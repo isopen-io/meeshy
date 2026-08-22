@@ -154,6 +154,52 @@ pytest tests/ -v --cov=src            # With coverage
 - Markers: `@pytest.mark.unit`, `@pytest.mark.integration`
 - Fixtures in `conftest.py` (mock ZMQ, TTS, DB)
 
+### Doubles de service : `create_autospec`, jamais `MagicMock()` nu
+
+Un `MagicMock()` nu accepte **n'importe quel argument nommé** et **fabrique
+n'importe quel attribut demandé**. C'est exactement le profil des deux pannes
+d'intégration qui ont tué `voice_analyze` et `voice_compare` en production
+pendant que leurs témoins restaient verts (cycle 90) :
+
+```python
+self.voice_analyzer.analyze(audio_path=…, analysis_types=…)  # TypeError réel
+self.voice_analyzer.compare_voices(…)                        # AttributeError réel
+```
+
+`operation_handlers` appelait une API composite qui n'existait sur **aucune** des
+deux classes d'analyseur du dépôt (`VoiceAnalyzerService` a `analyze(audio_path,
+use_cache)` et `compare(…)` ; `voice_clone.VoiceAnalyzer` a `analyze_audio` et
+`compare_voices(original_path, cloned_path)`). Les exceptions étaient avalées par
+le `except Exception` du handler et servies en `INTERNAL_ERROR`.
+
+```python
+service = create_autospec(VoiceAnalyzerService, instance=True)
+service.analyze.return_value = mock_result   # jamais `service.analyze = AsyncMock(…)`
+```
+
+**`spec=` ne suffit pas** : il contrôle l'EXISTENCE des attributs, pas les
+signatures — et une réassignation d'attribut efface ce qu'il y avait posé.
+Mesuré : sous `spec=`, la production revertie laissait le témoin passer.
+
+Et **la charge utile d'un double se CAPTURE, elle ne s'invente pas.** Celui-ci
+rendait du camelCase (`timbre`, `spectralCentroid`) qu'aucun émetteur du dépôt ne
+produit — `VoiceCharacteristics.to_dict()` rend du snake_case imbriqué
+(`spectral.centroid_hz`). La fixture propageait la fiction que la passerelle
+déclarait de son côté.
+
+Enfin : **un témoin qui assert `result['type'] in ['voice_api_success',
+'voice_api_error']` ne peut pas tomber.** Il n'atteste rien.
+
+### `except Exception` large : la panne devient un code d'erreur
+
+Les handlers de `voice_api/` enveloppent chaque opération dans un
+`except Exception → error_code="INTERNAL_ERROR"`. C'est voulu (le ZMQ ne doit pas
+tomber sur une requête), mais cela transforme une erreur de PROGRAMMATION —
+mauvaise signature, attribut inexistant — en réponse d'erreur ordinaire,
+indiscernable d'un audio illisible. Le `logger.error` porte le message réel :
+**c'est le seul endroit où la différence est visible.** En doutant d'une
+opération voix, lire les logs avant de conclure à un problème de données.
+
 ## Build & Deploy
 - Docker: `python:3.11-slim`, multi-stage
 - CPU/GPU variants via `TORCH_BACKEND` build arg

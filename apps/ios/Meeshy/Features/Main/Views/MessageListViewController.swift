@@ -1084,6 +1084,17 @@ final class MessageListViewController: UIViewController {
             // exact pendant iOS du lien `/u/{pseudo}` mort côté web. Son
             // identité vit dans CETTE conversation et se demande par le couple
             // `(conversationId, participantId)`.
+            // L'avis d'arrivée mène TOUJOURS à la fiche de participation, quelle
+            // que soit la porte empruntée : c'est là que vit l'identité fournie
+            // en entrant. Un arrivant qui a un compte y figure aussi, simplement
+            // sans conditions d'entrée à énoncer.
+            let openParticipantProfileHandler: ((String) -> Void) = { [weak self] participantId in
+                self?.router.participantProfileTarget = ParticipantProfileTarget(
+                    conversationId: message.conversationId,
+                    participantId: participantId
+                )
+            }
+
             let openProfileHandler: ((ProfileSheetUser) -> Void) = { [weak self] user in
                 guard let self else { return }
                 if user.isAnonymous, let participantId = user.participantId {
@@ -1287,6 +1298,7 @@ final class MessageListViewController: UIViewController {
                         onSetActiveDisplayLanguage: setActiveDisplayLanguage,
                         onSetSecondaryLanguage: setSecondaryLanguage,
                         onOpenProfile: openProfileHandler,
+                        onOpenParticipantProfile: openParticipantProfileHandler,
                         voiceConsentMissing: vm?.voiceConsentMissing ?? false,
                         onTapConsentNotice: { [weak self] in self?.router.push(.settings) },
                         standalone: standalone
@@ -1417,6 +1429,7 @@ final class MessageListViewController: UIViewController {
                 focalActions.onToggleReaction = { emoji in toggleReactionHandler?(messageId, emoji) }
                 focalActions.onAddReaction = addReactionHandler
                 focalActions.onOpenReactPicker = openReactPickerHandler
+                focalActions.onOpenParticipantProfile = openParticipantProfileHandler
                 focalActions.onShowReactions = showReactionsHandler
                 focalActions.onShowReadStatus = showReadStatusHandler
                 focalActions.onRetry = retryHandler

@@ -105,6 +105,17 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
     /// juste avant les réactions — commun aux messages texte et aux
     /// attachements audio porteurs de traductions — et plus jamais dans le
     /// fil du texte.
+    ///
+    /// RECALIBRAGE 2026-08-21 (« Focal revient en passe MINIMALE », commit
+    /// `45356f760`) : la RÈGLE n'a pas bougé, la SONDE si. La rangée monte
+    /// désormais le (+) de réaction rapide sur le dernier message reçu, via le
+    /// prédicat partagé `BubbleReactionsOverlay.isMounted(...)` hissé en tête de
+    /// `flagAndReactionsRow`. Ce call-site NE REND RIEN mais porte le nom du
+    /// type : chercher `BubbleReactionsOverlay` nu faisait pointer la sonde sur
+    /// la DÉCISION de montage (avant le drapeau) au lieu du SITE DE RENDU
+    /// (après), et rougir pour une consolidation qui respectait l'arbitrage.
+    /// On ancre donc sur l'initialiseur `BubbleReactionsOverlay(` — que
+    /// `.isMounted(` ne peut pas matcher.
     func test_versionFlag_sharesTheReactionsLine_flagFirst_notInsideTheTextBlock() throws {
         let code = try stripped(rowPath)
         guard let rowStart = code.range(of: "private var flagAndReactionsRow") else {
@@ -112,8 +123,8 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
         }
         let rowBody = String(code[rowStart.lowerBound...].prefix(1400))
         guard let flagPos = rowBody.range(of: "originalLanguageFlag"),
-              let reactionsPos = rowBody.range(of: "BubbleReactionsOverlay")
-        else { return XCTFail("drapeau ou réactions absents de flagAndReactionsRow") }
+              let reactionsPos = rowBody.range(of: "BubbleReactionsOverlay(")
+        else { return XCTFail("drapeau ou réactions RENDUES absents de flagAndReactionsRow (le prédicat `.isMounted(` ne compte pas — il ne rend rien)") }
         XCTAssertTrue(
             flagPos.lowerBound < reactionsPos.lowerBound,
             "le drapeau vient EN PREMIER, avant les réactions, sur la même ligne (HStack) — user 2026-08-18"
@@ -129,6 +140,36 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
         XCTAssertFalse(
             textBlockBody.contains("originalLanguageFlag"),
             "le drapeau ne vit PLUS dans le fil du texte — il est descendu sur la ligne des réactions"
+        )
+    }
+
+    /// SECONDE SURFACE du même arbitrage (consolidation des chips du focus,
+    /// 2026-08-21/22) : en focus, `flagAndReactionsRow` s'efface
+    /// (`.opacity(input.isFocused ? 0 : 1)`) et c'est `focusStrip` — la ligne
+    /// BASSE de la carte — qui porte drapeaux et réactions. Sans ce témoin, la
+    /// consolidation pouvait inverser l'ordre sur la surface RÉELLEMENT visible
+    /// en focus sans rien faire rougir : le danger gardé depuis le 18/08 aurait
+    /// changé de vue en silence.
+    func test_focusStrip_keepsTheFlagsBeforeTheReactions_onTheCardBottomLine() throws {
+        let code = try stripped(rowPath)
+        XCTAssertTrue(
+            code.contains(".opacity(input.isFocused ? 0 : 1)"),
+            "en focus, la ligne drapeau+réactions s'efface au profit de `focusStrip` — sans cet effacement les deux surfaces se superposent"
+        )
+        guard let stripStart = code.range(of: "private var focusStrip") else {
+            return XCTFail("`focusStrip` introuvable — la ligne basse de la carte du message en focus")
+        }
+        let stripBody = String(code[stripStart.lowerBound...].prefix(2600))
+        guard let flagsPos = stripBody.range(of: "focusFlagCodes"),
+              let reactionsPos = stripBody.range(of: "focusReactionChip")
+        else { return XCTFail("drapeaux ou réactions absents de focusStrip") }
+        XCTAssertTrue(
+            flagsPos.lowerBound < reactionsPos.lowerBound,
+            "sur la ligne de la carte aussi : les drapeaux AVANT les réactions (arbitrage user 2026-08-18, reporté sur la carte de focus)"
+        )
+        XCTAssertTrue(
+            stripBody.contains("HStack"),
+            "drapeaux et réactions partagent une HStack — jamais deux lignes empilées"
         )
     }
 

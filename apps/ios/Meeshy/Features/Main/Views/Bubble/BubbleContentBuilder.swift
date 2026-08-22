@@ -91,6 +91,7 @@ extension BubbleContent {
         // Linguistique veut que chaque lecteur voie sa langue.
         if message.messageSource == .system, let notice = message.joinNotice {
             self.joinNotice = JoinNotice(
+                participantId: notice.participantId,
                 displayName: notice.displayName,
                 isAnonymous: notice.isAnonymous,
                 viaShareLink: notice.viaShareLink,

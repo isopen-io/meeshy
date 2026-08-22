@@ -72,6 +72,16 @@
     <string name="conversations_lock_subtitle_unlock">Introduce el código de %1$s para desbloquearla</string>
     <string name="conversations_lock_subtitle_open">Introduce el código de %1$s para abrirla</string>
     <string name="conversations_lock_subtitle_unlock_all">Introduce tu PIN maestro para desbloquear todas las conversaciones</string>
+    <string name="conversations_lock_title_new_master">Nuevo PIN maestro</string>
+    <string name="conversations_lock_title_confirm_new">Confirmar el nuevo PIN</string>
+    <string name="conversations_lock_title_remove_master">Eliminar el PIN maestro</string>
+    <string name="conversations_lock_subtitle_change_verify">Introduce tu PIN maestro actual</string>
+    <string name="conversations_lock_subtitle_new_master">Elige un nuevo PIN maestro de 6 dígitos</string>
+    <string name="conversations_lock_subtitle_confirm_new">Confirma tu nuevo PIN maestro</string>
+    <string name="conversations_lock_subtitle_remove_master">Introduce tu PIN maestro para confirmar la eliminación</string>
+    <string name="conversations_change_master_pin">Cambiar el PIN maestro</string>
+    <string name="conversations_remove_master_pin">Eliminar el PIN maestro</string>
+    <string name="conversations_lock_security_menu">Ajustes de bloqueo</string>
     <string name="conversations_unlock_all">Desbloquear todas las conversaciones</string>
     <string name="conversations_lock_error_master_incorrect">PIN maestro incorrecto</string>
     <string name="conversations_lock_error_pin_mismatch">Los PIN no coinciden</string>

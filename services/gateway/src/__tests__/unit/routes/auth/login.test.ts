@@ -206,7 +206,20 @@ describe('POST /login — success', () => {
 });
 
 describe('POST /login — requires 2FA', () => {
-  it('returns 200 when 2FA is required', async () => {
+  /**
+   * Ce témoin n'assertait que `statusCode` et `success`, et son commentaire
+   * ÉRIGEAIT la perte en attendu : « response schema strips requires2FA from
+   * serialized output ». Il gelait donc la panne qu'il aurait dû nommer — le
+   * schéma 200 ne déclarait que `{user, token, sessionToken, session,
+   * expiresIn}`, si bien que fast-json-stringify retirait SILENCIEUSEMENT les
+   * deux clés qui portent tout le second facteur.
+   *
+   * Sans elles, `LoginView.swift:112` (`if authManager.requires2FA`) ne branche
+   * jamais, et `completeLoginWith2FA(twoFactorToken:)` n'a pas de jeton à
+   * présenter : un compte protégé par 2FA ne pouvait PAS terminer sa connexion.
+   * Le témoin assied désormais les VALEURS.
+   */
+  it('sert `requires2FA` et le jeton du second facteur — sans eux le client ne peut pas continuer', async () => {
     const authService = makeAuthService();
     authService.authenticate = jest.fn<any>().mockResolvedValue({
       user: mockUser,
@@ -220,9 +233,34 @@ describe('POST /login — requires 2FA', () => {
       method: 'POST', url: '/login',
       payload: { username: 'alice', password: 'secret123' },
     });
-    // 2FA case returns 200 (response schema strips requires2FA from serialized output)
+
     expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.requires2FA).toBe(true);
+    expect(body.data.twoFactorToken).toBe('2fa-token-xyz');
+    expect(body.data.user.id).toBe(USER_ID);
+    await app.close();
+  });
+
+  it('ne sert AUCUN jeton d’accès tant que le second facteur n’est pas fourni', async () => {
+    const authService = makeAuthService();
+    authService.authenticate = jest.fn<any>().mockResolvedValue({
+      user: mockUser,
+      sessionToken: 'partial-session',
+      session: mockSession,
+      requires2FA: true,
+      twoFactorToken: '2fa-token-xyz',
+    });
+    const { app } = await buildApp({ authService });
+    const res = await app.inject({
+      method: 'POST', url: '/login',
+      payload: { username: 'alice', password: 'secret123' },
+    });
+
+    const { data } = res.json();
+    expect(data.token).toBeUndefined();
+    expect(data.sessionToken).toBeUndefined();
     await app.close();
   });
 });

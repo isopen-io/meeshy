@@ -12,6 +12,8 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { messageValidationHook } from '../../middleware/rate-limiter';
 import {
   messageSchema,
+  messageResponseSchema,
+  conversationStatsSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
@@ -58,6 +60,55 @@ const EditMessageBodySchema = z.object({
 });
 // Logger dédié pour messages-advanced
 const logger = enhancedLogger.child({ module: 'messages-advanced' });
+
+/**
+ * `meta.conversationStats`, que `messageResponseSchema` ne porte pas.
+ *
+ * Le cycle 88 bis a réparé les deux transports d'ÉDITION en les pointant sur
+ * `messageResponseSchema` (`{ success, data: messageSchema }`) — la bonne
+ * forme, et la charge utile arrive enfin. Mais le transport `PUT` sert un champ
+ * de plus que le PATCH : `meta: { conversationStats }`, calculé juste avant la
+ * réponse. `messageSchema` ne le déclarant pas, il restait supprimé.
+ *
+ * Et le transport DELETE, lui, n'avait pas été repris du tout : son schéma est
+ * BIEN FORMÉ (`message: { type: 'string' }`) et décrit simplement une autre
+ * charge utile que `{messageId, deleted, meta}`. Le balayage des objets nus ne
+ * pouvait pas le voir — c'est ce qui a motivé le second balayage
+ * (`__tests__/response-payload-mismatch.ts`).
+ *
+ * Gardé par
+ * `__tests__/unit/routes/conversations/message-mutation-serialization.test.ts`.
+ */
+const conversationStatsMetaSchema = {
+  type: 'object',
+  properties: { conversationStats: conversationStatsSchema },
+} as const;
+
+/**
+ * L'enveloppe de `messageResponseSchema` (`{ success, data: messageSchema }`),
+ * plus les stats que le seul transport `PUT` calcule.
+ *
+ * Composé depuis `messageSchema` et non en descendant dans
+ * `messageResponseSchema.properties.data` : plusieurs suites mockent
+ * `@meeshy/shared/types/api-schemas` avec un sous-ensemble des exports, et une
+ * chaîne d'accès y lève à l'IMPORT — un `...spread` d'`undefined`, lui, est
+ * légal et inerte. Un schéma de module ne doit pas pouvoir casser le chargement
+ * d'un fichier de routes.
+ */
+const editedMessageResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      ...messageSchema,
+      description: 'The message as it stands after the edit — served flat, not wrapped',
+      properties: {
+        ...messageSchema.properties,
+        meta: conversationStatsMetaSchema,
+      },
+    },
+  },
+} as const;
 
 /**
  * Plafond de `GET /conversations/:id/status` : les N messages les plus récents.
@@ -109,18 +160,13 @@ export function registerMessagesAdvancedRoutes(
         }
       },
       response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'object', description: 'Updated message object' }
-              }
-            }
-          }
-        },
+        // La charge est le message édité LUI-MÊME (`sendSuccess(reply,
+        // messageResponse)`), pas un objet qui le contiendrait. Un
+        // enveloppement `data.message` a vécu ici, copié d'un
+        // `messageResponseSchema` mort : la clé déclarée étant absente de la
+        // charge, `fast-json-stringify` — `additionalProperties: false` par
+        // défaut — ne servait pas un message dégradé, il servait `data: {}`.
+        200: editedMessageResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
@@ -504,8 +550,14 @@ export function registerMessagesAdvancedRoutes(
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
+              // Le `message` déclaré ici — une STRING — n'a jamais été servi :
+              // le handler acquitte `{messageId, deleted, meta}`. Aucune clé ne
+              // matchait, donc `data` sortait VIDE, et le client n'apprenait
+              // même pas que la suppression avait eu lieu.
               properties: {
-                message: { type: 'string', example: 'Message supprimé avec succès' }
+                messageId: { type: 'string', description: 'ID of the deleted message' },
+                deleted: { type: 'boolean', description: 'Always true on success', example: true },
+                meta: conversationStatsMetaSchema
               }
             }
           }
@@ -705,18 +757,15 @@ export function registerMessagesAdvancedRoutes(
         }
       },
       response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'object', description: 'Updated message object' }
-              }
-            }
-          }
-        },
+        // Même enveloppe, même défaut, même correctif que le sibling `PUT` —
+        // et c'est CE transport qu'Android emprunte (`@PATCH("messages/{id}")`,
+        // `ApiResponse<ApiMessage>`). `data: {}` y levait `MissingFieldException`
+        // sur `id`/`conversationId`, que la file d'outbox lisait comme une
+        // panne réseau : l'édition, pourtant appliquée, était rejouée sans fin.
+        //
+        // Ce transport ne calcule PAS de statistiques (le sibling PUT si), d'où
+        // `messageResponseSchema` nu ici et sa variante `+ meta` là-bas.
+        200: messageResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
@@ -996,7 +1045,9 @@ export function registerMessagesAdvancedRoutes(
                 reactions: {
                   type: 'array',
                   description: 'All reactions grouped by message'
-                }
+                },
+                // Le handler sert aussi `total` ; non déclaré, il était retiré.
+                total: { type: 'number', description: 'Total reaction rows across the conversation' }
               }
             }
           }
@@ -1457,7 +1508,9 @@ export function registerMessagesAdvancedRoutes(
                 statuses: {
                   type: 'array',
                   description: 'Status information for all messages'
-                }
+                },
+                // Idem : `total` était servi et supprimé.
+                total: { type: 'number', description: 'Number of messages covered by this status page' }
               }
             }
           }

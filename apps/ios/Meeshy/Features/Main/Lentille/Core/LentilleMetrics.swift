@@ -120,7 +120,12 @@ nonisolated public enum LentilleMetrics {
         /// pendant la scène — translation de compositor, zéro relayout.
         /// 18 → 30 le 2026-08-22 : les chips d'étiquettes qui débordent
         /// sous la carte gardent une marge avec la rangée suivante.
-        public static let breathing: CGFloat = 30
+        /// **30 → 18 le 2026-08-22 (soir)** : ce n'était pas une respiration,
+        /// c'était un DÉGAGEMENT creusé pour la décoration qui débordait — et
+        /// il est ANIMÉ, donc les trous s'ouvraient et se refermaient pendant
+        /// le défilement. C'est la moitié « espaces compliqués » du retour
+        /// produit. La cause retirée (bord bas désencombré), la valeur revient.
+        public static let breathing: CGFloat = 18
         /// Rampe : nulle jusqu'à une demi-rangée (la rangée élue ne bouge
         /// pas), pleine une rangée plus loin — jamais de saut au passage.
         public static let breathingRampStart: CGFloat = 36

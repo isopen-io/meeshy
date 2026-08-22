@@ -1,5 +1,112 @@
 # Lessons
 
+## Leçon 243 — un outil trouve la forme qu'on lui a décrite ; l'autre moitié du défaut n'en a aucune (2026-08-22, routine messagerie, cycle 91)
+
+Le cycle 86 a nommé la règle « un objet de réponse sans `properties` EFFACE »,
+le cycle 87 l'a outillée, et le cliquet a bien fait son travail : 38 sites
+trouvés, 10 restants à reprendre au cycle 91.
+
+En les réparant, trois défauts sont apparus que l'outil ne pouvait PAS voir —
+et l'un d'eux tenait la connexion à deux facteurs fermée en production.
+
+> **La règle outillée décrivait la moitié RECONNAISSABLE du défaut.** Un objet
+> nu se repère : il lui manque quelque chose. Un bloc `data` qui déclare
+> proprement ses propriétés — mais celles d'une AUTRE charge utile que celle du
+> handler — n'a aucune forme suspecte. Il vide tout aussi complètement, et
+> aucun balayage cherchant l'absence de `properties` ne le distinguera jamais
+> d'un schéma juste.
+
+`POST /auth/login` déclarait `{user, token, sessionToken, session, expiresIn}`
+et sa branche 2FA envoyait `{requires2FA, twoFactorToken, …}` : le client ne
+recevait ni le drapeau ni le jeton, et aucun compte protégé par un second
+facteur ne pouvait terminer sa connexion. `DELETE /…/messages/:id` déclarait
+`message` en STRING et envoyait `{messageId, deleted, meta}` : `data: {}`.
+
+Le geste, et c'est le seul qui marche :
+
+> **Le discriminant est l'ÉMETTEUR, jamais le schéma seul.** On ne peut pas
+> juger un contrat de réponse en le lisant : il faut lire ce que `sendSuccess`
+> reçoit, ligne par ligne, et comparer les jeux de clés. C'est mécanisable —
+> `response-payload-mismatch.ts` le fait — mais ça ne se déduit d'aucune forme.
+
+Et la raison pour laquelle ces trois-là ont vécu si longtemps, qui est la
+partie la plus désagréable :
+
+> **Un témoin qui n'assert que `statusCode` couvre une route morte sans jamais
+> rougir.** Le témoin 2FA existait, il passait, il s'appelait « returns 200
+> when 2FA is required ». Il n'a jamais regardé la charge utile.
+
+Pire que l'absence d'assertion — l'observation ÉRIGÉE en attendu :
+
+> ```ts
+> // 2FA case returns 200 (response schema strips requires2FA from serialized output)
+> ```
+>
+> Quelqu'un a VU le retrait, l'a compris assez pour l'écrire exactement, et
+> l'a inscrit comme une propriété du système au lieu d'une panne. **Un
+> commentaire qui explique une perte de données la scelle** : il retire au
+> lecteur suivant la seule chose qui l'aurait fait creuser — la surprise. La
+> question à se poser devant toute phrase de cette forme (« le schéma retire
+> X », « ce champ ne sort pas ») est : *et c'est bien ?*
+
+Corollaire, déjà croisé au cycle 84 et confirmé ici sous sa forme la plus nette :
+
+> **Réparer un schéma peut OUVRIR ce que la panne retenait.** La charge utile du
+> conflit de numéro portait le mot de passe EN CLAIR ; il ne sortait pas, parce
+> que le schéma le retirait avec tout le reste. Déclarer la branche « pour que
+> le client reçoive enfin ses données » aurait publié le secret, sans qu'aucun
+> témoin ne tombe. Le retrait se fait à la SOURCE — compter sur une omission de
+> schéma pour retenir un secret, c'est un piège armé, pas une protection.
+
+## Leçon 242 — « Travaille directement sur main » : la directive de l'utilisateur prime le réflexe du worktree (2026-08-22, reprise Rivière)
+
+Mon plan ouvrait un worktree dédié (réflexe acquis : agents parallèles = worktrees). L'utilisateur a
+coupé : « Travailles directement sur main!! ». Deux sessions ont alors travaillé dans le MÊME arbre
+sur `main` — l'autre y a mergé une branche pendant mes éditions non committées, et committé un test
+non recalibré (`BubbleContentMatrixTests`) que j'ai dû réparer pour que le bundle recompile.
+
+**Ce qui en découle, quand on partage un arbre :**
+- committer par LOTS COURTS et par chemins explicites (`git commit -- <fichiers>`), jamais `add -A` ;
+- relire `git status` avant chaque commit : un fichier inattendu est le WIP d'un autre ;
+- chaque build peut être TUÉ par un voisin (« BUILD INTERRUPTED », « Test crashed with signal kill ») :
+  rejouer sans conclure à une régression ; garder les étapes simulateur en premier plan, courtes.
+
+**Et surtout** : un réflexe de méthode (worktree, branche, PR) n'est pas une règle produit. Quand la
+consigne est explicite, on l'applique et on adapte la discipline (commits serrés) — on ne la
+contourne pas « pour bien faire ».
+
+## Leçon 241 — « Merger dans main » veut dire atterrir sur `main` LOCAL d'abord ; un push `HEAD:main` détaché ne compte pas (2026-08-22, fluidité des listes iOS)
+
+J'avais fusionné `feat/ios-list-scroll-fluidity` depuis un worktree DÉTACHÉ sur `origin/main`
+et poussé `HEAD:main` — technique « single-push » apprise sur les lots de PR. Le merge était
+dans `origin/main`, la CI verte, le worktree supprimé. Au retour : « Tu es sur la branche
+main ? » puis « Il faut merger sur local main d'abord ». La branche `main` LOCALE du dépôt
+était restée vingt-cinq commits en arrière, sans le merge. Pour celui qui bascule, stashe et
+lit `git log` sur cette branche-là, le travail n'était **pas mergé**.
+
+**La règle.** Un merge de feature suit ce circuit, dans cet ordre :
+
+```bash
+git fetch origin main:main          # avance rapide SANS checkout — valable si `main`
+                                    # n'est checkout nulle part ET n'a aucun commit propre
+git worktree add ../v2_meeshy-main main   # si le dépôt principal porte le WIP d'une autre
+                                          # session : on ne le déplace JAMAIS
+git -C ../v2_meeshy-main merge --no-ff feat/… -m "merge: …"
+git -C ../v2_meeshy-main push origin main
+git worktree remove ../v2_meeshy-main     # depuis le dépôt principal, pas depuis le cwd retiré
+```
+
+Puis la preuve : `git rev-parse refs/heads/main` == `git rev-parse refs/remotes/origin/main`.
+
+**Deux pièges mécaniques rencontrés en le faisant.** `git worktree remove` du répertoire
+courant fait échouer tout ce qui suit dans la même ligne (« Unable to read current working
+directory ») — retirer depuis le dépôt principal. Et `git rev-parse --short main origin/main`
+rend « Needed a single revision » ici : passer par les refs complètes ou deux appels.
+
+Le single-push détaché reste juste pour les LOTS de PR (consigne du 2026-07-21) ; il se
+termine simplement par `git fetch origin main:main` pour que la branche locale rattrape
+ce qu'on vient de pousser.
+
 ## Leçon 162 — Avant d'OUVRIR un chantier, regarder qui d'autre est déjà dessus — la leçon 159 vaut aussi à l'aller (2026-08-14, routine messaging, cycle 123bis)
 
 La leçon 160 disait : avant de RÉPARER un fichier cassé, chercher qui d'autre le répare déjà. Ce

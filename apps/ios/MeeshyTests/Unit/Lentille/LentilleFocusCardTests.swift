@@ -409,22 +409,27 @@ extension LentilleFocusCardTests {
         XCTAssertGreaterThan(LentilleMetrics.FocusCard.height, LentilleMetrics.Row.height)
     }
 
-    /// L'encoche est un `Menu` SYSTÈME : un `.popover` devient une feuille
-    /// plein écran sur iPhone (retour user 2026-08-21).
-    /// 2026-08-21 : la catégorie est une encoche HAUT-GAUCHE (miroir exact de
-    /// l'encoche de mode) dont le menu déplace la conversation ; les étiquettes
-    /// sont des chips sur le bord BAS dont le menu filtre / retire le filtre /
-    /// supprime ; la date est la date COMPLÈTE du fil (« Aujourd'hui à 5:49 »),
-    /// plus jamais le relatif court ; le dernier expéditeur s'affiche pour
-    /// TOUTES les conversations.
-    func test_focusCard_hasCategoryNotchTopLeading_tagChipsBottomEdge_andTheFullTimestamp() throws {
+    /// **SUPERSÉDÉ le 2026-08-22 (soir).** La directive du 2026-08-21 avait
+    /// GRAVÉ ici l'encoche de catégorie, la ligne basse à quatre objets, le
+    /// nom original en haut. Le retour produit du lendemain la renverse :
+    /// « la conversation magnifiée semble trop surchargée avec des espaces
+    /// compliqués ; les éléments autour doivent être plus discrets ou
+    /// enlevés ». La carte passe de CINQ ancrages de bord à DEUX, de six
+    /// capsules bordées d'accent à UNE. Ce témoin atteste donc l'état
+    /// NOUVEAU — recalibré, jamais supprimé en silence.
+    ///
+    /// Le DANGER qu'il gardait est conservé et même resserré : la carte reste
+    /// MUETTE (elle ne touche pas au store), la date reste la date COMPLÈTE de
+    /// la loi du fil, et le dernier expéditeur s'affiche toujours pour toutes
+    /// les conversations. S'y ajoute le fait neuf : plus d'un seul contrôle
+    /// bordé sur la carte.
+    func test_focusCard_keepsOneControl_theTagsAndTheCount_andTheFullTimestamp() throws {
         let code = try modeSource("LentilleFocusCard.swift")
-        XCTAssertTrue(code.contains(".overlay(alignment: .topLeading) {"), "encoche catégorie en haut à gauche")
-        XCTAssertTrue(code.contains("categoryNotch"))
-        XCTAssertTrue(code.contains("onMoveToSection("), "toucher la catégorie déplace la conversation")
-        XCTAssertTrue(code.contains(".overlay(alignment: .bottomLeading) {"), "chips d'étiquettes sur le bord bas")
-        XCTAssertTrue(code.contains("onFilterByTag(tag.name)"))
-        XCTAssertTrue(code.contains("onFilterByTag(nil)"), "une étiquette qui filtre propose de RETIRER le filtre")
+
+        // Ce qui RESTE, et pourquoi.
+        XCTAssertTrue(code.contains(".overlay(alignment: .bottomLeading) {"), "UN seul ancrage de bord bas")
+        XCTAssertTrue(code.contains("onFilterByTag(tag.name)"), "le filtre par étiquette n'a pas d'autre domicile dans l'app")
+        XCTAssertTrue(code.contains("onFilterByTag(nil)"))
         XCTAssertTrue(code.contains("onRemoveTag(tag)"))
         XCTAssertTrue(code.contains("FocalFocusTimestamp.listLabel("), "la date complète vient de la loi du fil")
         XCTAssertFalse(code.contains("RelativeTimeFormatter.shortString"), "plus de relatif court sur la carte")
@@ -432,6 +437,39 @@ extension LentilleFocusCardTests {
             code.contains("conversation.type != .direct,\n               let sender"),
             "le dernier expéditeur s'affiche pour toutes les conversations"
         )
+
+        // Ce qui est PARTI, et qui ne doit pas revenir sans une décision.
+        XCTAssertFalse(code.contains(".overlay(alignment: .topLeading) {"), "plus d'encoche de catégorie")
+        XCTAssertFalse(code.contains(".overlay(alignment: .top) {"), "plus de nom original au centre du bord haut")
+        XCTAssertFalse(code.contains("Button(action: onForceSync)"), "plus de bouton « synchroniser maintenant »")
+        XCTAssertFalse(code.contains("Button(action: onShowParticipants)"), "l'effectif est une information, plus un contrôle")
+    }
+
+    /// L'identité GAGNE la ligne : c'est la date qui cède. L'inverse faisait
+    /// tronquer le NOM sur une carte dont le seul métier est de le montrer en
+    /// plus gros — la magnification rétrécissait l'identité.
+    func test_focusCard_theNameOutranksTheDate_onTheHeaderLine() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        let name = try XCTUnwrap(code.range(of: "Text(conversation.displayName)"))
+        let date = try XCTUnwrap(code.range(of: "Text(Self.fullTimestamp("))
+        let namePriority = try XCTUnwrap(code.range(of: ".layoutPriority(2)", range: name.upperBound..<code.endIndex))
+        XCTAssertLessThan(namePriority.lowerBound, date.lowerBound, "la priorité 2 appartient au NOM, avant la date")
+        XCTAssertTrue(
+            code[date.upperBound...].contains(".layoutPriority(0)"),
+            "la date cède la première"
+        )
+    }
+
+    /// Un seul contour d'ACCENT sur la carte : son anneau, et l'encoche de
+    /// mode. L'étiquette — l'élément le moins important — portait le trait le
+    /// plus fort ; son filtre actif se dit désormais par un liseré blanc.
+    func test_focusCard_accentBorder_isTheExclusivityOfTheCardAndItsModeNotch() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        XCTAssertFalse(
+            code.contains("strokeBorder(\n                            accent,"),
+            "l'étiquette ne porte plus de contour d'accent"
+        )
+        XCTAssertTrue(code.contains("Color.white.opacity(isFiltering ? 0.95 : 0)"), "le filtre actif se dit en blanc")
     }
 
     /// 2026-08-22 : la carte porte la pastille de présence de la rangée plate.
@@ -457,33 +495,17 @@ extension LentilleFocusCardTests {
         XCTAssertEqual(LentilleFocusBreathing.push(distance: far, level: 0, reduceMotion: false), 0, "au repos, rien")
     }
 
-    /// 2026-08-22 : effectif SUR la ligne basse à droite, avant l'icône de
-    /// synchronisation (un BOUTON : appui = synchroniser maintenant) ; nom
-    /// original centré sur la ligne du haut quand un nom personnalisé s'affiche.
-    func test_focusCard_memberCountAndSyncOnTheBottomLine_originalNameOnTheTopLine() throws {
+    /// **SUPERSÉDÉ le 2026-08-22 (soir)** — voir la note du témoin
+    /// `test_focusCard_keepsOneControl_…` ci-dessus. Ce qui reste vrai et
+    /// qu'aucun autre témoin ne dit : la ligne 2 reste « Auteur : texte » en
+    /// UN SEUL texte sur deux lignes, et la carte ne touche jamais au store.
+    /// Les trois autres assertions (bouton de synchronisation, bouton
+    /// d'effectif, nom original) sont désormais portées EN NÉGATIF par le
+    /// témoin ci-dessus : elles ne peuvent pas revenir en silence.
+    func test_focusCard_theSecondLineIsOneTextAndTheCardNeverTouchesTheStore() throws {
         let code = try modeSource("LentilleFocusCard.swift")
-        XCTAssertTrue(code.contains("Button(action: onForceSync)"), "l'icône de synchronisation est un bouton")
-        XCTAssertTrue(code.contains("Button(action: onShowParticipants)"), "l'effectif ouvre la feuille des participants")
         XCTAssertTrue(code.contains("(senderPrefix + Text(previewText)"), "« Auteur : texte » en un seul texte sur deux lignes")
-        XCTAssertTrue(code.contains("if conversation.userState.hasPendingSync {"), "visible seulement si une synchronisation est en attente")
-        XCTAssertTrue(code.contains(".overlay(alignment: .top) {"), "nom original centré en haut")
-        XCTAssertTrue(code.contains("Self.originalName(conversation: conversation)"))
-        XCTAssertTrue(code.contains("store.flushOutbox()") == false, "la carte ne touche pas au store : la liste câble le VM")
-    }
-
-    func test_originalName_onlyWhenACustomNameHidesIt() {
-        var renamed = makeConversation()
-        renamed.userState.customName = "Mon équipe"
-        XCTAssertEqual(LentilleFocusCard.originalName(conversation: renamed), "Equipe Produit")
-        XCTAssertNil(LentilleFocusCard.originalName(conversation: makeConversation()), "sans nom personnalisé : rien")
-        var same = makeConversation()
-        same.userState.customName = "Equipe Produit"
-        XCTAssertNil(LentilleFocusCard.originalName(conversation: same), "identique au titre : rien à rappeler")
-    }
-
-    func test_categoryText_isTheCurrentCategoryUppercased_orTheFallback() {
-        XCTAssertEqual(LentilleFocusCard.categoryText(current: "Travail", fallback: "Catégorie"), "TRAVAIL")
-        XCTAssertEqual(LentilleFocusCard.categoryText(current: nil, fallback: "Catégorie"), "CATÉGORIE")
+        XCTAssertFalse(code.contains("store.flushOutbox()"), "la carte ne touche pas au store : la liste câble le VM")
     }
 
     func test_notch_isANativeMenu_neverAPopover() throws {

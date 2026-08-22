@@ -5,6 +5,38 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-22 — An umbrella "…-mode / …-flow" parity box is several slices; find the pure brain first
+- The `[ ]` "Anonymous-session conversation mode; guest join-via-share-link flow" box LOOKED like
+  a big unstarted feature, but recon showed Android had already ported ~90% of it (permission core,
+  session store, guest-join form/VM/screen, composer gate, dual-auth). The one un-ported piece was
+  the pure entry-decision policy (`ShareLinkEntryPolicy.swift`) — a textbook 6-branch pure-logic
+  slice. Lesson: for an umbrella box, grep the codebase for what already exists BEFORE scoping;
+  the highest-value TDD slice is usually the pure decision engine the wired-up pieces are missing,
+  not a re-port of the whole feature. Mark the umbrella `[~]` with the named follow-ups, never `[x]`
+  on the strength of one slice.
+- Mutation RED-proof done right this run: `cp <file> /tmp/x.bak` before mutating, `cp /tmp/x.bak <file>`
+  to restore (NOT `git checkout` — the file is uncommitted; see the 2026-08-22 checkout lesson below).
+
+## 2026-08-22 — Never `git checkout <file>` to undo a mutation on an UNCOMMITTED file
+- Doing a mutation RED-proof, I `git checkout`-ed the reducer to "revert the one-line mutation".
+  The file was uncommitted (the whole slice was still in the working tree), so checkout reverted it
+  to **HEAD (main)** — silently wiping ALL the slice's edits to that file, not just the mutation.
+  The `grep` afterward is what caught it (only the old `entryStep = 0` line remained).
+- Rule: for a mutation RED-proof, undo the mutation with the **Edit tool** (exact reverse edit), the
+  same way you introduced it — never `git checkout`/`git restore` a file that carries uncommitted
+  slice work. If you must use git to revert, commit the slice FIRST so checkout only drops the mutation.
+
+## 2026-08-22 — iOS `ConversationLockSheet.Mode` has SEVEN modes; audit the whole enum before "done"
+- The conversation-lock box read as nearly complete (setup/lock/unlock/open/unlock-all all wired), but
+  iOS's `ConversationLockSheet.Mode` enum carries `changeMasterPin` + `removeMasterPin` too — two
+  Settings-level flows Android's `LockPinReducer` never had. A parity box titled "… setup/change/remove …"
+  is not done until every named arm exists; grep the iOS source enum, don't trust the box's prose note
+  (the "Still needed: PIN entry UI / hide-from-list / unlock flow" note was stale — all three had shipped).
+- SOTA lever found here: iOS `removeMasterPin` force-clears the PIN even while locks survive (orphaning
+  them). Android gates Remove on "nothing locked" + applies the store's *guarded* `removeMasterPin`, so an
+  orphaned lock is structurally impossible. Prefer the store's guarded call over its `force*` sibling
+  whenever a UI gate already guarantees the precondition.
+
 ## 2026-08-22 — First gradle run can race its own auto-install of `android-37.0` → false "Failed to find target 'android-37'"
 - `compileSdk = 37` (AGP 8.13) resolves to platform hash **`android-37`**, which is served by the
   canary package **`platforms;android-37.0`** (`sdkmanager --channel=3`). If the FIRST gradle

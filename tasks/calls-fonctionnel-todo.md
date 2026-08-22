@@ -10350,3 +10350,110 @@ celle fixée ici, hors périmètre d'un fix à une seule préoccupation. »
   iOS single-peer côté groupe (`2026-08-13-group-calls-gap-analysis.md`) ; kick modérateur sans
   vérification du rôle CONVERSATION de la cible (décision produit, Vague 147/149) ; dette lint
   systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143, décision d'équipe requise).
+
+
+
+## Vague 154 — la Vague 151 n'avait fermé que 2 des 9 sites : les six autres `toast.error(message)` DUPLIQUAIENT bien le toast du consommateur (web) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), reprise après
+qu'une exécution PARALLÈLE de cette même routine ait fermé (sous le même nom « Vague 151 »,
+numérotation coïncidente — motif déjà documenté aux cycles 49 bis/77/78) une PR (#3279) portant ce
+correctif complet, en la déclarant superseded par sa propre Vague 151 (commit `e5b2b81fd`). Vérifié
+sur `main` (`git show origin/main:apps/web/hooks/use-webrtc-p2p.ts`) : la Vague 151 réellement mergée
+n'a retiré QUE les deux `toast.error` des branches d'agrégation pair/ICE — les sept autres
+subsistaient, `toast.error` toujours présent aux lignes des catches `initializeLocalStream`,
+`createOffer`, `handleOffer`, `handleAnswer`, `onError` générique du service, et les deux catches de
+renégociation. La note « Non fait volontairement » de la Vague 151 le dit explicitement : « les six
+autres `toast.error(message)` … dette i18n plus large … **aucun doublon de toast identifié dessus** »
+— une conclusion FAUSSE, corrigée ici avec preuve directe (RED avant correctif : 7/75 tests rouges).
+
+## Current state (avant correctif) / pourquoi la Vague 151 a sous-estimé la portée
+
+Sur les sept sites restants, `onError?.()` est appelé IMMÉDIATEMENT après chaque `toast.error(...)`
+— exactement le même couplage que sur les deux sites déjà corrigés — et `VideoCallInterface.tsx`
+forwarde `onError` vers un unique `toast.error(handleWebRTCError(...))` inconditionnel. La Vague 151
+a dû lire ces sept sites comme « messages d'erreur réels, pas des doublons » parce que leur texte
+(`error.message` d'une exception navigateur/WebRTC, ou un repli anglais comme `'Failed to create
+offer'`) n'est pas visuellement identique à une clé `toasts.*` — contrairement aux deux codes internes
+(`PEER_CONNECTION_FAILED`/`ICE_CONNECTION_FAILED`) dont le texte anglais coïncidait BYTE-À-BYTE avec
+la traduction. Mais le mécanisme de duplication ne dépend pas du contenu du message : `onError` est
+TOUJOURS forwardé vers un toast unique côté consommateur, donc TOUT `toast.error` posé juste avant
+lui, quel que soit son texte, produit un second toast — brut, jamais traduit, empilé sur celui,
+correctement localisé (ou au générique préfixé `t('toasts.connectionError') + ': ' + error.message`),
+que `handleWebRTCError` affiche déjà.
+
+## Fix
+
+Retrait des sept `toast.error(...)` restants (`onError` générique du service, `initializeLocalStream`,
+`createOffer`, `handleOffer`, `handleAnswer`, renégociation offre, renégociation réponse) —
+`setError(...)` et `onError?.(...)` intacts sur chacun, même geste que la Vague 151.
+
+## Tests (TDD, RED confirmé)
+
+`use-webrtc-p2p.test.tsx` : 5 assertions `expect(toast.error).not.toHaveBeenCalled()` ajoutées aux
+tests d'erreur existants (initialisation, createOffer, handleOffer, handleAnswer), + 3 tests neufs
+(renégociation offre en échec, renégociation réponse en échec, erreur générique du service). RED
+confirmé par `git stash` du seul fichier de production sur la base Vague 151 (2 sites déjà fixés) :
+**7/75 tests rouges**, chacun échouant précisément sur `expect(toast.error).not.toHaveBeenCalled()`
+avec le texte brut anciennement toasté en preuve. GREEN après fix : **75/75**. Sweep web
+`--testPathPatterns="[Cc]all|webrtc"` : **60 suites / 796 tests** verts, 0 régression. `npx tsc
+--noEmit` (apps/web, diff `git stash`/`stash pop`) : **0 erreur ajoutée** — 1276 erreurs préexistantes,
+compte identique avant/après ; 0 erreur sur `use-webrtc-p2p.ts` avant comme après.
+
+## Risk assessment
+
+Faible — même raisonnement que la Vague 151 : le seul consommateur de production forwarde déjà
+`onError` vers un toast unique sur ces sept chemins ; retirer le toast du hook ne supprime AUCUNE
+notification utilisateur, seulement le doublon.
+
+## Non fait volontairement / reste ouvert
+
+`toast.success('Connected!')` reste un texte anglais codé en dur — pas un doublon (aucun toast de
+succès équivalent côté consommateur), dette i18n distincte, hors périmètre. Note de processus pour
+la routine elle-même : la collision de numérotation « Vague 151 » deux fois (deux exécutions
+parallèles, deux correctifs de portée différente sur le même fichier, méritant chacun le même nom)
+a produit une clôture de PR sur une affirmation non vérifiée exhaustivement (« no functional diff
+remains to merge ») — troisième occurrence documentée de ce motif après les cycles 49 bis/77/78 :
+**une clôture-pour-doublon doit diffuser le fichier ENTIER, pas seulement les lignes citées dans le
+message du commit qui a motivé la clôture.** Reconduits (inchangés) : dead code / god-object
+`CallManager.swift` ; ADR `actor CallEventQueue` ; iOS single-peer côté groupe ; `canCallBack`/
+`BubbleCallNoticeView` anonyme non audité iOS ; fuite `createPeerConnection()` au-delà du site déjà
+patché (Vague 148) ; kick modérateur sans vérification du rôle CONVERSATION de la cible.
+
+## Vague 154 — `callBack`/`joinOngoingCall` gagnent le garde `anonymousSession == nil` (iOS) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling, iOS). Ferme le
+suivi laissé ouvert par la Vague 146 (« le jumeau iOS potentiel … n'a pas été audité jusqu'au bout »)
+— toolchain iOS toujours hors d'atteinte dans ce sandbox Linux (pas de `xcodebuild`/`swift`), mais
+l'audit de LECTURE peut se terminer sans compiler : la chaîne d'enfilage a été tracée jusqu'au bout
+(`BubbleCallNoticeView` → `MessageListView`/`MessageListViewController` → `ConversationViewModel`),
+confirmant que le gate anonyme manquait réellement côté `ConversationViewModel`, exactement comme
+suspecté.
+
+- **Root cause** : `ConversationView`'s header masque déjà tout affordance d'appel pour une session
+  anonyme (`anonymousHeaderBar`), mais `ConversationViewModel.callBack(for:)` et `joinOngoingCall(_:)`
+  — atteints depuis une bulle de résumé d'appel plus bas dans l'historique, PAS depuis l'en-tête —
+  ne portaient aucun garde `anonymousSession`. Un invité anonyme (lien partagé) pouvait donc déclencher
+  le prompt OS de permission microphone (`CallManager.requestPermissionsThenStartCall`) ou un
+  round-trip serveur de rejoin, avant que le gate `isAnonymous` du gateway
+  (`CallEventsHandler.ts:2274`) ne refuse l'appel côté serveur. Même famille de défaut que la Vague
+  146 (web) et la Vague 145 (kick anonyme serveur) : un contrôle qui a l'air présent (en-tête) et
+  absent sur son jumeau (bulle).
+- **Fix** : `guard anonymousSession == nil else { return }` ajouté en tête des deux méthodes —
+  `callBack(for:)` (couvre aussi son branchement `Task { await joinOngoingCall(summary) }` pour le cas
+  `isLive`) et `joinOngoingCall(_:)` (re-assertion défensive, appelable indépendamment). Zéro
+  changement de signature, zéro impact pour un utilisateur inscrit (`anonymousSession == nil` déjà le
+  cas par défaut).
+- **Tests** (TDD — écrits mais non exécutables dans ce sandbox, cf. note toolchain) :
+  `ConversationViewModelTests.swift` — `test_joinOngoingCall_whileAnonymous_neverQueriesServerOrRejoins`
+  (await direct, vérifie `activeCallService.callCount == 0`) et
+  `test_callBack_liveSummaryWhileAnonymous_neverJoinsOrStartsCall` (expectation inversée sur le hook
+  `MockActiveCallService.onCalled`, motif déjà en usage dans ce fichier pour les Task fire-and-forget).
+  Les 5 tests `joinOngoingCall` existants restent verts par construction (`anonymousSession` défaut
+  `nil` dans `makeSUT`, comportement inchangé). Vérification effective déléguée à la CI macOS
+  (`ios.yml`) — aucun `xcodebuild`/`swift` disponible dans cet environnement Linux pour un RED/GREEN
+  local.
+- **Non fait volontairement** (reconduits, inchangés) : dead code / god-object `CallManager.swift`
+  (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; iOS single-peer côté groupe ; fuite
+  `createPeerConnection()` au-delà du site déjà patché (Vague 148, web) ; kick modérateur sans
+  vérification du rôle CONVERSATION de la cible.

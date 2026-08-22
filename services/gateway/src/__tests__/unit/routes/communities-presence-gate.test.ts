@@ -373,3 +373,153 @@ describe('GET /communities/search — routage des deux régimes', () => {
     expect(mockResolveForTargets).not.toHaveBeenCalled();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /communities/:id/conversations — le régime est tranché par le `where`
+//
+// Le contrôle d'accès de la route ne referme que les communautés PRIVÉES, ce
+// qui suggérerait le régime mixte. Mais la requête filtre
+// `participants: { some: { userId } }` : elle ne rend que les conversations
+// dont l'appelant est LUI-MÊME participant. Toute personne listée est donc un
+// co-participant — contexte acquis, prefs-only, sans condition.
+//
+// **Lire le `where` avant de choisir le régime.** Le contrôle d'accès, plus
+// permissif, aurait conduit au strict à tort.
+//
+// Le schéma, lui, déclarait `members[]` (que le handler ne produit pas) et
+// supprimait `participants` (qu'il produit), avec un `user: { type: 'object' }`
+// nu par-dessus. La réponse sortait sans titre, sans type et sans participants
+// — pendant que le web la type `Conversation[]`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CONVO_ID = '507f1f77bcf86cd799439077';
+
+async function fetchCommunityConversations(participants: ReadonlyArray<Record<string, unknown>>) {
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  app.decorate('authenticate', async (req: any) => { req.authContext = authContextFor(VIEWER_ID); });
+  app.decorate('prisma', {
+    community: {
+      findFirst: jest.fn<any>().mockResolvedValue({
+        createdBy: VIEWER_ID,
+        isPrivate: false,
+        members: [{ userId: VIEWER_ID }],
+      }),
+    },
+    conversation: {
+      findMany: jest.fn<any>().mockResolvedValue([{
+        id: CONVO_ID,
+        identifier: 'mshy_general',
+        title: 'Général',
+        type: 'group',
+        description: null,
+        avatar: null,
+        banner: null,
+        isActive: true,
+        communityId: COMM_ID,
+        memberCount: 2,
+        lastMessageAt: new Date('2026-08-22T10:00:00.000Z'),
+        createdAt: new Date('2026-08-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-08-22T10:00:00.000Z'),
+        participants,
+        _count: { messages: 12, participants: 2 },
+      }]),
+    },
+  } as any);
+  await communityRoutes(app);
+  await app.ready();
+  const res = await app.inject({ method: 'GET', url: `/communities/${COMM_ID}/conversations` });
+  await app.close();
+  return res.json().data[0];
+}
+
+const convoParticipant = (userId: string | null, isOnline: boolean) => ({
+  id: `part-${userId ?? 'anon'}`,
+  userId,
+  displayName: userId ?? 'Invité',
+  role: 'member',
+  isActive: true,
+  // Le handler fait `include`, pas `select` : TOUTES les colonnes scalaires de
+  // `Participant` arrivent, dont celle-ci — le SHA-256 du jeton de session
+  // anonyme, dénormalisé pour la recherche indexée. Elle est portée par la
+  // fixture de TOUS les témoins de cette route, et le témoin de liste fermée
+  // ci-dessous atteste qu'elle n'en sort jamais.
+  sessionTokenHash: 'sha256-jeton-de-session-anonyme',
+  user: userId ? { id: userId, username: userId, displayName: userId, avatar: null, isOnline } : null,
+});
+
+describe('GET /communities/:id/conversations — la conversation atteint le fil', () => {
+  it('sert titre, type et identifiant — le web la type `Conversation[]`', async () => {
+    mockResolvePrefsOnly.mockResolvedValue(new Map([[SHY_ID, VISIBLE]]));
+
+    const convo = await fetchCommunityConversations([convoParticipant(SHY_ID, true)]);
+
+    expect(convo).toMatchObject({
+      id: CONVO_ID, identifier: 'mshy_general', title: 'Général', type: 'group', isActive: true,
+    });
+  });
+
+  // Ce que la réparation de la dérive de noms aurait pu coûter. Le réflexe
+  // devant une clé déclarée qui ne correspond à aucune clé posée est d'ouvrir
+  // le sérialiseur — `additionalProperties: true` répare les trois dérives de
+  // cette route en une ligne. Il aurait aussi publié le `sessionTokenHash` de
+  // chaque participant anonyme à tout membre de la communauté, puisque le
+  // handler fait `include`. La liste du schéma est FERMÉE ; ce témoin garde ce
+  // choix, et tombe sur la ligne qui l'ouvrirait.
+  it('ne laisse JAMAIS sortir le `sessionTokenHash` de la ligne Participant', async () => {
+    mockResolvePrefsOnly.mockResolvedValue(new Map([[SHY_ID, VISIBLE]]));
+
+    const convo = await fetchCommunityConversations([convoParticipant(SHY_ID, true)]);
+    const serialised = JSON.stringify(convo);
+
+    expect(convo.participants[0].sessionTokenHash).toBeUndefined();
+    expect(serialised).not.toContain('sessionTokenHash');
+    expect(serialised).not.toContain('sha256-jeton-de-session-anonyme');
+  });
+
+  it('sert `participants` — le schéma déclarait `members`, que rien ne produit', async () => {
+    mockResolvePrefsOnly.mockResolvedValue(new Map([[SHY_ID, VISIBLE]]));
+
+    const convo = await fetchCommunityConversations([convoParticipant(SHY_ID, true)]);
+
+    expect(convo.participants).toHaveLength(1);
+    expect(convo.participants[0]).toMatchObject({ userId: SHY_ID, role: 'member' });
+    expect(convo.participants[0].user).toMatchObject({ id: SHY_ID });
+    expect(convo._count).toMatchObject({ messages: 12, participants: 2 });
+  });
+});
+
+describe('GET /communities/:id/conversations — gate de présence', () => {
+  it('masque la présence d’un co-participant qui l’a coupée', async () => {
+    mockResolvePrefsOnly.mockResolvedValue(new Map([[SHY_ID, HIDDEN]]));
+
+    const convo = await fetchCommunityConversations([convoParticipant(SHY_ID, true)]);
+
+    expect(convo.participants[0].user.isOnline).toBe(false);
+  });
+
+  it('conserve la présence que les préférences autorisent', async () => {
+    mockResolvePrefsOnly.mockResolvedValue(new Map([[OPEN_ID, VISIBLE]]));
+
+    const convo = await fetchCommunityConversations([convoParticipant(OPEN_ID, true)]);
+
+    expect(convo.participants[0].user.isOnline).toBe(true);
+  });
+
+  it('résout en prefs-only — jamais le critère strict', async () => {
+    await fetchCommunityConversations([convoParticipant(SHY_ID, true)]);
+
+    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([SHY_ID]);
+    expect(mockResolveForTargets).not.toHaveBeenCalled();
+  });
+
+  it('laisse un participant anonyme visible', async () => {
+    const convo = await fetchCommunityConversations([convoParticipant(null, true)]);
+
+    // `user` est déclaré `nullable: true` : un participant anonyme n'en a pas,
+    // et le sérialiseur rend `null` — il ne supprime pas la clé. La ligne reste
+    // servie, et aucune résolution n'est ouverte faute de `userId`.
+    expect(convo.participants[0].user).toBeNull();
+    expect(convo.participants[0]).toMatchObject({ userId: null, displayName: 'Invité' });
+    expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
+  });
+});

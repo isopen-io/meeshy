@@ -11,15 +11,41 @@ import MeeshyUI
 // Réactive le geste de retour par bord gauche d'iOS quand la nav bar est masquée.
 
 private struct InteractivePopEnabler: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> PopEnablerVC { PopEnablerVC() }
-    func updateUIViewController(_ vc: PopEnablerVC, context: Context) {}
+    /// **La Rivière défile HORIZONTALEMENT — le geste de bord doit lui céder.**
+    /// Retour produit 2026-08-21 : « aucune possibilité de naviguer librement
+    /// horizontalement ». Le geste de retour par bord gauche d'iOS, réactivé
+    /// ici pour toutes les autres vues du fil, s'emparait de chaque balayage
+    /// latéral : mesuré au simulateur, un glissement dans la Rivière fermait
+    /// la conversation au lieu de changer de couloir. Le fil vertical, lui,
+    /// n'a jamais eu d'axe horizontal à défendre — d'où l'activation d'origine,
+    /// conservée intégralement partout ailleurs. Le bouton « Retour » de
+    /// l'en-tête reste, dans les deux cas, le chemin explicite.
+    let allowsEdgeSwipe: Bool
+
+    func makeUIViewController(context: Context) -> PopEnablerVC {
+        let vc = PopEnablerVC()
+        vc.allowsEdgeSwipe = allowsEdgeSwipe
+        return vc
+    }
+
+    func updateUIViewController(_ vc: PopEnablerVC, context: Context) {
+        vc.allowsEdgeSwipe = allowsEdgeSwipe
+        vc.applyEdgeSwipePolicy()
+    }
 
     final class PopEnablerVC: UIViewController {
+        var allowsEdgeSwipe: Bool = true
+
         override func viewWillAppear(_ animated: Bool) {
             super.viewWillAppear(animated)
-            navigationController?.interactivePopGestureRecognizer?.isEnabled = true
+            applyEdgeSwipePolicy()
+        }
+
+        func applyEdgeSwipePolicy() {
+            guard let recognizer = navigationController?.interactivePopGestureRecognizer else { return }
+            recognizer.isEnabled = allowsEdgeSwipe
             // delegate = nil permet le geste même sans barre de navigation visible
-            navigationController?.interactivePopGestureRecognizer?.delegate = nil
+            recognizer.delegate = allowsEdgeSwipe ? nil : recognizer.delegate
         }
     }
 }
@@ -605,6 +631,13 @@ struct ConversationView: View {
     }
 
     /// SDK `MeeshyConversation.ConversationType` (8 cas) → miroir GELÉ de la
+    /// Hauteur de la bande de boutons de l'en-tête flottant, sous la safe
+    /// area : une rangée à la cible tactile HIG (`meeshyTapTarget`, 44) plus
+    /// le retrait haut que `expandedHeaderBand` s'applique. C'est la seule
+    /// cote de CE fichier que la Rivière consomme — la peau, elle, ne connaît
+    /// que ses propres tokens (`RiverMetrics`).
+    static let riverHeaderClearance: CGFloat = 44 + MeeshySpacing.sm
+
     /// loi de lecture (`ReadingModeOrchestrator.ConversationType`, 5 cas —
     /// RE-PREUVE : `community`/`channel`/`bot` n'y existent pas). Les trois
     /// cas absents sont des conversations multi-parties comme `.group` —
@@ -1058,7 +1091,7 @@ struct ConversationView: View {
     private var bodyWithLifecycle: AnyView {
         AnyView(
         bodyContent
-            .background(InteractivePopEnabler())
+            .background(InteractivePopEnabler(allowsEdgeSwipe: readingModeController.mode != .river))
             .task {
                 // Activate the live (StateObject-retained) VM exactly once.
                 // Heavy side-effects (GRDB observation, initial load, Combine
@@ -1335,16 +1368,77 @@ struct ConversationView: View {
             // Chantier Rivière iOS, lot 1 (2026-08-21) — le mode `.river` route
             // vers un HÔTE DÉDIÉ, comme `.summary` : la géométrie vient de la
             // loi partagée (`RiverLaneResolver`), le texte du Prisme (traduction
-            // préférée ou original), les messages système ne sont la voix de
+            // préférée ou original), et un avis système n'est la voix de
             // personne (`RiverConversationMapping`).
             if readingModeController.mode == .river {
-                AnyView(RiverConversationHost(
+                // `Color.clear.overlay { … }` plutôt que l'hôte nu : la Rivière
+                // est LARGE par nature (jusqu'à sept couloirs de 300 pt) et un
+                // `ScrollView` rend la taille IDÉALE de son contenu quand on ne
+                // lui propose rien — ce ZStack s'élargissait alors à ~2100 pt et
+                // CENTRAIT tous ses autres enfants dessus, en-tête compris
+                // (mesuré au simulateur : bouton « Retour » à x = −683, hors
+                // écran, malgré son `zIndex(100)`). Un `overlay` reçoit la
+                // taille de son hôte et ne la fait JAMAIS grandir : le
+                // débordement s'arrête ici.
+                AnyView(Color.clear.overlay(RiverConversationHost(
                     messages: viewModel.messages,
                     viewerId: viewModel.currentUserIdForView,
+                    // Îlot dynamique + bande de boutons de l'en-tête flottant
+                    // (`floatingHeaderSection`, zIndex 100) : la Rivière PINGLE
+                    // sa bande de couloirs en haut de son pane, elle doit donc
+                    // commencer SOUS l'en-tête — contrairement au fil, dont les
+                    // bulles ont le droit de défiler dessous.
+                    topInset: previewMode ? 0 : DeviceLayout.safeAreaTop + Self.riverHeaderClearance,
+                    // R-7 : la même réserve basse que le fil — le composeur
+                    // n'est jamais une zone où une bulle reste prise.
+                    bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
+                    // R-5 : identité vivante — les MÊMES sources que le Fil
+                    // (`MessageListViewController` : présence par expéditeur,
+                    // anneau de story sauf pour soi, fiche par le routeur).
+                    presence: { message in PresenceManager.shared.presenceState(for: message.senderId) },
+                    storyRing: { message in
+                        message.isMe ? .none : storyViewModel.storyRingState(forUserId: message.senderId)
+                    },
+                    onOpenProfile: { user in
+                        if user.isAnonymous, let participantId = user.participantId, let conversationId = conversation?.id {
+                            router.participantProfileTarget = ParticipantProfileTarget(
+                                conversationId: conversationId,
+                                participantId: participantId
+                            )
+                        } else {
+                            router.deepLinkProfileUser = user
+                        }
+                    },
+                    onViewStory: { userId in
+                        overlayState.storyViewerUserId = userId
+                        overlayState.storyViewerSlideIndex = 0
+                        overlayState.storyViewerStartAtFirstUnviewed = true
+                        overlayState.showStoryViewer = true
+                    },
+                    // Lot 3 : mêmes retours au Fil que le Résumé — Script,
+                    // puis atterrissage sur le message (et le composeur en
+                    // mode réponse pour « Répondre »).
+                    onOpenInThread: { messageId in
+                        readingModeController.select(.script)
+                        scrollState.scrollToMessageId = messageId
+                        scrollState.scrollToMessageTrigger += 1
+                    },
+                    onReply: { messageId in
+                        readingModeController.select(.script)
+                        guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                        triggerReply(for: msg)
+                        scrollState.scrollToMessageId = messageId
+                        scrollState.scrollToMessageTrigger += 1
+                    },
                     text: { message in
                         viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
                     }
-                ))
+                )))
+                // Le pane monte JUSQU'AU bord physique haut : `topInset` porte
+                // déjà la safe area, et sans cela le fil (rendu dessous)
+                // réapparaissait dans la bande de la barre d'état — une
+                // deuxième conversation par-dessus la première.
+                .ignoresSafeArea(edges: .top)
                 .zIndex(80)
                 .transition(.opacity)
             }
@@ -1781,7 +1875,11 @@ struct ConversationView: View {
                     }
                 )
             }
-            .zIndex(50)
+            // R-7 (2026-08-22) : en Rivière, le composeur passe AU-DESSUS du
+            // pane (80) — le pane lui réserve sa hauteur (`bottomInset`) et
+            // c'est lui qui est recouvert sinon (mesuré au simulateur :
+            // champ « Message… » présent à y = 797, invisible).
+            .zIndex(readingModeController.mode == .river ? 85 : 50)
             // Chrome escamoté pendant le défilement Focal : glissement vers le
             // bord BAS + fondu (`EdgeHiddenChrome`) — le composeur garde sa
             // hauteur mesurée (aucun inset ne bouge, donc aucun re-scaling du

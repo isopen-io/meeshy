@@ -381,4 +381,149 @@ class ConversationLockFlowViewModelTest {
 
         assertThat(vm.state.value.lockPrompt).isNull()
     }
+
+    // MARK: - Change master PIN (Settings → verify current, enter new, confirm)
+
+    @Test
+    fun the_change_affordance_surfaces_only_once_a_master_pin_exists() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore()
+        val vm = viewModel(store)
+        advanceUntilIdle()
+        assertThat(vm.state.value.hasMasterPin).isFalse()
+        assertThat(vm.state.value.canChangeMasterPin).isFalse()
+
+        // A first-time setup+lock flow installs a master PIN — the mirror must flip to true.
+        vm.onLockToggle("c1")
+        vm.enter("123456")
+        vm.enter("123456")
+        vm.enter("4321")
+        vm.enter("4321")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.hasMasterPin).isTrue()
+        assertThat(vm.state.value.canChangeMasterPin).isTrue()
+    }
+
+    @Test
+    fun changing_the_master_pin_replaces_it_leaving_locks_untouched() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply {
+            setMasterPin("123456")
+            setLock("c1", "4321")
+        }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+
+        vm.onChangeMasterPin()
+        assertThat(vm.state.value.lockPrompt?.mode).isEqualTo(LockPinMode.CHANGE_MASTER_PIN)
+
+        vm.enter("123456")            // verify current
+        vm.enter("654321")            // new
+        vm.enter("654321")            // confirm new
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.lockPrompt).isNull()
+        assertThat(store.verifyMasterPin("654321")).isTrue()
+        assertThat(store.verifyMasterPin("123456")).isFalse()
+        // Locks are untouched by a master-PIN change.
+        assertThat(store.isLocked("c1")).isTrue()
+    }
+
+    @Test
+    fun a_wrong_current_master_pin_keeps_the_change_sheet_open_and_changes_nothing() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply { setMasterPin("123456") }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+
+        vm.onChangeMasterPin()
+        vm.enter("000000")
+
+        assertThat(vm.state.value.lockPrompt?.mode).isEqualTo(LockPinMode.CHANGE_MASTER_PIN)
+        assertThat(vm.state.value.lockPrompt?.error).isEqualTo(LockPinError.MASTER_PIN_INCORRECT)
+        assertThat(store.verifyMasterPin("123456")).isTrue()
+    }
+
+    @Test
+    fun change_is_inert_without_a_master_pin() = runTest(dispatcher) {
+        val vm = viewModel(InMemoryConversationLockStore())
+        advanceUntilIdle()
+
+        vm.onChangeMasterPin()
+
+        assertThat(vm.state.value.lockPrompt).isNull()
+    }
+
+    // MARK: - Remove master PIN (Settings → verify, clear)
+
+    @Test
+    fun the_remove_affordance_requires_a_pin_and_no_locks() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore()
+        val vm = viewModel(store)
+        advanceUntilIdle()
+        assertThat(vm.state.value.canRemoveMasterPin).isFalse()   // no PIN
+
+        store.setMasterPin("123456")
+        store.setLock("c1", "4321")                               // fires the flow
+        advanceUntilIdle()
+        assertThat(vm.state.value.canRemoveMasterPin).isFalse()   // PIN but a lock survives
+
+        store.removeLock("c1")
+        advanceUntilIdle()
+        assertThat(vm.state.value.canRemoveMasterPin).isTrue()    // PIN and nothing locked
+    }
+
+    @Test
+    fun removing_the_master_pin_clears_it() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply { setMasterPin("123456") }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+
+        vm.onRemoveMasterPin()
+        assertThat(vm.state.value.lockPrompt?.mode).isEqualTo(LockPinMode.REMOVE_MASTER_PIN)
+
+        vm.enter("123456")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.lockPrompt).isNull()
+        assertThat(store.hasMasterPin()).isFalse()
+        assertThat(vm.state.value.hasMasterPin).isFalse()
+    }
+
+    @Test
+    fun a_wrong_remove_master_pin_keeps_it() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply { setMasterPin("123456") }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+
+        vm.onRemoveMasterPin()
+        vm.enter("000000")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.lockPrompt?.mode).isEqualTo(LockPinMode.REMOVE_MASTER_PIN)
+        assertThat(vm.state.value.lockPrompt?.error).isEqualTo(LockPinError.MASTER_PIN_INCORRECT)
+        assertThat(store.hasMasterPin()).isTrue()
+    }
+
+    @Test
+    fun remove_is_inert_without_a_master_pin() = runTest(dispatcher) {
+        val vm = viewModel(InMemoryConversationLockStore())
+        advanceUntilIdle()
+
+        vm.onRemoveMasterPin()
+
+        assertThat(vm.state.value.lockPrompt).isNull()
+    }
+
+    @Test
+    fun remove_is_inert_while_a_conversation_is_locked() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply {
+            setMasterPin("123456")
+            setLock("c1", "4321")
+        }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+
+        vm.onRemoveMasterPin()
+
+        assertThat(vm.state.value.lockPrompt).isNull()
+    }
 }

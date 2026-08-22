@@ -27,7 +27,8 @@ export function ParticipantProfileDialog({
   onClose,
 }: ParticipantProfileDialogProps) {
   const { t } = useI18n('conversations');
-  const { data, isLoading, isError } = useParticipantProfile(conversationId, participantId);
+  const { data, isLoading, isError, error } = useParticipantProfile(conversationId, participantId);
+  const hasLeft = (error as (Error & { code?: string }) | null)?.code === 'PARTICIPANT_LEFT';
   const updateRights = useUpdateParticipantRights(conversationId, participantId);
 
   return (
@@ -43,8 +44,14 @@ export function ParticipantProfileDialog({
           </div>
         )}
         {isError && (
+          // « Parti » et « indisponible » ne disent pas la même chose. Un avis
+          // d'arrivée reste dans le fil pour toujours et mène ici longtemps
+          // après le départ de son auteur : servir « Fiche indisponible » dans
+          // ce cas ferait passer un fait de conversation pour une panne.
           <p className="text-sm text-gray-500" data-testid="participant-profile-error">
-            {t('participantProfile.unavailable', 'Fiche indisponible')}
+            {hasLeft
+              ? t('participantProfile.hasLeft', 'Cette personne a quitté la conversation')
+              : t('participantProfile.unavailable', 'Fiche indisponible')}
           </p>
         )}
         {data && (

@@ -154,29 +154,70 @@ def mock_voice_clone_service():
 
 @pytest.fixture
 def mock_voice_analyzer():
-    """Mock pour le service d'analyse vocale"""
-    service = MagicMock()
-    service.is_initialized = True
+    """
+    Double de VoiceAnalyzerService — SPÉCIFIÉ, et c'est le point.
+
+    Ce double était un `MagicMock()` nu. Un MagicMock nu accepte n'importe quel
+    argument nommé et fabrique n'importe quel attribut à la demande : il rendait
+    donc vert `analyze(audio_path=…, analysis_types=…)`, que le vrai service
+    refuse (`TypeError`), et `compare_voices(…)`, qui n'existe pas du tout sur
+    lui (`AttributeError`). Les deux opérations étaient MORTES en production,
+    avalées par le `except Exception` d'`operation_handlers`, avec des témoins
+    verts au-dessus.
+
+    `create_autospec` referme exactement cet écart, et il faut bien
+    l'autospec : `MagicMock(spec=…)` ne contrôle que l'EXISTENCE des attributs,
+    pas les signatures — et réassigner `service.analyze = AsyncMock(...)`
+    effacerait de toute façon ce que le spec y avait posé. Avec l'autospec, le
+    double ne connaît que les méthodes du vrai service ET refuse un argument
+    nommé qu'elles ne prennent pas : les deux pannes tombent ici, au lieu de
+    tomber chez l'utilisateur.
+
+    Les charges utiles rendues sont celles de `VoiceCharacteristics.to_dict()` /
+    `VoiceSimilarityResult.to_dict()` — snake_case imbriqué. L'ancien double
+    rendait une forme camelCase qu'aucun émetteur du dépôt ne produit ; c'est
+    elle qui a fait croire au contrat déclaré côté passerelle.
+    """
+    from unittest.mock import create_autospec
+    from services.voice_analyzer_service import VoiceAnalyzerService
+
+    service = create_autospec(VoiceAnalyzerService, instance=True)
 
     mock_result = MagicMock()
     mock_result.to_dict = MagicMock(return_value={
-        'pitch': {'mean': 150.5, 'std': 25.3, 'min': 100, 'max': 200},
-        'timbre': {'spectralCentroid': 1500, 'spectralBandwidth': 500},
-        'mfcc': {'coefficients': [1.0, 0.5, 0.3], 'mean': [0.8, 0.4]},
-        'classification': {'voiceType': 'medium_male', 'gender': 'male', 'confidence': 0.85}
+        'pitch': {'mean_hz': 150.5, 'std_hz': 25.3, 'min_hz': 100.0, 'max_hz': 200.0,
+                  'range_hz': 100.0},
+        'classification': {'voice_type': 'medium_male', 'estimated_gender': 'male',
+                           'estimated_age_range': 'adult'},
+        'spectral': {'centroid_hz': 1500.0, 'bandwidth_hz': 500.0, 'rolloff_hz': 3000.0,
+                     'flatness': 0.04, 'brightness': 1500.0, 'warmth': 0.6,
+                     'breathiness': 0.2, 'nasality': 0.1},
+        'energy': {'mean': 0.08, 'std': 0.02, 'dynamic_range_db': 45.0,
+                   'silence_ratio': 0.2},
+        'quality': {'harmonics_to_noise': 14.0, 'jitter': 0.01, 'shimmer': 0.03},
+        'prosody': {'speech_rate_wpm': 140.0},
+        'mfcc': {'mean': [0.8, 0.4], 'std': [0.2, 0.1]},
+        'metadata': {'sample_rate': 22050, 'bit_depth': 16, 'channels': 1, 'codec': 'wav',
+                     'duration_seconds': 8.0, 'analysis_time_ms': 300, 'confidence': 0.85}
     })
 
     mock_compare = MagicMock()
     mock_compare.to_dict = MagicMock(return_value={
-        'overallSimilarity': 0.85,
-        'pitchSimilarity': 0.90,
-        'timbreSimilarity': 0.80,
-        'verdict': 'same_speaker',
-        'confidence': 0.87
+        'overall_score': 0.85,
+        'is_likely_same_speaker': True,
+        'confidence': 0.87,
+        'components': {
+            'pitch_similarity': 0.90,
+            'timbre_similarity': 0.80,
+            'mfcc_similarity': 0.86,
+            'energy_similarity': 0.78
+        },
+        'details': {},
+        'analysis_time_ms': 420
     })
 
-    service.analyze = AsyncMock(return_value=mock_result)
-    service.compare = AsyncMock(return_value=mock_compare)
+    service.analyze.return_value = mock_result
+    service.compare.return_value = mock_compare
     return service
 
 
@@ -460,7 +501,14 @@ class TestVoiceAnalysisHandlers:
 
     @pytest.mark.asyncio
     async def test_handle_compare_success(self, voice_api_handler, audio_base64):
-        """Test la comparaison vocale - structure de réponse"""
+        """
+        La comparaison vocale RÉUSSIT.
+
+        Ce témoin acceptait auparavant `voice_api_success` OU `voice_api_error`,
+        donc il ne pouvait pas tomber — et il passait, vert, pendant que
+        `compare_voices` levait `AttributeError` sur chaque appel. Un témoin qui
+        accepte les deux issues n'atteste rien.
+        """
         request_data = {
             'type': 'voice_compare',
             'taskId': str(uuid.uuid4()),
@@ -471,12 +519,37 @@ class TestVoiceAnalysisHandlers:
 
         result = await voice_api_handler.handle_request(request_data)
 
-        # Test response structure - may succeed or fail gracefully
-        assert result['type'] in ['voice_api_success', 'voice_api_error']
+        assert result['type'] == 'voice_api_success'
         assert 'timestamp' in result
+        assert result['result']['overall_score'] == 0.85
+        assert result['result']['components']['pitch_similarity'] == 0.90
 
-        if result['type'] == 'voice_api_success':
-            assert 'result' in result
+    @pytest.mark.asyncio
+    async def test_handle_analyze_serves_the_emitted_families(
+        self, voice_api_handler, audio_base64
+    ):
+        """
+        L'analyse rend les familles que `VoiceCharacteristics.to_dict()` produit.
+
+        Le double étant désormais `spec`é sur le vrai service, ce témoin tombe
+        si `handle_analyze` réintroduit un argument nommé que
+        `VoiceAnalyzerService.analyze` ne prend pas.
+        """
+        request_data = {
+            'type': 'voice_analyze',
+            'taskId': str(uuid.uuid4()),
+            'userId': 'user_123',
+            'audioBase64': audio_base64,
+            'analysisTypes': ['pitch', 'timbre', 'mfcc']
+        }
+
+        result = await voice_api_handler.handle_request(request_data)
+
+        assert result['type'] == 'voice_api_success'
+        assert result['result']['pitch']['mean_hz'] == 150.5
+        assert result['result']['spectral']['centroid_hz'] == 1500.0
+        assert result['result']['energy']['dynamic_range_db'] == 45.0
+        assert result['result']['metadata']['confidence'] == 0.85
 
 
 # ═══════════════════════════════════════════════════════════════════════════

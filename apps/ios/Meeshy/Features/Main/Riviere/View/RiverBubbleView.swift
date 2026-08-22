@@ -28,6 +28,20 @@ struct RiverBubbleContent: Equatable {
     /// mimerait une branche que le verdict de forme vient de retirer.
     let layout: RiverLaneResolver.RiverLayout
     let replyPreview: RiverReplyPreview?
+    /// L'avis système, prêt à peindre — non-nil UNIQUEMENT quand
+    /// `bubble.isSystem`. Défaut `nil` : les sites de montage antérieurs à
+    /// le lot 2 (et leurs témoins) restent inchangés.
+    let systemNotice: RiverSystemNotice?
+    /// Lot G (2026-08-22) — où la bulle se tient dans son groupe, déduit par
+    /// `RiverConversationMapping.groupPositions` (pur). Gouverne le CONTOUR :
+    /// une bulle jointe partage son bord haut en pointillé et laisse son bas
+    /// ouvert si la suivante la continue. Défaut `.solo` : contour fermé.
+    let groupPosition: RiverGroupPosition
+    /// R-5 (2026-08-22) — l'identité VIVANTE de la voix : présence, cercle de
+    /// story, avatar, fiche à ouvrir. Résolue par l'appelant (singletons de
+    /// l'app), injectée ici — la vue n'en lit aucun. `nil` pour un avis
+    /// système : il n'est la voix de personne.
+    let identity: RiverBubbleIdentity?
 
     init(
         bubble: RiverLaneResolver.RiverBubble,
@@ -36,7 +50,10 @@ struct RiverBubbleContent: Equatable {
         timeString: String,
         text: String,
         layout: RiverLaneResolver.RiverLayout,
-        replyPreview: RiverReplyPreview? = nil
+        replyPreview: RiverReplyPreview? = nil,
+        systemNotice: RiverSystemNotice? = nil,
+        groupPosition: RiverGroupPosition = .solo,
+        identity: RiverBubbleIdentity? = nil
     ) {
         self.bubble = bubble
         self.senderDisplayName = senderDisplayName
@@ -45,7 +62,107 @@ struct RiverBubbleContent: Equatable {
         self.text = text
         self.layout = layout
         self.replyPreview = replyPreview
+        self.systemNotice = systemNotice
+        self.groupPosition = groupPosition
+        self.identity = identity
     }
+}
+
+/// Ce qu'une tête de groupe montre de sa voix, au-delà du nom (R-5) : la
+/// pastille devient un vrai avatar (présence, cercle de story), et le nom
+/// devient ACTIVABLE — profil pour un compte, fiche d'information pour un
+/// visiteur sans compte (`ProfileSheetUser`, le MÊME type que le Fil).
+struct RiverBubbleIdentity: Equatable {
+    let avatarURL: String?
+    let presence: PresenceState?
+    let storyRing: StoryRingState
+    let profileUser: ProfileSheetUser
+    /// Compte de l'auteur — la story s'ouvre par lui ; `nil` pour un visiteur.
+    let userId: String?
+}
+
+// MARK: - Contour de groupe — une forme PURE, éprouvée sans monter la vue
+
+/// Le contour PLEIN d'une bulle selon sa position de groupe : fermé des
+/// quatre côtés quand elle est seule, OUVERT du côté qu'elle partage avec sa
+/// voisine. Le bord partagé n'est pas dessiné ici — c'est la jointure
+/// pointillée (`RiverBubbleView.sharedEdge`), posée à part. Les coins ne
+/// s'arrondissent qu'aux extrémités du groupe : un fond continu
+/// (`UnevenRoundedRectangle`, mêmes rayons) relie les bulles sans encoche.
+///
+/// Directive produit 2026-08-22 : « bordure jointe en pointillé et partagée,
+/// non pas des bordures fermées puis des pointillés en plus ».
+struct RiverBubbleOutline: Shape {
+    let position: RiverGroupPosition
+    let cornerRadius: CGFloat
+    let lineWidth: CGFloat
+
+    /// Rayons par coin — `r` aux coins EXTÉRIEURS du groupe, `0` là où la
+    /// bulle rencontre sa voisine (même valeur pour le fond et le contour).
+    static func cornerRadii(position: RiverGroupPosition, radius: CGFloat) -> RectangleCornerRadii {
+        let top: CGFloat = position.joinsAbove ? 0 : radius
+        let bottom: CGFloat = position.joinsBelow ? 0 : radius
+        return RectangleCornerRadii(topLeading: top, bottomLeading: bottom, bottomTrailing: bottom, topTrailing: top)
+    }
+
+    func path(in rect: CGRect) -> Path {
+        // Inset d'un demi-trait : le trait reste DANS la bulle, comme
+        // `strokeBorder` — le canvas derrière ne le voit jamais déborder.
+        let r = rect.insetBy(dx: lineWidth / 2, dy: lineWidth / 2)
+        let radius = min(cornerRadius, min(r.width, r.height) / 2)
+        var path = Path()
+        switch position {
+        case .solo:
+            path.addRoundedRect(in: r, cornerSize: CGSize(width: radius, height: radius), style: .continuous)
+        case .head:
+            // Remonte le flanc gauche, ferme le haut par ses deux coins,
+            // redescend le flanc droit — le bas reste ouvert.
+            path.move(to: CGPoint(x: r.minX, y: r.maxY))
+            path.addLine(to: CGPoint(x: r.minX, y: r.minY + radius))
+            path.addArc(center: CGPoint(x: r.minX + radius, y: r.minY + radius), radius: radius,
+                        startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+            path.addLine(to: CGPoint(x: r.maxX - radius, y: r.minY))
+            path.addArc(center: CGPoint(x: r.maxX - radius, y: r.minY + radius), radius: radius,
+                        startAngle: .degrees(270), endAngle: .degrees(360), clockwise: false)
+            path.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+        case .middle:
+            // Les deux flancs seulement — haut partagé, bas ouvert.
+            path.move(to: CGPoint(x: r.minX, y: r.minY))
+            path.addLine(to: CGPoint(x: r.minX, y: r.maxY))
+            path.move(to: CGPoint(x: r.maxX, y: r.minY))
+            path.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+        case .tail:
+            // Descend le flanc gauche, ferme le bas par ses deux coins,
+            // remonte le flanc droit — le haut est partagé.
+            path.move(to: CGPoint(x: r.minX, y: r.minY))
+            path.addLine(to: CGPoint(x: r.minX, y: r.maxY - radius))
+            path.addArc(center: CGPoint(x: r.minX + radius, y: r.maxY - radius), radius: radius,
+                        startAngle: .degrees(180), endAngle: .degrees(90), clockwise: true)
+            path.addLine(to: CGPoint(x: r.maxX - radius, y: r.maxY))
+            path.addArc(center: CGPoint(x: r.maxX - radius, y: r.maxY - radius), radius: radius,
+                        startAngle: .degrees(90), endAngle: .degrees(0), clockwise: true)
+            path.addLine(to: CGPoint(x: r.maxX, y: r.minY))
+        }
+        return path
+    }
+}
+
+/// **Un avis système n'est la voix de personne** — et la peau doit le dire.
+///
+/// La loi l'a déjà retiré des voix, des couloirs, des connecteurs et des
+/// groupes (`RiverLaneResolver`, « ce qu'un avis système n'est pas ») ; elle
+/// le sert quand même dans `bubbles`, avec son rang, et documente que « la
+/// peau le rend PLEINE LARGEUR ». Ce type porte de quoi le faire — en
+/// réutilisant les vues et les clés i18n du Fil, jamais un libellé réécrit
+/// pour la Rivière.
+enum RiverSystemNotice: Equatable {
+    /// « X a rejoint la conversation » — `BubbleJoinNoticeView`, qui sait dire
+    /// l'arrivant sans compte et les droits du lien d'entrée.
+    case join(BubbleContent.JoinNotice)
+    /// Résumé d'appel — `BubbleCallNoticeView`, la carte compacte du Fil.
+    case call(BubbleContent.CallNotice)
+    /// Tout autre jalon, déjà localisé par l'appelant.
+    case plain(String)
 }
 
 /// « La citation est une RÉFÉRENCE, pas une relecture » (§7ter A4) — une
@@ -104,6 +221,15 @@ nonisolated enum RiverBubbleLayout {
 /// d'auteur, même épaisseur que le trait), le reste neutre
 /// (`RiverMetrics.Bubble.flatBorderWidth`, 1pt).
 ///
+/// **Lot G (2026-08-22) — deux bulles d'un même groupe partagent UNE
+/// bordure.** Le contour suit la position de groupe (`RiverGroupPosition`,
+/// déduite purement par `RiverConversationMapping.groupPositions`) : fermé
+/// quand la bulle est seule, OUVERT du côté où la voisine se colle, et le
+/// bord partagé est un POINTILLÉ unique (`sharedEdge`) porté par la bulle qui
+/// continue. Le fond (`UnevenRoundedRectangle`) n'arrondit que les coins
+/// extérieurs du groupe — une seule surface, sans encoche. La forme du 21/08
+/// (contours fermés + couture pointillée intercalée) est retirée.
+///
 /// **« Le message en ENTIER »** (§7ter A1) : AUCUN `.lineLimit` sur le texte
 /// principal — c'est ce qui rend la hauteur du rang MESURÉE plutôt que
 /// supposée. La citation d'une réponse, elle, reste UNE ligne tronquée
@@ -123,6 +249,19 @@ nonisolated enum RiverBubbleLayout {
 struct RiverBubbleView: View, Equatable {
     let content: RiverBubbleContent
     let contentWidth: CGFloat
+    /// R-6 — « la citation mène à sa cible » : tap sur la citation ⇒ l'hôte
+    /// pose le curseur sur le message cité et le cadre. Reçu, jamais résolu
+    /// ici : cette vue ne connaît ni la géométrie ni le défilement.
+    var onOpenReply: ((String) -> Void)? = nil
+    /// R-5 — le nom (et l'avatar) ouvrent la fiche de la voix ; le cercle de
+    /// story non lue ouvre sa story. Reçus de l'hôte, jamais résolus ici.
+    var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
+    var onViewStory: ((String) -> Void)? = nil
+    /// Lot 3 — l'appui long : « Ouvrir dans le fil » (retour Script +
+    /// atterrissage, comme Résumé), « Répondre » (Script + composeur),
+    /// « Copier ». Les deux premiers sont des actes de l'hôte.
+    var onOpenInThread: ((String) -> Void)? = nil
+    var onReply: ((String) -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -135,6 +274,71 @@ struct RiverBubbleView: View, Equatable {
     private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Retour produit 2026-08-21 : « les messages s'empilent bord à
+            // bord sans espace ». Chaque rang porte SA propre respiration en
+            // tête — jamais un `spacing` sur la pile, qui ne saurait pas la
+            // remplacer par une couture. Le rythme vertical reste donc
+            // constant (`RiverMetrics.Row.gap`), et c'est son CONTENU qui dit
+            // s'il s'agit d'un silence ou d'une continuation.
+            topSeam
+            if content.bubble.isSystem {
+                systemNoticeRow
+            } else {
+                speechRow
+            }
+        }
+    }
+
+    /// Le haut du rang. Une nouvelle voix qui prend la parole gagne du VIDE
+    /// (`Row.gap`) ; la MÊME voix qui continue ne gagne RIEN — sa bulle vient
+    /// se COLLER à la précédente, bord à bord, et c'est SON contour qui porte
+    /// la jointure : un bord haut en pointillé, PARTAGÉ (`sharedEdge`), à la
+    /// place d'une couture posée entre deux contours fermés (directive produit
+    /// 2026-08-22 — la forme du 21/08, « bulles fermées + trait pointillé en
+    /// plus », est retirée). Le groupement lui-même reste une décision de la
+    /// LOI (`isFirstInGroup`) — cette vue ne fait que le dessiner.
+    @ViewBuilder
+    private var topSeam: some View {
+        if !content.groupPosition.joinsAbove {
+            Color.clear
+                .frame(width: contentWidth, height: RiverMetrics.Row.gap)
+                .accessibilityHidden(true)
+        }
+    }
+
+    // MARK: - Avis système — GRAVÉ, jamais une prise de parole
+
+    /// Pleine largeur, centré, heure EN TÊTE : exactement ce que le Fil et
+    /// Focal en font (`BubbleJoinNoticeView`, `FocalSystemNoticeRow`), donc
+    /// exactement les mêmes vues. Ni pastille d'auteur, ni contour de couloir,
+    /// ni heure en base : l'avis n'a pas d'auteur à montrer, et la loi ne lui
+    /// a donné aucune branche à porter. Il ne publie PAS son cadre — aucun
+    /// trait ne l'aborde, `RiverLaneCanvas` n'a rien à y lire.
+    @ViewBuilder
+    private var systemNoticeRow: some View {
+        Group {
+            switch content.systemNotice {
+            case .join(let notice):
+                BubbleJoinNoticeView(notice: notice, isDark: isDark, timeString: content.timeString)
+            case .call(let notice):
+                BubbleCallNoticeView(notice: notice, accentHex: colorHex, isDark: isDark)
+            case .plain(let text):
+                FocalSystemNoticeRow(text: text, isDark: isDark, timeString: content.timeString)
+            case .none:
+                // Un avis dont l'appelant n'a pas résolu le libellé garde
+                // quand même son rang et son heure — le fil ne saute jamais
+                // un jalon en silence.
+                FocalSystemNoticeRow(text: content.text, isDark: isDark, timeString: content.timeString)
+            }
+        }
+        .frame(width: contentWidth, alignment: .center)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Prise de parole
+
+    private var speechRow: some View {
         VStack(alignment: .leading, spacing: RiverMetrics.Bubble.baseGap) {
             if content.bubble.isFirstInGroup {
                 identityHeader
@@ -151,6 +355,37 @@ struct RiverBubbleView: View, Equatable {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
+        .contextMenu { bubbleMenu }
+    }
+
+    // MARK: - Appui long — les actes que le Fil offre déjà, avec ses mots
+
+    /// Les libellés sont CEUX du Fil (`action.reply`, `action.copy`,
+    /// `MessageMoreSheet`) — un seul vocabulaire pour un même acte.
+    @ViewBuilder
+    private var bubbleMenu: some View {
+        if let onOpenInThread {
+            Button {
+                onOpenInThread(content.bubble.messageId)
+            } label: {
+                Label(
+                    String(localized: "riviere.bubble.openInThread", defaultValue: "Ouvrir dans le fil", bundle: .main),
+                    systemImage: "text.bubble"
+                )
+            }
+        }
+        if let onReply {
+            Button {
+                onReply(content.bubble.messageId)
+            } label: {
+                Label(String(localized: "action.reply", defaultValue: "Répondre", bundle: .main), systemImage: "arrowshape.turn.up.left")
+            }
+        }
+        Button {
+            UIPasteboard.general.string = content.text
+        } label: {
+            Label(String(localized: "action.copy", defaultValue: "Copier", bundle: .main), systemImage: "doc.on.doc")
+        }
     }
 
     // MARK: - Corps du message — la bulle proprement dite
@@ -169,42 +404,92 @@ struct RiverBubbleView: View, Equatable {
                 .font(MeeshyFont.relative(FocalMetrics.Text.size))
                 .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: FocalMetrics.Text.size))
 
-            if !content.bubble.isFirstInGroup {
-                footerTime
-            }
+            // « L'heure d'une bulle doit TOUJOURS être en bas dans la bulle »
+            // (arbitrage produit 2026-08-21). Elle ne vivait en base que pour
+            // les bulles de SUITE ; une tête de groupe la portait dans sa
+            // rangée d'identité, si bien qu'une même conversation lisait son
+            // horloge à deux endroits selon le rang.
+            footerTime
         }
         // `gutter` reste au propriétaire de la COLONNE (`RiverStreamHost`,
         // l'espace EXTÉRIEUR à la bulle où passe le trait) — jamais dupliqué
-        // ici : le seul écart interne de cette vue est `baseGap`.
-        .padding(.horizontal, RiverMetrics.Bubble.baseGap)
-        .padding(.vertical, RiverMetrics.Bubble.baseGap)
+        // ici. Le retrait INTÉRIEUR, lui, a son propre token depuis le retour
+        // produit du 2026-08-21 : `baseGap` (l'écart de pile entre les blocs)
+        // en tenait lieu et laissait le texte coller au contour.
+        .padding(.horizontal, RiverMetrics.Bubble.contentPadding)
+        .padding(.vertical, RiverMetrics.Bubble.contentPadding)
         .frame(width: contentWidth, alignment: .leading)
+        // Le fond n'arrondit que les coins EXTÉRIEURS du groupe : deux bulles
+        // jointes forment UNE surface continue, sans encoche à la jointure.
         .background(
-            RoundedRectangle(cornerRadius: RiverMetrics.Bubble.detourRadius, style: .continuous)
+            UnevenRoundedRectangle(cornerRadii: cornerRadii, style: .continuous)
                 .fill(MeeshyColors.backgroundSecondary(isDark: isDark))
         )
         .overlay(bubbleOutline)
+        .overlay(alignment: .top) { sharedEdge }
+    }
+
+    private var cornerRadii: RectangleCornerRadii {
+        RiverBubbleOutline.cornerRadii(position: content.groupPosition, radius: RiverMetrics.Bubble.detourRadius)
+    }
+
+    private var solidOutline: RiverBubbleOutline {
+        RiverBubbleOutline(
+            position: content.groupPosition,
+            cornerRadius: RiverMetrics.Bubble.detourRadius,
+            lineWidth: content.layout == .lanes ? RiverMetrics.Line.width : RiverMetrics.Bubble.flatBorderWidth
+        )
+    }
+
+    /// La JOINTURE — le bord haut d'une bulle qui continue son groupe, en
+    /// pointillé (`Row.continuationDash*`), couleur d'auteur. C'est le SEUL
+    /// dessin à cet endroit : le contour plein y est ouvert (`RiverBubbleOutline`),
+    /// la bulle précédente y est ouverte aussi (`joinsBelow`). Une bordure,
+    /// partagée — jamais deux contours fermés plus un trait.
+    @ViewBuilder
+    private var sharedEdge: some View {
+        if content.groupPosition.joinsAbove {
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 0.5))
+                path.addLine(to: CGPoint(x: contentWidth, y: 0.5))
+            }
+            .stroke(
+                laneColor.opacity(0.55),
+                style: StrokeStyle(
+                    lineWidth: 1,
+                    dash: [RiverMetrics.Row.continuationDashLength, RiverMetrics.Row.continuationDashGap]
+                )
+            )
+            .frame(width: contentWidth, height: 1)
+            .accessibilityHidden(true)
+        }
     }
 
     /// §7ter A.6 — l'habillage suit le VERDICT DE FORME, jamais une
     /// préférence de peau (voir la docstring de tête du fichier).
     @ViewBuilder
     private var bubbleOutline: some View {
-        let shape = RoundedRectangle(cornerRadius: RiverMetrics.Bubble.detourRadius, style: .continuous)
         if content.layout == .lanes {
-            shape.strokeBorder(laneColor, lineWidth: RiverMetrics.Line.width)
+            // Contour plein, OUVERT du côté partagé (lot G) — même trait,
+            // même couleur que la ligne : « le bord de la bulle EST un segment
+            // de sa ligne ».
+            solidOutline.stroke(laneColor, lineWidth: RiverMetrics.Line.width)
         } else {
-            // Vue sérialisée : contour neutre PARTOUT, puis deux barres
-            // droites (gauche/bas) posées PAR-DESSUS en couleur d'auteur —
-            // approximation décorative assumée (deux rectangles, pas une
-            // découpe de coin), jamais éprouvée pixel-à-pixel hors device.
+            // Vue sérialisée : contour neutre (ouvert du côté partagé, lui
+            // aussi), puis deux barres droites en couleur d'auteur — le flanc
+            // gauche sur TOUTE la hauteur (il court le long du groupe), le
+            // bas sur la QUEUE ou la bulle seule seulement (sinon la suivante
+            // s'y colle) — approximation décorative assumée (deux
+            // rectangles, pas une découpe de coin).
             ZStack {
-                shape.strokeBorder(neutralOutlineColor, lineWidth: RiverMetrics.Bubble.flatBorderWidth)
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    Rectangle()
-                        .fill(laneColor)
-                        .frame(height: RiverMetrics.Line.width)
+                solidOutline.stroke(neutralOutlineColor, lineWidth: RiverMetrics.Bubble.flatBorderWidth)
+                if !content.groupPosition.joinsBelow {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        Rectangle()
+                            .fill(laneColor)
+                            .frame(height: RiverMetrics.Line.width)
+                    }
                 }
                 HStack(spacing: 0) {
                     Rectangle()
@@ -226,16 +511,32 @@ struct RiverBubbleView: View, Equatable {
 
     // MARK: - En-tête d'identité (tête de groupe seulement) — §7ter A.5, HORS de la bulle
 
+    /// R-5 — la pastille devient un avatar VIVANT (présence, cercle de
+    /// story) et l'identité entière s'active : un tap ouvre la fiche de la
+    /// voix, exactement comme l'en-tête d'identité du Fil
+    /// (`FocalIdentityHeader`). Le cercle de story non lue, lui, ouvre la
+    /// story — `MeeshyAvatar` arbitre déjà cette priorité.
+    @ViewBuilder
     private var identityHeader: some View {
+        if let identity = content.identity, let onOpenProfile {
+            Button {
+                onOpenProfile(identity.profileUser)
+            } label: {
+                identityRow(identity: identity)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(content.senderDisplayName)
+            .accessibilityHint(
+                String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main)
+            )
+        } else {
+            identityRow(identity: content.identity)
+        }
+    }
+
+    private func identityRow(identity: RiverBubbleIdentity?) -> some View {
         HStack(spacing: 7) {
-            Circle()
-                .fill(laneColor)
-                .frame(width: FocalMetrics.Avatar.size, height: FocalMetrics.Avatar.size)
-                .overlay(
-                    Text(RiverBubbleLayout.initials(for: content.senderDisplayName))
-                        .font(MeeshyFont.relative(FocalMetrics.Avatar.size / 2, weight: .bold))
-                        .foregroundColor(.white)
-                )
+            avatar(identity: identity)
 
             // §7ter A.5 — borné à la moitié de la largeur de la bulle : la
             // branche descend à l'aplomb du CENTRE du couloir, cette borne
@@ -251,15 +552,9 @@ struct RiverBubbleView: View, Equatable {
                 )
 
             Spacer(minLength: 0)
-
-            // « L'heure vit en base de bulle » (amendement R) : en tête de
-            // groupe, la base ET la tête portent la même horloge — c'est la
-            // règle du Fil (`FocalIdentityHeader`/`FocalMetaRow`, même
-            // horodatage dans les deux positions selon qu'un rang ouvre ou
-            // prolonge un groupe).
-            Text(content.timeString)
-                .font(FocalMetrics.Time.font)
-                .foregroundColor(metaTint)
+            // L'heure N'EST PLUS répétée ici : elle vit en base de bulle, pour
+            // TOUS les rangs (arbitrage produit 2026-08-21). La tête de groupe
+            // ne porte plus que l'identité — la pastille et le nom.
         }
         // Même largeur que `messageBox` (`contentWidth`) : la pastille
         // s'aligne sur le bord GAUCHE de la bulle, l'heure sur son bord
@@ -267,6 +562,39 @@ struct RiverBubbleView: View, Equatable {
         // bulle, exactement comme `.idh`/`.bub`, deux enfants directs de
         // `.cell` dans la maquette normative.
         .frame(width: contentWidth, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    /// L'avatar de la voix — `MeeshyAvatar` (présence, cercle de story,
+    /// image ou initiales) dès qu'une identité est là ; la pastille colorée
+    /// d'initiales sinon. La COULEUR reste celle du couloir : c'est elle qui
+    /// dit à quelle branche la voix appartient.
+    @ViewBuilder
+    private func avatar(identity: RiverBubbleIdentity?) -> some View {
+        if let identity {
+            MeeshyAvatar(
+                name: content.senderDisplayName,
+                context: .custom(FocalMetrics.Avatar.size),
+                accentColor: colorHex,
+                avatarURL: identity.avatarURL,
+                storyState: identity.storyRing,
+                presenceState: identity.presence,
+                enablePulse: false,
+                isDark: isDark,
+                onViewStory: identity.userId.flatMap { userId in
+                    identity.storyRing == .none ? nil : { onViewStory?(userId) }
+                }
+            )
+        } else {
+            Circle()
+                .fill(laneColor)
+                .frame(width: FocalMetrics.Avatar.size, height: FocalMetrics.Avatar.size)
+                .overlay(
+                    Text(RiverBubbleLayout.initials(for: content.senderDisplayName))
+                        .font(MeeshyFont.relative(FocalMetrics.Avatar.size / 2, weight: .bold))
+                        .foregroundColor(.white)
+                )
+        }
     }
 
     // MARK: - Heure en base de bulle (rangée de suite)
@@ -286,7 +614,21 @@ struct RiverBubbleView: View, Equatable {
 
     // MARK: - Citation de réponse — une ligne, jamais plus (§7ter A4)
 
+    @ViewBuilder
     private func quotedReply(_ reply: RiverReplyPreview) -> some View {
+        if let targetId = content.bubble.replyToMessageId, let onOpenReply {
+            // R-6 : la citation est une RÉFÉRENCE — et une référence se suit.
+            Button { onOpenReply(targetId) } label: { quotedReplyLabel(reply) }
+                .buttonStyle(.plain)
+                .accessibilityHint(
+                    String(localized: "riviere.bubble.replyHint", defaultValue: "Ouvre le message cité", bundle: .main)
+                )
+        } else {
+            quotedReplyLabel(reply)
+        }
+    }
+
+    private func quotedReplyLabel(_ reply: RiverReplyPreview) -> some View {
         HStack(spacing: 0) {
             Rectangle()
                 .fill(laneColor.opacity(0.6))
@@ -297,6 +639,9 @@ struct RiverBubbleView: View, Equatable {
                 .lineLimit(1)
                 .padding(.leading, 8)
         }
+        // Le rail prend la hauteur de la LIGNE, jamais celle qu'on lui propose.
+        .fixedSize(horizontal: false, vertical: true)
+        .contentShape(Rectangle())
     }
 
     // MARK: - Accessibilité

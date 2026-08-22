@@ -3012,14 +3012,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       gateway endpoint) — Android's first cut has no autocomplete corpus; a real, documented follow-up,
       not a silently-dropped feature. Every sub-item of this line is now wired on both platforms — box
       checked.
-- [ ] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all.
+- [x] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all.
       **Storage foundation shipped 2026-08-15** (`sdk-core`'s `ConversationLockStore`/
       `EncryptedConversationLockStore`, slice `conversation-lock-store-foundation`, PR #3045) — PIN
       hashing/storage only. **Logout hook wired 2026-08-15** (slice `conversation-lock-logout-wiring`,
-      PR #3048) — `DefaultSessionTeardown.wipe()` now clears the master PIN and every conversation
-      lock, closing the cross-account leak the foundation slice deferred. Still needed: PIN entry
-      UI, `ConversationListViewModel` wiring (hide locked conversations from the list), the unlock
-      flow itself. Box stays unchecked until those land.
+      PR #3048) — `DefaultSessionTeardown.wipe()` clears the master PIN and every conversation lock.
+      **PIN-entry UI + setup/lock/unlock/open/unlock-all flows shipped** (pure `LockPinReducer` +
+      `ConversationLockPinSheet` + `ConversationListViewModel` wiring): the row-tap gate opens locked
+      conversations via `OPEN_CONVERSATION` (SOTA over iOS — the row stays visible and reveals on tap,
+      WhatsApp-style, rather than being hidden from the list), and unlock-all sits in the top bar.
+      **Master PIN change + remove shipped 2026-08-22** (slice `conversation-lock-master-pin`) — the
+      last named arm: `LockPinReducer` gains `CHANGE_MASTER_PIN` (verify current → new → confirm →
+      commit) and `REMOVE_MASTER_PIN` (verify → clear), a `RemoveMasterPin` effect, and change/remove
+      copy; `ConversationListViewModel` gains `onChangeMasterPin`/`onRemoveMasterPin` + a mirrored
+      `hasMasterPin` and the `canChangeMasterPin`/`canRemoveMasterPin` gates; a `LockSecurityMenu`
+      overflow in the top bar surfaces both once a PIN exists. SOTA over iOS: remove is offered ONLY
+      while nothing is locked and is applied through the store's *guarded* `removeMasterPin`, so a lock
+      can never be orphaned behind a PIN the user can no longer produce (iOS force-removes
+      unconditionally). +17 tests (reducer ×9, ViewModel ×8), 2 mutation RED proofs. Box now `[x]`.
 - [x] Leave / archive / delete-for-me / delete-for-all conversation — all four verified shipped: leave/delete-for-me/archive already live (earlier slices), delete-for-all closes the gap (`conversation-delete-for-all`, 2026-08-16)
       — leave, archive, and delete-for-me are wired (`conversation-leave` PR #3055 +
       `conversation-delete-for-me` PR #3057, 2026-08-16: two context-menu items, each behind its
@@ -3027,7 +3037,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       path — `conversation:participant-left`/`conversation:deleted`). delete-for-all still
       unwired — the gateway's admin/creator-only "delete for everyone" semantics differ
       meaningfully (not assumed to be a quick follow-up). Box stays unchecked until it lands.
-- [ ] Anonymous-session conversation mode; guest join-via-share-link flow
+- [~] Anonymous-session conversation mode; guest join-via-share-link flow — the
+      **entry-decision brain landed** (slice `sharelink-entry-policy`, 2026-08-22): pure
+      `ShareLinkEntryPolicy.intent(ShareLinkEntryFacts) → ShareLinkEntryIntent` (`:core:model`,
+      faithful port of iOS `ShareLinkEntryPolicy.swift`) — five facts in (conversationId,
+      isAuthenticated, isAlreadyMember, linkRequiresAccount, hasStoredGuestSession), one of six
+      intents out (`OpenConversation` / `JoinWithAccount` / `JoinAnonymously` / `ResumeGuestSession`
+      / `ChooseIdentity` / `RequiresAccount`). Encodes the two load-bearing precedence rules:
+      unauthenticated → a stored guest session on THIS link beats the link's account requirement
+      (re-asking would erase the only identity the visitor has here); authenticated → already-a-member
+      beats the account requirement (nothing to decide when already named in the room). This closes
+      the gap where Android's deep-link handler (`MeeshyApp.kt`) routed EVERY share-link straight to
+      the anonymous guest form, wrongly forcing an authenticated user / an existing member / a
+      returning guest into it. +11 behavioural tests, 2 mutation RED proofs (both precedence orders).
+      **Remaining before `[x]`:** a `:sdk-core` `ShareLinkEntryResolver` that assembles the facts
+      (preview + `AnonymousSessionStore.load(linkId)` + in-memory conversation list), a
+      `joinAuthenticated` endpoint (`POST conversations/join/{linkId}`, idempotent) on `ShareLinkApi`
+      + repository method, and rewiring `MeeshyApp.kt`'s deep-link route to branch on the intent.
 - [x] AI conversation analysis (health score, summary, topics, tone, emotions) —
       **AI-summary card shipped 2026-08-22** (slice `conversation-analysis-summary`). The
       `ConversationAnalysis` model shipped orphaned (no repository, no consumer); this slice turns

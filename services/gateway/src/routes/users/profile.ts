@@ -16,6 +16,7 @@ import {
   userMinimalSchema,
   updateUserRequestSchema,
   errorResponseSchema,
+  validationErrorResponseSchema,
   usernamePatternSource
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, UserIdParams, UsernameParams } from './types';
@@ -108,14 +109,12 @@ export async function updateUserProfile(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Validation error or duplicate email/phone' },
-            details: { type: 'array', items: { type: 'object' } }
-          }
-        },
+        // Schema partage : l'enveloppe pose `error`, `message` ET `code`
+        // (`utils/response.ts`). Les cinq 400 de ce fichier, ecrits a la main,
+        // supprimaient `message` et `code` a la serialisation, et declaraient
+        // un tableau `details` que l'enveloppe ne pose jamais comme cle — elle
+        // l'ETALE a la racine ; son champ tableau s'appelle `violations`.
+        400: { description: 'Validation error or duplicate email/phone', ...validationErrorResponseSchema },
         401: errorResponseSchema,
         500: errorResponseSchema
       }
@@ -327,14 +326,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', example: 'Invalid image format' },
-            details: { type: 'array', items: { type: 'object' } }
-          }
-        },
+        400: { description: 'Invalid image format', ...validationErrorResponseSchema },
         401: errorResponseSchema,
         500: errorResponseSchema
       }
@@ -440,14 +432,7 @@ export async function updateUserBanner(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', example: 'Invalid image format' },
-            details: { type: 'array', items: { type: 'object' } }
-          }
-        },
+        400: { description: 'Invalid image format', ...validationErrorResponseSchema },
         401: errorResponseSchema,
         500: errorResponseSchema
       }
@@ -546,14 +531,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Validation error or incorrect current password' },
-            details: { type: 'array', items: { type: 'object' } }
-          }
-        },
+        400: { description: 'Validation error or incorrect current password', ...validationErrorResponseSchema },
         401: errorResponseSchema,
         404: errorResponseSchema,
         500: errorResponseSchema
@@ -659,14 +637,7 @@ export async function updateUsername(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Validation error, username taken, or rate limit' },
-            details: { type: 'array', items: { type: 'object' } }
-          }
-        },
+        400: { description: 'Validation error, username taken, or rate limit', ...validationErrorResponseSchema },
         401: errorResponseSchema,
         404: errorResponseSchema,
         429: {
@@ -963,7 +934,15 @@ export async function getUserById(fastify: FastifyInstance) {
                 updatedAt: { type: 'string', format: 'date-time' },
                 email: { type: 'string', description: 'Masked for security' },
                 phoneNumber: { type: 'string', nullable: true, description: 'Masked for security' },
-                permissions: { type: 'object', nullable: true },
+                // `permissions` a été RETIRÉ, du schéma comme de la charge
+                // utile. Il n'avait pas de producteur : le handler posait
+                // `permissions: undefined` DÉLIBÉRÉMENT — un profil public ne
+                // porte pas les autorisations de son sujet — si bien que la
+                // clé ne partait jamais sur le fil. Le `{ type: 'object' }` nu
+                // qui la déclarait ne vidait donc rien, mais il occupait
+                // l'inventaire du balayage en promettant un champ qui n'existe
+                // pas. Aucun changement de contrat : ce qui ne sortait pas ne
+                // sort toujours pas.
                 isAnonymous: { type: 'boolean', example: false },
                 isMeeshyer: { type: 'boolean', example: true }
               }
@@ -1027,7 +1006,6 @@ export async function getUserById(fastify: FastifyInstance) {
         autoTranslateEnabled: true,
         email: '',
         phoneNumber: undefined,
-        permissions: undefined,
         isAnonymous: false,
         isMeeshyer: true,
       };

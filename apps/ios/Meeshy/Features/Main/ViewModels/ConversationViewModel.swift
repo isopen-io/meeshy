@@ -2004,6 +2004,13 @@ class ConversationViewModel: ObservableObject {
     /// resolved best-effort from a received message so the CallKit / in-app
     /// outgoing UI shows a name, not a raw id.
     func callBack(for summary: CallSummaryMetadata) {
+        // Anonymous shared-link guests never get a calling affordance — mirrors
+        // the header's `anonymousHeaderBar` swap (ConversationView) which hides
+        // the call buttons entirely for this session kind. A call-summary
+        // bubble further down history must honor the SAME gate, otherwise a
+        // guest can trigger the OS microphone permission prompt from a bubble
+        // tap before the gateway's own isAnonymous check ever runs.
+        guard anonymousSession == nil else { return }
         guard isDirect, let peerUserId = participantUserId, !peerUserId.isEmpty else { return }
         if summary.isLive {
             Task { await joinOngoingCall(summary) }
@@ -2032,6 +2039,11 @@ class ConversationViewModel: ObservableObject {
     ///      sera éditée au terminal dès que le message:edited arrive).
     /// Internal (pas private) pour la testabilité des branches.
     func joinOngoingCall(_ summary: CallSummaryMetadata) async {
+        // Same anonymity gate as `callBack(for:)` — this is also reachable
+        // directly from `callBack` for the isLive branch, but joining is a
+        // distinct code path (revalidated server round-trip) so it re-asserts
+        // the guard rather than relying on the caller alone.
+        guard anonymousSession == nil else { return }
         // 1 — déjà sur cet appel : l'UI d'appel revient au premier plan.
         if liveCallJoin.currentCallId() == summary.callId, !liveCallJoin.isIdle() {
             liveCallJoin.bringCallUIForward()

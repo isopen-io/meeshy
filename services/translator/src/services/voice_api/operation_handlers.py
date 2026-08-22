@@ -292,7 +292,17 @@ class OperationHandlers:
     # ═══════════════════════════════════════════════════════════════════════════
 
     async def handle_analyze(self, audio_path: str, analysis_types: Optional[List[str]]) -> VoiceAPIResult:
-        """Handle voice analysis"""
+        """
+        Handle voice analysis.
+
+        `analysis_types` is accepted for wire compatibility and SELECTS NOTHING:
+        `VoiceAnalyzerService.analyze` runs one complete librosa pass and returns
+        every family at once (pitch, spectral, energy, quality, prosody, mfcc).
+        It used to be forwarded as a keyword argument the method does not take,
+        which raised `TypeError` on every call — swallowed by the `except` below
+        and served as INTERNAL_ERROR. Do not re-add it without a parameter that
+        `VoiceAnalyzerService` actually honours.
+        """
         try:
             if not self.voice_analyzer:
                 return VoiceAPIResult(
@@ -301,10 +311,7 @@ class OperationHandlers:
                     error_code="SERVICE_UNAVAILABLE"
                 )
 
-            result = await self.voice_analyzer.analyze(
-                audio_path=audio_path,
-                analysis_types=analysis_types
-            )
+            result = await self.voice_analyzer.analyze(audio_path=audio_path)
 
             return VoiceAPIResult(
                 success=True,
@@ -320,7 +327,15 @@ class OperationHandlers:
             )
 
     async def handle_compare(self, audio_path_1: str, audio_path_2: str) -> VoiceAPIResult:
-        """Handle voice comparison"""
+        """
+        Handle voice comparison.
+
+        The method is `VoiceAnalyzerService.compare`. `compare_voices` belongs to
+        the OTHER analyzer of the repository — `voice_clone.VoiceAnalyzer` — which
+        `main.py` does not inject here, and whose signature is
+        `(original_path, cloned_path)` anyway. Calling it raised `AttributeError`
+        on every comparison, swallowed by the `except` below.
+        """
         try:
             if not self.voice_analyzer:
                 return VoiceAPIResult(
@@ -329,7 +344,7 @@ class OperationHandlers:
                     error_code="SERVICE_UNAVAILABLE"
                 )
 
-            result = await self.voice_analyzer.compare_voices(
+            result = await self.voice_analyzer.compare(
                 audio_path_1=audio_path_1,
                 audio_path_2=audio_path_2
             )

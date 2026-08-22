@@ -836,7 +836,8 @@
         "canSendLinks": "Enviar enlaces",
         "canSendLocations": "Compartir su ubicación"
       },
-      "unavailable": "Ficha no disponible"
+      "unavailable": "Ficha no disponible",
+      "hasLeft": "Esta persona ha salido de la conversación"
     },
     "forward": {
       "title": "Reenviar mensaje",

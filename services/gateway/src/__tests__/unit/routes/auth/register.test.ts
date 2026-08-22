@@ -237,25 +237,65 @@ describe('POST /register — register returns result with no user', () => {
 });
 
 describe('POST /register — phone ownership conflict', () => {
-  it('returns 200 with phoneOwnershipConflict data', async () => {
+  /**
+   * Ce témoin s'intitulait « returns 200 with phoneOwnershipConflict data » et
+   * n'assertait que le code de statut — or la charge utile en question ne
+   * sortait PAS. Le schéma 200 ne déclarait que `{user, token, expiresIn}` :
+   * les trois clés du conflit étaient retirées à la sérialisation, `data`
+   * partait VIDE, et `use-registration-submit.ts` — qui branche sur
+   * `data.data.phoneOwnershipConflict` — retombait sur « Registration failed ».
+   * La bascule vers `PhoneExistsModal` (et donc tout le transfert de numéro)
+   * était morte.
+   */
+  const conflictResult = {
+    phoneOwnershipConflict: true,
+    phoneOwnerInfo: {
+      maskedDisplayName: 'A***',
+      maskedUsername: 'al***',
+      maskedEmail: 'al***@test.com',
+      avatar: null,
+      phoneNumber: '+33612345678',
+      phoneCountryCode: 'FR',
+    },
+  };
+
+  const inject = async (app: FastifyInstance) => app.inject({
+    method: 'POST', url: '/register',
+    payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
+  });
+
+  it('sert le drapeau et le propriétaire masqué — sans eux le client ne peut pas ouvrir la modale', async () => {
     const authService = makeAuthService();
-    authService.register = jest.fn<any>().mockResolvedValue({
-      phoneOwnershipConflict: true,
-      phoneOwnerInfo: {
-        maskedDisplayName: 'A***',
-        maskedUsername: 'al***',
-        maskedEmail: 'al***@test.com',
-        avatar: null,
-        phoneNumber: '+33612345678',
-        phoneCountryCode: 'FR',
-      },
-    });
+    authService.register = jest.fn<any>().mockResolvedValue(conflictResult);
     const { app } = await buildApp({ authService });
-    const res = await app.inject({
-      method: 'POST', url: '/register',
-      payload: { username: 'alice', password: 'secret1234', email: 'alice@test.com', firstName: 'Alice', lastName: 'Smith' },
-    });
+
+    const res = await inject(app);
+
     expect(res.statusCode).toBe(200);
+    const { data } = res.json();
+    expect(data.phoneOwnershipConflict).toBe(true);
+    expect(data.phoneOwnerInfo.maskedDisplayName).toBe('A***');
+    expect(data.phoneOwnerInfo.phoneNumber).toBe('+33612345678');
+    expect(data.pendingRegistration.username).toBe('alice');
+    await app.close();
+  });
+
+  /**
+   * Le mot de passe EN CLAIR figurait dans la charge utile du handler. Il ne
+   * sortait pas — le schéma le retirait avec tout le reste. Le déclarer sans y
+   * penser aurait donc OUVERT un aller-retour du secret. Le client ne s'en sert
+   * pas : les deux reprises (`handleContinueWithoutPhone`,
+   * `handlePhoneTransferred`) réémettent depuis `...formData`, son propre état.
+   */
+  it('ne renvoie JAMAIS le mot de passe en clair', async () => {
+    const authService = makeAuthService();
+    authService.register = jest.fn<any>().mockResolvedValue(conflictResult);
+    const { app } = await buildApp({ authService });
+
+    const res = await inject(app);
+
+    expect(res.json().data.pendingRegistration.password).toBeUndefined();
+    expect(res.payload).not.toContain('secret1234');
     await app.close();
   });
 });

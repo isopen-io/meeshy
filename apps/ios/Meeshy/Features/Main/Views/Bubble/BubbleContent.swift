@@ -162,6 +162,11 @@ nonisolated struct BubbleContent: Equatable {
     /// `BubbleJoinNoticeView` a besoin, en primitifs, pour ne se réévaluer que
     /// sur changement réel. Même convention que `CallNotice`.
     struct JoinNotice: Equatable {
+        /// `Participant.id` de l'arrivant — il est l'auteur de son propre avis.
+        ///
+        /// La métadonnée le portait déjà ; le value model le perdait, et l'avis
+        /// restait le seul endroit du fil où un nom ne menait nulle part.
+        let participantId: String
         let displayName: String
         /// L'arrivant n'a pas de compte — c'est ce que le glyphe dit.
         let isAnonymous: Bool

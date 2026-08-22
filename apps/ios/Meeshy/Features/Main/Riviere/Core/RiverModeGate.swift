@@ -12,10 +12,13 @@ import Foundation
 /// dans `LentilleModeMenuModel.build` : une seconde loi d'éligibilité
 /// réécrite ici serait un bug de contrat.
 ///
-/// `riviereMode` (`LentilleFeatureFlag`) reste défaut OFF ET non câblé dans
-/// `isRiverFlagEnabled` par aucun site de montage à ce jour (R-135 : le
-/// dégrisage du menu, hors périmètre de ce lot) — la porte reste donc fermée
-/// PAR CONSTRUCTION, pas par un gate applicatif qui pourrait être contourné.
+/// `riviereMode` (`LentilleFeatureFlag`) vaut OFF en l'absence de tout choix
+/// et suit la bascule « Activer les bêta » sinon (2026-08-21).
+/// `ConversationView.init` le câble dans son propre `resolveCapabilities` et
+/// monte `RiverConversationHost` derrière `mode == .river` dans le même
+/// fichier (chantier Rivière iOS, lot 1) : la porte s'ouvre par la LOI —
+/// drapeau ET éligibilité —, jamais par un gate applicatif qui pourrait être
+/// contourné.
 nonisolated public enum RiverModeGate {
 
     /// `true` UNIQUEMENT si `.river` figure dans le catalogue rendu par la
