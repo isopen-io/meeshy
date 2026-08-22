@@ -292,7 +292,7 @@ struct StoryTrayView: View {
 /// One story group rendered as avatar ring + (optional) username, sharing the
 /// exact same `MeeshyAvatar` atom across the full-size trail and the compact
 /// pinned mini-trail. `context` drives the size (`.storyTray` 88pt vs
-/// `.storyTrayCompact` 44pt); all proportional metrics derive from it.
+/// `.storyTrayCompact` 36pt); all proportional metrics derive from it.
 struct StoryRingCell: View {
     let group: StoryGroup
     var context: AvatarContext = .storyTray
@@ -723,7 +723,7 @@ private struct StoryUploadOverlay: View {
 /// (directive user 2026-08-13). It used to render as a second row BELOW a title
 /// that stayed on screen for nothing.
 ///
-/// Rings render at half size (`.storyTrayCompact`, 44pt) with the same design
+/// Rings render smaller (`.storyTrayCompact`, 36pt) with the same design
 /// and horizontal scroll as the full trail, without the username caption — the
 /// bar has room for one row of rings, not for a caption under each.
 ///
