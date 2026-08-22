@@ -512,7 +512,17 @@ schema is invalid: data/properties/data/properties/attachment must be object,boo
 ```
 
 Deux bouts du même défaut : un double partiel cache un bug, ou empêche un
-correctif de se charger. **Prolonger (`jest.requireActual` + surcharge ciblée)
+correctif de se charger.
+
+**Et c'est arrivé DEUX FOIS EN DEUX CYCLES.** Le cycle 93 a reproduit
+l'incident sur `conversation-messages-advanced.test.ts`, dont le double de
+`api-schemas` listait deux schémas à la main : une composition de
+`messageResponseSchema` au chargement du module y a trouvé `undefined`, et
+152 témoins ont cessé de se charger. La règle du cycle 91 était déjà écrite et
+n'a pas suffi — **un double partiel ne se signale qu'au moment où le module
+grandit**, donc jamais avant. Ce n'est plus un incident, c'est un patron de
+harnais à cesser d'écrire : `jest.requireActual` par défaut, surcharge ciblée
+seulement si nécessaire. **Prolonger (`jest.requireActual` + surcharge ciblée)
 plutôt que remplacer** ; et quand le double existait pour garantir un
 comportement de SÉCURITÉ, préférer le vrai code — un double ne peut qu'attester
 l'absence d'un repli vulnérable, le vrai code la prouve. Patron : `communities-live-wiring.test.ts`, qui n'assert que ce
