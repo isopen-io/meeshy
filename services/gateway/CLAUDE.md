@@ -653,7 +653,7 @@ d'édition de message, le seul qui servait la charge entière est
 schéma faux est strictement pire que pas de schéma ; la conclusion n'est pas
 d'en retirer, c'est d'en tester la sortie.
 
-### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 15
+### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 11
 
 **L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
 gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
@@ -690,9 +690,12 @@ au cliquet comme dette de FORME, plus comme fuite.
 
 **État de l'inventaire** : les sites de niveau `data:` (charge utile ENTIÈRE) et
 les cinq sites de PRÉSENCE sont corrigés ; les onze schémas d'ERREUR écrits à la
-main sont repris au cycle 89 (voir plus bas). **L'inventaire trié des 15
-restants — tous sur des charges utiles `200`/`202` — est dans
-`tasks/realtime-sync-audit-2026-08-22-cycle89.md` §7.**
+main sont repris au cycle 89 (voir plus bas) ; les trois enveloppes fantômes le
+sont au cycle 88 bis. **Il reste 11 sites, tous sur des charges utiles
+`200`/`202`**, triés dans `tasks/realtime-sync-audit-2026-08-22-cycle89.md` §7
+et `…-cycle88-bis.md` §5 — le second pose les deux questions à instruire AVANT
+de réparer (que passe le gestionnaire à `sendSuccess`, et à quel niveau le
+schéma prétend-il le décrire).
 
 **Le balayage ne lit que `services/gateway/src/routes`** : les schémas de
 `packages/shared`, dont un défaut se propage le plus loin, lui échappent.
