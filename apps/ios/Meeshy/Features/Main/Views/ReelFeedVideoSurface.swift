@@ -27,12 +27,24 @@ nonisolated enum ReelEngineOwnershipPolicy {
 /// (surface chrome-free). Aucun contrôleur exposé : la carte n'a ni play/pause
 /// ni scrub (ils vivent dans le viewer plein écran). Affiché aspect-fill.
 ///
-/// Différence avec le viewer : le son est forcé MUET (`isForceMuted = true`,
-/// PAS `isMuted` — cf. commentaire dans `drive`) — le feed ne joue jamais
-/// d'audio ; le son démarre dans le viewer au tap.
+/// Différence avec le viewer : le son suit l'intention de SESSION du fil
+/// (`ReelFeedSoundIntent`, S2 — bouton de son du fil, exigence produit
+/// 2026-08-22), jamais `isMuted` (préférence globale, cf. commentaire dans
+/// `drive`) — muet par défaut, activable par carte via le bouton de son.
 struct ReelFeedVideoSurface: View {
     let media: FeedMedia
     let isActive: Bool
+
+    /// Reporté au parent (D3, S2) : `true` quand CETTE instance possède
+    /// RÉELLEMENT le moteur partagé et qu'il joue bien SA vidéo
+    /// (`ownsEngine && isShowingThis`). Le parent (`ReelFeedCard`/
+    /// `ReelRepostEmbedCell`) en a besoin pour décider de monter son bouton de
+    /// son — `isActive` seul peut être vrai UNE frame avant que `drive()`
+    /// n'ait chargé quoi que ce soit (média en téléchargement, appel en
+    /// cours) : monter le bouton sur cette frame serait exactement le défaut
+    /// « bouton monté, tap ne pilote rien » rejeté deux fois par la revue DoD
+    /// du lot E (`MuteButtonExistenceGuardTests`).
+    var isEngineOwned: Binding<Bool> = .constant(false)
 
     // Plain reference (NOT @ObservedObject): this card only needs `player`
     // identity and `activeURL` to decide what to render — the manager also
@@ -43,6 +55,11 @@ struct ReelFeedVideoSurface: View {
     private let manager = SharedAVPlayerManager.shared
     @State private var activeURL: String = SharedAVPlayerManager.shared.activeURL
     @State private var player: AVPlayer?
+
+    /// Miroir local de l'intention de son du fil (même discipline que
+    /// `activeURL`/`player` ci-dessus : @State scopé + `.onReceive`, jamais
+    /// `@ObservedObject` sur un singleton global dans une feuille de liste).
+    @State private var soundOn: Bool = ReelFeedSoundIntent.shared.isSoundOn
 
     /// `true` once THIS card instance has actually driven the shared engine
     /// (called `load()`/`play()` while active) and not yet relinquished it.
@@ -65,6 +82,7 @@ struct ReelFeedVideoSurface: View {
         }
         .onReceive(manager.$activeURL) { activeURL = $0 }
         .onReceive(manager.$player) { player = $0 }
+        .onReceive(ReelFeedSoundIntent.shared.$isSoundOn) { soundOn = $0 }
     }
 
     @ViewBuilder
@@ -85,6 +103,11 @@ struct ReelFeedVideoSurface: View {
         .onAppear { drive(ready: ready) }
         .adaptiveOnChange(of: isActive) { _, _ in drive(ready: ready) }
         .adaptiveOnChange(of: ready) { _, _ in drive(ready: ready) }
+        // Le tap sur le bouton de son (S2) flippe `ReelFeedSoundIntent.shared
+        // .isSoundOn` — sans cette bascule, la prochaine passe de `drive()`
+        // (carte suivante, ou simple re-render sur CETTE carte) réaffirmerait
+        // l'ancienne valeur et le son mourrait dans la seconde (D4).
+        .adaptiveOnChange(of: soundOn) { _, _ in drive(ready: ready) }
         .onDisappear {
             // Pause (pas stop) quand cette carte possède encore le moteur : le
             // coordinator élira la prochaine carte centrée et rechargera son url.
@@ -106,7 +129,7 @@ struct ReelFeedVideoSurface: View {
             if ReelEngineOwnershipPolicy.shouldRelease(ownsEngine: ownsEngine, isShowingThis: isShowingThis) {
                 manager.pause()
                 releaseForceMute()
-                ownsEngine = false
+                updateEngineOwnership(false)
             }
         }
     }
@@ -124,29 +147,41 @@ struct ReelFeedVideoSurface: View {
             if ReelEngineOwnershipPolicy.shouldRelease(ownsEngine: ownsEngine, isShowingThis: isShowingThis) {
                 manager.pause()
                 releaseForceMute()
-                ownsEngine = false
+                updateEngineOwnership(false)
             }
             return
         }
         if manager.activeURL != attachment.fileUrl {
             manager.load(urlString: attachment.fileUrl, attachmentId: media.id)
         }
-        ownsEngine = true
+        updateEngineOwnership(true)
         // Loop DOIT être (ré)affirmé APRÈS `load()` : `load()` appelle `cleanup()`
         // en interne, qui remet `shouldLoop = false` ; le poser avant serait
         // silencieusement écrasé. `isForceMuted` (idem transitoire, reset par
         // `cleanup()`) est réaffirmé pour la même raison.
         //
-        // Intentionnellement `isForceMuted`, PAS `isMuted` : `isMuted` est la
-        // préférence utilisateur GLOBALE (bouton mute du fullscreen overlay),
-        // persistée entre vidéos. Y écrire directement depuis l'autoplay muet
-        // du feed fuitait cette préférence vers la surface suivante (la galerie
-        // de conversation héritait d'un `isMuted = true` jamais remis à zéro et
-        // jouait en silence sans que l'utilisateur n'ait rien demandé).
-        // `isForceMuted` exprime la même intention sans polluer la préférence.
-        manager.isForceMuted = true
+        // Résolu via le prédicat pur (S2, D4) — jamais un littéral figé :
+        // `isForceMuted` exprime l'intention de SESSION du fil
+        // (`ReelFeedSoundIntent`), PAS `isMuted` (préférence utilisateur
+        // GLOBALE du bouton mute fullscreen, persistée entre vidéos). Y écrire
+        // directement depuis le feed fuiterait cette préférence vers la
+        // surface suivante (la galerie de conversation hériterait d'un
+        // `isMuted = true` jamais remis à zéro et jouerait en silence sans que
+        // l'utilisateur n'ait rien demandé) — exactement la fuite documentée
+        // que `isForceMuted` a été créé pour fermer.
+        let forceMuted = ReelFeedSoundButtonPolicy.isForceMuted(soundOn: soundOn)
+        if !forceMuted {
+            // D5 : `play()` saute délibérément l'armement de la session
+            // `.duckOthers` pour l'autoplay muet (`shouldDuckOthersOnPlay`) —
+            // sans ce rappel explicite au passage au son, la catégorie reste
+            // `.soloAmbient` et le son est inaudible interrupteur Silence
+            // enclenché (précédent documenté : RecentMediaStrip.swift).
+            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.duckOthers])
+        }
+        manager.isForceMuted = forceMuted
         manager.shouldLoop = true
         manager.play()
+        probeAudioTrackIfNeeded()
     }
 
     /// Relâche l'intention de mute forcé du feed. Appelé chaque fois que cette
@@ -154,5 +189,42 @@ struct ReelFeedVideoSurface: View {
     /// jamais laissé traîner au-delà de la durée de vie de la carte active.
     private func releaseForceMute() {
         manager.isForceMuted = false
+    }
+
+    /// Écrit `ownsEngine` ET répercute la combinaison `ownsEngine &&
+    /// isShowingThis` vers le parent (`isEngineOwned`, S2/D3) en UN seul
+    /// point — les deux valeurs ne doivent jamais diverger. Appelé APRÈS
+    /// `manager.load()` : à ce stade `self.player`/`self.activeURL` (les
+    /// miroirs @State) reflètent déjà la nouvelle vidéo, `@Published` livrant
+    /// ses abonnés `.onReceive` de façon synchrone pendant l'affectation —
+    /// `isShowingThis`, calculé ici, est donc exact.
+    private func updateEngineOwnership(_ owns: Bool) {
+        ownsEngine = owns
+        isEngineOwned.wrappedValue = owns && isShowingThis
+    }
+
+    /// Sonde la présence d'une piste audio sur LE MOTEUR RÉELLEMENT chargé
+    /// (`manager.player?.currentItem?.asset`, pas une réémission d'URL) —
+    /// c'est exactement l'asset en train de jouer, aucune ambiguïté possible.
+    /// Ne sonde qu'une fois par média (`ReelFeedSoundIntent.isProbed`) : un
+    /// résultat déjà résolu n'est jamais réécrit (même contrat que le viewer
+    /// story, `StoryAudioAvailability.merging`). Sonde SEULEMENT quand cette
+    /// carte possède réellement le moteur (appelé depuis la branche active de
+    /// `drive()`) — jamais sur une carte inactive.
+    private func probeAudioTrackIfNeeded() {
+        let mediaId = media.id
+        guard !ReelFeedSoundIntent.shared.isProbed(mediaId: mediaId) else { return }
+        guard let asset = manager.player?.currentItem?.asset else { return }
+        Task {
+            let count: Int?
+            do {
+                count = try await asset.loadTracks(withMediaType: .audio).count
+            } catch {
+                count = nil
+            }
+            await MainActor.run {
+                ReelFeedSoundIntent.shared.recordAudioProbe(mediaId: mediaId, probedTrackCount: count)
+            }
+        }
     }
 }

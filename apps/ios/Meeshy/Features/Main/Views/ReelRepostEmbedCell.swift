@@ -26,6 +26,17 @@ struct ReelRepostEmbedCell: View {
 
     private var theme: ThemeManager { ThemeManager.shared }
 
+    // MARK: - Bouton de son du fil (S2, exigence produit 2026-08-22)
+    //
+    // Miroir @State + `.onReceive` (même discipline que `ReelFeedVideoSurface`)
+    // — jamais `@ObservedObject` sur le store de session dans une feuille de
+    // liste.
+    /// Reporté par `ReelFeedVideoSurface` : vrai seulement quand CETTE cellule
+    /// possède réellement le moteur partagé (D3) — jamais dérivé localement.
+    @State private var isEngineOwned = false
+    @State private var soundIsOn: Bool = ReelFeedSoundIntent.shared.isSoundOn
+    @State private var soundTrackPresence: [String: Bool] = ReelFeedSoundIntent.shared.audioTrackPresence
+
     /// Election identity reported to `ReelFeedAutoplayCoordinator`: the CONTAINING
     /// (reposter's) post id. NEVER `post.repost?.id` (the reposted reel id) — if a
     /// reel appears both as a native reel card and inside this repost cell, keying
@@ -91,7 +102,35 @@ struct ReelRepostEmbedCell: View {
                 .accessibilityLabel(Self.reelCardAccessibilityLabel(for: repost))
                 .accessibilityHint(String(localized: "feed.reel.repost.hint", defaultValue: "Appuyez deux fois pour ouvrir le réel", bundle: .main))
                 .accessibilityAddTraits(.isButton)
+                // HISSÉ hors du label: ci-dessus (S2) — un Button imbriqué dans le
+                // label: d'un Button est INERTE sous iOS. Posé APRÈS
+                // .accessibilityElement(children: .ignore) : avant, il serait avalé
+                // par l'élément d'accessibilité unique de la carte. Décalage
+                // (padding) tenant compte du padding(12) de `reelCard` pour retomber
+                // dans la bande `mediaStrip` (stripHeight).
+                .overlay(alignment: .topLeading) {
+                    soundButtonOverlay(repost)
+                }
             }
+        }
+        .onReceive(ReelFeedSoundIntent.shared.$isSoundOn) { soundIsOn = $0 }
+        .onReceive(ReelFeedSoundIntent.shared.$audioTrackPresence) { soundTrackPresence = $0 }
+    }
+
+    @ViewBuilder
+    private func soundButtonOverlay(_ repost: RepostContent) -> some View {
+        if let media = Self.reelVideoMedia(for: repost),
+           ReelFeedSoundButtonPolicy.showsSoundButton(
+               isActive: isActive,
+               isEngineOwned: isEngineOwned,
+               hasAudioTrack: soundTrackPresence[media.id] ?? false
+           ) {
+            ReelFeedSoundButton(isSoundOn: soundIsOn) {
+                ReelFeedSoundIntent.shared.toggleSound()
+                HapticFeedback.light()
+            }
+            .padding(.leading, 22)
+            .padding(.top, 22)
         }
     }
 
@@ -186,7 +225,7 @@ struct ReelRepostEmbedCell: View {
             // `SharedAVPlayerManager` (no 2nd player), call-gated, force-muted (feed
             // policy). It renders its own poster beneath until the first frame, and
             // shows only the poster while inactive.
-            ReelFeedVideoSurface(media: videoMedia, isActive: isActive)
+            ReelFeedVideoSurface(media: videoMedia, isActive: isActive, isEngineOwned: $isEngineOwned)
                 .aspectRatio(contentMode: .fill)
         } else if let media = repost.primaryReelMedia, media.type != .audio, posterURL(media) != nil {
             ProgressiveCachedImage(

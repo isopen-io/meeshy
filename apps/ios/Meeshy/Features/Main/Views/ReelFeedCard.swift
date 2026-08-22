@@ -130,6 +130,22 @@ struct ReelFeedCard: View, Equatable {
     /// favori dédié (bookmark) qui, lui, enregistre le poste dans l'app.
     @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
+    // MARK: - Bouton de son du fil (S2, exigence produit 2026-08-22)
+    //
+    // Miroir @State + `.onReceive` (même discipline que
+    // `ReelFeedVideoSurface.activeURL`/`.player`) — jamais `@ObservedObject`
+    // sur le store de session dans une feuille de liste.
+    /// Reporté par `ReelFeedVideoSurface` : vrai seulement quand CETTE carte
+    /// possède réellement le moteur partagé (D3) — jamais dérivé localement.
+    @State private var isEngineOwned = false
+    @State private var soundIsOn: Bool = ReelFeedSoundIntent.shared.isSoundOn
+    @State private var soundTrackPresence: [String: Bool] = ReelFeedSoundIntent.shared.audioTrackPresence
+
+    private var hasAudioTrack: Bool {
+        guard let media else { return false }
+        return soundTrackPresence[media.id] ?? false
+    }
+
     /// Non-nil when this card displays a REPUBLISHED reel: the outer post has no
     /// media (content sourced from the reposted reel). Drives author attribution
     /// + caption so the card shows the ORIGINAL author, not just the re-poster.
@@ -165,6 +181,7 @@ struct ReelFeedCard: View, Equatable {
                 background(width: width, height: height)
                 bottomOverlay
                 reelGlyph
+                soundButtonOverlay
             }
             .frame(width: width, height: height)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -175,6 +192,8 @@ struct ReelFeedCard: View, Equatable {
         .reportReelFrame(id: post.id, kind: kind)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "feed.reel.card.a11y", defaultValue: "Réel de \(displayAuthor)", bundle: .main))
+        .onReceive(ReelFeedSoundIntent.shared.$isSoundOn) { soundIsOn = $0 }
+        .onReceive(ReelFeedSoundIntent.shared.$audioTrackPresence) { soundTrackPresence = $0 }
         .fullScreenCover(item: $reelCardFullscreenPlace) { item in
             LocationFullscreenView(
                 latitude: item.place.latitude,
@@ -202,7 +221,7 @@ struct ReelFeedCard: View, Equatable {
         switch kind {
         case .video:
             if let media {
-                ReelFeedVideoSurface(media: media, isActive: isActive)
+                ReelFeedVideoSurface(media: media, isActive: isActive, isEngineOwned: $isEngineOwned)
                     .frame(width: width, height: height)
                     .clipped()
             } else {
@@ -275,6 +294,29 @@ struct ReelFeedCard: View, Equatable {
                 .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
             }
             Spacer()
+        }
+    }
+
+    // MARK: - Bouton de son (coin haut-gauche — seul coin libre, S2)
+    //
+    // Aucun Button englobant sur cette carte (le ZStack porte un simple
+    // `.onTapGesture` — voir body) : un Button gagne sur un onTapGesture
+    // parent (même mécanique que `likeButton`/`reelButton` ci-dessous),
+    // insertion directe dans le ZStack.
+    @ViewBuilder
+    private var soundButtonOverlay: some View {
+        if ReelFeedSoundButtonPolicy.showsSoundButton(isActive: isActive, isEngineOwned: isEngineOwned, hasAudioTrack: hasAudioTrack) {
+            VStack {
+                HStack {
+                    ReelFeedSoundButton(isSoundOn: soundIsOn) {
+                        ReelFeedSoundIntent.shared.toggleSound()
+                        HapticFeedback.light()
+                    }
+                    .padding(10)
+                    Spacer()
+                }
+                Spacer()
+            }
         }
     }
 
