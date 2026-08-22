@@ -142,6 +142,46 @@ export const voiceAnalysisResultSchema = {
   }
 } as const;
 
+/**
+ * `VoiceQualityAnalysis` = `VoiceAnalysisResult` + prosodie + métriques de
+ * qualité. C'est la forme que `VoiceAnalysisService` construit, persiste et
+ * ressert — les routes de `voice-analysis.ts` la déclaraient
+ * `{ type: 'object' }` NU, donc `{}`.
+ *
+ * `prosody` et `qualityMetrics` sont OPTIONNELS au sens du type ; en JSON Schema
+ * ils sont simplement déclarés — une clé absente de l'objet réel n'est pas
+ * fabriquée par le sérialiseur.
+ */
+export const voiceQualityAnalysisSchema = {
+  type: 'object',
+  properties: {
+    ...voiceAnalysisResultSchema.properties,
+    prosody: {
+      type: 'object',
+      properties: {
+        energyMean: { type: 'number', description: 'Mean RMS energy' },
+        energyStd: { type: 'number', description: 'Energy standard deviation' },
+        silenceRatio: { type: 'number', description: 'Ratio of silence (0-1)' },
+        speechRateWpm: { type: 'number', description: 'Estimated words per minute' }
+      }
+    },
+    qualityMetrics: {
+      type: 'object',
+      properties: {
+        overallScore: { type: 'number', description: 'Overall voice quality score (0-1)' },
+        clarity: { type: 'number', description: 'Audio clarity (0-1)' },
+        consistency: { type: 'number', description: 'Voice consistency (0-1)' },
+        suitableForCloning: { type: 'boolean', description: 'Quality sufficient for voice cloning' },
+        trainingQuality: {
+          type: 'string',
+          enum: ['poor', 'fair', 'good', 'excellent'],
+          description: 'Qualitative training grade'
+        }
+      }
+    }
+  }
+} as const;
+
 export const voiceComparisonResultSchema = {
   type: 'object',
   properties: {

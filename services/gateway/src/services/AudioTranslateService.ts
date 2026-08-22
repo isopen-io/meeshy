@@ -14,6 +14,11 @@ import { randomUUID } from 'crypto';
 import * as path from 'path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ZmqTranslationClient } from './zmq-translation';
+import {
+  normalizeVoiceAnalysis,
+  normalizeVoiceComparison,
+  normalizeVoiceProsody
+} from './voice-analysis-normalize';
 import { logger } from '../utils/logger';
 import type {
   VoiceTranslateRequest,
@@ -35,6 +40,7 @@ import type {
   VoiceTranslationResult,
   TranslationJob,
   VoiceAnalysisResult,
+  VoiceQualityAnalysis,
   VoiceComparisonResult,
   TranslationHistoryEntry,
   VoiceUserStats,
@@ -589,7 +595,7 @@ export class AudioTranslateService extends EventEmitter {
       audioPath?: string;
       analysisTypes?: VoiceAnalysisType[];
     }
-  ): Promise<VoiceAnalysisResult> {
+  ): Promise<VoiceQualityAnalysis> {
     const request: VoiceAnalyzeRequest = {
       type: 'voice_analyze',
       taskId: randomUUID(),
@@ -599,7 +605,13 @@ export class AudioTranslateService extends EventEmitter {
       analysisTypes: options.analysisTypes
     };
 
-    return this._sendRequest<VoiceAnalysisResult>(request, 30000);
+    const raw = await this._sendRequest<unknown>(request, 30000);
+    const prosody = normalizeVoiceProsody(raw);
+
+    return {
+      ...normalizeVoiceAnalysis(raw),
+      ...(prosody ? { prosody } : {})
+    };
   }
 
   /**
@@ -624,7 +636,7 @@ export class AudioTranslateService extends EventEmitter {
       audioPath_2: options.audioPath_2
     };
 
-    return this._sendRequest<VoiceComparisonResult>(request, 30000);
+    return normalizeVoiceComparison(await this._sendRequest<unknown>(request, 30000));
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
