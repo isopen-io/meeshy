@@ -524,6 +524,12 @@ struct GlowingButton: View {
 
     @State private var isPressed = false
 
+    /// État d'attente annoncé par VoiceOver — clé existante, réutilisée telle
+    /// quelle (0 clé neuve, déjà traduite dans les 7 locales).
+    static var loadingAccessibilityValue: String {
+        String(localized: "loading.message", defaultValue: "Chargement…", bundle: .main)
+    }
+
     var body: some View {
         Button(action: {
             guard isEnabled && !isLoading else { return }
@@ -571,6 +577,15 @@ struct GlowingButton: View {
         }
         .buttonStyle(PlainButtonStyle())
         .disabled(!isEnabled || isLoading)
+        // Pendant `isLoading`, le corps du bouton ne contient PLUS que le
+        // `ProgressView` : SwiftUI compose le nom accessible depuis le label,
+        // donc le CTA principal de l'inscription devenait un « bouton » ANONYME
+        // au moment précis où l'utilisateur attend le réseau. Le titre est posé
+        // explicitement pour qu'il survive à ce basculement, et l'attente est
+        // annoncée comme VALEUR — pas en la maquillant dans le nom, qui doit
+        // rester stable pour Voice Control (« Appuyer sur Continuer »).
+        .accessibilityLabel(title)
+        .accessibilityValue(isLoading ? Self.loadingAccessibilityValue : "")
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in isPressed = true }
