@@ -7,7 +7,7 @@ import { GeoIPService, getRequestContext } from '../services/GeoIPService';
 import { initSessionService, markSessionTrusted } from '../services/SessionService';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendInternalError } from '../utils/response.js';
-import { userSchema, sessionSchema } from '@meeshy/shared/types/api-schemas';
+import { userSchema, sessionSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 const logger = enhancedLogger.child({ module: 'MagicLinkRoutes' });
 
 // Validation schemas
@@ -80,11 +80,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         },
         400: {
           description: 'Invalid request',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string' }
-          }
+          ...errorResponseSchema
         }
       },
       security: []
@@ -171,11 +167,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         },
         400: {
           description: 'Invalid or expired token',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string' }
-          }
+          ...errorResponseSchema
         }
       },
       security: []
@@ -262,11 +254,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         },
         400: {
           description: 'Invalid or expired token',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string' }
-          }
+          ...errorResponseSchema
         }
       },
       security: []

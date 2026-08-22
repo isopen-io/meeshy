@@ -179,17 +179,17 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
           400: { description: 'Validation error', ...validationErrorResponseSchema },
           401: errorResponseSchema,
           403: {
-            type: 'object',
+            ...errorResponseSchema,
             properties: {
-              success: { type: 'boolean', example: false },
-              error: { type: 'string', example: 'You are not authorized to access this user\'s encryption keys' }
+              ...errorResponseSchema.properties,
+              error: { type: 'string', example: 'You are not authorized to access this user\'s encryption keys' },
             }
           },
           404: {
-            type: 'object',
+            ...errorResponseSchema,
             properties: {
-              success: { type: 'boolean', example: false },
-              error: { type: 'string', example: 'User has not generated encryption keys' }
+              ...errorResponseSchema.properties,
+              error: { type: 'string', example: 'User has not generated encryption keys' },
             }
           },
           500: errorResponseSchema,
@@ -326,17 +326,17 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
           },
           401: errorResponseSchema,
           403: {
-            type: 'object',
+            ...errorResponseSchema,
             properties: {
-              success: { type: 'boolean', example: false },
-              error: { type: 'string', example: 'You are not a participant in this conversation' }
+              ...errorResponseSchema.properties,
+              error: { type: 'string', example: 'You are not a participant in this conversation' },
             }
           },
           404: {
-            type: 'object',
+            ...errorResponseSchema,
             properties: {
-              success: { type: 'boolean', example: false },
-              error: { type: 'string', example: 'Recipient has not generated encryption keys' }
+              ...errorResponseSchema.properties,
+              error: { type: 'string', example: 'Recipient has not generated encryption keys' },
             }
           },
           500: errorResponseSchema,

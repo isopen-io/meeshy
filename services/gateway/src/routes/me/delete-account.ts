@@ -6,6 +6,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateBody, validateQuery } from '../../validation/helpers.js';
 import { DeleteAccountBodySchema, TokenQuerySchema } from '../../validation/delete-account-schemas.js';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendConflict, sendInternalError } from '../../utils/response.js';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 const logger = enhancedLogger.child({ module: 'DeleteAccount' });
 
@@ -51,34 +52,10 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
               }
             }
           },
-          400: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean' },
-              error: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' } } }
-            }
-          },
-          401: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean' },
-              error: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' } } }
-            }
-          },
-          409: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean' },
-              error: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' } } }
-            }
-          },
-          500: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean' },
-              error: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' } } }
-            }
-          }
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          409: errorResponseSchema,
+          500: errorResponseSchema
         }
       }
     },

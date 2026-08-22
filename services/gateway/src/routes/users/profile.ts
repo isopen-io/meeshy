@@ -641,11 +641,11 @@ export async function updateUsername(fastify: FastifyInstance) {
         401: errorResponseSchema,
         404: errorResponseSchema,
         429: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
+            ...errorResponseSchema.properties,
             error: { type: 'string', example: 'Username change limited to once every 30 days' },
-            nextChangeAllowedAt: { type: 'string', format: 'date-time' }
+            nextChangeAllowedAt: { type: 'string', format: 'date-time' },
           }
         },
         500: errorResponseSchema

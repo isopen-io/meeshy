@@ -535,11 +535,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         },
         404: {
           description: 'Session not found',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            error: { type: 'string' }
-          }
+          ...errorResponseSchema
         }
       }
     },

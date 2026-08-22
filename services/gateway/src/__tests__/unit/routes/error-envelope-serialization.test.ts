@@ -93,18 +93,71 @@ describe('enveloppe d’erreur — `validationErrorResponseSchema`', () => {
   });
 });
 
-describe('enveloppe d’erreur — `errorResponseSchema` ne déclare pas `message`', () => {
-  // Constat, pas correction : le schéma partagé le plus utilisé du dépôt ne
-  // déclare que { success, error, code }. Le texte passe donc par `error`, et
-  // `api.service.ts` lit `data.message || data.error` — d'où l'absence de
-  // symptôme. Ce témoin fige le fait pour que l'ajout d'un lecteur de `message`
-  // ne se découvre pas en production.
-  it('sert `error` mais pas `message`', async () => {
+describe('enveloppe d’erreur — `errorResponseSchema` sert `message` (cycle 92)', () => {
+  /**
+   * Ce bloc figeait le CONTRAIRE jusqu'au cycle 92 : le schéma partagé le plus
+   * utilisé du dépôt ne déclarait que `{ success, error, code }`, et le témoin
+   * assertait `body.message).toBeUndefined()` — un constat, pas une correction,
+   * parce qu'ajouter la clé touchait trois cent cinquante-quatre déclarations.
+   *
+   * Ce qui a forcé la décision : réparer les schémas d'erreur écrits à la main
+   * en les ramenant sur cette constante EXIGE qu'elle porte `message`. Dix de
+   * ces sites déclaraient `{ success, message }` et servaient donc bien leur
+   * phrase ; les consolider sur une constante muette sur `message` aurait
+   * échangé une troncature contre une autre.
+   *
+   * Le texte n'était pas décoratif : cent trente-huit appels d’erreur passent un
+   * `message` DISTINCT de l'`error`, et `api.service.ts:239` le lit EN PREMIER
+   * (`data.message || data.error`). Sur `calls.ts`, `error` porte le CODE
+   * (`NOT_A_PARTICIPANT`) et `message` la phrase — le client affichait le code.
+   */
+  it('sert `error` ET `message`', async () => {
     const body = await serve(errorResponseSchema, (reply) =>
       sendBadRequest(reply, 'Donnees invalides')
     );
 
     expect(body.error).toBe('Donnees invalides');
-    expect(body.message).toBeUndefined();
+    expect(body.message).toBe('Donnees invalides');
+  });
+
+  it('sert la phrase lisible quand elle DIFFÈRE du code d’erreur', async () => {
+    const body = await serve(errorResponseSchema, (reply) =>
+      sendError(reply, 400, 'NOT_A_PARTICIPANT', {
+        message: 'Vous ne participez pas a cet appel',
+      })
+    );
+
+    expect(body).toMatchObject({
+      success: false,
+      error: 'NOT_A_PARTICIPANT',
+      message: 'Vous ne participez pas a cet appel',
+    });
+  });
+
+  /**
+   * La forme que `calls.ts` portait sur ses dix-neuf schémas. Elle n'omettait
+   * pas `error` — elle le déclarait OBJET, quand `sendError` en pose une
+   * chaîne. Le sérialiseur ne supprime pas une clé du mauvais type, il la
+   * COERCE, et une chaîne coercée en objet ne garde rien.
+   *
+   * Ce témoin garde la forme fautive elle-même : c'est elle qui rendait la
+   * déclaration d'apparence complète, donc invisible au balayage frère.
+   */
+  it('une clé d’enveloppe déclarée OBJET coerce la chaîne en `{}`', async () => {
+    const body = await serve(
+      {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          error: { type: 'object', properties: { code: { type: 'string' } } },
+        },
+      },
+      (reply) =>
+        sendError(reply, 400, 'NOT_A_PARTICIPANT', {
+          message: 'Vous ne participez pas a cet appel',
+        })
+    );
+
+    expect(body).toEqual({ success: false, error: {} });
   });
 });

@@ -121,6 +121,15 @@ const ROUTES_DIR = join(__dirname, '..');
  * balayage frère : `response-payload-mismatch.test.ts`. **Les deux sont
  * nécessaires ; aucun ne subsume l'autre.**
  *
+ * **Un troisième les complète depuis le cycle 92** : `error-schema-sweep.test.ts`.
+ * Le `calls.ts|details|400` retiré ci-dessus était la FEUILLE d'un défaut dont
+ * ce cliquet ne pouvait pas voir la racine — `error` déclaré OBJET porte des
+ * `properties`, donc n'est pas « nu ». Et cette racine-là vivait sur les
+ * DIX-NEUF schémas du fichier, pas sur le seul 400 que l'inventaire nommait.
+ * Une clé du mauvais TYPE n'est pas supprimée, elle est COERCÉE ; c'est le
+ * balayage d'erreur qui garde cette forme, et il le peut parce que les erreurs
+ * n'ont qu'un producteur.
+ *
  * Détail, preuves de sérialisation et inventaire raisonné :
  * `tasks/realtime-sync-audit-2026-08-22-cycle91-bis.md`.
  */
