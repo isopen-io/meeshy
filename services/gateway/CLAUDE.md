@@ -1344,6 +1344,66 @@ ce qu'elle déclarait faux.** Deux autres mensonges du même contrat sont tombé
 silencieusement ignoré, et un résultat qui jetait la clé éphémère publique sans
 laquelle le pair ne peut rien dériver.
 
+## Deux moitiés d'un protocole peuvent être cohérentes SÉPARÉMENT et fausses ENSEMBLE
+
+X3DH liait un identifiant d'enregistrement dans l'`info` de son HKDF. L'initiateur
+y mettait celui du DESTINATAIRE (`recipientBundle.registrationId`), le répondeur
+celui de l'INITIATEUR — deux entiers tirés au hasard par identité, donc
+différents. Les quatre Diffie-Hellman étant correctement disposés, **le secret
+partagé coïncidait et toutes les clés qui en sortaient divergeaient** : clé
+racine, chaîne d'émission, chaîne de réception. Toute session nouvelle
+s'établissait sans erreur, et aucun message n'y était déchiffrable (cycle 97).
+
+**Le répondeur ÉNONÇAIT l'invariant que l'initiateur violait**, trois lignes
+au-dessus de son propre appel :
+
+```ts
+// Note: both parties must use the same registration ID (initiator's)
+// to derive identical shared secrets
+```
+
+> **Un commentaire qui énonce un invariant de PAIRE ne garde que l'exemplaire qui
+> le porte.** Le côté qui écrivait la règle était le côté conforme — même famille
+> que « Cette entité a-t-elle une JUMELLE ? » (cycle 85) et que la note de
+> `storyAuthorSelect` (cycle 83). La connaissance était dans le dépôt, à l'endroit
+> exact, et ne s'appliquait qu'à la moitié où elle était écrite.
+
+**Aucun témoin ne pouvait le voir, et la raison est structurelle** :
+`X3DHKeyAgreement.test.ts` exerce chaque côté SEUL, et **un côté seul est toujours
+cohérent avec lui-même**. Il faut confronter les deux PRODUCTIONS réelles pour
+qu'un désaccord apparaisse — c'est la « quatrième famille » que le cycle 94
+déclarait non outillée.
+
+**Le témoin d'une paire SÉPARE ses affirmations**, parce que la séparation est le
+diagnostic : « le secret partagé coïncide » puis « les clés dérivées coïncident »
+localise la panne dans le HKDF plutôt que dans les DH, là où un unique `expect`
+sur la clé racine laisse chercher partout
+(`__tests__/unit/dma-x3dh-derivation-symmetry.test.ts`).
+
+### Entre deux valeurs qu'il faut accorder, choisir celle qui ne vient pas d'un canal hostile
+
+Il fallait décider quel identifiant est autoritatif. Celui de l'initiateur — et
+pas par convention : l'identifiant du destinataire ne voyage QUE dans le paquet de
+pré-clés, un champ que la signature de la pré-clé signée **ne couvre pas**. Le
+lier donnerait à l'annuaire un levier pour désaccorder deux pairs sans jamais
+toucher à une signature, donc sans franchir la vérification du cycle 96. Celui de
+l'initiateur, lui, est lu chez soi d'un côté et dans l'inscription de l'expéditeur
+de l'autre.
+
+> **Quand deux bouts doivent s'accorder sur une valeur, la question n'est pas
+> « laquelle est la plus naturelle ? » mais « laquelle un attaquant peut-il
+> fournir ? ».**
+
+### Un défaut par défaut ment sur sa cause
+
+Le répondeur repliait sur `0` un identifiant absent (`initiatorRegistrationId ?? 0`).
+Ce repli ne dégrade pas la session : il en fabrique une que le pair ne retrouvera
+jamais, et déplace le diagnostic vers la couche GCM — où la panne se présente sous
+les traits d'une ATTAQUE, plusieurs secondes et deux modules plus loin. Fail-closed
+à l'endroit où la cause est encore lisible ; et le paramètre devient REQUIS au
+typage, la garde runtime subsistant pour la frontière que le typage ne couvre pas
+(la valeur vient d'une colonne).
+
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (Fastify, Socket.IO, ZeroMQ, auth unifie, Prisma/MongoDB, Redis fallback, erreurs types, rate limiting, Signal Protocol, logging PII, audio pipeline, push notifications) avec contexte, alternatives rejetes et consquences.
 
