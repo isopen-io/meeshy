@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UserRoleEnum } from '@meeshy/shared/types';
-import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
+import { resolveParticipantAvatar, serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import {
   ACTIVE_MEMBER_LISTING_LIMIT,
   isMemberListingRestricted,
@@ -340,44 +340,15 @@ export function registerParticipantsRoutes(
         paginatedParticipants.map(p => p.userId).filter((uid): uid is string => !!uid),
       );
 
-      const formattedParticipants = paginatedParticipants.map(participant => ({
-        id: participant.id,
-        participantId: participant.id,
-        userId: participant.userId,
-        type: participant.type,
-        username: participant.user?.username ?? participant.displayName,
-        firstName: participant.user?.firstName ?? participant.displayName,
-        lastName: participant.user?.lastName ?? '',
-        displayName: participant.displayName,
-        avatar: resolveParticipantAvatar(participant),
-        role: participant.user?.role ?? 'USER',
-        conversationRole: participant.role,
-        joinedAt: participant.joinedAt,
-        isOnline: presenceVis.get(participant.userId ?? '')?.showOnline === false ? false : participant.isOnline,
-        lastActiveAt: presenceVis.get(participant.userId ?? '')?.showLastSeenTimestamp === false ? null : participant.lastActiveAt,
-        systemLanguage: participant.user?.systemLanguage ?? participant.language,
-        regionalLanguage: participant.user?.regionalLanguage ?? participant.language,
-        customDestinationLanguage: participant.user?.customDestinationLanguage ?? participant.language,
-        autoTranslateEnabled: true,
-        isActive: participant.isActive,
-        createdAt: participant.user?.createdAt ?? participant.joinedAt,
-        updatedAt: participant.user?.updatedAt ?? participant.joinedAt,
-        isAnonymous: participant.type === 'anonymous',
-        canSendMessages: participant.permissions?.canSendMessages ?? true,
-        canSendFiles: participant.permissions?.canSendFiles ?? true,
-        canSendImages: participant.permissions?.canSendImages ?? true,
-        permissions: {
-          canAccessAdmin: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canManageUsers: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canManageGroups: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canManageConversations: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canViewAnalytics: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canModerateContent: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canViewAuditLogs: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canManageNotifications: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canManageTranslations: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-        }
-      }));
+      // Cette projection ÉTAIT la référence de la forme de fil, écrite à la main
+      // ici — et c'est précisément parce qu'elle n'existait qu'ici que les deux
+      // routes de MUTATION (invite, changement de rang) passaient un rang Prisma
+      // brut sans gate. La fabrique partagée est désormais la source unique.
+      const formattedParticipants = paginatedParticipants.map(participant =>
+        serializeConversationParticipant(participant, {
+          presence: presenceVis.get(participant.userId ?? '')
+        })
+      );
 
       // NOTE: Cannot use sendSuccess() — response includes a top-level `pagination` field
       // (with cursor-based shape: nextCursor/hasMore/totalCount) that iOS SDK
@@ -856,8 +827,11 @@ export function registerParticipantsRoutes(
             data: {
               type: 'object',
               properties: {
-                message: { type: 'string', example: 'Participant ajouté avec succès' },
-                participant: conversationParticipantSchema
+                // `participant` était déclaré ici SANS producteur : le handler
+                // ne renvoie que `message`. Retiré plutôt que fabriqué —
+                // l'inventaire cesse de promettre un champ qui n'a jamais existé
+                // (même traitement que `users/profile.ts|permissions`, cycle 91 bis §5).
+                message: { type: 'string', example: 'Participant ajouté avec succès' }
               }
             }
           }
@@ -1454,21 +1428,27 @@ export function registerParticipantsRoutes(
         }
       });
 
-      const updatedParticipant = await prisma.participant.findUnique({
+      const updatedRow = await prisma.participant.findUnique({
         where: { id: targetParticipant.id },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              firstName: true,
-              lastName: true,
-              avatar: true
-            }
-          }
-        }
+        include: participantListUserSelect
       });
+
+      // Cette route servait `updatedRow` TEL QUEL sous la clé `participant`, que
+      // `conversationParticipantSchema` déclare. Le schéma déclarant aussi
+      // `isOnline`/`lastActiveAt`, la présence de la personne promue sortait sans
+      // que sa préférence `showOnlineStatus` soit consultée — seule des cinq
+      // surfaces à participants à ne pas la garder. La diffusion Socket.IO plus
+      // bas est le chemin le plus exposé : elle ne passe par AUCUN sérialiseur,
+      // donc le rang y partait entier (`nickname`, `shareLinkId`, `bannedAt`,
+      // `deletedForMe`) à toute la salle.
+      const rolePresenceVis = updatedRow?.userId
+        ? await getPresenceVisibilityService(prisma).resolvePrefsOnly([updatedRow.userId])
+        : new Map();
+      const updatedParticipant = updatedRow
+        ? serializeConversationParticipant(updatedRow, {
+            presence: updatedRow.userId ? rolePresenceVis.get(updatedRow.userId) : undefined
+          })
+        : null;
 
       const manager = fastify.socketIOHandler?.getManager();
       if (manager) {

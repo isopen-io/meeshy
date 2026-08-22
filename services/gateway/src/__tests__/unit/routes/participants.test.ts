@@ -26,6 +26,16 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
   errorResponseSchema: { type: 'object' },
 }));
 
+// Gate de présence. Régime `resolvePrefsOnly` : une entrée ABSENTE révèle (un
+// anonyme n'a pas de compte, donc pas de préférences) — la carte vide par défaut
+// est donc le comportement nominal, pas une neutralisation du gate.
+const mockResolvePrefsOnly = jest.fn<any>(async () => new Map());
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+  }),
+}));
+
 jest.mock('@meeshy/shared/types', () => ({
   UserRoleEnum: {},
 }));
@@ -1789,6 +1799,114 @@ describe('registerParticipantsRoutes', () => {
       });
     }
 
+    // ── Cycle 92 : la seule des cinq surfaces à publier un rang BRUT ──────────
+    //
+    // Les trois routes qui LISTENT des participants construisent leur projection
+    // et gardent la présence ; cette route-ci passait `updatedParticipant` — un
+    // rang Prisma lu en `include`, donc tous les scalaires — directement sous la
+    // clé `participant` que déclare `conversationParticipantSchema`.
+    //
+    // Comme le schéma DÉCLARE `isOnline` et `lastActiveAt`, le sérialiseur les
+    // laissait passer : la présence de la personne dont on changeait le rang
+    // sortait sans que sa préférence `showOnlineStatus` soit consultée. Le
+    // jumeau `POST …/invite` faisait exactement la même chose et ne fuyait pas,
+    // par le seul accident d'une clé mal nommée (`member` vs `membership`).
+    //
+    // La diffusion Socket.IO est le chemin le plus exposé : elle ne passe par
+    // AUCUN sérialiseur, donc le rang y partait entier — état privé par paire
+    // compris — à toute la salle.
+    describe('la charge utile du participant promu', () => {
+      const targetRow = (over: Record<string, unknown> = {}) =>
+        createParticipant({
+          id: TARGET_PARTICIPANT_ID,
+          userId: TARGET_USER_ID,
+          role: 'admin',
+          nickname: 'surnom privé',
+          shareLinkId: 'lnk-1',
+          bannedAt: null,
+          leftAt: null,
+          deletedForMe: null,
+          ...over,
+        });
+
+      async function promote(row: Record<string, unknown>) {
+        const route = getRoute(mockFastify, 'PATCH', '/role');
+        const io = createMockIO();
+        const request = createPatchRequest({
+          server: { io, notificationService: createMockNotificationService() },
+        });
+        mockPrisma.participant.findFirst
+          .mockResolvedValueOnce(createCreatorParticipant())
+          .mockResolvedValueOnce(createParticipant({
+            id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'member',
+          }));
+        mockPrisma.participant.update.mockResolvedValue({});
+        mockPrisma.participant.findUnique.mockResolvedValue(row);
+        const reply = createMockReply();
+
+        await route.handler(request, reply);
+
+        return {
+          payload: reply.send.mock.calls.at(-1)?.[0]?.data,
+          broadcast: io._emit.mock.calls.at(-1)?.[1],
+        };
+      }
+
+      it('masque la présence de la cible quand elle refuse de montrer son statut', async () => {
+        mockResolvePrefsOnly.mockResolvedValue(
+          new Map([[TARGET_USER_ID, { showOnline: false, showLastSeenTimestamp: false }]]),
+        );
+
+        const { payload } = await promote(targetRow());
+
+        expect(payload.participant.isOnline).toBe(false);
+        expect(payload.participant.lastActiveAt).toBeNull();
+      });
+
+      it('consulte le gate sur la CIBLE du changement de rang', async () => {
+        mockResolvePrefsOnly.mockResolvedValue(new Map());
+
+        await promote(targetRow());
+
+        expect(mockResolvePrefsOnly).toHaveBeenCalledWith([TARGET_USER_ID]);
+      });
+
+      it('sépare le rang de conversation du rôle global', async () => {
+        mockResolvePrefsOnly.mockResolvedValue(new Map());
+
+        const { payload } = await promote(targetRow());
+
+        expect(payload.participant.conversationRole).toBe('admin');
+        expect(payload.participant.role).toBe('USER');
+        expect(payload.participant.participantId).toBe(TARGET_PARTICIPANT_ID);
+      });
+
+      it('diffuse la même forme gardée que la réponse REST', async () => {
+        mockResolvePrefsOnly.mockResolvedValue(
+          new Map([[TARGET_USER_ID, { showOnline: false, showLastSeenTimestamp: false }]]),
+        );
+
+        const { payload, broadcast } = await promote(targetRow());
+
+        expect(broadcast.participant).toEqual(payload.participant);
+        expect(broadcast.participant.isOnline).toBe(false);
+      });
+
+      // La diffusion n'a pas de sérialiseur pour l'arrêter : ce qui n'est pas
+      // retiré à la SOURCE part sur le fil.
+      it('ne diffuse pas l\'état privé par paire du rang Prisma', async () => {
+        mockResolvePrefsOnly.mockResolvedValue(new Map());
+
+        const { broadcast } = await promote(targetRow());
+
+        expect(broadcast.participant).not.toHaveProperty('nickname');
+        expect(broadcast.participant).not.toHaveProperty('shareLinkId');
+        expect(broadcast.participant).not.toHaveProperty('bannedAt');
+        expect(broadcast.participant).not.toHaveProperty('deletedForMe');
+        expect(broadcast.participant).not.toHaveProperty('conversationId');
+      });
+    });
+
     it('should return 400 for invalid role', async () => {
       const route = getRoute(mockFastify, 'PATCH', '/role');
       const request = createPatchRequest({ body: { role: 'SUPERUSER' } });
@@ -1952,18 +2070,23 @@ describe('registerParticipantsRoutes', () => {
 
       await route.handler(createPatchRequest(), reply);
 
+      // Le `select` s'aligne sur celui de la LISTE : la fabrique partagée sert
+      // `role` global, les trois langues et les horodatages de compte, qu'un
+      // select court aurait fait retomber sur des valeurs par défaut.
       expect(mockPrisma.participant.findUnique).toHaveBeenCalledWith({
         where: { id: TARGET_PARTICIPANT_ID },
         include: {
           user: {
-            select: {
+            select: expect.objectContaining({
               id: true,
               username: true,
               displayName: true,
               firstName: true,
               lastName: true,
               avatar: true,
-            },
+              role: true,
+              systemLanguage: true,
+            }),
           },
         },
       });
@@ -1983,13 +2106,21 @@ describe('registerParticipantsRoutes', () => {
 
       await route.handler(request, reply);
 
+      // Ce témoin assertait l'identité du RANG PRISMA (`participant:
+      // updatedParticipant`) : il tenait pour correct que la diffusion parte
+      // brute, sur un chemin qui n'a AUCUN sérialiseur pour l'arrêter. Repointé
+      // sur la forme de fil — ce que la salle a le droit de recevoir.
       expect(io.to).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
       expect(io._emit).toHaveBeenCalledWith('participant:role-updated', {
         conversationId: VALID_CONV_ID,
         userId: TARGET_USER_ID,
         newRole: 'admin',
         updatedBy: VALID_USER_ID,
-        participant: updatedParticipant,
+        participant: expect.objectContaining({
+          participantId: TARGET_PARTICIPANT_ID,
+          conversationRole: 'admin',
+          role: 'USER',
+        }),
       });
     });
 
@@ -2031,15 +2162,20 @@ describe('registerParticipantsRoutes', () => {
 
       await route.handler(request, reply);
 
-      expect(reply.send).toHaveBeenCalledWith({
-        success: true,
-        data: {
-          message: expect.any(String),
-          userId: TARGET_USER_ID,
-          role: 'moderator',
-          participant: updatedParticipant,
-        },
-      });
+      expect(reply.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({
+            message: expect.any(String),
+            userId: TARGET_USER_ID,
+            role: 'moderator',
+            participant: expect.objectContaining({
+              participantId: TARGET_PARTICIPANT_ID,
+              conversationRole: 'moderator',
+            }),
+          }),
+        })
+      );
     });
 
     it('should not crash when io is undefined', async () => {
