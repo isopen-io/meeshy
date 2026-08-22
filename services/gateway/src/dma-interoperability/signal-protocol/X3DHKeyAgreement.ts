@@ -17,13 +17,28 @@
  */
 
 import * as crypto from 'crypto';
-import { createHmac, createHash } from 'crypto';
+import { createHmac, createVerify } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SignalKeyManager } from './SignalKeyManager';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 // Create child logger for this module
 const logger = enhancedLogger.child({ module: 'X3DHKeyAgreement' });
+
+/**
+ * Refus d'un paquet de pré-clés dont la pré-clé signée n'est pas rattachée à la
+ * clé d'identité annoncée.
+ *
+ * Type propre plutôt qu'`Error` nu : un appelant doit pouvoir distinguer « ce
+ * paquet est inauthentique » — qui est un signal d'ATTAQUE, et ne se réessaie
+ * pas — d'un accord qui a échoué pour une raison d'exploitation.
+ */
+export class X3DHSignedPreKeyRejected extends Error {
+  constructor(reason: string) {
+    super(`X3DH: pré-clé signée refusée — ${reason}`);
+    this.name = 'X3DHSignedPreKeyRejected';
+  }
+}
 
 /**
  * Pre-key bundle published by a user for others to initiate sessions
@@ -120,7 +135,11 @@ export class X3DHKeyAgreement {
     initiatorSessions: 0,
     responderSessions: 0,
     dhOperationsPerformed: 0,
-    agreementErrors: 0
+    agreementErrors: 0,
+    // Comptés à part d'`agreementErrors` : un refus de signature n'est pas un
+    // incident d'exploitation, c'est la trace d'un paquet inauthentique.
+    signedPreKeysVerified: 0,
+    signedPreKeysRejected: 0
   };
 
   constructor(keyManager: SignalKeyManager, prisma: PrismaClient) {
@@ -149,6 +168,17 @@ export class X3DHKeyAgreement {
   ): Promise<X3DHInitiatorResult> {
     try {
       logger.debug('Starting X3DH initiator key agreement');
+
+      // Step 0: AUTHENTIFIER le paquet avant d'en dériver quoi que ce soit.
+      //
+      // X3DH §3.3 : « Alice verifies the prekey signature and aborts the protocol
+      // if verification fails ». C'est la SEULE étape qui rattache la pré-clé
+      // signée — reçue d'un annuaire que le protocole suppose hostile — à la clé
+      // d'identité, qui est l'unique ancre de confiance de l'accord.
+      //
+      // Le refus est prononcé AVANT la génération de l'éphémère et avant tout DH :
+      // aucun secret ne doit être dérivé contre une clé qu'on n'a pas authentifiée.
+      this.assertSignedPreKeyIsAuthentic(recipientBundle);
 
       // Step 1: Generate ephemeral key pair (ephemeral_key_pair)
       const ephemeralKeyPair = this.generateEphemeralKeyPair();
@@ -345,6 +375,90 @@ export class X3DHKeyAgreement {
       logger.error('X3DH responder agreement failed', { err: error });
       this.stats.agreementErrors++;
       throw error;
+    }
+  }
+
+  /**
+   * Confronte la pré-clé signée du paquet à la clé d'identité qu'il annonce.
+   *
+   * Le producteur est `SignalKeyManager.generateAndStoreSignedPreKey` : il signe
+   * les octets SPKI DER de la pré-clé publique, en ECDSA-SHA256, avec la clé
+   * d'identité privée. La vérification lit donc exactement ces octets-là.
+   *
+   * Fail-closed sur toute la surface : une signature absente, une clé illisible
+   * ou une exception d'OpenSSL valent REFUS, jamais laissez-passer. Le retrait de
+   * la signature est en pratique la manœuvre la moins chère — bien moins que la
+   * forgerie — donc l'absence est traitée exactement comme l'invalidité.
+   */
+  private assertSignedPreKeyIsAuthentic(bundle: PreKeyBundle): void {
+    const reason = this.signedPreKeyRejectionReason(bundle);
+
+    if (reason) {
+      this.stats.signedPreKeysRejected++;
+      logger.error('SECURITY: X3DH signed pre-key rejected — aborting key agreement', {
+        reason,
+        signedPreKeyId: bundle?.signedPreKey?.id,
+        registrationId: bundle?.registrationId
+      });
+      throw new X3DHSignedPreKeyRejected(reason);
+    }
+
+    this.stats.signedPreKeysVerified++;
+  }
+
+  /**
+   * Rend la raison du refus, ou `null` si le paquet est authentique.
+   */
+  private signedPreKeyRejectionReason(bundle: PreKeyBundle): string | null {
+    if (!bundle?.identityKey?.length) {
+      return "le paquet ne porte aucune clé d'identité";
+    }
+
+    if (!bundle.signedPreKey?.publicKey?.length) {
+      return 'le paquet ne porte aucune pré-clé signée';
+    }
+
+    if (!bundle.signedPreKey.signature?.length) {
+      return 'le paquet ne porte aucune signature';
+    }
+
+    return this.signatureIsAuthentic(
+      bundle.signedPreKey.publicKey,
+      bundle.signedPreKey.signature,
+      bundle.identityKey
+    )
+      ? null
+      : "la signature ne rattache pas la pré-clé signée à la clé d'identité annoncée";
+  }
+
+  /**
+   * Vérification ECDSA-SHA256, rendant `false` sur toute anomalie.
+   *
+   * Une clé d'identité malformée fait lever `createPublicKey` ; une signature
+   * malformée fait lever ou rendre `false` selon la nature du défaut. Les deux
+   * issues sont le même verdict — le paquet n'est pas authentique — et aucune ne
+   * doit remonter à l'appelant sous la forme d'une exception d'OpenSSL.
+   */
+  private signatureIsAuthentic(
+    signedPreKeyPublic: Buffer,
+    signature: Buffer,
+    identityKey: Buffer
+  ): boolean {
+    try {
+      const identityKeyObject = crypto.createPublicKey({
+        key: identityKey,
+        format: 'der',
+        type: 'spki'
+      });
+
+      const verify = createVerify('SHA256');
+      verify.update(signedPreKeyPublic);
+      return verify.verify(identityKeyObject, signature);
+    } catch (error) {
+      logger.warn('X3DH signed pre-key signature could not be verified', {
+        err: error instanceof Error ? error.message : String(error)
+      });
+      return false;
     }
   }
 

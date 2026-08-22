@@ -488,3 +488,58 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle94-bis.md`.
   `APIMessage.translations` en `try` non tolérant quand ses trois voisins sont en `try?` (lot
   iOS) ; **le quatrième balayage n'existe pas** — rien ne garde contre une déclaration présente,
   bien formée et FAUSSE contre son producteur, ce qu'étaient les deux défauts de ce cycle.
+
+## Cycle 96 (2026-08-22) — l'accord de clés X3DH s'authentifie
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle96.md`.
+
+- [x] Constat : `signedPreKey.signature` est PRODUITE (`SignalKeyManager`), PERSISTÉE
+      (`DMAEnrollment.signedPreKeySignature`), RELUE et placée dans le paquet
+      (`SignalProtocolEngine.initiateNewSession`), DÉCLARÉE obligatoire
+      (`PreKeyBundle`) — et **jamais lue**. `initiatorKeyAgreement` accordait des
+      clés contre une pré-clé signée acceptée sur la seule parole de l'annuaire,
+      alors que X3DH §3.3 en fait une étape d'abandon obligatoire.
+- [x] Preuve la plus courte que rien ne vérifiait : les six constructions de paquet
+      de la suite du sous-arbre passent `signature: crypto.randomBytes(64)`, et
+      l'accord aboutissait.
+- [x] Contraste interne qui rend le défaut lisible : le moteur REJETTE strictement
+      un message dont la signature de CONTENU ne vérifie pas ; la signature qui
+      établit la session n'était confrontée à rien.
+- [x] `initiatorKeyAgreement` authentifie le paquet en **étape 0** — avant la
+      génération de l'éphémère, avant tout DH. Fail-closed sur toute la surface
+      (signature absente, clé illisible, exception d'OpenSSL ⇒ REFUS).
+      `X3DHSignedPreKeyRejected` distingue « paquet inauthentique » (signal
+      d'attaque, ne se réessaie pas) d'un échec d'exploitation ; compteurs
+      `signedPreKeysVerified` / `signedPreKeysRejected` séparés d'`agreementErrors`.
+- [x] **Second défaut, même famille** — `decryptMessage` étape 2 gatait sur
+      `&& encryptedMessage.signature.length > 0` : un message SANS signature ne
+      franchissait aucune branche (ni vérification, ni avertissement, ni refus),
+      sous un commentaire qui déclare la vérification « stricte ». Le retrait est
+      moins cher que la forgerie. Gate ramené à `if (senderIdentityKey)` — c'est
+      l'INTENTION de l'appelant qui décide, pas l'obligeance de l'émetteur.
+- [x] Suivi du cycle 95 refermé : `ISignalProtocolAdapter.performX3DH` transporte
+      la signature, ce qui **dissout** le `as any` — lequel masquait exactement
+      l'absence du seul champ qui authentifie l'accord.
+- [x] Deux mensonges de contrat emportés par la même réouverture de signature :
+      `ourEphemeralPrivate` DÉCLARÉ et silencieusement ignoré (retiré — un
+      éphémère fourni par l'appelant est réemployable, donc l'API ne doit pas
+      l'offrir), et un résultat qui jetait la clé éphémère PUBLIQUE sans laquelle
+      le pair ne peut rien dériver (désormais rendue).
+- [x] Témoins : `dma-x3dh-authentication.test.ts` (11), dont le paquet ACCEPTÉ sort
+      du producteur RÉEL (`generateAndStoreSignedPreKey`), jamais d'un signeur
+      recopié. **ROUGE prouvé deux fois séparément** : retrait de la vérification
+      ⇒ 7/11 tombent ; retour du gate `signature.length > 0` ⇒ 1/11.
+- [x] Gates : `tsc --noEmit` gateway 0 · suite ciblée 11/11 · suite complète gateway.
+- [ ] Suivi — les 3 suites du sous-arbre restent ignorées par jest. Mesuré ici :
+      elles PENDENT (PrismaClient réel sans base), elles n'échouent même pas. Elles
+      portent maintenant une dette de plus : leurs signatures `randomBytes(64)` sont
+      désormais refusées à juste titre. Les instruire une par une en leur faisant
+      produire de VRAIES signatures — jamais en desserrant la vérification.
+- [ ] Suivi — `SignalProtocolAdapter.performX3DH` fige `registrationId: 0` alors que
+      `deriveKeys` le mêle à l'info HKDF : deux pairs en désaccord sur cet entier
+      dérivent des clés différentes. Le moteur passe la vraie valeur, l'adaptateur
+      non. Le porter demande de décider qui est autoritatif — lot en soi.
+- [ ] Suivi — X3DH n'inclut pas le préfixe `F` (32 octets 0xFF) dans l'entrée du
+      HKDF, et le sel est nul plutôt que de longueur de hachage. Sans conséquence
+      tant que les deux bouts sont ce dépôt ; en aura une à la première
+      interopérabilité réelle avec libsignal.

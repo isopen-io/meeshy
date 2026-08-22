@@ -406,8 +406,20 @@ export class SignalProtocolEngine {
       }
 
       // Step 2: Verify message signature if sender identity key provided
-      // SECURITY: Strict signature verification - reject invalid signatures
-      if (senderIdentityKey && encryptedMessage.signature.length > 0) {
+      //
+      // SECURITY: une signature RETIRÉE n'est pas une signature absente. Le gate
+      // portait `&& encryptedMessage.signature.length > 0`, si bien qu'un message
+      // arrivant sans signature ne franchissait AUCUNE branche : ni vérification,
+      // ni avertissement, ni refus — alors que `signMessage` en pose une sur tout
+      // message émis (étape 4 du chiffrement), donc une signature vide ne peut
+      // venir que d'un retrait en chemin. Or retirer la signature est strictement
+      // moins cher que la forger, et suffisait à désarmer la vérification que ce
+      // bloc déclare « stricte ».
+      //
+      // Dès lors qu'une clé d'identité est fournie, l'appelant DEMANDE
+      // l'authentification : le verdict est celui de `verifyMessageSignature`,
+      // qui rend `false` sur une signature vide comme sur une signature fausse.
+      if (senderIdentityKey) {
         const contentToVerify = Buffer.concat([
           encryptedMessage.iv,
           encryptedMessage.ciphertext,
