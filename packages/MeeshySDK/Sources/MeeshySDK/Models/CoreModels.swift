@@ -402,8 +402,24 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         guard let translations = lastMessageTranslations, !translations.isEmpty else {
             return lastMessagePreview
         }
-        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        let original = lastMessageOriginalLanguage?.lowercased()
+        // Canonicalise (case-fold + region-strip via the shared normalizer) every
+        // language token compared — reader languages, original language, and map
+        // keys — mirroring the TypeScript twin `resolveLastMessagePreview`
+        // (`normalizeLanguageForDedup`). `resolveUserLanguagesOrdered` already
+        // strips regions from the reader's languages, but `lastMessageOriginalLanguage`
+        // arrives raw and messages written before the write-boundary canonicalisation
+        // carry a region-tagged code (`en-US`, `pt-BR`); compared with `.lowercased()`
+        // alone, `en-us` never matched the normalized rank `en`, and a lower-ranked
+        // translation won — demoting the reader's PRIMARY language, the exact Prisme
+        // violation (#3) this resolver fights. Canonicalising at the comparison point
+        // is idempotent on already-canonical codes (zero regression).
+        let canon: (String) -> String = { MeeshyUser.normalizeLanguageCode($0) ?? $0.lowercased() }
+        let preferred = preferredLanguages.filter { !$0.isEmpty }.map(canon)
+        let original = lastMessageOriginalLanguage.map(canon)
+        var translationsByCanonicalKey: [String: String] = [:]
+        for (lang, text) in translations {
+            translationsByCanonicalKey[canon(lang)] = text
+        }
         // The prism is ORDERED, and the original language competes at its own
         // RANK — never as a global short-circuit. Walking the reader's
         // languages in order, the first one that is served wins, whether by a
@@ -423,7 +439,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
             if let original, lang == original {
                 return lastMessagePreview
             }
-            if let translated = translations[lang] {
+            if let translated = translationsByCanonicalKey[lang] {
                 return translated
             }
         }
