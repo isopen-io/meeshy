@@ -23,7 +23,7 @@ import Foundation
 ///    latines ; l'arabe abrège par « ألف » et « مليون ». Un « 1.5k » en écriture
 ///    arabe mêle deux systèmes d'écriture dans un même nombre.
 ///
-/// `.notation(.compact)` rend les deux — séparateur ET abréviation — depuis les
+/// `.notation(.compactName)` rend les deux — séparateur ET abréviation — depuis les
 /// données CLDR de la locale. C'est aussi Foundation qui décide de la précision,
 /// donc « 1000 » devient « 1 k » et non « 1.0k » : l'abrégé fait maison gravait
 /// une décimale nulle que personne n'écrit à la main.
@@ -37,7 +37,21 @@ enum CompactCountLabel {
 
     /// Sous 1000, Foundation rend le nombre tel quel (« 999 »), comme le faisait
     /// la branche de repli du code remplacé.
+    ///
+    /// Le style est **nommé et construit explicitement** plutôt qu'écrit
+    /// `count.formatted(.number.notation(…))` : la forme abrégée passe par la
+    /// surcharge générique de `BinaryInteger.formatted(_:)`, où le membre
+    /// statique `.number` n'a pas de base à inférer — le compilateur rend
+    /// « type 'BinaryInteger' has no member 'number' ». Construire
+    /// `IntegerFormatStyle<Int>` puis appeler `format(_:)` ne dépend d'aucune
+    /// inférence.
+    ///
+    /// La notation s'appelle `.compactName` — `.compact` n'existe pas dans
+    /// `NumberFormatStyleConfiguration.Notation`, qui n'offre que `.automatic`,
+    /// `.scientific` et `.compactName`.
     static func text(_ count: Int, locale: Locale = .current) -> String {
-        count.formatted(.number.notation(.compact).locale(locale))
+        IntegerFormatStyle<Int>(locale: locale)
+            .notation(.compactName)
+            .format(count)
     }
 }

@@ -62,10 +62,12 @@ une décimale nulle que personne n'écrit à la main.
 ## Le correctif
 
 ```swift
-count.formatted(.number.notation(.compact).locale(locale))
+IntegerFormatStyle<Int>(locale: locale)
+    .notation(.compactName)
+    .format(count)
 ```
 
-`.notation(.compact)` rend **les deux** — séparateur et abréviation — depuis les
+`.notation(.compactName)` rend **les deux** — séparateur et abréviation — depuis les
 données CLDR de la locale, et c'est Foundation qui décide de la précision. Le
 helper est extrait en `CompactCountLabel`, jumeau de `MembersCountLabel` (234i)
 et `UnreadCountLabel` (236i), au même endroit et selon le même idiome : un
@@ -125,6 +127,38 @@ Contrôles déterministes complémentaires :
   suite serait *verte par omission* en local.
 - Le retrait du `private func` ne laisse ni accolade orpheline ni ligne vide
   parasite (vérifié à la lecture, l. 488-494).
+
+## Correction après CI rouge
+
+La première rédaction du correctif n'a pas compilé, et il faut le dire :
+
+```swift
+count.formatted(.number.notation(.compact).locale(locale))   // ✗ deux erreurs
+```
+
+- `type 'BinaryInteger' has no member 'number'` — `.number` est un membre
+  statique porté par une extension conditionnelle de `FormatStyle` ; à travers
+  la surcharge générique `BinaryInteger.formatted(_:)` il n'a **aucune base à
+  inférer**.
+- `cannot infer contextual base in reference to member 'compact'` — plus
+  simplement : **`.compact` n'existe pas**.
+  `NumberFormatStyleConfiguration.Notation` n'offre que `.automatic`,
+  `.scientific` et `.compactName`.
+
+Les deux défauts sont **indépendants**, et le second message se lit volontiers
+comme une conséquence du premier : n'en corriger qu'un aurait produit un second
+rouge. La forme retenue — style **nommé et construit**, puis `format(_:)` — ne
+demande aucune inférence : elle compile, ou elle ne trouve pas le symbole, et
+dans ce cas l'erreur nomme le symbole.
+
+J'avais vérifié que la notation compacte existait depuis iOS 15 et que le
+plancher du projet était iOS 16 : la *disponibilité*, donc, mais pas
+l'*orthographe* des cas de l'enum. Leçon consignée dans `tasks/lessons.md`.
+
+**Ce qui n'a PAS eu à changer : la suite de tests.** Elle n'affirmait ni chaîne
+CLDR ni forme d'appel — seulement que le rendu français diffère du rendu
+anglais. Un test écrit sur le contrat survit à la correction de
+l'implémentation.
 
 ## Bilan
 

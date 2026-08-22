@@ -15,7 +15,8 @@ décimal ET abréviation — au lieu de le composer à la main en format POSIX.
 - [x] Numéro **237i** choisi strictement au-dessus du plus haut mergé (236i). Collision essaim : **0 PR iOS ouverte** (#3326 Android, #3325 gateway).
 - [x] **Écarter le carry-over (a)** `MeeshyAppIntents.swift:272` pour la raison que le pointeur 236i donne lui-même : `IntentDialog` se compose depuis `LocalizedStringResource` → demande un compilateur.
 - [x] Extraire `formatCount` en `CompactCountLabel`, jumeau de `MembersCountLabel` (234i) et `UnreadCountLabel` (236i) — même dossier, même idiome `enum` + statique + locale en paramètre.
-- [x] Remplacer le corps par `count.formatted(.number.notation(.compact).locale(locale))`.
+- [x] Remplacer le corps par `IntegerFormatStyle<Int>(locale:).notation(.compactName).format(count)`.
+- [x] **Correction après CI rouge** — la première rédaction, `count.formatted(.number.notation(.compact).locale(locale))`, ne compilait pas, pour DEUX raisons distinctes : (1) `.number` n'a pas de base à inférer à travers la surcharge générique `BinaryInteger.formatted(_:)` (« type 'BinaryInteger' has no member 'number' ») ; (2) **`.compact` n'existe pas** — `NumberFormatStyleConfiguration.Notation` n'offre que `.automatic`, `.scientific` et `.compactName`. Style nommé + `format(_:)` : aucune inférence en jeu.
 - [x] Recâbler les 2 sites d'appel, supprimer le `private func` (non testable depuis le bundle — c'est ce qui a laissé le défaut survivre à 234i et 236i).
 - [x] Ajouter `CompactCountLabelTests` — 7 tests de **propriétés**, jamais de chaîne CLDR exacte (elles appartiennent à Foundation et bougent avec iOS).
 - [x] Ajouter les 8 entrées `pbxproj` (4 helper + 4 suite).
