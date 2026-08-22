@@ -1,4 +1,4 @@
-import { validatePagination, MAX_PAGINATION_OFFSET } from '../../../utils/pagination';
+import { validatePagination, sliceByIdCursor, MAX_PAGINATION_OFFSET } from '../../../utils/pagination';
 
 /**
  * Iter 33 — single source of truth for offset/limit pagination parsing.
@@ -51,5 +51,77 @@ describe('validatePagination', () => {
 
   it('keeps offsets under the cap untouched', () => {
     expect(validatePagination(String(MAX_PAGINATION_OFFSET - 1), '20').offset).toBe(MAX_PAGINATION_OFFSET - 1);
+  });
+});
+
+/**
+ * In-memory id-cursor windowing over an already-ordered, already-filtered list.
+ *
+ * Unlike a DB keyset cursor, callers of this helper (the "top-N most active
+ * members" listing) RECOMPUTE the list on every request from live ranking +
+ * presence, so a cursor handed out on a previous page routinely names a row that
+ * is no longer in the recomputed list. The invariant under test: a stale cursor
+ * TERMINATES pagination (empty tail), it never silently restarts from page 1.
+ */
+describe('sliceByIdCursor', () => {
+  const row = (id: string) => ({ id });
+  const list = [row('a'), row('b'), row('c'), row('d'), row('e')];
+
+  it('returns the first page and a live cursor when no cursor is supplied', () => {
+    expect(sliceByIdCursor(list, undefined, 2)).toEqual({
+      page: [row('a'), row('b')],
+      hasMore: true,
+      nextCursor: 'b',
+    });
+  });
+
+  it('resumes strictly after a valid cursor', () => {
+    expect(sliceByIdCursor(list, 'b', 2)).toEqual({
+      page: [row('c'), row('d')],
+      hasMore: true,
+      nextCursor: 'd',
+    });
+  });
+
+  it('terminates cleanly on the last page (hasMore false, nextCursor null)', () => {
+    expect(sliceByIdCursor(list, 'c', 2)).toEqual({
+      page: [row('d'), row('e')],
+      hasMore: false,
+      nextCursor: null,
+    });
+  });
+
+  it('returns an empty tail when the cursor is the last item', () => {
+    expect(sliceByIdCursor(list, 'e', 2)).toEqual({
+      page: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+  });
+
+  it('TERMINATES on a stale cursor instead of restarting from page 1', () => {
+    // The recomputed list no longer contains 'z' (a member who dropped out of
+    // the live top-N ranking, or went offline under onlineOnly). A naïve
+    // `findIndex('z') + 1` collapses to `0` and re-serves ['a','b'] — duplicating
+    // already-served rows and looping infinite scroll. The fix returns an empty
+    // page so the client's pagination terminates.
+    expect(sliceByIdCursor(list, 'z', 2)).toEqual({
+      page: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+  });
+
+  it('handles an empty list', () => {
+    expect(sliceByIdCursor([], undefined, 2)).toEqual({
+      page: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+    expect(sliceByIdCursor([], 'a', 2)).toEqual({
+      page: [],
+      hasMore: false,
+      nextCursor: null,
+    });
   });
 });
