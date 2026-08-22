@@ -395,6 +395,26 @@ pas — une omission de schéma partagé, que la première route qui l'ajoute
 annulerait sans faire tomber un seul témoin. fast-json-stringify n'est pas une
 garde de confidentialité.
 
+**CHARGER n'est pas SERVIR, et un témoin de `select` n'atteste pas la réponse.**
+`storyAuthorSelect` charge la présence pour une raison produit légitime
+(l'interstitiel du viewer doit être complet au switch de groupe) ; le fil la
+servait brute. Trois témoins nommés `stories-presence` étaient verts — ils
+assertaient tous les trois que le `select` DEMANDE les champs, aucun sur ce que
+le handler en FAIT, et le défaut vivait dans l'espace exact entre les deux
+(cycle 83). **Un témoin de confidentialité assert sur la VALEUR SERVIE.**
+
+**Le régime peut se trancher par LIGNE, pas seulement par route.** Sur une page
+de stories, `PUBLIC` ne prouve aucun lien (`buildPostVisibilityOrFilter` la sert
+sans condition d'audience) ⇒ strict ; `FRIENDS` / `EXCEPT` / `COMMUNITY` /
+`ONLY` en prouvent un ⇒ `resolvePrefsOnly`. Un régime unique s'y trompe dans les
+deux sens. Et un sujet qui prouve le lien par UNE ligne de la page le prouve
+pour toutes. Voir `PostFeedService.resolveStoryAuthorPresence`.
+
+**Attention aux commentaires qui ÉNUMÈRENT une règle au lieu de la citer** : la
+note de `storyAuthorSelect` listait trois audiences gatées et omettait `PUBLIC`,
+la seule qui ne l'est pas. Fausse nulle part, incomplète là où l'incomplétude
+valait autorisation — c'est elle, pas le code, qui a tenu la porte ouverte.
+
 ### Une règle appliquée à l'ÉCRITURE n'est pas appliquée
 
 `ContactDirectoryService.match()` filtrait le blocage bidirectionnel, avec le
