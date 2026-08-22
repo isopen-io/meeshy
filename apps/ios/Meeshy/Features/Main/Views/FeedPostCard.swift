@@ -1271,8 +1271,9 @@ struct FeedPostCard: View {
                     .padding(.horizontal, 16)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(topComments.enumerated()), id: \.element.id) { index, comment in
-                        topCommentRow(comment: comment, isLast: index == topComments.count - 1)
+                    let comments = topComments
+                    ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
+                        topCommentRow(comment: comment, isLast: index == comments.count - 1)
                     }
 
                     // "See all comments" link

@@ -20,6 +20,7 @@ struct HashtagResultsView: View {
             LazyVStack(spacing: 12) {
                 ForEach(viewModel.posts) { post in
                     FeedPostCard(post: post)
+                        .equatable()
                         .onAppear {
                             if post.id == viewModel.posts.last?.id {
                                 Task { await viewModel.loadMore() }
