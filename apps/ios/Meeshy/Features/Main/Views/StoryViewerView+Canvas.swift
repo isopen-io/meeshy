@@ -1018,15 +1018,12 @@ struct StoryCardView: View {
     let isStoryCommentsEmpty: Bool
     let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
-    /// Présence d'un audio de fond sur la slide — pilote la note musicale du
-    /// header (`StoryHeaderView`). Primitive calculée par le viewer parent
-    /// (`StoryViewerView.storyHasBackgroundAudio`) et descendue en `let`
-    /// jusqu'à la leaf view, comme `storyHasAudibleSound` juste au-dessus.
-    let storyHasBackgroundAudio: Bool
-    /// Contenu à droite de la note (crédit défilant d'un son de bibliothèque
-    /// ou onde d'une piste propre) + fenêtre du fond qui arme le compteur de
-    /// temps restant — même règle de descente en primitive Equatable.
-    let headerBackgroundAudioDisplay: AudioChipHeaderModel
+    /// Annonce du fond (B3.3-5) — résolveur unique partagé avec la carte de
+    /// post et le plein écran réel (E1). Remplace `storyHasBackgroundAudio` +
+    /// `headerBackgroundAudioDisplay` : primitive Equatable descendue en
+    /// `let` depuis `StoryViewerView.backgroundSoundAnnouncement`, même
+    /// règle que `storyHasAudibleSound` juste au-dessus.
+    let backgroundSoundAnnouncement: BackgroundAudioAnnouncement
     /// Présence d'une transcription affichable — pilote l'entrée « Transcription »
     /// du menu « … ». Même règle de descente en primitive que ci-dessus.
     let storyHasAudioTranscript: Bool
@@ -1710,8 +1707,7 @@ struct StoryCardView: View {
                     currentGroup: currentGroup,
                     currentStory: currentStory,
                     isOwnStory: isOwnStory,
-                    hasBackgroundAudio: storyHasBackgroundAudio,
-                    headerAudioDisplay: headerBackgroundAudioDisplay,
+                    backgroundSoundAnnouncement: backgroundSoundAnnouncement,
                     hasAudioTranscript: storyHasAudioTranscript,
                     showAudioTranscript: $showAudioTranscript,
                     selectedProfileUser: $selectedProfileUser,

@@ -3044,7 +3044,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       rows, summary narrative, dynamic. Strings en/fr/es/pt. **Persona profiles + trait bars landed
       2026-08-22** (slice `conversation-analysis-personas`) — same endpoint/ViewModel, rendered under
       the summary in the same sheet (no third header button): see the persona box below.
-- [~] Conversation stats rings + activity-over-time chart + content-type / sentiment breakdown —
+- [x] Conversation stats rings + activity-over-time chart + content-type / sentiment breakdown —
       **stats dashboard shipped 2026-08-21** (slice `conversation-stats-core`). The
       `ConversationMessageStatsResponse` model shipped orphaned (no consumer); this slice turns it
       real. Pure `ConversationStatsProjection` (`:core:model`, SSOT) derives the content-type
@@ -3056,9 +3056,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       new header `Insights` action (any member; period picker re-derives locally, no refetch).
       **AI-summary arm landed 2026-08-22** (slice `conversation-analysis-summary`, the
       `AI conversation analysis` box above — `GET /conversations/{id}/analysis` → health / tone /
-      topics / emotions). **Still open here — the sentiment three-way bar** the stats dashboard's
-      own `sentimentAnalysis` computes, and the `AI participant persona` box below (same endpoint,
-      `ParticipantProfile`/`ParticipantTraits`). Box stays `[~]` until the sentiment bar lands.
+      topics / emotions). **Sentiment three-way bar landed 2026-08-22** (slice
+      `conversation-stats-sentiment-bar`) — the last open arm of this box. Pure `:core:model`
+      `SentimentBreakdownProjection` (SSOT) scores the loaded message texts **on-device via the
+      existing `SentimentAnalyzer`** (the composer's dictionary scorer, reused — no `NLTagger`
+      equivalent needed) and collapses the seven-bucket `SentimentLevel` SSOT into positive /
+      neutral / negative; SOTA over iOS on the sampling (deterministic even stride vs
+      `shuffled().prefix(200)`) and the dominant tie-break (explicit positive ≥ neutral ≥ negative).
+      `ConversationStatsViewModel` scores client-side at load (independent of the `/stats` fetch, so
+      it survives a fetch failure); `ConversationStatsSheet` renders the three emoji/percent columns
+      + a segmented success/warning/error bar. Strings en/fr/es/pt. Box now `[x]`. (The `AI
+      participant persona` box below, same `/analysis` endpoint, shipped separately 2026-08-22.)
 - [x] AI participant persona profiles + trait bars — **shipped 2026-08-22** (slice
       `conversation-analysis-personas`). The `ParticipantProfile`/`ParticipantTraits` model tree shipped
       orphaned (grep-confirmed zero consumers); this slice turns it real. Pure
@@ -3074,7 +3082,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       extra header action, matching iOS's single dashboard. Strings en/fr/es/pt. +25 tests (projection ×22,
       ViewModel ×3), 2 mutation RED proofs. (The per-participant *activity* breakdown — message-count bars —
       is the stats sheet's busiest-participant list, shipped with `conversation-stats-core`.)
-      **Still open on this endpoint — the stats dashboard's sentiment three-way bar.**
+      **The stats dashboard's sentiment three-way bar shipped 2026-08-22** (slice
+      `conversation-stats-sentiment-bar`); the conversation-analysis dashboard is now at full parity.
 
 ## D. Translation — Prisme Linguistique
 - [~] Automatic per-user translation display (resolution: system → regional → custom → original) —
