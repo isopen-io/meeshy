@@ -1608,6 +1608,20 @@ export class CallService {
       if (!idemIsDirect && idemRemaining > 1) {
         // Group call with others still active and this leaver already gone:
         // nothing to end. Return the live session unchanged.
+        //
+        // Vague 157 — this is the third branch that resolves a departed
+        // participant without ending the call (siblings: the terminal-guard
+        // branch below and the main-branch mid-call-leave `else`), and until
+        // now the only one that skipped the per-participant in-memory
+        // cleanup they both do. Reachable in production via
+        // CallEventsHandler.forceCleanupParticipationAfterLeaveFailure (which
+        // stamps leftAt directly, bypassing this method's normal cleanup) or
+        // a raced/duplicate call:leave. Without this, the departed
+        // participant's heartbeat entry lingers in `this.heartbeats` for the
+        // rest of the call, inflating CallCleanupService's stale-vs-live
+        // ratio and risking a force-end of a call still legitimately active.
+        this.clearParticipantBackgrounded(callId, participantId);
+        this.heartbeats.get(callId)?.delete(participantId);
         logger.info('ℹ️ Idempotent leave — leaver gone, group call continues', { callId, userId });
         return this.getCallSession(callId);
       }
