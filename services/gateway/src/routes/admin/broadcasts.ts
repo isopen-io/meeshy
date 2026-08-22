@@ -4,6 +4,7 @@ import { SecuritySanitizer } from '../../utils/sanitize';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { BroadcastTranslationService } from '../../services/admin/broadcast-translation.service';
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
+import { BroadcastInAppSenderJob } from '../../jobs/broadcast-inapp-sender';
 import { EmailService } from '../../services/EmailService';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
@@ -401,6 +402,59 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
     } catch (error: any) {
       logger.error('Error sending broadcast');
       return sendInternalError(reply, 'Erreur lors du lancement de l\'envoi du broadcast');
+    }
+  });
+
+  // =========================================================================
+  // POST /:id/send-inapp - Canal in-app : une notification système par compte
+  // ciblé (toast web/iOS, centre de notifications, push). Indépendant du canal
+  // e-mail : exige des traductions prêtes (READY ou SENT), ne touche pas `status`.
+  // =========================================================================
+
+  fastify.post('/:id/send-inapp', {
+    onRequest: [fastify.authenticate, requireBroadcastPermission],
+    preHandler: [validateParams(BroadcastIdParamSchema)]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const adminId = authContext.registeredUser.id;
+
+      const broadcast = await fastify.prisma.adminBroadcast.findUnique({ where: { id } });
+      if (!broadcast) {
+        return sendNotFound(reply, 'Broadcast non trouve');
+      }
+      if (!['READY', 'SENT'].includes(broadcast.status)) {
+        return sendBadRequest(reply, 'Les traductions doivent etre pretes (READY ou SENT). Lancez d\'abord la preview.');
+      }
+
+      await fastify.prisma.adminBroadcast.update({
+        where: { id },
+        data: { inAppSentById: adminId, inAppSentAt: new Date(), inAppCompletedAt: null, inAppSentCount: 0, inAppFailedCount: 0 },
+      });
+
+      await fastify.prisma.adminAuditLog.create({
+        data: {
+          adminId,
+          userId: adminId,
+          action: 'SEND_BROADCAST_INAPP',
+          entity: 'Broadcast',
+          entityId: id,
+          metadata: JSON.stringify({ name: broadcast.name, subject: broadcast.subject }),
+          ipAddress: request.ip,
+          userAgent: request.headers['user-agent'],
+        },
+      });
+
+      const job = new BroadcastInAppSenderJob(fastify.prisma, fastify.notificationService);
+      job.execute(id).catch((err: unknown) => {
+        logger.error(`In-app broadcast job failed for id=${id}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      });
+
+      return sendSuccess(reply, undefined, { message: 'Diffusion in-app en cours' });
+    } catch (error: unknown) {
+      logger.error('Error sending in-app broadcast');
+      return sendInternalError(reply, 'Erreur lors du lancement de la diffusion in-app');
     }
   });
 

@@ -543,6 +543,56 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle96.md`.
       HKDF, et le sel est nul plutôt que de longueur de hachage. Sans conséquence
       tant que les deux bouts sont ce dépôt ; en aura une à la première
       interopérabilité réelle avec libsignal.
+## Bêta OFF par défaut · story legacy lisible · diffusion in-app admin (2026-08-22, branche feat/ios-beta-off-legacy-story)
+
+Demande : (1) « Activer les bêta » naît OFF ; (2) au lancement, si ON, lire les UserDefaults pour savoir
+quelles fonctionnalités bêta sont actives (tout-ou-rien aujourd'hui, une par une demain, la section
+n'affichant les fonctionnalités qu'une fois l'option validée) ; (3) depuis l'espace admin, envoyer une
+notification à toutes les applications connectées ; (4) l'app iOS doit pouvoir LIRE la forme « legacy
+simple » d'une story (média seul, sans `storyEffects`) — code transitoire, à retirer au fil des mises à
+jour jusqu'au modèle unique (canvas v3).
+
+### Lot A — iOS, programme bêta
+- [x] RED : `BetaFeaturesPreferenceGateTests` — clé absente ⇒ `false` ; `enabledFeatures` vide quand OFF,
+      les 3 drapeaux couverts quand ON, un drapeau coupé par sa clé propre reste hors de la liste.
+- [x] GREEN : `BetaFeaturesPreference.isEnabled` absence ⇒ OFF ; `isExplicitlySet` RETIRÉ (n'avait de sens
+      que sous défaut ON) ; cascade `LentilleFeatureFlag` étage 3 = `BetaFeaturesPreference.isEnabled`.
+- [x] `BetaFeaturesPreference.enabledFeatures(defaults:environment:)` + `resolveAtLaunch()` (journal
+      `me.meeshy.app:beta`) appelé dans `MeeshyApp.init`.
+- [x] Réglages : sous le toggle, la liste des fonctionnalités du programme n'apparaît QUE si ON
+      (3 lignes : modes de lecture, liste Lentille, Rivière) — clés neuves ×7 langues, dump à blanc d'abord.
+- [x] Retrait du paramètre mort `isFocalBetaPreviewEnabled` (Focal retiré le 2026-08-18).
+- [x] Décors de tests qui figeaient le défaut ON : `LentilleFlagGateTests` (×4), `RiverFeatureFlagTests`.
+      **Piège mesuré** : sur simulateur iOS 26.1, 7 tests instanciant `ReadingModeController` « crash abrt, 0 s »
+      (malloc générique `swift_task_deinitOnExecutor`, déjà vu sur `AudienceUserPickerViewModel` dans un run voisin) ;
+      sur iOS 18.2 les 96 mêmes tests passent 96/96 — le runtime, pas le diff.
+
+### Lot B — SDK, story legacy « média seul »
+- [x] RED : `StoryItemRenderableSlideTests` — média[0] vidéo sans `mediaObjects` ⇒ un `StoryMediaObject`
+      de fond (`kind .video`, `isBackground`, `mediaURL`, `thumbHash`, durée) et `slide.mediaURL == nil` ;
+      `.mov` déclaré image ⇒ vidéo (extension = vérité) ; image legacy ⇒ route inchangée.
+- [x] GREEN : adaptateur de lecture dans `StoryItem.toRenderableSlide` (`legacyVideoCarrier`, c54e13ac9) — commenté TRANSITOIRE, à supprimer
+      quand le parc ne sert plus que le canvas v3 (règle 5 du gateway + `X-Canvas-Caps`).
+- [x] Marquer de même la branche legacy `slide.mediaURL` de `StoryRenderer.renderBackground`.
+- [ ] Build + install sur `Meeshy-iOS26` pour constater la story `6a894bd8…`.
+
+### Lot C — gateway + web, canal in-app des diffusions admin
+- [x] RED : job `broadcast-inapp-sender` — pour chaque destinataire ciblé, `createSystemNotification`
+      (`systemType: 'announcement'`, sujet/corps dans la langue du destinataire via `translated*`),
+      compteurs `sentCount`/`failedCount`, statut.
+- [x] Route `POST /api/admin/broadcasts/:id/send-inapp` (garde existante, audit log) ; web : bouton
+      « Envoyer en notification » + méthode `adminService.sendBroadcastInApp` + i18n 4 langues.
+- [x] Réception : web/iOS déjà branchés sur `notification:new` (toast + centre + push) — Android : trou
+      connu (pas d'hôte de toast global), consigné.
+
+### Gates
+- [x] iOS : `MeeshyTests` complet sur iOS 18.2 — **7499/7499, 0 échec, 7 ignorés** (simulateur dédié, DerivedData privé).
+- [x] Gateway : 51 suites / 1578 tests (notifications, routes admin, jobs, devices, friends) + `tsc` 0.
+- [x] Web : `admin`/`services`/`use-i18n` 2079/2080 sous load 367 — le seul rouge (`admin/users/[id]`, timeout 5 s)
+      passe 67/67 isolé ; `tsc` : 0 erreur sur mes fichiers, total 1290 → 1241 (page de diffusion typée).
+- [x] SDK : `MeeshySDK-Package` complet sur iOS 18.2 — **7896/7896, 0 échec, 35 ignorés** (ciblé : 19/19).
+- [ ] Merge `--no-ff` via `main` local (ff sur `origin/main` fait : 36937badb), push, CI, build + install sur `Meeshy-iOS26`.
+
 
 ## Cycle 97 (2026-08-22) — les deux bouts de X3DH dérivent les mêmes clés
 
