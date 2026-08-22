@@ -146,19 +146,60 @@ public struct MeeshyScenePlayer: View {
         return requestedMute ?? config.isMuted
     }
 
-    /// L'identité servie à l'hôte : le PORTEUR quand il existe, affiné par la
-    /// scène, puis par le tour de boucle qui la relance.
+    /// L'identité servie à l'hôte : sa RACINE (cf. `identityRoot`), affinée par
+    /// la scène, puis par le tour de boucle qui la relance.
     ///
-    /// Le porteur en est la racine parce que la scène ne s'identifie pas seule :
-    /// `CanvasV3(migrating:)` fabrique `SceneV3(id: "s1")` EN DUR, si bien que
-    /// deux stories legacy porteraient la même identité et qu'`updateUIView` ne
-    /// verrait jamais son `identityChanged`. La scène reste dans l'identité pour
-    /// qu'un document à plusieurs scènes rejoue bien à chaque avance.
+    /// La scène ne s'identifie pas seule : `CanvasV3(migrating:)` fabrique
+    /// `SceneV3(id: "s1")` EN DUR, si bien que deux stories legacy porteraient
+    /// la même identité et qu'`updateUIView` ne verrait jamais son
+    /// `identityChanged`. La scène reste DANS l'identité pour qu'un document à
+    /// plusieurs scènes rejoue bien à chaque avance.
     nonisolated static func hostIdentity(carrierId: String? = nil,
                                          sceneId: String,
                                          loopPass: Int) -> String {
         let base = carrierId.map { "\($0)@\(sceneId)" } ?? sceneId
         return loopPass == 0 ? base : "\(base)#\(loopPass)"
+    }
+
+    /// La RACINE de l'identité : ce que le montage PEINT, jamais la place du
+    /// cadre dans le document.
+    ///
+    /// Le porteur d'abord — c'est l'identité RÉELLE de ce qui est monté, et
+    /// deux montages du MÊME document (un repost et son original) doivent
+    /// rester distincts. À défaut — `FeedPostCard` monte `.card` sans porteur —
+    /// ce que la scène ADRESSE. Le littéral `"s1"` de la migration ne peut pas
+    /// servir : son jumeau gateway (`storyEffectsV3.ts`) émet le même et le
+    /// golden partagé (`v1-legacy-full.v3.json`) le grave des deux côtés, si
+    /// bien que toute story legacy le porte.
+    nonisolated static func identityRoot(carrierId: String?,
+                                         document: CanvasV3,
+                                         sceneIndex: Int) -> String? {
+        guard let carrierId, !carrierId.isEmpty else {
+            return sceneDiscriminant(in: document, sceneIndex: sceneIndex)
+        }
+        return carrierId
+    }
+
+    /// Ce qu'une scène porte de distinctif : le `postMediaId` le plus BAS en z
+    /// — seule chose d'un document migré qui désigne un ENREGISTREMENT —, sinon
+    /// son empreinte (`thumbHash`, calculée par la file hors-ligne après le
+    /// persist), qui empreinte exactement ce qui est peint.
+    ///
+    /// `nil` est un résultat ASSUMÉ : un document qui n'adresse rien ne porte
+    /// aucun discriminant, et l'identité retombe alors sur la place de la scène.
+    /// C'est au montage de donner un porteur — le viewer story en a toujours un.
+    nonisolated static func sceneDiscriminant(in document: CanvasV3,
+                                              sceneIndex: Int) -> String? {
+        guard document.scenes.indices.contains(sceneIndex) else { return nil }
+        let scene = document.scenes[sceneIndex]
+        let addressed = scene.objects
+            .compactMap { object -> (z: Int, identity: String)? in
+                guard case .string(let identity)? = object.payload["postMediaId"],
+                      !identity.isEmpty else { return nil }
+                return (object.z, identity)
+            }
+            .min { $0.z < $1.z }?.identity
+        return addressed ?? scene.thumbHash
     }
 
     public var body: some View {
@@ -201,7 +242,9 @@ public struct MeeshyScenePlayer: View {
     /// dans le Prisme du lecteur. Le reste du `StoryItem` (compteurs, visibilité,
     /// vues) ne descend jamais jusqu'au canvas — le recopier serait un leurre.
     private var storyItem: StoryItem {
-        StoryItem(id: Self.hostIdentity(carrierId: carrier?.id,
+        StoryItem(id: Self.hostIdentity(carrierId: Self.identityRoot(carrierId: carrier?.id,
+                                                                     document: document,
+                                                                     sceneIndex: sceneIndex),
                                         sceneId: document.scenes[safe: sceneIndex]?.id
                                                  ?? "\(sceneIndex)",
                                         loopPass: loopPass),
