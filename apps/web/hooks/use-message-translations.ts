@@ -148,10 +148,18 @@ export function useMessageTranslations({
         const content = t.translatedContent || t.content;
         const currentTimestamp = new Date(t.createdAt || message.createdAt);
         
+        // Clé de dédup canonicalisée : `fr` et `fr-FR` (ou `FR`) désignent la même
+        // langue et ne doivent former qu'UNE entrée, sinon le classement qualité
+        // ci-dessous ne les compare jamais et un `.find` ultérieur peut servir la
+        // basic plutôt que la premium. La valeur `language` stockée reste verbatim
+        // (le code du gagnant) — les comparaisons aval passent déjà par sameLanguage.
+        // SSOT : normalizeLanguageForDedup (language-normalize.ts).
+        const dedupKey = normalizeLanguageForDedup(language ?? '');
+
         // Dédup ordre-indépendant : la qualité du modèle prime (premium > medium >
         // basic), la récence ne départage que les ex æquo de qualité. Empêche une
         // traduction basic/medium plus récente de rétrograder une premium déjà retenue.
-        const existingTranslation = translationsMap.get(language ?? '');
+        const existingTranslation = translationsMap.get(dedupKey);
         const currentRank = translationModelRank(t.translationModel);
         const existingRank = existingTranslation
           ? translationModelRank(existingTranslation.translationModel)
@@ -171,7 +179,7 @@ export function useMessageTranslations({
             cached: t.cached || false
           };
 
-          translationsMap.set(language ?? '', translation);
+          translationsMap.set(dedupKey, translation);
         }
       });
     
