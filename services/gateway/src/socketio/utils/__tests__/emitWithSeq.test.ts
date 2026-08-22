@@ -132,4 +132,72 @@ describe('emitWithSeq', () => {
     expect(emit.mock.calls[0][1]).not.toHaveProperty('_seq');
     expect(emit).toHaveBeenNthCalledWith(2, 'notification:new', { n: 'second', _seq: 7 });
   });
+
+  // ─── La chaîne de nettoyage détachée ────────────────────────────────────
+  //
+  // `emitWithSeq` retire sa queue de la Map par `void next.finally(…)`. `.finally`
+  // ADOPTE le sort de `next` : quand l'emit lève (adaptateur Redis, encodeur),
+  // la promesse DÉRIVÉE rejette — et elle, personne ne la tient, pas même un
+  // appelant qui garde consciencieusement le `next` qu'on lui rend. Les deux
+  // témoins ci-dessous sont donc disjoints : le premier dit que l'appelant voit
+  // bien l'erreur, le second qu'AUCUNE promesse ne reste sans écouteur.
+
+  /**
+   * Jumeau du helper de `MeeshySocketIOManager.test.ts` : une promesse détachée
+   * ne se prouve pas par le retour de son appelant — seul le verdict du runtime
+   * distingue « gardée » d'« abandonnée ».
+   */
+  async function captureUnhandledRejections(body: () => Promise<void>): Promise<unknown[]> {
+    const captured: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { captured.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      await body();
+      await new Promise<void>(resolve => setImmediate(resolve));
+      await new Promise<void>(resolve => setImmediate(resolve));
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+    return captured;
+  }
+
+  function makeFailingIO(error: Error) {
+    const emit = jest.fn(() => { throw error; });
+    const to = jest.fn().mockReturnValue({ emit });
+    return { io: { to } as unknown as Server, emit };
+  }
+
+  it('rend l\'échec de l\'emit à son appelant', async () => {
+    const adapterDown = new Error('socket.io adapter unavailable');
+    const { io } = makeFailingIO(adapterDown);
+    const seq = { nextSeq: jest.fn<() => Promise<number>>().mockResolvedValue(1) } as unknown as SequenceService;
+
+    await expect(emitWithSeq(io, seq, 'u-fail', 'notification:new', { title: 'x' })).rejects.toBe(adapterDown);
+  });
+
+  it('ne laisse AUCUN rejet sans écouteur quand l\'emit lève et que l\'appelant garde la promesse', async () => {
+    const adapterDown = new Error('socket.io adapter unavailable');
+    const { io } = makeFailingIO(adapterDown);
+    const seq = { nextSeq: jest.fn<() => Promise<number>>().mockResolvedValue(1) } as unknown as SequenceService;
+
+    const unhandled = await captureUnhandledRejections(async () => {
+      await emitWithSeq(io, seq, 'u-detached', 'notification:new', { title: 'x' }).catch(() => {});
+    });
+
+    expect(unhandled).toEqual([]);
+  });
+
+  it('la queue du user est retirée de la Map même quand l\'emit lève', async () => {
+    const adapterDown = new Error('socket.io adapter unavailable');
+    const { io, emit } = makeFailingIO(adapterDown);
+    const seq = { nextSeq: jest.fn<() => Promise<number>>().mockResolvedValue(1) } as unknown as SequenceService;
+
+    // Un échec ne doit pas poisonner la chaîne : l'appel suivant repart d'une
+    // queue propre — c'est le travail que le `.finally` doit encore faire, et
+    // que le `.catch` ajouté ne doit pas court-circuiter.
+    await emitWithSeq(io, seq, 'u-cleanup', 'notification:new', { n: 1 }).catch(() => {});
+    await emitWithSeq(io, seq, 'u-cleanup', 'notification:new', { n: 2 }).catch(() => {});
+
+    expect(emit).toHaveBeenCalledTimes(2);
+  });
 });

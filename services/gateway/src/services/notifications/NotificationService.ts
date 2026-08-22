@@ -1025,9 +1025,24 @@ export class NotificationService {
       // Émettre via Socket.IO — A2 : event user-scoped enrichi de `_seq`
       // (SyncEngine, détection de gap exacte). `emitWithSeq` est résilient :
       // sur échec d'allocation de séquence, l'event part sans `_seq`.
+      //
+      // ISOLÉ, comme les deux canaux qui suivent. `emitWithSeq` reste résilient
+      // à l'ALLOCATION de séquence, mais pas à l'emit lui-même : `io.to(…).emit`
+      // lève quand l'adaptateur Redis ou l'encodeur est en défaut. Nu, ce `await`
+      // faisait porter au canal le plus fragile le sort des deux SEULS canaux
+      // qui atteignent un destinataire absent — et la panne qui le déclenche est
+      // exactement celle où tout le monde est absent. Le push ne partait pas
+      // (malgré le « always » de la ligne d'en dessous), l'e-mail immédiat des
+      // notifications `high` non plus (alertes de SÉCURITÉ comprises), et
+      // `create()` rendait `null` sur une ligne pourtant écrite.
       if (this.io) {
-        await emitWithSeq(this.io, this.sequenceService, params.userId, SERVER_EVENTS.NOTIFICATION_NEW, socketPayload as unknown as Record<string, unknown>);
-        notificationLogger.debug('notification:new emitted via socket', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
+        await this.emitBestEffort(SERVER_EVENTS.NOTIFICATION_NEW, params.userId, async () => {
+          await emitWithSeq(this.io!, this.sequenceService, params.userId, SERVER_EVENTS.NOTIFICATION_NEW, socketPayload as unknown as Record<string, unknown>);
+          // DANS le callback : « emitted » ne doit se dire que d'un emit qui est
+          // effectivement parti. Sur échec, c'est le log `error` d'emitBestEffort
+          // qui parle.
+          notificationLogger.debug('notification:new emitted via socket', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
+        });
         // Update badge counters on client (fire-and-forget, non-blocking)
         this.emitCountsUpdate(params.userId).catch(() => {});
       }
@@ -4810,7 +4825,12 @@ export class NotificationService {
 
     for (const { id, userId } of retracted) {
       affectedUserIds.add(userId);
-      this.io?.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: id });
+      // Isolé PAR DESTINATAIRE : un emit qui lève sur le premier ne doit pas
+      // priver d'annonce les suivants, ni faire sauter le recalcul de badge en
+      // fin de méthode — dont le commentaire ci-dessus dit qu'il « compte ».
+      await this.emitBestEffort(SERVER_EVENTS.NOTIFICATION_DELETED, userId, () => {
+        this.io?.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: id });
+      });
     }
 
     await Promise.all(
@@ -4858,7 +4878,9 @@ export class NotificationService {
       // Retirée entre la réécriture et l'annonce : le `notification:deleted`
       // reste dû — la ligne n'existe effectivement plus — mais il n'y a rien à
       // reproduire.
-      this.io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: id });
+      await this.emitBestEffort(SERVER_EVENTS.NOTIFICATION_DELETED, userId, () => {
+        this.io!.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: id });
+      });
       if (!row) continue;
 
       const formatted = this.formatNotification(row);
@@ -4879,12 +4901,14 @@ export class NotificationService {
           : subtitle,
       };
 
-      await emitWithSeq(
-        this.io,
-        this.sequenceService,
-        userId,
-        SERVER_EVENTS.NOTIFICATION_NEW,
-        socketPayload as unknown as Record<string, unknown>
+      await this.emitBestEffort(SERVER_EVENTS.NOTIFICATION_NEW, userId, () =>
+        emitWithSeq(
+          this.io!,
+          this.sequenceService,
+          userId,
+          SERVER_EVENTS.NOTIFICATION_NEW,
+          socketPayload as unknown as Record<string, unknown>
+        )
       );
     }
 
@@ -4896,6 +4920,43 @@ export class NotificationService {
   // ==============================================
   // SOCKET.IO
   // ==============================================
+
+  /**
+   * Émission temps réel BEST-EFFORT — le canal éphémère ne commande jamais ce
+   * qui le suit.
+   *
+   * Une notification a trois sorties, et une seule est volatile. La ligne est
+   * écrite avant elles ; le push et l'e-mail atteignent un destinataire absent ;
+   * le socket n'atteint qu'un destinataire déjà là. Laisser l'emit décider du
+   * reste inverse exactement l'ordre des enjeux — et la panne qui le déclenche
+   * (adaptateur Redis, encodeur) est celle où personne n'est là, donc celle où
+   * les deux autres comptent le plus.
+   *
+   * `try/catch` plutôt qu'un `.catch` sur la promesse rendue, parce que les deux
+   * gardes sont DISJOINTES : `io.to(…).emit(…)` lève SYNCHRONEMENT, ce qu'aucun
+   * `.catch` n'attrape. Même raison, mot pour mot, que le `try/catch` de
+   * `ReactionHandler._retractReactionNotification`.
+   *
+   * Ne pas confondre avec un silence : l'échec est journalisé en `error`, et
+   * l'événement manqué se rattrape par le chemin prévu pour ça — la file
+   * hors-ligne pour les mutations, `/sync` pour le gap de séquence, la lecture
+   * REST pour la liste.
+   */
+  private async emitBestEffort(
+    event: string,
+    userId: string,
+    emit: () => void | Promise<void>
+  ): Promise<void> {
+    try {
+      await emit();
+    } catch (error) {
+      notificationLogger.error('socket emit failed — durable channels proceed', {
+        error,
+        event,
+        userId,
+      });
+    }
+  }
 
   /**
    * Configure Socket.IO pour les notifications temps réel
