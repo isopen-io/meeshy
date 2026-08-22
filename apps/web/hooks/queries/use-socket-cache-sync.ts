@@ -19,7 +19,8 @@ import { extractPreviewTranslations } from '@/services/conversations/transformer
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
 import type { SocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
-import type { AudioTranslationReadyEventData, MessageRestoredForMeEventData, TranscriptionReadyEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import type { AudioTranslationReadyEventData, ConversationJoinErrorEventData, MessageRestoredForMeEventData, TranscriptionReadyEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import { isMembershipDeniedJoinError } from '@meeshy/shared/utils/conversation-join-error';
 import type { OptimisticMessage } from '@/utils/optimistic-message';
 
 function isOptimisticMessage(m: Message): m is OptimisticMessage {
@@ -1499,13 +1500,31 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       });
     };
 
-    // Handler for conversation:join-error — server rejected the room join; purge stale local cache
-    const handleConversationJoinError = (data: { conversationId: string; reason: string; message: string }) => {
+    // `conversation:join-error` — le serveur a refusé la jonction. Le motif
+    // DÉCIDE : sur les sept qu'émet `ConversationHandler`, trois seulement
+    // établissent la non-appartenance (`not_a_member`, `banned`,
+    // `no_longer_member`) et autorisent à purger. Les quatre autres sont
+    // transitoires — limite de débit (30 jonctions/min, qu'une tempête de
+    // reconnexion franchit en rejoignant toutes les rooms d'un coup), erreur
+    // serveur, authentification pas encore prête, requête malformée — et n'ont
+    // RIEN à dire de l'appartenance.
+    //
+    // Ce gestionnaire les traitait tous pareil : la conversation disparaissait
+    // de la liste et tout son historique en cache était jeté sur un incident
+    // passager, alors que ce cache est précisément ce qui fait tenir la lecture
+    // hors ligne. La règle est partagée (`isMembershipDeniedJoinError`) — le
+    // consommateur iOS applique la même.
+    //
+    // Le CustomEvent, lui, part dans TOUS les cas : l'UI doit pouvoir dire
+    // « réessaie » sur un transitoire. Seule la PURGE est conditionnelle.
+    const handleConversationJoinError = (data: ConversationJoinErrorEventData) => {
       const { conversationId: rejectedId, reason } = data;
       if (!rejectedId) return;
-      updateInfiniteConversationCache(queryClient, (convs) => convs.filter((c) => c.id !== rejectedId));
-      queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(rejectedId) });
-      queryClient.removeQueries({ queryKey: queryKeys.messages.infinite(rejectedId) });
+      if (isMembershipDeniedJoinError(reason)) {
+        updateInfiniteConversationCache(queryClient, (convs) => convs.filter((c) => c.id !== rejectedId));
+        queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(rejectedId) });
+        queryClient.removeQueries({ queryKey: queryKeys.messages.infinite(rejectedId) });
+      }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('meeshy:conversation-join-error', { detail: { conversationId: rejectedId, reason } }));
       }

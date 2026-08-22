@@ -22,7 +22,7 @@ import type {
   SocketIOResponse
 } from '@/types';
 import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encryption';
-import type { AudioTranslationReadyEventData, LinkMessageNewEventData, MessageRestoredForMeEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import type { AudioTranslationReadyEventData, ConversationJoinErrorEventData, LinkMessageNewEventData, MessageRestoredForMeEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 
 import { SocketIOOrchestrator } from './socketio/orchestrator.service';
 import type { ConnectionStatus } from './socketio/types';
@@ -439,7 +439,7 @@ class MeeshySocketIOService {
     return this.orchestrator.onLinkMessageNew(listener);
   }
 
-  public onConversationJoinError(listener: (data: { conversationId: string; reason: string; message: string }) => void): () => void {
+  public onConversationJoinError(listener: (data: ConversationJoinErrorEventData) => void): () => void {
     return this.orchestrator.onConversationJoinError(listener);
   }
 

@@ -19,7 +19,7 @@ import type {
   MessageAckResponse,
   UnsubscribeFn
 } from './types';
-import type { LinkMessageNewEventData, MessageRestoredForMeEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import type { ConversationJoinErrorEventData, LinkMessageNewEventData, MessageRestoredForMeEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 
 import { ConnectionService } from './connection.service';
 import { MessagingService } from './messaging.service';
@@ -856,7 +856,7 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationClosed(listener);
   }
 
-  onConversationJoinError(listener: (data: { conversationId: string; reason: string; message: string }) => void): UnsubscribeFn {
+  onConversationJoinError(listener: (data: ConversationJoinErrorEventData) => void): UnsubscribeFn {
     return this.presenceService.onConversationJoinError(listener);
   }
 

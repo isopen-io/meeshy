@@ -790,10 +790,42 @@ public struct ConversationParticipationEvent: Decodable, Sendable {
 /// stale cache entries. `reason` is a stable machine-readable code:
 /// `not_a_member`, `banned`, `no_longer_member`, `invalid_payload`,
 /// `server_error`. `message` is a localized, human-readable description.
+/// Refus d'une jonction de conversation (`conversation:join-error`).
+///
+/// Contrat partagé : `ConversationJoinErrorEventData`
+/// (`packages/shared/types/socketio-events.ts`).
 public struct ConversationJoinErrorEvent: Decodable, Sendable {
     public let conversationId: String
+    /// Motif du refus. `nil` seulement d'une passerelle antérieure au contrat.
+    ///
+    /// **Il DÉCIDE.** Voir ``isMembershipDenied`` — un consommateur qui
+    /// l'ignore traite une limite de débit comme une exclusion.
     public let reason: String?
     public let message: String?
+
+    /// Les seuls motifs qui ÉTABLISSENT que le lecteur n'est pas membre, donc
+    /// les seuls où purger le cache de la conversation ou fermer la vue ouverte
+    /// est fondé.
+    ///
+    /// JUMEAU de `isMembershipDeniedJoinError()`
+    /// (`packages/shared/utils/conversation-join-error.ts`) — toute évolution
+    /// touche les deux.
+    ///
+    /// La passerelle émet sept motifs ; quatre sont transitoires (`rate_limited`,
+    /// `server_error`, `not_authenticated`, `invalid_payload`) et ne disent rien
+    /// de l'appartenance. Ce client les traitait tous comme une révocation
+    /// d'accès : une limite de débit franchie par une tempête de reconnexion
+    /// fermait le fil que l'utilisateur était en train de lire, sur un bandeau
+    /// « accès révoqué », après avoir purgé son cache.
+    ///
+    /// Liste d'AUTORISATION, jamais d'exclusion : un motif inconnu — d'une
+    /// passerelle plus récente que ce client — rend `false`. Ne pas savoir lire
+    /// n'autorise pas à détruire ; c'est la règle que `MeeshyConversation.bridge`
+    /// applique déjà, pour la même raison.
+    public var isMembershipDenied: Bool {
+        guard let reason else { return false }
+        return ["not_a_member", "banned", "no_longer_member"].contains(reason)
+    }
 }
 
 public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {

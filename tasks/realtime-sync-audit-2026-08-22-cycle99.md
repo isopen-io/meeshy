@@ -1,225 +1,186 @@
-# Cycle 99 (2026-08-22) — `message:new` a deux producteurs, et ils avaient cessé de dire la même chose
+# Cycle 99 — un refus de jonction TRANSITOIRE effaçait la conversation
 
-## Ce que ce cycle construit
+## Ce que le cycle 98 demandait, et où il envoyait chercher
 
-Le cycle 98 laissait la « quatrième famille » outillée sur le protocole Signal et
-nommait ce qui restait : **le sérialiseur/décodeur Socket.IO**, et **le couple
-producteur passerelle / décodeurs clients**. Ce cycle-ci prend le premier.
+Le cycle 98 laissait la « quatrième famille » — deux moitiés d'un même contrat,
+chacune cohérente avec elle-même et fausses l'une contre l'autre — outillée sur
+UNE paire seulement, et nommait les deux qui restaient : le sérialiseur/décodeur
+Socket.IO, et le couple producteur passerelle / décodeurs iOS-Android.
 
-`message:new` — l'événement le plus chaud du produit — a **DEUX producteurs** :
+**La première n'existe pas.** Vérifié : le dépôt n'a aucun parser Socket.IO
+personnalisé. Le suivi est à retirer de la liste, pas à porter.
 
-| producteur | transport | ce qu'il porte |
+La seconde a livré le défaut de ce cycle, et il est en PRODUCTION — contrairement
+aux cycles 95-98, dont le cycle 98 a lui-même établi que le sous-arbre
+`dma-interoperability` n'est appelé de nulle part.
+
+## Le défaut
+
+`conversation:join-error` est émis par `ConversationHandler.handleConversationJoin`
+sur **huit sites**, portant **sept motifs distincts** :
+
+| motif | ce qu'il dit | famille |
 |---|---|---|
-| `MessageHandler.broadcastNewMessage` | socket `message:send` | messages texte ordinaires |
-| `MeeshySocketIOManager._broadcastNewMessage` | REST / ZMQ | `POST /conversations/:id/messages`, retour du traducteur, messages d'agent, routes de lien |
+| `not_a_member` (×2 sites) | tu n'es pas membre | appartenance |
+| `banned` | tu es banni | appartenance |
+| `no_longer_member` | tu n'es plus membre | appartenance |
+| `rate_limited` | 30 jonctions/min dépassées | **transitoire** |
+| `server_error` | la passerelle a échoué | **transitoire** |
+| `not_authenticated` | session pas encore résolue | **transitoire** |
+| `invalid_payload` | requête malformée | **transitoire** |
 
-Chacun construisait sa charge utile **à la main, dans son fichier**. Les deux
-portaient un commentaire jumeau qui s'en avertissait — « tout champ ajouté ici
-doit être répliqué à la main […] et inversement — **c'est la 3e fois** que cette
-duplication cause un bug de parité » — et chacun de ces commentaires n'a gardé
-que l'exemplaire qui le portait. C'est mot pour mot la leçon du cycle 85
-(« Cette entité a-t-elle une JUMELLE ? »), une couche plus haut.
+**Les deux consommateurs lisaient `reason` et n'en faisaient RIEN.**
 
-## Le désaccord, mesuré
+- **web** (`use-socket-cache-sync.ts`) — destructurait `reason`, puis retirait
+  inconditionnellement la conversation de la liste, supprimait son détail et
+  **purgeait tout son historique de messages en cache**.
+- **iOS** (`ConversationSocketHandler.swift`) — appelait
+  `handleSocketAccessRevoked` sans regarder le motif : purge du cache de la
+  conversation **et fermeture de la vue ouverte sous un bandeau « accès
+  révoqué »**.
 
-| famille de champs | socket | REST/ZMQ |
-|---|---|---|
-| enveloppe E2EE — `isEncrypted`, `encryptionMode`, `encryptedContent`, `encryptionMetadata`, `encryptedPayload` | servie | **absente** |
-| plafond de vue-unique — `maxViewOnceCount` | servi | **absent** |
-| provenance d'un transfert — `forwardedFromId`, `forwardedFromConversationId` | servie | **absente** |
-| réponse à un post — `storyReplyToId` | servie | **absente** |
-| `messageSource`, `updatedAt` | **absents** | servis |
-| pseudo d'un expéditeur SANS COMPTE | **absent** | servi |
+Donc : une limite de débit franchie — ce qu'une tempête de reconnexion produit
+mécaniquement, puisqu'elle rejoint toutes les rooms d'un coup — éjectait
+l'utilisateur du fil qu'il était en train de lire et jetait son cache. Sur un
+produit qui promet la lecture hors ligne, c'est le cache qui porte cette
+promesse qu'on détruisait, sur un incident passager.
 
-**La colonne perdante n'est pas la moins fréquentée.** Le commentaire du chemin
-REST le dit lui-même, quelques lignes au-dessus du défaut :
+`not_authenticated` est au moins aussi atteignable : il se lève quand la carte
+`connectedUsers` n'a pas encore la session du socket — exactement la fenêtre où
+les clients rejoignent leurs rooms.
 
-> Ce chemin est celui de TOUT envoi REST — donc, côté iOS, de tout envoi non
-> éligible au socket-first : pièce jointe, **DM chiffré**, **vue-unique**,
-> éphémère, message à effets.
+## La cause, et elle est structurelle
 
-Autrement dit : **les familles de champs que ce producteur omettait sont
-exactement celles des messages qu'il est SEUL à porter.**
+**`conversation:join-error` n'était déclaré NULLE PART.** Pas de type de payload,
+aucune entrée dans `ServerToClientEvents`. Ses deux consommateurs en avaient donc
+chacun transcrit la forme en lisant le producteur — et tous deux avaient conclu la
+même chose de travers.
 
-## La panne, remontée jusqu'au consommateur
+Pourquoi rien ne l'exigeait : `MeeshySocketIOManager` déclare bien son `io` avec
+les deux maps, donc ce qu'il émet lui-même est vérifié. **Les handlers, eux,
+importaient le `Socket` NU de `socket.io`**, dont les génériques valent
+`DefaultEventsMap` — `[event: string]: (...args: any[]) => void`. Sur un tel
+socket, `socket.emit(n'importe quoi, n'importe quoi)` compile.
 
-Ce n'est pas un piège armé. Le chemin est complet et il est en production.
+> Un contrat que seul l'orchestrateur honore n'est pas un contrat, c'est une
+> convention. Les décodeurs iOS et Android sont pourtant écrits contre lui.
 
-1. `MessageProcessor.saveMessage` écrit `content: isEncrypted ? '' : …` — le
-   texte d'un message chiffré vit dans `encryptedContent`, `content` est VIDE.
-2. Le chemin REST diffusait donc `content: ''` **sans** `encryptedContent`,
-   **sans** `encryptionMetadata`, **sans** le drapeau `isEncrypted`.
-3. Côté web, `MessagingService.decryptMessage`
-   (`apps/web/services/socketio/messaging.service.ts:258`) lit le chiffré
-   **depuis ces deux champs précis** :
+## Pourquoi les témoins existants ne pouvaient pas le voir
 
-```ts
-const encryptedContent = socketMsg.encryptedContent;
-const encryptionMetadata = socketMsg.encryptionMetadata;
-if (!encryptedContent || !encryptionMetadata || !this.encryptionHandlers?.decrypt) {
-  return message;   // ← sortie au PREMIER garde, silencieuse
-}
-```
+Le web AVAIT trois témoins sur ce gestionnaire. Ils exerçaient `banned` et
+`not_a_member` — **les deux seuls motifs où purger est juste**. La couverture
+était réelle et la conclusion fausse : les témoins attestaient que la purge a
+lieu, jamais qu'elle est conditionnelle.
 
-4. Le web, lui, ENVOIE ses messages chiffrés par le socket, et refuse
-   explicitement le repli REST (« REST can't handle E2EE yet »).
+C'est la forme du § *« un témoin qui ne peut pas tomber »* appliquée à un
+échantillon : ce n'est pas le témoin qui était faible, c'est le jeu de motifs
+qu'il traversait.
 
-**Conclusion : web → web fonctionnait (chemin socket) ; iOS → web ne
-fonctionnait pas.** Un DM chiffré parti d'un iPhone arrivait chez un
-destinataire web comme une **bulle vide** — pas un message dégradé, pas une
-erreur, rien à signaler. Le chiffrement de bout en bout était **unidirectionnel
-sans que rien ne le dise**.
+## Ce qui a été fait
 
-Et le symptôme touchait aussi l'EXPÉDITEUR iOS. `ConversationSocketHandler`
-porte la garde exacte, avec sa raison écrite :
+**1. Le contrat, déclaré** (`packages/shared`)
+- `CONVERSATION_JOIN_ERROR_REASONS` — les sept motifs, énumérés.
+- `ConversationJoinErrorEventData` + entrée dans `ServerToClientEvents`.
+- `isMembershipDeniedJoinError()` — **la seule règle** qui sépare les deux
+  familles, partagée par les deux consommateurs TypeScript.
 
-```swift
-// For an own E2EE message we keep the OPTIMISTIC plaintext: the server echo
-// only carries ciphertext […] Without this the bubble would flip plaintext →
-// base64 ciphertext on echo.
-let reconciledContent: String? = (apiMsg.isEncrypted == true) ? optimisticContent : serverMsg.content
-```
+**2. Le producteur, contraint** (`services/gateway`)
+- `src/socketio/typed-socket.ts` : `MeeshySocket` / `MeeshyIOServer`, le socket
+  d'un handler typé contre le contrat partagé.
+- `ConversationHandler` l'emploie. **Mesuré** : un `reason` mal orthographié
+  (`'bnned'`) fait désormais échouer `tsc` en nommant les sept valeurs admises.
+- Le littéral nu de `_resyncReadStatusToSocket` est annoté
+  `ReadStatusUpdatedEventData`, comme ses quatre frères émetteurs.
 
-`isEncrypted` étant absent du fil REST, la garde ne se déclenchait jamais sur le
-transport qui porte les messages chiffrés : la bulle de l'expéditeur basculait de
-son texte clair optimiste vers `serverMsg.content`, soit **la chaîne vide**.
+**3. Les consommateurs, corrigés**
+- web : la purge est gardée par `isMembershipDeniedJoinError`. Le `CustomEvent`
+  part toujours — l'UI doit pouvoir dire « réessaie ».
+- iOS SDK : `ConversationJoinErrorEvent.isMembershipDenied`, jumeau Swift de la
+  règle partagée.
+- iOS app : `handleSocketAccessRevoked` n'est plus appelé que sur un refus
+  d'appartenance ; un transitoire journalise et ne détruit rien.
 
-> **Une garde écrite pour un symptôme peut ne jamais s'exécuter sur le transport
-> qui le produit.** Elle était juste, commentée, et sans effet — même forme que
-> le correctif de symétrie du cycle 97 défait par sa couche consommatrice.
+## La décision qui compte : où tombe l'INCONNU
 
-## Le témoin
+Liste d'**autorisation**, jamais d'exclusion — un motif qu'un client ne connaît
+pas rend `false`, donc ne détruit pas. Deux raisons :
 
-`src/socketio/__tests__/message-new-producer-parity.test.ts` — six affirmations.
+1. Les deux erreurs ne coûtent pas la même chose. Purger à tort détruit des
+   données locales que rien ne rattrape hors ligne ; garder à tort un cache
+   périmé se corrige au prochain 403 REST.
+2. **C'est la règle de maison déjà écrite dans ce contrat**, pour exactement la
+   même raison : « un pont ILLISIBLE n'est pas un pont ABSENT — ne pas savoir
+   lire n'autorise pas à détruire » (`BridgeAnnouncement`).
 
-Il applique le patron de la quatrième famille (cycles 97/98) tel quel :
+## ROUGE prouvé
 
-1. **Deux productions RÉELLES.** Un seul `MeeshySocketIOManager` est construit,
-   et on lui prend le vrai `MessageHandler` qu'il porte — le harnais du manager,
-   lui, le DOUBLE, ce qui est précisément pourquoi il ne pouvait rien voir. Les
-   deux producteurs confrontés sont exactement ceux que la passerelle exécute.
-2. **Un seul message**, portant une valeur de chaque famille du contrat.
-3. **Affirmations SÉPARÉES** — la séparation EST le diagnostic.
-
-**Les témoins existants étaient eux-mêmes en JUMELLES** : un par producteur,
-chacun dans le harnais de sa classe, l'un annoté « Jumeau EXACT du témoin de
-`MessageHandler.broadcastNewMessage` ». Deux exemplaires d'une même affirmation,
-chacun vert contre sa moitié — structurellement incapables de voir un désaccord.
-C'est le coût, mesuré, de la duplication d'un témoin.
-
-### ROUGE prouvé, mutation par mutation
-
-Contre la production d'avant le lot : **6/6 tombent**. Puis, une famille retirée
-à la fois de l'unité partagée :
-
-| mutation | témoins qui tombent |
-|---|---|
-| enveloppe E2EE retirée | 1 — « l'enveloppe E2EE voyage par les DEUX transports » |
-| `maxViewOnceCount` retiré | 1 — « le plafond de vue-unique… » |
-| provenance de transfert retirée | 1 — « la provenance d'un transfert… » |
-| `storyReplyToId` retiré | 1 — « la réponse à un post… » |
-| repli du pseudo anonyme retiré | 1 — « le pseudo d'un expéditeur SANS COMPTE… » |
-| un producteur regagne un champ que l'autre n'a pas | 1 — « le MÊME jeu de clés de contrat » |
-
-**Chaque mutation en fait tomber EXACTEMENT UN, et c'est celui qui nomme sa
-famille.** Le cliquet de divergence et les témoins nommés sont complémentaires,
-jamais redondants : retirer un champ de l'unité PARTAGÉE le retire des deux
-côtés, donc les jeux de clés continuent de coïncider — seul le témoin nommé
-tombe. Inversement, un champ ajouté à un seul producteur ne fait tomber que le
-cliquet.
-
-## Le correctif
-
-`src/socketio/messageNewPayload.ts` — `buildMessageNewPayload`, source **unique**
-des champs dérivés de la ligne message. Les deux producteurs l'appellent.
-
-Ce qui reste PARAMÈTRE, parce que la forme diffère délibérément d'un transport à
-l'autre, avec la raison écrite aux deux sites :
-
-- `replyTo` — passthrough BRUT côté socket, sender reconstruit et APLATI côté
-  REST ;
-- `attachments` — normalisés par `serializeAttachmentForSocket` côté socket,
-  bruts côté REST ;
-- `translations` — chaque chemin les obtient par sa propre voie.
-
-Et deux champs laissés HORS contrat **par décision**, écrite dans le cliquet
-pour qu'elle ne se relise pas comme un oubli :
-
-- `originalContent` — **n'est pas une colonne** : il duplique `content` sur le
-  fil. L'ajouter au chemin socket doublerait le poids texte du chemin le plus
-  chaud du service pour un alias que le web lit en SECOND
-  (`content || originalContent`).
-- `metadata` — l'enveloppe brute d'où le chemin socket HISSE ce dont les clients
-  ont besoin (`location`, `trackingLinks`, `postReplyTo`) ; iOS y lit encore
-  `callSummary` et `joinNotice`, deux familles de messages système que seul le
-  transport REST produit.
-
-Les retirer du chemin REST serait un **RETRAIT**, qui demande d'abord de relever
-leurs consommateurs sur les trois clients — donc un lot à part.
-
-> **Le lot entier est ADDITIF.** Aucun champ ne disparaît d'aucun transport ;
-> chaque producteur gagne ce que l'autre avait. C'est ce qui le rend livrable
-> sans coordination client : un décodeur qui lisait déjà un champ continue de le
-> lire, un décodeur qui l'ignorait l'ignore encore (`decodeIfPresent` partout
-> côté iOS).
-
-### Une note de typage qui est une garde
-
-Le type de retour de `buildMessageNewPayload` est **inféré**, jamais annoté en
-`Record<string, unknown>` : le chemin REST étale ce résultat dans son littéral
-puis l'émet sur un `emit` typé `message:new`. Une annotation large ferait perdre
-au littéral son type exact et l'émission cesserait d'être vérifiée — la garde que
-`stripClientMessageId`, générique et préservant (cycle 7), avait été écrit pour
-ne pas casser. Mesuré : annoter large, puis annoter `sender.type: string`, ont
-fait tomber le compilateur aux trois sites d'émission, l'un après l'autre.
+- **web** : les quatre motifs transitoires, avant correctif ⇒ **4/4 tombent**
+  (`Received array: []` — la conversation avait disparu de la liste). Après ⇒
+  93/93, les trois témoins de purge légitime préexistants compris.
+- **passerelle** : `reason: 'bnned'` injecté ⇒ `tsc` rouge (TS2820, avec la liste
+  des sept). Mutation revertie ⇒ 0 erreur.
+- **shared** : le module absent ⇒ la suite ne se charge pas. Après ⇒ 15/15.
 
 ## Gates
 
-- `tsc --noEmit` passerelle : **0 erreur**
-- Suite complète passerelle : voir § Résultats ci-dessous
-- Témoin du lot : **6/6**, ROUGE prouvé séparément pour chacune des 6 mutations
+| gate | résultat |
+|---|---|
+| `tsc --noEmit` passerelle | **0 erreur** |
+| `tsc --noEmit` web | **1241 erreurs = BASELINE À L'IDENTIQUE** (diff vide, mesuré par `git stash`) |
+| suite shared | **102 fichiers / 2449 témoins / 0 échec** |
+| couverture shared | stmts 98.78 · branches 94.99 · fn 98.6 · lignes 99.2 — **tous les seuils passés** |
+| web ciblé | **144/144** (`use-socket-cache-sync` + `presence.service`) |
+| suite complète passerelle | voir § ci-dessous |
+
+**Le web porte 1241 erreurs `tsc` préexistantes**, presque toutes dans des
+fichiers de test. Ce n'est pas un gate du CI ; je l'ai mesuré par différence
+contre l'arbre propre pour prouver que ce lot n'en ajoute aucune. Le compte est
+relevé, pas hérité.
+
+## Ce que ce lot NE prouve pas
+
+- **Le socket typé ne rattrape pas la nullité.** La passerelle compile sous
+  `strictNullChecks: false` : `participantId: string | null` passe dans un champ
+  déclaré `string`. C'est pourquoi le site d'appel de `_resyncReadStatusToSocket`
+  doit prouver la non-nullité — il la prouve (les deux branches du contrôle
+  d'appartenance rendent la main avant), mais le typage n'en est pas témoin.
+- **Les témoins Swift n'ont pas tourné ici** : pas de Xcode sous Linux. Ils sont
+  gatés par `sdk-tests.yml` (suite SDK complète) et `ios.yml` (compile de l'app).
 
 ## Suivis
 
-- [ ] **iOS ne lit PAS `encryptedContent` du fil.** `APIMessage` n'a pas cette
-      clé ; `decryptMessagesIfNeeded` tire le chiffré de `msg.content`
-      (`Data(base64Encoded: msg.content)`), que la passerelle laisse VIDE pour un
-      message chiffré. Le correctif de ce cycle est une PRÉCONDITION pour iOS,
-      pas une garantie : il rétablit le contrat du fil, il ne rétablit pas à lui
-      seul le déchiffrement côté iOS. À instruire comme un lot propre — et à
-      trancher d'abord : est-ce le fil qui doit servir le chiffré dans `content`
-      (comme le web le lit ailleurs), ou iOS qui doit lire `encryptedContent` ?
-      Les deux moitiés sont cohérentes séparément. **C'est la quatrième famille,
-      exactement, sur le couple producteur passerelle / décodeur iOS** — celui
-      que le cycle 98 nommait en second et qui reste ouvert.
-- [ ] **`originalContent` : alias hérité à retirer du fil** après relevé de ses
-      consommateurs web (`MessageSearch.tsx`, `BubbleMessageNormalView.tsx`
-      le déclarent ; `content || originalContent` le lit en second). Gain direct
-      sur le poids de CHAQUE message du chemin REST.
-- [ ] **`attachments` : les deux transports ne les normalisent pas pareil.**
-      Le chemin socket passe par `serializeAttachmentForSocket` (qui garantit
-      `transcription` + `translations` et agrège les réactions), le chemin REST
-      les sert bruts. Unifier est un CHANGEMENT de forme, pas un ajout — à
-      instruire contre les consommateurs des trois clients avant de bouger.
-- [ ] **`SocketIOMessage` déclare 13 champs pour une charge utile qui en porte
-      plus de trente.** Le type partagé qui NOMME `message:new`
-      (`packages/shared/types/socketio-events.ts:2292`) ignore l'enveloppe E2EE,
-      la vue-unique, le transfert, `effectFlags`, `translations`,
-      `validatedMentions`, `attachments`, `clientMessageId`… Rien n'est
-      SUPPRIMÉ — c'est une `interface`, pas un sérialiseur — mais le web doit
-      caster pour lire ce qu'il lit déjà :
+- [ ] **Un seul handler est typé.** `MeeshySocket` existe ; `ConversationHandler`
+      l'emploie. Les autres handlers (`MessageHandler`, `ReactionHandler`,
+      `StatusHandler`, `LocationHandler`, `SocialEventsHandler`,
+      `CallEventsHandler`, `AttachmentReactionHandler`, `Comment/PostReactionHandler`)
+      importent toujours le `Socket` nu. Les basculer un par un — chacun peut
+      révéler un événement non déclaré, comme celui-ci.
+- [ ] **Après un refus transitoire, iOS ne re-tente pas la jonction.** Le fil
+      reste ouvert et son cache intact (c'est le gain), mais sa room n'est pas
+      rejointe tant que le cycle de reconnexion du socket ne repasse pas. Un
+      re-essai borné avec retrait exponentiel sur les seuls motifs transitoires
+      est la suite naturelle — non fait ici faute de pouvoir l'exercer.
+- [ ] **Android n'a pas été instruit.** Le cycle 92 bis a montré qu'un
+      consommateur Android peut exister et n'avoir jamais fonctionné. Relever si
+      un décodeur `conversation:join-error` y existe, et lui porter la règle.
+- [ ] **La quatrième famille : le sérialiseur/décodeur Socket.IO n'existe pas**
+      (vérifié). Reste le couple producteur passerelle / décodeurs iOS-Android,
+      dont ce cycle n'a instruit qu'UN événement sur les ~158 du contrat.
+- [ ] Hérités du cycle 98, non touchés : les 3 suites `dma-interoperability`
+      rouges et exclues (56/114) ; le suivi des clés distantes d'`asymmetricRatchet` ;
+      la pré-clé unique non CONSOMMÉE par le répondeur ;
+      `SignalKeyManager.registrationId` tiré au hasard au constructeur ;
+      préfixe `F` et sel du HKDF.
 
-      ```ts
-      const socketMsg = socketMessage as SocketIOMessage & { encryptedContent?: string; … };
-      ```
+## Une observation de méthode, pour le prochain cycle
 
-      Et le compilateur ne s'en plaint pas : les deux producteurs émettent une
-      VARIABLE, pas un littéral frais, donc le contrôle des propriétés en excès
-      ne se déclenche jamais. **C'est ce cycle qui rend le lot faisable** : tant
-      que « le contrat » était ce sur quoi deux littéraux manuscrits se
-      trouvaient d'accord, il n'y avait rien à déclarer. Il y a maintenant une
-      unité unique à lire pour l'écrire. À faire dans un lot dédié — élargir un
-      type partagé se mesure contre les trois clients (règle du cycle 93 : le
-      schéma partagé ne grossit pas pour deux appelants).
-- [ ] **Reste de la quatrième famille** : le couple producteur passerelle /
-      décodeurs **Android**. Non instruit ici.
+En cherchant, j'ai relevé une asymétrie de codecs de dates qui n'est PAS un
+défaut vivant, et je la consigne pour qu'elle ne soit pas rouverte à froid : les
+frontières de fil (socket, REST) décodent les dates avec une stratégie `.custom`
+qui accepte les fractions de seconde, tandis que les caches locaux encodent ET
+décodent en `.iso8601` Foundation, qui formate à la seconde entière. Les deux
+moitiés de chaque cache étant accordées entre elles, le round-trip est cohérent ;
+la perte de précision ne franchit aucune comparaison d'ordre, les messages étant
+persistés en COLONNES GRDB (millisecondes préservées), pas en JSON. **Piège armé,
+pas panne** — et à traiter comme tel si un jour un type ordonné par date transite
+par `GRDBCacheStore`.

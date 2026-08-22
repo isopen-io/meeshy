@@ -3,10 +3,12 @@
  * Gère les événements de conversation (join, leave, stats)
  */
 
-import type { Socket } from 'socket.io';
+// Cycle 99 — `MeeshySocket`, pas le `Socket` nu de socket.io : les huit refus
+// de jonction ci-dessous sont désormais vérifiés contre `ServerToClientEvents`.
+import type { MeeshySocket as Socket } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS, type ReadStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketConversationJoinSchema, SocketConversationLeaveSchema } from '../../validation/socket-event-schemas.js';
@@ -324,7 +326,13 @@ export class ConversationHandler {
       const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
       if (summary.totalMembers === 0 && summary.deliveredCount === 0 && summary.readCount === 0) return;
 
-      const payload = {
+      // Annoté contre le contrat, comme ses quatre frères émetteurs. Le littéral
+      // NU qu'il était échappait à `ReadStatusUpdatedEventData` : sous
+      // `strictNullChecks: false`, le socket typé ne rattrape pas non plus la
+      // nullité, donc c'est le site d'appel qui doit prouver `participantId`.
+      // Il le prouve — les deux branches du contrôle d'appartenance rendent la
+      // main avant d'arriver ici quand la ligne `Participant` est absente.
+      const payload: ReadStatusUpdatedEventData = {
         conversationId,
         participantId: participantRowId,
         userId: registeredUserId,
