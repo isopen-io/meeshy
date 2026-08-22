@@ -2,8 +2,7 @@
   "$source": "tasks/lentille-implementation-contract.md §4.3 (Cotes relevées sur les maquettes) — toutes les valeurs sont lues dans les maquettes interactives (Lentille et Focal) et dans les métriques LWS-5",
   "list": {
     "row": {
-      "height": 92,
-      "edgeBadgeOverhang": 2,
+      "height": 84,
       "padding": {
         "vertical": 8,
         "horizontal": 16

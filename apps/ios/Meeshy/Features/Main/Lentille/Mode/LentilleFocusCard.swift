@@ -363,6 +363,11 @@ struct LentilleFocusCard: View, Equatable {
     /// capsule bordée d'accent de plus sur un bord déjà chargé. Ce qu'il
     /// apportait vraiment, c'est le NOMBRE, qui n'existe nulle part ailleurs
     /// dans la liste : il reste, en label nu et muet.
+    /// Dans une BULLE, au gabarit des chips d'étiquette voisines (retour
+    /// produit 2026-08-22 : « les effectifs doivent être dans une bulle comme
+    /// les autres éléments au niveau des bordures ») — même forme qu'au repos,
+    /// pour que la loupe agrandisse sans transformer. Pas de contour d'accent :
+    /// il reste l'exclusivité de l'anneau de la carte et de l'encoche de mode.
     private var typeBadge: some View {
         HStack(spacing: 3) {
             Image(systemName: Self.typeBadgeIcon(for: conversation.type))
@@ -373,7 +378,10 @@ struct LentilleFocusCard: View, Equatable {
                     .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
             }
         }
-        .foregroundColor(textMuted)
+        .foregroundColor(accent)
+        .padding(.horizontal, LentilleMetrics.Tags.chipPaddingHorizontal)
+        .padding(.vertical, LentilleMetrics.Tags.chipPaddingVertical)
+        .background(Capsule(style: .continuous).fill(accent.opacity(LentilleMetrics.Tags.bubbleFillOpacity)))
         .accessibilityElement(children: .combine)
         .accessibilityValue(conversation.memberCountDisplay)
     }

@@ -25,19 +25,14 @@ nonisolated public enum LentilleMetrics {
     /// `list.row` — padding `10/16`, marge latérale `8`, radius `16`,
     /// `transform-origin: 16% 50%`.
     nonisolated public enum Row {
-        /// 64 → 92 le 2026-08-22 : la rangée porte désormais TROIS lignes —
-        /// nom, « auteur : message », puis la date seule à droite (retour
-        /// produit : « en bas sur une nouvelle ligne à droite mettre la date »)
-        /// — et, sur son bord bas, l'effectif. Le premier essai à 78 a été
-        /// CONSTATÉ trop court sur simulateur : le contenu mesure ~78,6 pt à la
-        /// taille de texte par défaut, si bien que la pile d'effectif sortait
-        /// sous la rangée suivante et que la date passait dessous.
-        public static let height: CGFloat = 92
-        /// Distance du badge de bord (effectif) au bord bas de la rangée : il
-        /// se pose SUR la trace que la bordure de la carte y dessinera, sans
-        /// jamais sortir du cadre — dehors, il mordait la rangée voisine et s'y
-        /// faisait tronquer (constaté au premier essai, débord de 6 pt).
-        public static let edgeBadgeOverhang: CGFloat = 2
+        /// 64 → 84 le 2026-08-22 : la rangée porte TROIS lignes — nom (avec
+        /// la pile de non-lus en fin de ligne), « auteur : message », puis la
+        /// date seule à droite. Le contenu mesure ~78,6 pt à la taille de
+        /// texte par défaut : 64 n'en logeait que deux. Un essai à 92 a réservé
+        /// la place d'un badge d'effectif de bord, retiré depuis (l'effectif
+        /// est une information de MAGNIFICATION, pas de repos) — la rangée a
+        /// rendu cette hauteur.
+        public static let height: CGFloat = 84
         public static let paddingVertical: CGFloat = 8
         public static let paddingHorizontal: CGFloat = 16
         public static let marginHorizontal: CGFloat = 8
@@ -205,6 +200,10 @@ nonisolated public enum LentilleMetrics {
         /// Chips d'étiquettes de la carte de focus (2026-08-22 : « plus
         /// petites ») — un cran sous l'encoche de mode.
         public static let chipFontSize: CGFloat = 8
+        /// Fond d'une bulle de bord TEINTÉE (effectif) — la chip d'étiquette,
+        /// elle, est pleine de la couleur du tag. Assez pour détacher la bulle
+        /// du fond, assez peu pour qu'une information ne crie pas.
+        public static let bubbleFillOpacity: Double = 0.16
         public static let chipPaddingHorizontal: CGFloat = 6
         public static let chipPaddingVertical: CGFloat = 2
     }

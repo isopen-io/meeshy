@@ -133,23 +133,6 @@ struct LentilleConversationRow: View {
                     .padding(.vertical, 6)
             }
         }
-        // L'EFFECTIF vit sur la trace de la bordure, jamais dans le contenu
-        // (retour produit 2026-08-22 : « la pile avec le nombre de membre
-        // s'affiche en bas à droite sur les traces de la bordure et jamais
-        // dans le contenu, même au repos »). La rangée plate n'a pas de
-        // bordure — c'est la carte de magnification qui la peint, au même
-        // endroit : le badge occupe donc d'avance la place où elle passera,
-        // et ne bouge pas quand la carte se lève. Il reste DANS le cadre, à
-        // `edgeBadgeOverhang` du bord : un débord VERS L'EXTÉRIEUR le faisait
-        // tronquer par la rangée voisine (constaté au premier essai).
-        // Label NU, sans capsule ni fond — aucune carte dans `Lentille/Row/`.
-        .overlay(alignment: .bottomTrailing) {
-            if conversation.type != .direct {
-                memberCountBadge
-                    .padding(.trailing, LentilleMetrics.Row.paddingHorizontal)
-                    .padding(.bottom, LentilleMetrics.Row.edgeBadgeOverhang)
-            }
-        }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         // Idem `ThemedConversationRow` — dont ce libellé est justement dérivé
@@ -308,8 +291,36 @@ struct LentilleConversationRow: View {
                 // en bas à droite (`dateLine`). Le nom possède donc toute la
                 // ligne, et l'aperçu commence à la même abscisse que lui.
                 Spacer(minLength: 0)
+
+                if conversation.userState.unreadCount > 0 {
+                    unreadBadge
+                        .fixedSize()
+                        .layoutPriority(1)
+                }
             }
         }
+    }
+
+    /// Pile de non-lus — MÊME place et MÊME rouge qu'en magnification (retour
+    /// produit 2026-08-22, soir : « enlever l'effectif sur les rows non
+    /// magnifiées, mais mettre le chip rouge si messages non lus »). La loupe
+    /// n'ajoute donc que l'effectif et la précision de la date : elle
+    /// agrandit, elle ne recompose pas.
+    ///
+    /// **Supersession assumée du contrat §LWS-7** (« aucun badge chiffré
+    /// nulle part », vol.5 « badge rouge 99+ supprimé ») : cette règle datait
+    /// d'un rang où le non-lu se disait par le seul point accent du pont ✦.
+    /// Le pont n'apparaît QUE si la conversation en a un (`showsBridge` exige
+    /// `bridge != nil`) — une conversation non lue SANS pont ne disait donc
+    /// rien du tout. Le chip, lui, parle toujours.
+    private var unreadBadge: some View {
+        Text(conversation.userState.unreadCount > 99 ? "99+" : "\(conversation.userState.unreadCount)")
+            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .heavy))
+            .foregroundColor(.white)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(Capsule(style: .continuous).fill(MeeshyColors.unreadBadgeBackground(isDark: isDark)))
+            .accessibilityLabel(UnreadCountLabel.messages(conversation.userState.unreadCount))
     }
 
     /// Troisième ligne — la date SEULE, poussée à droite (retour produit
@@ -337,38 +348,6 @@ struct LentilleConversationRow: View {
                 .lineLimit(1)
         }
         .accessibilityHidden(true)
-    }
-
-    /// Effectif — MÊME grammaire que la carte de magnification
-    /// (`LentilleFocusCard.typeBadge`) : icône de type + compteur, en texte
-    /// nu, jamais une capsule. Il ne s'affiche que hors conversation directe,
-    /// où « le nombre de membres » ne veut rien dire.
-    private var memberCountBadge: some View {
-        HStack(spacing: 3) {
-            Image(systemName: Self.typeBadgeIcon(for: conversation.type))
-                .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
-                .imageScale(.small)
-            if conversation.memberCount > 1 {
-                Text(conversation.memberCountDisplay)
-                    .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
-            }
-        }
-        .foregroundColor(textMuted)
-        .accessibilityHidden(true)
-    }
-
-    /// Reproduit depuis `LentilleFocusCard.typeBadgeIcon` — même icône des
-    /// deux côtés de la loupe, sinon le badge changerait de forme en se
-    /// levant.
-    private static func typeBadgeIcon(for type: MeeshyConversation.ConversationType) -> String {
-        switch type {
-        case .group: return "person.2.fill"
-        case .community: return "person.3.fill"
-        case .channel: return "megaphone.fill"
-        case .bot: return "sparkles"
-        case .public, .global, .broadcast: return "globe"
-        case .direct: return "person.fill"
-        }
     }
 
     /// Tags — « pastilles 6 (≤ 3) » (contrat §4.3), après le nom. Adaptation
