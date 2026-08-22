@@ -7,13 +7,34 @@ import MeeshyUI
 // Rang plat de la Lentille — MÊMES entrées que `ThemedConversationRow`
 // (`Meeshy/Features/Main/Views/ThemedConversationRow.swift`, INTERDIT
 // d'édition : c'est le modèle d'entrées et de `==` de ce fichier), rendu
-// radicalement différent : AUCUNE carte (ni `backgroundSecondary`, ni
-// gradient de chaleur, ni bordure — la focus card de LWS-8 est la seule
-// carte de l'écran), rang plat `LentilleMetrics.Row.height` (64), avatar
-// `LentilleMetrics.Avatar` (44, contexte `.conversationHeaderCollapsed`) +
-// anneau accent propre, `Nom · heure`, ligne 2 dont la précédence
+// radicalement différent : AUCUNE CARTE DE RANGÉE (ni `backgroundSecondary`,
+// ni gradient de chaleur, ni bordure autour du rang — la focus card de LWS-8
+// reste la seule carte de l'écran), rang plat `LentilleMetrics.Row.height`,
+// avatar `LentilleMetrics.Avatar` (44, contexte `.conversationHeaderCollapsed`)
+// + anneau accent propre, ligne 2 dont la précédence
 // (typing > brouillon > pont ✦ > préview) est **inchangée** par rapport au
 // rang historique.
+//
+// **Lot 2 (2026-08-22) — quatre changements produits, et ce qu'ils touchent :**
+//
+// 1. L'heure QUITTE la ligne de titre et entre dans une **bulle d'aperçu**
+//    (`LentillePreviewBubble`, ce fichier), en bas à droite, exactement
+//    comme l'heure d'une bulle de messagerie.
+// 2. La bulle entoure la ligne 2. Elle enveloppe le **mux** `line2`, jamais
+//    une branche : c'est la seule forme qui couvre les huit chemins
+//    (typing/brouillon/pont + les cinq sous-branches d'aperçu) sans qu'un
+//    oubli dans une branche rare puisse passer inaperçu. L'interdit
+//    « AUCUNE carte » vise la CARTE DE RANGÉE, pas cette surface interne —
+//    et la bulle n'emploie jamais `backgroundSecondary` : sa teinte dérive
+//    de l'accent de la conversation, à une opacité BORNÉE PAR LE CONTRASTE
+//    (voir `LentilleMetrics.PreviewBubble`).
+// 3. L'**effectif** se pose en bas à droite du cadre, hors bulle — jamais
+//    pour une conversation `.direct`.
+// 4. Le glyphe de synchronisation ⟳ est RETIRÉ (l'outbox continue de
+//    renvoyer ; seule l'affordance de liste part) et sa place revient à la
+//    **pastille rouge chiffrée** de non-lus, atome partagé avec la peau
+//    historique (`UnreadCountBadge`). Le point accent de 8 px qui la
+//    remplaçait disparaît avec son token : il portait la MÊME donnée.
 //
 // Le rang ne porte AUCUN `@State` de langue : la résolution du texte passe
 // exclusivement par `resolvedLastMessagePreview(preferredLanguages:)` (SDK,
@@ -114,7 +135,21 @@ struct LentilleConversationRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 headerLine
-                line2
+
+                LentillePreviewBubble(
+                    date: conversation.lastMessageAt,
+                    accentColorHex: accentColorHex,
+                    timestampColor: Self.timestampColor(
+                        unreadCount: conversation.userState.unreadCount,
+                        accent: accent,
+                        isDark: isDark
+                    ),
+                    isDark: isDark
+                ) {
+                    line2
+                }
+
+                memberCountLine
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -181,10 +216,18 @@ struct LentilleConversationRow: View {
     /// commentaire ci-dessus) — lue directement par
     /// `LentilleFlatRowBridgeAriaTests` via `@testable import`.
     var accessibilityLabel: String {
-        let base = ThemedConversationRow(
+        let historical = ThemedConversationRow(
             conversation: conversation,
             preferredContentLanguages: preferredContentLanguages
         ).conversationAccessibilityLabel
+
+        // Lot 2 — l'effectif est VISIBLE sur le rang plat (et sur lui seul :
+        // le rang historique l'absorbe dans son badge de type). Le libellé
+        // hérité ne le compose pas ; il est ajouté ici, depuis la MÊME
+        // chaîne que la ligne visible (`memberCountText`), pour que
+        // l'oreille entende exactement ce que l'œil voit — et se taise
+        // exactement quand l'œil ne voit rien (`.direct`).
+        let base = memberCountText.map { "\(historical), \($0)" } ?? historical
 
         guard showsBridge, let bridge = conversation.bridge else { return base }
         let bridgeText = LentilleBridgeLine.resolveAriaText(bridge: bridge, preferredLanguages: preferredContentLanguages)
@@ -274,36 +317,61 @@ struct LentilleConversationRow: View {
 
             tagPastilles
 
+            Spacer(minLength: 0)
+
             // behaviour-matrix:L13 — appel en cours (Scène) : « … remplace
             // toute autre info à droite » (contrat §3.3). `liveCall == nil`
-            // (défaut) ⇒ la queue de ligne INCHANGÉE (heure + outbox) :
+            // (défaut) ⇒ la queue de ligne porte la pastille de non-lus :
             // zéro donnée fabriquée quand l'appelant ne branche rien
             // (contrat LWS-2bis, « un appel inconnu n'est pas affiché »).
+            //
+            // Lot 2 : l'heure a quitté cette ligne pour la bulle d'aperçu, et
+            // le glyphe outbox ⟳ est retiré (behaviour-matrix:L09 amendé — le
+            // renvoi automatique par l'outbox est conservé, l'état reste
+            // annoncé à VoiceOver par `accessibility.pending_sync`, seule
+            // l'affordance visuelle de la liste part). Sa place revient à la
+            // pastille rouge CHIFFRÉE (behaviour-matrix:L06 amendé), qui ne
+            // rend RIEN à zéro non-lu — le portillon vit dans l'atome.
             if let liveCall {
-                Spacer(minLength: 0)
                 LentilleLiveCallBadge(liveCall: liveCall, accentColorHex: accentColorHex)
                 if !liveCall.joined {
                     joinLiveCallButton
                 }
             } else {
-                Text("·")
-                    .font(LentilleMetrics.Time.font)
-                    .foregroundColor(textMuted)
-
-                LentilleRowTimestamp(date: conversation.lastMessageAt)
-                    .font(LentilleMetrics.Time.font)
-                    .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent, isDark: isDark))
-                    .layoutPriority(1)
-
-                Spacer(minLength: 0)
-
-                if conversation.userState.hasPendingSync {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .foregroundColor(accent.opacity(0.7))
-                        .accessibilityHidden(true)
-                }
+                UnreadCountBadge(count: conversation.userState.unreadCount, isDark: isDark)
             }
+        }
+    }
+
+    // MARK: - Effectif — bas à droite du CADRE (hors bulle), jamais en `.direct`
+
+    /// UNE seule composition de l'effectif, lue par la ligne visible ET par
+    /// le libellé VoiceOver : deux compositions divergeraient au premier
+    /// changement de règle plurielle. `nil` ⇒ rien à afficher ET rien à
+    /// annoncer — c'est le même portillon des deux côtés.
+    ///
+    /// `MembersCountLabel` (234i) porte la règle : le pluriel vient du
+    /// catalogue (`conversation.members-count`), le « + » du plafond
+    /// (`memberCountCapped`) est sa seule concaténation, écrite à UN endroit.
+    /// Le rang ne retombe donc jamais sur `memberCountDisplay` (chiffres nus
+    /// « 199+ »), qui n'accorde rien.
+    private var memberCountText: String? {
+        guard conversation.type != .direct else { return nil }
+        return MembersCountLabel.text(conversation.memberCount, capped: conversation.memberCountCapped)
+    }
+
+    /// Aligné à droite dans le cadre du rang, sous la bulle. Décoratif pour
+    /// VoiceOver : le rang combine ses enfants et annonce un libellé unique
+    /// (`accessibilityLabel`), qui porte déjà cette même chaîne.
+    @ViewBuilder
+    private var memberCountLine: some View {
+        if let memberCountText {
+            Text(memberCountText)
+                .font(LentilleMetrics.Members.font)
+                .foregroundColor(textMuted)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityHidden(true)
         }
     }
 
@@ -325,9 +393,11 @@ struct LentilleConversationRow: View {
     /// supprimé […] l'heure reste TERTIAIRE au même format ». Diverge
     /// délibérément de `ThemedConversationRow.timestampColor` (rouge
     /// sémantique si non-lu, sinon accent) : le rang plat ne bascule plus
-    /// JAMAIS sur le rouge — le pont ✦ + le point accent 8 px portent déjà
-    /// la nouvelle du non-lu (contrat §LWS-7), le timestamp reste un
-    /// troisième niveau de texte, quel que soit l'état de lecture.
+    /// JAMAIS sur le rouge — le pont ✦ et la pastille CHIFFRÉE de la ligne
+    /// de titre portent déjà la nouvelle du non-lu (contrat §LWS-7, premier
+    /// volet amendé par le lot 2 : c'est le point accent de 8 px qui est
+    /// parti, pas le badge), le timestamp reste un troisième niveau de
+    /// texte, quel que soit l'état de lecture.
     /// `unreadCount`/`accent` restent dans la signature pour la stabilité
     /// d'appel (site d'appel + suite de tests inchangés) mais ne
     /// discriminent plus rien ; `isDark` a un défaut pour rester appelable
@@ -680,6 +750,81 @@ private struct LentilleRowAvatar: View {
             onMoodTap: onMoodBadgeTap,
             contextMenuItems: isDirect ? directContextMenuItems : groupContextMenuItems
         )
+    }
+}
+
+// MARK: - Bulle d'aperçu (lot 2, 2026-08-22)
+
+/// Surface arrondie qui entoure la LIGNE 2 et loge l'heure en bas à droite —
+/// l'idiome exact d'une bulle de messagerie, appliqué à l'aperçu de la
+/// rangée.
+///
+/// **Elle enveloppe le MUX, jamais une branche.** `LentilleConversationRow
+/// .line2` est le point de passage obligé des huit chemins d'aperçu
+/// (typing / brouillon / pont ✦ / expiré / masqué / vue unique / éphémère
+/// actif / standard) : entourer le mux les couvre TOUS par construction.
+/// Entourer chaque branche aurait été la version fragile — un oubli dans une
+/// branche rare (message expiré, vue unique) ne se voit pas sans capture
+/// d'écran, et aucune suite de ce dépôt n'en fait.
+///
+/// **Ce n'est pas la « carte » que le contrat interdit.** L'interdit vise la
+/// carte de RANGÉE (un fond qui enveloppe le rang entier et le fait
+/// concurrencer la focus card de LWS-8). Cette surface-ci est interne à la
+/// rangée, ne porte ni `backgroundSecondary` ni gradient de chaleur, et sa
+/// teinte dérive de l'accent de la conversation — donc de la conversation
+/// elle-même, jamais d'un token de fond partagé.
+///
+/// **Le remplissage est borné par le CONTRASTE, pas par le goût** : l'heure
+/// est peinte en `textMuted`, qui ne dispose que d'environ 5 % de marge de
+/// luminance sur le fond clair. Les opacités vivent dans
+/// `LentilleMetrics.PreviewBubble` et sont mesurées, accent par accent, par
+/// `LentilleTextMutedContrastAATests`. C'est le CONTOUR — sur lequel aucun
+/// texte n'est posé — qui donne sa présence à la bulle.
+private struct LentillePreviewBubble<Content: View>: View {
+    let date: Date
+    let accentColorHex: String
+    let timestampColor: Color
+    let isDark: Bool
+    @ViewBuilder let content: Content
+
+    private var accent: Color { Color(hex: accentColorHex) }
+
+    private var fill: Color {
+        accent.opacity(
+            isDark
+                ? LentilleMetrics.PreviewBubble.fillOpacityDark
+                : LentilleMetrics.PreviewBubble.fillOpacityLight
+        )
+    }
+
+    private var stroke: Color {
+        accent.opacity(
+            isDark
+                ? LentilleMetrics.PreviewBubble.strokeOpacityDark
+                : LentilleMetrics.PreviewBubble.strokeOpacityLight
+        )
+    }
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: LentilleMetrics.PreviewBubble.radius, style: .continuous)
+    }
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: LentilleMetrics.PreviewBubble.gap) {
+            content
+
+            // `layoutPriority` : sous compression, c'est l'aperçu qui cède
+            // (il tronque déjà par ellipse à une ligne), jamais l'heure —
+            // une heure rognée à « 12 m… » ne dit plus rien.
+            LentilleRowTimestamp(date: date)
+                .font(LentilleMetrics.Time.font)
+                .foregroundColor(timestampColor)
+                .layoutPriority(1)
+        }
+        .padding(.horizontal, LentilleMetrics.PreviewBubble.paddingHorizontal)
+        .padding(.vertical, LentilleMetrics.PreviewBubble.paddingVertical)
+        .background(shape.fill(fill))
+        .overlay(shape.strokeBorder(stroke, lineWidth: LentilleMetrics.PreviewBubble.strokeWidth))
     }
 }
 

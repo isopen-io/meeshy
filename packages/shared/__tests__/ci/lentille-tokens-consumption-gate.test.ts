@@ -113,6 +113,8 @@ const SWIFT_SYMBOL_BY_FAMILY: Record<string, string> = {
   'list.time': 'LentilleMetrics.Time',
   'list.line2': 'LentilleMetrics.Line2',
   'list.unreadDot': 'LentilleMetrics.UnreadDot',
+  'list.previewBubble': 'LentilleMetrics.PreviewBubble',
+  'list.members': 'LentilleMetrics.Members',
   'list.focusCard': 'LentilleMetrics.FocusCard',
   'list.modeNotch': 'LentilleMetrics.ModeNotch',
   'list.sticker': 'LentilleMetrics.Sticker',

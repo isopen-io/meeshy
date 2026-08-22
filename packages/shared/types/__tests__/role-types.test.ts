@@ -5,6 +5,7 @@ import {
   normalizeGlobalRole,
   isGlobalUserRole,
   hasMinimumRole,
+  globalRoleLevel,
   getEffectiveRole,
   getEffectiveRoleLevel,
   hasModeratorPrivileges,
@@ -62,6 +63,27 @@ describe('AGENT role', () => {
 
   it('hasMinimumRole fails closed for an unknown role (level 0)', () => {
     expect(hasMinimumRole('GUEST' as GlobalUserRole, 'USER')).toBe(false);
+  });
+});
+
+// `globalRoleLevel` et `normalizeGlobalRole` répondent à DEUX questions et ne
+// doivent jamais être substitués l'un à l'autre : le second RÉPARE une chaîne
+// pour l'afficher (inconnu ⇒ USER), le premier la PÈSE pour décider d'un droit
+// (inconnu ⇒ 0). Toute autorisation qui passe par le second promeut un rôle
+// bidon au niveau de USER.
+describe('globalRoleLevel — la lecture qui échoue fermé', () => {
+  it('rend le niveau de la hiérarchie pour un rôle connu, quelle que soit la casse', () => {
+    expect(globalRoleLevel('BIGBOSS')).toBe(GLOBAL_ROLE_HIERARCHY[GlobalUserRole.BIGBOSS]);
+    expect(globalRoleLevel('moderator')).toBe(GLOBAL_ROLE_HIERARCHY[GlobalUserRole.MODERATOR]);
+    expect(globalRoleLevel('User')).toBe(GLOBAL_ROLE_HIERARCHY[GlobalUserRole.USER]);
+  });
+
+  it('rend 0 pour un rôle inconnu ou vide, là où normalizeGlobalRole rendrait USER', () => {
+    expect(globalRoleLevel('WIZARD')).toBe(0);
+    expect(globalRoleLevel('')).toBe(0);
+    expect(GLOBAL_ROLE_HIERARCHY[normalizeGlobalRole('WIZARD')]).toBe(
+      GLOBAL_ROLE_HIERARCHY[GlobalUserRole.USER]
+    );
   });
 });
 

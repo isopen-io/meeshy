@@ -4,10 +4,10 @@ import { UserRoleEnum } from '@meeshy/shared/types';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import {
   ACTIVE_MEMBER_LISTING_LIMIT,
+  canViewExactMemberCount,
   isMemberListingRestricted,
   presentMemberCount
 } from '@meeshy/shared/utils/member-visibility';
-import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationParticipantSchema,
@@ -24,7 +24,7 @@ import {
   type ParticipantRightName,
 } from '../../services/participantRights';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
+import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
 import { endConversationMembership } from '../../socketio/endConversationMembership';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import {
@@ -229,40 +229,47 @@ export function registerParticipantsRoutes(
       const pageLimit = limit ? Math.min(parseInt(limit, 10), 100) : 20;
       const platformRole = authRequest.authContext.registeredUser?.role ?? null;
 
+      // Le participant du LECTEUR, résolu UNE fois. Son rôle de conversation
+      // commande DEUX décisions distinctes : la restriction top-99 du listing
+      // ci-dessous, et le droit à l'effectif ENTIER plus bas
+      // (`canViewExactMemberCount`). Il était lu paresseusement, sous la seule
+      // branche du listing — donc jamais pour un lecteur que son rôle
+      // plateforme exemptait du top-99 sans lui ouvrir l'effectif (AUDIT,
+      // ANALYST), fût-il créateur de son propre groupe.
+      //
+      // Même précédence d'identité que resolveCallerParticipant :
+      // participantId (anonyme) d'abord, userId (inscrit) ensuite.
+      const viewer = await prisma.participant.findFirst({
+        where: authRequest.authContext.participantId
+          ? { id: authRequest.authContext.participantId, conversationId, isActive: true }
+          : { conversationId, userId: authRequest.authContext.userId, isActive: true },
+        select: { id: true, role: true, userId: true }
+      });
+      const conversationRole = viewer?.role ?? null;
+
       // Restriction top-99 : un USER plateforme (ou anonyme) qui n'est que
       // simple member de la conversation ne voit que les plus actifs — sauf
       // s'il tient un rôle au-dessus de member dans la communauté hôte
       // (un admin de communauté supervise TOUS les membres de ses salons).
       let restricted = false;
-      if (isMemberListingRestricted({ platformRole, conversationRole: null, communityRole: null })) {
-        // Même précédence d'identité que resolveCallerParticipant :
-        // participantId (anonyme) d'abord, userId (inscrit) ensuite.
-        const viewer = await prisma.participant.findFirst({
-          where: authRequest.authContext.participantId
-            ? { id: authRequest.authContext.participantId, conversationId, isActive: true }
-            : { conversationId, userId: authRequest.authContext.userId, isActive: true },
-          select: { id: true, role: true, userId: true }
+      if (isMemberListingRestricted({ platformRole, conversationRole, communityRole: null })) {
+        let communityRole: string | null = null;
+        const parentCommunity = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { communityId: true }
         });
-        const conversationRole = viewer?.role ?? null;
-        if (isMemberListingRestricted({ platformRole, conversationRole, communityRole: null })) {
-          let communityRole: string | null = null;
-          const parentCommunity = await prisma.conversation.findUnique({
-            where: { id: conversationId },
-            select: { communityId: true }
+        if (parentCommunity?.communityId && viewer?.userId) {
+          const membership = await prisma.communityMember.findFirst({
+            where: {
+              communityId: parentCommunity.communityId,
+              userId: viewer.userId,
+              isActive: true
+            },
+            select: { role: true }
           });
-          if (parentCommunity?.communityId && viewer?.userId) {
-            const membership = await prisma.communityMember.findFirst({
-              where: {
-                communityId: parentCommunity.communityId,
-                userId: viewer.userId,
-                isActive: true
-              },
-              select: { role: true }
-            });
-            communityRole = membership?.role ?? null;
-          }
-          restricted = isMemberListingRestricted({ platformRole, conversationRole, communityRole });
+          communityRole = membership?.role ?? null;
         }
+        restricted = isMemberListingRestricted({ platformRole, conversationRole, communityRole });
       }
 
       let paginatedParticipants: any[];
@@ -319,8 +326,9 @@ export function registerParticipantsRoutes(
       }
 
       // Total count for accurate header display — même cap 199+ que le
-      // memberCount des conversations : l'effectif exact est réservé aux
-      // admins plateforme.
+      // memberCount des conversations : l'effectif ENTIER est réservé aux
+      // lecteurs autorisés (ADMIN/BIGBOSS/MODERATOR plateforme, OU
+      // creator/admin de la conversation).
       const totalCount = await prisma.participant.count({
         where: {
           conversationId: conversationId,
@@ -328,7 +336,7 @@ export function registerParticipantsRoutes(
         }
       });
       const presentedTotal = presentMemberCount(totalCount, {
-        viewerSeesExactCount: isGlobalAdmin(platformRole ?? '')
+        viewerSeesExactCount: canViewExactMemberCount({ platformRole, conversationRole })
       });
 
       // Présence des co-participants : montrable (co-participation = contexte
@@ -1032,9 +1040,27 @@ export function registerParticipantsRoutes(
         // conversation avant cet emit.)
         const audience = await prisma.participant.findMany({
           where: { conversationId, isActive: true, NOT: { userId } },
-          select: { id: true, userId: true },
+          // `role` et `user.role` en plus : les deux titres qui ouvrent
+          // l'effectif ENTIER (`canViewExactMemberCount`), que le fanout doit
+          // connaître PAR DESTINATAIRE — un broadcast ne portait qu'une
+          // présentation, et c'était la plafonnée, pour tout le monde.
+          select: { id: true, userId: true, role: true, user: { select: { role: true } } },
         });
-        emitToConversationParticipants({
+        // Compte ABSOLU plutôt qu'un delta : un client qui incrémente ne se
+        // rattrape jamais d'un événement manqué (hors ligne, trou de
+        // reconnexion), et les deux clients PERSISTENT la dérive (cache disque
+        // iOS, `staleTime: Infinity` web). Un total se rattrape au suivant.
+        //
+        // `+ 1` parce que l'éventail ÉCARTE l'arrivant (voir ci-dessus) : il est
+        // actif depuis l'écriture juste au-dessus, donc il compte, mais il ne
+        // figure pas dans `audience`. Une seconde requête ne rendrait rien de
+        // plus.
+        //
+        // Deux chaînes disjointes : « 199+ » pour la room, l'effectif ENTIER
+        // pour les lecteurs autorisés. Un broadcast unique ne portait que la
+        // présentation plafonnée, et écrasait donc chez l'admin du groupe la
+        // valeur exacte que le REST venait de lui servir.
+        emitConversationMemberCountEvent({
           io,
           conversationId,
           participants: audience,
@@ -1044,21 +1070,8 @@ export function registerParticipantsRoutes(
             userId,
             displayName: addedMemberFields.displayName,
             joinedAt: joinedAt.toISOString(),
-            // Compte ABSOLU plutôt qu'un delta : un client qui incrémente ne se
-            // rattrape jamais d'un événement manqué (hors ligne, trou de
-            // reconnexion), et les deux clients PERSISTENT la dérive (cache
-            // disque iOS, `staleTime: Infinity` web). Un total se rattrape au
-            // suivant.
-            //
-            // `+ 1` parce que l'éventail ÉCARTE l'arrivant (voir ci-dessus) : il
-            // est actif depuis l'écriture juste au-dessus, donc il compte, mais
-            // il ne figure pas dans `audience`. Une seconde requête ne rendrait
-            // rien de plus.
-            //
-            // Plafonné à 199 pour TOUTE la room (broadcast unique) : un admin
-            // plateforme récupère l'exact au prochain fetch REST.
-            ...presentMemberCount(audience.length + 1),
           },
+          memberCount: audience.length + 1,
         });
       }
       // Auto-join the added user's currently-connected sockets to the conversation
@@ -1247,7 +1260,10 @@ export function registerParticipantsRoutes(
           // encore dedans jusqu'à l'éviction ci-dessous — garde son signal.
           const remaining = await prisma.participant.findMany({
             where: { conversationId, isActive: true },
-            select: { id: true, userId: true }
+            // `role` et `user.role` en plus : les deux titres qui ouvrent
+            // l'effectif ENTIER (`canViewExactMemberCount`), que le fanout doit
+            // connaître PAR DESTINATAIRE.
+            select: { id: true, userId: true, role: true, user: { select: { role: true } } }
           });
           // Le retiré ferme la chaîne. Le commentaire ci-dessus disait « la
           // room reste en tête, donc le retiré garde son signal » : vrai du
@@ -1260,7 +1276,11 @@ export function registerParticipantsRoutes(
           const audience = removedParticipant
             ? [...remaining, { id: removedParticipant.id, userId }]
             : remaining;
-          emitToConversationParticipants({
+          // Compte ABSOLU — `remaining` est déjà chargé pour nommer les rooms,
+          // et un delta ne rattrape jamais un événement manqué. Deux chaînes
+          // disjointes, comme le fanout d'arrivée : « 199+ » pour la room,
+          // l'effectif ENTIER pour les lecteurs autorisés.
+          emitConversationMemberCountEvent({
             io,
             conversationId,
             participants: audience,
@@ -1269,12 +1289,9 @@ export function registerParticipantsRoutes(
               conversationId,
               userId,
               displayName: removedParticipant?.displayName ?? '',
-              leftAt: leftAt.toISOString(),
-              // Compte ABSOLU — `remaining` est déjà chargé pour nommer les
-              // rooms, et un delta ne rattrape jamais un événement manqué.
-              // Plafonné à 199 pour toute la room, comme le fanout d'arrivée.
-              ...presentMemberCount(remaining.length)
-            }
+              leftAt: leftAt.toISOString()
+            },
+            memberCount: remaining.length
           });
 
           // La fin d'appartenance, en un seul geste : `endConversationMembership`

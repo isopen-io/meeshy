@@ -2,7 +2,8 @@
   "$source": "tasks/lentille-implementation-contract.md §4.3 (Cotes relevées sur les maquettes) — toutes les valeurs sont lues dans les maquettes interactives (Lentille et Focal) et dans les métriques LWS-5",
   "list": {
     "row": {
-      "height": 64,
+      "$noteHeight": "64 -> 88 le 2026-08-22 (lot 2 iOS) — imposé par les TROIS bandes de la rangée (titre 24 avec la pastille chiffrée + bulle d'aperçu 24 + effectif 14, écarts et paddings compris). Le token est PARTAGÉ : la peau web (LentilleRow.tsx / LentilleSkeletonRow.tsx, var(--lentille-list-row-height)) grandit d'autant avant d'avoir adopté la bulle et la ligne d'effectif — divergence connue, à solder par le lot 2 web.",
+      "height": 88,
       "padding": {
         "vertical": 10,
         "horizontal": 16
@@ -39,7 +40,28 @@
     },
     "unreadDot": {
       "size": 8,
-      "colorAccent": true
+      "colorAccent": true,
+      "$note": "Lot 2 (2026-08-22) — la peau iOS NE LE CONSOMME PLUS : la pastille chiffrée rétablie sur la ligne de titre porte la même donnée (unreadCount > 0), le point était un doublon. Le token RESTE parce que la peau WEB le consomme toujours (apps/web/components/conversations/lentille/LentilleRow.tsx, --lentille-list-unread-dot-size) : le retirer y ferait un point de 0×0 en silence. À supprimer quand le lot 2 web aura fait le même arbitrage."
+    },
+    "previewBubble": {
+      "radius": 12,
+      "padding": {
+        "vertical": 4,
+        "horizontal": 8
+      },
+      "gap": 6,
+      "strokeWidth": 1,
+      "fillOpacityLight": 0.04,
+      "fillOpacityDark": 0.1,
+      "strokeOpacityLight": 0.22,
+      "strokeOpacityDark": 0.28,
+      "colorAccent": true,
+      "$note": "Lot 2 (2026-08-22) — Ajoutée par le lot 2 : la peau iOS y déplace l'heure et n'affiche plus le point `unreadDot` (doublon de la pastille chiffrée). Bulle qui entoure la ligne 2 et loge l'heure en bas à droite. Les quatre opacités sont un BUDGET DE CONTRASTE : ce sont les plus fortes qui gardent l'heure (textMuted) au-dessus de AA sur les 528 accents que DynamicColorGenerator sait produire — mesure LentilleTextMutedContrastAATests.test_previewBubble_keepsTheTimestampAboveAA_onEveryGeneratedAccent. Les remonter sans re-mesurer fait rougir cette suite."
+    },
+    "members": {
+      "size": 11,
+      "weight": 600,
+      "$note": "Lot 2 — libellé d'effectif (« 12 membres », « 199+ membres ») posé en bas à droite du cadre de la rangée, hors bulle ; jamais rendu pour une conversation .direct."
     },
     "focusCard": {
       "ringSize": 1.5,

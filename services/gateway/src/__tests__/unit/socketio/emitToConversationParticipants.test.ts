@@ -120,7 +120,7 @@ describe('emitToConversationParticipants', () => {
   });
 
   /**
-   * `exceptRoom` — la moitié qui permet à un émetteur de servir DEUX payloads
+   * `exceptRooms` — la moitié qui permet à un émetteur de servir DEUX payloads
    * sans jamais en livrer deux au même socket.
    *
    * Un accusé de lecture porte, pour l'acteur seul, sa frontière de lecture et
@@ -130,7 +130,7 @@ describe('emitToConversationParticipants', () => {
    * sans qu'il reçoive l'événement deux fois — la room de conversation
    * l'atteindrait sinon quand il regarde le fil.
    */
-  describe('exceptRoom', () => {
+  describe('exceptRooms', () => {
     it('drops the excluded room from the chain AND hands it to except()', () => {
       const { io, to, except } = makeEmitter();
 
@@ -143,7 +143,7 @@ describe('emitToConversationParticipants', () => {
         ],
         event: 'read-status:updated',
         payload: {},
-        exceptRoom: 'user:u_actor',
+        exceptRooms: ['user:u_actor'],
       });
 
       expect(to.mock.calls.map((c) => c[0])).toEqual([
@@ -164,7 +164,7 @@ describe('emitToConversationParticipants', () => {
         participants: [{ id: 'p_actor', userId: null }],
         event: 'read-status:updated',
         payload: {},
-        exceptRoom: 'user:p_actor',
+        exceptRooms: ['user:p_actor'],
       });
 
       expect(rooms).toEqual(['conversation:c_1']);

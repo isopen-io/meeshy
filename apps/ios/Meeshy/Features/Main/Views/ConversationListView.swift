@@ -1222,16 +1222,46 @@ struct ConversationListView: View {
         // même règle que le tray, sinon l'anneau promet un viewer qui se
         // refermerait aussitôt.
         let myGroup = storyViewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
-        return LentilleRailSelfEntry(
+        return Self.railSelfEntry(
             displayName: currentUser.displayName ?? currentUser.username,
             avatarURL: currentUser.avatar,
-            moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
+            accentColor: DynamicColorGenerator.colorForName(currentUser.username),
+            // MÊME résolveur que le tray (`MyStoryButton`) : la couverture de
+            // ma dernière story, jamais une seconde écriture de la cascade
+            // cover locale > thumbnail serveur > image > avatar.
+            coverURL: myGroup.flatMap { latestStoryThumbnailURL($0) },
             hasActiveStory: myGroup != nil,
+            moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
             // Le libellé sort de la MÊME règle que le routage ci-dessous : les
             // deux ne peuvent pas diverger (régression déjà vécue côté tray).
             // Le tap ouvre TOUJOURS le listing « Mes stories » (voir
             // `openMyStoriesFromRail`) : l'annonce dit cette destination-là.
             actionLabel: StoryTrayCopy.manageStories
+        )
+    }
+
+    /// Mappage PUR de la pastille « moi » — `nonisolated`, donc attaquable
+    /// directement par les tests (même convention que `sectionPillTitle`).
+    /// La seule décision qu'il porte : la couverture de ma story active PRIME
+    /// sur mon avatar, et à défaut c'est l'avatar — parité avec le bouton
+    /// « moi » du tray.
+    nonisolated static func railSelfEntry(
+        displayName: String,
+        avatarURL: String?,
+        accentColor: String,
+        coverURL: String?,
+        hasActiveStory: Bool,
+        moodEmoji: String?,
+        actionLabel: String?
+    ) -> LentilleRailSelfEntry {
+        LentilleRailSelfEntry(
+            displayName: displayName,
+            avatarURL: avatarURL,
+            previewURL: coverURL ?? avatarURL,
+            accentColor: accentColor,
+            moodEmoji: moodEmoji,
+            hasActiveStory: hasActiveStory,
+            actionLabel: actionLabel
         )
     }
 
@@ -1262,16 +1292,48 @@ struct ConversationListView: View {
     /// où la donnée existera.
     private var lentilleRailEntries: [LentilleRailEntry] {
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-        return storyViewModel.storyGroups
-            .filter { $0.id != currentUserId && !$0.isFullyExpired() }
+        return Self.railStoryGroups(storyViewModel.storyGroups, excludingUserId: currentUserId)
             .map { group in
-                LentilleRailEntry(
-                    id: group.id,
-                    displayName: group.username,
-                    avatarURL: group.avatarURL,
-                    isLive: false
+                Self.railEntry(
+                    group: group,
+                    // MÊME résolveur que le tray — une seule écriture de la
+                    // cascade de couverture dans toute l'app (garde de source
+                    // `LentilleChromeSourceGuardTests`).
+                    coverURL: latestStoryThumbnailURL(group),
+                    moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji
                 )
             }
+    }
+
+    /// Le FILTRE du rail, isolé et PUR (`now` explicite) : ni moi-même, ni un
+    /// groupe entièrement expiré — un groupe expiré ouvrirait puis refermerait
+    /// le viewer (tap-puis-flash déjà documenté côté tray).
+    nonisolated static func railStoryGroups(
+        _ groups: [StoryGroup],
+        excludingUserId currentUserId: String,
+        now: Date = Date()
+    ) -> [StoryGroup] {
+        groups.filter { $0.id != currentUserId && !$0.isFullyExpired(at: now) }
+    }
+
+    /// Mappage PUR d'un groupe vers son entrée de rail. Les deux valeurs que
+    /// la vue Chrome ne peut pas aller chercher elle-même (couverture, humeur)
+    /// arrivent RÉSOLUES ; tout le reste est lu sur le groupe.
+    nonisolated static func railEntry(
+        group: StoryGroup,
+        coverURL: String?,
+        moodEmoji: String?
+    ) -> LentilleRailEntry {
+        LentilleRailEntry(
+            id: group.id,
+            displayName: group.username,
+            avatarURL: group.avatarURL,
+            previewURL: coverURL ?? group.avatarURL,
+            moodEmoji: moodEmoji,
+            hasUnviewed: group.hasUnviewed,
+            accentColor: group.avatarColor,
+            isLive: false
+        )
     }
 
     // MARK: - Ligne d'épinglage des stickers (LWS-6/I-063bis)

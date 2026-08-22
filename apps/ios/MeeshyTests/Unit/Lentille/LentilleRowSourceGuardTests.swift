@@ -89,16 +89,38 @@ final class LentilleRowSourceGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Aucun badge chiffré (contrat §LWS-7 : « le chiffre vit dans le pont »)
+    // MARK: - Le chrome du badge de non-lus n'est jamais RECOPIÉ dans le rang
+    //
+    // **Contrat AMENDÉ le 2026-08-22 (lot 2, décision produit).** La règle
+    // d'origine (§LWS-7) était « aucun badge chiffré nulle part — le chiffre
+    // vit dans le pont ✦ » : ce fichier l'appliquait en interdisant le
+    // symbole `unreadBadgeBackground` dans `Lentille/Row/`. La décision
+    // produit du lot 2 RÉTABLIT la pastille rouge chiffrée sur le rang plat,
+    // identique à celle de la peau historique — la garde ne peut donc plus
+    // signifier « aucun badge ».
+    //
+    // Elle est CONSERVÉE avec un sens NOUVEAU et toujours réel : le rang ne
+    // doit pas RECOPIER le chrome du badge (couleur, capsule, ombre,
+    // paddings). Il consomme l'atome de présentation partagé
+    // (`UnreadCountBadge`, `MeeshyUI/Primitives/`), seul domicile de
+    // `MeeshyColors.unreadBadgeBackground(isDark:)` + `NotificationBadge
+    // .displayed(_:)` pour les rangs de liste. Un `unreadBadgeBackground`
+    // qui réapparaîtrait ici signalerait une SECONDE écriture du même badge
+    // — exactement ce que l'extraction de l'atome vient de supprimer.
+    //
+    // Le témoin POSITIF (le rang consomme bien l'atome) vit plus bas,
+    // `test_unreadBadge_isTheSharedAtom_gatedByTheUnreadCount` : sans lui,
+    // cette garde-ci resterait verte sur un rang qui n'affiche RIEN.
 
-    func test_noUnreadBadgeBackground_inAnyRowFile() throws {
+    func test_noUnreadBadgeBackground_inAnyRowFile_theChromeLivesInTheSharedAtom() throws {
         for source in try rowSources() {
             let count = occurrences(of: "unreadBadgeBackground", in: normalizedCode(source.code))
             XCTAssertEqual(
                 count, 0,
                 "\(source.name) contient \(count) occurrence(s) de « unreadBadgeBackground » — " +
-                "le chiffre de non-lu vit dans le pont ✦ (point accent 8 px), plus dans un " +
-                "badge chiffré (contrat §LWS-7, critère « aucun badge chiffré nulle part »)."
+                "le chrome de la pastille de non-lus vit dans l'atome partagé UnreadCountBadge " +
+                "(MeeshyUI/Primitives/UnreadCountBadge.swift), jamais recopié dans une peau " +
+                "(lot 2, 2026-08-22)."
             )
         }
     }
@@ -261,25 +283,215 @@ final class LentilleRowSourceGuardTests: XCTestCase {
         )
     }
 
-    /// Contrat §LWS-7 : « pont : […] ligne 2 = pont ✦ + point accent 8 ».
-    /// `LentilleMetricsTests` verrouille déjà `LentilleMetrics.UnreadDot.size == 8`
-    /// contre `lentille-tokens.json` (LWS-5, hors périmètre) ; ce témoin
-    /// verrouille le CÔTÉ CONSOMMATEUR — que `LentilleBridgeLine` dimensionne
-    /// bien son point avec CE token, jamais un `8` recopié (garde R15 en
-    /// prime : `8` n'est pas dans la liste des littéraux interdits, mais
-    /// l'identité de source reste la propriété recherchée, comme pour
-    /// `LentilleSkeletonRowTests`).
-    func test_bridgeLine_unreadDot_usesMetric_notALiteral() throws {
-        guard let source = try rowSources().first(where: { $0.name == "LentilleBridgeLine.swift" }) else {
-            XCTFail("LentilleBridgeLine.swift introuvable parmi les fichiers découverts de Lentille/Row/")
+    // MARK: - Lot 2 (2026-08-22) — bulle d'aperçu, effectif, pastille chiffrée,
+    // retrait du glyphe outbox.
+
+    /// **Le point accent de 8 px est RETIRÉ (lot 2).** L'ancien témoin
+    /// (`test_bridgeLine_unreadDot_usesMetric_notALiteral`) verrouillait le
+    /// CÔTÉ CONSOMMATEUR du token `LentilleMetrics.UnreadDot` : que
+    /// `LentilleBridgeLine` dimensionne son point de tête avec ce token
+    /// plutôt qu'un `8` recopié. Le lot 2 rétablit la pastille rouge
+    /// CHIFFRÉE sur le rang ; le point de 8 px devient alors le DOUBLON
+    /// strict de cette pastille (même donnée, `unreadCount > 0`, deux
+    /// signaux à 4 pt l'un de l'autre). C'est le RENDU qui est supprimé —
+    /// le TOKEN, lui, survit, et c'est délibéré : la peau web le consomme
+    /// toujours (`apps/web/components/conversations/lentille/LentilleRow.tsx`
+    /// dimensionne son point avec `--lentille-list-unread-dot-size`), donc le
+    /// retirer de `lentille-tokens.json` y ferait un point de 0×0 en silence.
+    /// `LentilleMetrics.UnreadDot`, `LentilleMetricsTests.test_unreadDot_size`
+    /// et la table de la garde de consommation restent en place pour cette
+    /// seule raison, chacun portant la note qui l'explique ; à solder quand le
+    /// lot 2 web fera le même arbitrage.
+    ///
+    /// Le témoin est INVERSÉ, pas supprimé : plus aucun fichier de
+    /// `Lentille/Row/` ne doit CONSOMMER `UnreadDot`.
+    func test_unreadDotToken_isGoneFromEveryRowFile_supersededByTheCountedBadge() throws {
+        for source in try rowSources() {
+            XCTAssertEqual(
+                occurrences(of: "UnreadDot", in: normalizedCode(source.code)), 0,
+                "\(source.name) consomme encore LentilleMetrics.UnreadDot — le point accent de " +
+                "8 px est supprimé par le lot 2 (doublon strict de la pastille chiffrée, " +
+                "même donnée unreadCount > 0). Le token survit pour la seule peau WEB : " +
+                "aucune peau iOS ne doit le lire."
+            )
+        }
+    }
+
+    /// **La bulle d'aperçu entoure le MUX, jamais une branche.** C'est la
+    /// seule forme qui couvre les HUIT chemins de `line2` sans qu'aucun
+    /// puisse être oublié : `LentilleConversationRow.line2` est le point de
+    /// passage OBLIGÉ de `typing`/`draft`/`bridge` et des cinq
+    /// sous-branches d'aperçu (`expired`/`hidden`/`viewOnce`/
+    /// `ephemeralActive`/`standard`). Envelopper chaque branche
+    /// individuellement aurait été la version fragile — un oubli dans une
+    /// branche rare (vue unique, message expiré) reste invisible sans
+    /// snapshot.
+    func test_previewBubble_wrapsTheLine2Mux_soNoBranchCanEscapeIt() throws {
+        let code = normalizedCode(try rowSource())
+        XCTAssertTrue(
+            code.contains("LentillePreviewBubble("),
+            "LentilleConversationRow.swift doit construire la bulle d'aperçu (LentillePreviewBubble) — lot 2."
+        )
+        XCTAssertEqual(
+            occurrences(of: "{ line2 }", in: code), 1,
+            "La bulle doit envelopper le MUX `line2` EXACTEMENT une fois : c'est ce qui " +
+            "garantit la couverture des huit branches d'aperçu sans en énumérer aucune."
+        )
+        XCTAssertFalse(
+            code.contains("headerLine line2"),
+            "La ligne 2 ne doit plus être posée NUE sous la ligne de titre — elle passe " +
+            "désormais par LentillePreviewBubble."
+        )
+    }
+
+    /// Les huit chemins, nommés un par un — pour que l'échec DÉSIGNE la
+    /// branche perdue plutôt qu'un « la structure a changé » global. Chacun
+    /// doit vivre à l'intérieur du mux (`line2`) ou d'une fonction que le
+    /// mux appelle (`previewLine`/`standardPreview`), donc à l'intérieur de
+    /// la bulle par construction.
+    func test_allEightPreviewBranches_liveInsideTheBubbleWrappedMux() throws {
+        let code = normalizedCode(try rowSource())
+        guard let muxStart = code.range(of: "private var line2: some View {") else {
+            XCTFail("le mux `line2` est introuvable — la garde doit être re-pointée")
             return
         }
-        let code = normalizedCode(source.code)
-        XCTAssertTrue(
-            code.contains("frame(width: LentilleMetrics.UnreadDot.size, height: LentilleMetrics.UnreadDot.size)"),
-            "LentilleBridgeLine.swift doit dimensionner le point du pont avec " +
-            "LentilleMetrics.UnreadDot.size (8, contrat §LWS-7 : « point accent 8 »), jamais un " +
-            "littéral recopié."
+        guard let senderStart = code.range(of: "private var senderLabel: some View {", range: muxStart.upperBound..<code.endIndex) else {
+            XCTFail("borne de fin (senderLabel) introuvable — la garde doit être re-pointée")
+            return
+        }
+        let muxThroughPreview = String(code[muxStart.lowerBound..<senderStart.lowerBound])
+
+        let branches = [
+            ("typing", "case .typing:"),
+            ("brouillon", "case .draft:"),
+            ("pont ✦", "case .bridge:"),
+            ("aperçu (racine)", "case .preview:"),
+            ("expiré", "case .expired:"),
+            ("masqué", "case .hidden:"),
+            ("vue unique", "case .viewOnce:"),
+            ("éphémère actif", "case .ephemeralActive:"),
+            ("standard", "case .standard:"),
+        ]
+        for (label, needle) in branches {
+            XCTAssertTrue(
+                muxThroughPreview.contains(needle),
+                "La branche « \(label) » (\(needle)) n'est plus dans la région couverte par le " +
+                "mux `line2` — elle échapperait donc à la bulle d'aperçu, et son heure " +
+                "disparaîtrait sans qu'aucun autre témoin ne rougisse (risque n°1 du lot 2)."
+            )
+        }
+    }
+
+    /// **L'heure quitte la ligne de titre et entre dans la bulle.** Deux
+    /// moitiés indissociables : si l'ancien emplacement survivait, l'heure
+    /// serait rendue DEUX fois.
+    func test_timestamp_leftTheTitleLine_andLivesAtTheBubblesBottomRight() throws {
+        let code = normalizedCode(try rowSource())
+        guard let headerStart = code.range(of: "private var headerLine: some View {"),
+              let headerEnd = code.range(of: "private var tagPastilles: some View {", range: headerStart.upperBound..<code.endIndex)
+        else {
+            XCTFail("les bornes de headerLine sont introuvables — la garde doit être re-pointée")
+            return
+        }
+        let header = String(code[headerStart.lowerBound..<headerEnd.lowerBound])
+
+        XCTAssertFalse(
+            header.contains("LentilleRowTimestamp"),
+            "headerLine rend encore l'horodatage — l'heure appartient désormais à la bulle " +
+            "d'aperçu (bas à droite), comme l'heure d'une bulle de messagerie."
         )
+        XCTAssertFalse(
+            header.contains(#"Text("·")"#),
+            "headerLine garde le point médian qui séparait le nom de l'heure — sans heure à " +
+            "séparer, il ne sépare plus rien."
+        )
+        XCTAssertTrue(
+            code.contains("struct LentillePreviewBubble"),
+            "La bulle d'aperçu doit être déclarée dans LentilleConversationRow.swift."
+        )
+        guard let bubbleStart = code.range(of: "struct LentillePreviewBubble") else { return }
+        XCTAssertTrue(
+            String(code[bubbleStart.lowerBound...]).contains("LentilleRowTimestamp(date: date)"),
+            "LentillePreviewBubble doit rendre l'horodatage (LentilleRowTimestamp) — c'est le " +
+            "nouveau domicile de l'heure."
+        )
+    }
+
+    /// **Le glyphe outbox ⟳ est retiré du rang** (décision produit lot 2 :
+    /// le renvoi automatique par l'outbox est conservé, seule l'affordance
+    /// visuelle de la liste disparaît, remplacée par la pastille chiffrée).
+    /// Voir `LentilleRowBehaviourAnchorTests.test_L09_…` pour l'amendement de
+    /// la matrice comportementale.
+    func test_pendingSyncGlyph_isRemovedFromTheFlatRow() throws {
+        let code = normalizedCode(try rowSource())
+        XCTAssertFalse(
+            code.contains("arrow.triangle.2.circlepath"),
+            "LentilleConversationRow.swift rend encore le glyphe de synchronisation — le lot 2 " +
+            "le retire de la liste (l'outbox continue de renvoyer, sans affordance de rang)."
+        )
+        XCTAssertFalse(
+            code.contains("hasPendingSync"),
+            "LentilleConversationRow.swift lit encore userState.hasPendingSync — plus rien ne " +
+            "doit en dépendre côté rendu du rang plat."
+        )
+    }
+
+    /// **La pastille chiffrée vient de l'atome partagé**, jamais d'un second
+    /// assemblage local (pendant POSITIF de
+    /// `test_noUnreadBadgeBackground_inAnyRowFile_theChromeLivesInTheSharedAtom`).
+    /// Le portillon `count > 0` vit DANS l'atome — un seul endroit décide si
+    /// la pastille existe.
+    func test_unreadBadge_isTheSharedAtom_gatedByTheUnreadCount() throws {
+        let code = normalizedCode(try rowSource())
+        XCTAssertTrue(
+            code.contains("UnreadCountBadge(count: conversation.userState.unreadCount, isDark: isDark)"),
+            "LentilleConversationRow.swift doit consommer l'atome partagé " +
+            "UnreadCountBadge(count:isDark:) alimenté par conversation.userState.unreadCount — " +
+            "jamais un second assemblage de Text + Capsule + unreadBadgeBackground."
+        )
+    }
+
+    /// **L'effectif se pose en bas à droite du cadre, et JAMAIS sur un
+    /// `.direct`.** Le libellé vient de `MembersCountLabel` (règle plurielle
+    /// du catalogue + suffixe « + » du plafond) — jamais une concaténation
+    /// locale « nombre + + », le défaut que 234i a précisément supprimé.
+    func test_memberCountLine_isTrailing_absentForDirect_andReusesTheSharedLabel() throws {
+        let code = normalizedCode(try rowSource())
+        XCTAssertTrue(
+            code.contains("guard conversation.type != .direct else { return nil }"),
+            "L'effectif doit être décidé par UN seul portillon `conversation.type != .direct` — " +
+            "une conversation directe n'affiche AUCUN effectif (contrat lot 2), et le libellé " +
+            "VoiceOver doit se taire exactement quand l'œil ne voit rien."
+        )
+        XCTAssertTrue(
+            code.contains("MembersCountLabel.text(conversation.memberCount, capped: conversation.memberCountCapped)"),
+            "L'effectif doit passer par MembersCountLabel.text(_:capped:) — la règle plurielle " +
+            "vit dans le catalogue et le « + » du plafond dans ce type, jamais réécrits ici."
+        )
+        XCTAssertEqual(
+            occurrences(of: "MembersCountLabel.text(", in: code), 1,
+            "UN seul site de composition de l'effectif : la ligne visible et le libellé " +
+            "VoiceOver doivent lire la MÊME chaîne (sinon l'oreille et l'œil divergent au " +
+            "premier changement de règle plurielle)."
+        )
+        XCTAssertTrue(
+            code.contains(".frame(maxWidth: .infinity, alignment: .trailing)"),
+            "La ligne d'effectif doit être alignée à DROITE dans le cadre du rang (contrat lot 2)."
+        )
+        XCTAssertFalse(
+            code.contains("memberCountDisplay"),
+            "Le rang ne doit pas retomber sur memberCountDisplay (chiffres nus « 199+ ») — la " +
+            "liste affiche un libellé ACCORDÉ (« 199+ membres »), pas un compteur nu."
+        )
+    }
+
+    // MARK: - Aiguille
+
+    private func rowSource() throws -> String {
+        guard let source = try rowSources().first(where: { $0.name == "LentilleConversationRow.swift" }) else {
+            XCTFail("LentilleConversationRow.swift introuvable parmi les fichiers découverts de Lentille/Row/")
+            return ""
+        }
+        return source.code
     }
 }

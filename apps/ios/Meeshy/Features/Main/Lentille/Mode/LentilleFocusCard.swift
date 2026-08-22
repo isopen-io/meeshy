@@ -144,16 +144,18 @@ struct LentilleFocusCard: View, Equatable {
         //
         // Le critère qui a tranché chaque retrait : « cette action a-t-elle
         // déjà un domicile ? » — catégorie : trois (menu contextuel, panneau,
-        // glisser-déposer sur les chips de section) ; synchronisation : deux
+        // glisser-déposer sur les chips de section), critère ARBITRÉ CADUC le
+        // soir même (la catégorie est d'abord une information, pas une porte :
+        // voir « Encoche CATÉGORIE » plus bas) ; synchronisation : deux
         // appels AUTOMATIQUES (reconnexion socket, retour au premier plan), et
         // la rangée plate en peint déjà le glyphe ; participants : l'avatar de
         // la rangée SOUS la carte ouvre la même feuille et reste touchable
         // (`allowsHitTesting(false)` ci-dessus) ; nom original : feuille
         // d'infos et champ Renommer.
         //
-        // Restent l'ENCOCHE DE MODE — seule capsule bordée de la carte, et
-        // seule raison FONCTIONNELLE de son existence — et, en bas, les
-        // étiquettes avec l'effectif. Les étiquettes ne peuvent PAS partir
+        // Restent l'ENCOCHE DE MODE — première raison FONCTIONNELLE de la
+        // carte, rejointe au coin opposé par l'encoche de CATÉGORIE — et, en
+        // bas, les étiquettes avec l'effectif. Les étiquettes ne peuvent PAS partir
         // sèchement : `activeTagFilter` n'a qu'un seul écrivain dans toute
         // l'app, ce menu. Elles perdent donc leur contour d'accent au lieu de
         // leur place ; leur relogement dans le menu contextuel reste à faire.
@@ -169,6 +171,15 @@ struct LentilleFocusCard: View, Equatable {
             }
             .padding(.horizontal, LentilleMetrics.ModeNotch.right)
             .offset(y: -LentilleMetrics.ModeNotch.top)
+        }
+        // Miroir exact de l'encoche de mode (CSS `top: -9; left: 14`) :
+        // ARBITRAGE du 2026-08-22 (soir) — voir la section « Encoche
+        // CATÉGORIE » plus bas pour le revirement et sa raison. Rien n'est
+        // monté quand la conversation n'appartient à aucune catégorie, donc
+        // l'ancrage reste sans effet sur la très grande majorité des cartes.
+        .overlay(alignment: .topLeading) {
+            categoryNotch
+                .offset(x: LentilleMetrics.ModeNotch.right, y: LentilleMetrics.ModeNotch.top)
         }
     }
 
@@ -419,13 +430,61 @@ struct LentilleFocusCard: View, Equatable {
             .contentShape(Capsule(style: .continuous))
     }
 
-    // MARK: - Encoche CATÉGORIE (haut-gauche, 2026-08-21)
-    // `categoryNotch` a vécu ici jusqu'au 2026-08-22 : une 4e porte vers
-    // « Déplacer vers… », en capsule permanente au coin haut-gauche — visible
-    // même sans catégorie, où elle affichait le mot générique « CATÉGORIE »
-    // bordé d'accent. Retirée : l'action a déjà TROIS domiciles (menu
-    // contextuel de la rangée, panneau d'overlay, glisser-déposer sur les
-    // chips de section).
+    // MARK: - Encoche CATÉGORIE (haut-gauche) — retirée puis ARBITRÉE le 2026-08-22
+    //
+    // Elle a été retirée le matin du 2026-08-22, au motif que déplacer une
+    // conversation avait déjà trois domiciles (menu contextuel, panneau
+    // d'overlay, glisser-déposer sur les chips de section). L'utilisateur a
+    // ARBITRÉ son retour le soir même, et le revirement est assumé : sur la
+    // carte de focus, la catégorie n'est pas d'abord une ACTION, c'est une
+    // INFORMATION que rien d'autre dans la liste ne dit — à quel dossier
+    // appartient la conversation qu'on est en train de lire. Le grief réel du
+    // retrait n'était pas la porte de plus, c'était la capsule PERMANENTE
+    // affichant le mot générique « CATÉGORIE », bordé d'accent, sur les
+    // conversations qui n'en ont aucune.
+    //
+    // Elle revient donc CONDITIONNELLE, et sans mot de remplissage.
+
+    /// Le nom à peindre, ou `nil` s'il n'y a rien d'honnête à dire.
+    ///
+    /// Quatre chemins vers `nil`, dont un qui ne se voit pas : un `sectionId`
+    /// PÉRIMÉ (catégorie supprimée ailleurs pendant que la liste vit sur son
+    /// cache) ne résout aucun nom — c'est par là que le mot générique
+    /// reviendrait si la résolution portait un repli.
+    nonisolated static func categoryName(sectionId: String?, categories: [ConversationSection]) -> String? {
+        guard let sectionId, !sectionId.isEmpty else { return nil }
+        guard let name = categories.first(where: { $0.id == sectionId })?.name else { return nil }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed.uppercased()
+    }
+
+    /// Toucher ⇒ le catalogue des catégories pour DÉPLACER la conversation —
+    /// le catalogue PARTAGÉ du menu contextuel (`ConversationMoveToSectionMenuItems`),
+    /// jamais un second jeu d'items qui divergerait sur la convention `""`.
+    ///
+    /// Le contenu de la carte est `allowsHitTesting(false)` pour laisser la
+    /// rangée réelle touchable dessous ; cette capsule est un OVERLAY posé sur
+    /// la carte, donc hors de cette extinction, et son `.contentShape(Capsule)`
+    /// (dans `notchChip`) borne la zone sensible à la pastille elle-même : le
+    /// tap d'ouverture et l'appui long de la rangée gardent tout le reste.
+    @ViewBuilder
+    private var categoryNotch: some View {
+        if let name = Self.categoryName(sectionId: conversation.userState.sectionId, categories: categories) {
+            Menu {
+                ConversationMoveToSectionMenuItems(
+                    categories: categories,
+                    currentSectionId: conversation.userState.sectionId,
+                    onMove: onMoveToSection
+                )
+            } label: {
+                notchChip(name)
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .accessibilityLabel(name)
+            .accessibilityHint(String(localized: "context.move_to", defaultValue: "Déplacer vers...", bundle: .main))
+        }
+    }
 
     // MARK: - Étiquettes en chips sur le bord BAS (2026-08-21)
 

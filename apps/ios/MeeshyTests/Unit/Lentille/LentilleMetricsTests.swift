@@ -178,9 +178,48 @@ final class LentilleMetricsTests: XCTestCase {
     }
 
     // MARK: - Point de non-lu
+    //
+    // Le token SURVIT au lot 2 (2026-08-22) bien qu'AUCUNE vue iOS ne le
+    // consomme plus (le point de 8 px était le doublon strict de la pastille
+    // chiffrée rétablie sur la ligne de titre — voir
+    // `LentilleRowSourceGuardTests.test_unreadDotToken_isGoneFromEveryRowFile_supersededByTheCountedBadge`).
+    // La peau WEB, elle, le consomme toujours
+    // (`LentilleRow.tsx`, `--lentille-list-unread-dot-size`) : le retirer du
+    // JSON y ferait un point de 0×0 en silence. La parité reste donc due.
 
     func test_unreadDot_size() throws {
         XCTAssertEqual(Double(LentilleMetrics.UnreadDot.size), try tokenNumber("unreadDot", "size"))
+    }
+
+    // MARK: - Bulle d'aperçu (lot 2, 2026-08-22)
+
+    func test_previewBubble_geometry() throws {
+        XCTAssertEqual(Double(LentilleMetrics.PreviewBubble.radius), try tokenNumber("previewBubble", "radius"))
+        XCTAssertEqual(Double(LentilleMetrics.PreviewBubble.paddingVertical), try tokenNumber("previewBubble", "padding", "vertical"))
+        XCTAssertEqual(Double(LentilleMetrics.PreviewBubble.paddingHorizontal), try tokenNumber("previewBubble", "padding", "horizontal"))
+        XCTAssertEqual(Double(LentilleMetrics.PreviewBubble.gap), try tokenNumber("previewBubble", "gap"))
+        XCTAssertEqual(Double(LentilleMetrics.PreviewBubble.strokeWidth), try tokenNumber("previewBubble", "strokeWidth"))
+    }
+
+    /// Les quatre opacités de la bulle sont un BUDGET DE CONTRASTE, pas un
+    /// goût : `LentilleTextMutedContrastAATests
+    /// .test_previewBubble_keepsTheTimestampAboveAA_onEveryGeneratedAccent`
+    /// mesure l'heure (`textMuted`) sur la surface que ces valeurs peignent,
+    /// pour CHAQUE accent que `DynamicColorGenerator` sait produire. Les
+    /// remonter sans re-mesurer fait rougir cette suite-là, pas celle-ci.
+    func test_previewBubble_opacities() throws {
+        XCTAssertEqual(LentilleMetrics.PreviewBubble.fillOpacityLight, try tokenNumber("previewBubble", "fillOpacityLight"))
+        XCTAssertEqual(LentilleMetrics.PreviewBubble.fillOpacityDark, try tokenNumber("previewBubble", "fillOpacityDark"))
+        XCTAssertEqual(LentilleMetrics.PreviewBubble.strokeOpacityLight, try tokenNumber("previewBubble", "strokeOpacityLight"))
+        XCTAssertEqual(LentilleMetrics.PreviewBubble.strokeOpacityDark, try tokenNumber("previewBubble", "strokeOpacityDark"))
+    }
+
+    // MARK: - Effectif (lot 2)
+
+    func test_members() throws {
+        XCTAssertEqual(Double(LentilleMetrics.Members.size), try tokenNumber("members", "size"))
+        let css = try tokenNumber("members", "weight")
+        XCTAssertEqual(LentilleMetrics.Members.weight, expectedWeight(forCSS: css))
     }
 
     // MARK: - Carte de focus

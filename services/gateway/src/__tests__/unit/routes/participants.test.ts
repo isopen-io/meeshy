@@ -656,8 +656,60 @@ describe('registerParticipantsRoutes', () => {
       );
     });
 
-    // ── Cap 199+ du totalCount : l'effectif exact est réservé aux admins ─────
-    it('plafonne pagination.totalCount à 199 avec drapeau pour un lecteur non admin plateforme', async () => {
+    // ── Cap 199+ du totalCount : l'effectif ENTIER va aux lecteurs autorisés ─
+    // `canViewExactMemberCount` : ADMIN/BIGBOSS/MODERATOR plateforme, OU
+    // creator/admin de la conversation. Le plafond se démontre donc sur un
+    // simple USER simple membre — le défaut de `createGetRequest` est MODERATOR.
+    function simpleMemberContext() {
+      return {
+        isAuthenticated: true,
+        isAnonymous: false,
+        userId: VALID_USER_ID,
+        registeredUser: { id: VALID_USER_ID, role: 'USER' },
+      };
+    }
+
+    it('plafonne pagination.totalCount à 199 avec drapeau pour un simple membre', async () => {
+      const route = getRoute(mockFastify, 'GET', '/participants');
+      mockedCanAccess.mockResolvedValue(true);
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: PARTICIPANT_ID,
+        role: 'member',
+        userId: VALID_USER_ID,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.count.mockResolvedValue(500);
+      const reply = createMockReply();
+
+      await route.handler(createGetRequest({ authContext: simpleMemberContext() }), reply);
+
+      const pagination = reply.send.mock.calls[0][0].pagination;
+      expect(pagination.totalCount).toBe(199);
+      expect(pagination.totalCountCapped).toBe(true);
+    });
+
+    it('sert le totalCount ENTIER à l\'admin du GROUPE, sans rôle plateforme', async () => {
+      for (const role of ['creator', 'admin']) {
+        const route = getRoute(mockFastify, 'GET', '/participants');
+        mockedCanAccess.mockResolvedValue(true);
+        mockPrisma.participant.findFirst.mockResolvedValue({
+          id: PARTICIPANT_ID,
+          role,
+          userId: VALID_USER_ID,
+        });
+        mockPrisma.participant.findMany.mockResolvedValue([]);
+        mockPrisma.participant.count.mockResolvedValue(500);
+        const reply = createMockReply();
+
+        await route.handler(createGetRequest({ authContext: simpleMemberContext() }), reply);
+
+        const pagination = reply.send.mock.calls[0][0].pagination;
+        expect(pagination.totalCount).toBe(500);
+        expect(pagination.totalCountCapped).toBeUndefined();
+      }
+    });
+
+    it('sert le totalCount ENTIER à un MODERATOR plateforme', async () => {
       const route = getRoute(mockFastify, 'GET', '/participants');
       mockedCanAccess.mockResolvedValue(true);
       mockPrisma.participant.findMany.mockResolvedValue([]);
@@ -667,8 +719,8 @@ describe('registerParticipantsRoutes', () => {
       await route.handler(createGetRequest(), reply);
 
       const pagination = reply.send.mock.calls[0][0].pagination;
-      expect(pagination.totalCount).toBe(199);
-      expect(pagination.totalCountCapped).toBe(true);
+      expect(pagination.totalCount).toBe(500);
+      expect(pagination.totalCountCapped).toBeUndefined();
     });
 
     it('sert le totalCount exact sans drapeau à un admin plateforme', async () => {

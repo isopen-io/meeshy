@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 @testable import Meeshy
 
@@ -10,6 +11,18 @@ import MeeshyUI
 /// … le rang plat ne bascule plus JAMAIS sur le rouge ») sont peints par
 /// `MeeshyColors.textMuted(isDark:)`. Aucun témoin de RATIO n'existait avant
 /// ce fichier (seulement des gardes de source, cf. `LentilleRowSourceGuardTests`).
+///
+/// **AMENDEMENT lot 2 (2026-08-22).** Le constat « le rang plat se lit
+/// directement sur le fond ambiant » ci-dessous reste vrai du NOM, de
+/// l'effectif et de tout ce qui vit hors de la bulle — mais plus de l'HEURE :
+/// le lot 2 la déplace DANS une bulle d'aperçu teintée à l'accent de la
+/// conversation (`LentillePreviewBubble`). Une surface neuve sous du texte
+/// mesuré ne peut pas rester non mesurée : c'est
+/// `test_previewBubble_keepsTheTimestampAboveAA_onEveryGeneratedAccent`
+/// ci-dessous, exhaustif sur TOUT l'espace d'accents que
+/// `DynamicColorGenerator` sait produire, qui la mesure — et qui a DICTÉ les
+/// opacités de remplissage retenues (`list.previewBubble.fillOpacity*`),
+/// plutôt que l'inverse.
 ///
 /// **Fonds réels re-prouvés (pas déduits).**
 /// `LentilleConversationRow` ne porte AUCUNE carte (« AUCUNE carte (ni
@@ -184,6 +197,114 @@ final class LentilleTextMutedContrastAATests: XCTestCase {
             source.contains("indigo400.opacity(0.5) : indigo500.opacity(0.4)"),
             "MeeshyColors.swift a réintroduit la formule D-18 d'origine (indigo500.opacity(0.4)/" +
             "indigo400.opacity(0.5)) — régression du défaut de contraste corrigé par D-18"
+        )
+    }
+
+    // MARK: - Bulle d'aperçu (lot 2) — l'heure change de fond, donc de mesure
+
+    /// Cotes lues dans le DOMICILE DE VÉRITÉ (`packages/shared/design/lentille-tokens.json`),
+    /// jamais dans la constante Swift : ce test mesure ce que le DESIGN
+    /// promet ; `LentilleMetricsTests` vérifie séparément que le miroir Swift
+    /// porte la même valeur. Faire les deux ici confondrait « le token est
+    /// mauvais » et « le miroir a dérivé ».
+    private func previewBubbleToken(_ path: String...) throws -> Double {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("packages/shared/design/lentille-tokens.json")
+        let data = try Data(contentsOf: url)
+        var node: Any? = try XCTUnwrap(
+            (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["list"] as? [String: Any]
+        )
+        for key in ["previewBubble"] + path {
+            node = (node as? [String: Any])?[key]
+        }
+        return try XCTUnwrap(
+            (node as? NSNumber)?.doubleValue,
+            "chemin absent dans lentille-tokens.json : list.previewBubble.\(path.joined(separator: "."))"
+        )
+    }
+
+    /// TOUT l'espace d'accents que la conversation peut porter :
+    /// `conversation.accentColor` est `colorPalette.primary`, c'est-à-dire
+    /// `DynamicColorGenerator.colorFor(context:).primary` — un mélange
+    /// pondéré (langue × type × thème). Les trois axes sont `CaseIterable` :
+    /// l'espace est donc ÉNUMÉRABLE en entier (10 × 5 × 10), pas
+    /// échantillonné. S'y ajoute le repli `colorForName` (palette de 40
+    /// couleurs, atteinte par hachage) : 240 noms suffisent à la couvrir
+    /// plusieurs fois.
+    private var everyGeneratableAccentHex: [String] {
+        var hexes: [String] = []
+        for language in ConversationContext.ConversationLanguage.allCases {
+            for type in ConversationContext.ConversationType.allCases {
+                for theme in ConversationContext.ConversationTheme.allCases {
+                    let context = ConversationContext(name: "c", type: type, language: language, theme: theme)
+                    hexes.append(DynamicColorGenerator.colorFor(context: context).primary)
+                }
+            }
+        }
+        hexes.append(contentsOf: (0..<240).map { DynamicColorGenerator.colorForName("user-\($0)") })
+        return hexes
+    }
+
+    /// Surface RÉELLE sous l'heure : l'accent translucide composé sur le fond
+    /// ambiant — exactement ce que `LentillePreviewBubble` peint.
+    private func bubbleSurface(accentHex: String, isDark: Bool, fillOpacity: Double) -> Color {
+        WCAGContrast.composite(
+            Color(hex: accentHex).opacity(fillOpacity),
+            over: MeeshyColors.backgroundSecondary(isDark: isDark)
+        )
+    }
+
+    /// **Le budget de contraste EST la loi qui borne les opacités de la
+    /// bulle.** `textMuted` ne dispose que de ~5 % de marge de luminance sur
+    /// le fond clair (4,76:1 contre un seuil de 4,5:1, mesuré ci-dessus) :
+    /// toute teinte assombrissante mange cette marge. Ce témoin mesure
+    /// l'heure sur la bulle pour CHAQUE accent générable, dans les deux
+    /// thèmes — un remplissage remonté d'un cran le fera rougir, et c'est
+    /// exactement le service attendu (le lot 2 a choisi ses opacités EN
+    /// LISANT cette mesure, jamais à l'œil).
+    func test_previewBubble_keepsTheTimestampAboveAA_onEveryGeneratedAccent() throws {
+        let fillLight = try previewBubbleToken("fillOpacityLight")
+        let fillDark = try previewBubbleToken("fillOpacityDark")
+        let accents = everyGeneratableAccentHex
+        XCTAssertGreaterThan(accents.count, 500, "l'espace d'accents doit être ÉNUMÉRÉ, jamais échantillonné (leçon 257)")
+
+        for (isDark, fill) in [(false, fillLight), (true, fillDark)] {
+            var worst = (ratio: Double.greatestFiniteMagnitude, hex: "")
+            let muted = MeeshyColors.textMuted(isDark: isDark)
+            for hex in accents {
+                let surface = bubbleSurface(accentHex: hex, isDark: isDark, fillOpacity: fill)
+                let ratio = WCAGContrast.ratioOfTranslucentForeground(muted, on: surface)
+                if ratio < worst.ratio { worst = (ratio, hex) }
+            }
+            XCTAssertGreaterThanOrEqual(
+                worst.ratio, aa,
+                "heure Lentille sur la bulle d'aperçu, thème \(isDark ? "SOMBRE" : "CLAIR") : " +
+                "l'accent #\(worst.hex) descend à \(WCAGContrast.fmt(worst.ratio)):1, sous AA " +
+                "(\(aa):1). Remède : BAISSER list.previewBubble.fillOpacity\(isDark ? "Dark" : "Light") " +
+                "dans lentille-tokens.json — jamais relâcher ce test, et jamais compenser en " +
+                "éclaircissant textMuted (ce serait défaire D-18)."
+            )
+        }
+    }
+
+    /// Témoin de DISCRIMINATION (leçon 266) : sans lui, le témoin ci-dessus
+    /// resterait vert même si la mesure ne mesurait rien (par ex. si
+    /// `bubbleSurface` renvoyait le fond ambiant nu). Un remplissage
+    /// nettement plus opaque DOIT faire tomber la mesure sous AA.
+    func test_previewBubble_aMuchStrongerFillWouldBreakAA_soTheMeasureDiscriminates() {
+        let muted = MeeshyColors.textMuted(isDark: false)
+        let surface = bubbleSurface(accentHex: "6D28D9", isDark: false, fillOpacity: 0.25)
+        let ratio = WCAGContrast.ratioOfTranslucentForeground(muted, on: surface)
+        XCTAssertLessThan(
+            ratio, aa,
+            "un remplissage à 25 % de l'accent le plus sombre mesure \(WCAGContrast.fmt(ratio)):1 — " +
+            "s'il passait AA, c'est que la mesure ne regarde pas la bulle."
         )
     }
 }

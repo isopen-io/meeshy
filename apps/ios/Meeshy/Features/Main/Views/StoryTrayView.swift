@@ -390,9 +390,13 @@ fileprivate func storyCountDots(count: Int, unviewed: Bool) -> some View {
 /// `createdAt` (cf. `FeedDataResponse.toStoryGroups`), donc `last` =
 /// plus récente. Préfère `thumbnailUrl` (servi optimisé par le
 /// gateway) au full `url` si dispo. Fallback sur l'avatar du profil
-/// pour les stories text-only (pas de media). Helper fileprivate
-/// pour pouvoir s'appeler depuis `MyStoryButton` aussi.
-fileprivate func latestStoryThumbnailURL(_ group: StoryGroup) -> String? {
+/// pour les stories text-only (pas de media). Portée INTERNE (2026-08-22,
+/// lot 3 Lentille) : le rail `StoriesVivantsRail` monté en tête de liste sous
+/// drapeau doit résoudre sa couverture par CE résolveur — un second serait la
+/// troisième écriture de la même cascade (cover composite locale >
+/// `thumbnailUrl` serveur > `url` image > avatar), et la première à diverger.
+/// Garde : `LentilleChromeSourceGuardTests`.
+func latestStoryThumbnailURL(_ group: StoryGroup) -> String? {
     guard let lastStory = group.stories.last else { return group.avatarURL }
     // Local-first: a composite cover rendered at publish (text + drawing + all
     // layers) wins over the server thumbnail (raw bg, no overlays). Synchronous

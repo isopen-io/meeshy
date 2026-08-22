@@ -32,7 +32,7 @@
   {
     "id": "L06",
     "surface": "list",
-    "behaviour": "Le badge rouge 99+ (unreadBadgeBackground) et le timestamp rouge sur non-lu sont supprimés, remplacés par un point accent 8 px et le pont ✦ ; l'heure reste tertiaire au même format (RelativeTimestampText/TimelineView conservé, seul le format change).",
+    "behaviour": "AMENDÉ 2026-08-22 (lot 2, décision produit) — le badge rouge chiffré (unreadBadgeBackground) est RÉTABLI sur la ligne de titre du rang plat, via l'atome partagé UnreadCountBadge, et c'est le point accent 8 px qui est supprimé (doublon strict : même donnée unreadCount > 0). Le timestamp rouge sur non-lu reste supprimé et l'heure reste tertiaire au même format (RelativeTimestampText/TimelineView conservé) — mais elle vit désormais DANS la bulle d'aperçu, en bas à droite, plus sur la ligne de titre.",
     "source": "vol5 §5.3"
   },
   {
@@ -50,7 +50,7 @@
   {
     "id": "L09",
     "surface": "list",
-    "behaviour": "Le glyphe hasPendingSync (outbox) est conservé tel quel : arrow.triangle.2.circlepath en accent à 70 %.",
+    "behaviour": "AMENDÉ 2026-08-22 (lot 2, décision produit) — le glyphe hasPendingSync (arrow.triangle.2.circlepath) est RETIRÉ du rang plat : le renvoi automatique par l'outbox est conservé côté mécanique et l'état reste annoncé à VoiceOver (accessibility.pending_sync), seule l'affordance visuelle de la liste disparaît. Sa place en queue de ligne de titre revient à la pastille de non-lus chiffrée (cf. L06 amendé).",
     "source": "vol5 §5.3"
   },
   {

@@ -267,7 +267,6 @@ public struct MeeshyAvatar: View {
     }
 
     @State private var tapScale: CGFloat = 1.0
-    @State private var moodScale: CGFloat = 1.0
     private let isDark: Bool
     private let resolvedAccent: String
     private let resolvedSecondary: String
@@ -445,49 +444,17 @@ public struct MeeshyAvatar: View {
         return CGSize(width: delta, height: delta)
     }
 
+    /// Délégué à l'atome partagé `MeeshyMoodBadge` : le glyphe, le ressort
+    /// `repeatForever` et sa garde anti-double-animation y vivent une seule
+    /// fois — et, depuis l'extraction, derrière le portillon Reduce Motion
+    /// que cette écriture-ci n'a jamais consulté.
     private func moodBadge(emoji: String) -> some View {
-        // Frame explicite = `context.badgeSize` pour éviter le collapse du
-        // GeometryReader en overlay context (sans frame, le reader peut
-        // s'effondrer à 0×0 selon le contexte parent → emoji invisible).
-        // Le glyphe Text est rendu à `badgeSize × 0.65` ; le frame de la
-        // bounding box vaut badgeSize pour donner au glyph la place
-        // visuelle complète + la hit area du tap mood.
-        GeometryReader { geo in
-            Text(emoji)
-                .font(.system(size: context.badgeSize * 0.65))
-                .frame(width: context.badgeSize, height: context.badgeSize)
-                .scaleEffect(moodScale)
-                .contentShape(Circle())
-                .onTapGesture {
-                    HapticFeedback.light()
-                    let f = geo.frame(in: .global)
-                    onMoodTap?(CGPoint(x: f.midX, y: f.midY))
-                }
-                .onAppear {
-                    // `moodScale == 1.0` = pas de pulse en vol pour cette
-                    // identité de vue. Un `.onAppear` peut re-fire sans
-                    // `.onDisappear` intermédiaire (ScrollView, re-parenting) ;
-                    // relancer un `repeatForever` par-dessus un autre les fait
-                    // COMBINER par le moteur (aucun des deux ne se termine
-                    // jamais) et chaque frame les évalue tous, pour toujours
-                    // (hog device 2026-07-03 : `DefaultCombiningAnimation` à
-                    // ~90 % du thread ViewGraphDisplayLink).
-                    guard context.animatesMoodBadge, moodScale == 1.0 else { return }
-                    withAnimation(
-                        .spring(response: 0.5, dampingFraction: 0.4)
-                        .repeatForever(autoreverses: true)
-                        .delay(Double.random(in: 0...1.5))
-                    ) {
-                        moodScale = 1.18
-                    }
-                }
-                .onDisappear {
-                    withTransaction(Transaction(animation: nil)) {
-                        moodScale = 1.0
-                    }
-                }
-        }
-        .frame(width: context.badgeSize, height: context.badgeSize)
+        MeeshyMoodBadge(
+            emoji: emoji,
+            diameter: context.badgeSize,
+            animates: context.animatesMoodBadge,
+            onTap: onMoodTap
+        )
         .ifTrue(enablePulse) { $0.pulse(intensity: 0.12) }
     }
 
