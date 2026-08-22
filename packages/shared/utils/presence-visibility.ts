@@ -60,14 +60,20 @@ export const applyPresenceVisibility = <
  * Deux différences avec {@link applyPresenceVisibility}, et les deux comptent :
  * `false` au lieu de `null`, et une visibilité **absente** vaut masquée — un id
  * qu'une carte `resolveForTargets` n'a pas rendu n'est pas un id autorisé.
+ *
+ * `lastActiveAt` est OPTIONNEL : certaines portes ne chargent que `isOnline`
+ * (aperçu de membres d'une communauté). Le gate ne fabrique alors pas la clé —
+ * une réponse ne gagne pas un champ parce qu'on l'a filtrée.
  */
 export const applyPresenceVisibilityAsOffline = <
-  T extends { isOnline: boolean | null; lastActiveAt: Date | null },
+  T extends { isOnline: boolean | null; lastActiveAt?: Date | null },
 >(
   profile: T,
   visibility: PresenceVisibility | undefined,
-): Omit<T, 'isOnline' | 'lastActiveAt'> & { isOnline: boolean; lastActiveAt: Date | null } => ({
+): Omit<T, 'isOnline'> & { isOnline: boolean } => ({
   ...profile,
   isOnline: visibility?.showOnline ? profile.isOnline === true : false,
-  lastActiveAt: visibility?.showLastSeenTimestamp ? profile.lastActiveAt : null,
+  ...('lastActiveAt' in profile
+    ? { lastActiveAt: visibility?.showLastSeenTimestamp ? profile.lastActiveAt ?? null : null }
+    : {}),
 });

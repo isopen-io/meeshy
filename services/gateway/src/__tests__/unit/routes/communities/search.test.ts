@@ -5,7 +5,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -153,5 +153,39 @@ describe('GET /communities/search — DB error', () => {
     const res = await app.inject({ method: 'GET', url: '/communities/search?q=test' });
     expect(res.statusCode).toBe(500);
     await app.close();
+  });
+});
+
+// ─── L'aperçu de membres ne sort AUCUNE présence ─────────────────────────────
+//
+// La requête charge `members.take(5)` avec `user.isOnline`, et le `creator`.
+// Le schéma de réponse les déclare en `{ type: 'object' }` NU — sans
+// `properties` — et fast-json-stringify sérialise une telle forme en `{}` :
+// rien de tout cela n'atteint le fil.
+//
+// Ce témoin garde la PROPRIÉTÉ DE CONFIDENTIALITÉ, pas la forme actuelle :
+// `/communities/search` est une porte de DÉCOUVERTE (on y voit des communautés
+// dont on n'est pas membre), donc le jour où quelqu'un déclare les propriétés
+// du schéma pour faire vivre l'aperçu, ce témoin doit tomber — et le forcer à
+// poser le gate STRICT en même temps. Cf. le journal du cycle 84 §4.
+
+describe('GET /communities/search — aucune présence sur l aperçu de membres', () => {
+  it('ne sert ni isOnline ni profil de membre', async () => {
+    const prisma = makePrisma();
+    prisma.community.findMany = jest.fn<any>().mockResolvedValue([{
+      ...mockCommunity,
+      members: [
+        { user: { id: 'usr-member-a', username: 'awa', displayName: 'Awa', avatar: null, isOnline: true } },
+      ],
+    }]);
+    prisma.community.count = jest.fn<any>().mockResolvedValue(1);
+    const { app } = await buildApp({ prisma });
+
+    const res = await app.inject({ method: 'GET', url: '/communities/search?q=test' });
+    const member = res.json().data[0].members[0];
+    await app.close();
+
+    expect(member.user).toBeUndefined();
+    expect(member.isOnline).toBeUndefined();
   });
 });

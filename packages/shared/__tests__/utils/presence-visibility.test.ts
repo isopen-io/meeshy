@@ -175,4 +175,20 @@ describe('applyPresenceVisibilityAsOffline', () => {
     expect(input.isOnline).toBe(true);
     expect(input.lastActiveAt).toEqual(new Date(2000));
   });
+
+  // Certaines portes ne chargent QUE `isOnline` (aperçu de membres d'une
+  // communauté). Le gate ne doit pas leur fabriquer un `lastActiveAt` qu'elles
+  // n'ont jamais servi — sinon la clé apparaît, à `null`, dans une réponse dont
+  // le contrat ne la mentionne pas.
+  it('n invente pas lastActiveAt sur un profil qui n en porte pas', () => {
+    const out = applyPresenceVisibilityAsOffline({ id: 'u5', isOnline: true }, undefined);
+    expect(out.isOnline).toBe(false);
+    expect('lastActiveAt' in out).toBe(false);
+  });
+
+  it('masque lastActiveAt quand le profil en porte un, même absent de la visibilité', () => {
+    const out = applyPresenceVisibilityAsOffline({ id: 'u6', isOnline: true, lastActiveAt: new Date(3000) }, undefined);
+    expect('lastActiveAt' in out).toBe(true);
+    expect(out.lastActiveAt).toBeNull();
+  });
 });

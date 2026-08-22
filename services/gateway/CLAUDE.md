@@ -415,6 +415,31 @@ note de `storyAuthorSelect` listait trois audiences gatées et omettait `PUBLIC`
 la seule qui ne l'est pas. Fausse nulle part, incomplète là où l'incomplétude
 valait autorisation — c'est elle, pas le code, qui a tenu la porte ouverte.
 
+**Les deux régimes ont des défauts OPPOSÉS sur une carte incomplète, et les deux
+ont raison.** Strict (`resolveForTargets`) : un id non rendu vaut MASQUÉ — le
+résolveur rend une entrée par id, donc un manquant est une anomalie, et une
+porte de confidentialité refuse par défaut. Prefs-only (`resolvePrefsOnly`) : un
+id manquant est NORMAL — les participants anonymes n'ont pas de `userId`, donc
+pas de préférences, et restent visibles ; seule une préférence **explicitement**
+négative masque, d'où l'idiome `vis.get(id)?.showOnline === false ? false : x`
+(`participants.ts`, la référence). Ne jamais « simplifier » l'un vers l'autre.
+
+**Un audit qui liste des `select:` ne liste pas des fuites.** Entre la requête et
+le fil il y a un sérialiseur : au cycle 84, deux des trois portes examinées ne
+servaient RIEN — `POST /conversations/:id/invite` renvoie `member` quand son
+schéma déclare `membership` (la clé du handler supprimée, celle du schéma jamais
+posée), et `GET /communities/search` déclare `creator`/`members` en
+`{ type: 'object' }` NU, que fast-json-stringify sérialise en `{}`. Avant de
+qualifier une fuite, **traverser la sérialisation** (patron :
+`friend-requests-pagination.test.ts`, `conversation-invite-serialization.test.ts`).
+
+**Et une non-fuite ACCIDENTELLE se garde par un témoin.** Trois fois déjà, la
+donnée s'est arrêtée sur une omission de schéma que rien ne nomme
+« confidentialité ». Chacune est un piège armé : la première personne qui aligne
+les noms pour faire vivre la charge utile ouvre la fuite sans qu'un témoin
+tombe. Poser le témoin qui la forcera à voir ce qu'elle ouvre — il garde une
+PORTE, pas un bug.
+
 ### Une règle appliquée à l'ÉCRITURE n'est pas appliquée
 
 `ContactDirectoryService.match()` filtrait le blocage bidirectionnel, avec le
