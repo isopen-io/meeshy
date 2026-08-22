@@ -13,7 +13,7 @@ export const AnalyticsMessageTypesQuerySchema = z.object({
 export type AnalyticsMessageTypesQuery = z.infer<typeof AnalyticsMessageTypesQuerySchema>;
 
 export const AnalyticsLanguageDistQuerySchema = z.object({
-  limit: z.string().transform(Number).prefault('5'),
+  limit: z.string().transform(Number).prefault('5').pipe(z.number().int().min(1).max(100)),
 });
 
 export type AnalyticsLanguageDistQuery = z.infer<typeof AnalyticsLanguageDistQuerySchema>;
@@ -91,7 +91,7 @@ export type UpdateBroadcastBody = z.infer<typeof UpdateBroadcastBodySchema>;
 
 export const InvitationsListQuerySchema = z.object({
   offset: z.string().transform(Number).prefault('0'),
-  limit: z.string().transform(Number).pipe(z.number().max(100)).prefault('20'),
+  limit: z.string().transform(Number).pipe(z.number().int().min(1).max(100)).prefault('20'),
   status: z.string().optional(),
   communityId: mongoId.optional(),
   senderId: mongoId.optional(),
@@ -117,7 +117,7 @@ export type UpdateInvitationBody = z.infer<typeof UpdateInvitationBodySchema>;
 
 export const LanguageStatsQuerySchema = z.object({
   period: z.enum(['7d', '30d', '90d']).default('30d'),
-  limit: z.string().transform(Number).prefault('10'),
+  limit: z.string().transform(Number).prefault('10').pipe(z.number().int().min(1).max(100)),
 });
 
 export type LanguageStatsQuery = z.infer<typeof LanguageStatsQuerySchema>;
@@ -130,7 +130,7 @@ export const LanguageTimelineQuerySchema = z.object({
 export type LanguageTimelineQuery = z.infer<typeof LanguageTimelineQuerySchema>;
 
 export const TranslationAccuracyQuerySchema = z.object({
-  limit: z.string().transform(Number).prefault('10'),
+  limit: z.string().transform(Number).prefault('10').pipe(z.number().int().min(1).max(100)),
 });
 
 export type TranslationAccuracyQuery = z.infer<typeof TranslationAccuracyQuerySchema>;
