@@ -17,6 +17,8 @@ import me.meeshy.sdk.model.ConversationStatsProjection
 import me.meeshy.sdk.model.DailyActivityEntry
 import me.meeshy.sdk.model.LanguageShare
 import me.meeshy.sdk.model.ParticipantShare
+import me.meeshy.sdk.model.SentimentBreakdown
+import me.meeshy.sdk.model.SentimentBreakdownProjection
 import me.meeshy.sdk.net.NetworkResult
 import java.time.LocalDate
 import javax.inject.Inject
@@ -42,6 +44,13 @@ data class ConversationStatsUiState(
     val languages: List<LanguageShare> = emptyList(),
     val hourly: List<Int> = emptyList(),
     val dailyActivity: List<DailyActivityEntry> = emptyList(),
+    /**
+     * The on-device three-way sentiment split of the loaded messages, or null when
+     * no text message could be scored. Computed client-side (like iOS) from the
+     * conversation's own content, so it is independent of the network stats fetch
+     * and survives a fetch failure.
+     */
+    val sentiment: SentimentBreakdown? = null,
 ) {
     val isLoading: Boolean get() = phase == StatsPhase.Loading
     val hasError: Boolean get() = phase == StatsPhase.Error
@@ -67,18 +76,21 @@ class ConversationStatsViewModel @Inject constructor(
     val state: StateFlow<ConversationStatsUiState> = _state.asStateFlow()
 
     /**
-     * Bind to a conversation and load its stats. Idempotent for an id already
-     * loaded (or in flight); a prior [StatsPhase.Error] for the same id re-tries.
+     * Bind to a conversation and load its stats. [messageContents] are the loaded
+     * message texts, scored on-device into the sentiment split (a pure, fast pass —
+     * no network). Idempotent for an id already loaded (or in flight); a prior
+     * [StatsPhase.Error] for the same id re-tries and re-scores.
      */
-    fun load(conversationId: String) {
+    fun load(conversationId: String, messageContents: List<String> = emptyList()) {
         val current = _state.value
         if (current.conversationId == conversationId && current.phase != StatsPhase.Error) return
-        fetch(conversationId)
+        fetch(conversationId, SentimentBreakdownProjection.breakdown(messageContents).takeIf { it.hasContent })
     }
 
-    /** Re-fetch the current conversation after a failure. */
+    /** Re-fetch the current conversation after a failure, keeping the already-scored sentiment. */
     fun retry() {
-        _state.value.conversationId?.let(::fetch)
+        val current = _state.value
+        current.conversationId?.let { fetch(it, current.sentiment) }
     }
 
     /** Switch the activity window. Pure — no refetch, the [ConversationStatsUiState.activity] getter reflects it. */
@@ -87,11 +99,12 @@ class ConversationStatsViewModel @Inject constructor(
         _state.update { it.copy(period = period) }
     }
 
-    private fun fetch(conversationId: String) {
+    private fun fetch(conversationId: String, sentiment: SentimentBreakdown?) {
         _state.value = ConversationStatsUiState(
             conversationId = conversationId,
             phase = StatsPhase.Loading,
             period = _state.value.period,
+            sentiment = sentiment,
         )
         viewModelScope.launch {
             when (val result = repository.fetchStats(conversationId)) {

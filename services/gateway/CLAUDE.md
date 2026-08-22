@@ -463,10 +463,13 @@ devient une **coquille de ré-export**.
 export { userRoutes } from './users/index';
 ```
 
-`routes/users.ts`, `routes/voice.ts` et `routes/attachments.ts` la portent.
-`routes/communities.ts` ne l'a jamais reçue : son répertoire (~1 900 lignes,
-gates de présence compris) est injoignable, et le legacy sert seul la production
-— où trois routes servaient `isOnline` brut (cycle 85-bis).
+`routes/users.ts`, `routes/voice.ts` et `routes/attachments.ts` la portaient.
+`routes/communities.ts` ne l'a jamais reçue, et son répertoire (~1 900 lignes,
+gates de présence compris) est resté injoignable de sa création au cycle 86-ter, qui
+l'a consolidé — les quatre routes que seul le legacy portait (`/mine`,
+`/:id/join`, `/:id/leave`, `/:id/invite`) portées dans le répertoire, puis le
+fichier basculé en coquille. **Les quatre scissions du dépôt sont désormais
+branchées, et `KNOWN_UNREACHABLE` doit rester vide.**
 
 **Une scission inachevée ne ressemble à rien** : le répertoire compile, ses
 suites passent, sa couverture monte, aucun avertissement ne se lève. Le seul
@@ -474,6 +477,38 @@ symptôme est un correctif sans effet — et l'effet d'un correctif de
 confidentialité, personne ne le mesure. `module-shadowing.test.ts` garde les
 paires par deux voies (balayage des coquilles, et routes RÉELLEMENT
 enregistrées) ; toute nouvelle paire non-coquille le fait tomber.
+
+Coût mesuré avant consolidation (cycle 86-ter) : **trois cycles de correctifs
+atterris dans le répertoire sans jamais atteindre la production**. Le cycle 84 y
+a diagnostiqué, corrigé et CLOS « la recherche de communautés iOS était morte » ;
+le fichier vivant portait encore le défaut mot pour mot. Avec lui, en
+production : les noms de communauté non assainis, `memberCount` correct mais
+`creator`/`members[]` vidés en `{}`, et `POST /communities/:id/conversations/:conversationId`
+— qu'iOS appelle — en `404`.
+
+### Corollaire : un témoin s'importe par le chemin de la PRODUCTION
+
+Six des huit suites communauté importaient `routes/communities/search` ou
+`routes/communities/index` — des chemins explicites vers le module mort. Une
+septième visait bien le spécificateur de production mais mockait
+`@meeshy/shared/types/api-schemas` en `{ additionalProperties: true }`, ce qui
+désarme fast-json-stringify, soit exactement la couche où vivaient deux des
+défauts.
+
+**Copier le spécificateur depuis `route-registration.ts`, ne pas le composer à
+la main** — et ne pas mocker les schémas partagés dans un témoin de
+sérialisation. Patron : `communities-live-wiring.test.ts`, qui n'assert que ce
+que deux modules concurrents ne partagent pas.
+
+Et **poser au moins un témoin de SURFACE** : « cette route est-elle
+enregistrée ? ». Aucun ne le demandait, et un `404` sur une route qu'un client
+appelle depuis toujours n'était vu par personne.
+
+Corollaire de manœuvre : **basculer vers la jumelle exige de porter d'abord ce
+que l'exemplaire VIVANT avait de plus.** Le répertoire ignorait
+`flattenCommunityCounts` et quatre routes ; basculer sans les porter aurait
+servi `memberCount: 0` partout. Les témoins qui PASSENT déjà avant la bascule
+valent autant que ceux qui échouent — on les écrit dans le même lot.
 
 ## Cette entité a-t-elle une JUMELLE ?
 
@@ -499,6 +534,14 @@ l'événement émis. Et quand on change la méthode Prisma qu'un handler appelle
 **repointer les témoins d'erreur** : un `mockRejectedValue` sur une méthode que
 la route n'appelle plus passe au vert par le chemin nominal en croyant tenir le
 chemin d'erreur.
+
+**Le jumeau, côté LECTURE : un témoin de lecture assert sur ce que la réponse
+DIT.** `conversations/stats.test.ts` portait cinq témoins verts — un 404, un
+403, un 500, deux fois `statusCode === 200` avec `body.success === true` — sur
+une route qui servait `{}` (cycle 86). Aucun ne nommait un champ de `data`.
+Les deux moitiés tiennent en une phrase : **`statusCode` n'est pas une
+observation de la charge utile**, et seul un témoin qui traverse le sérialiseur
+(`app.inject()`, jamais un double du handler) peut voir ce qui en sort.
 
 **Une PANNE peut tenir la porte, et la réparer l'ouvre.**
 `GET /communities/search` chargeait `isOnline` sur ses membres sans le gater ;
@@ -536,6 +579,71 @@ Corollaire : **un champ que le schéma déclare et que la requête ne charge pas
 est la même dérive, dans l'autre sens.** `PATCH /conversations/:id` déclarait
 `participants[].userId` sans jamais le `select` — la réponse sortait sans, et
 sans lui aucune carte de visibilité de présence n'est adressable.
+
+### « Objet libre » ≠ « pas de déclaration » — c'est `additionalProperties`
+
+La seule défense honnête de `{ type: 'object' }` est *« mais c'est une carte,
+je ne connais pas ses clés »*. Elle est parfois vraie — et la déclaration qui
+la dit s'appelle `additionalProperties`, pas le silence :
+
+```ts
+hourlyDistribution: { type: 'object', additionalProperties: { type: 'number' } }
+```
+
+L'une laisse passer les clés inconnues, l'autre les supprime toutes. La
+question à poser à chaque objet de réponse est binaire : **carte à clés
+inconnues ⇒ `additionalProperties` ; sinon ⇒ `properties`.** Le silence n'est
+jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte à
+côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
+tableaux — cycle 86.)
+
+### Le balayage a été fait : 38 sites, et il reste 31
+
+Le cycle 86 a outillé le balayage du gateway. Un `grep` ne suffit pas — il faut
+résoudre l'objet littéral englobant (a-t-il `properties` ?), calculer la portée
+des clés `response:` (un schéma de REQUÊTE sans `properties` est permissif, pas
+destructeur), et **dépouiller les commentaires**, sans quoi on retrouve les
+commentaires des cycles précédents au lieu des défauts.
+
+Les deux sites de niveau `data:` (charge utile ENTIÈRE) sont corrigés ;
+**l'inventaire trié des 31 restants est dans
+`tasks/realtime-sync-audit-2026-08-22-cycle87.md` §6** (le tri du cycle 86 bis
+était FAUX — voir juste en dessous). Les plus graves restants sont les 4 `user:`
+et 1 `sender:`, qui touchent la famille de la présence : **les traiter comme le
+cycle 84 bis a traité le sien** — déclarer le schéma ET poser le gate dans le
+même lot, sans quoi la réparation publie la fuite (§ Une PANNE peut tenir la
+porte). Et `communities/core.ts:524` vit dans le module OMBRÉ : vérifier
+d'abord qui enregistre la route.
+
+### Un tri est une AFFIRMATION, et se vérifie comme telle
+
+Le cycle 86 bis a publié une priorité sur quatorze sites groupés sous
+l'étiquette `items`, en les annonçant « listes vides, gravité maximale ». Le tri
+était faux, par un artefact d'extraction : sur
+`data: { type: 'array', items: { type: 'object' } }`, l'objet nu est porté par
+`items` — le mot-clé JSON Schema — et non par `data`. **Trois charges utiles
+ENTIÈRES se sont donc rangées sous une étiquette de détail**, dans le même
+document qui affirmait n'en avoir laissé que deux ; les onze autres sont des
+champs `details`/`errors` de réponses 400 **sans aucun producteur** (gravité
+documentaire — les retirer plutôt que les déclarer).
+
+Corrigé au cycle 87, après ouverture de chacun des quatorze. **Ne jamais
+prioriser un inventaire sur la foi d'une clé extraite par script sans avoir
+ouvert les sites.**
+
+### La liste vide est plus dangereuse que la réponse vide
+
+Une charge utile `data:` sérialisée en `{}` se voit — l'écran est blanc,
+quelqu'un le signale. Une LISTE de la bonne longueur, à la pagination juste,
+dont chaque ligne est `{}`, ressemble à un défaut d'affichage : elle envoie
+chercher du mauvais côté et survit plus longtemps. Trois listes
+d'administration (`/admin/messages`, `/admin/communities`, `/admin/posts`,
+toutes lues par le web) l'ont fait jusqu'au cycle 87.
+
+Corollaire de harnais : **un double Prisma qui rend `[]` rend tout témoin de
+contenu trivialement vert.** Rien ne distingue « la route sert ses lignes » de
+« la route n'a aucune ligne » tant que le double est vide — c'est ce qui a
+laissé ces trois listes couvertes et cassées.
 
 ### Une règle appliquée à l'ÉCRITURE n'est pas appliquée
 

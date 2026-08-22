@@ -86,9 +86,9 @@ jest.mock('@/hooks/use-auth', () => ({
 }));
 // Captured so tests can drive the component's own onError callback directly
 // (Vague 149) — the mock previously ignored the config object entirely.
-let capturedWebRTCConfig: { onError?: (error: Error) => void } = {};
+let capturedWebRTCConfig: { onError?: (error: Error) => void; onConnected?: () => void } = {};
 jest.mock('@/hooks/use-webrtc-p2p', () => ({
-  useWebRTCP2P: (config: { onError?: (error: Error) => void }) => {
+  useWebRTCP2P: (config: { onError?: (error: Error) => void; onConnected?: () => void }) => {
     capturedWebRTCConfig = config;
     return webrtc;
   },
@@ -1526,6 +1526,17 @@ describe('VideoCallInterface (container)', () => {
       act(() => capturedWebRTCConfig.onError?.(new Error('SOME_UNKNOWN_CODE')));
 
       expect(toast.error).toHaveBeenCalledWith('toasts.connectionError: SOME_UNKNOWN_CODE');
+    });
+  });
+
+  describe('handleWebRTCConnected — the call-connected success toast is translated, not hardcoded English (Vague 153)', () => {
+    it('shows a translated toast when the hook reports the call connected', () => {
+      render(<VideoCallInterface callId="call1" />);
+
+      act(() => capturedWebRTCConfig.onConnected?.());
+
+      expect(toast.success).toHaveBeenCalledWith('toasts.connected');
+      expect(toast.success).not.toHaveBeenCalledWith('Connected!');
     });
   });
 });

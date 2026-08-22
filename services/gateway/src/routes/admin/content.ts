@@ -15,6 +15,112 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 
+/**
+ * Lignes des deux listes d'administration de ce fichier.
+ *
+ * Elles étaient déclarées `data: { type: 'array', items: { type: 'object' } }`.
+ * Sans `properties`, fast-json-stringify applique `additionalProperties: false`
+ * par défaut et sérialise CHAQUE élément en `{}` — la liste sortait donc de la
+ * bonne longueur, avec sa pagination juste, et toutes ses lignes vides. C'est
+ * la forme la plus trompeuse de ce défaut : une réponse valide en apparence.
+ *
+ * Les deux tableaux de bord web qui les lisent (`admin.service.ts`) rendaient
+ * donc des rangées sans contenu.
+ *
+ * Source de vérité de la forme : le `select` Prisma de chaque handler, dont la
+ * valeur part telle quelle dans `sendPaginatedSuccess`.
+ */
+const adminMessageRowSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    content: { type: 'string', nullable: true },
+    messageType: { type: 'string', nullable: true },
+    originalLanguage: { type: 'string', nullable: true },
+    isEdited: { type: 'boolean', nullable: true },
+    createdAt: { type: 'string', format: 'date-time' },
+    sender: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        id: { type: 'string' },
+        userId: { type: 'string', nullable: true },
+        displayName: { type: 'string', nullable: true },
+        avatar: { type: 'string', nullable: true },
+        type: { type: 'string', nullable: true },
+        language: { type: 'string', nullable: true },
+        user: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            id: { type: 'string' },
+            username: { type: 'string', nullable: true },
+            displayName: { type: 'string', nullable: true },
+            firstName: { type: 'string', nullable: true },
+            lastName: { type: 'string', nullable: true },
+            avatar: { type: 'string', nullable: true }
+          }
+        }
+      }
+    },
+    conversation: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        id: { type: 'string' },
+        identifier: { type: 'string', nullable: true },
+        title: { type: 'string', nullable: true },
+        type: { type: 'string', nullable: true }
+      }
+    },
+    attachments: {
+      type: 'array',
+      items: {
+        type: 'object',
+        // `attachmentMediaSelect` porte une quinzaine de champs et évolue avec
+        // le pipeline média. Une pièce jointe est ici une donnée d'inspection,
+        // pas un contrat client : `additionalProperties: true` la laisse
+        // passer entière plutôt que de figer une copie qui dériverait.
+        additionalProperties: true
+      }
+    },
+    _count: {
+      type: 'object',
+      properties: { replies: { type: 'number' } }
+    }
+  }
+} as const;
+
+const adminCommunityRowSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    identifier: { type: 'string', nullable: true },
+    name: { type: 'string', nullable: true },
+    description: { type: 'string', nullable: true },
+    avatar: { type: 'string', nullable: true },
+    isPrivate: { type: 'boolean', nullable: true },
+    createdAt: { type: 'string', format: 'date-time' },
+    creator: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        id: { type: 'string' },
+        username: { type: 'string', nullable: true },
+        displayName: { type: 'string', nullable: true },
+        avatar: { type: 'string', nullable: true }
+      }
+    },
+    _count: {
+      type: 'object',
+      properties: {
+        members: { type: 'number' },
+        Conversation: { type: 'number' }
+      }
+    }
+  }
+} as const;
+
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
@@ -53,7 +159,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'array', items: { type: 'object' } },
+            data: { type: 'array', items: adminMessageRowSchema },
             pagination: {
               type: 'object',
               properties: {
@@ -203,7 +309,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'array', items: { type: 'object' } },
+            data: { type: 'array', items: adminCommunityRowSchema },
             pagination: {
               type: 'object',
               properties: {

@@ -114,11 +114,20 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     toast.error(message);
   }, [t]);
 
+  // Stable success handler, same forwarding contract as handleWebRTCError
+  // above (Vague 153) — the hook has no i18n access, so it forwards the
+  // call-connected signal here instead of toasting a hardcoded English
+  // 'Connected!' regardless of locale.
+  const handleWebRTCConnected = useCallback(() => {
+    toast.success(t('toasts.connected'));
+  }, [t]);
+
   // Initialize WebRTC
   const { initializeLocalStream, createOffer, connectionState, isReconnecting, enableVideo, disableVideo, switchCamera, applyQualityTierToPeer, removeParticipant } = useWebRTCP2P({
     callId,
     userId: user?.id,
     onError: handleWebRTCError,
+    onConnected: handleWebRTCConnected,
   });
 
   // Initialize audio effects

@@ -5,20 +5,20 @@
  * Node résout alors LOAD_AS_FILE avant LOAD_AS_DIRECTORY : c'est `X.ts` qui
  * gagne, et `X/index.ts` n'est jamais chargé — sauf si `X.ts` le ré-exporte.
  *
- * Trois scissions du dépôt (`users`, `voice`, `attachments`) portent cette
- * coquille de ré-export et sont donc bien branchées. `communities` ne l'a jamais
- * reçue : son répertoire — `core.ts`, `members.ts`, `settings.ts`, `search.ts` —
- * est INJOIGNABLE, et le legacy `communities.ts` sert seul la production.
+ * Les QUATRE scissions du dépôt (`users`, `voice`, `attachments`, et
+ * `communities` depuis le cycle 86-ter) portent désormais cette coquille de
+ * ré-export. Aucun répertoire n'est plus injoignable.
  *
- * Ce témoin ne « répare » pas l'ombrage : basculer `communities.ts` en coquille
- * supprimerait quatre routes de production absentes du répertoire
- * (`/communities/mine`, `/:id/join`, `/:id/leave`, `/:id/invite`). C'est une
- * décision de consolidation, pas un correctif de maintenance.
+ * `communities` était la seule à ne l'avoir jamais reçue : son répertoire est
+ * resté code mort au sens strict — il compilait, ses suites passaient, il ne
+ * s'exécutait jamais — et trois cycles de correctifs y ont atterri sans
+ * atteindre la production. La consolidation a d'abord porté dans le répertoire
+ * les quatre routes que seul le legacy avait (`/communities/mine`, `/:id/join`,
+ * `/:id/leave`, `/:id/invite`), puis basculé le fichier en coquille.
  *
- * Ce qu'il fait, c'est empêcher le piège de se réarmer en silence :
- *  - une NOUVELLE scission sans coquille le fait tomber ;
- *  - la consolidation de `communities` le fait tomber aussi, et oblige alors à
- *    constater ce qu'on branche et ce qu'on retire.
+ * Ce témoin empêche le piège de se réarmer : une NOUVELLE scission sans
+ * coquille le fait tomber, et le second bloc atteste par le COMPORTEMENT — les
+ * routes réellement enregistrées — que la bascule n'a rien retiré.
  *
  * @jest-environment node
  */
@@ -50,9 +50,10 @@ const isReExportShim = (name: string): boolean =>
     readFileSync(join(ROUTES_DIR, `${name}.ts`), 'utf8'),
   );
 
-// Répertoires que le fichier voisin N'ATTEINT PAS. Toute entrée ici est du code
-// mort au sens strict : il compile, ses tests passent, et il ne s'exécute jamais.
-const KNOWN_UNREACHABLE = ['communities'];
+// Répertoires que le fichier voisin N'ATTEINT PAS. Toute entrée ici serait du
+// code mort au sens strict : il compile, ses tests passent, et il ne s'exécute
+// jamais. La liste est VIDE depuis le cycle 86-ter, et doit le rester.
+const KNOWN_UNREACHABLE: string[] = [];
 
 describe('ombrage fichier/répertoire dans routes/', () => {
   it('n’a pas d’autre répertoire injoignable que ceux déjà connus', () => {
@@ -71,9 +72,10 @@ describe('ombrage fichier/répertoire dans routes/', () => {
 });
 
 // La preuve par le comportement, et non par la lecture des fichiers : le module
-// effectivement chargé sous le nom `'../../../routes/communities'` enregistre
-// les routes du LEGACY, pas celles du répertoire.
-describe('c’est bien routes/communities.ts qui est servi', () => {
+// effectivement chargé sous le nom `'../../../routes/communities'` — le
+// spécificateur exact qu'emploie `route-registration.ts` — est le RÉPERTOIRE,
+// et il porte l'union des deux surfaces.
+describe('c’est bien routes/communities/ qui est servi', () => {
   const registeredRoutes = async (): Promise<Set<string>> => {
     const Fastify = (await import('fastify')).default;
     const { communityRoutes } = await import('../../../routes/communities');
@@ -92,7 +94,7 @@ describe('c’est bien routes/communities.ts qui est servi', () => {
     return seen;
   };
 
-  it('enregistre les routes que seul le legacy porte', async () => {
+  it('garde les quatre routes que seul le legacy portait', async () => {
     const routes = await registeredRoutes();
 
     expect(routes.has('GET /communities/mine')).toBe(true);
@@ -101,9 +103,9 @@ describe('c’est bien routes/communities.ts qui est servi', () => {
     expect(routes.has('POST /communities/:id/invite')).toBe(true);
   });
 
-  it('n’enregistre AUCUNE route que seul le répertoire porte', async () => {
+  it('branche la route que seul le répertoire portait — iOS l’appelle', async () => {
     const routes = await registeredRoutes();
 
-    expect(routes.has('POST /communities/:id/conversations/:conversationId')).toBe(false);
+    expect(routes.has('POST /communities/:id/conversations/:conversationId')).toBe(true);
   });
 });

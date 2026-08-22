@@ -1,11 +1,16 @@
 /**
  * Visibilité de la présence des membres rendus dans un APERÇU de communauté.
  *
- * Ce module est délibérément un SIBLING de `routes/communities.ts` et de
- * `routes/communities/search.ts` : les deux servent la même recherche, l'un en
- * production et l'autre non (cf. `module-shadowing.test.ts`), et la loi de
- * présence doit rester la MÊME des deux côtés — sans quoi la consolidation à
- * venir devra arbitrer entre deux comportements au lieu de choisir un fichier.
+ * Ce module a été hoisté en SIBLING de `routes/communities.ts` et de
+ * `routes/communities/search.ts` du temps où les deux servaient la même
+ * recherche, l'un en production et l'autre non : la loi de présence devait
+ * rester la MÊME des deux côtés, pour que la consolidation à venir ait à
+ * choisir un fichier et non à arbitrer entre deux comportements.
+ *
+ * Cette consolidation a eu lieu (cycle 86-ter) : `routes/communities.ts` est
+ * une coquille de ré-export, et `routes/communities/search.ts` est l'unique
+ * appelant. Le module reste ici — le déplacer serait de la churn pure — mais sa
+ * raison d'être est désormais la mutualisation ordinaire, plus l'ombrage.
  */
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';

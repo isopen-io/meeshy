@@ -10249,3 +10249,104 @@ plusieurs `toast.error(error.message)` sur du texte anglais codé en dur, jamais
   fuite `createPeerConnection()` (web, `webrtc-service.ts:369`) au-delà du seul site déjà patché
   (Vague 148) — repéré par l'audit de cette vague comme candidat pour une prochaine vague ; kick
   modérateur sans vérification du rôle CONVERSATION de la cible (Vague 149, décision produit).
+
+## Vague 152 — `createPeerConnection()` fermait la fuite de RTCPeerConnection qu'il documentait depuis deux vagues (web) (2026-08-21)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend
+explicitement l'item laissé en « Non fait volontairement » par la Vague 148 : « le défaut sous-jacent
+dans `createPeerConnection` lui-même reste ouvert pour tout autre chemin qui pourrait le
+déclencher ».
+
+- **Root cause** : `createPeerConnection(participantId)` (`webrtc-service.ts:348`) réinitialise l'état
+  de perfect-negotiation puis assigne inconditionnellement `this.peerConnection = new
+  RTCPeerConnection(...)`. Un `WebRTCService` peut être réutilisé à travers un cycle
+  participant-quitte→rejoint SANS `close()` intermédiaire — c'est le cache de service
+  par-participant de `use-webrtc-p2p.ts`, et c'est exactement pourquoi le bloc juste au-dessus
+  réinitialise déjà `autoNegotiate`/`makingOffer`/etc. Mais si une `RTCPeerConnection` PRÉCÉDENTE
+  pend encore sur l'instance (rejoin après un échec géré ailleurs que par `close()` — dont, depuis
+  la Vague 148, `handleAnswer` sur échec), elle est purement et simplement écrasée : jamais fermée,
+  jamais désenregistrée. Elle reste vivante côté navigateur (transports ICE/DTLS ouverts) pour la
+  durée de l'onglet — une `RTCPeerConnection` orpheline par cycle rejoin, sur un chemin déjà identifié
+  comme emprunté deux vagues de suite (Vague 146 : historique d'appel + lien partagé ; Vague 148 :
+  reprise après `handleAnswer` en échec).
+- **Précédent existant dans le même fichier** : `close()` (ligne ~1287, teardown complet) ferme
+  déjà `this.peerConnection` avant de le mettre à `null` — le même geste, absent uniquement du
+  chemin de réutilisation partielle.
+- **Fix** : un `if (this.peerConnection) { this.peerConnection.close(); }` ajouté juste avant la
+  construction de la nouvelle instance, symétrique au geste de `close()`. Aucun changement de
+  signature, aucun impact sur le premier appel d'un cycle de vie (`this.peerConnection` est `null`
+  à ce moment, la garde est un no-op).
+- **Tests** (TDD, RED confirmé — `pc.close` reçu 0 fois avant le fix) : 1 cas neuf dans
+  `webrtc-service.coverage.test.ts`, describe « createPeerConnection — reused without close
+  (participant rejoin) » (déjà porteur du test Vague 148/pré-existant qui ne couvrait que la remise
+  à zéro des drapeaux, jamais la fermeture) — « closes the previous RTCPeerConnection before
+  overwriting it with a new one » : deux appels successifs à `createPeerConnection` sur la même
+  instance, assertion que la PREMIÈRE connexion est fermée (`close` appelé une fois) et que la
+  SECONDE ne l'est pas. Sweep web `--testPathPatterns="[Cc]all|webrtc"` : **58 suites / 782 tests**
+  verts (+1 net vs Vague 149, 0 régression). `npx tsc --noEmit` (apps/web) : **0 erreur ajoutée** —
+  1278 erreurs `error TS` préexistantes, aucune sur `webrtc-service.ts` (les 23 erreurs listées sur
+  `webrtc-service.coverage.test.ts` sont un défaut de typage de mocks préexistant, sur des lignes
+  distinctes du test ajouté). `eslint` non exécuté : même échec environnemental documenté en Vague
+  146/147/148/149 (`react/display-name` : `contextOrFilename.getFilename is not a function`,
+  reproductible sur TOUT fichier du dépôt), délégué au gate CI `Quality (bun)`.
+- **Non fait volontairement** : `close()` (teardown complet, ligne ~1287) reste un site de code
+  dupliqué avec le nouveau garde-fou — les deux ferment `this.peerConnection` par des chemins
+  distincts (l'un vide aussi `localStream`/état complet, l'autre prépare une réutilisation) ; les
+  fusionner en un seul point d'ancrage `closePeerConnection()` privé serait un refactor propre mais
+  hors périmètre d'un fix single-concern. Reconduits (inchangés) : dead code / god-object
+  `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; jumeau iOS de
+  Vague 146 (`BubbleCallNoticeView.swift`/`CallSummaryDetailSheet`, toolchain iOS hors d'atteinte
+  dans ce sandbox — confirmé à nouveau, ni `xcodebuild` ni `swift` disponibles) ;
+  `mergeEntries`/`upsertRemoteSegment` sans filtre `targetLanguage` explicite côté client (racine
+  déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure groupe
+  (`2026-08-13-group-calls-gap-analysis.md`) ; suspend/resume audio-only par-pair (Vague 143) ;
+  fuite i18n `error.message` brut restante dans `use-webrtc-p2p.ts` (Vague 149) ; kick modérateur
+  sans vérification du rôle de la cible (`calls.ts`/`participants.ts`, question de politique produit,
+  Vague 147/149) ; dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143,
+  non corrigée — chantier distinct, décision d'équipe requise).
+
+## Vague 153 — `toast.success('Connected!')` était le dernier texte anglais codé en dur sans forwarding (web) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend
+explicitement l'item laissé en « Non fait volontairement » par la Vague 151 : « `toast.success('Connected!')`
+(même fichier, branche jumelle de succès) reste un texte anglais codé en dur — PAS un doublon
+(aucun toast de succès équivalent côté `VideoCallInterface`), donc une dette i18n différente de
+celle fixée ici, hors périmètre d'un fix à une seule préoccupation. »
+
+- **Root cause** : `use-webrtc-p2p.ts` n'a pas accès à l'i18n — ce n'est pas un composant, il ne
+  charge aucun catalogue de traduction. La branche `aggregated === 'failed'` de l'agrégation
+  call-wide (`onConnectionStateChange`) le sait déjà et forwarde via `onError?.()`, laissant le
+  toast traduit au consommateur (`VideoCallInterface.handleWebRTCError`, Vague 149/151). La branche
+  jumelle `aggregated === 'connected'` n'avait PAS ce forwarding : elle appelait directement
+  `toast.success('Connected!')`, un texte anglais figé pour toute locale — le seul site de toast
+  restant dans ce hook sans contrat de forwarding vers un consommateur traduit.
+- **Fix** : ajout de `onConnected?: () => void` à `UseWebRTCP2POptions`, symétrique à `onError`.
+  La branche `connected` appelle désormais `onConnected?.()` au lieu de `toast.success('Connected!')`
+  directement. `VideoCallInterface.tsx` gagne `handleWebRTCConnected` (même forme que
+  `handleWebRTCError`) : `toast.success(t('toasts.connected'))`, câblé via
+  `onConnected: handleWebRTCConnected` sur `useWebRTCP2P(...)`. Nouvelle clé `toasts.connected`
+  ajoutée aux 4 locales (`en`: "Connected!", `fr`: "Connecté !", `es`: "¡Conectado!", `pt`: "Conectado!").
+  Aucun changement de comportement pour l'utilisateur anglophone ; les trois autres locales voient
+  enfin un toast traduit au lieu du texte anglais fixe.
+- **Tests** (TDD, RED confirmé — 2 échecs précis avant le fix) : `use-webrtc-p2p.test.tsx`, le test
+  du describe « Multi-peer connection state aggregation (W4) » qui asserait `toast.success` appelé
+  directement réécrit pour asserter `onConnected` appelé une fois et `toast.success` JAMAIS appelé
+  par le hook. `VideoCallInterface.test.tsx` : nouveau describe « handleWebRTCConnected » — le mock
+  de `useWebRTCP2P` capture désormais aussi `onConnected` (même pattern que `onError` depuis la
+  Vague 149), test neuf assertant `toast.success('toasts.connected')` (jamais `'Connected!'` brut).
+  Sweep web `--testPathPatterns="[Cc]all|webrtc"` : **60 suites / 795 tests** verts (+1 net vs
+  Vague 152, 0 régression). `npx tsc --noEmit` (apps/web) : 0 erreur nouvelle sur les 3 fichiers
+  touchés (`use-webrtc-p2p.ts`, `VideoCallInterface.tsx`, aucun sur les 4 `calls.json`) — compte
+  d'erreurs préexistantes identique avant/après. JSON des 4 locales validé (`python3 -m json.tool`).
+  `eslint` non exécuté : même échec environnemental documenté en Vague 146–152.
+- **Non fait volontairement** : les six autres `toast.error(message)` du fichier
+  (initializeLocalStream/createOffer/handleOffer/handleAnswer/renégociation×2, repérés par l'audit
+  Vague 151) restent un mélange de vrais messages d'erreur navigateur/WebRTC et de replis anglais
+  codés en dur — dette i18n plus large nécessitant un traitement au cas par cas (pas la même forme
+  de bug : ce ne sont pas des doublons de toast, et certains portent un message utile au débogage
+  qu'une traduction générique appauvrirait). Reconduits (inchangés) : dead code / god-object
+  `CallManager.swift` (~6234 lignes, toolchain iOS hors d'atteinte dans ce sandbox — confirmé à
+  nouveau, ni `xcodebuild` ni `swift` disponibles) ; ADR `actor CallEventQueue` non implémenté ;
+  iOS single-peer côté groupe (`2026-08-13-group-calls-gap-analysis.md`) ; kick modérateur sans
+  vérification du rôle CONVERSATION de la cible (décision produit, Vague 147/149) ; dette lint
+  systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143, décision d'équipe requise).
