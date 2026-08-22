@@ -11,6 +11,8 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.conversation.ConversationAnalysisRepository
 import me.meeshy.sdk.model.AnalysisSummaryView
 import me.meeshy.sdk.model.ConversationAnalysisProjection
+import me.meeshy.sdk.model.ParticipantProfileProjection
+import me.meeshy.sdk.model.ParticipantProfileView
 import me.meeshy.sdk.net.NetworkResult
 import javax.inject.Inject
 
@@ -18,15 +20,17 @@ import javax.inject.Inject
 enum class AnalysisPhase { Loading, Loaded, Empty, Error }
 
 /**
- * Immutable snapshot of the AI-analysis sheet. The [summary] is the pure projection
- * of the server payload, pre-computed once at load — the Composable stays a renderer.
- * [AnalysisPhase.Empty] means the analysis carried nothing renderable (no summary, or
- * a summary that projects to no content), distinct from a load [AnalysisPhase.Error].
+ * Immutable snapshot of the AI-analysis sheet. Both the [summary] and the participant
+ * [profiles] are pure projections of the server payload, pre-computed once at load — the
+ * Composable stays a renderer. [AnalysisPhase.Empty] means the analysis carried nothing
+ * renderable (no summary AND no participant profiles), distinct from a load
+ * [AnalysisPhase.Error].
  */
 data class ConversationAnalysisUiState(
     val conversationId: String? = null,
     val phase: AnalysisPhase = AnalysisPhase.Loading,
     val summary: AnalysisSummaryView? = null,
+    val profiles: List<ParticipantProfileView> = emptyList(),
 ) {
     val isLoading: Boolean get() = phase == AnalysisPhase.Loading
     val hasError: Boolean get() = phase == AnalysisPhase.Error
@@ -70,10 +74,16 @@ class ConversationAnalysisViewModel @Inject constructor(
             when (val result = repository.fetchAnalysis(conversationId)) {
                 is NetworkResult.Success -> {
                     val view = ConversationAnalysisProjection.summary(result.data)
+                    val profiles = ParticipantProfileProjection.profiles(result.data)
                     _state.update {
                         it.copy(
-                            phase = if (view == null) AnalysisPhase.Empty else AnalysisPhase.Loaded,
+                            phase = if (view == null && profiles.isEmpty()) {
+                                AnalysisPhase.Empty
+                            } else {
+                                AnalysisPhase.Loaded
+                            },
                             summary = view,
+                            profiles = profiles,
                         )
                     }
                 }

@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.ConflictTier
 import me.meeshy.sdk.model.ConversationAnalysis
 import me.meeshy.sdk.model.ConversationSummaryAnalysis
 import me.meeshy.sdk.model.HealthTier
+import me.meeshy.sdk.model.ParticipantProfile
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import org.junit.After
@@ -37,8 +38,10 @@ class ConversationAnalysisViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun analysis(summary: ConversationSummaryAnalysis?) =
-        ConversationAnalysis(conversationId = "c1", summary = summary)
+    private fun analysis(
+        summary: ConversationSummaryAnalysis?,
+        profiles: List<ParticipantProfile> = emptyList(),
+    ) = ConversationAnalysis(conversationId = "c1", summary = summary, participantProfiles = profiles)
 
     private fun repo(result: NetworkResult<ConversationAnalysis>): ConversationAnalysisRepository {
         val repository = mockk<ConversationAnalysisRepository>()
@@ -71,6 +74,53 @@ class ConversationAnalysisViewModelTest {
         assertThat(s.summary?.healthTier).isEqualTo(HealthTier.GOOD)
         assertThat(s.summary?.conflictTier).isEqualTo(ConflictTier.HIGH)
         assertThat(s.summary?.topics).containsExactly("Sport")
+    }
+
+    @Test
+    fun `load projects participant profiles even when there is no summary`() = runTest {
+        val vm = ConversationAnalysisViewModel(
+            repo(
+                NetworkResult.Success(
+                    analysis(
+                        summary = null,
+                        profiles = listOf(
+                            ParticipantProfile(userId = "u1", displayName = "Ada", confidence = 0.9),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        vm.load("c1")
+        advanceUntilIdle()
+
+        val s = vm.state.value
+        assertThat(s.phase).isEqualTo(AnalysisPhase.Loaded)
+        assertThat(s.summary).isNull()
+        assertThat(s.profiles.map { it.name }).containsExactly("Ada")
+        assertThat(s.profiles.single().confidencePercent).isEqualTo(90)
+    }
+
+    @Test
+    fun `load carries both summary and participant profiles when both are present`() = runTest {
+        val vm = ConversationAnalysisViewModel(
+            repo(
+                NetworkResult.Success(
+                    analysis(
+                        summary = ConversationSummaryAnalysis(text = "Lively"),
+                        profiles = listOf(ParticipantProfile(userId = "u1", displayName = "Bob")),
+                    ),
+                ),
+            ),
+        )
+
+        vm.load("c1")
+        advanceUntilIdle()
+
+        val s = vm.state.value
+        assertThat(s.phase).isEqualTo(AnalysisPhase.Loaded)
+        assertThat(s.summary?.text).isEqualTo("Lively")
+        assertThat(s.profiles.map { it.name }).containsExactly("Bob")
     }
 
     @Test

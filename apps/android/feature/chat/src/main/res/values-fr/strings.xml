@@ -180,6 +180,12 @@
     <string name="conversation_analysis_emotions">Émotions</string>
     <string name="conversation_analysis_summary">Résumé</string>
     <string name="conversation_analysis_dynamic">Dynamique</string>
+    <string name="conversation_analysis_personas">Profils des participants</string>
+    <string name="conversation_analysis_persona_confidence">%1$d%%</string>
+    <string name="conversation_analysis_trait_communication">Communication</string>
+    <string name="conversation_analysis_trait_personality">Personnalité</string>
+    <string name="conversation_analysis_trait_interpersonal">Interpersonnel</string>
+    <string name="conversation_analysis_trait_emotional">Émotionnel</string>
     <string name="conversation_stats_type_text">Texte</string>
     <string name="conversation_stats_type_image">Photos</string>
     <string name="conversation_stats_type_audio">Audio</string>
