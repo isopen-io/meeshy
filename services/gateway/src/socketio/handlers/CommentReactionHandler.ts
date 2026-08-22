@@ -11,8 +11,8 @@
  *   Anonymous users are rejected (comments require registered users to react)
  */
 
-import type { Socket } from 'socket.io';
-import type { Server as SocketIOServer } from 'socket.io';
+import type { MeeshySocket as Socket } from '../typed-socket';
+import type { MeeshyIOServer as SocketIOServer } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
