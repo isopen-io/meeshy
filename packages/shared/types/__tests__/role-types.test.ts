@@ -54,6 +54,15 @@ describe('AGENT role', () => {
     expect(hasMinimumRole('AGENT', 'USER')).toBe(false);
     expect(hasMinimumRole('USER', 'AGENT')).toBe(true);
   });
+
+  it('hasMinimumRole is case insensitive on the compared role', () => {
+    expect(hasMinimumRole('moderator' as GlobalUserRole, 'MODERATOR')).toBe(true);
+    expect(hasMinimumRole('admin' as GlobalUserRole, 'MODERATOR')).toBe(true);
+  });
+
+  it('hasMinimumRole fails closed for an unknown role (level 0)', () => {
+    expect(hasMinimumRole('GUEST' as GlobalUserRole, 'USER')).toBe(false);
+  });
 });
 
 describe('getEffectiveRole', () => {
@@ -169,6 +178,10 @@ describe('hasMinimumMemberRole', () => {
   it('accepts MemberRole enum values', () => {
     expect(hasMinimumMemberRole(MemberRole.ADMIN, MemberRole.MEMBER)).toBe(true);
   });
+  it('is case insensitive on the compared role', () => {
+    expect(hasMinimumMemberRole('ADMIN', 'member')).toBe(true);
+    expect(hasMinimumMemberRole('Moderator', 'member')).toBe(true);
+  });
 });
 
 describe('isMemberRole', () => {
@@ -199,6 +212,12 @@ describe('isGlobalModerator', () => {
   it('returns false for USER', () => expect(isGlobalModerator('USER')).toBe(false));
   it('returns false for ANALYST', () => expect(isGlobalModerator('ANALYST')).toBe(false));
   it('accepts GlobalUserRole enum', () => expect(isGlobalModerator(GlobalUserRole.MODERATOR)).toBe(true));
+  // Parity with the sibling isGlobalAdmin (l.187): every other global role helper
+  // (isGlobalAdmin, isGlobalUserRole, normalizeGlobalRole) case-folds its input.
+  // isGlobalModerator was the lone outlier — a lowercase role silently indexed the
+  // UPPERCASE-keyed hierarchy as undefined → level 0 → not a moderator.
+  it('is case insensitive', () => expect(isGlobalModerator('moderator' as GlobalUserRole)).toBe(true));
+  it('is case insensitive for ADMIN', () => expect(isGlobalModerator('admin' as GlobalUserRole)).toBe(true));
 });
 
 describe('isMemberAdmin', () => {
@@ -217,6 +236,13 @@ describe('isMemberModerator', () => {
   it('returns false for member', () => expect(isMemberModerator('member')).toBe(false));
   it('returns false for unknown role', () => expect(isMemberModerator('guest')).toBe(false));
   it('accepts MemberRole enum', () => expect(isMemberModerator(MemberRole.MODERATOR)).toBe(true));
+  // Parity with the sibling isMemberAdmin (l.206) / isMemberCreator (l.224): every
+  // other member role helper case-folds. isMemberModerator was the lone outlier —
+  // an UPPERCASE role silently indexed the lowercase-keyed hierarchy as level 0.
+  // apps/web already works around this defect by pre-lowercasing at two call sites
+  // (participant-helpers.ts, use-participant-management.ts).
+  it('is case insensitive', () => expect(isMemberModerator('MODERATOR')).toBe(true));
+  it('is case insensitive for ADMIN', () => expect(isMemberModerator('ADMIN')).toBe(true));
 });
 
 describe('isMemberCreator', () => {

@@ -792,11 +792,18 @@ export type FormatFileSizeOptions = {
  * dans tout le monorepo. `decimals` permet d'ajuster la précision sans réimplémenter.
  */
 export function formatFileSize(bytes: number, options?: FormatFileSizeOptions): string {
-  if (bytes === 0) return '0 B';
+  // Non-finite (NaN/Infinity) et non-positif (0 ou négatif) ne sont pas des
+  // tailles exprimables : ramenés à zéro, comme le formatteur jumeau
+  // `formatClock` (duration-format.ts) le fait pour ses entrées invalides.
+  // Sans ce garde, `Math.log(bytes)` vaut NaN et l'index d'unité sortait de la
+  // plage → `FILE_SIZE_UNITS[-1]`/`[NaN]` = `undefined` (« NaN undefined »).
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
   const decimals = options?.decimals ?? 2;
   const k = 1024;
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  const sizeIndex = Math.min(i, FILE_SIZE_UNITS.length - 1);
+  // Borne BASSE autant que haute : pour `0 < bytes < 1`, `i` est négatif — sans
+  // le `Math.max(_, 0)`, l'index restait négatif et `0.5` rendait « 512 undefined ».
+  const sizeIndex = Math.min(Math.max(i, 0), FILE_SIZE_UNITS.length - 1);
   return `${parseFloat((bytes / Math.pow(k, sizeIndex)).toFixed(decimals))} ${FILE_SIZE_UNITS[sizeIndex]}`;
 }
 

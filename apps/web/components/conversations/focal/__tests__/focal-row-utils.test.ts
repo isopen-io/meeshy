@@ -159,16 +159,44 @@ describe('resolveFocalMessageDisplay — texte + langue RÉELLEMENT servie', () 
 
 describe('isFirstInFocalGroup', () => {
   it('vrai quand il n\'y a pas de message précédent', () => {
-    expect(isFirstInFocalGroup({ senderId: 'u1' }, null)).toBe(true);
-    expect(isFirstInFocalGroup({ senderId: 'u1' }, undefined)).toBe(true);
+    expect(isFirstInFocalGroup({ senderId: 'u1', messageSource: 'user' }, null)).toBe(true);
+    expect(isFirstInFocalGroup({ senderId: 'u1', messageSource: 'user' }, undefined)).toBe(true);
   });
 
   it('vrai quand l\'expéditeur change', () => {
-    expect(isFirstInFocalGroup({ senderId: 'u2' }, { senderId: 'u1' })).toBe(true);
+    expect(
+      isFirstInFocalGroup(
+        { senderId: 'u2', messageSource: 'user' },
+        { senderId: 'u1', messageSource: 'user' }
+      )
+    ).toBe(true);
   });
 
   it('faux quand le même expéditeur enchaîne', () => {
-    expect(isFirstInFocalGroup({ senderId: 'u1' }, { senderId: 'u1' })).toBe(false);
+    expect(
+      isFirstInFocalGroup(
+        { senderId: 'u1', messageSource: 'user' },
+        { senderId: 'u1', messageSource: 'user' }
+      )
+    ).toBe(false);
+  });
+
+  it("ouvre un groupe après l'avis d'arrivée DU MÊME auteur — un message système n'est pas une prise de parole", () => {
+    expect(
+      isFirstInFocalGroup(
+        { senderId: 'u1', messageSource: 'user' },
+        { senderId: 'u1', messageSource: 'system' }
+      )
+    ).toBe(true);
+  });
+
+  it('ouvre un groupe pour un message système lui-même', () => {
+    expect(
+      isFirstInFocalGroup(
+        { senderId: 'u1', messageSource: 'system' },
+        { senderId: 'u1', messageSource: 'user' }
+      )
+    ).toBe(true);
   });
 });
 

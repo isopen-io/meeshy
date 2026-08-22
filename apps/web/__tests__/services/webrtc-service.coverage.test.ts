@@ -9,6 +9,7 @@ jest.mock('@/utils/logger', () => ({
 }));
 
 import { WebRTCService, type WebRTCServiceConfig } from '@/services/webrtc-service';
+import { logger } from '@/utils/logger';
 
 // ---------------------------------------------------------------------------
 // Fake RTCPeerConnection + supporting fakes
@@ -454,6 +455,45 @@ describe('createPeerConnection — event handlers', () => {
     // autoNegotiate is false before first createOffer
     pc.onnegotiationneeded!();
     expect(onLocalDescription).not.toHaveBeenCalled();
+  });
+
+  it('does not leave an unhandled rejection when the auto-renegotiation triggered by onnegotiationneeded fails', async () => {
+    // onnegotiationneeded's `void this.negotiate()` (unlike every other
+    // negotiate()/restartIce() call site in this file — see the deferred
+    // ICE-restart replay in negotiate()'s `finally` and scheduleIceRestart's
+    // restartIce() call, both `.catch(...)`-guarded) detaches the promise
+    // with no handler. negotiate() rethrows after calling onError, so a
+    // failure here (e.g. createOffer() rejecting mid A/V-switch) becomes an
+    // unhandled rejection instead of a caught, logged one.
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    await service.createOffer(); // arms autoNegotiate
+
+    const negotiationError = new Error('createOffer failed');
+    pc.createOffer.mockRejectedValueOnce(negotiationError);
+
+    const captured: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => {
+      captured.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandledRejection);
+    try {
+      pc.onnegotiationneeded!();
+      // Let the detached promise's rejection surface across a couple of
+      // macrotask boundaries — same technique as services/gateway/CLAUDE.md's
+      // `captureUnhandledRejections` pattern, adapted to setTimeout since
+      // jsdom (this file's test environment) has no `setImmediate` global.
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection);
+    }
+
+    expect(captured).toEqual([]);
+    expect(logger.error).toHaveBeenCalledWith(
+      '[WebRTCService] Auto-renegotiation (onnegotiationneeded) failed',
+      expect.objectContaining({ error: negotiationError })
+    );
   });
 });
 

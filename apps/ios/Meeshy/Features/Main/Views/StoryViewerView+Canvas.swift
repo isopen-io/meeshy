@@ -1103,7 +1103,7 @@ struct StoryCardView: View {
 
     /// Reflète `shouldPauseTimer` du parent (aggrégation des pauses UI : sheets,
     /// composer, drag, long-press, transition). Propagée au canvas via
-    /// `StoryReaderRepresentable.isPaused` pour que la timeline canvas (vidéo,
+    /// `MeeshyScenePlayer.isPlaying` (nié) pour que la timeline canvas (vidéo,
     /// audio, displayLink) gèle EN PHASE avec la progress bar du viewer.
     let isCanvasPlaybackPaused: Bool
 
@@ -1186,8 +1186,8 @@ struct StoryCardView: View {
 
     /// Dimensions strictes 9:16 du canvas dans la géométrie courante.
     /// `.aspectRatio(.fit) + .frame(maxWidth/Height)` ne contraint pas
-    /// correctement le `StoryReaderRepresentable` (UIViewRepresentable) sur
-    /// iPhone 16 Pro (402×874pt) — le canvas se retrouvait à 491×754pt
+    /// correctement l'hôte canvas (`UIViewRepresentable`, monté sous
+    /// `MeeshyScenePlayer`) sur iPhone 16 Pro (402×874pt) — le canvas se retrouvait à 491×754pt
     /// (height-fit avec width qui déborde) au lieu de 402×715pt (width-fit
     /// attendu). La sidebar droite tombait alors hors écran à x=389+w=46
     /// → out of 402 (bug 2026-05-27). On force ici les dimensions explicites
@@ -1198,6 +1198,163 @@ struct StoryCardView: View {
     /// par défaut. Fallback portrait pour toutes les stories antérieures.
     private var readerCanvasRatio: CGFloat {
         CGFloat(currentStory?.storyEffects?.canvasAspect.ratio ?? Double(CanvasGeometry.portraitRatio))
+    }
+
+    /// La PORTE du lecteur de scènes — écrite une fois, partagée par les DEUX
+    /// canvas. `nil` = cette story n'a pas de document v3 natif, et se peint par
+    /// l'hôte canvas direct.
+    ///
+    /// Le fil sert du v3 : le décodeur de `StoryEffects` pose alors `canvasV3`,
+    /// snapshot de LECTURE du document reçu, et rend le runtime v1 depuis lui —
+    /// servir ce snapshot au player est l'identité, pas une conversion.
+    ///
+    /// **Pourquoi une porte, et non un montage inconditionnel.** iOS ne pose
+    /// AUCUN en-tête `X-Canvas-Caps` (c'est la tâche C4, ouverte) : le gateway
+    /// lui sert donc l'archive v1 TELLE QUELLE et une story v3-native en
+    /// sentinelle v1 — `canvasV3` vaut `nil` pour CENT POUR CENT des stories
+    /// affichées aujourd'hui. Monter le lecteur sans porte ferait passer TOUTE
+    /// l'archive par `CanvasV3(migrating:)` → `StoryEffects(rendering:)`, un
+    /// aller-retour qui letterboxe les ancres libres dans l'espace de scène FIXE
+    /// 9:16 et ne rend au retour ni le ratio du porteur ni le remap inverse
+    /// (`CanvasV3MigrationTests`
+    /// `.v1RoundTripThroughV3_letterboxesFreeAnchors_andDropsTheCarrierAspect` :
+    /// une ancre à `y = 0,90` sous un fond 16:9 revient à `0,6266`). Pendant ce
+    /// temps `readerCanvasRatio` encadre, lui, au ratio RÉEL de la story : le
+    /// contenu remonterait d'un quart de cadre dans une carte restée large.
+    ///
+    /// La porte rend les deux branches SELF-COHÉRENTES. L'archive v1 se peint
+    /// dans son propre cadre, exactement comme avant le swap E4. Une story
+    /// v3-native se peint dans un cadre 9:16 — son `StoryEffects` décodé sort
+    /// lui aussi de `StoryEffects(rendering:)`, donc sans ratio, donc portrait.
+    /// Le lecteur prendra la main de lui-même le jour où C4 posera
+    /// `X-Canvas-Caps: 3`.
+    private func nativeSceneDocument(of story: StoryItem) -> CanvasV3? {
+        story.storyEffects?.canvasV3
+    }
+
+    /// Couche contenu du canvas SORTANT du cross-fade, derrière la porte v3.
+    ///
+    /// `isOutgoing: true` des deux côtés : le sortant naît en `.edit` dès
+    /// `makeUIView`, ses AVPlayer bg/FG et son mixer audio ne démarrent JAMAIS —
+    /// sans quoi les deux canvas jouent en double 350-400 ms à chaque avance
+    /// (bug user 2026-05-28). Visuellement le slide reste rendu (image bg +
+    /// textes), seule l'animation vidéo est gelée — invisible à l'œil pendant
+    /// une sortie en opacity sur 350 ms.
+    ///
+    /// `carrier: outgoing` — le document dit QUOI peindre, jamais où vivent les
+    /// pixels : c'est le porteur qui indexe les médias. Le canvas sortant rend le
+    /// MÊME slide que celui qu'on quitte ; sans porteur il repartirait d'une
+    /// coquille (`media == []`) le temps du fondu.
+    ///
+    /// `isPlaying: .constant(false)` : le sortant ne joue jamais.
+    @ViewBuilder
+    private func outgoingContentHost(_ outgoing: StoryItem) -> some View {
+        if let document = nativeSceneDocument(of: outgoing) {
+            MeeshyScenePlayer(document: document,
+                              mode: .reader,
+                              sceneIndex: .constant(0),
+                              isPlaying: .constant(false),
+                              accentColorHex: composerAccentColor,
+                              carrier: outgoing,
+                              preferredContentLanguages: resolvedViewerLanguageChain,
+                              isOutgoing: true,
+                              preloadedImages: preloadedImages,
+                              preloadedVideoURLs: preloadedVideoURLs,
+                              preloadedAudioURLs: preloadedAudioURLs)
+        } else {
+            StoryReaderRepresentable(story: outgoing,
+                                     preferredLanguage: resolvedViewerLanguage,
+                                     preferredContentLanguages: resolvedViewerLanguageChain,
+                                     preloadedImages: preloadedImages,
+                                     preloadedVideoURLs: preloadedVideoURLs,
+                                     preloadedAudioURLs: preloadedAudioURLs,
+                                     isOutgoing: true)
+        }
+    }
+
+    /// Couche contenu de la story COURANTE, derrière la porte v3. Les deux hôtes
+    /// portent les mêmes fils du viewer — une porte qui en couperait un d'un seul
+    /// côté le couperait pour la moitié du parc, en silence.
+    ///
+    /// `carrier: story` — sans le porteur, `toRenderableSlide` perd son
+    /// hydratation read-time : `aspectRatio` d'abord (source de dimensionnement
+    /// PRIMAIRE, le composer stampant toujours la sentinelle 1.0 — tout média non
+    /// carré s'afficherait squishé), puis `duration`, l'adresse d'un clip audio et
+    /// le backdrop legacy ; le résolveur de `makeUIView` perdrait en plus son
+    /// repli distant par `postMediaId`.
+    ///
+    /// La pause du viewer (long-press, feuilles, drag) gèle la timeline canvas EN
+    /// PHASE avec la barre de progression : `isPaused:` pour l'hôte direct,
+    /// `isPlaying:` nié pour le lecteur. Le player ne réécrit jamais cette valeur
+    /// — la commande de lecture appartient au viewer, d'où la liaison constante.
+    /// Le mode `.reader` naît en pause et n'honore la commande qu'À PARTIR de
+    /// l'apparition : le rail est ainsi figé à l'entrée du slide.
+    ///
+    /// Le muet est une préférence VIEWER persistante (`isGlobalMuted`, `@State`
+    /// qui survit aux avances). Le canvas est recréé à chaque story
+    /// (`.id(story.id)`) : sans cet état à l'init, chaque nouvelle story repartait
+    /// non-muette. Le mode `.reader` ne VERROUILLE pas le muet (seule la carte de
+    /// fil le fait) — la demande de l'hôte gouverne.
+    ///
+    /// `onPlaybackProgressing` — timeline unifiée : la barre de progression et
+    /// l'auto-advance (pilotés par `slideTimer`) gèlent EN PHASE quand la lecture
+    /// du média primaire stalle (buffer), et reprennent sans saut dès qu'elle
+    /// rejoue. Entrée INDÉPENDANTE de `setPaused` (long-press / feuilles) — elles
+    /// ne se clobberent jamais. No-op pour les slides sans vidéo (le canvas n'émet
+    /// alors jamais). Décision produit câblée app-side ; le SDK n'expose que le
+    /// signal.
+    @ViewBuilder
+    private func currentContentHost(_ story: StoryItem) -> some View {
+        if let document = nativeSceneDocument(of: story) {
+            MeeshyScenePlayer(document: document,
+                              mode: .reader,
+                              sceneIndex: .constant(0),
+                              isPlaying: .constant(!isCanvasPlaybackPaused),
+                              accentColorHex: composerAccentColor,
+                              carrier: story,
+                              preferredContentLanguages: resolvedViewerLanguageChain,
+                              isMuted: isGlobalMuted,
+                              preloadedImages: preloadedImages,
+                              preloadedVideoURLs: preloadedVideoURLs,
+                              preloadedAudioURLs: preloadedAudioURLs,
+                              onContentReady: { isContentReady = true },
+                              onContentProgress: { p in slideContentProgress = latchedContentProgress(p) },
+                              onPlaybackProgressing: { progressing in
+                                  onPlaybackProgressing(progressing)
+                                  handleStallIndicatorSignal(progressing: progressing)
+                              })
+        } else {
+            StoryReaderRepresentable(story: story,
+                                     preferredLanguage: resolvedViewerLanguage,
+                                     preferredContentLanguages: resolvedViewerLanguageChain,
+                                     preloadedImages: preloadedImages,
+                                     preloadedVideoURLs: preloadedVideoURLs,
+                                     preloadedAudioURLs: preloadedAudioURLs,
+                                     mute: isGlobalMuted,
+                                     isPaused: isCanvasPlaybackPaused,
+                                     onContentReady: { isContentReady = true },
+                                     onContentProgress: { p in slideContentProgress = latchedContentProgress(p) },
+                                     onPlaybackProgressing: { progressing in
+                                         onPlaybackProgressing(progressing)
+                                         handleStallIndicatorSignal(progressing: progressing)
+                                     })
+        }
+    }
+
+    /// Latch monotone de la fraction de contenu lue : la valeur à écrire, jamais
+    /// l'écriture elle-même — c'est le MONTAGE qui doit montrer le fil qu'il
+    /// alimente.
+    ///
+    /// Une fois le contenu prêt (≥ 0.95), on ne redescend JAMAIS : sans ça chaque
+    /// `scheduleContentReadyEvaluation` (déclenché par les didSet slide cumulés)
+    /// remettait `contentReadyFired = false` → `recomputeContentProgress` émettait
+    /// 0 → l'overlay de chargement réapparaissait → scintillement (user-reporté
+    /// 2026-05-27 « la story scintille seulement »). Le reset à 0 se fait
+    /// UNIQUEMENT sur slide-change (cf. le `.task(id:)` plus bas).
+    private func latchedContentProgress(_ progress: Double) -> Double {
+        (slideContentProgress >= 0.95 && progress < slideContentProgress)
+            ? slideContentProgress
+            : progress
     }
 
     private var canvasFitSize: CGSize {
@@ -1290,19 +1447,9 @@ struct StoryCardView: View {
 
             // === Outgoing canvas (cross-dissolve pixel-perfect) ===
             if let outgoing = outgoingStory, outgoingOpacity > 0 {
-                // `isOutgoing: true` force le canvas en `.edit` mode dès
-                // makeUIView — ses bg/FG AVPlayer + audio mixer ne démarrent
-                // PAS, supprimant le bleed audio/vidéo 350-400 ms pendant le
-                // cross-fade (bug user 2026-05-28 « médias jouent en double »).
-                // Visuellement, le slide reste rendu (image bg + textes), seule
-                // l'animation vidéo est gelée — invisible à l'œil pendant une
-                // sortie en opacity sur 350 ms.
-                StoryReaderRepresentable(story: outgoing, preferredLanguage: resolvedViewerLanguage,
-                                      preferredContentLanguages: resolvedViewerLanguageChain,
-                                      preloadedImages: preloadedImages,
-                                      preloadedVideoURLs: preloadedVideoURLs,
-                                      preloadedAudioURLs: preloadedAudioURLs,
-                                      isOutgoing: true)
+                // La porte v3, la naissance en `.edit` et les fils du viewer
+                // vivent dans `outgoingContentHost(_:)`.
+                outgoingContentHost(outgoing)
                     .id("out-\(outgoing.id)")
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
                     // Sans contrainte, le reader s'étirait à la hauteur écran et
@@ -1340,47 +1487,9 @@ struct StoryCardView: View {
 
             // === Layers 2–4: Canvas pixel-perfect (media + filter + text + stickers) ===
             if let story = currentStory {
-                StoryReaderRepresentable(story: story, preferredLanguage: resolvedViewerLanguage,
-                                      preferredContentLanguages: resolvedViewerLanguageChain,
-                                      preloadedImages: preloadedImages,
-                                      preloadedVideoURLs: preloadedVideoURLs,
-                                      preloadedAudioURLs: preloadedAudioURLs,
-                                      // Le mute est une préférence VIEWER persistante (`isGlobalMuted`,
-                                      // @State qui survit aux avances). Le canvas est recréé à chaque
-                                      // story (`.id(story.id)`) → sans passer l'état ici, chaque
-                                      // nouvelle story repartait à `mute: false` (bug : on remute
-                                      // chaque story). On sème donc l'état persistant à l'init.
-                                      mute: isGlobalMuted,
-                                      isPaused: isCanvasPlaybackPaused,
-                                      onContentReady: { isContentReady = true },
-                                      onContentProgress: { p in
-                                          // Latch monotone : une fois le contenu prêt
-                                          // (≥ 0.95), on ne redescend JAMAIS. Sans ça
-                                          // chaque `scheduleContentReadyEvaluation`
-                                          // (déclenché par les didSet slide cumulés)
-                                          // remettait `contentReadyFired=false` →
-                                          // `recomputeContentProgress` émettait 0 →
-                                          // loader overlay réapparaissait → scintillement
-                                          // (user-reporté 2026-05-27 « la story scintille
-                                          // seulement »). Le reset à 0 se fait UNIQUEMENT
-                                          // sur slide-change (cf. `.task(id:)` plus bas).
-                                          if slideContentProgress >= 0.95 && p < slideContentProgress {
-                                              return
-                                          }
-                                          slideContentProgress = p
-                                      },
-                                      // Timeline unifiée : la progress bar + l'auto-advance
-                                      // (pilotés par `slideTimer`) gèlent EN PHASE quand la
-                                      // lecture du média primaire stalle (buffer), et reprennent
-                                      // sans saut dès qu'elle rejoue. Input INDÉPENDANT de
-                                      // `setPaused` (long-press / sheets) — ils ne se clobberent
-                                      // jamais. No-op pour les slides sans vidéo (le canvas
-                                      // n'émet alors jamais). Décision produit câblée app-side ;
-                                      // le SDK n'expose que le signal `onPlaybackProgressing`.
-                                      onPlaybackProgressing: { progressing in
-                                          onPlaybackProgressing(progressing)
-                                          handleStallIndicatorSignal(progressing: progressing)
-                                      })
+                // La porte v3 et les fils du viewer vivent dans
+                // `currentContentHost(_:)`.
+                currentContentHost(story)
                     .id(story.id)
                     // U6 inc.2 — la navigation prev/next est une gesture
                     // SPATIALE (position x du tap dans le canvas) que VoiceOver

@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.ConversationAnalysis
 import me.meeshy.sdk.model.ConversationMessageStatsResponse
 import me.meeshy.sdk.model.ConversationSummaryAnalysis
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.JoinAuthenticatedResponse
 import me.meeshy.sdk.model.PaginatedParticipantsResponse
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
@@ -43,6 +44,7 @@ private abstract class StubAnalysisApi : ConversationApi {
     override suspend fun removeParticipant(id: String, userId: String) = ApiResponse<Unit>(success = false)
     override suspend fun addParticipant(id: String, body: AddParticipantRequest) = ApiResponse<Unit>(success = false)
     override suspend fun banParticipant(id: String, userId: String) = ApiResponse<Unit>(success = false)
+    override suspend fun joinViaShareLink(linkId: String) = ApiResponse<JoinAuthenticatedResponse>(success = false)
 }
 
 private class SuccessAnalysisApi(private val payload: ConversationAnalysis) : StubAnalysisApi() {

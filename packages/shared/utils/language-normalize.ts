@@ -148,12 +148,21 @@ export function normalizeLanguageCode(
  * région/script) vers une clé stable de **déduplication / affichage**, sans
  * jamais perdre les codes que {@link normalizeLanguageCode} ne sait pas réduire.
  *
- * Contrat : `normalizeLanguageCode(code) ?? code.toLowerCase()`
+ * Contrat : `normalizeLanguageCode(code) ?? <sous-tag primaire lowercased>`
  * - `'en-US'`, `'EN'`, `'en'` → `'en'` (une seule entrée dans un `Set`)
  * - `'pt-BR'` → `'pt'`, `'zh-Hant-HK'` → `'zh'`, `'fr_FR'` → `'fr'`
  * - ISO 639-3 irréductible inconnu (`'xyz'`) → `'xyz'` conservé lowercased plutôt
  *   que supprimé (le repli `undefined` ferait disparaître la donnée, changement
  *   de comportement non désiré pour une liste/un compteur).
+ * - Irréductible inconnu MAIS tagué région/script (`'yue-HK'`, `'xyz-AB'`) →
+ *   `'yue'`, `'xyz'` : la clé de dedup est région-aveugle pour TOUT code, pas
+ *   seulement ceux que `normalizeLanguageCode` sait réduire. Sinon `'yue'` et
+ *   `'yue-HK'` (Cantonais, hors catalogue) compteraient pour deux langues — la
+ *   fuite exacte que le cas `'en'`/`'en-US'` interdit.
+ *
+ * Garde « ne jamais perdre la donnée » : quand le sous-tag primaire est vide
+ * (`'-US'`) ou purement non-alphabétique (`'@@@'`), le découpage retomberait sur
+ * `''` — on préserve alors la chaîne entière lowercased plutôt que de la vider.
  *
  * SSOT unique du couple normalisation-avec-repli employé partout où des codes
  * verbatim (préférences in-app persistées sans normalisation, `participant.language`
@@ -164,5 +173,8 @@ export function normalizeLanguageCode(
  * @see services/gateway/src/routes/anonymous.ts — agrégat `spokenLanguages`
  */
 export function normalizeLanguageForDedup(code: string): string {
-  return normalizeLanguageCode(code) ?? code.toLowerCase();
+  const normalized = normalizeLanguageCode(code);
+  if (normalized) return normalized;
+  const primary = code.trim().split(/[-_]/)[0]?.toLowerCase();
+  return primary ? primary : code.toLowerCase();
 }

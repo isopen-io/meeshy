@@ -238,6 +238,74 @@ describe('resolveLastMessagePreview — insensibilité à la casse', () => {
   })
 })
 
+describe("resolveLastMessagePreview — la langue d'origine région-taguée concourt à son rang normalisé", () => {
+  // Régression : `resolveUserLanguagesOrdered` normalise les langues du lecteur
+  // (région strippée : `'en-US'` → `'en'`), mais `originalLanguage` arrive brut
+  // du fil. Les messages écrits AVANT la canonicalisation au write-boundary
+  // (`MessagingService`, `normalizeLanguageCode(claimedLanguage)`) portent encore
+  // un `Message.originalLanguage` région-tagué (`'en-US'`, `'pt-BR'`). Comparé
+  // en `.toLowerCase()` seul, `'en-us'` ne matchait jamais le rang normalisé
+  // `'en'` du prisme — et une traduction de rang INFÉRIEUR gagnait, rétrogradant
+  // la langue PRIMAIRE du lecteur : exactement la violation du Prisme (#3) que
+  // ce résolveur combat, réintroduite par une frontière de normalisation.
+
+  it("rend l'original quand le message est déjà dans la langue PRIMAIRE, même région-taguée", () => {
+    // Lecteur `['en', 'fr']` (anglais primaire). Message anglais région-tagué
+    // `'en-US'`, traduction française disponible (rang 2). Le message EST déjà
+    // en anglais — rang 1 — donc l'aperçu brut. Avant le correctif : `'en'` du
+    // prisme ≠ `'en-us'`, pas de clé `en`, on tombait sur le français « Bonjour ».
+    expect(
+      resolveLastMessagePreview({
+        preview: 'Hello everyone',
+        originalLanguage: 'en-US',
+        translations: { fr: 'Bonjour à tous' },
+        preferredLanguages: ['en', 'fr'],
+      })
+    ).toBe('Hello everyone')
+  })
+
+  it("s'arrête à la langue d'origine région-taguée sans servir un rang inférieur", () => {
+    // Lecteur `['pt', 'en']`. Message portugais brésilien `'pt-BR'`, traduction
+    // anglaise disponible (rang 2). Rang 1 EST la langue d'origine (normalisée) :
+    // on rend l'original, jamais l'anglais.
+    expect(
+      resolveLastMessagePreview({
+        preview: 'Olá pessoal',
+        originalLanguage: 'pt-BR',
+        translations: { en: 'Hello everyone' },
+        preferredLanguages: ['pt', 'en'],
+      })
+    ).toBe('Olá pessoal')
+  })
+
+  it('apparie une CLÉ de traduction région-taguée au rang normalisé du lecteur', () => {
+    // Symétrie : une carte héritée peut porter une clé région-taguée (`'fr-FR'`).
+    // Le lecteur `['fr']` doit la recevoir — `'fr-fr'` lowercased seul ne matchait
+    // pas `'fr'`.
+    expect(
+      resolveLastMessagePreview({
+        preview: 'Hello',
+        originalLanguage: 'en',
+        translations: { 'fr-FR': 'Bonjour' },
+        preferredLanguages: ['fr'],
+      })
+    ).toBe('Bonjour')
+  })
+
+  it("apparie une langue du LECTEUR région-taguée à une clé de traduction normalisée", () => {
+    // Un niveau in-app persisté verbatim (`systemLanguage = 'pt-BR'`, jamais
+    // normalisé à l'écriture) doit matcher la traduction `pt`.
+    expect(
+      resolveLastMessagePreview({
+        preview: 'Hello',
+        originalLanguage: 'en',
+        translations: { pt: 'Olá' },
+        preferredLanguages: ['pt-BR'],
+      })
+    ).toBe('Olá')
+  })
+})
+
 describe('resolveLastMessagePreview — entrées dégénérées du prisme', () => {
   it('saute les entrées vides de la liste des langues du lecteur', () => {
     expect(

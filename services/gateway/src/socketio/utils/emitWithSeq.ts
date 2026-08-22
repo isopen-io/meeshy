@@ -77,11 +77,24 @@ export function emitWithSeq(
   userEmitChains.set(userId, next);
   // Éviter la croissance non bornée de la Map : on retire la queue une fois
   // drainée, sauf si un appel plus récent l'a déjà remplacée.
-  void next.finally(() => {
-    if (userEmitChains.get(userId) === next) {
-      userEmitChains.delete(userId);
-    }
-  });
+  //
+  // Le `.catch` final n'est PAS décoratif. `.finally` ADOPTE le sort de `next` :
+  // la promesse qu'il rend rejette quand `next` rejette, et cette promesse-ci
+  // est DÉTACHÉE par le `void`. Un appelant qui garde consciencieusement le
+  // `next` qu'on lui rend ne couvre donc pas cette branche dérivée — elle
+  // rejette sans écouteur, ce que Node compte comme `unhandledRejection`
+  // (CLAUDE.md § « `void p` exige TOUJOURS `p.catch(...)` », Leçon 230). La
+  // cause est réelle et pas hypothétique : `emitEnriched` finit par
+  // `io.to(...).emit(...)`, qui lève quand l'adaptateur ou l'encodeur est en
+  // défaut. Le nettoyage de la Map est le SEUL travail dû ici ; l'erreur, elle,
+  // appartient à l'appelant, qui la reçoit par le `next` rendu.
+  void next
+    .finally(() => {
+      if (userEmitChains.get(userId) === next) {
+        userEmitChains.delete(userId);
+      }
+    })
+    .catch(() => { /* le rejet est celui de `next` — déjà rendu à l'appelant */ });
   return next;
 }
 

@@ -777,6 +777,17 @@ describe('resolveRiverLaneAt — une colonne partagée dit QUI l’occupe à cet
     expect(resolveRiverLaneAt(geometry, 0, 1)?.laneId).toBe('sarah');
     expect(resolveRiverLaneAt(geometry, 1, 0)).toBeNull();
   });
+
+  it('sérialisée, ne nomme AUCUNE colonne au rang d’une annonce — même quand l’arrivant parlera ensuite', () => {
+    const geometry = resolveRiverLanes(
+      input([notice('j', 'lena', 0), message('a', 'lena', 1), message('b', 'mia', 2)]),
+    );
+
+    expect(geometry.layout).toBe('serialized');
+    expect(resolveRiverLaneAt(geometry, 0, 0)).toBeNull();
+    expect(resolveRiverLaneAt(geometry, 0, 1)?.laneId).toBe('lena');
+    expect(resolveRiverLaneAt(geometry, 0, 2)?.laneId).toBe('mia');
+  });
 });
 
 describe('resolveRiverLaneHeaders — le nom en tête suit la ligne qu’on lit', () => {
