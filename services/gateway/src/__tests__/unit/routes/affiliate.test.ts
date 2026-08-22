@@ -317,6 +317,25 @@ describe('POST /affiliate/register', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  // `statusCode` et `success` attestent que la route RÉPOND, jamais qu'elle
+  // DIT quelque chose : le schéma déclarait `data: { type: 'object' }` sans
+  // `properties`, et fast-json-stringify (`additionalProperties: false` par
+  // défaut) vidait la relation en `{}`. Les deux sorties de
+  // `convertAffiliateVisit` — relation neuve et relation préexistante —
+  // rendent la même paire, et c'est elle qui doit atteindre le fil.
+  it('sert la relation créée, pas un objet vide', async () => {
+    mockConvertVisit.mockResolvedValueOnce({
+      success: true,
+      data: { id: 'rel_42', status: 'completed' },
+    });
+    const res = await app.inject({
+      method: 'POST', url: '/affiliate/register',
+      payload: { token: TOKEN_CODE, referredUserId: 'new_user_id' },
+    });
+
+    expect(res.json().data).toEqual({ id: 'rel_42', status: 'completed' });
+  });
 });
 
 // ─── POST /affiliate/click/:token ─────────────────────────────────────────────

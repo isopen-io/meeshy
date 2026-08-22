@@ -7,6 +7,97 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
+/**
+ * Charge utile de `GET /conversations/:id/stats`.
+ *
+ * Elle était déclarée `data: { type: 'object' }` — sans `properties`, et
+ * fast-json-stringify applique `additionalProperties: false` par défaut : la
+ * réponse ENTIÈRE sortait en `{}`. Les deux clients qui l'appellent typent tous
+ * leurs champs comme NON-optionnels (`ConversationMessageStatsResponse`, iOS et
+ * Android), donc le `{}` faisait échouer le décodage : `fetchStats()` ne pouvait
+ * rendre qu'une erreur, jamais une statistique vide.
+ *
+ * Les trois formes de cette charge utile sont volontairement différentes, et la
+ * distinction est celle que `{ type: 'object' }` efface :
+ *   - `contentTypes` est un objet FERMÉ (six compteurs nommés) ⇒ `properties` ;
+ *   - `hourlyDistribution` est une vraie CARTE (`[String: Int]` côté iOS), dont
+ *     les clés sont des données ⇒ `additionalProperties`, la seule déclaration
+ *     qui laisse passer un objet aux clés inconnues ;
+ *   - `participantStats` / `dailyActivity` / `languageDistribution` sont des
+ *     TABLEAUX, aplatis par le handler depuis les cartes stockées en base.
+ *
+ * Source de vérité de la forme : `ConversationMessageStatsService.shapeResponse`
+ * plus l'aplatissement du handler ci-dessous. Les noms suivent les décodeurs
+ * clients (`ParticipantStatEntry`, `DailyActivityEntry`, `LanguageEntry`).
+ */
+const conversationStatsDataSchema = {
+  type: 'object',
+  properties: {
+    conversationId: { type: 'string' },
+    totalMessages: { type: 'number' },
+    totalWords: { type: 'number' },
+    totalCharacters: { type: 'number' },
+    contentTypes: {
+      type: 'object',
+      properties: {
+        text: { type: 'number' },
+        image: { type: 'number' },
+        audio: { type: 'number' },
+        video: { type: 'number' },
+        file: { type: 'number' },
+        location: { type: 'number' }
+      }
+    },
+    participantStats: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          userId: { type: 'string' },
+          name: { type: 'string', nullable: true },
+          username: { type: 'string', nullable: true },
+          displayName: { type: 'string', nullable: true },
+          avatar: { type: 'string', nullable: true },
+          messageCount: { type: 'number' },
+          wordCount: { type: 'number' },
+          characterCount: { type: 'number' },
+          imageCount: { type: 'number' },
+          audioCount: { type: 'number' },
+          videoCount: { type: 'number' },
+          firstMessageAt: { type: 'string', nullable: true },
+          lastMessageAt: { type: 'string', nullable: true }
+        }
+      }
+    },
+    dailyActivity: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          date: { type: 'string' },
+          count: { type: 'number' }
+        }
+      }
+    },
+    hourlyDistribution: {
+      type: 'object',
+      additionalProperties: { type: 'number' },
+      description: 'Carte heure → nombre de messages ; les clés sont des données'
+    },
+    languageDistribution: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          language: { type: 'string' },
+          count: { type: 'number' }
+        }
+      }
+    },
+    updatedAt: { type: 'string', nullable: true }
+  }
+} as const;
+
 export function registerStatsRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -29,7 +120,7 @@ export function registerStatsRoutes(
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'object' }
+            data: conversationStatsDataSchema
           }
         },
         401: errorResponseSchema,

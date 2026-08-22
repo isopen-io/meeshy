@@ -672,9 +672,18 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
+            // `{ type: 'object' }` sans `properties` sérialise en `{}` :
+            // `additionalProperties: false` est le défaut de
+            // fast-json-stringify. Les deux sorties de
+            // `AffiliateTrackingService.convertAffiliateVisit` (relation neuve
+            // et relation préexistante) rendent la même paire.
             data: {
               type: 'object',
-              description: 'Created affiliate relationship details'
+              description: 'Created affiliate relationship details',
+              properties: {
+                id: { type: 'string', description: 'Affiliate relation ID' },
+                status: { type: 'string', description: 'Relation status' }
+              }
             }
           }
         },
