@@ -3,7 +3,7 @@
 **Date** : 2026-08-22
 **Branche** : `claude/keen-hamilton-inwn81`
 **Périmètre** : passerelle — `routes/messages.ts`, `routes/magic-link.ts`,
-`routes/communities.ts`
+`routes/communities/core.ts` (le module devenu vivant au cycle 86-ter — voir §1)
 
 **Clients touchés** : aucun changement de code client. Aucun nom d'événement
 ajouté ni retiré, aucune charge utile temps réel modifiée, aucune ligne de
@@ -19,10 +19,30 @@ présence, avec la consigne du cycle 84 bis :
 > **`user` × 4 + `sender` × 1** — les seuls qui touchent la présence. Schéma
 > **et** gate dans le même lot, sans quoi la réparation publie la fuite.
 
-Ce cycle les prend. Il en reste un, et pour une raison qui n'est pas un oubli :
-`communities/core.ts:524` vit dans le module OMBRÉ que rien n'enregistre
-(cycles 85-bis / 86). Le corriger n'aurait aucun effet ; la vraie route est
-`routes/communities.ts`, traitée ici.
+Ce cycle les prend — **les cinq**, y compris celui que j'annonçais laisser.
+
+### Le module a bougé SOUS ce lot, une troisième fois
+
+J'ai commencé par corriger `GET /communities/:id/conversations` dans
+`routes/communities.ts`, au motif que `routes/communities/core.ts` vivait dans
+le module ombré. À l'intégration de `main`, le **cycle 86-ter** avait consolidé
+l'ombrage : `routes/communities.ts` est désormais une **coquille de ré-export**,
+et `routes/communities/` est le module vivant. Mon correctif était donc, à
+nouveau, dans le mauvais fichier — pour la raison exactement inverse de la
+première fois.
+
+Il a été porté sur `routes/communities/core.ts`, et le ROUGE re-prouvé contre
+la version de `main` de ce fichier-là : **6 des 6 témoins de cette route
+tombent**. C'est la troisième fois en une session que ce fichier change de
+place, et la deuxième fois que je m'y trompe. La règle du cycle 86 bis tient et
+mérite d'être relue avant chaque correctif de route :
+
+> Avant de corriger une route, `grep` sur le CHEMIN de la route, pas sur le
+> fichier qu'on croit être le sien.
+
+À quoi s'ajoute, désormais : **et re-vérifier après chaque intégration de
+`main`** — une consolidation peut déplacer le fichier vivant entre le moment où
+l'on écrit le correctif et celui où on le pousse.
 
 ## 2. Le faux positif — et ce qu'il cachait
 
@@ -163,7 +183,7 @@ DISTINCTS de la page). Aucune requête de profil ajoutée.
 
 ## 8. Ce que ce cycle laisse ouvert
 
-**Inventaire : 26 sites restants** (31 − 5 traités).
+**Inventaire : 26 sites restants** (31 − 5 traités). Aucun ne touche la présence.
 
 | champ | sites | note |
 |---|---|---|
@@ -173,7 +193,7 @@ DISTINCTS de la page). Aucune requête de profil ajoutée.
 | `attachment` | 2 | `voice/translation.ts` |
 | `message` | 2 | `conversations/messages-advanced.ts` |
 | `creator` / `details` / `link` / `permissions` / `transcription` | 5 | un par un |
-| `user` (module ombré) | 1 | `communities/core.ts:524` — **sans effet tant que le module n'est pas enregistré** |
+| — | — | les cinq sites de présence sont traités (le cycle 86-ter ayant rendu `communities/core.ts` vivant, il l'est aussi) |
 
 Et, propre à ce cycle :
 
