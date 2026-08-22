@@ -935,6 +935,12 @@ export function registerSharingRoutes(
         }
       };
 
+      // `isOnline` était chargé ici et n'a jamais eu de destinataire : le
+      // schéma de réponse déclare `data.membership` quand le handler renvoie
+      // `data.member`, que fast-json-stringify supprime donc en entier. Ne rien
+      // charger qu'aucune surface ne sert — sinon le jour où la dérive
+      // `member`/`membership` est corrigée, la présence brute d'un invité part
+      // sur le fil sans qu'un seul témoin ne tombe.
       const invitedMemberInclude = {
         user: {
           select: {
@@ -943,8 +949,7 @@ export function registerSharingRoutes(
             displayName: true,
             firstName: true,
             lastName: true,
-            avatar: true,
-            isOnline: true
+            avatar: true
           }
         }
       };
