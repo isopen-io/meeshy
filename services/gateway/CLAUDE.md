@@ -688,7 +688,7 @@ main sont repris au cycle 89 (voir plus bas) ; les quatre `analysis` de
 de message, les deux routes de traduction vocale, la création de lien de
 partage, le `creator` d'administration, le 400 de `calls.ts`, et
 `users/profile.ts|permissions` RETIRÉ faute de producteur). Détail et preuves de
-sérialisation : `tasks/realtime-sync-audit-2026-08-22-cycle91.md`.
+sérialisation : `tasks/realtime-sync-audit-2026-08-22-cycle91-bis.md`.
 
 **Il ne reste qu'UNE ligne au cliquet, et ce n'est pas une fuite** :
 `messages.ts|sender|200`, dette de FORME décrite au § suivant — la déclaration y

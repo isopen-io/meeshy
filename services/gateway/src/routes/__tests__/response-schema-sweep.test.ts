@@ -90,7 +90,7 @@ const ROUTES_DIR = join(__dirname, '..');
  *   producteur.
  *
  * Détail, preuves de sérialisation et inventaire raisonné :
- * `tasks/realtime-sync-audit-2026-08-22-cycle91.md`.
+ * `tasks/realtime-sync-audit-2026-08-22-cycle91-bis.md`.
  */
 const FROZEN_INVENTORY: readonly string[] = [
   'messages.ts|sender|200',
