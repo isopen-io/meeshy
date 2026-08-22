@@ -129,6 +129,29 @@ internal struct _InlineOverlayControls: View {
                         .frame(width: 28, height: 28)
                         .accessibilityLabel(String(localized: "media.video.airplay", defaultValue: "AirPlay", bundle: .module))
                 }
+                if controls.contains(.mute) {
+                    // S2, exigence produit 2026-08-22 (« reels ET vidéos de post ») :
+                    // `_InlineOverlayControls` n'avait aucun cas `.mute` — le
+                    // drapeau existait dans `ControlSet` (consommé par
+                    // `VideoTransportControls`, plein écran) mais un appelant
+                    // `.inline` qui l'ajoutait à ses `controls` n'obtenait
+                    // silencieusement AUCUN bouton. Réutilise EXACTEMENT le
+                    // même toggle/icônes/clés que `VideoTransportControls
+                    // .muteButton` — un seul jeu d'icônes, aucune clé neuve.
+                    Button {
+                        manager.isMuted.toggle()
+                        HapticFeedback.light()
+                    } label: {
+                        Image(systemName: manager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 28, height: 28)
+                            .adaptiveGlass(in: Circle(), interactive: true)
+                    }
+                    .accessibilityLabel(manager.isMuted
+                        ? String(localized: "media.video.unmute", defaultValue: "Réactiver le son", bundle: .module)
+                        : String(localized: "media.video.mute", defaultValue: "Couper le son", bundle: .module))
+                }
                 if controls.contains(.speed) {
                     Button {
                         manager.cycleSpeed()

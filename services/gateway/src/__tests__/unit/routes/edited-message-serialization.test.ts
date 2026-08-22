@@ -12,6 +12,10 @@
  * une charge utile INVENTÉE n'atteste rien.** Les objets ci-dessous sont
  * calqués sur `messageResponse` tel que les deux gestionnaires le composent.
  *
+ * Les deux transports sont couverts : `PUT` (avec `meta`) et `PATCH` (sans),
+ * dont le cycle 91 bis a séparé les enveloppes. Le `sender` est le même des deux
+ * côtés, et c'est ce que ce fichier garde.
+ *
  * **Ce qui tombe, et ce qui est seulement mesuré.** Le module de routes exige
  * prisma, le service de traduction, l'auth et Socket.IO ; un témoin qui les
  * monterait tous n'observerait plus le schéma mais le harnais. Ce fichier garde
@@ -25,7 +29,10 @@
 import { describe, it, expect, afterEach } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
-import { editedMessageResponseSchema } from '../../../routes/conversations/messages-advanced';
+import {
+  editedMessageResponseSchema,
+  patchedMessageResponseSchema
+} from '../../../routes/conversations/messages-advanced';
 
 /** L'expéditeur tel que le `include` des deux routes le charge — un Participant. */
 function participantSender(overrides: Record<string, unknown> = {}) {
@@ -175,6 +182,34 @@ describe("l'expéditeur est un PARTICIPANT, et le lot le déclare comme tel", ()
     expect(sender.userId).toBeNull();
     expect(sender.type).toBe('anonymous');
     expect(sender.user).toBeNull();
+  });
+});
+
+describe("le sibling PATCH porte le MÊME expéditeur, sans `meta`", () => {
+  async function servePatched(data: Record<string, unknown>) {
+    app = Fastify({ logger: false });
+    app.get('/patched', { schema: { response: { 200: patchedMessageResponseSchema } } }, async () => ({
+      success: true,
+      data
+    }));
+    await app.ready();
+    return (await app.inject({ method: 'GET', url: '/patched' })).json().data;
+  }
+
+  it('sert `role`, `language` et le `user` imbriqué', async () => {
+    const { sender } = await servePatched(messageResponse());
+
+    expect(sender.role).toBe('MEMBER');
+    expect(sender.language).toBe('fr');
+    expect(sender.user.username).toBe('alice');
+  });
+
+  it("ne sert PAS `isOnline`, même quand l'objet le porte", async () => {
+    const { sender } = await servePatched(
+      messageResponse({ sender: participantSender({ isOnline: true }) })
+    );
+
+    expect(sender.isOnline).toBeUndefined();
   });
 });
 

@@ -11,7 +11,9 @@ import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { messageValidationHook } from '../../middleware/rate-limiter';
 import {
+  messageSchema,
   messageResponseSchema,
+  conversationStatsSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
@@ -60,50 +62,62 @@ const EditMessageBodySchema = z.object({
 const logger = enhancedLogger.child({ module: 'messages-advanced' });
 
 /**
- * Plafond de `GET /conversations/:id/status` : les N messages les plus récents.
+ * `meta.conversationStats`, que `messageResponseSchema` ne porte pas.
  *
- * Cet endpoint charge, PAR message, ses entrées de statut et le participant
- * joint sur chacune — il ne peut pas rester non borné. Le détail exhaustif
- * d'un message précis vit derrière `GET /messages/:messageId/status-details`,
- * qui est paginé ; ce plafond n'y retire donc aucune information.
+ * Le cycle 88 bis a réparé les deux transports d'ÉDITION en les pointant sur
+ * `messageResponseSchema` (`{ success, data: messageSchema }`) — la bonne
+ * forme, et la charge utile arrive enfin. Mais le transport `PUT` sert un champ
+ * de plus que le PATCH : `meta: { conversationStats }`, calculé juste avant la
+ * réponse. `messageSchema` ne le déclarant pas, il restait supprimé.
+ *
+ * Et le transport DELETE, lui, n'avait pas été repris du tout : son schéma est
+ * BIEN FORMÉ (`message: { type: 'string' }`) et décrit simplement une autre
+ * charge utile que `{messageId, deleted, meta}`. Le balayage des objets nus ne
+ * pouvait pas le voir — c'est ce qui a motivé le second balayage
+ * (`__tests__/response-payload-mismatch.ts`).
+ *
+ * Gardé par
+ * `__tests__/unit/routes/conversations/message-mutation-serialization.test.ts`.
  */
-const CONVERSATION_STATUS_PAGE_SIZE = 50;
+const conversationStatsMetaSchema = {
+  type: 'object',
+  properties: { conversationStats: conversationStatsSchema },
+} as const;
 
 /**
  * L'expéditeur tel que les DEUX routes d'édition le CHARGENT — un `Participant`,
  * pas un `User`.
  *
- * Deux défauts se sont empilés sur ce champ, et l'ordre compte : tant que le
- * cycle 88 bis n'avait pas corrigé l'enveloppe fantôme (`data.message` sur une
- * charge qui n'a jamais porté cette clé), `data` sortait `{}` et rien de ceci
- * n'était observable. **Réparer une enveloppe rend lisibles les défauts de ce
- * qu'elle contenait.**
+ * Trois défauts se sont empilés sur ce champ, et l'ordre compte. Le cycle 88 bis
+ * a corrigé l'enveloppe fantôme (`data.message` sur une charge qui n'a jamais
+ * porté cette clé) ; le cycle 91 bis a composé l'enveloppe proprement et ajouté
+ * `meta` au seul transport qui le calcule. Tant que `data` sortait `{}`, rien de
+ * ceci n'était observable — **réparer une enveloppe rend lisibles les défauts de
+ * ce qu'elle contenait.**
  *
- * `messageSchema.sender` est `userMinimalSchema`, qui couvre bien le cas
- * participant — il déclare `userId` et `type` pour lui. Mais il est
- * délibérément MINIMAL, et ces deux routes chargent trois champs de plus.
- * Mesuré au compilateur sur la charge utile réelle, une fois l'enveloppe
- * réparée :
+ * Reste celui-ci. `messageSchema.sender` est `userMinimalSchema`, qui couvre bien
+ * le cas participant — il déclare `userId` et `type` pour lui — mais qui est
+ * délibérément MINIMAL, quand ces deux routes chargent trois champs de plus.
+ * Mesuré au compilateur sur la charge utile réelle :
  *
  * ```
  * in  : { id, userId, displayName, avatar, type, role, language, user: {…} }
  * out : { id, userId, displayName, avatar, type }     ← role, language, user PERDUS
  * ```
  *
- * Élargir `userMinimalSchema` pousserait `role`, `language` et un objet `user`
- * imbriqué sur les dizaines de réponses qui l'emploient, dont beaucoup décrivent
- * un vrai `User`. Le grain juste est celui qui CHARGE : ce sont ces deux routes
- * qui chargent plus, ce sont elles qui déclarent plus.
+ * Élargir `userMinimalSchema` pousserait ces trois champs sur les dizaines de
+ * réponses qui l'emploient, dont beaucoup décrivent un vrai `User`. **Le grain
+ * juste est celui qui CHARGE** : ce sont ces deux routes qui chargent plus, ce
+ * sont elles qui déclarent plus.
  *
  * **`isOnline` est délibérément ABSENT, et c'est la décision du lot.**
  * `userMinimalSchema` le déclare, et la réparation de l'enveloppe a rendu cette
- * déclaration VIVANTE : vérifié au compilateur, un `isOnline: true` posé sur
- * l'objet est désormais SERVI. Rien ne fuit aujourd'hui — aucun des deux
- * `select` ne le charge — mais le piège du cycle 84 est armé pour de bon, et le
- * prochain `select` qui l'ajoute le mettrait sur le fil sans gate et sans qu'un
- * témoin tombe. L'omettre est fail-closed : si le champ apparaît, le sérialiseur
- * le retire. Cela vaut mieux qu'un gate sur une donnée que personne ne charge,
- * lequel est du code mort qui se périme.
+ * déclaration VIVANTE : vérifié au compilateur, un `isOnline` posé sur l'objet
+ * serait désormais SERVI. Rien ne fuit aujourd'hui — aucun des deux `select` ne
+ * le charge — mais le prochain qui l'ajoute le mettrait sur le fil sans gate et
+ * sans qu'un témoin tombe. L'omettre est fail-closed : si le champ apparaît, le
+ * sérialiseur le retire. Cela vaut mieux qu'un gate sur une donnée que personne
+ * ne charge, lequel est du code mort qui se périme.
  */
 const editedMessageSenderSchema = {
   type: 'object',
@@ -133,25 +147,64 @@ const editedMessageSenderSchema = {
 } as const;
 
 /**
- * `messageResponseSchema` avec ce seul `sender` remplacé.
+ * Le message édité, servi À PLAT — la forme commune aux deux transports.
  *
- * L'enveloppe vient du schéma partagé — corrigée au cycle 88 bis, elle est
- * juste, et la recopier ici rouvrirait la porte que ce cycle-là a fermée. Seul
- * le `sender` est surchargé, pour la raison ci-dessus.
+ * Composé depuis `messageSchema` et **non** en descendant dans
+ * `messageResponseSchema.properties.data` : plusieurs suites mockent
+ * `@meeshy/shared/types/api-schemas` avec un sous-ensemble des exports, et une
+ * chaîne d'accès y lève à l'IMPORT, quand un `...spread` d'`undefined` est légal
+ * et inerte. La contrainte vient du cycle 91 bis et elle est juste — une
+ * première version de ce lot descendait dans `.properties.data.properties` et a
+ * fait cesser de CHARGER une suite de 154 témoins.
+ */
+const editedMessageDataSchema = {
+  ...messageSchema,
+  description: 'The message as it stands after the edit — served flat, not wrapped',
+  properties: {
+    ...messageSchema.properties,
+    sender: editedMessageSenderSchema,
+  },
+} as const;
+
+/**
+ * L'enveloppe du transport `PUT` : le message à plat, plus les stats que lui
+ * seul calcule.
  */
 export const editedMessageResponseSchema = {
-  ...messageResponseSchema,
+  type: 'object',
   properties: {
-    ...messageResponseSchema.properties,
+    success: { type: 'boolean', example: true },
     data: {
-      ...messageResponseSchema.properties.data,
+      ...editedMessageDataSchema,
       properties: {
-        ...messageResponseSchema.properties.data.properties,
-        sender: editedMessageSenderSchema
-      }
-    }
-  }
+        ...editedMessageDataSchema.properties,
+        meta: conversationStatsMetaSchema,
+      },
+    },
+  },
 } as const;
+
+/**
+ * L'enveloppe du transport `PATCH` : la même, SANS `meta` — ce transport ne
+ * calcule pas de statistiques.
+ */
+export const patchedMessageResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: editedMessageDataSchema,
+  },
+} as const;
+
+/**
+ * Plafond de `GET /conversations/:id/status` : les N messages les plus récents.
+ *
+ * Cet endpoint charge, PAR message, ses entrées de statut et le participant
+ * joint sur chacune — il ne peut pas rester non borné. Le détail exhaustif
+ * d'un message précis vit derrière `GET /messages/:messageId/status-details`,
+ * qui est paginé ; ce plafond n'y retire donc aucune information.
+ */
+const CONVERSATION_STATUS_PAGE_SIZE = 50;
 
 
 /**
@@ -583,8 +636,14 @@ export function registerMessagesAdvancedRoutes(
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
+              // Le `message` déclaré ici — une STRING — n'a jamais été servi :
+              // le handler acquitte `{messageId, deleted, meta}`. Aucune clé ne
+              // matchait, donc `data` sortait VIDE, et le client n'apprenait
+              // même pas que la suppression avait eu lieu.
               properties: {
-                message: { type: 'string', example: 'Message supprimé avec succès' }
+                messageId: { type: 'string', description: 'ID of the deleted message' },
+                deleted: { type: 'boolean', description: 'Always true on success', example: true },
+                meta: conversationStatsMetaSchema
               }
             }
           }
@@ -789,7 +848,10 @@ export function registerMessagesAdvancedRoutes(
         // `ApiResponse<ApiMessage>`). `data: {}` y levait `MissingFieldException`
         // sur `id`/`conversationId`, que la file d'outbox lisait comme une
         // panne réseau : l'édition, pourtant appliquée, était rejouée sans fin.
-        200: editedMessageResponseSchema,
+        //
+        // Ce transport ne calcule PAS de statistiques (le sibling PUT si), d'où
+        // l'enveloppe sans `meta` ici et sa variante `+ meta` là-bas.
+        200: patchedMessageResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
@@ -1069,7 +1131,9 @@ export function registerMessagesAdvancedRoutes(
                 reactions: {
                   type: 'array',
                   description: 'All reactions grouped by message'
-                }
+                },
+                // Le handler sert aussi `total` ; non déclaré, il était retiré.
+                total: { type: 'number', description: 'Total reaction rows across the conversation' }
               }
             }
           }
@@ -1530,7 +1594,9 @@ export function registerMessagesAdvancedRoutes(
                 statuses: {
                   type: 'array',
                   description: 'Status information for all messages'
-                }
+                },
+                // Idem : `total` était servi et supprimé.
+                total: { type: 'number', description: 'Number of messages covered by this status page' }
               }
             }
           }

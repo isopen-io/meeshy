@@ -48,18 +48,37 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       body: loginRequestSchema,
       response: {
         200: {
-          description: 'Successful login - returns user data, tokens, and session info',
+          description: 'Successful login - returns user data, tokens, and session info. When the account carries a second factor, returns instead `requires2FA` + `twoFactorToken`, to be presented to POST /login/2fa.',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
+              // Cette route sert DEUX charges utiles sous le même 200, et le
+              // schéma n'en décrivait qu'une. `requires2FA` et `twoFactorToken`
+              // n'étant pas déclarés, fast-json-stringify les RETIRAIT : la
+              // branche du second facteur ne rendait que `user`, et un compte
+              // protégé par 2FA ne pouvait pas terminer sa connexion — le client
+              // ne savait pas qu'un second facteur était attendu (iOS
+              // `LoginView.swift` : `if authManager.requires2FA`) et n'avait
+              // aucun jeton à présenter à `POST /login/2fa`.
+              //
+              // Les deux branches sont EXCLUSIVES : la branche 2FA ne porte ni
+              // `token` ni `sessionToken` — aucun accès n'est accordé avant que
+              // le second facteur soit vérifié.
               properties: {
+                // Branche « connexion complète »
                 user: userSchema,
-                token: { type: 'string', description: 'JWT access token for API authentication' },
-                sessionToken: { type: 'string', description: 'Session token for device management (store securely)' },
+                token: { type: 'string', description: 'JWT access token for API authentication (absent when 2FA is required)' },
+                sessionToken: { type: 'string', description: 'Session token for device management (store securely; absent when 2FA is required)' },
                 session: sessionMinimalSchema,
-                expiresIn: { type: 'number', description: 'Token expiration time in seconds', example: 86400 }
+                expiresIn: { type: 'number', description: 'Token expiration time in seconds', example: 86400 },
+
+                // Branche « second facteur attendu »
+                requires2FA: { type: 'boolean', description: 'True when the account carries a second factor — no access token is granted yet', example: true },
+                twoFactorToken: { type: 'string', description: 'Short-lived token identifying the pending login; present it to POST /login/2fa with the user code' },
+                rememberDevice: { type: 'boolean', description: 'Echo of the requested device-trust preference, to be replayed on POST /login/2fa' },
+                message: { type: 'string', description: 'Human-readable prompt for the second factor' }
               }
             }
           }

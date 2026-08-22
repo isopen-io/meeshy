@@ -1364,6 +1364,13 @@ export function registerParticipantsRoutes(
               type: 'object',
               properties: {
                 message: { type: 'string', example: 'Rôle du participant modifié avec succès' },
+                // Le handler sert aussi le couple qui NOMME la mutation ;
+                // non déclarés, `userId` et `role` étaient retirés, et
+                // l'appelant devait rouvrir `participant` pour savoir ce qui
+                // venait de changer. L'événement Socket.IO jumeau
+                // (`PARTICIPANT_ROLE_UPDATED`) porte les deux depuis toujours.
+                userId: { type: 'string', description: 'The participant whose role changed' },
+                role: { type: 'string', description: 'The role now in force' },
                 participant: conversationParticipantSchema
               }
             }
