@@ -26,6 +26,7 @@ export interface UseWebRTCP2POptions {
   callId: string;
   userId?: string;
   onError?: (error: Error) => void;
+  onConnected?: () => void;
 }
 
 // Gap fix (2026-07-07) — the gateway has always exposed a full TURN
@@ -91,7 +92,7 @@ function aggregateIceConnectionState(
   return ICE_CONNECTION_STATE_PRIORITY.find((candidate) => present.has(candidate)) ?? 'new';
 }
 
-export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
+export function useWebRTCP2P({ callId, userId, onError, onConnected }: UseWebRTCP2POptions) {
   const {
     localStream,
     iceServers,
@@ -359,7 +360,13 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               onError?.(new Error('PEER_CONNECTION_FAILED'));
             } else if (aggregated === 'connected' && previousAggregated !== 'connected') {
               setConnecting(false);
-              toast.success('Connected!');
+              // No toast.success here either (Vague 153) — same forwarding
+              // contract as the failure branch above: this hook has no i18n
+              // access (it isn't a component and doesn't load translation
+              // catalogs), so the hardcoded 'Connected!' toast was English
+              // for every locale. The consumer (VideoCallInterface's
+              // handleWebRTCConnected) owns the translated toast.
+              onConnected?.();
             }
 
             if (state === 'connected') {
@@ -481,7 +488,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
 
       return service;
     },
-    [callId, userId, iceServers, addRemoteStream, setError, setConnecting, onError, requestFreshTurnCredentials, currentNegotiationId, bumpOutgoingNegotiationId]  // CRITICAL: Added userId, iceServers
+    [callId, userId, iceServers, addRemoteStream, setError, setConnecting, onError, onConnected, requestFreshTurnCredentials, currentNegotiationId, bumpOutgoingNegotiationId]  // CRITICAL: Added userId, iceServers
   );
 
   /**

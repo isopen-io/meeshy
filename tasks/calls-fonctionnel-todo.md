@@ -10249,3 +10249,49 @@ plusieurs `toast.error(error.message)` sur du texte anglais codé en dur, jamais
   fuite `createPeerConnection()` (web, `webrtc-service.ts:369`) au-delà du seul site déjà patché
   (Vague 148) — repéré par l'audit de cette vague comme candidat pour une prochaine vague ; kick
   modérateur sans vérification du rôle CONVERSATION de la cible (Vague 149, décision produit).
+
+## Vague 153 — `toast.success('Connected!')` était le dernier texte anglais codé en dur sans forwarding (web) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend
+explicitement l'item laissé en « Non fait volontairement » par la Vague 151 : « `toast.success('Connected!')`
+(même fichier, branche jumelle de succès) reste un texte anglais codé en dur — PAS un doublon
+(aucun toast de succès équivalent côté `VideoCallInterface`), donc une dette i18n différente de
+celle fixée ici, hors périmètre d'un fix à une seule préoccupation. »
+
+- **Root cause** : `use-webrtc-p2p.ts` n'a pas accès à l'i18n — ce n'est pas un composant, il ne
+  charge aucun catalogue de traduction. La branche `aggregated === 'failed'` de l'agrégation
+  call-wide (`onConnectionStateChange`) le sait déjà et forwarde via `onError?.()`, laissant le
+  toast traduit au consommateur (`VideoCallInterface.handleWebRTCError`, Vague 149/151). La branche
+  jumelle `aggregated === 'connected'` n'avait PAS ce forwarding : elle appelait directement
+  `toast.success('Connected!')`, un texte anglais figé pour toute locale — le seul site de toast
+  restant dans ce hook sans contrat de forwarding vers un consommateur traduit.
+- **Fix** : ajout de `onConnected?: () => void` à `UseWebRTCP2POptions`, symétrique à `onError`.
+  La branche `connected` appelle désormais `onConnected?.()` au lieu de `toast.success('Connected!')`
+  directement. `VideoCallInterface.tsx` gagne `handleWebRTCConnected` (même forme que
+  `handleWebRTCError`) : `toast.success(t('toasts.connected'))`, câblé via
+  `onConnected: handleWebRTCConnected` sur `useWebRTCP2P(...)`. Nouvelle clé `toasts.connected`
+  ajoutée aux 4 locales (`en`: "Connected!", `fr`: "Connecté !", `es`: "¡Conectado!", `pt`: "Conectado!").
+  Aucun changement de comportement pour l'utilisateur anglophone ; les trois autres locales voient
+  enfin un toast traduit au lieu du texte anglais fixe.
+- **Tests** (TDD, RED confirmé — 2 échecs précis avant le fix) : `use-webrtc-p2p.test.tsx`, le test
+  du describe « Multi-peer connection state aggregation (W4) » qui asserait `toast.success` appelé
+  directement réécrit pour asserter `onConnected` appelé une fois et `toast.success` JAMAIS appelé
+  par le hook. `VideoCallInterface.test.tsx` : nouveau describe « handleWebRTCConnected » — le mock
+  de `useWebRTCP2P` capture désormais aussi `onConnected` (même pattern que `onError` depuis la
+  Vague 149), test neuf assertant `toast.success('toasts.connected')` (jamais `'Connected!'` brut).
+  Sweep web `--testPathPatterns="[Cc]all|webrtc"` : **60 suites / 795 tests** verts (+1 net vs
+  Vague 152, 0 régression). `npx tsc --noEmit` (apps/web) : 0 erreur nouvelle sur les 3 fichiers
+  touchés (`use-webrtc-p2p.ts`, `VideoCallInterface.tsx`, aucun sur les 4 `calls.json`) — compte
+  d'erreurs préexistantes identique avant/après. JSON des 4 locales validé (`python3 -m json.tool`).
+  `eslint` non exécuté : même échec environnemental documenté en Vague 146–152.
+- **Non fait volontairement** : les six autres `toast.error(message)` du fichier
+  (initializeLocalStream/createOffer/handleOffer/handleAnswer/renégociation×2, repérés par l'audit
+  Vague 151) restent un mélange de vrais messages d'erreur navigateur/WebRTC et de replis anglais
+  codés en dur — dette i18n plus large nécessitant un traitement au cas par cas (pas la même forme
+  de bug : ce ne sont pas des doublons de toast, et certains portent un message utile au débogage
+  qu'une traduction générique appauvrirait). Reconduits (inchangés) : dead code / god-object
+  `CallManager.swift` (~6234 lignes, toolchain iOS hors d'atteinte dans ce sandbox — confirmé à
+  nouveau, ni `xcodebuild` ni `swift` disponibles) ; ADR `actor CallEventQueue` non implémenté ;
+  iOS single-peer côté groupe (`2026-08-13-group-calls-gap-analysis.md`) ; kick modérateur sans
+  vérification du rôle CONVERSATION de la cible (décision produit, Vague 147/149) ; dette lint
+  systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143, décision d'équipe requise).
