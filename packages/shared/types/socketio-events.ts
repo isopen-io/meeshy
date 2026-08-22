@@ -778,10 +778,35 @@ export interface ConversationJoinErrorEventData {
 /**
  * Données pour l'événement d'authentification
  */
+/**
+ * L'identité MINIMALE que l'accusé d'authentification rend au socket qui vient
+ * de s'authentifier.
+ *
+ * Ce n'est PAS un `SocketIOUser`, et le déclarer ainsi était un mensonge de
+ * contrat (cycle 101) : les deux — et seuls — émetteurs de `AUTHENTICATED`
+ * (`AuthHandler._authenticateJWTUser` et `._authenticateAnonymousUser`)
+ * servent exactement ces trois champs. `language` n'existe pas sur
+ * `SocketIOUser` ; ses onze champs requis (`username`, `email`, `role`,
+ * `isOnline`, `lastActiveAt`…) n'ont jamais voyagé sur cet événement, et un
+ * participant ANONYME n'a pas de ligne `User` d'où les tirer.
+ *
+ * Le destinataire de cet accusé sait déjà QUI il est — il vient de présenter
+ * son jeton. Ce que l'événement lui apprend, c'est sous quelle identité la
+ * passerelle l'a admis (`id`), dans quelle langue elle le servira
+ * (`language`), et par quel régime (`isAnonymous`).
+ */
+export interface AuthenticatedEventUser {
+  readonly id: string;
+  readonly language: string;
+  readonly isAnonymous: boolean;
+}
+
 export interface AuthenticatedEventData {
   readonly success: boolean;
-  readonly user?: SocketIOUser;
+  readonly user?: AuthenticatedEventUser;
   readonly error?: string;
+  /** `APP_VERSION` de la passerelle — émis par les deux producteurs. */
+  readonly version?: string;
 }
 
 /**

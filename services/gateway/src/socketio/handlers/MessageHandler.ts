@@ -7,6 +7,29 @@
  */
 
 import * as path from 'path';
+// Cycle 101 — ce handler est le DERNIER encore rendu au `Socket` nu de
+// socket.io (les dix autres sont sur `MeeshySocket`, cycles 99 et 100). Le flip
+// a été TENTÉ ici, et mesuré : il fait tomber le compilateur sur HUIT
+// émissions, réparties en deux dettes indépendantes.
+//
+//  1. `message:edited` (1 site) — le producteur omettait `senderId`,
+//     `messageType` et `createdAt`, trois des sept champs que `SocketIOMessage`
+//     déclare requis, et que le décodeur iOS lit en `try c.decode`. RÉPARÉ dans
+//     ce cycle, et retenu par le cliquet de `socketio/messageEditedPayload.ts`.
+//
+//  2. `message:new` (7 sites) — la dette que le cycle 100 nommait déjà :
+//     `_buildMessagePayload` rend `unknown`, que les enrichissements
+//     (`forwardedFrom`, `postReplyTo`, `mentionedUsers`, `trackingLinks`,
+//     `location`) MUTENT ensuite via `as Record<string, unknown>`. Rendre ce
+//     type honnête est nécessaire mais PAS suffisant : mesuré au compilateur,
+//     le seul blocage restant est alors `messageType`, que
+//     `buildMessageNewPayload` sert en `string` (`message.messageType ||
+//     'text'`) quand le contrat déclare l'union `MessageType`. Le caster
+//     BLANCHIRAIT précisément ce que la garde existe pour voir ; l'honnête est
+//     de valider la colonne contre l'union AU PRODUCTEUR. C'est un lot à part,
+//     et il se mesure contre les trois clients.
+//
+// Le flip de ce fichier appartient donc au lot (2), avec lequel il se livrera.
 import type { Socket } from 'socket.io';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -59,6 +82,7 @@ import type {
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import type { Message } from '@meeshy/shared/types/index';
 import { buildMessageNewPayload } from '../messageNewPayload';
+import { buildMessageEditedCore } from '../messageEditedPayload';
 import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
@@ -719,6 +743,11 @@ export class MessageHandler {
           senderId: true,
           content: true,
           originalLanguage: true,
+          // `messageType` et `createdAt` ne sont pas lus par la décision
+          // d'admission : ils sont REQUIS par le contrat de fil
+          // (`SocketIOMessage`) que la diffusion doit servir. Deux colonnes de
+          // plus sur un `select` déjà là — aucun aller-retour supplémentaire.
+          messageType: true,
           createdAt: true,
           // Lu pour la réconciliation des mentions : une mention ajoutée en
           // éditant un message éphémère ne doit pas survivre à ce message.
@@ -871,13 +900,25 @@ export class MessageHandler {
         onError: (err) => handlerLogger.warn('mention reconciliation failed after socket edit', { messageId: validated.messageId, error: err }),
       });
 
+      // Le NOYAU du contrat `message:edited` vient de `buildMessageEditedCore`
+      // — la source unique partagée avec les autres producteurs de l'événement.
+      // Ce littéral était manuscrit, et il omettait TROIS des sept champs que
+      // `SocketIOMessage` déclare requis (`senderId`, `messageType`,
+      // `createdAt`), ce qui faisait échouer le décodage iOS du message ENTIER
+      // et rendait invisible en direct, sur iOS, toute édition faite depuis le
+      // web. Détail et tableau de parité : `socketio/messageEditedPayload.ts`.
+      //
+      // `sender` reste ici, en passthrough BRUT : la forme est propre à ce
+      // transport (le `select` ci-dessus porte `role`, pas `user`), et
+      // l'aligner sur celle du manager serait un CHANGEMENT de forme, pas un
+      // ajout.
       const updatedMessage = {
-        id: message.id,
-        conversationId: message.conversationId,
-        content: editedContent,
-        isEdited: true,
-        editedAt,
-        originalLanguage: message.originalLanguage,
+        ...buildMessageEditedCore(message as unknown as Message, {
+          conversationId: message.conversationId,
+          content: editedContent,
+          isEdited: true,
+          editedAt,
+        }),
         sender: message.sender,
       };
 

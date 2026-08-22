@@ -13,14 +13,14 @@
  * CommentReactionHandler delegates join/leave to the same shared room.
  */
 
-import type { Socket } from 'socket.io';
-import type { Server as SocketIOServer } from 'socket.io';
+import type { MeeshySocket as Socket, MeeshyIOServer as SocketIOServer } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
 import { PostReactionService } from '../../services/PostReactionService';
 import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
+import type { PostReactionUpdateEventData } from '@meeshy/shared/types/post';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import {
@@ -96,7 +96,11 @@ export class PostReactionHandler {
     emoji: string,
     action: 'add' | 'remove',
     userId: string,
-    updateEvent: unknown
+    // Cycle 101 — `unknown` ici ANNULAIT le contrat pour les deux sites
+    // d'émission ci-dessous : la garde d'un `MeeshySocket` ne vaut que jusqu'au
+    // premier paramètre non typé (leçon du cycle 100, `SocialEventsHandler`).
+    // `createUpdateEvent` rend déjà exactement cette forme.
+    updateEvent: PostReactionUpdateEventData
   ): Promise<void> {
     if (emoji === HEART_EMOJI) {
       const post = await this.prisma.post.findUnique({
