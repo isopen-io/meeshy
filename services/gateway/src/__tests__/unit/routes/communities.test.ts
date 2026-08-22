@@ -56,10 +56,13 @@ const MEMBER_ID = '507f1f77bcf86cd799439022';
 // les cas qui ne parlent pas de présence restent inchangés. Sans lui, le
 // résolveur rend `undefined` et le handler tombe en 500.
 beforeEach(() => {
-  mockResolvePrefsOnly.mockImplementation(async (ids: string[]) =>
+  // `mockReset` et pas seulement `mockImplementation` : sans lui l'historique
+  // d'appels s'accumule d'un témoin à l'autre, et un `not.toHaveBeenCalled()`
+  // voit les appels du voisin.
+  mockResolvePrefsOnly.mockReset().mockImplementation(async (ids: string[]) =>
     new Map((ids ?? []).map((id) => [id, { showOnline: true, showLastSeenTimestamp: true }])),
   );
-  mockResolveForTargets.mockImplementation(async (_v: unknown, ids: string[]) =>
+  mockResolveForTargets.mockReset().mockImplementation(async (_v: unknown, ids: string[]) =>
     new Map((ids ?? []).map((id) => [id, { showOnline: true, showLastSeenTimestamp: true }])),
   );
 });
@@ -671,31 +674,64 @@ describe('GET /communities/:id/members — gate de présence (module live)', () 
   });
 });
 
-// ─── L'aperçu de membres de la RECHERCHE ne sort aucune présence (module live) ─
+// ─── L'aperçu de membres de la RECHERCHE : servi, et GATÉ (module live) ──────
 //
-// Ce témoin existait au cycle 84 — mais dans `communities/search.test.ts`, qui
-// monte `routes/communities/index`, c'est-à-dire le répertoire MASQUÉ. Il
-// gardait donc une porte qui n'est pas montée. Le voici sur le module réel.
+// Le cycle 84 avait posé ici un témoin « ne sert aucune présence », gardant une
+// non-fuite ACCIDENTELLE (schéma `{ type: 'object' }` NU ⇒ `{}`), avec sa
+// condition de péremption écrite : « le jour où quelqu'un déclare les
+// propriétés, ce témoin doit tomber — et le forcer à poser le gate STRICT en
+// même temps. »
 //
-// La conclusion du cycle 84 tient pour la route live : son schéma déclare
-// `creator` et `members` en `{ type: 'object' }` NU, sans `properties`, et
-// fast-json-stringify sérialise cette forme en `{}`. Le jour où quelqu'un
-// déclare ces propriétés pour faire vivre l'aperçu, ce témoin tombe — et
-// l'oblige à poser le gate STRICT (la recherche est une porte de découverte).
+// Le cycle 84 bis a fait ce jour-là — mais dans `routes/communities/search.ts`,
+// le module MASQUÉ : sa réparation de schéma (le `{}` faisait échouer le
+// décodage iOS de la réponse ENTIÈRE) et son gate n'ont jamais tourné. Ce
+// cycle les porte sur le module MONTÉ, et le témoin garde désormais le GATE.
 
-describe('GET /communities/search — aucune présence sur l aperçu (module live)', () => {
-  it('ne sert ni isOnline ni profil de membre', async () => {
+describe('GET /communities/search — l aperçu de membres est gaté (module live)', () => {
+  const HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
+
+  async function searchWith(members: any[]) {
     const app = await buildApp();
-    (app as any).prisma.community.findMany.mockResolvedValueOnce([{
-      ...mockCommunityWithAdminMember,
-      members: [{ user: { id: OTHER_USER_ID, username: 'bob', displayName: 'Bob', avatar: null, isOnline: true } }],
-    }]);
-
+    (app as any).prisma.community.findMany.mockResolvedValueOnce([
+      { ...mockCommunityWithAdminMember, members },
+    ]);
+    (app as any).prisma.communityMember.findMany.mockResolvedValue([]);
     const res = await app.inject({ method: 'GET', url: '/communities/search?q=test' });
-    const member = res.json().data[0].members[0];
+    const body = res.json();
     await app.close();
+    return body;
+  }
 
-    expect(member.user).toBeUndefined();
-    expect(member.isOnline).toBeUndefined();
+  const onlineMember = { user: { id: OTHER_USER_ID, username: 'bob', displayName: 'Bob', avatar: null, isOnline: true } };
+
+  it('sert bien le profil du membre (le schéma ne l efface plus)', async () => {
+    const body = await searchWith([onlineMember]);
+
+    expect(body.data[0].members[0].user.id).toBe(OTHER_USER_ID);
+    expect(body.data[0].members[0].user.username).toBe('bob');
+  });
+
+  it('masque isOnline d un membre dont la présence n est pas montrable', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[OTHER_USER_ID, HIDDEN]]));
+
+    const body = await searchWith([onlineMember]);
+
+    expect(body.data[0].members[0].user.isOnline).toBe(false);
+  });
+
+  // La recherche sert `isPrivate: false` sans condition d'appartenance : le
+  // lecteur qui découvre une communauté n'a posé aucun lien.
+  it('résout par le critère STRICT une communauté que le lecteur découvre', async () => {
+    await searchWith([onlineMember]);
+
+    expect(mockResolveForTargets).toHaveBeenCalled();
+    expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
+  });
+
+  it('n ouvre aucune résolution quand l aperçu ne porte aucun membre', async () => {
+    await searchWith([]);
+
+    expect(mockResolveForTargets).not.toHaveBeenCalled();
+    expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
   });
 });

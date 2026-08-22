@@ -16,6 +16,7 @@ import {
   communitySchema,
   communityMinimalSchema,
   communityMemberSchema,
+  userMinimalSchema,
   createCommunityRequestSchema,
   updateCommunityRequestSchema,
   errorResponseSchema
@@ -369,8 +370,13 @@ export async function communityRoutes(fastify: FastifyInstance) {
                   memberCount: { type: 'number' },
                   conversationCount: { type: 'number' },
                   createdAt: { type: 'string', format: 'date-time' },
-                  creator: { type: 'object' },
-                  members: { type: 'array', items: { type: 'object' } }
+                  // `{ type: 'object' }` NU sérialise en `{}` : le décodage iOS
+                  // de la réponse ENTIÈRE échouait (`APICommunityUser.id`
+                  // non-optionnel). Réutiliser les schémas partagés qui
+                  // décrivent déjà les types clients. Porté du cycle 84 bis,
+                  // qui l'avait posé dans le module MASQUÉ (cycle 86).
+                  creator: { ...userMinimalSchema, nullable: true, description: 'Community creator' },
+                  members: { type: 'array', items: communityMemberSchema }
                 }
               }
             },
@@ -443,6 +449,9 @@ export async function communityRoutes(fastify: FastifyInstance) {
               }
             },
             members: {
+              // Sans ce filtre, réparer le schéma présenterait comme membre
+              // quelqu'un ayant QUITTÉ la communauté (cycle 84 bis).
+              where: { isActive: true },
               take: 5,
               include: {
                 user: {
@@ -470,6 +479,57 @@ export async function communityRoutes(fastify: FastifyInstance) {
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
+      // Gate de présence de l'aperçu de membres, porté du cycle 84 bis (posé
+      // dans le module MASQUÉ, donc jamais exécuté — cycle 86).
+      //
+      // Régime tranché par LIGNE : une communauté dont le lecteur EST membre
+      // actif prouve un lien posé des DEUX côtés (contexte acquis) ; une
+      // communauté publique qu'il ne fait que découvrir n'en prouve aucun —
+      // cette route sert `isPrivate: false` sans condition d'appartenance, donc
+      // son régime par défaut est STRICT. Un membre qui prouve le lien par UNE
+      // communauté de la page le prouve pour toutes.
+      const memberIdsOf = (c: { members: Array<{ user?: { id: string } | null }> }) =>
+        c.members.map(m => m.user?.id).filter((id): id is string => typeof id === 'string');
+      const allMemberIds = new Set(communities.flatMap(memberIdsOf));
+
+      let memberVisibility = new Map<string, { showOnline: boolean; showLastSeenTimestamp: boolean }>();
+      if (allMemberIds.size > 0) {
+        const viewer = viewerFromRequest(request);
+        const viewerCommunityIds = viewer
+          ? new Set(
+              (await fastify.prisma.communityMember.findMany({
+                where: {
+                  communityId: { in: communities.map((c: { id: string }) => c.id) },
+                  userId: viewer.userId,
+                  isActive: true
+                },
+                select: { communityId: true }
+              })).map((row: { communityId: string }) => row.communityId)
+            )
+          : new Set<string>();
+
+        const contextIds = new Set(
+          communities.filter((c: { id: string }) => viewerCommunityIds.has(c.id)).flatMap(memberIdsOf)
+        );
+        const strictIds = [...allMemberIds].filter(id => !contextIds.has(id));
+
+        const presence = getPresenceVisibilityService(fastify.prisma);
+        const [contextVisibility, strictVisibility] = await Promise.all([
+          contextIds.size > 0 ? presence.resolvePrefsOnly([...contextIds]) : new Map(),
+          strictIds.length > 0 ? presence.resolveForTargets(viewer, strictIds) : new Map()
+        ]);
+        memberVisibility = new Map([...contextVisibility, ...strictVisibility]);
+      }
+
+      const gateMember = (member: { user?: { id: string; isOnline: boolean | null } | null }) => {
+        if (!member.user) return member;
+        const vis = memberVisibility.get(member.user.id);
+        return {
+          ...member,
+          user: { ...member.user, isOnline: vis?.showOnline ? member.user.isOnline === true : false }
+        };
+      };
+
       // Transformer les donnees pour le frontend
       const communitiesWithCount = communities.map(community => ({
         id: community.id,
@@ -482,7 +542,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         conversationCount: community._count.Conversation,
         createdAt: community.createdAt,
         creator: community.creator,
-        members: community.members
+        members: community.members.map(gateMember)
       }));
 
       sendPaginatedSuccess(reply, communitiesWithCount, {
