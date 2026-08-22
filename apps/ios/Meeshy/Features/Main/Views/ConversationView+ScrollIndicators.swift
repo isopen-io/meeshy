@@ -86,9 +86,12 @@ extension ConversationView {
         let action = String(localized: "conversation.scroll-to-bottom.a11y",
                             defaultValue: "Défiler vers le bas", bundle: .main)
         if scrollState.unreadBadgeCount > 0 {
-            let unread = String(format: String(localized: "conversation.scroll-to-bottom.a11y-unread",
-                                defaultValue: "%d messages non lus", bundle: .main),
-                                scrollState.unreadBadgeCount)
+            // `UnreadCountLabel` et non une clé propre à ce bouton : la clé
+            // `conversation.scroll-to-bottom.a11y-unread` était, dans les 7
+            // locales, le doublon mot pour mot de la forme `other` de
+            // `accessibility.unread_count` — mais à plat, donc « 1 messages
+            // non lus » au singulier.
+            let unread = UnreadCountLabel.messages(scrollState.unreadBadgeCount)
             return "\(unread), \(action)"
         }
         if hasTypingIndicator {
