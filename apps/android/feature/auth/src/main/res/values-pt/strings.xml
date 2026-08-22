@@ -108,6 +108,13 @@
     <string name="guest_join_preview_error">Não foi possível abrir este link</string>
     <string name="guest_join_requires_account">Este link requer uma conta.</string>
     <string name="guest_join_sign_in">Entrar</string>
+    <string name="share_link_entry_resolving">Abrindo o link…</string>
+    <string name="share_link_choose_title">Como você quer entrar?</string>
+    <string name="share_link_choose_subtitle">Entre em %1$s com sua conta ou como convidado.</string>
+    <string name="share_link_choose_subtitle_generic">Entre com sua conta ou como convidado.</string>
+    <string name="share_link_continue_with_account">Continuar com minha conta</string>
+    <string name="share_link_join_anonymously">Entrar anonimamente</string>
+    <string name="share_link_resume_anonymously">Retomar anonimamente</string>
 
     <!-- Account recovery -->
     <string name="login_forgot_password">Esqueceu a senha?</string>
