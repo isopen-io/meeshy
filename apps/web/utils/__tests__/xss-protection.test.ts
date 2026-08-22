@@ -440,4 +440,18 @@ describe('sanitizeFileName', () => {
     expect(result.length).toBeLessThanOrEqual(255);
     expect(result).toContain('.txt');
   });
+
+  it('should cap an over-length DOTLESS name without synthesizing a leading-dot hidden file', () => {
+    const result = sanitizeFileName('a'.repeat(300));
+
+    expect(result.length).toBeLessThanOrEqual(255);
+    expect(result.startsWith('.')).toBe(false);
+  });
+
+  it('should cap an over-length name whose trailing segment is itself huge', () => {
+    const result = sanitizeFileName('file.' + 'x'.repeat(300));
+
+    expect(result.length).toBeLessThanOrEqual(255);
+    expect(result.startsWith('.')).toBe(false);
+  });
 });

@@ -359,9 +359,16 @@ export function sanitizeFileName(fileName: string | null | undefined): string {
   // Enforce max length
   const maxLength = 255;
   if (sanitized.length > maxLength) {
-    const ext = sanitized.split('.').pop() || '';
-    const nameWithoutExt = sanitized.substring(0, maxLength - ext.length - 1);
-    return `${nameWithoutExt}.${ext}`;
+    // Preserve a genuine extension only when it fits AND still leaves at least
+    // one name character before the dot. A dotless name, a leading-dot name, or
+    // an oversized trailing segment all fall back to a plain truncation — never
+    // synthesize a leading-dot (hidden) file, and never exceed maxLength.
+    const lastDot = sanitized.lastIndexOf('.');
+    const ext = lastDot > 0 ? sanitized.slice(lastDot + 1) : '';
+    if (ext.length > 0 && ext.length <= maxLength - 2) {
+      return `${sanitized.slice(0, maxLength - ext.length - 1)}.${ext}`;
+    }
+    return sanitized.slice(0, maxLength);
   }
 
   return sanitized;
