@@ -497,7 +497,25 @@ défauts.
 
 **Copier le spécificateur depuis `route-registration.ts`, ne pas le composer à
 la main** — et ne pas mocker les schémas partagés dans un témoin de
-sérialisation. Patron : `communities-live-wiring.test.ts`, qui n'assert que ce
+sérialisation.
+
+**Un double PARTIEL d'un module perd en silence tout ce que le module GAGNE**,
+et la seule question est de savoir si la perte se voit. Au cycle 86 elle ne se
+voyait pas : le double `additionalProperties: true` désarmait la couche où
+vivaient deux défauts. Au cycle 91 elle s'est vue bruyamment — un double de
+`routes/voice/types` listant trois schémas à la main rendait `undefined` les
+deux constantes que le lot venait d'y ajouter, et **la route ne se construisait
+plus** :
+
+```
+schema is invalid: data/properties/data/properties/attachment must be object,boolean
+```
+
+Deux bouts du même défaut : un double partiel cache un bug, ou empêche un
+correctif de se charger. **Prolonger (`jest.requireActual` + surcharge ciblée)
+plutôt que remplacer** ; et quand le double existait pour garantir un
+comportement de SÉCURITÉ, préférer le vrai code — un double ne peut qu'attester
+l'absence d'un repli vulnérable, le vrai code la prouve. Patron : `communities-live-wiring.test.ts`, qui n'assert que ce
 que deux modules concurrents ne partagent pas.
 
 Et **poser au moins un témoin de SURFACE** : « cette route est-elle
@@ -597,7 +615,7 @@ jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte
 côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
 tableaux — cycle 86.)
 
-### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 11
+### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 8
 
 **L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
 gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
@@ -635,12 +653,17 @@ au cliquet comme dette de FORME, plus comme fuite.
 **État de l'inventaire** : les sites de niveau `data:` (charge utile ENTIÈRE) et
 les cinq sites de PRÉSENCE sont corrigés ; les onze schémas d'ERREUR écrits à la
 main sont repris au cycle 89 (voir plus bas) ; les quatre `analysis` de
-`voice-analysis.ts` au cycle 90, avec la PANNE qu'ils recouvraient.
-**L'inventaire trié des 11 restants — tous sur des charges utiles `200`/`202` —
-est dans `tasks/realtime-sync-audit-2026-08-22-cycle90.md` §9.**
+`voice-analysis.ts` au cycle 90, avec la PANNE qu'ils recouvraient ; les trois
+de `voice/translation.ts` au cycle 91, avec la TRONCATURE que portait la forme
+« juste » du même fichier.
+**L'inventaire trié des 8 restants — tous sur des charges utiles `200` — est
+dans `tasks/realtime-sync-audit-2026-08-22-cycle91.md` §8.**
 
 **Le balayage ne lit que `services/gateway/src/routes`** : les schémas de
-`packages/shared`, dont un défaut se propage le plus loin, lui échappent.
+`packages/shared`, dont un défaut se propage le plus loin, lui échappent. **Et
+il ne détecte qu'une déclaration ABSENTE, jamais une déclaration INCOMPLÈTE**
+(§ Une déclaration n'est juste que contre son PRODUCTEUR) — un vert au cliquet
+n'atteste donc pas qu'un schéma dit vrai.
 
 ### Une déclaration n'agit que si le schéma décrit la bonne ENVELOPPE
 
@@ -699,6 +722,44 @@ Constat non corrigé : **`errorResponseSchema` ne déclare pas `message`.** Rien
 ne casse tant que les clients lisent les deux clés, mais l'ajouter est un
 changement de contrat sur des centaines de routes — une décision, pas une
 initiative. Figé par `error-envelope-serialization.test.ts`.
+
+### Une déclaration n'est juste que contre son PRODUCTEUR
+
+Le cliquet garde contre l'**absence** de déclaration. Rien ne garde contre une
+déclaration qui dit **faux** — et une déclaration fausse tronque exactement
+comme un objet nu vide, sans qu'aucun outil ne la signale, puisqu'elle porte
+des `properties`.
+
+Cas mesuré (cycle 91) : `routes/voice/translation.ts` portait trois
+`attachment: { type: 'object' }` nus **et**, trois cents lignes plus bas, la
+forme « juste » qu'on aurait voulu leur copier. Elle déclarait les six champs du
+producteur COURT (`translateAttachment`) sur une route qui sert le producteur
+LONG (`getAttachmentWithTranscription`, treize champs) :
+
+```
+out : {"id","messageId","fileName","fileUrl","duration","mimeType"}
+      ← originalName, fileSize, bitrate, sampleRate, codec, channels, createdAt PERDUS
+```
+
+Plus `translatedAudios`, produit par les trois chemins de la route et jamais
+déclaré, donc supprimé sur les trois.
+
+> **Copier la forme juste d'à côté ne suffit pas : il faut l'ouvrir contre le
+> producteur de CETTE route.** Trois fois de suite (cycles 84, 89, 91) la bonne
+> forme se trouvait à portée de regard du défaut ; la troisième fois, elle était
+> fausse aussi.
+
+**Entre deux producteurs, déclarer le SUPERSET.** L'asymétrie du sérialiseur le
+permet et le commande : une clé déclarée qu'un objet ne porte pas n'est pas
+fabriquée, une clé portée et non déclarée est supprimée. Le superset est donc
+sans risque dans un sens et le seul correct dans l'autre.
+
+**Et quand les deux producteurs se CONTREDISENT** au lieu de s'emboîter — sur
+`translatedAudios`, l'un rend `audioBase64`, l'autre `audioPath`/`id`/`createdAt` —
+il n'y a pas de superset. Ne rien déclarer (`{ type: 'array' }` sans `items`,
+qui laisse passer) est alors plus honnête que d'en choisir un ; l'écrire en
+commentaire sur place, pour que ça se lise comme une décision et non comme un
+oubli.
 
 ### Un tableau sans `items` est PERMISSIF ; un objet sans `properties` EFFACE
 
