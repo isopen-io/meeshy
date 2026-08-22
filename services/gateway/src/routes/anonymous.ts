@@ -207,34 +207,34 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         // que rien ne produit — `violations` est celui que l'enveloppe porte.
         400: { description: 'Validation error', ...validationErrorResponseSchema },
         403: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
+            ...errorResponseSchema.properties,
             message: { type: 'string', description: 'Access denied (region, IP, language, or account restriction)' },
-            requiresAccount: { type: 'boolean', description: 'True if account is required' }
+            requiresAccount: { type: 'boolean', description: 'True if account is required' },
           }
         },
         404: errorResponseSchema,
         409: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
+            ...errorResponseSchema.properties,
             message: { type: 'string', description: 'Username already taken' },
-            suggestedNickname: { type: 'string', description: 'Alternative username suggestion' }
+            suggestedNickname: { type: 'string', description: 'Alternative username suggestion' },
           }
         },
         410: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', description: 'Link expired, inactive, or max uses reached' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', description: 'Link expired, inactive, or max uses reached' },
           }
         },
         429: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Nombre maximum d\'utilisateurs concurrent atteint' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Nombre maximum d\'utilisateurs concurrent atteint' },
           }
         },
         500: errorResponseSchema
@@ -560,17 +560,17 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         },
         400: { description: 'Invalid data', ...validationErrorResponseSchema },
         401: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Session invalide ou expiree' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Session invalide ou expiree' },
           }
         },
         410: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', description: 'Link expired or deactivated' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', description: 'Link expired or deactivated' },
           }
         },
         500: errorResponseSchema
@@ -684,10 +684,10 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           }
         },
         404: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Session introuvable' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Session introuvable' },
           }
         },
         500: errorResponseSchema
@@ -807,17 +807,17 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           }
         },
         404: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Lien de conversation introuvable' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Lien de conversation introuvable' },
           }
         },
         410: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', description: 'Link expired, inactive, or max uses reached' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', description: 'Link expired, inactive, or max uses reached' },
           }
         },
         500: errorResponseSchema

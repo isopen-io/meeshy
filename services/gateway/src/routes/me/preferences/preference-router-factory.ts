@@ -168,12 +168,11 @@ export function createPreferenceRouter<T>(
             401: errorResponseSchema,
             403: {
               description: 'Consentements requis manquants',
-              type: 'object',
+              ...errorResponseSchema,
               properties: {
-                success: { type: 'boolean', example: false },
+                ...errorResponseSchema.properties,
                 error: { type: 'string', example: 'CONSENT_REQUIRED' },
-                message: { type: 'string' },
-                violations: { type: 'array' }
+                violations: { type: 'array' },
               }
             },
             500: errorResponseSchema
@@ -277,12 +276,11 @@ export function createPreferenceRouter<T>(
             401: errorResponseSchema,
             403: {
               description: 'Consentements requis manquants',
-              type: 'object',
+              ...errorResponseSchema,
               properties: {
-                success: { type: 'boolean', example: false },
+                ...errorResponseSchema.properties,
                 error: { type: 'string', example: 'CONSENT_REQUIRED' },
-                message: { type: 'string' },
-                violations: { type: 'array' }
+                violations: { type: 'array' },
               }
             },
             500: errorResponseSchema

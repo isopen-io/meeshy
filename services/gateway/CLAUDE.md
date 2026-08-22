@@ -832,6 +832,13 @@ chaque cycle — le FICHIER a toujours été juste, c'est la prose qui a dériv�
 **Un compte est une AFFIRMATION, comme un tri (cycle 86 bis) : il se compte,
 il ne s'hérite pas.**
 
+**Et le `calls.ts|details|400` retiré ci-dessus était une FEUILLE.** Le balayage
+d'ERREUR (§ *La troisième forme*) a ouvert la racine que ce cliquet-ci ne peut
+pas voir : le `details` fautif était imbriqué dans un `error` déclaré OBJET, et
+cette racine-là vivait sur les **dix-neuf** schémas du fichier, pas sur le seul
+400 que l'inventaire nommait. Une clé du mauvais TYPE porte des `properties` :
+elle n'est jamais « nue ».
+
 **Le balayage ne lit que `services/gateway/src/routes`** : les schémas de
 `packages/shared`, dont un défaut se propage le plus loin, lui échappent. **Et
 il ne détecte qu'une déclaration ABSENTE, jamais une déclaration INCOMPLÈTE**
@@ -889,12 +896,40 @@ aucun de ces chemins ne pose de `code` aujourd'hui : **piège armé, pas panne.*
 **Ne pas écrire de schéma d'erreur à la main.** `errorResponseSchema` pour un
 échec simple, `validationErrorResponseSchema` quand il y a des `violations`.
 Les deux étaient déjà utilisés à quelques lignes des blocs fautifs, dans les
-mêmes fichiers.
+mêmes fichiers. **C'est outillé et en cliquet depuis le cycle 92** —
+`routes/__tests__/error-schema-sweep.ts`, inventaire VIDE : il n'y a pas de dette
+d'erreur légitime à porter, la forme juste étant toujours la même constante.
 
-Constat non corrigé : **`errorResponseSchema` ne déclare pas `message`.** Rien
-ne casse tant que les clients lisent les deux clés, mais l'ajouter est un
-changement de contrat sur des centaines de routes — une décision, pas une
-initiative. Figé par `error-envelope-serialization.test.ts`.
+### La troisième forme : une clé du MAUVAIS TYPE est COERCÉE, pas supprimée
+
+Le cycle 89 cherchait des clés ABSENTES. `calls.ts` portait l'autre moitié du
+défaut sur ses **dix-neuf** schémas : `error` déclaré OBJET
+`{ code, message, details }`, quand `sendError` en pose une CHAÎNE — le code
+d'erreur lui-même. Mesuré au sérialiseur :
+
+```
+in  : { success: false, error: 'NOT_A_PARTICIPANT', message: 'Vous ne participez pas…', code: … }
+out : {"success":false,"error":{}}
+```
+
+Toute la surface de signalisation d'appel servait ses erreurs **sans code, sans
+message et sans rien d'exploitable**. Une déclaration d'apparence complète, donc
+invisible au balayage frère — qui ne signalait que le `details` imbriqué, la
+feuille, jamais la racine.
+
+> **Un schéma d'erreur ne se vérifie pas sur la PRÉSENCE des clés mais sur leur
+> TYPE contre le producteur.** `sendError` est unique : `success` booléen,
+> `error`/`message`/`code` chaînes. Toute autre forme est fausse, et l'écrire
+> n'échoue pas — elle coerce.
+
+**`errorResponseSchema` déclare `message` depuis le cycle 92.** Le constat était
+posé ici depuis le cycle 89 comme « une décision, pas une initiative » ; ce qui
+l'a tranchée, c'est que ramener les schémas écrits à la main sur cette constante
+l'EXIGE — dix d'entre eux déclaraient `{ success, message }` et servaient donc
+bien leur phrase, que consolider sur une constante muette aurait supprimée. Le
+texte n'était pas décoratif : **138 appels d’erreur (sur 1440) passent un `message` distinct
+de l'`error`**, et `api.service.ts:239` le lit EN PREMIER
+(`data.message || data.error`).
 
 ### Une déclaration n'est juste que contre son PRODUCTEUR
 

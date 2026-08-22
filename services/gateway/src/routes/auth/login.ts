@@ -86,12 +86,10 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         401: errorResponseSchema,
         429: {
           description: 'Too many login attempts',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string' },
-            error: { type: 'string' },
-            retryAfter: { type: 'number' }
+            ...errorResponseSchema.properties,
+            retryAfter: { type: 'number' },
           }
         },
         500: errorResponseSchema

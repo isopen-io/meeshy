@@ -82,18 +82,18 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
         401: errorResponseSchema,
         403: {
           description: 'Insufficient permissions or cannot modify this user',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Vous ne pouvez pas modifier le role de cet utilisateur' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Vous ne pouvez pas modifier le role de cet utilisateur' },
           }
         },
         404: {
           description: 'User not found',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Utilisateur non trouve' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Utilisateur non trouve' },
           }
         },
         500: errorResponseSchema
@@ -209,18 +209,18 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
         401: errorResponseSchema,
         403: {
           description: 'Insufficient permissions or cannot modify this user',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Vous ne pouvez pas modifier le statut de cet utilisateur' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Vous ne pouvez pas modifier le statut de cet utilisateur' },
           }
         },
         404: {
           description: 'User not found',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Utilisateur non trouve' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Utilisateur non trouve' },
           }
         },
         500: errorResponseSchema
