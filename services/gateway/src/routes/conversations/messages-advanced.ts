@@ -11,7 +11,7 @@ import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { messageValidationHook } from '../../middleware/rate-limiter';
 import {
-  messageSchema,
+  messageResponseSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
@@ -109,18 +109,13 @@ export function registerMessagesAdvancedRoutes(
         }
       },
       response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'object', description: 'Updated message object' }
-              }
-            }
-          }
-        },
+        // La charge est le message édité LUI-MÊME (`sendSuccess(reply,
+        // messageResponse)`), pas un objet qui le contiendrait. Un
+        // enveloppement `data.message` a vécu ici, copié d'un
+        // `messageResponseSchema` mort : la clé déclarée étant absente de la
+        // charge, `fast-json-stringify` — `additionalProperties: false` par
+        // défaut — ne servait pas un message dégradé, il servait `data: {}`.
+        200: messageResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
@@ -705,18 +700,12 @@ export function registerMessagesAdvancedRoutes(
         }
       },
       response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'object', description: 'Updated message object' }
-              }
-            }
-          }
-        },
+        // Même enveloppe, même défaut, même correctif que le sibling `PUT` —
+        // et c'est CE transport qu'Android emprunte (`@PATCH("messages/{id}")`,
+        // `ApiResponse<ApiMessage>`). `data: {}` y levait `MissingFieldException`
+        // sur `id`/`conversationId`, que la file d'outbox lisait comme une
+        // panne réseau : l'édition, pourtant appliquée, était rejouée sans fin.
+        200: messageResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,

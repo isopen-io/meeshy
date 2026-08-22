@@ -32,8 +32,17 @@ const ROUTES_DIR = join(__dirname, '..');
 
 /**
  * Les sites nus qui subsistent, gelés au cycle 87 bis, après la consolidation de
- * `routes/communities.ts` en coquille (cycle 86-ter) et la réparation des trois
- * listes d'administration (cycle 87).
+ * `routes/communities.ts` en coquille (cycle 86-ter), la réparation des trois
+ * listes d'administration (cycle 87) et celle des deux transports REST
+ * d'édition de message (cycle 88).
+ *
+ * Le cycle 88 a montré que cette famille a deux gravités, pas une. Un objet nu
+ * SOUS une charge servie vide ce champ-là ; un objet nu qui déclare une clé que
+ * la charge ne porte PAS emporte tout son parent. Les deux entrées
+ * `messages-advanced.ts|message|200` étaient du second genre — `data` sortait
+ * `{}`. Avant de réparer un site restant, vérifier laquelle des deux formes il
+ * a : la clé déclarée existe-t-elle dans ce que le gestionnaire passe à
+ * `sendSuccess` ?
  *
  * Les `400` sont des `details` / `errors` de schémas d'ERREUR : ils dégradent
  * un diagnostic, ils ne cassent aucun décodage client. Les `200` / `202` sont
@@ -52,9 +61,6 @@ const FROZEN_INVENTORY: readonly string[] = [
   'anonymous.ts|items|400',
   'calls.ts|details|400',
   'communities/core.ts|user|200',
-  'conversations/messages-advanced.ts|message|200',
-  'conversations/messages-advanced.ts|message|200',
-  'conversations/sharing.ts|link|200',
   'links/admin.ts|creator|200',
   'magic-link.ts|session|200',
   'magic-link.ts|session|200',
@@ -90,6 +96,14 @@ describe('balayage — un schéma de réponse ne déclare jamais un objet NU', (
   it('ne compte plus aucun site nu dans les trois listes réparées au cycle 87', () => {
     const repaired = sweepRoutes(ROUTES_DIR).filter(
       (s) => s.file === 'admin/content.ts' || s.file === 'admin/posts.ts'
+    );
+
+    expect(repaired).toEqual([]);
+  });
+
+  it("ne compte plus aucun site nu dans les deux transports d'édition réparés au cycle 88", () => {
+    const repaired = sweepRoutes(ROUTES_DIR).filter(
+      (s) => s.file === 'conversations/messages-advanced.ts'
     );
 
     expect(repaired).toEqual([]);

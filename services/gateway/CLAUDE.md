@@ -597,7 +597,56 @@ jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte
 côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
 tableaux — cycle 86.)
 
-### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 31
+### Cette famille a DEUX gravités, et la seconde vide la réponse entière
+
+Un schéma de réponse ne décrit pas seulement le CONTENU d'un champ : il décrit
+aussi **sa présence**. Les deux cas ont la même forme dans le code et des
+conséquences sans commune mesure :
+
+| gravité | forme | effet |
+|---|---|---|
+| **1** — la clé déclarée EXISTE dans la charge | `sender: { type: 'object' }` sur une charge qui porte `sender` | `sender` sort `{}`, **le reste survit** |
+| **2** — la clé déclarée N'EXISTE PAS | `data: { properties: { message } }` sur une charge qui n'a pas de `message` | **`data` ENTIER sort `{}`** |
+
+Le balayage ne voit que la forme du schéma, jamais la charge d'en face : il ne
+peut donc pas les distinguer. **Avant de réparer un site de l'inventaire, poser
+la question — la clé déclarée existe-t-elle dans ce que le gestionnaire passe à
+`sendSuccess` ?**
+
+Trois sites de gravité 2 corrigés au cycle 88, tous de la même forme : une
+enveloppe `data.message` / `data.link` qu'aucun gestionnaire n'a jamais produite.
+Les deux transports REST d'édition de message rendaient `{"success":true,
+"data":{}}` ; `POST /conversations/:id/new-link` rendait
+`{"success":true,"data":{"link":{}}}` — ni lien, ni code, ni réglages.
+
+**Un défaut de sérialisation, seul, produit une boucle de réémission temps
+réel.** Sur `PATCH /messages/:messageId`, `data: {}` fait échouer le décodage
+Android (`ApiMessage.id`/`.conversationId` n'ont pas de défaut) ; `apiCall` rend
+`Failure(PARSE)` ; `OutboxFlushWorker` traduit tout `Failure` d'une
+`EDIT_MESSAGE` en `TransientFailure`, donc en RÉESSAI. La ligne d'outbox ne
+draine jamais, et chaque vidange rejoue l'édition que le serveur rediffuse en
+`message:edited` à toute la room. Chaque maillon est correct ; c'est la réponse
+vide qui les compose en boucle. **Chercher la cause d'une boucle de réessai dans
+la file d'attente, c'est chercher là où la lumière est meilleure.**
+
+### Une forme écrite dans du CODE MORT n'est pas maintenue, et se propage
+
+`messageResponseSchema` portait l'enveloppe fantôme `data.message` et n'était
+**utilisé nulle part** — ce qui l'a mis hors de portée de toute correction, et
+n'a rien empêché : ses deux copies inline vivaient dans les routes servies. Un
+schéma mort n'est pas neutre, il est un **patron**.
+
+Le correctif n'est pas de le supprimer, c'est de le rendre VIVANT : corrigé en
+`data: messageSchema` et CONSOMMÉ par les deux routes, il n'y a plus de forme à
+copier, il y a un import.
+
+Corollaire : **un contrat déclaré doit être EXERCÉ.** Des trois transports
+d'édition de message, le seul qui servait la charge entière est
+`PUT /messages/:messageId` — celui qui ne déclare AUCUN schéma de réponse. Un
+schéma faux est strictement pire que pas de schéma ; la conclusion n'est pas
+d'en retirer, c'est d'en tester la sortie.
+
+### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 27
 
 **L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
 gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
@@ -625,10 +674,10 @@ troncature), mais `sender` y est déclaré explicitement `{ type: 'object' }` �
 un parent permissif ne rattrape pas un enfant déclaré vide, puisque la clé est
 LISTÉE. Le champ sort à `{}` là où l'omettre l'aurait laissé passer entier.
 
-Les deux sites de niveau `data:` (charge utile ENTIÈRE) sont corrigés ;
-**l'inventaire trié des 31 restants est dans
-`tasks/realtime-sync-audit-2026-08-22-cycle87.md` §6** (le tri du cycle 86 bis
-était FAUX — voir juste en dessous). Les plus graves restants sont les 4 `user:`
+Les sites de niveau `data:` (charge utile ENTIÈRE) sont corrigés ;
+**l'inventaire des 27 restants, trié par gravité ET par victime vivante, est
+dans `tasks/realtime-sync-audit-2026-08-22-cycle88.md` §5** (le tri du cycle
+86 bis était FAUX — voir juste en dessous). Les plus graves restants sont les 4 `user:`
 et 1 `sender:`, qui touchent la famille de la présence : **les traiter comme le
 cycle 84 bis a traité le sien** — déclarer le schéma ET poser le gate dans le
 même lot, sans quoi la réparation publie la fuite (§ Une PANNE peut tenir la
