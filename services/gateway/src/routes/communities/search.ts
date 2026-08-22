@@ -1,81 +1,15 @@
 /**
  * Search routes for communities
  */
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { communityMemberSchema, errorResponseSchema, userMinimalSchema } from '@meeshy/shared/types/api-schemas';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
-import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import { validatePagination } from '../../utils/pagination';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendPaginatedSuccess, sendInternalError, createPaginationMeta } from '../../utils/response.js';
-import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
-import { viewerFromRequest } from '../users/presence-gate';
+import { resolveCommunityMemberPresence } from '../community-member-presence';
 
 const logger = enhancedLogger.child({ module: 'CommunitySearchRoutes' });
-
-/**
- * Profil inline porté par un membre rendu par la recherche. Pas de
- * `lastActiveAt` : l'aperçu ne le charge pas, et `applyPresenceVisibilityAsOffline`
- * ne fabrique pas la clé — une réponse ne gagne pas un champ parce qu'on l'a filtrée.
- */
-type MemberProfile = { id: string; isOnline: boolean | null };
-type MemberRow = { user?: MemberProfile | null };
-type CommunityRow = { id: string; members: MemberRow[] };
-
-/**
- * Résout la visibilité de la présence des membres rendus par la recherche
- * PUBLIQUE de communautés.
- *
- * Le régime se tranche par LIGNE, pas par route — même loi que le fil de
- * stories : une communauté dont le lecteur EST membre prouve un lien posé des
- * DEUX côtés (appartenance commune) et relève du contexte acquis ; une
- * communauté publique qu'il ne fait que découvrir n'en prouve aucun. Cette
- * route sert `isPrivate: false` sans aucune condition d'appartenance — la
- * recherche est une surface de DÉCOUVERTE, et son régime par défaut est donc
- * strict.
- *
- * Et un membre qui prouve le lien par UNE communauté de la page le prouve pour
- * toutes : masquer sa pastille sur une ligne pendant qu'elle s'affiche sur la
- * suivante, dans la même page, ne décrirait rien.
- */
-async function resolveMemberPresence(
-  fastify: FastifyInstance,
-  request: FastifyRequest,
-  communities: CommunityRow[],
-): Promise<Map<string, PresenceVisibility>> {
-  const memberIdsOf = (community: CommunityRow) =>
-    community.members.map(m => m.user?.id).filter((id): id is string => typeof id === 'string');
-
-  const allIds = new Set(communities.flatMap(memberIdsOf));
-  if (allIds.size === 0) return new Map();
-
-  const viewer = viewerFromRequest(request);
-  const viewerCommunityIds = viewer
-    ? new Set(
-        (
-          await fastify.prisma.communityMember.findMany({
-            where: {
-              communityId: { in: communities.map(c => c.id) },
-              userId: viewer.userId,
-              isActive: true
-            },
-            select: { communityId: true }
-          })
-        ).map((row: { communityId: string }) => row.communityId)
-      )
-    : new Set<string>();
-
-  const contextIds = new Set(communities.filter(c => viewerCommunityIds.has(c.id)).flatMap(memberIdsOf));
-  const strictIds = [...allIds].filter(id => !contextIds.has(id));
-
-  const presence = getPresenceVisibilityService(fastify.prisma);
-  const [contextVisibility, strictVisibility] = await Promise.all([
-    contextIds.size > 0 ? presence.resolvePrefsOnly([...contextIds]) : new Map<string, PresenceVisibility>(),
-    strictIds.length > 0 ? presence.resolveForTargets(viewer, strictIds) : new Map<string, PresenceVisibility>()
-  ]);
-
-  return new Map([...contextVisibility, ...strictVisibility]);
-}
 
 export async function registerSearchRoutes(fastify: FastifyInstance) {
   // Route pour rechercher des communautes PUBLIQUES accessibles a tous
@@ -244,7 +178,7 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
-      const memberVisibility = await resolveMemberPresence(fastify, request, communities);
+      const memberVisibility = await resolveCommunityMemberPresence(fastify, request, communities);
 
       // Transformer les donnees pour le frontend
       const communitiesWithCount = communities.map(community => ({

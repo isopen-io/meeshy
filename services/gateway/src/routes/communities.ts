@@ -18,7 +18,8 @@ import {
   communityMemberSchema,
   createCommunityRequestSchema,
   updateCommunityRequestSchema,
-  errorResponseSchema
+  errorResponseSchema,
+  userMinimalSchema
 } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
@@ -26,6 +27,7 @@ import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendFor
 import { validatePagination } from '../utils/pagination';
 import { getPresenceVisibilityService } from '../services/PresenceVisibilityService';
 import { viewerFromRequest } from './users/presence-gate';
+import { resolveCommunityMemberPresence } from './community-member-presence';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesRoutes' });
@@ -402,8 +404,20 @@ export async function communityRoutes(fastify: FastifyInstance) {
                   memberCount: { type: 'number' },
                   conversationCount: { type: 'number' },
                   createdAt: { type: 'string', format: 'date-time' },
-                  creator: { type: 'object' },
-                  members: { type: 'array', items: { type: 'object' } }
+                  // `{ type: 'object' }` sans `properties` n'est PAS un objet
+                  // libre : fast-json-stringify applique
+                  // `additionalProperties: false` par défaut et sérialisait
+                  // `creator` et chaque `members[i]` en `{}`. iOS type
+                  // `APICommunityUser.id` / `.username` NON optionnels, et une
+                  // propriété Swift optionnelle ne tolère que la clé ABSENTE ou
+                  // `null`, jamais un objet malformé — le `{}` faisait échouer
+                  // le décodage de TOUTE la réponse.
+                  creator: { ...userMinimalSchema, nullable: true, description: 'Community creator' },
+                  members: {
+                    type: 'array',
+                    items: communityMemberSchema,
+                    description: 'First members of the community (max 5)'
+                  }
                 }
               }
             },
@@ -476,6 +490,11 @@ export async function communityRoutes(fastify: FastifyInstance) {
               }
             },
             members: {
+              // Sans ce filtre, l'aperçu pouvait présenter comme membre
+              // quelqu'un qui a quitté la communauté. Invisible tant que le
+              // schéma vidait `members[]` en `{}` ; servi dès que la réponse
+              // porte vraiment ses champs.
+              where: { isActive: true },
               take: 5,
               include: {
                 user: {
@@ -503,6 +522,8 @@ export async function communityRoutes(fastify: FastifyInstance) {
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
+      const memberVisibility = await resolveCommunityMemberPresence(fastify, request, communities);
+
       // Transformer les donnees pour le frontend
       const communitiesWithCount = communities.map(community => ({
         id: community.id,
@@ -515,7 +536,11 @@ export async function communityRoutes(fastify: FastifyInstance) {
         conversationCount: community._count.Conversation,
         createdAt: community.createdAt,
         creator: community.creator,
-        members: community.members
+        members: community.members.map((member: { user?: MemberUser | null }) =>
+          member.user
+            ? { ...member, user: applyPresenceVisibilityAsOffline(member.user, memberVisibility.get(member.user.id)) }
+            : member
+        )
       }));
 
       sendPaginatedSuccess(reply, communitiesWithCount, {
