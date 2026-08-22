@@ -70,6 +70,21 @@ describe('removingHandle', () => {
   it('laisse les autres handles tranquilles', () => {
     expect(removingHandle('alice', '@alice et @alicia')).toBe('et @alicia');
   });
+
+  it('ne touche pas un `@handle` collé à un caractère de nom (adresse e-mail — frontière gauche)', () => {
+    // `bob@alice` : le `@` est précédé d'une lettre, donc jamais détecté comme
+    // mention par parseMentions/hasMentions — removingHandle ne doit pas le
+    // retirer non plus (parité de span détection ⇄ suppression).
+    expect(removingHandle('alice', 'écris à bob@alice stp')).toBe('écris à bob@alice stp');
+    expect(removingHandle('alice', 'bob@alice')).toBe('bob@alice');
+    expect(removingHandle('alice', 'ping bob@alice!')).toBe('ping bob@alice!');
+  });
+
+  it('retire toujours un `@handle` réellement séparé (frontière gauche propre)', () => {
+    expect(removingHandle('alice', 'coucou @alice ok')).toBe('coucou ok');
+    // Après une ponctuation (non caractère de nom), le handle reste une mention.
+    expect(removingHandle('alice', 'salut:@alice')).toBe('salut:');
+  });
 });
 
 describe('DECLARABLE_DISPLAYS', () => {

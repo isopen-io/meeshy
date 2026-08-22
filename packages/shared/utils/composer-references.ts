@@ -1,3 +1,4 @@
+import { NAME_BOUNDARY_LEFT } from './mention-parser.js';
 import type {
   ComposerReference,
   PostReferenceDisplay,
@@ -65,9 +66,19 @@ export function referencePayload(
  * C'est la transition INLINE → autre chose : passer une référence en note ou en
  * silence n'a de sens que si le pseudo quitte la phrase. Frontière de mot à
  * droite : `@alice` ne doit pas emporter `@alicia`.
+ *
+ * Frontière de mot à GAUCHE {@link NAME_BOUNDARY_LEFT} — la MÊME source que
+ * `parseMentions`/`hasMentions` : un `@` précédé d'un caractère de nom
+ * appartient à une adresse e-mail (`bob@alice`), n'a jamais été DÉTECTÉ comme
+ * mention, et ne doit donc pas être RETIRÉ ici. Sans ce lookbehind, la
+ * suppression frappait un span que la détection n'avait jamais reconnu — un
+ * drift exactement de la classe que `mention-parser.ts` interdit. Le lookbehind
+ * se place APRÈS `\s*` (à hauteur du `@`) : quand une espace précède le handle,
+ * le caractère testé est cette espace (frontière propre) ; sans espace, c'est le
+ * caractère réellement collé au `@` (lettre d'e-mail ⇒ pas de retrait).
  */
 export function removingHandle(username: string, text: string): string {
   const escaped = username.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
-  const pattern = new RegExp(`\\s*@${escaped}(?![\\p{L}\\p{N}_.-])`, 'giu');
+  const pattern = new RegExp(`\\s*${NAME_BOUNDARY_LEFT}@${escaped}(?![\\p{L}\\p{N}_.-])`, 'giu');
   return text.replace(pattern, '').trim();
 }
