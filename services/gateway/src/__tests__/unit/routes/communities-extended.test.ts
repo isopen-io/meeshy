@@ -29,14 +29,13 @@ jest.mock('../../../utils/pagination', () => ({
   })),
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  communitySchema: { type: 'object', additionalProperties: true },
-  communityMinimalSchema: { type: 'object', additionalProperties: true },
-  communityMemberSchema: { type: 'object', additionalProperties: true },
-  createCommunityRequestSchema: { type: 'object', additionalProperties: true },
-  updateCommunityRequestSchema: { type: 'object', additionalProperties: true },
-  errorResponseSchema: { type: 'object', properties: {} },
-}));
+// `@meeshy/shared/types/api-schemas` n'est PAS mocké, délibérément. Un double
+// de schéma désarme fast-json-stringify — la couche EXACTE où vivent les
+// défauts de charge utile que ces routes ont portés (cf. CLAUDE.md § « un
+// témoin s'importe par le chemin de la PRODUCTION »). Le stub omettait de
+// surcroît `userMinimalSchema`, que `core.ts` emploie pour le `user` d'un
+// participant : `{ ...undefined }` le réduisait à une déclaration vide, et
+// toute assertion sur ce `user` passait pour la mauvaise raison.
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
