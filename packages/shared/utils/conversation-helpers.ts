@@ -2,7 +2,7 @@
  * Helpers utilitaires pour les conversations
  * Logique métier réutilisable entre Gateway et Frontend
  */
-import { normalizeLanguageCode } from './language-normalize.js';
+import { normalizeLanguageCode, normalizeLanguageForDedup } from './language-normalize.js';
 
 /**
  * Options de résolution de langue. La locale appareil intervient en 4e priorité
@@ -176,10 +176,23 @@ export function resolveUserLanguagesOrdered(
  * le contenu est déjà dans cette langue, ou qu'aucune traduction n'a été
  * produite — servir une troisième langue serait pire que l'original.
  *
- * Les clés de la carte comme les langues du lecteur sont comparées en
- * minuscules : iOS minuscule ses clés au décodage, le web consomme la charge
- * telle quelle, et la normalisation doit donc vivre ici pour que les deux
- * plateformes restent d'accord.
+ * Les trois sources de codes comparées — langues du lecteur, langue d'origine,
+ * clés de la carte — sont CANONICALISÉES par la même SSOT
+ * ({@link normalizeLanguageForDedup} : casse repliée ET région strippée,
+ * `'en-US'`/`'EN'` → `'en'`), jamais un simple `.toLowerCase()`. La raison est un
+ * défaut mesuré : `resolveUserLanguagesOrdered` strippe déjà la région des
+ * langues du lecteur, mais `originalLanguage` arrive brut du fil, et les messages
+ * écrits AVANT la canonicalisation au write-boundary (`MessagingService`,
+ * `normalizeLanguageCode(claimedLanguage)`) portent encore un
+ * `Message.originalLanguage` région-tagué (`'en-US'`, `'pt-BR'`). Comparée en
+ * minuscules seule, une origine `'en-us'` ne matchait jamais le rang normalisé
+ * `'en'` du prisme, et une traduction de rang INFÉRIEUR gagnait — rétrogradant la
+ * langue PRIMAIRE du lecteur, la violation exacte du Prisme (#3) que ce résolveur
+ * combat. Canonicaliser les trois sources au point de comparaison rend le
+ * résolveur robuste quelle que soit la normalisation de l'appelant, et idempotent
+ * sur les codes déjà canoniques (zéro régression). iOS minuscule ses clés au
+ * décodage et le web consomme la charge telle quelle : la normalisation doit
+ * vivre ici pour que les deux plateformes restent d'accord.
  *
  * `preferredLanguages` doit être ordonnée — c'est la sortie de
  * {@link resolveUserLanguagesOrdered}, jamais une liste reconstruite à la main.
@@ -196,20 +209,20 @@ export function resolveLastMessagePreview(params: {
 
   const preferred = preferredLanguages
     .filter((lang): lang is string => typeof lang === 'string' && lang.trim() !== '')
-    .map((lang) => lang.toLowerCase());
+    .map(normalizeLanguageForDedup);
   if (preferred.length === 0) return preview;
 
-  const original = originalLanguage?.toLowerCase();
+  const original = originalLanguage ? normalizeLanguageForDedup(originalLanguage) : undefined;
 
-  const byLowercasedKey = new Map<string, string>();
+  const byCanonicalKey = new Map<string, string>();
   for (const [lang, text] of Object.entries(translations)) {
     if (typeof text !== 'string' || text.trim() === '') continue;
-    byLowercasedKey.set(lang.toLowerCase(), text);
+    byCanonicalKey.set(normalizeLanguageForDedup(lang), text);
   }
 
   for (const lang of preferred) {
     if (original && lang === original) return preview;
-    const translated = byLowercasedKey.get(lang);
+    const translated = byCanonicalKey.get(lang);
     if (translated !== undefined) return translated;
   }
 

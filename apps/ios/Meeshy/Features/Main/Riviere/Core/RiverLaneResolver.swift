@@ -771,10 +771,16 @@ nonisolated public enum RiverLaneResolver {
     /// croisent pas) — ce n'est donc pas un choix arbitraire, c'est le seul.
     ///
     /// Sérialisée, la seule colonne appartient, à chaque rang, à l'auteur du
-    /// message de ce rang.
+    /// message de ce rang. Sauf au rang d'un avis système : il n'occupe la
+    /// colonne de personne (`RiverBubble.laneId` n'a de sens que pour une prise
+    /// de parole), donc `nil` — même règle que `serializedOccupancies`, sans
+    /// quoi nommer la colonne à ce rang ferait parler quelqu'un qui vient
+    /// seulement d'entrer.
     public static func resolveRiverLaneAt(_ geometry: RiverGeometry, laneIndex: Int, rank: Int) -> RiverLane? {
         if geometry.layout == .serialized {
-            guard laneIndex == 0, let bubble = geometry.bubbles.first(where: { $0.rank == rank }) else { return nil }
+            guard laneIndex == 0,
+                  let bubble = geometry.bubbles.first(where: { $0.rank == rank }),
+                  !bubble.isSystem else { return nil }
             return geometry.lanes.first { $0.laneId == bubble.laneId }
         }
 

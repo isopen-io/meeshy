@@ -14,6 +14,7 @@ import {
   SignalProtocolLimits,
   NotificationPreferenceSchemas,
   updateUsernameSchema,
+  SignalSchemas,
 } from '../utils/validation.js';
 import { z } from 'zod';
 import { MeeshyError } from '../utils/errors.js';
@@ -182,6 +183,48 @@ describe('SignalValidation', () => {
     };
     expect(SignalValidation.validateEncryptedPayload(payload).valid).toBe(true);
     expect(SignalValidation.validateEncryptedPayload({}).valid).toBe(false);
+  });
+});
+
+describe('SignalSchemas.encryptedMessage — base64 length invariants', () => {
+  // Ground truth of the wire payload (`encryption-utils.encryptContent`): a
+  // 12-byte AES-GCM IV and a 16-byte auth tag, BOTH base64-encoded
+  // (`uint8ArrayToBase64`). 12 bytes base64 = 16 chars (no padding); 16 bytes
+  // base64 = 24 chars (padded). The schema's `iv.length(24)` was a copy of the
+  // sibling `authTag.length(24)` constant that forgot the IV is 12 bytes, not
+  // 16 — it rejected every real IV the codebase produces.
+  const validIv = Buffer.alloc(12).toString('base64'); // 16 chars
+  const validAuthTag = Buffer.alloc(16).toString('base64'); // 24 chars
+
+  const base = {
+    ciphertext: 'Y2lwaGVydGV4dA==',
+    iv: validIv,
+    authTag: validAuthTag,
+    messageNumber: 0,
+  };
+
+  it('accepts a real 12-byte base64 IV (16 chars)', () => {
+    expect(validIv.length).toBe(16);
+    expect(SignalSchemas.encryptedMessage.safeParse(base).success).toBe(true);
+  });
+
+  it('accepts a real 16-byte base64 auth tag (24 chars)', () => {
+    expect(validAuthTag.length).toBe(24);
+    expect(SignalSchemas.encryptedMessage.safeParse(base).success).toBe(true);
+  });
+
+  it('rejects an IV of the wrong byte length (16 bytes → 24 chars)', () => {
+    const wrongIv = Buffer.alloc(16).toString('base64'); // 24 chars — a 16-byte IV
+    expect(
+      SignalSchemas.encryptedMessage.safeParse({ ...base, iv: wrongIv }).success
+    ).toBe(false);
+  });
+
+  it('rejects an auth tag of the wrong byte length (12 bytes → 16 chars)', () => {
+    const wrongTag = Buffer.alloc(12).toString('base64'); // 16 chars — a 12-byte tag
+    expect(
+      SignalSchemas.encryptedMessage.safeParse({ ...base, authTag: wrongTag }).success
+    ).toBe(false);
   });
 });
 

@@ -176,4 +176,26 @@ describe('normalizeLanguageForDedup', () => {
     expect(normalizeLanguageForDedup('xyz')).toBe('xyz');
     expect(normalizeLanguageForDedup('QW')).toBe('qw');
   });
+
+  it('strips region/script tags from irreducible unknown codes too', () => {
+    // The dedup contract is region-blind for EVERY code, not only the ones
+    // normalizeLanguageCode can reduce. An irreducible code carried a region
+    // (`yue-HK` Cantonese, `xyz-AB`) must collapse onto its bare primary
+    // subtag, otherwise `spokenLanguages` aggregation (anonymous.ts) and
+    // preference dedup (conversation-helpers.ts) count `yue` and `yue-HK` as
+    // two distinct languages — the exact leak the 'en'/'en-US' case forbids.
+    expect(normalizeLanguageForDedup('xyz-AB')).toBe('xyz');
+    expect(normalizeLanguageForDedup('xyz_CD')).toBe('xyz');
+    expect(normalizeLanguageForDedup('yue-HK')).toBe('yue');
+    expect(normalizeLanguageForDedup('YUE-Hant-HK')).toBe('yue');
+  });
+
+  it('never drops a datum when the primary subtag is empty or malformed', () => {
+    // Guard the "never lose the datum" invariant against inputs whose primary
+    // subtag is empty (`-US`) or purely non-alphabetic (`@@@`): stripping must
+    // not collapse these to '' — the full lowercased string is preserved.
+    expect(normalizeLanguageForDedup('-US')).toBe('-us');
+    expect(normalizeLanguageForDedup('@@@')).toBe('@@@');
+    expect(normalizeLanguageForDedup('')).toBe('');
+  });
 });

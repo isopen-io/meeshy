@@ -177,8 +177,17 @@ describe('chunk', () => {
     expect(chunk([1, 2], 10)).toEqual([[1, 2]]);
   });
 
-  it.each([0, -1, Number.NaN])('never loops forever on a nonsensical size (%p)', (size) => {
-    const result = chunk([1, 2, 3], size as number);
-    expect(result.flat()).toEqual([1, 2, 3]);
-  });
+  // Contrat documenté : « size non finie ou < 1 produit une tranche unique ».
+  // On épingle la STRUCTURE (`[[1, 2, 3]]`), pas seulement `.flat()` : un
+  // `.flat()` seul laissait passer `[[1], [2], [3]]` — exactement le bug où un
+  // `size` fini < 1 (0, négatif, fractionnaire) tombait sur `step = 1` au lieu
+  // de la tranche unique, alors que le chemin non fini (NaN/Infinity) l'honorait
+  // déjà. Toute taille absurde doit donc rendre une seule tranche, jamais
+  // boucler à l'infini ni fragmenter en singletons.
+  it.each([0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY])(
+    'produces a single chunk for a nonsensical size (%p)',
+    (size) => {
+      expect(chunk([1, 2, 3], size as number)).toEqual([[1, 2, 3]]);
+    }
+  );
 });

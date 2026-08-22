@@ -1168,6 +1168,180 @@ describe('callRoutes', () => {
       );
     });
 
+    // Vague 155 — the moderator-rights check above only asked "is the CALLER
+    // at least a moderator?" and never asked "does the caller outrank the
+    // TARGET?". A conversation moderator (rank 20) could therefore remove a
+    // conversation admin (rank 30) — or even the conversation creator (rank
+    // 40) — from an active call, the inverse of every other role-gated
+    // mutation in this codebase (PermissionsService.canManage,
+    // conversations/participants.ts role-update's `creator` guard). Same
+    // family as the socket-side gap Vague 154 closed for anonymous callers:
+    // an authorization check present at one layer, absent at its sibling.
+    describe('role hierarchy — caller must outrank the TARGET, not just meet a floor', () => {
+      it('returns 403 when a moderator tries to remove an admin', async () => {
+        const session = makeCallSession();
+        const modMembership = makeMembership({ role: 'moderator' });
+        const adminTarget = { id: TARGET_PART_ID, role: 'admin' };
+
+        const participantFindFirst = jest
+          .fn<any>()
+          .mockResolvedValueOnce(modMembership) // caller
+          .mockResolvedValueOnce(adminTarget); // target resolution by userId
+
+        const { routes, reply } = setup({
+          participant: { findFirst: participantFindFirst },
+          callSession: { findFirst: jest.fn<any>() },
+        });
+
+        mockGetCallSession.mockResolvedValueOnce(session);
+
+        const req = makeRequest({
+          params: { callId: CALL_ID, participantId: TARGET_PART_ID },
+        });
+
+        await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(
+          req,
+          reply
+        );
+
+        expect(reply.status).toHaveBeenCalledWith(403);
+        expect(reply._body?.error).toBe('PERMISSION_DENIED');
+        expect(mockLeaveCall).not.toHaveBeenCalled();
+      });
+
+      it('returns 403 when an admin tries to remove the conversation creator', async () => {
+        const session = makeCallSession();
+        const adminMembership = makeMembership({ role: 'admin' });
+        const creatorTarget = { id: TARGET_PART_ID, role: 'creator' };
+
+        const participantFindFirst = jest
+          .fn<any>()
+          .mockResolvedValueOnce(adminMembership)
+          .mockResolvedValueOnce(creatorTarget);
+
+        const { routes, reply } = setup({
+          participant: { findFirst: participantFindFirst },
+          callSession: { findFirst: jest.fn<any>() },
+        });
+
+        mockGetCallSession.mockResolvedValueOnce(session);
+
+        const req = makeRequest({
+          params: { callId: CALL_ID, participantId: TARGET_PART_ID },
+        });
+
+        await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(
+          req,
+          reply
+        );
+
+        expect(reply.status).toHaveBeenCalledWith(403);
+        expect(reply._body?.error).toBe('PERMISSION_DENIED');
+        expect(mockLeaveCall).not.toHaveBeenCalled();
+      });
+
+      it('returns 403 when a moderator tries to remove a peer moderator (equal rank does not outrank)', async () => {
+        const session = makeCallSession();
+        const modMembership = makeMembership({ role: 'moderator' });
+        const peerModTarget = { id: TARGET_PART_ID, role: 'moderator' };
+
+        const participantFindFirst = jest
+          .fn<any>()
+          .mockResolvedValueOnce(modMembership)
+          .mockResolvedValueOnce(peerModTarget);
+
+        const { routes, reply } = setup({
+          participant: { findFirst: participantFindFirst },
+          callSession: { findFirst: jest.fn<any>() },
+        });
+
+        mockGetCallSession.mockResolvedValueOnce(session);
+
+        const req = makeRequest({
+          params: { callId: CALL_ID, participantId: TARGET_PART_ID },
+        });
+
+        await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(
+          req,
+          reply
+        );
+
+        expect(reply.status).toHaveBeenCalledWith(403);
+        expect(reply._body?.error).toBe('PERMISSION_DENIED');
+        expect(mockLeaveCall).not.toHaveBeenCalled();
+      });
+
+      it('allows a moderator to remove a plain member (moderator outranks member)', async () => {
+        const session = makeCallSession();
+        const modMembership = makeMembership({ role: 'moderator' });
+        const memberTarget = { id: TARGET_PART_ID, role: 'member' };
+
+        const participantFindFirst = jest
+          .fn<any>()
+          .mockResolvedValueOnce(modMembership)
+          .mockResolvedValueOnce(memberTarget);
+
+        const { routes, reply } = setup({
+          participant: { findFirst: participantFindFirst },
+          callSession: { findFirst: jest.fn<any>() },
+        });
+
+        mockGetCallSession.mockResolvedValueOnce(session);
+        mockLeaveCall.mockResolvedValueOnce(session);
+
+        const req = makeRequest({
+          params: { callId: CALL_ID, participantId: TARGET_PART_ID },
+        });
+
+        await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(
+          req,
+          reply
+        );
+
+        expect(mockLeaveCall).toHaveBeenCalledWith(
+          expect.objectContaining({ participantId: memberTarget.id })
+        );
+      });
+
+      // The pre-existing `isModerator` check (`role === 'admin' ||
+      // role === 'moderator'`) never included `'creator'` — the highest
+      // conversation rank — so a group call's creator got PERMISSION_DENIED
+      // removing anyone at all. Folding the floor check into the same
+      // shared rank table that now guards the target fixes both bugs with
+      // one source of truth instead of leaving the floor's own gap open.
+      it('allows the conversation creator to remove an admin', async () => {
+        const session = makeCallSession();
+        const creatorMembership = makeMembership({ role: 'creator' });
+        const adminTarget = { id: TARGET_PART_ID, role: 'admin' };
+
+        const participantFindFirst = jest
+          .fn<any>()
+          .mockResolvedValueOnce(creatorMembership)
+          .mockResolvedValueOnce(adminTarget);
+
+        const { routes, reply } = setup({
+          participant: { findFirst: participantFindFirst },
+          callSession: { findFirst: jest.fn<any>() },
+        });
+
+        mockGetCallSession.mockResolvedValueOnce(session);
+        mockLeaveCall.mockResolvedValueOnce(session);
+
+        const req = makeRequest({
+          params: { callId: CALL_ID, participantId: TARGET_PART_ID },
+        });
+
+        await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(
+          req,
+          reply
+        );
+
+        expect(mockLeaveCall).toHaveBeenCalledWith(
+          expect.objectContaining({ participantId: adminTarget.id })
+        );
+      });
+    });
+
     it('returns 403 when regular member tries to remove another participant', async () => {
       const session = makeCallSession();
       const regularMembership = makeMembership({ role: 'member' });

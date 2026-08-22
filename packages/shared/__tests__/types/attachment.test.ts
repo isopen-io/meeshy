@@ -409,4 +409,26 @@ describe('formatFileSize', () => {
     expect(formatFileSize(0, { decimals: 1 })).toBe('0 B');
     expect(formatFileSize(1024, { decimals: 1 })).toBe('1 KB');
   });
+
+  it('renders sub-1-byte positive values in bytes (low-end clamp)', () => {
+    // Regression: Math.floor(Math.log(0.5) / Math.log(1024)) === -1, and the
+    // former Math.min(i, 4) clamped only the high end, leaving the index
+    // negative → FILE_SIZE_UNITS[-1] was undefined and Math.pow(1024, -1)
+    // scaled the value up, so 0.5 rendered as "512 undefined". The index must
+    // be clamped at the low end too.
+    expect(formatFileSize(0.5)).toBe('0.5 B');
+    expect(formatFileSize(0.001)).toBe('0 B');
+  });
+
+  it('folds negative and non-finite inputs to "0 B" (parity with formatClock)', () => {
+    // Math.log of a negative or of NaN is NaN → the index became NaN and the
+    // output "NaN undefined". Negative/non-finite byte counts are nonsensical;
+    // the twin duration formatter (formatClock, duration-format.ts) already
+    // ramène ces entrées à zéro — same contract for this SSOT.
+    expect(formatFileSize(-1)).toBe('0 B');
+    expect(formatFileSize(-1024)).toBe('0 B');
+    expect(formatFileSize(Number.NaN)).toBe('0 B');
+    expect(formatFileSize(Number.POSITIVE_INFINITY)).toBe('0 B');
+    expect(formatFileSize(Number.NEGATIVE_INFINITY)).toBe('0 B');
+  });
 });

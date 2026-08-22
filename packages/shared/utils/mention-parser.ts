@@ -122,6 +122,18 @@ export function hasMentions(content: string): boolean {
   return new RegExp(`${NAME_BOUNDARY_LEFT}@${NAME_CHAR}`, 'u').test(content);
 }
 
-function escapeRegex(str: string): string {
+/**
+ * Échappe les métacaractères regex d'un littéral. Source de vérité unique —
+ * `composer-references.removingHandle` la RÉUTILISE au lieu d'en tenir une copie
+ * (le drift entre les deux avait introduit un crash, cf. ci-dessous).
+ *
+ * La classe N'INCLUT PAS le tiret. Le résultat est interpolé HORS d'une classe
+ * de caractères (`@${escaped}`), et là un `\-` n'est PAS un escape valide sous
+ * le flag `u` : `new RegExp('\\-', 'u')` throw `Invalid escape`. Le tiret n'a
+ * de sens de métacaractère qu'à l'intérieur d'un `[...]` — un tiret littéral
+ * hors classe ne s'échappe donc jamais. Ajouter `-` ici (ce que faisait la
+ * copie locale de `composer-references`) faisait planter TOUT username à tiret.
+ */
+export function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

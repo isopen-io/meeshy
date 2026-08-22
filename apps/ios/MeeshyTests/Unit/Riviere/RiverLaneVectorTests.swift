@@ -550,6 +550,22 @@ final class RiverLaneVectorTests: XCTestCase {
         XCTAssertNil(RiverLaneResolver.resolveRiverLaneAt(geometry, laneIndex: 1, rank: 0))
     }
 
+    // Transposé de river-lanes.test.ts « sérialisée, ne nomme AUCUNE colonne au
+    // rang d'une annonce — même quand l'arrivant parlera ensuite » : aucun
+    // vecteur JSON n'exerce `resolveRiverLaneAt`, le miroir se tient à la main.
+    func test_resolveRiverLaneAt_serialized_namesNoColumnAtTheRankOfANotice_evenWhenTheNewcomerSpeaksNext() {
+        let geometry = Self.geometry([
+            Self.notice("j", "mia", 0),
+            Self.message("a", "mia", 1),
+            Self.message("b", "sarah", 2),
+        ])
+
+        XCTAssertEqual(geometry.layout, .serialized)
+        XCTAssertNil(RiverLaneResolver.resolveRiverLaneAt(geometry, laneIndex: 0, rank: 0))
+        XCTAssertEqual(RiverLaneResolver.resolveRiverLaneAt(geometry, laneIndex: 0, rank: 1)?.laneId, "mia")
+        XCTAssertEqual(RiverLaneResolver.resolveRiverLaneAt(geometry, laneIndex: 0, rank: 2)?.laneId, "sarah")
+    }
+
     // — Un avis système n'est la voix de personne (river-lanes.test.ts,
     //   describe « un avis système n'est la voix de personne »).
     //

@@ -294,6 +294,32 @@ describe('AttachmentStatusBodySchema', () => {
     expect(AttachmentStatusBodySchema.safeParse({ action: 'listened', stretches }).success).toBe(false);
   });
 
+  it('rejette une écoute dont endMs est strictement inférieur à startMs', () => {
+    // Un tuple inversé serait SILENCIEUSEMENT jeté par le filtre `isUsable` en aval
+    // (`services/gateway/src/utils/playback-trace.ts:78`, `endMs > startMs`) — le
+    // client recevrait `200 OK` sans savoir que sa trace n'a pas été persistée.
+    // Le wire miroite ce contrat pour transformer le drop muet en 400 visible.
+    expect(
+      AttachmentStatusBodySchema.safeParse({
+        action: 'listened',
+        stretches: [{ startMs: 500, endMs: 200, endedBy: 'pause' }],
+      }).success
+    ).toBe(false);
+  });
+
+  it('rejette une écoute de durée nulle (endMs === startMs)', () => {
+    // Différent de la décision 234/236 (`>=`) : le refine est STRICT (`>`) ici parce
+    // que la sémantique documentée est « une écoute réellement CONTINUE »
+    // (`playback-trace.ts:7`). Une durée zéro n'est pas une écoute, et la
+    // persistance la jette. Le wire aligne son verdict.
+    expect(
+      AttachmentStatusBodySchema.safeParse({
+        action: 'listened',
+        stretches: [{ startMs: 500, endMs: 500, endedBy: 'pause' }],
+      }).success
+    ).toBe(false);
+  });
+
   // ── Prisme linguistique ─────────────────────────────────────────────────
 
   it('accepte un code de langue simple', () => {

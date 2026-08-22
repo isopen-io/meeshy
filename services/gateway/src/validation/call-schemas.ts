@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { isMsRangeOrdered, MS_RANGE_REFINEMENT } from '@meeshy/shared/utils/time-range';
 import {
   callTypeEnum,
   CommonSchemas,
@@ -321,17 +322,16 @@ export const socketTranscriptionSegmentSchema = z.object({
     })
     // Un segment temporel ne peut PAS finir avant d'avoir commencé — même
     // classe de sanité numérique que `min(0)` sur les bornes. Bornes égales
-    // (segment ponctuel) admises. Miroir strict de `transcriptionSegmentSchema`
-    // dans `packages/shared/utils/attachment-validators.ts` (durci itération
-    // 234) : sans ce `refine`, un `startMs=1500, endMs=500` traverse le gate
-    // et se PROPAGE — ce chemin persiste le segment (`Transcription`), l'envoie
-    // au traducteur (ZMQ) et le diffuse à TOUS les participants de l'appel,
-    // qui l'inscrivent dans leur overlay de sous-titres puis dans le replay
+    // (segment ponctuel) admises. Invariant partagé par tous les couples
+    // `startMs/endMs`, déclaré une seule fois dans
+    // `@meeshy/shared/utils/time-range` (itération 238, ex-miroir manuel de
+    // `transcriptionSegmentSchema`, durci itération 234/236) : sans ce
+    // `refine`, un `startMs=1500, endMs=500` traverse le gate et se PROPAGE —
+    // ce chemin persiste le segment (`Transcription`), l'envoie au traducteur
+    // (ZMQ) et le diffuse à TOUS les participants de l'appel, qui l'inscrivent
+    // dans leur overlay de sous-titres puis dans le replay
     // `GET /calls/:callId/transcript`, sans indice d'origine.
-    .refine((segment) => segment.endMs >= segment.startMs, {
-      message: 'endMs must be greater than or equal to startMs',
-      path: ['endMs'],
-    })
+    .refine(isMsRangeOrdered, MS_RANGE_REFINEMENT)
 });
 
 /**
