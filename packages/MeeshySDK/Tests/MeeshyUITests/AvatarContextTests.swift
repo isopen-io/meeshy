@@ -270,11 +270,19 @@ final class AvatarContextTests: XCTestCase {
 
     func test_storyTrayCompact_keepsStoryStyling() {
         // La variante compacte garde l'anneau story + le mood badge, juste plus
-        // fin et à taille 44 (badge proportionnel, pas le 32 fixe du grand trail).
+        // fin et à taille 36 (badge PROPORTIONNEL, pas le 32 fixe du grand
+        // trail). Le repère est passé de 44 à 36 le 2026-08-22 avec le
+        // rétrécissement des anneaux : c'est la PROPORTION qui est la règle —
+        // le badge suit la taille du contexte, il ne la fige pas.
         XCTAssertTrue(AvatarContext.storyTrayCompact.showsStoryRing)
         XCTAssertTrue(AvatarContext.storyTrayCompact.showsMoodBadge)
         XCTAssertEqual(AvatarContext.storyTrayCompact.ringWidth, 1.5)
-        XCTAssertEqual(AvatarContext.storyTrayCompact.badgeSize, 44 * 0.42, accuracy: 0.01)
+        XCTAssertEqual(AvatarContext.storyTrayCompact.badgeSize, 36 * 0.42, accuracy: 0.01)
+        XCTAssertNotEqual(
+            AvatarContext.storyTrayCompact.badgeSize,
+            AvatarContext.storyTray.badgeSize,
+            "le grand trail fige son badge à 32 ; le compact reste proportionnel"
+        )
     }
 
     func test_ringWidth_nonStoryTray_useSizeThreshold() {
