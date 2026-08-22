@@ -2,6 +2,64 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-22 **post-detail gains repost + quote** (slice `feed-postdetail-quote-repost`, feature-parity
+> §F — "Post / comment pin-unpin; repost / quote-repost / share; report"). The feed card already offered
+> repost + quote (slice `feed-quote-repost`); the full-screen post-detail did not. iOS offers both there via
+> `PostDetailView.toggleDetailRepost(quote:)` behind a repost button + alert. This lands the same on Android,
+> routed through the already-tested `RepostCommand` SSOT.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the one
+> open PR repo-wide is #3348, a web/gateway/shared/iOS realtime fix, not android-routine). Prior android
+> iteration (`feed-quote-repost`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`ea1789df`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe wrinkle: `--channel=3
+> platforms;android-37.0` installs a MINOR-versioned platform dir (`platforms/android-37.0`, ApiLevel
+> `37.0`), but AGP 8.13 with `compileSdk = 37` looks up hash string `android-37` → *"Failed to find target
+> with hash string 'android-37'"*. Fix: `ln -sf android-37.0 android-37` in `$HOME/android-sdk/platforms`.
+> After the symlink the full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) ran
+> locally, **BUILD SUCCESSFUL** (973 tasks). Local gate available this run. (Recorded in NOTES.md.)
+>
+> **`:feature:feed` `PostDetailViewModel`**: new `repost()` / `beginQuote()` / `onQuoteTextChange()` /
+> `cancelQuote()` / `submitQuote()`, mirror of the feed VM's quote flow but scoped to the single open post
+> (`rawPost`). Both paths fold through `RepostCommand.of(post.id, post.repostOf, quote, commentary)` — the
+> pure SSOT already tested by `RepostCommandTest` (root-target resolution + blank-quote degradation). Two
+> **improvements over iOS's post-detail**, both free from routing through the SSOT: (1) reposting a SHARE
+> targets its ROOT, never the intermediate share — iOS's `toggleDetailRepost` reposts the raw `postId` and so
+> embeds an empty share card; (2) a blank/whitespace quote degrades to a simple repost (iOS sends
+> `content = ""`, and in fact iOS's post-detail "quote" is content-LESS entirely — `content: nil`). Ephemeral
+> repost/quote UI state (`quoteComposer`, optimistic `isReposted`, in-flight guard) lives in the existing
+> `PostDetailStatus` flow so it survives every re-projection; the optimistic `isReposted` reverts on failure
+> (iOS `isPostReposted`), failures surface via `errorMessage`, and a double-tap fires the network once
+> (in-flight guard). `sendRepost` rethrows `CancellationException`.
+>
+> **`:feature:feed` `PostDetailScreen`** (Compose glue, exempt): the read-only repost stat becomes an
+> interactive `DetailRepostStat` — a tap opens a Repost / Quote `DropdownMenu` (Android take on iOS's button
+> + alert), the icon fills accent `Indigo500` once reposted (optimistic). The quote path reuses the feed's
+> `QuoteComposerSheet` (made `internal`) for visual coherence — the source-preview card above a commentary
+> field, same as the feed. No new strings (reuses `feed_action_repost` / `feed_action_quote` / the quote
+> sheet strings). No dead ends: the menu dismisses cleanly, the sheet cancels back to the post.
+>
+> **Tests: +15** — all in `PostDetailViewModelTest`, driving the public `state`: repost-original→own-id /
+> repost-of-repost→root / repost-no-root→direct-parent / repost-before-load inert / repost-failure reverts +
+> error / double-repost fires once (in-flight guard) / beginQuote preview (author + trimmed content) /
+> beginQuote-before-load inert / draft change / cancel closes no repost / submitQuote commentary + flags +
+> closes / submitQuote-of-repost→root / submitQuote blank degrades / submitQuote no-composer inert /
+> submitQuote failure reverts + error. **Mutation RED-proof ×1**: `RepostCommand.of(post.id, post.repostOf…)`
+> → `…, null…` fails EXACTLY the 2 root-target tests, other 27 green. Restored via `cp` backup; production
+> diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (VM methods + state, screen wiring, 1 visibility widening in FeedScreen, +15
+> tests, tracking docs). Verdict: **PASS** — app-side orchestration + Compose glue, behavioural tests through
+> the public API, the "what to send" decision left in the already-tested pure SSOT, no production logic
+> outside apps/android.
+>
+> **Next**: still §F (Feed). Candidates: the `PostCommentsViewModel` could gain the same repost entry point if
+> iOS exposes one on comment cells (scout first); or advance to the reposted/quoted embed cell polish, or the
+> `comment pin-unpin` sibling once a gateway endpoint exists (still net-new, skip until then). Re-scout
+> read-only before committing — parity notes are hypotheses.
+
 > On 2026-08-22 **quote-repost composer shipped** (slice `feed-quote-repost`, feature-parity §F —
 > "Post / comment pin-unpin; repost / quote-repost / share; report"). The post options menu offered only a
 > SIMPLE repost; iOS also lets you **quote** — repost with your own commentary. This lands the quote flow

@@ -368,7 +368,7 @@ fun FeedScreen(
  * pour rester coherent avec [ReportPostDialog].
  */
 @Composable
-private fun QuoteComposerSheet(
+internal fun QuoteComposerSheet(
     composer: QuoteComposerState,
     onTextChange: (String) -> Unit,
     onSubmit: () -> Unit,
