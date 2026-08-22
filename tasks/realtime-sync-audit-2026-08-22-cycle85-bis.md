@@ -1,4 +1,4 @@
-# Cycle 85 — Le module que le cycle 84 a audité n'est pas celui qui sert
+# Cycle 85-bis — Le module que le cycle 84 a audité n'est pas celui qui sert
 
 **Date** : 2026-08-22
 **Branche** : `claude/keen-hamilton-761vij`
