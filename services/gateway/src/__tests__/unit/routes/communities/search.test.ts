@@ -158,6 +158,12 @@ describe('GET /communities/search — DB error', () => {
 
 // ─── L'aperçu de membres sort, et sa présence est GATÉE ──────────────────────
 //
+// ⚠ CE FICHIER MONTE LE MODULE MASQUÉ. `routes/communities.ts` (fichier) fait
+// écran à `routes/communities/` (répertoire) — résolution Node : le fichier
+// l'emporte. Rien de ce qui est testé ici ne tourne en production, et le gate
+// décrit ci-dessous n'a jamais protégé personne (cycle 86 ; le portage vers le
+// module MONTÉ vit dans `routes/communities.test.ts`).
+//
 // Ce bloc remplace le témoin « ne sert ni isOnline ni profil de membre » posé
 // par le cycle 84. Ce témoin gardait une non-fuite ACCIDENTELLE — le schéma
 // déclarait `creator` et `members` en `{ type: 'object' }` NU, que

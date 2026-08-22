@@ -42,7 +42,13 @@ const COMM_ID = '507f1f77bcf86cd799439011';
 const MEMBER_ID = '507f1f77bcf86cd799439022';
 
 const mockAuthContext = {
-  type: 'registered' as const,
+  // `middleware/auth.ts` pose `type: 'user'` pour un compte (ligne 354), jamais
+  // 'registered' — la prose de `services/gateway/CLAUDE.md` est périmée sur ce
+  // point, pas le code. `viewerFromRequest` lit CE champ : avec une fixture
+  // inexacte il rend `null`, donc un gate qui masque TOUT, donc un témoin vert
+  // attestant une confidentialité que la production n'applique pas. Piège réel,
+  // rencontré au cycle 86 en branchant le gate de présence des membres.
+  type: 'user' as const,
   isAuthenticated: true,
   userId: USER_ID,
   hasFullAccess: true,
