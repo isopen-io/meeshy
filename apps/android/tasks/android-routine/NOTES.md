@@ -5,6 +5,27 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-22 — First gradle run can race its own auto-install of `android-37.0` → false "Failed to find target 'android-37'"
+- `compileSdk = 37` (AGP 8.13) resolves to platform hash **`android-37`**, which is served by the
+  canary package **`platforms;android-37.0`** (`sdkmanager --channel=3`). If the FIRST gradle
+  invocation of the run triggers gradle's own auto-download of `android-37.0`, task-graph
+  dependency resolution can run BEFORE the platform finishes unzipping and dies with
+  `Could not determine the dependencies of task ':core:model:testDebugUnitTest' > Failed to find
+  target with hash string 'android-37'`. This is an **install race, not a toolchain gap** — do NOT
+  read it as "SDK 37 unavailable" and do NOT touch `compileSdk` (that's production build config).
+  Fix: just re-run the same gradle command once the platform is installed; it builds clean.
+- Belt-and-braces for a fresh container: pre-install the platform explicitly in the bootstrap
+  (`sdkmanager --channel=3 "platforms;android-37.0" "build-tools;35.0.0" "platform-tools"`) and let
+  it FINISH before the first `./gradlew` call, so no gradle-triggered mid-build download can race.
+
+## 2026-08-22 — Reuse the on-device sentiment scorer; don't reach for a new NL model
+- The stats dashboard's three-way sentiment bar looked like it might need an on-device NL model
+  (iOS uses Apple `NLTagger`, which has no portable Android twin). It does not: `:core:model`
+  `SentimentAnalyzer` (the composer's dictionary scorer, shipped by `composer-live-sentiment`) is
+  the on-device scorer, and `SentimentLevel.from` is the seven-bucket SSOT. The three-way split just
+  **collapses that existing SSOT** (`toneOf`) — one sentiment source of truth, not two. When a parity
+  gap smells like "needs a new model", first check whether an existing pure scorer already covers it.
+
 ## 2026-08-22 — Two test files in one package can't both declare the same `private class` name
 - When adding a new sibling repository test (`ConversationAnalysisRepositoryTest`) modelled on an
   existing one (`ConversationStatsRepositoryTest`) in the SAME package
