@@ -240,8 +240,8 @@ final class Router: ObservableObject {
 
     /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant, posé par l'item « Focal
     /// (bêta) » du menu d'appui long de la liste (gardé par
-    /// `BetaFeaturesPreference.isEnabled`, préférence utilisateur défaut ON —
-    /// amendement produit 2026-08-16, ex-drapeau caché `focalDevPreview`).
+    /// `BetaFeaturesPreference.isEnabled`, préférence utilisateur — défaut OFF
+    /// depuis le 2026-08-22 ; ex-drapeau caché `focalDevPreview`).
     /// Consommé + remis à `nil` par le site d'appel de
     /// `ConversationView(forcedReadingMode:)` à l'ouverture — MÊME patron que
     /// `pendingReplyContext`/`pendingOpenSearch` ci-dessus : une propriété
