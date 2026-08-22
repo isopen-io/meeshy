@@ -9,6 +9,10 @@ import type { ParticipantType } from './participant.js';
 // Le pont ✦ (G-123) — payload optionnel de `conversation:unread-updated`
 import type { ConversationBridge } from './conversation-bridge.js';
 
+// Motifs de refus de `conversation:join` — la table ET la règle qui décide
+// lesquels autorisent un consommateur à purger son cache (cycle 99)
+import type { ConversationJoinErrorReason } from '../utils/conversation-join-error.js';
+
 // Prédicat des marquages de notifications en masse
 import type {
   NotificationDeletedBulkScope,
@@ -740,6 +744,35 @@ export interface ConversationParticipationEventData {
   // appartenance change. L'adhésion et le départ réels ont leurs propres
   // événements — `CONVERSATION_PARTICIPANT_JOINED` / `_LEFT` — et ce sont eux
   // qui portent `memberCount`.
+}
+
+/**
+ * Données pour le REFUS d'une jonction de conversation (`conversation:join-error`).
+ *
+ * Déclaré au cycle 99. L'événement existait depuis longtemps — huit sites
+ * d'émission dans `ConversationHandler`, un consommateur web et un consommateur
+ * iOS — mais n'avait AUCUNE entrée ici. Ses deux consommateurs en avaient donc
+ * chacun transcrit la forme en lisant le producteur, et tous deux avaient
+ * conclu la même chose de travers : que l'événement signifiait « tu n'es plus
+ * membre », alors que quatre de ses sept motifs sont transitoires.
+ *
+ * `reason` n'est pas décoratif : c'est lui qui sépare les refus qui établissent
+ * la non-appartenance de ceux qui ne disent rien de l'appartenance. Un
+ * consommateur DOIT le lire avant de détruire quoi que ce soit, via
+ * `isMembershipDeniedJoinError()` — la seule règle, partagée.
+ *
+ * @see utils/conversation-join-error.ts
+ */
+export interface ConversationJoinErrorEventData {
+  /**
+   * L'identifiant TEL QUE DEMANDÉ par le client, pas l'identifiant normalisé :
+   * sur les refus précoces (`invalid_payload`, `server_error`) la normalisation
+   * n'a pas eu lieu, et le client doit pouvoir rapprocher le refus de la
+   * demande qu'il a émise.
+   */
+  readonly conversationId: string;
+  readonly reason: ConversationJoinErrorReason;
+  readonly message: string;
 }
 
 /**
@@ -1915,6 +1948,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.PRESENCE_SNAPSHOT]: (data: PresenceSnapshotEventData) => void;
   [SERVER_EVENTS.CONVERSATION_JOINED]: (data: ConversationParticipationEventData) => void;
   [SERVER_EVENTS.CONVERSATION_LEFT]: (data: ConversationParticipationEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_JOIN_ERROR]: (data: ConversationJoinErrorEventData) => void;
   [SERVER_EVENTS.AUTHENTICATED]: (data: AuthenticatedEventData) => void;
   [SERVER_EVENTS.AUTH_TOKEN_EXPIRED]: (data: AuthTokenExpiredEventData) => void;
   [SERVER_EVENTS.AUTH_SESSION_REVOKED]: (data: AuthSessionRevokedEventData) => void;

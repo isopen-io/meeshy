@@ -12,7 +12,7 @@
 
 import { logger } from '@/utils/logger';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type { ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import type { ConversationJoinErrorEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { useConversationUIStore } from '@/stores/conversation-ui-store';
 import type { UserStatusEvent } from '@/types';
 import type {
@@ -62,7 +62,7 @@ export class PresenceService {
   private conversationParticipantBannedListeners: Set<(data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void> = new Set();
   private conversationParticipantUnbannedListeners: Set<(data: { conversationId: string; userId: string }) => void> = new Set();
   private conversationClosedListeners: Set<(data: { conversationId: string; closedBy: string; closedAt: string }) => void> = new Set();
-  private conversationJoinErrorListeners: Set<(data: { conversationId: string; reason: string; message: string }) => void> = new Set();
+  private conversationJoinErrorListeners: Set<(data: ConversationJoinErrorEventData) => void> = new Set();
 
   /**
    * Setup presence event listeners on socket
@@ -197,7 +197,7 @@ export class PresenceService {
       this.conversationClosedListeners.forEach(listener => listener(data));
     });
 
-    socket.on(SERVER_EVENTS.CONVERSATION_JOIN_ERROR as any, (data: { conversationId: string; reason: string; message: string }) => {
+    socket.on(SERVER_EVENTS.CONVERSATION_JOIN_ERROR as any, (data: ConversationJoinErrorEventData) => {
       logger.warn('[PresenceService]', 'conversation join rejected', { conversationId: data.conversationId, reason: data.reason });
       this.conversationJoinErrorListeners.forEach(listener => listener(data));
     });
@@ -344,7 +344,7 @@ export class PresenceService {
     return () => this.conversationClosedListeners.delete(listener);
   }
 
-  onConversationJoinError(listener: (data: { conversationId: string; reason: string; message: string }) => void): UnsubscribeFn {
+  onConversationJoinError(listener: (data: ConversationJoinErrorEventData) => void): UnsubscribeFn {
     this.conversationJoinErrorListeners.add(listener);
     return () => this.conversationJoinErrorListeners.delete(listener);
   }

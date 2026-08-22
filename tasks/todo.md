@@ -695,6 +695,67 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle98.md`.
 - [ ] Suivi — préfixe `F` et sel du HKDF (conformité libsignal).
 - [ ] Suivi — quatrième famille : restent le sérialiseur/décodeur Socket.IO et le
       couple producteur passerelle / décodeurs iOS-Android.
+
+
+## Cycle 99 (2026-08-22) — un refus de jonction TRANSITOIRE effaçait la conversation
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle99.md`.
+
+- [x] Suivi du cycle 98 « sérialiseur/décodeur Socket.IO » **retiré, pas porté** :
+      vérifié, le dépôt n'a aucun parser Socket.IO personnalisé. Il n'y avait rien
+      à instruire là.
+- [x] L'autre moitié du suivi — producteur passerelle / décodeurs clients — a livré
+      un défaut **en PRODUCTION**, contrairement aux cycles 95-98 dont le
+      sous-arbre n'est appelé de nulle part.
+- [x] `conversation:join-error` n'était déclaré NULLE PART : ni type de payload, ni
+      entrée dans `ServerToClientEvents`. Ses DEUX consommateurs (web, iOS) en
+      avaient donc transcrit la forme en lisant le producteur, et tous deux avaient
+      conclu la même chose de travers.
+- [x] **Le défaut** : la passerelle émet SEPT motifs de refus, dont quatre
+      transitoires (`rate_limited`, `server_error`, `not_authenticated`,
+      `invalid_payload`). Les deux clients lisaient `reason` et n'en faisaient
+      rien — le web purgeait la conversation et TOUT son historique de messages,
+      iOS y ajoutait la fermeture de la vue ouverte sous « accès révoqué ».
+      Une limite de débit franchie par une tempête de reconnexion éjectait donc
+      l'utilisateur du fil qu'il lisait, et détruisait le cache qui porte la
+      promesse de lecture hors ligne.
+- [x] **Cause structurelle** : les handlers importaient le `Socket` NU de
+      socket.io (`DefaultEventsMap`), sur lequel `emit(n'importe quoi)` compile.
+      Seul l'`io` de `MeeshySocketIOManager` était typé. Un contrat que seul
+      l'orchestrateur honore n'est pas un contrat.
+- [x] **Pourquoi les témoins ne l'ont pas vu** : le web en avait trois sur ce
+      gestionnaire — ils exerçaient `banned` et `not_a_member`, les deux seuls
+      motifs où purger est JUSTE. Ils attestaient que la purge a lieu, jamais
+      qu'elle est conditionnelle.
+- [x] Contrat déclaré (`CONVERSATION_JOIN_ERROR_REASONS`,
+      `ConversationJoinErrorEventData`, entrée dans `ServerToClientEvents`) et
+      règle unique partagée `isMembershipDeniedJoinError()`.
+- [x] `MeeshySocket` (`socketio/typed-socket.ts`) contraint le producteur.
+      **Mesuré** : `reason: 'bnned'` fait désormais échouer `tsc` en nommant les
+      sept valeurs admises.
+- [x] L'INCONNU ne détruit pas — liste d'autorisation, jamais d'exclusion. Même
+      règle de maison que `BridgeAnnouncement` : « ne pas savoir lire n'autorise
+      pas à détruire ».
+- [x] **ROUGE prouvé** : web 4/4 tombent avant correctif (`Received array: []`) ;
+      passerelle rouge sous mutation du motif ; shared ne se charge pas sans le
+      module.
+- [x] Gates : `tsc` passerelle 0 · `tsc` web **identique à la baseline** (diff vide,
+      mesuré par `git stash` — 1241 erreurs préexistantes) · shared 2449/2449 +
+      tous seuils de couverture · web ciblé 144/144 · suite complète passerelle.
+- [ ] Suivi — **un seul handler est typé.** Basculer les autres un par un sur
+      `MeeshySocket` ; chacun peut révéler un événement non déclaré.
+- [ ] Suivi — après un refus transitoire, iOS ne RE-TENTE pas la jonction. Le fil
+      et son cache survivent (le gain), mais la room n'est rejointe qu'au prochain
+      cycle de reconnexion. Un re-essai borné sur les seuls motifs transitoires
+      est la suite naturelle.
+- [ ] Suivi — **Android n'a pas été instruit** (cf. cycle 92 bis : un consommateur
+      Android peut exister et n'avoir jamais fonctionné).
+- [ ] Suivi — ce cycle n'a instruit qu'UN événement sur les ~158 du contrat.
+- [ ] Suivis hérités du cycle 98, non touchés : 3 suites `dma-interoperability`
+      rouges et exclues (56/114) ; clés distantes d'`asymmetricRatchet` ; pré-clé
+      unique non consommée par le répondeur ; `SignalKeyManager.registrationId`
+      tiré au hasard au constructeur ; préfixe `F` et sel du HKDF.
+
 ## Chrome de la rangée Lentille (2026-08-22 soir, branche feat/lentille-row-chrome)
 
 Directive produit (4 points) : « le trail a des cercles coupés, il faut réduire la taille des cercles » ·
