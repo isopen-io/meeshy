@@ -5,6 +5,18 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-22 — An umbrella "…-mode / …-flow" parity box is several slices; find the pure brain first
+- The `[ ]` "Anonymous-session conversation mode; guest join-via-share-link flow" box LOOKED like
+  a big unstarted feature, but recon showed Android had already ported ~90% of it (permission core,
+  session store, guest-join form/VM/screen, composer gate, dual-auth). The one un-ported piece was
+  the pure entry-decision policy (`ShareLinkEntryPolicy.swift`) — a textbook 6-branch pure-logic
+  slice. Lesson: for an umbrella box, grep the codebase for what already exists BEFORE scoping;
+  the highest-value TDD slice is usually the pure decision engine the wired-up pieces are missing,
+  not a re-port of the whole feature. Mark the umbrella `[~]` with the named follow-ups, never `[x]`
+  on the strength of one slice.
+- Mutation RED-proof done right this run: `cp <file> /tmp/x.bak` before mutating, `cp /tmp/x.bak <file>`
+  to restore (NOT `git checkout` — the file is uncommitted; see the 2026-08-22 checkout lesson below).
+
 ## 2026-08-22 — Never `git checkout <file>` to undo a mutation on an UNCOMMITTED file
 - Doing a mutation RED-proof, I `git checkout`-ed the reducer to "revert the one-line mutation".
   The file was uncommitted (the whole slice was still in the working tree), so checkout reverted it
