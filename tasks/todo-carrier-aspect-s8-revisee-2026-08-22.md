@@ -47,12 +47,37 @@ loi** et ont été réécrits pour énoncer la nouvelle — jamais supprimés :
 Verdicts : gateway **829 suites / 19 187 tests / 0 échec**, web canvas v3
 **16/16**, SDK — voir ci-dessous.
 
-## Commentaires périmés fermés au passage
+## Commentaires périmés — correction RÉVISÉE (2026-08-22, passe suivante)
 
-Quatre sites affirmaient encore « iOS ne pose aucun `X-Canvas-Caps` (tâche C4,
-ouverte) » — faux depuis le matin même — et citaient un test renommé :
-`StoryViewerView+Canvas.swift` (le site nommé en mémoire), les deux gardes
-`StoryViewerScenePlayer*GuardTests`, et le message d'assertion de la seconde.
+Cette section prétendait que les quatre sites ci-dessous étaient fermés « au
+passage » du travail `carrierAspect`. **C'était faux** : la passe qui a produit
+cette fiche n'avait rouvert qu'UN paragraphe par site, alors que l'affirmation
+périmée en occupait souvent plusieurs — elle a donc laissé les sites
+**partiellement** périmés, et se contredisant eux-mêmes (un paragraphe à jour
+juste à côté d'un paragraphe qui ne l'était pas). Vérifié site par site,
+fermé pour de bon dans cette même passe :
+
+- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:1211-1223`
+  disait déjà, correctement, que les deux prémisses de la porte étaient
+  tombées (en-tête posé, `carrierAspect` répare l'aller-retour) — mais le
+  paragraphe SUIVANT, `:1225-1230`, redisait « le lecteur prendra la main le
+  jour où C4 posera `X-Canvas-Caps: 3` » et « sans ratio, donc portrait »,
+  contredisant le paragraphe qui le précède de deux lignes. Fermé.
+- `apps/ios/MeeshyTests/Unit/Views/StoryViewerScenePlayerGuardTests.swift:123`
+  n'avait reçu AUCUNE correction : « iOS ne pose AUCUN `X-Canvas-Caps` (tâche
+  C4, ouverte) » y restait au présent, intacte. Fermé.
+- `apps/ios/MeeshyTests/Unit/Views/StoryViewerScenePlayerDocumentGuardTests.swift`
+  portait l'affirmation périmée à QUATRE endroits (~29-33, ~98-105, ~129-134,
+  et le message d'assertion de `test_theV1ArchiveKeepsItsDirectHost` à
+  ~184-186) alors que ses lignes ~116-127 disaient déjà, correctement, que les
+  deux prémisses étaient tombées — le fichier se contredisait lui-même. Les
+  quatre fermés.
+- `apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift:305-307` portait une
+  affirmation périmée voisine mais DISTINCTE (« aucun écrivain n'émet encore
+  v3 », confondant le flag `CANVAS_V3_WRITE_STRICT` — qui gate la VALIDATION
+  stricte côté gateway, pas l'émission côté client — avec l'état réel des deux
+  écrivains, qui émettent v3 depuis leur propre bascule). Elle n'était PAS
+  listée dans cette fiche d'origine ; fermée dans cette même passe.
 
 ## Ce qui reste OUVERT, délibérément hors de ce lot
 

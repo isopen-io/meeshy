@@ -74,12 +74,25 @@ restent distincts.
 
 ## Reste bloquant pour l'ARMEMENT de `CANVAS_V3_READ` (pas pour l'en-tête)
 
-- [ ] Un test qui prend une story au ratio réel ≠ 9:16, la fait servir **avec**
-      puis **sans** l'en-tête, et compare le cadrage. `remapFreeAnchor`
-      reprojette les coordonnées v1 (relatives au média porteur) vers la scène
-      9:16 : sur un réel 16:9 un texte à `y = 0.90` atterrit à `0.6266`, et
-      `SceneV3Schema` n'a **aucun champ d'aspect** où consigner le ratio
-      d'origine — la conversion n'est donc pas inversible.
+- [x] **Fermé par `b82ebbc17` (2026-08-22), correctif `carrierAspect` — cette
+      ligne était périmée.** Elle affirmait que `SceneV3Schema` n'avait
+      « aucun champ d'aspect » où consigner le ratio d'origine, rendant la
+      conversion non inversible. C'est faux depuis `carrierAspect` :
+      `SceneV3Schema.carrierAspect` (optionnel, positif, fini —
+      `packages/shared/types/canvas-v3.ts:120`) loge désormais ce ratio ; le
+      convertisseur gateway le pose (`storyEffectsV3.ts:226-227`) et le pont
+      Swift le restaure à la lecture (`CanvasV3Migration.swift:69` et
+      `:543`), rendant `remapFreeAnchor` inversible. Le test demandé ici
+      existe : `CanvasV3MigrationTests.v1RoundTripThroughV3_isFAITHFUL_nowThatTheSceneCarriesItsAspect`,
+      plus le golden PARTAGÉ gateway/SDK. Sur un réel 16:9, `y = 0.90` ne
+      retombe plus à `0.6266`.
+- [ ] Ce qui reste RÉELLEMENT bloquant pour armer `CANVAS_V3_READ` n'est donc
+      plus le cadrage, mais la LECTURE Android (lot H, cf. section « État »
+      ci-dessus) : `CANVAS_V3_READ` est un drapeau gateway, pas un drapeau
+      iOS — l'armer convertirait l'archive v1 en v3 pour TOUS les clients,
+      Android compris, et un client Android qui ne sait pas encore lire le
+      v3 verrait ses stories-texte vidées. Non vérifié dans cette passe :
+      confirmer qu'aucun autre blocage ne subsiste avant d'armer.
 
 ## Ne pas rouvrir
 
