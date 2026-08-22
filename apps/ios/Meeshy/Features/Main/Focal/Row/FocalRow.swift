@@ -100,7 +100,8 @@ struct FocalRow: View {
             accentHex: input.accentHex,
             isDark: input.isDark,
             onCallBack: { _ in actions.onCallBack?(input.localId) },
-            onLongPress: { actions.onLongPressCallDetail?(input.localId) }
+            onLongPress: { actions.onLongPressCallDetail?(input.localId) },
+            onOpenParticipantProfile: actions.onOpenParticipantProfile
         )
     }
 
