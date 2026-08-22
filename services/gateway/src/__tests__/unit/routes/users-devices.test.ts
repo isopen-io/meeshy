@@ -41,6 +41,15 @@ jest.mock('../../../utils/pagination', () => ({
   })),
 }));
 
+// Gate de présence — `resolveForTargets` (critère STRICT). Le double rend FULL
+// par défaut : les cas historiques de ce fichier ne s'occupent pas de présence.
+const mockResolveForTargets = jest.fn<any>();
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
+  }),
+}));
+
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   userMinimalSchema: { type: 'object', additionalProperties: true },
   errorResponseSchema: {
@@ -115,6 +124,14 @@ import {
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const RECEIVER_ID = '507f1f77bcf86cd799439022';
+
+// Défaut du double de gate : tout est visible, pour que les cas de ce fichier
+// qui ne parlent pas de présence restent inchangés.
+beforeEach(() => {
+  mockResolveForTargets.mockImplementation(async (_viewer: unknown, ids: string[]) =>
+    new Map((ids ?? []).map((id) => [id, { showOnline: true, showLastSeenTimestamp: true }])),
+  );
+});
 const FR_ID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 const CONVO_ID = 'cccccccccccccccccccccccc';
 
@@ -389,6 +406,156 @@ describe('getFriendRequests — GET /users/friend-requests', () => {
 
     const [findManyArgs] = pr.friendRequest.findMany.mock.calls[0];
     expect(findManyArgs.where).not.toHaveProperty('status');
+  });
+});
+
+// ─── Gate de présence sur GET /users/friend-requests ─────────────────────────
+//
+// La route inlinait `sender` et `receiver` avec `isOnline`/`lastActiveAt`
+// BRUTS. C'est l'annuaire de personnes le plus consulté de l'app (la liste
+// d'amis est `?status=accepted`), et ses clients FILTRENT dessus
+// (`ContactsListViewModel`, `use-contacts-data`). Une préférence
+// `showOnlineStatus: false` n'y survivait pas — pas même pour un ami accepté,
+// dont la politique partagée masque bel et bien la présence quand il l'a
+// désactivée.
+describe('getFriendRequests — gate de présence (critère STRICT)', () => {
+  const HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
+  const FULL = { showOnline: true, showLastSeenTimestamp: true };
+
+  beforeEach(() => jest.clearAllMocks());
+
+  function setup(prismaOverrides: Record<string, any> = {}) {
+    const { fastify, pr } = makeFastify(prismaOverrides);
+    getFriendRequests(fastify);
+    const route = findRoute(fastify.routes, 'GET', 'friend-requests');
+    const reply = makeReply();
+    return { fastify, pr, route, reply };
+  }
+
+  function servedRows() {
+    const [, data] = mockSendPaginatedSuccess.mock.calls[0];
+    return data as any[];
+  }
+
+  it('masque isOnline du pair quand la visibilité résolue est masquée', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[RECEIVER_ID, HIDDEN], [USER_ID, FULL]]));
+    const { route, reply } = setup({
+      friendRequest: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          makeFriendRequest({
+            status: 'accepted',
+            receiver: makeUser({ id: RECEIVER_ID, isOnline: true, lastActiveAt: new Date('2026-08-22') }),
+          }),
+        ]),
+        count: jest.fn<any>().mockResolvedValue(1),
+      },
+    });
+
+    await route.handler(makeReq({ query: {} }), reply);
+
+    const [row] = servedRows();
+    expect(row.receiver.isOnline).toBe(false);
+    expect(row.receiver.lastActiveAt).toBeNull();
+  });
+
+  it('conserve la présence du pair quand la visibilité est pleine', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[RECEIVER_ID, FULL], [USER_ID, FULL]]));
+    const lastSeen = new Date('2026-08-22T10:00:00.000Z');
+    const { route, reply } = setup({
+      friendRequest: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          makeFriendRequest({ receiver: makeUser({ id: RECEIVER_ID, isOnline: true, lastActiveAt: lastSeen }) }),
+        ]),
+        count: jest.fn<any>().mockResolvedValue(1),
+      },
+    });
+
+    await route.handler(makeReq({ query: {} }), reply);
+
+    const [row] = servedRows();
+    expect(row.receiver.isOnline).toBe(true);
+    expect(row.receiver.lastActiveAt).toEqual(lastSeen);
+  });
+
+  it('résout les DEUX côtés de chaque demande, pas seulement le pair', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[RECEIVER_ID, FULL], [USER_ID, FULL]]));
+    const { route, reply } = setup();
+
+    await route.handler(makeReq({ query: {} }), reply);
+
+    const [, ids] = mockResolveForTargets.mock.calls[0];
+    expect(new Set(ids as string[])).toEqual(new Set([USER_ID, RECEIVER_ID]));
+  });
+
+  it('passe le viewer construit depuis authContext', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map());
+    const { route, reply } = setup();
+
+    await route.handler(makeReq({ query: {}, authContext: { ...makeAuthContext(), type: 'user' } }), reply);
+
+    const [viewer] = mockResolveForTargets.mock.calls[0];
+    expect(viewer).toEqual({ userId: USER_ID, role: 'USER' });
+  });
+
+  // Un id absent de la carte résolue sort masqué : le défaut est le refus.
+  it('masque un pair que le résolveur n a pas rendu', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map());
+    const { route, reply } = setup({
+      friendRequest: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          makeFriendRequest({ receiver: makeUser({ id: RECEIVER_ID, isOnline: true, lastActiveAt: new Date() }) }),
+        ]),
+        count: jest.fn<any>().mockResolvedValue(1),
+      },
+    });
+
+    await route.handler(makeReq({ query: {} }), reply);
+
+    const [row] = servedRows();
+    expect(row.receiver.isOnline).toBe(false);
+    expect(row.receiver.lastActiveAt).toBeNull();
+  });
+
+  it('n ouvre aucune requête de visibilité sur une page vide', async () => {
+    const { route, reply } = setup({
+      friendRequest: {
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        count: jest.fn<any>().mockResolvedValue(0),
+      },
+    });
+
+    await route.handler(makeReq({ query: {} }), reply);
+
+    expect(mockResolveForTargets).not.toHaveBeenCalled();
+    expect(mockSendPaginatedSuccess).toHaveBeenCalledWith(reply, [], expect.objectContaining({ total: 0 }));
+  });
+
+  // Une demande dont le pair a supprimé son compte n'a plus de profil inline :
+  // le gate ne doit pas trébucher dessus.
+  it('tolère un côté absent (compte supprimé)', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[USER_ID, FULL]]));
+    const { route, reply } = setup({
+      friendRequest: {
+        findMany: jest.fn<any>().mockResolvedValue([makeFriendRequest({ receiver: null })]),
+        count: jest.fn<any>().mockResolvedValue(1),
+      },
+    });
+
+    await route.handler(makeReq({ query: {} }), reply);
+
+    const [row] = servedRows();
+    expect(row.receiver).toBeNull();
+    expect(mockResolveForTargets.mock.calls[0][1]).toEqual([USER_ID]);
+  });
+
+  it('rend 500 sans fuiter la présence quand le résolveur échoue', async () => {
+    mockResolveForTargets.mockRejectedValue(new Error('presence down'));
+    const { route, reply } = setup();
+
+    await route.handler(makeReq({ query: {} }), reply);
+
+    expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
+    expect(mockSendPaginatedSuccess).not.toHaveBeenCalled();
   });
 });
 

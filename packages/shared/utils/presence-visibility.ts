@@ -51,3 +51,23 @@ export const applyPresenceVisibility = <
   isOnline: visibility.showOnline ? profile.isOnline : null,
   lastActiveAt: visibility.showLastSeenTimestamp ? profile.lastActiveAt : null,
 });
+
+/**
+ * Même application, pour les surfaces dont le schéma de sérialisation déclare
+ * `isOnline` NON nullable (`userMinimalSchema`, `contacts-schemas`) et dont les
+ * clients le typent `boolean` : masqué s'y présente comme HORS LIGNE.
+ *
+ * Deux différences avec {@link applyPresenceVisibility}, et les deux comptent :
+ * `false` au lieu de `null`, et une visibilité **absente** vaut masquée — un id
+ * qu'une carte `resolveForTargets` n'a pas rendu n'est pas un id autorisé.
+ */
+export const applyPresenceVisibilityAsOffline = <
+  T extends { isOnline: boolean | null; lastActiveAt: Date | null },
+>(
+  profile: T,
+  visibility: PresenceVisibility | undefined,
+): Omit<T, 'isOnline' | 'lastActiveAt'> & { isOnline: boolean; lastActiveAt: Date | null } => ({
+  ...profile,
+  isOnline: visibility?.showOnline ? profile.isOnline === true : false,
+  lastActiveAt: visibility?.showLastSeenTimestamp ? profile.lastActiveAt : null,
+});

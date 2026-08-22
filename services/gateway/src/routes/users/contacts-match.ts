@@ -3,7 +3,8 @@ import { logError } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { normalizeContacts, MAX_CONTACTS_PER_SYNC } from '../../utils/contact-identifiers';
-import { ContactDirectoryService, applyMatchedPresence } from '../../services/ContactDirectoryService';
+import { ContactDirectoryService } from '../../services/ContactDirectoryService';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { matchedUserSchema } from './contacts-schemas';
 import { viewerFromRequest } from './presence-gate';
@@ -121,7 +122,7 @@ export async function matchContacts(fastify: FastifyInstance) {
         const match = matchesByKey.get(contact.contactKey);
         if (!match) return [];
         return [{
-          user: applyMatchedPresence(match.user, visibility.get(match.user.id)),
+          user: applyPresenceVisibilityAsOffline(match.user, visibility.get(match.user.id)),
           matchedBy: match.matchedBy,
           contactDisplayName: contact.displayName
         }];
