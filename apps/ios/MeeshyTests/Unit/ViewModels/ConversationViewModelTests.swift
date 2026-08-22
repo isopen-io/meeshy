@@ -2582,12 +2582,24 @@ final class ConversationViewModelTests: XCTestCase {
 
     private final class MockActiveCallService: ActiveCallServiceProviding, @unchecked Sendable {
         var result: Result<ActiveCallSession?, Error> = .success(nil)
+        var onCalled: (() -> Void)?
         private(set) var callCount = 0
 
         func activeCall(conversationId: String) async throws -> ActiveCallSession? {
             callCount += 1
+            onCalled?()
             return try result.get()
         }
+    }
+
+    private func makeAnonymousSession(conversationId: String) -> AnonymousSessionContext {
+        AnonymousSessionContext(
+            sessionToken: "test-anon-token",
+            participantId: "part-123",
+            permissions: ParticipantPermissions(),
+            linkId: "mshy_test",
+            conversationId: conversationId
+        )
     }
 
     @MainActor
@@ -2714,6 +2726,54 @@ final class ConversationViewModelTests: XCTestCase {
         await sut.joinOngoingCall(makeLiveCallSummary())
 
         XCTAssertTrue(spy.rejoinCalls.isEmpty, "une bulle périmée ne rejoint jamais un AUTRE appel")
+    }
+
+    // MARK: - Anonymous guests never get a calling affordance from a bubble
+    //
+    // Mirrors the header's `anonymousHeaderBar` swap (ConversationView), which
+    // hides the call buttons entirely for anonymous shared-link sessions. A
+    // call-summary bubble further down history must honor the SAME gate —
+    // otherwise a guest can trigger the OS microphone permission prompt (and,
+    // for a live call, a server round-trip) before the gateway's own
+    // isAnonymous check ever runs.
+
+    func test_joinOngoingCall_whileAnonymous_neverQueriesServerOrRejoins() async {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        let sut = makeSUT(
+            isDirect: true,
+            participantUserId: "peer-user-1",
+            anonymousSession: makeAnonymousSession(conversationId: testConversationId),
+            activeCallService: service,
+            liveCallJoin: spy.context
+        )
+
+        await sut.joinOngoingCall(makeLiveCallSummary())
+
+        XCTAssertEqual(service.callCount, 0, "un invité anonyme ne doit jamais déclencher de round-trip serveur")
+        XCTAssertTrue(spy.rejoinCalls.isEmpty)
+        XCTAssertEqual(spy.broughtUIForwardCount, 0)
+    }
+
+    func test_callBack_liveSummaryWhileAnonymous_neverJoinsOrStartsCall() async {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        let neverCalled = expectation(description: "activeCallService.activeCall must never be reached while anonymous")
+        neverCalled.isInverted = true
+        service.onCalled = { neverCalled.fulfill() }
+        let sut = makeSUT(
+            isDirect: true,
+            participantUserId: "peer-user-1",
+            anonymousSession: makeAnonymousSession(conversationId: testConversationId),
+            activeCallService: service,
+            liveCallJoin: spy.context
+        )
+
+        sut.callBack(for: makeLiveCallSummary())
+
+        await fulfillment(of: [neverCalled], timeout: 0.5)
+        XCTAssertTrue(spy.rejoinCalls.isEmpty)
+        XCTAssertEqual(spy.broughtUIForwardCount, 0)
     }
 
     // MARK: - Helpers

@@ -11,6 +11,7 @@ import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normali
 import { toAnonymousUsername, suffixAnonymousUsername } from '@meeshy/shared/utils/anonymous-username';
 import {
   errorResponseSchema,
+  validationErrorResponseSchema,
   anonymousParticipantSchema,
   conversationLinkSchema,
   conversationMinimalSchema,
@@ -201,14 +202,10 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', description: 'Error message' },
-            errors: { type: 'array', items: { type: 'object' }, description: 'Validation errors' }
-          }
-        },
+        // Voir `utils/response.ts` : l'enveloppe pose `error`, `message` et
+        // `code`. Ce bloc n'en declarait qu'un, et nommait `errors` un tableau
+        // que rien ne produit — `violations` est celui que l'enveloppe porte.
+        400: { description: 'Validation error', ...validationErrorResponseSchema },
         403: {
           type: 'object',
           properties: {
@@ -561,14 +558,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', description: 'Invalid data' },
-            errors: { type: 'array', items: { type: 'object' } }
-          }
-        },
+        400: { description: 'Invalid data', ...validationErrorResponseSchema },
         401: {
           type: 'object',
           properties: {

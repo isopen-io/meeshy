@@ -35,39 +35,37 @@ const ROUTES_DIR = join(__dirname, '..');
  * `routes/communities.ts` en coquille (cycle 86-ter) et la réparation des trois
  * listes d'administration (cycle 87).
  *
- * Les `400` sont des `details` / `errors` de schémas d'ERREUR : ils dégradent
- * un diagnostic, ils ne cassent aucun décodage client. Les `200` / `202` sont
+ * **Les onze `400` ont été retirés au cycle 89** : c'étaient des `details` /
+ * `errors` déclarés en TABLEAU au premier niveau, alors que l'enveloppe
+ * (`utils/response.ts`) ÉTALE `details` à la racine et ne porte de tableau que
+ * sous `violations`. Ces schémas écrits à la main supprimaient en prime
+ * `error`, `message` ou `code` selon les cas. Tous remplacés par
+ * `validationErrorResponseSchema`, qui déclare les cinq champs réels. Les `200` / `202` sont
  * la vraie dette — chacun vide une charge utile SERVIE. Inventaire raisonné et
  * priorisé : `tasks/realtime-sync-audit-2026-08-22-cycle86-bis.md` §6 et
  * `…-cycle87.md` §2.
  *
- * Les quatre `user:` / `sender:` touchent la présence : les traiter comme le
- * cycle 84 bis a traité le sien — déclarer le schéma ET poser le gate dans le
- * MÊME lot, sans quoi la réparation publie la fuite que la panne retenait.
+ * **Les sites de PRÉSENCE sont tous traités (cycle 88).** Cinq lignes ont donc
+ * quitté cet inventaire : `communities/core.ts|user`, `magic-link.ts|user` ×2 et
+ * `magic-link.ts|session` ×2 — schéma déclaré ET gate posé dans le même lot,
+ * selon la règle du cycle 84 bis.
+ *
+ * `messages.ts|sender|200` RESTE, et ce n'est pas un oubli. Le balayage le
+ * signale comme nu, mais la déclaration y est INERTE : le schéma de cette route
+ * décrit le message quand `sendSuccess` répond `{ success, data }`, si bien que
+ * rien n'y matche et que la charge utile traverse entière. Ce site portait donc
+ * une fuite de présence ACTIVE — fermée au cycle 88 par un gate à la source.
+ * Aligner son schéma sur l'enveloppe est un lot en soi : déclarer partiellement
+ * ce qui passait entier TRONQUERAIT. Tant que ce n'est pas fait, la ligne reste
+ * ici — elle nomme une dette de FORME, plus une fuite.
  */
 const FROZEN_INVENTORY: readonly string[] = [
-  'admin/roles.ts|items|400',
-  'admin/roles.ts|items|400',
-  'anonymous.ts|items|400',
-  'anonymous.ts|items|400',
   'calls.ts|details|400',
-  'communities/core.ts|user|200',
   'conversations/messages-advanced.ts|message|200',
   'conversations/messages-advanced.ts|message|200',
   'conversations/sharing.ts|link|200',
   'links/admin.ts|creator|200',
-  'magic-link.ts|session|200',
-  'magic-link.ts|session|200',
-  'magic-link.ts|user|200',
-  'magic-link.ts|user|200',
   'messages.ts|sender|200',
-  'signal-protocol.ts|items|400',
-  'signal-protocol.ts|items|400',
-  'users/profile.ts|items|400',
-  'users/profile.ts|items|400',
-  'users/profile.ts|items|400',
-  'users/profile.ts|items|400',
-  'users/profile.ts|items|400',
   'users/profile.ts|permissions|200',
   'voice-analysis.ts|analysis|200',
   'voice-analysis.ts|analysis|200',

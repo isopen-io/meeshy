@@ -3012,14 +3012,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       gateway endpoint) — Android's first cut has no autocomplete corpus; a real, documented follow-up,
       not a silently-dropped feature. Every sub-item of this line is now wired on both platforms — box
       checked.
-- [ ] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all.
+- [x] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all.
       **Storage foundation shipped 2026-08-15** (`sdk-core`'s `ConversationLockStore`/
       `EncryptedConversationLockStore`, slice `conversation-lock-store-foundation`, PR #3045) — PIN
       hashing/storage only. **Logout hook wired 2026-08-15** (slice `conversation-lock-logout-wiring`,
-      PR #3048) — `DefaultSessionTeardown.wipe()` now clears the master PIN and every conversation
-      lock, closing the cross-account leak the foundation slice deferred. Still needed: PIN entry
-      UI, `ConversationListViewModel` wiring (hide locked conversations from the list), the unlock
-      flow itself. Box stays unchecked until those land.
+      PR #3048) — `DefaultSessionTeardown.wipe()` clears the master PIN and every conversation lock.
+      **PIN-entry UI + setup/lock/unlock/open/unlock-all flows shipped** (pure `LockPinReducer` +
+      `ConversationLockPinSheet` + `ConversationListViewModel` wiring): the row-tap gate opens locked
+      conversations via `OPEN_CONVERSATION` (SOTA over iOS — the row stays visible and reveals on tap,
+      WhatsApp-style, rather than being hidden from the list), and unlock-all sits in the top bar.
+      **Master PIN change + remove shipped 2026-08-22** (slice `conversation-lock-master-pin`) — the
+      last named arm: `LockPinReducer` gains `CHANGE_MASTER_PIN` (verify current → new → confirm →
+      commit) and `REMOVE_MASTER_PIN` (verify → clear), a `RemoveMasterPin` effect, and change/remove
+      copy; `ConversationListViewModel` gains `onChangeMasterPin`/`onRemoveMasterPin` + a mirrored
+      `hasMasterPin` and the `canChangeMasterPin`/`canRemoveMasterPin` gates; a `LockSecurityMenu`
+      overflow in the top bar surfaces both once a PIN exists. SOTA over iOS: remove is offered ONLY
+      while nothing is locked and is applied through the store's *guarded* `removeMasterPin`, so a lock
+      can never be orphaned behind a PIN the user can no longer produce (iOS force-removes
+      unconditionally). +17 tests (reducer ×9, ViewModel ×8), 2 mutation RED proofs. Box now `[x]`.
 - [x] Leave / archive / delete-for-me / delete-for-all conversation — all four verified shipped: leave/delete-for-me/archive already live (earlier slices), delete-for-all closes the gap (`conversation-delete-for-all`, 2026-08-16)
       — leave, archive, and delete-for-me are wired (`conversation-leave` PR #3055 +
       `conversation-delete-for-me` PR #3057, 2026-08-16: two context-menu items, each behind its
