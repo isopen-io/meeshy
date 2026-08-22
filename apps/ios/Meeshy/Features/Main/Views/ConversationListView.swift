@@ -603,20 +603,26 @@ struct ConversationListView: View {
                 isExpanded: isSectionContentVisible(group.section.id),
                 onToggle: sectionToggle(for: group.section.id)
             )
-            // D7 — la respiration s'appliquait aux RANGS SEULS (`sectionConversations`)
-            // et jamais aux headers : les rangées sous la ligne de focus étaient
-            // poussées de +18 pt pendant la scène tandis que le sticker restait
-            // immobile, si bien que la marge de 8 pt était mangée et que le
-            // header mordait la rangée précédente. Chevauchement mesuré à
-            // géométrie stabilisée, deux frontières, deux relevés indépendants :
-            // 9,6 / 8,9 puis 9,2 / 9,1 pt. L'arithmétique boucle exactement —
-            // 18 (respiration) − 8 (marge) − (88 − h)/2 = 9,6 pour h = 87,3.
-            // Ce n'était PAS l'échelle : elle rétrécit autour du midY, donc elle
-            // éloigne les bords de leurs voisins et ne peut mécaniquement pas
-            // mordre un header. Poser la MÊME loi ici fait suivre le sticker et
-            // conserve la marge, plutôt que d'écrêter la respiration — l'effet
-            // reste entier.
-            .lentilleFocusBreathing(isEnabled: true)
+            // D7 — DIAGNOSTIQUÉ, NON CORRIGÉ ICI : le correctif demande un
+            // arbitrage produit. La respiration (`LentilleFocusBreathing`)
+            // écarte les voisines de la rangée élue de ±18 pt, mais elle est
+            // posée sur les RANGS SEULS (`sectionConversations`) et jamais sur
+            // ce sticker : la marge de 8 pt est donc mangée et le header mord
+            // la rangée précédente. Mesuré à deux frontières, deux relevés
+            // indépendants : 9,6 / 8,9 puis 9,2 / 9,1 pt, et l'arithmétique
+            // boucle — 18 − 8 − (88 − h)/2 = 9,6 pour h = 87,3. Ce n'est PAS
+            // l'échelle : elle rétrécit autour du midY, donc elle éloigne les
+            // bords de leurs voisins et ne peut mécaniquement pas mordre un
+            // header.
+            //
+            // Poser la même loi ICI a été essayé et REJETÉ par la mesure : sur
+            // un sticker ÉPINGLÉ, l'`.offset` étend le cadre d'accessibilité de
+            // façon durable (h 21,3 → 39,3 pendant toute la scène, encore à
+            // 3 s), ce qui rend la géométrie de l'épinglage inintelligible.
+            // Les deux issues restantes amoindrissent ou déplacent un réglage
+            // produit — écrêter la respiration à la marge (18 → 8, effet
+            // réduit) ou porter le gap de section à 18 (densité réduite) —
+            // d'où l'arbitrage.
             // Position vivante du sticker → registre inerte de la pilule (la
             // section épinglée = le sticker le plus haut). `onGeometryChange`
             // ne monte aucune vue de plus, contrairement à un `GeometryReader`.
