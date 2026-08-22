@@ -33,6 +33,7 @@ import {
   MoreVertical
 } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
+import { readPaginatedList } from '@/services/paginated-list';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog';
@@ -102,15 +103,11 @@ export default function AdminShareLinksPage() {
         statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined
       );
 
-      if (response.data) {
-        setShareLinks(response.data.shareLinks || []);
-        setTotalCount(response.data.pagination?.total || 0);
-        setTotalPages(Math.ceil((response.data.pagination?.total || 0) / pageSize));
-      } else {
-        setShareLinks([]);
-        setTotalCount(0);
-        setTotalPages(1);
-      }
+      const { items, pagination } = readPaginatedList<ShareLink>(response);
+      const total = pagination?.total ?? 0;
+      setShareLinks(items);
+      setTotalCount(total);
+      setTotalPages(Math.max(1, Math.ceil(total / pageSize)));
     } catch (error) {
       console.error('Erreur lors du chargement des liens de partage:', error);
       toast.error(t('shareLinks.loadError'));
