@@ -20,12 +20,13 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }) },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  communitySchema: { type: 'object', properties: { id: { type: 'string' } } },
-  createCommunityRequestSchema: { type: 'object', properties: { name: { type: 'string' } } },
-  updateCommunityRequestSchema: { type: 'object', properties: {} },
-  errorResponseSchema: { type: 'object', properties: { success: { type: 'boolean' } } },
-}));
+// `@meeshy/shared/types/api-schemas` n'est PAS mocké, délibérément. Un double
+// de schéma désarme fast-json-stringify — la couche EXACTE où vivent les
+// défauts de charge utile que ces routes ont portés (cf. CLAUDE.md § « un
+// témoin s'importe par le chemin de la PRODUCTION »). Le stub omettait de
+// surcroît `userMinimalSchema`, que `core.ts` emploie pour le `user` d'un
+// participant : `{ ...undefined }` le réduisait à une déclaration vide, et
+// toute assertion sur ce `user` passait pour la mauvaise raison.
 
 jest.mock('../../../routes/communities/types', () => ({
   CreateCommunitySchema: { parse: (data: any) => ({ isPrivate: true, ...data }) },
