@@ -21,6 +21,17 @@ jest.mock('../../../utils/pagination', () => ({
   })),
 }));
 
+// Gate de présence — le module LIVE. `routes/communities.ts` (fichier) fait
+// écran à `routes/communities/` (répertoire) : c'est celui-ci qui est monté.
+const mockResolvePrefsOnly = jest.fn<any>();
+const mockResolveForTargets = jest.fn<any>();
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
+  }),
+}));
+
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   communitySchema: { type: 'object', additionalProperties: true },
   communityMinimalSchema: { type: 'object', additionalProperties: true },
@@ -41,8 +52,25 @@ const OTHER_USER_ID = 'user-other456';
 const COMM_ID = '507f1f77bcf86cd799439011';
 const MEMBER_ID = '507f1f77bcf86cd799439022';
 
+// Défaut du double de gate, pour TOUT le fichier : tout est montrable, afin que
+// les cas qui ne parlent pas de présence restent inchangés. Sans lui, le
+// résolveur rend `undefined` et le handler tombe en 500.
+beforeEach(() => {
+  mockResolvePrefsOnly.mockImplementation(async (ids: string[]) =>
+    new Map((ids ?? []).map((id) => [id, { showOnline: true, showLastSeenTimestamp: true }])),
+  );
+  mockResolveForTargets.mockImplementation(async (_v: unknown, ids: string[]) =>
+    new Map((ids ?? []).map((id) => [id, { showOnline: true, showLastSeenTimestamp: true }])),
+  );
+});
+
 const mockAuthContext = {
-  type: 'registered' as const,
+  // `middleware/auth.ts` pose `type: 'user'` pour un compte (jamais
+  // 'registered' — la prose de `services/gateway/CLAUDE.md` est périmée sur ce
+  // point, pas le code). `viewerFromRequest` lit ce champ : une fixture
+  // inexacte rendrait un viewer `null`, donc un gate qui masque tout, et le
+  // témoin attesterait une confidentialité que la production n'applique pas.
+  type: 'user' as const,
   isAuthenticated: true,
   userId: USER_ID,
   hasFullAccess: true,
@@ -546,5 +574,128 @@ describe('POST /communities/:id/invite', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+  });
+});
+
+// ─── Gate de présence sur GET /communities/:id/members (module LIVE) ─────────
+//
+// Le gate de cette route existait — dans `routes/communities/members.ts`, que
+// `routes/communities.ts` MASQUE (résolution Node : le fichier l'emporte sur le
+// répertoire). Il n'a donc jamais tourné : la route montée servait
+// `user.isOnline` brut, et `communityMemberSchema.user` étant `userMinimalSchema`,
+// qui déclare `isOnline`, le champ atteignait bien le fil.
+//
+// Le régime dépend du LECTEUR, pas de la route : l'accès n'est refusé qu'aux
+// non-membres d'une communauté PRIVÉE (`if (!hasAccess && community.isPrivate)`).
+// Sur une communauté publique, un inconnu lit donc la liste sans avoir posé
+// aucun lien — critère STRICT pour lui, contexte acquis pour un vrai membre.
+
+describe('GET /communities/:id/members — gate de présence (module live)', () => {
+  const PRESENT = { showOnline: true, showLastSeenTimestamp: true };
+  const HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
+
+  beforeEach(() => {
+    mockResolvePrefsOnly.mockReset().mockImplementation(async (ids: string[]) =>
+      new Map((ids ?? []).map((id) => [id, PRESENT])),
+    );
+    mockResolveForTargets.mockReset().mockImplementation(async (_v: unknown, ids: string[]) =>
+      new Map((ids ?? []).map((id) => [id, PRESENT])),
+    );
+  });
+
+  async function membersOf(community: Record<string, any>) {
+    const app = await buildApp();
+    (app as any).prisma.community.findFirst.mockResolvedValue(community);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/communities/${COMM_ID}/members`,
+      headers: { authorization: 'Bearer t' },
+    });
+    const body = res.json();
+    await app.close();
+    return body;
+  }
+
+  const asMember = { ...mockCommunityWithAdminMember, isPrivate: false, createdBy: 'someone-else', members: [{ userId: USER_ID }] };
+  const asStranger = { ...mockCommunityWithAdminMember, isPrivate: false, createdBy: 'someone-else', members: [] };
+
+  // Le membre est EN LIGNE dans la fixture : sans gate, `true` sort tel quel.
+  // (Le défaut `mockMember` est hors ligne — il rendrait ce témoin increvable.)
+  it('masque isOnline quand le membre a coupé sa présence', async () => {
+    mockResolvePrefsOnly.mockResolvedValue(new Map([[OTHER_USER_ID, HIDDEN]]));
+
+    const app = await buildApp();
+    (app as any).prisma.community.findFirst.mockResolvedValue(asMember);
+    (app as any).prisma.communityMember.findMany.mockResolvedValue([
+      { ...mockMember, user: { ...mockMember.user, isOnline: true } },
+    ]);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/communities/${COMM_ID}/members`,
+      headers: { authorization: 'Bearer t' },
+    });
+    const body = res.json();
+    await app.close();
+
+    expect(body.data[0].user.isOnline).toBe(false);
+  });
+
+  // Un vrai co-membre : le lien est posé des deux côtés.
+  it('résout un co-membre par les préférences seules', async () => {
+    await membersOf(asMember);
+
+    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([OTHER_USER_ID]);
+    expect(mockResolveForTargets).not.toHaveBeenCalled();
+  });
+
+  // Une communauté PUBLIQUE est lisible par un non-membre : aucun lien posé.
+  it('résout par le critère STRICT pour un lecteur non membre', async () => {
+    await membersOf(asStranger);
+
+    expect(mockResolveForTargets).toHaveBeenCalled();
+    const [viewer, ids] = mockResolveForTargets.mock.calls[0];
+    expect(ids).toEqual([OTHER_USER_ID]);
+    expect(viewer).toEqual({ userId: USER_ID, role: 'USER' });
+    expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
+  });
+
+  it('n ouvre aucune résolution sur une page sans membre', async () => {
+    const app = await buildApp();
+    (app as any).prisma.community.findFirst.mockResolvedValue(asMember);
+    (app as any).prisma.communityMember.findMany.mockResolvedValue([]);
+    await app.inject({ method: 'GET', url: `/communities/${COMM_ID}/members`, headers: { authorization: 'Bearer t' } });
+    await app.close();
+
+    expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
+    expect(mockResolveForTargets).not.toHaveBeenCalled();
+  });
+});
+
+// ─── L'aperçu de membres de la RECHERCHE ne sort aucune présence (module live) ─
+//
+// Ce témoin existait au cycle 84 — mais dans `communities/search.test.ts`, qui
+// monte `routes/communities/index`, c'est-à-dire le répertoire MASQUÉ. Il
+// gardait donc une porte qui n'est pas montée. Le voici sur le module réel.
+//
+// La conclusion du cycle 84 tient pour la route live : son schéma déclare
+// `creator` et `members` en `{ type: 'object' }` NU, sans `properties`, et
+// fast-json-stringify sérialise cette forme en `{}`. Le jour où quelqu'un
+// déclare ces propriétés pour faire vivre l'aperçu, ce témoin tombe — et
+// l'oblige à poser le gate STRICT (la recherche est une porte de découverte).
+
+describe('GET /communities/search — aucune présence sur l aperçu (module live)', () => {
+  it('ne sert ni isOnline ni profil de membre', async () => {
+    const app = await buildApp();
+    (app as any).prisma.community.findMany.mockResolvedValueOnce([{
+      ...mockCommunityWithAdminMember,
+      members: [{ user: { id: OTHER_USER_ID, username: 'bob', displayName: 'Bob', avatar: null, isOnline: true } }],
+    }]);
+
+    const res = await app.inject({ method: 'GET', url: '/communities/search?q=test' });
+    const member = res.json().data[0].members[0];
+    await app.close();
+
+    expect(member.user).toBeUndefined();
+    expect(member.isOnline).toBeUndefined();
   });
 });

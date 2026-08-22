@@ -158,6 +158,14 @@ describe('GET /communities/search — DB error', () => {
 
 // ─── L'aperçu de membres ne sort AUCUNE présence ─────────────────────────────
 //
+// ⚠ CE FICHIER MONTE LE MODULE MASQUÉ. `routes/communities.ts` (fichier) fait
+// écran à `routes/communities/` (répertoire) — résolution Node : le fichier
+// l'emporte. Rien de ce qui est testé ici ne tourne en production.
+//
+// Le témoin ci-dessous est donc un DOUBLE. Le vrai, celui qui garde la porte
+// montée, vit dans `routes/communities.test.ts` (cycle 86). Ne pas se fier à
+// celui-ci pour attester quoi que ce soit du fil.
+//
 // La requête charge `members.take(5)` avec `user.isOnline`, et le `creator`.
 // Le schéma de réponse les déclare en `{ type: 'object' }` NU — sans
 // `properties` — et fast-json-stringify sérialise une telle forme en `{}` :

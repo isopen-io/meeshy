@@ -440,6 +440,29 @@ les noms pour faire vivre la charge utile ouvre la fuite sans qu'un témoin
 tombe. Poser le témoin qui la forcera à voir ce qu'elle ouvre — il garde une
 PORTE, pas un bug.
 
+## ⚠ `routes/communities.ts` MASQUE `routes/communities/`
+
+Deux implémentations du même domaine, toutes deux exportant `communityRoutes`.
+`route-registration.ts` importe `'./routes/communities'` et la résolution Node
+fait gagner le **fichier** : le monolithe (16 routes) est monté, le répertoire
+(13 routes) est **mort**. Sept fichiers de témoins montent le mort.
+
+**Toute correction de route communauté va dans `routes/communities.ts`.** Le
+gate de présence de `GET /communities/:id/members` avait été écrit dans le
+répertoire masqué — commenté, couvert de témoins verts — et n'a jamais tourné
+(cycle 86). `communities-module-shadowing.test.ts` fige la résolution effective.
+
+Le sort du répertoire (supprimer / câbler) attend une décision humaine : les
+deux ensembles de routes divergent DANS LES DEUX SENS.
+
+## Devant deux implémentations : laquelle l'`import` désigne-t-il ?
+
+Question mécanique, dix secondes, et l'inspection visuelle n'y répond JAMAIS —
+le module mort est souvent le plus propre des deux, puisque c'est celui qu'on a
+pris le temps de refactoriser. `npx tsc --traceResolution` ou `require.resolve`
+répondent. Un correctif dans un fichier non chargé n'est pas un correctif, c'est
+un commentaire — et il rend des témoins verts.
+
 ## Cette entité a-t-elle une JUMELLE ?
 
 À poser au moment où l'on corrige, pas des cycles plus tard. Le dépôt est plein

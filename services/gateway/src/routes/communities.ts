@@ -24,6 +24,8 @@ import { UnifiedAuthRequest } from '../middleware/auth';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../utils/response';
 import { validatePagination } from '../utils/pagination';
+import { getPresenceVisibilityService } from '../services/PresenceVisibilityService';
+import { viewerFromRequest } from './users/presence-gate';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesRoutes' });
 
@@ -965,7 +967,46 @@ export async function communityRoutes(fastify: FastifyInstance) {
         fastify.prisma.communityMember.count({ where: { communityId: id } })
       ]);
 
-      sendPaginatedSuccess(reply, members, {
+      // Gate de présence. `communityMemberSchema.user` est `userMinimalSchema`,
+      // qui DÉCLARE `isOnline` : le champ atteint le fil, et rien ne le
+      // filtrait ici.
+      //
+      // Le régime dépend du LECTEUR, pas de la route. L'accès n'est refusé
+      // qu'aux non-membres d'une communauté PRIVÉE (`hasAccess` ci-dessus) :
+      // sur une communauté publique, un inconnu lit donc cette liste sans avoir
+      // posé le moindre lien — critère STRICT pour lui. Un vrai membre, lui, a
+      // un lien que les deux parties ont posé : préférences seules.
+      //
+      // Même partition qu'au fil de stories (cycle 83), et pour la même raison :
+      // la branche publique d'une règle de visibilité ne prouve aucune relation.
+      const memberUserIds = members
+        .map((m: { user?: { id: string } | null }) => m.user?.id)
+        .filter((uid: string | undefined): uid is string => !!uid);
+      const presence = getPresenceVisibilityService(fastify.prisma);
+      const visibility = memberUserIds.length === 0
+        ? new Map()
+        : hasAccess
+          ? await presence.resolvePrefsOnly(memberUserIds)
+          : await presence.resolveForTargets(viewerFromRequest(request), memberUserIds);
+
+      const gatedMembers = members.map((m: Record<string, any>) => {
+        if (!m.user) return m;
+        const vis = visibility.get(m.user.id);
+        // Un id absent de la carte prefs-only reste MONTRABLE (aucune
+        // préférence à appliquer) ; le critère strict, lui, rend une entrée
+        // pour chaque id qu'on lui passe. Cf. `services/gateway/CLAUDE.md`.
+        if (!vis) return hasAccess ? m : { ...m, user: { ...m.user, isOnline: false, lastActiveAt: null } };
+        return {
+          ...m,
+          user: {
+            ...m.user,
+            isOnline: vis.showOnline ? m.user.isOnline : false,
+            lastActiveAt: vis.showLastSeenTimestamp ? m.user.lastActiveAt : null,
+          },
+        };
+      });
+
+      sendPaginatedSuccess(reply, gatedMembers, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
