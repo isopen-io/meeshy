@@ -525,6 +525,42 @@ groupe pour le roster/toasts join-leave restants. Mesh iOS mono-PC (I1-I7)
 et SFU toujours hors périmètre (nécessitent le toolchain Xcode, absent de
 cet environnement).
 
+## Mise à jour 2026-08-22 — bug latent sous W6 corrigé : les tuiles flottantes sortaient de l'écran en appel de groupe
+
+En creusant le reste de W6 (« grille adaptative multi-participants »), un bug
+concret et atteignable une fois S1 levé : le placement INITIAL des tuiles
+flottantes (`VideoCallInterface.tsx`, overlay des participants distants hors
+plein écran) était `x: 20 + index * 160, y: 20` — une seule rangée non
+bornée. Pour un appel à 3+ participants distants sur un viewport standard, les
+tuiles au-delà des 6-7 premières se retrouvaient placées entièrement HORS de
+la fenêtre (invisibles), et `DraggableParticipantOverlay` ne borne la position
+que pendant un GLISSER (`handleDragMove` clamp `maxX`/`maxY`) — jamais au
+montage. Une tuile née hors écran restait donc introuvable : aucune affordance
+ne permettait de savoir qu'un participant supplémentaire était même connecté.
+
+**Fix** — nouveau module pur `apps/web/lib/calls/overlay-grid-layout.ts`
+(`computeParticipantOverlayPosition`) : place les tuiles en grille qui
+enveloppe (colonnes puis rangées) dans les bornes du viewport, et boucle vers
+la première case dès que le nombre de participants dépasse la capacité de la
+grille — des tuiles qui se chevauchent restent visibles et déplaçables, des
+tuiles hors écran ne le sont pas. Dimensions par défaut alignées sur les
+constantes de clamp déjà utilisées par `DraggableParticipantOverlay`
+(`200×280`), pour qu'une tuile fraîchement montée soit toujours DANS la plage
+que le glisser peut atteindre. `VideoCallInterface.tsx` appelle la fonction
+avec `window.innerWidth/innerHeight` (garde SSR triviale, le composant ne
+rend que côté client).
+
+Ne construit PAS le reste de W6 (roster dédié avec états mute/vidéo par
+participant) — bug de PLACEMENT pur, indépendant.
+
+Tests : `overlay-grid-layout.test.ts` (nouveau, 6 cas — première tuile au
+coin, rangée qui progresse en x, enveloppement au lieu de déborder à droite,
+jamais hors bornes jusqu'à 24 participants, bouclage à capacité pleine,
+dimensions par défaut alignées sur le clamp de glisser). Suite complète
+`video-calls`/`lib/calls` (14 suites / 139 tests) verte. `tsc --noEmit` :
+mêmes 11 erreurs pré-existantes de `VideoCallInterface.tsx` (vérifié par diff
+`git stash` avant/après), aucune nouvelle.
+
 Tests : `calls.service.test.ts` (nouveau, 6 cas — `getActiveCall` +
 `removeParticipant`, jusque-là non testé du tout), `VideoStream.test.tsx`
 (+6 cas), `DraggableParticipantOverlay.test.tsx` (+2 cas, transmission de
