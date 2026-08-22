@@ -87,6 +87,20 @@ const ROUTES_DIR = join(__dirname, '..');
  * feuille. Un normaliseur les réconcilie à la frontière
  * (`services/voice-analysis-normalize.ts`).
  *
+ * **`calls.ts|details|400` est parti au cycle 92**, et il n'a jamais été ce que
+ * cette ligne disait. Ce `details` nu était imbriqué dans un
+ * `error: { type: 'object', properties: { code, message, details } }` — une
+ * déclaration de l'enveloppe d'erreur écrite contre un producteur IMAGINAIRE,
+ * quand `sendError` pose `error` en CHAÎNE. Les dix-neuf schémas du fichier la
+ * portaient, et le sérialiseur coerçait la chaîne en objet vide :
+ *
+ *   { "success": false, "error": {} }
+ *
+ * Toute la surface de signalisation d'appel servait ses erreurs sans code, sans
+ * message et sans `success` exploitable. Le balayage voyait le `details` — la
+ * feuille — et jamais la racine, parce qu'une clé du MAUVAIS TYPE n'est pas nue.
+ * C'est `error-schema-sweep` qui garde cette forme-là désormais.
+ *
  * `messages.ts|sender|200` RESTE, et ce n'est pas un oubli. Le balayage le
  * signale comme nu, mais la déclaration y est INERTE : le schéma de cette route
  * décrit le message quand `sendSuccess` répond `{ success, data }`, si bien que
@@ -97,7 +111,6 @@ const ROUTES_DIR = join(__dirname, '..');
  * ici — elle nomme une dette de FORME, plus une fuite.
  */
 const FROZEN_INVENTORY: readonly string[] = [
-  'calls.ts|details|400',
   'links/admin.ts|creator|200',
   'messages.ts|sender|200',
   'users/profile.ts|permissions|200',

@@ -662,11 +662,11 @@ export async function translationRoutes(fastify: FastifyInstance) {
         },
         500: {
           description: 'Internal server error - test failed',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
+            ...errorResponseSchema.properties,
             error: { type: 'string', example: 'TEST_FAILED' },
-            message: { type: 'string', example: 'Translation service test failed' }
+            message: { type: 'string', example: 'Translation service test failed' },
           }
         }
       }
