@@ -317,6 +317,27 @@ toute garde de comportement du manager y va. Le prétexte historique de la copie
 la mutation qu'elle nomme — c'est la seule mesure qui distingue un témoin d'une
 décoration.
 
+**Un témoin qui n'exerce pas la SÉRIALISATION atteste un contrat que personne ne
+respecte.** La règle vaut dans les deux sens, et les deux ont été mesurés :
+
+- côté SERVEUR, mocker les schémas partagés DÉSARME fast-json-stringify — 154
+  témoins verts couvraient des routes qui ne rendaient rien (cycle 91 bis) ;
+- côté CLIENT, construire l'événement dans le langage du client et l'ÉMETTRE
+  directement dans le flux saute le DÉCODEUR. `ConversationMembersViewModelTest`
+  (Android) le faisait : `ParticipantRoleUpdatedEvent` exigeait un `role` de
+  premier niveau que la passerelle n'a jamais émis (elle envoie `newRole`), donc
+  `MissingFieldException` à chaque événement, avalée par le `runCatching` du
+  listener. **Aucun changement de rang n'a jamais atteint le trombinoscope
+  Android**, et le témoin était vert (cycle 92 bis).
+
+Un témoin de contrat de fil part donc de la charge utile RÉELLE de l'émetteur,
+copiée clé par clé, et la fait traverser la vraie couche de (dé)sérialisation.
+
+Corollaire pour un événement DIFFUSÉ : **avant d'en changer la forme, relever ses
+consommateurs sur les trois clients.** Le commentaire du site d'émission de
+`participant:role-updated` affirmait « les seuls consommateurs sont web et iOS ».
+Android en avait un — il n'était pas compté parce qu'il n'avait jamais marché.
+
 **Un `.catch` sur promesse détachée se prouve par le runtime, pas par le retour de
 l'appelant** (§ Critical Gotchas, `void p`) : la promesse étant abandonnée,
 l'appelant résout `undefined` qu'elle soit gardée ou non. Écouter
@@ -428,12 +449,15 @@ négative masque, d'où l'idiome `vis.get(id)?.showOnline === false ? false : x`
 
 **Un audit qui liste des `select:` ne liste pas des fuites.** Entre la requête et
 le fil il y a un sérialiseur : au cycle 84, deux des trois portes examinées ne
-servaient RIEN — `POST /conversations/:id/invite` renvoie `member` quand son
-schéma déclare `membership` (la clé du handler supprimée, celle du schéma jamais
-posée), et `GET /communities/search` déclare `creator`/`members` en
+servaient RIEN — `POST /conversations/:id/invite` renvoyait `member` quand son
+schéma déclarait `membership` (la clé du handler supprimée, celle du schéma jamais
+posée), et `GET /communities/search` déclarait `creator`/`members` en
 `{ type: 'object' }` NU, que fast-json-stringify sérialise en `{}`. Avant de
 qualifier une fuite, **traverser la sérialisation** (patron :
 `friend-requests-pagination.test.ts`, `conversation-invite-serialization.test.ts`).
+
+Les deux sont réparés — l'invitation au cycle 92 bis, avec son gate. La règle, elle,
+ne l'est pas : c'est une règle de MÉTHODE, et elle vaut au prochain audit.
 
 **Et une non-fuite ACCIDENTELLE se garde par un témoin.** Trois fois déjà, la
 donnée s'est arrêtée sur une omission de schéma que rien ne nomme
@@ -441,6 +465,52 @@ donnée s'est arrêtée sur une omission de schéma que rien ne nomme
 les noms pour faire vivre la charge utile ouvre la fuite sans qu'un témoin
 tombe. Poser le témoin qui la forcera à voir ce qu'elle ouvre — il garde une
 PORTE, pas un bug.
+
+**Le piège a fonctionné, et c'est mesuré.** Le témoin posé sur l'invitation au
+cycle 84 disait explicitement qu'il tomberait le jour où quelqu'un aligne les
+deux noms, et qu'il l'obligerait à poser le gate dans le même lot. Il est tombé
+au cycle 92 bis, et les deux sont arrivés ensemble. Un cycle entier s'est écoulé
+entre le moment où le site a été identifié (91 bis, laissé ouvert PAR DÉCISION,
+gelé au cliquet avec sa raison écrite) et sa réparation : **c'est la forme
+normale d'un lot de confidentialité, pas un retard.**
+
+## La présence est gardée sur ce qui LISTE un participant, sur rien qui en MUTE un
+
+Formulé au cycle 92 bis, où c'était vrai des cinq surfaces qui servent un participant
+sous `conversationParticipantSchema` : les trois qui en LISTENT construisaient
+leur projection et gardaient la présence, les deux qui en MUTENT passaient le
+rang Prisma BRUT et ne la gardaient pas.
+
+Les deux mutations avaient le MÊME défaut et des issues OPPOSÉES, décidées par
+la seule coïncidence d'un nom de clé : `PATCH …/role` déclarait `participant` et
+envoyait `participant` ⇒ `Participant.isOnline`/`lastActiveAt`, que le schéma
+DÉCLARE, sortaient non gardés. `POST …/invite` déclarait `membership` et envoyait
+`member` ⇒ tout était supprimé, donc rien ne fuyait.
+
+> **Un schéma qui « marche » peut cacher une fuite au lieu de l'empêcher.** Celui
+> qui ne fuyait pas ne protégeait rien — il était cassé. Ne jamais lire « ce site
+> ne fuit pas » comme « ce site est gardé » sans avoir vu la garde.
+
+Le chemin le plus exposé n'était pas REST mais la diffusion Socket.IO
+(`participant:role-updated`), qui n'a **aucun sérialiseur** : le rang y partait
+entier — `bannedAt`, `leftAt`, `deletedForMe`, `nickname`, `shareLinkId`.
+
+**La cause était structurelle, pas un oubli.** Aucun sérialiseur de participant
+n'existait : la forme de fil était réécrite à la main à chaque surface, donc la
+garde n'avait aucun endroit unique où être posée.
+`serializeConversationParticipant` (`packages/shared/utils/participant-helpers.ts`)
+est cette source unique. Elle ferme deux pièges par construction :
+
+1. **La présence ne peut sortir qu'à travers son paramètre de visibilité** — pas
+   de champ à recopier, donc pas de champ à oublier.
+2. **`role` porte DEUX taxonomies.** `Participant.role` est le rang DANS LA
+   CONVERSATION (`creator|admin|moderator|member`) ; le schéma déclare le rôle
+   GLOBAL (`USER|ADMIN|…`). Le rang brut servait donc `member` là où le contrat
+   promet `USER`, en laissant `conversationRole` vide. La fabrique sépare les deux.
+
+**Toute nouvelle surface qui sert un participant l'appelle.** Écrire la projection
+à la main est exactement ce qui a produit l'écart — une règle qui doit être
+retapée à chaque site est une règle qu'un site finira par ne pas avoir.
 
 **Une même route peut relever des DEUX régimes, décidés par son contrôle
 d'accès.** `GET /communities/:id/members` ne referme que les communautés
@@ -723,6 +793,13 @@ les clés déclarées.
 Sa limite, assumée : `sendSuccess(reply, maVariable)` lui échappe — remonter
 jusqu'à la variable demanderait un typeur, pas un balayage.
 
+**`FROZEN_MISMATCHES` est VIDE depuis le cycle 92 bis**, et c'est un état à défendre,
+pas un état atteint. Son dernier site — l'invitation — y a été gelé un cycle
+entier PAR DÉCISION, le temps que son gate de présence soit prêt. Quand le
+cliquet tombe : ouvrir l'ÉMETTEUR (le seul discriminant, cycle 91 bis) avant de
+geler quoi que ce soit, et ne geler que ce qu'une raison ÉCRITE justifie de
+laisser ouvert.
+
 **Pourquoi il fallait l'outiller, et pas seulement poser la question.** Le
 cycle 88 bis a réparé trois sites de forme 2 en les cherchant à la main. Le
 `DELETE /…/messages/:messageId` — dans le MÊME fichier, entre les deux
@@ -791,13 +868,17 @@ un parent `additionalProperties: true` ne rattrape pas un enfant déclaré vide,
 puisque la clé est LISTÉE : le champ sort à `{}` là où l'omettre l'aurait laissé
 passer entier. La règle est juste et vérifiée au compilateur.
 
-**Mais elle ne s'applique PAS à `messages.ts:113`**, que ce paragraphe citait en
-exemple. Sur cette route, le schéma décrit le MESSAGE quand `sendSuccess` répond
-`{ success, data }` : `sender` n'est pas une clé de l'objet réel, la déclaration
-est donc INERTE et le champ traverse entier (§ Une déclaration n'agit que si le
-schéma décrit la bonne ENVELOPPE). Ce site ne vidait rien — il portait une fuite
-de présence ACTIVE, fermée au cycle 88 par un gate à la source. Sa ligne reste
-au cliquet comme dette de FORME, plus comme fuite.
+**Mais elle ne s'appliquait PAS à `GET /messages/:messageId`**, que ce
+paragraphe citait en exemple. Sur cette route, le schéma décrivait le MESSAGE
+quand `sendSuccess` répond `{ success, data }` : `sender` n'était pas une clé de
+l'objet réel, la déclaration était donc INERTE et le champ traversait entier
+(§ Une déclaration n'agit que si le schéma décrit la bonne ENVELOPPE). Ce site
+ne vidait rien — il portait une fuite de présence ACTIVE, fermée au cycle 88 par
+un gate à la source.
+
+**Aligné au cycle 94**, et l'alignement a découvert les DEUX défauts que
+l'enveloppe inerte neutralisait — voir § *Gouverner, c'est créer la possibilité
+du désaccord* ci-dessous.
 
 **État de l'inventaire** : les sites de niveau `data:` (charge utile ENTIÈRE) et
 les cinq sites de PRÉSENCE sont corrigés ; les onze schémas d'ERREUR écrits à la
@@ -813,10 +894,13 @@ les trois enveloppes fantômes au cycle 88 bis.
 gestionnaire posait `permissions: undefined` délibérément, le champ n'avait
 aucun producteur.
 
-**Il ne reste qu'UNE ligne au cliquet, et ce n'est pas une fuite** :
-`messages.ts|sender|200`, dette de FORME (forme 3 de la taxonomie ci-dessus) —
-la déclaration y est INERTE, le champ traverse entier. `FROZEN_INVENTORY` doit
-rester à une ligne. Inventaires raisonnés :
+**L'inventaire est VIDE depuis le cycle 94.** Sa dernière ligne —
+`messages.ts|sender|200`, seule de la forme 3 — est partie avec le lot qui a
+aligné `GET /messages/:messageId` sur son enveloppe réelle. Les 42 clés servies
+ont été relevées MÉCANIQUEMENT depuis le `select` et les surcharges du handler,
+puis passées au sérialiseur : 42 entrent, 42 sortent. `FROZEN_INVENTORY` doit
+rester VIDE — quand le cliquet tombe, l'entrée en trop est un site NEUF, à
+déclarer, jamais à geler. Inventaires raisonnés :
 `tasks/realtime-sync-audit-2026-08-22-cycle91-bis.md`,
 `…-cycle91.md` §8 et `…-cycle88-bis.md` §5 — ce dernier pose les deux questions
 à instruire AVANT de réparer : que passe le gestionnaire à `sendSuccess`, et à
@@ -844,6 +928,82 @@ elle n'est jamais « nue ».
 il ne détecte qu'une déclaration ABSENTE, jamais une déclaration INCOMPLÈTE**
 (§ Une déclaration n'est juste que contre son PRODUCTEUR) — un vert au cliquet
 n'atteste donc pas qu'un schéma dit vrai.
+
+### Gouverner, c'est créer la possibilité du désaccord
+
+Une charge utile NON gouvernée ne se trompe jamais — il n'y a pas de contrat à
+contredire. C'est ce qui la rend dangereuse, et le cycle 94 l'a mesuré en
+alignant la dernière enveloppe inerte du dépôt (`GET /messages/:messageId`).
+Deux défauts vivaient dessous, invisibles tant que rien ne les confrontait :
+
+**1. `translations` sortait en CARTE Mongo.** `schema.prisma` est explicite —
+`Message.translations` est une map `langue → {text, …}`. Le contrat déclare un
+TABLEAU `{targetLanguage, translatedContent, …}`, et les TROIS clients le
+décodent ainsi (iOS `[APITextTranslation]?`, Android `List<ApiTextTranslation>`,
+`messageSchema.translations`). Le pont existe — `transformTranslationsToArray`
+(`utils/translation-transformer.ts`) — et il était appliqué par la liste, par la
+recherche, et **par les deux autres transports du MÊME fichier**. Pas par ce
+GET-là, qui étalait `...message`.
+
+Le symptôme ne remontait nulle part, parce que le seul consommateur de cette
+route est l'extension de notification iOS : elle appelle, dépose le blob dans
+l'App Group, et `NSEPendingMessageConsumer` le décode en `APIMessage` — où
+`translations` se décode avec un `try` NON tolérant, contrairement à ses voisins
+immédiats (`callSummary`, `trackingLinks`) qui sont en `try?`. Une carte y fait
+échouer le décodage du message ENTIER ; le consommateur SUPPRIME le fichier.
+**Le démarrage à froid depuis une notification était sans son message, pour tout
+message portant au moins une traduction** — donc, sur un produit qui traduit
+tout, pour à peu près tous.
+
+> **Réparer l'ADRESSE d'un appel ne prouve rien sur la FORME de sa réponse.**
+> Cette route avait justement été CHOISIE à l'audit du 2026-08-13 pour rétablir
+> cette garantie (l'appel précédent visait une paire méthode/chemin jamais
+> enregistrée et répondait 404). La garantie a été rétablie au transport, et
+> reperdue à la forme. Un 404 se voit ; un 200 dont le corps ne se décode pas ne
+> laisse qu'une ligne de log dans un processus que personne ne regarde.
+
+**2. `encryptionMode` manquait à `messageSchema`**, sur la foi de ce commentaire :
+
+```ts
+// Encryption (encryptionMode is only on Conversation)
+```
+
+Faux. `schema.prisma` porte le champ sur `Message` aussi, deux routes le
+CHARGENT, et le SDK iOS le DÉCLARE sur son message. Le défaut n'était pas propre
+à la route du lot : la LISTE sert par `items: messageSchema`, donc mesuré au
+sérialiseur, `encryptionMode` était **supprimé de chaque message de chaque
+page**. Un client E2EE recevait `isEncrypted: true` et le chiffré, sans savoir
+**sous quel régime** déchiffrer. C'est mot pour mot le défaut « R5 » des pièces
+jointes, une couche plus haut — `messageAttachmentSchema` a son enveloppe E2EE
+et son cliquet (`attachmentIncludes.test.ts`), le MESSAGE porteur ne les avait
+pas.
+
+> **Un commentaire qui ÉNONCE une contrainte de schéma est une AFFIRMATION, et
+> se vérifie comme telle** — comme un tri (cycle 86 bis) et comme un compte
+> (cycle 93). Celui-ci a tenu un champ hors du contrat pendant toute la vie de
+> `messageSchema`, alors que `schema.prisma` le contredisait à deux fichiers de
+> là. Même famille que la note de `storyAuthorSelect` qui ÉNUMÉRAIT trois
+> audiences gatées en omettant la quatrième, celle qui ne l'est pas.
+
+**Méthode, et elle n'est pas négociable** : les clés servies se relèvent
+MÉCANIQUEMENT (parcours de profondeur sur le littéral `select:` + les surcharges
+que le handler compose ensuite), puis se passent au vrai `fast-json-stringify`.
+La réutilisation naïve du schéma partagé perdait ici CINQ choses
+(`encryptionMode`, `conversation`, `statusSummary`, `sender.user`, et la relation
+brute `reactions` des pièces jointes). Lire le schéma ne l'aurait pas dit.
+
+**Et un lot qui gouverne une charge utile jusque-là libre ne doit rien y décider
+d'autre.** `conversation` (la ligne d'appartenance de l'APPELANT, chargée pour
+le contrôle d'accès) et `statusSummary` (le miroir groupé des trois compteurs)
+sont déclarés TELS QU'ILS SONT SERVIS, pas retirés : un changement de contrat se
+décide sur des preuves de consommation client. Sinon la mesure « rien n'a été
+perdu » cesse d'être vérifiable, et c'est la seule qui protège les clients.
+
+**Enfin, la quatrième famille n'est pas outillée.** Les trois cliquets sont à
+inventaire vide en même temps depuis le cycle 94, et aucun ne voit une
+déclaration **présente, bien formée, et fausse contre son producteur** — ce
+qu'étaient les deux défauts ci-dessus. Un vert aux trois n'atteste pas qu'un
+schéma dit vrai.
 
 ### Une déclaration n'agit que si le schéma décrit la bonne ENVELOPPE
 

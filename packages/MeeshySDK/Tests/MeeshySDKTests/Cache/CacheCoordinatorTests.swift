@@ -178,7 +178,7 @@ final class CacheCoordinatorTests: XCTestCase {
         try await sut.participants.save([participant], for: "conv-1")
 
         let participantInfo = ParticipantRoleUpdatedParticipantInfo(
-            id: "p1", role: "ADMIN", displayName: "Test", userId: nil
+            id: "p1", role: "USER", conversationRole: "admin", displayName: "Test", userId: nil
         )
         let event = ParticipantRoleUpdatedEvent(
             conversationId: "conv-1", userId: "u1",

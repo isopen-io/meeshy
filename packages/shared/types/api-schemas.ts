@@ -375,7 +375,15 @@ export const messageAttachmentSchema = {
 
     // Timestamps
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
-    metadata: { type: 'object', nullable: true, description: 'Additional metadata JSON' },
+    // `additionalProperties: true` — c'est une CARTE à clés ouvertes
+    // (`AttachmentMetadata` : dimensions, codecs, et surtout
+    // `audioEffectsTimeline`), donc la seule déclaration qui la laisse passer.
+    // Sans lui, fast-json-stringify appliquait `additionalProperties: false` et
+    // servait `{}` — sur TOUTE route employant ce schéma, la liste de messages
+    // comprise. `apps/web/…/message-formatting.tsx` lit
+    // `attachment.metadata?.audioEffectsTimeline` et ne l'a donc jamais reçu :
+    // la timeline d'effets d'une note vocale n'a jamais atteint un client.
+    metadata: { type: 'object', nullable: true, additionalProperties: true, description: 'Additional metadata JSON (audioEffectsTimeline, dimensions, codecs…) — carte à clés ouvertes' },
 
     // ===== TRANSCRIPTION & TRANSLATION V2 (JSON intégré - Générique) =====
     // V2: Champs JSON intégrés dans MessageAttachment
@@ -461,14 +469,19 @@ export const messageAttachmentSchema = {
           }
         },
         durationMs: { type: 'number', nullable: true, description: 'Durée en millisecondes (audio/video)' },
+        // Carte à clés ouvertes : `VoiceAnalysisService` la produit en
+        // `Record<string, unknown>`. Sans `additionalProperties`, elle sortait
+        // `{}` — le champ était LISTÉ, donc l'omettre l'aurait mieux servi.
         voiceQualityAnalysis: {
           type: 'object',
           nullable: true,
-          description: 'Analyse qualité vocale (audio)'
+          additionalProperties: true,
+          description: 'Analyse qualité vocale (audio) — carte à clés ouvertes'
         },
         // Spécifique document
         pageCount: { type: 'number', nullable: true, description: 'Nombre de pages (document)' },
-        documentLayout: { type: 'object', nullable: true, description: 'Structure document (document)' },
+        // Même famille, même correctif : structure libre produite par l'OCR.
+        documentLayout: { type: 'object', nullable: true, additionalProperties: true, description: 'Structure document (document) — carte à clés ouvertes' },
         // Spécifique image
         imageDescription: { type: 'string', nullable: true, description: 'Description image (image)' },
         detectedObjects: { type: 'array', nullable: true, description: 'Objets détectés (image)' },
@@ -873,8 +886,29 @@ export const messageSchema = {
       description: 'Array of validated user IDs mentioned in message'
     },
 
-    // Encryption (encryptionMode is only on Conversation)
+    // Encryption
+    //
+    // `encryptionMode` était annoté ici « only on Conversation ». C'est FAUX :
+    // `schema.prisma` le porte sur `Message` aussi (« Encryption mode: e2ee,
+    // server, hybrid »), deux routes le CHARGENT (`conversations/messages.ts`
+    // pour la liste, `messages.ts` pour le détail) et le SDK iOS le DÉCLARE sur
+    // son message (`APIMessage.encryptionMode`, décodé). Il manquait ici, et
+    // seulement ici — mesuré au sérialiseur sur la charge utile de la liste :
+    //
+    //   in  : { …, isEncrypted: true, encryptionMode: 'e2ee', encryptedContent }
+    //   out : { …, isEncrypted: true,                         encryptedContent }
+    //
+    // Un client E2EE recevait donc `isEncrypted: true` et le chiffré, sans
+    // jamais savoir SOUS QUEL RÉGIME déchiffrer. C'est le même défaut que le
+    // R5 des pièces jointes, une couche plus haut : `messageAttachmentSchema`
+    // a gagné son enveloppe E2EE et un cliquet
+    // (`attachmentIncludes.test.ts`), le MESSAGE porteur ne l'avait pas.
     isEncrypted: { type: 'boolean', description: 'Message is encrypted' },
+    encryptionMode: {
+      type: 'string',
+      nullable: true,
+      description: 'Encryption mode of this message: e2ee, server, hybrid (null = not encrypted)'
+    },
     encryptedContent: {
       type: 'string',
       nullable: true,
@@ -961,7 +995,11 @@ export const messageMinimalSchema = {
           sampleRate: { type: 'number', nullable: true, description: 'Sample rate (audio)' },
           pageCount: { type: 'number', nullable: true, description: 'Page count (PDFs)' },
           lineCount: { type: 'number', nullable: true, description: 'Line count (code/text)' },
-          metadata: { type: 'object', nullable: true, description: 'Additional metadata (audioEffectsTimeline, etc.)' }
+          // La JUMELLE de `messageAttachmentSchema.metadata` — celle de
+          // l'APERÇU de conversation, pas celle du fil — et elle portait le
+          // même objet NU, avec une description qui NOMMAIT
+          // `audioEffectsTimeline` pendant qu'elle le supprimait.
+          metadata: { type: 'object', nullable: true, additionalProperties: true, description: 'Additional metadata (audioEffectsTimeline, etc.)' }
         }
       },
       nullable: true,
@@ -2467,7 +2505,11 @@ export const callSessionMinimalSchema = {
   description: 'Minimal call session data',
   properties: {
     id: { type: 'string', description: 'Call session ID' },
-    mode: { type: 'string', enum: ['voice', 'video'], description: 'Call mode' },
+    mode: {
+      type: 'string',
+      enum: ['p2p', 'sfu'],
+      description: 'WebRTC architecture (p2p or sfu) — NOT the call type; see metadata.type'
+    },
     status: { type: 'string', description: 'Call status' },
     startedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Start time' },
     duration: { type: 'number', nullable: true, description: 'Duration in seconds' },

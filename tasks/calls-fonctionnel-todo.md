@@ -10499,3 +10499,141 @@ reconduit ci-dessus depuis la Vague 151.
   `createPeerConnection()` au-delà du site déjà patché (Vague 148, web) ; même gap de hiérarchie de
   rôle sur `conversations/participants.ts` (retrait d'un membre de la conversation elle-même, pas
   d'un appel — hors périmètre calling).
+
+
+## Vague 156 — `onnegotiationneeded`'s auto-renegotiation crashed the process on failure — the one `void this.negotiate()` left unguarded (web) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit ciblé
+sur `apps/web/services/webrtc-service.ts` après vérification que le backlog reconduit
+« fuite `createPeerConnection()` au-delà du site déjà patché (Vague 148) » est en réalité déjà
+clos — `createPeerConnection()` ferme toute connexion précédente avant remplacement (Vague 148),
+et les trois sites de `use-webrtc-p2p.ts` qui la créent (`createOffer`, `handleOffer`,
+`handleAnswer`) appellent tous `removeParticipant()` dans leur `catch`. Aucun site non couvert
+trouvé sur ce chemin — le reconduit est donc RETIRÉ ci-dessous plutôt que reconduit une nouvelle
+fois sans preuve (cf. la note de méthode du cycle 86-ter sur les clôtures non vérifiées).
+
+## Root cause
+
+`createPeerConnection()`'s `onnegotiationneeded` handler (déclenché par un A/V switch ou toute
+autre renégociation initiée par le navigateur) appelait l'auto-renégociation en promesse
+DÉTACHÉE et NON GARDÉE :
+
+```ts
+if (this.autoNegotiate) {
+  void this.negotiate();
+}
+```
+
+`negotiate()` relance systématiquement son erreur après avoir notifié `onError` (`catch { …
+this.config.onError?.(err); throw err; }`) — donc tout échec de `createOffer()` /
+`setLocalDescription()` pendant une renégociation devient un rejet SANS écouteur. Sous
+`--unhandled-rejections=throw` (défaut Node 22, cf. `services/gateway/CLAUDE.md` § Critical
+Gotchas — la même règle vaut ici bien que ce fichier soit client-side, le test le tourne sous
+Node) un tel rejet **termine le PROCESS**, pas seulement l'appel — confirmé en reproduisant
+directement dans ce sandbox : le test RED (avant fix) a fait crasher le runner Jest lui-même
+(`[Error: createOffer failed]`, process Node terminé), pas juste échoué une assertion. Vérifié
+navigateur : Chrome/Safari ne tuent pas l'onglet sur un `unhandledrejection`, mais l'émettent
+comme événement global — bruit dans tout tracker d'erreurs (Sentry et consorts) qui l'écoute, et
+un signal perdu puisque ni `setError` ni le retour à l'appelant n'existent pour une promesse
+`void`.
+
+C'est exactement le défaut que ce même fichier corrige déjà DEUX FOIS ailleurs, avec le même
+remède — `restartIce().catch(...)` (`scheduleIceRestart`, ligne ~1215) et
+`void this.negotiate({ iceRestart: true }).catch(...)` (replay différé dans le `finally` de
+`negotiate()`, ligne ~886) — mais le troisième site créé par `onnegotiationneeded`, présent depuis
+l'introduction de la renégociation automatique, n'avait jamais reçu le même traitement.
+
+## Fix
+
+```ts
+if (this.autoNegotiate) {
+  void this.negotiate().catch((error) => {
+    logger.error('[WebRTCService] Auto-renegotiation (onnegotiationneeded) failed', { error });
+  });
+}
+```
+
+Même patron que les deux sites déjà gardés du fichier — zéro changement de comportement sur le
+chemin nominal, zéro changement de la notification `onError` (toujours émise à l'intérieur de
+`negotiate()`), le `.catch` se contente de donner un écouteur à la promesse abandonnée.
+
+## Tests (TDD, RED confirmé)
+
+`webrtc-service.coverage.test.ts` — nouveau test dans le describe `createPeerConnection — event
+handlers` : arme `autoNegotiate` via un `createOffer()` initial, fait rejeter `pc.createOffer`
+une fois, écoute `process.on('unhandledRejection')` autour du déclenchement de
+`onnegotiationneeded`, flush deux macrotasks. RED confirmé : sans le fix, le rejet non gardé a
+fait **crasher le process Node du test runner lui-même** — pas une assertion rouge ordinaire, la
+preuve la plus directe possible que le défaut est réel. GREEN après fix : `captured` vide et
+`logger.error` appelé avec le message attendu. Sweep complet
+`--testPathPatterns="[Cc]all|webrtc"` : **60 suites / 799 tests** verts, 0 régression. `tsc
+--noEmit` (diff `git stash`/`stash pop`) : **1279 erreurs avant et après** — 0 erreur ajoutée,
+aucune sur les deux fichiers touchés (les erreurs pré-existantes du fichier de test portent sur
+des mocks Jest sans rapport, lignes 1022+, inchangées par ce diff).
+
+## Risk assessment
+
+Minimal — ajoute un `.catch` à une promesse jusqu'ici détachée, sans toucher au chemin de succès
+ni à la notification d'erreur existante (`onError` reste la seule voie que le consommateur
+observe). Aucun changement de signature, aucun nouveau comportement observable côté UI.
+
+## Non fait volontairement / reste ouvert
+
+`createPeerConnection()` leak « au-delà du site déjà patché » — **retiré du backlog reconduit**,
+vérifié clos (voir ci-dessus). Reconduits (inchangés, non revérifiés ce cycle) : dead code /
+god-object `CallManager.swift` (~5880 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ;
+iOS single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts`
+(hors périmètre calling). PR #3325 (ouverte en parallèle, `services/gateway/src/routes/calls.ts`
+— enveloppes d'erreur `success:false,error:{}`) non touchée par cette vague : fichiers
+disjoints (`apps/web/services/webrtc-service.ts` et son test).
+
+## Vague 157 — la branche idempotente « groupe continue » de `leaveCall()` était la seule des trois à fuir le heartbeat du partant (gateway) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(agent en tâche de fond) sur `use-webrtc-p2p.ts` / `CallCleanupService.ts` / `CallService.ts`,
+après vérification des zones déjà closes (Vagues 148-156). Trouvé dans `CallService.ts`.
+
+**Root cause** : `leaveCall()` a trois branches qui résolvent un participant déjà parti sans
+mettre fin à l'appel — la garde terminale (ligne ~1703, `TERMINAL_STATUSES`/`endedAt`), le
+`else` de la branche principale (ligne ~1847, appel mid-call sur un appel qui continue), et la
+branche idempotente « le rang `CallParticipant` du partant est déjà absent, appel de GROUPE avec
+d'autres participants actifs » (ligne ~1608). Les deux premières appellent
+`clearParticipantBackgrounded(callId, participantId)` + `this.heartbeats.get(callId)?.delete(participantId)`
+avant leur `return` — la troisième ne le faisait pas, seule des trois. Atteignable en
+production par deux chemins : un `call:leave` en double/racé (auto-leave sur `disconnect` socket
+qui court-circuite l'appel explicite), et
+`CallEventsHandler.forceCleanupParticipationAfterLeaveFailure` (ligne ~1065), qui stamp `leftAt`
+directement sur la ligne `CallParticipant` en contournant tout le nettoyage normal de
+`leaveCall()` — tout `call:leave`/kick REST ultérieur pour ce même participant retombe alors
+dans la branche non nettoyée. L'entrée `heartbeats` du partant reste dans la Map jusqu'à
+`HEARTBEAT_TIMEOUT_MS`, ce qui gonfle le ratio stale/live que `CallCleanupService.runCleanup()`
+compare au nombre de participants VIVANTS (`leftAt: null` en base) — un appel de groupe encore
+légitimement actif peut donc se faire force-terminer par le GC à mesure que d'authentiques
+départs réduisent le dénominateur pendant que l'entrée fantôme continue de compter au numérateur.
+
+**Fix** — deux lignes, copiées des deux branches sœurs, avant le `return` de la branche
+idempotente groupe-continue :
+```ts
+this.clearParticipantBackgrounded(callId, participantId);
+this.heartbeats.get(callId)?.delete(participantId);
+```
+Zéro changement de statut/réponse ; libère uniquement la comptabilité en mémoire par
+participant, exactement comme les deux autres branches le font déjà partout ailleurs.
+
+**Tests (TDD, RED confirmé)** : nouveau test dans `callService-leaveCall.test.ts` — arme un
+heartbeat pour le partant via `recordHeartbeat`, simule la branche idempotente groupe-continue
+(3 participants en base, celui qui part déjà `leftAt` non-null, 2 autres actifs), vérifie que
+l'entrée heartbeat est supprimée après `leaveCall()`. RED confirmé (entrée encore présente sans
+le fix) ; GREEN après. Sweep `--testPathPatterns="callService-leaveCall|CallCleanupService|CallEventsHandler"` :
+38 suites / 686 tests verts ; sweep `[Cc]all` complet : 58 suites / 1265 tests verts ; suite
+gateway COMPLÈTE (`test:coverage`) : 824 suites / 19129 tests verts, 0 régression. `tsc --noEmit` propre.
+
+**Risk assessment** : minimal — ajoute deux appels déjà utilisés ailleurs dans la même méthode,
+aucun changement de comportement observable côté client (statut, réponse, événements diffusés
+inchangés).
+
+**Non fait volontairement / reste ouvert** (reconduits, inchangés) : dead code / god-object
+`CallManager.swift` (~5880 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS
+single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts`
+(hors périmètre calling). L'audit n'a pas trouvé de défaut supplémentaire dans
+`use-webrtc-p2p.ts` (1285 lignes, lu en entier) au-delà de ce qui est déjà documenté.

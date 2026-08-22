@@ -1,5 +1,52 @@
 # Lessons
 
+## Leçon 244 — une ligne d'`exclude` dans `tsconfig` retire le code de TOUT ce qui mesure, d'un seul geste (2026-08-22, routine messagerie, cycle 94)
+
+Toutes les autres façons de rendre du code invisible ont un coût que quelqu'un
+voit :
+
+| geste | ce qui se voit |
+|---|---|
+| retirer un test | la couverture baisse |
+| supprimer un fichier | un import casse |
+| poser un `any` | le reste du fichier reste sous contrôle |
+| **`exclude` dans `tsconfig`** | **rien** |
+
+Une ligne d'`exclude` retire le code de la compilation, du type-check, de
+l'émission — et, si `jest.config.json` porte la ligne jumelle, du banc de test et
+de la couverture. Aucun avertissement ne se lève, aucune suite ne rougit, aucun
+seuil ne bouge. **Le répertoire reste là, plein, crédible, cité dans les documents
+d'architecture.**
+
+Coût mesuré sur `services/gateway/src/dma-interoperability/` : 3 231 lignes de
+Signal Protocol (X3DH, Double Ratchet, gestion de clés, moteur, adaptateurs) hors
+compilateur et hors banc, importées par personne. Quatre de ses modules
+importaient un chemin qui ne résout **nulle part** — ni dans le dépôt, ni dans
+l'image Docker. Remis sous le compilateur : **8 erreurs, dont 4 défauts
+d'exécution**, dont trois qui cassaient l'établissement de session par des chemins
+indépendants.
+
+Et le détail qui donne la mesure exacte de ce que le silence coûte : le seul
+endroit du chemin fautif où le compilateur AURAIT pu parler malgré l'exclusion
+portait un `(pk: any)`.
+
+> **Avant de conclure qu'un défaut est un oubli d'auteur, demander ce qui aurait
+> dû le voir.** Le suivi qui a ouvert ce cycle nommait un IV de 4 octets de trop.
+> Ce qu'il fallait aller chercher, c'est ce qui laissait un écart pareil vivre
+> entre trois déclarations partagées et leur unique producteur : deux lignes de
+> configuration, écrites une fois, jamais relues.
+
+Corollaire de manœuvre, pour ne pas transformer la remise sous compilateur en lot
+sans fin : **ce qu'on rallume et ce qu'on laisse éteint se DÉCIDENT séparément, et
+se disent.** Ici — le compilateur : oui, tout de suite (8 erreurs, tractable). Les
+3 suites du sous-arbre : non (mesuré 56 échecs / 114 ; les rendre vertes est un lot
+qui se fait en regardant chaque échec, pas en desserrant des assertions). La
+couverture : non (3 231 lignes quasi non couvertes feraient rougir la CI sous le
+seuil, ce qui n'a aucun rapport avec le défaut). La suppression : non — c'est une
+obligation réglementaire, donc une décision de feuille de route, pas un arbitrage
+d'hygiène de code. **Publier la mesure de ce qu'on n'a pas fait est ce qui permet
+au cycle suivant de partir d'un chiffre plutôt que d'une estimation.**
+
 ## Leçon 243 — un outil trouve la forme qu'on lui a décrite ; l'autre moitié du défaut n'en a aucune (2026-08-22, routine messagerie, cycle 91)
 
 Le cycle 86 a nommé la règle « un objet de réponse sans `properties` EFFACE »,
@@ -11934,3 +11981,208 @@ Corollaire de manœuvre, coûteux à oublier :
 > retiré `join` / `leave` / `invite` / `mine`. Les témoins qui PASSENT déjà
 > avant la bascule sont ceux-là — on les écrit dans le même lot que ceux qui
 > échouent, et ils valent autant.
+
+## Leçon — une API qu'on ne compile pas se vérifie sur sa surface exacte, pas sur son allure (2026-08-22)
+
+Itération 237i. Le correctif tenait en une ligne, écrite de mémoire :
+
+```swift
+count.formatted(.number.notation(.compact).locale(locale))
+```
+
+La CI l'a rendue **deux fois fausse**, et les deux erreurs sont de natures
+différentes — ce qui est précisément l'intérêt du cas :
+
+1. `type 'BinaryInteger' has no member 'number'`. `.number` est un membre
+   statique porté par une extension conditionnelle de `FormatStyle` ; à travers
+   la surcharge générique `BinaryInteger.formatted(_:)`, il n'a **pas de base à
+   inférer**. L'expression est bien formée à l'œil, et le compilateur n'a
+   pourtant rien pour la résoudre.
+2. `cannot infer contextual base in reference to member 'compact'`. Celle-là est
+   plus simple et plus humiliante : **`.compact` n'existe pas**.
+   `NumberFormatStyleConfiguration.Notation` n'offre que `.automatic`,
+   `.scientific` et `.compactName`. Le nom plausible n'était pas le nom réel.
+
+Le second message masquait le premier autant que l'inverse : « cannot infer
+contextual base » se lit volontiers comme une conséquence de l'échec de
+`.number`, alors que c'est un défaut indépendant. Corriger l'un sans l'autre
+aurait donné un second rouge.
+
+> **Écrire du Swift sans compilateur oblige à préférer, à qualité de rendu
+> égale, la forme qui demande le MOINS d'inférence.** Un style nommé et
+> construit — `IntegerFormatStyle<Int>(locale:).notation(.compactName).format(count)`
+> — n'a aucune base contextuelle à deviner : il compile ou il ne trouve pas le
+> symbole, et dans ce dernier cas l'erreur nomme le symbole. La forme abrégée,
+> elle, échoue sur l'inférence et l'erreur parle du protocole, pas du membre.
+
+Corollaire, qui vaut au-delà de Swift :
+
+> **Le doute doit porter sur les NOMS, pas seulement sur la forme.** J'avais
+> vérifié que la notation compacte existait depuis iOS 15 et que le plancher du
+> projet était iOS 16 — j'ai vérifié la *disponibilité* et pas l'*orthographe*.
+> Quand on ne peut pas compiler, une API mémorisée mérite qu'on énumère les cas
+> réels de son enum, ou qu'on la cite depuis un site d'appel déjà présent dans
+> le dépôt.
+
+Ce qui a bien fonctionné, et qu'il faut garder : les **tests de propriétés**
+n'ont eu à changer d'aucune façon. Ils n'affirmaient aucune chaîne CLDR ni
+aucune forme d'appel — seulement que le rendu français diffère du rendu
+anglais. Un test écrit sur le contrat et non sur l'implémentation survit à la
+correction de l'implémentation.
+
+## Leçon — annoncer un grep « dépôt entier » sans le lancer coûte une revue (2026-08-22)
+
+Itération 237i, suite. L'analyse affirmait, dans sa section « Vérification » :
+
+> **`formatCount` n'a plus qu'une occurrence** dans tout `apps/ios` : la ligne
+> de doc-comment qui explique ce qu'il a remplacé (`grep` sur le dépôt entier,
+> méthode imposée par la leçon 236i).
+
+Deux choses ne vont pas dans cette phrase, et la seconde est la vraie.
+
+La première est visible à l'œil : « dans tout `apps/ios` » et « sur le dépôt
+entier » ne peuvent pas être vrais ensemble. La seconde est que **le dépôt
+n'avait pas été grepé** : la commande avait porté sur `apps/ios` seul. La revue
+de merge a trouvé en trois minutes ce que la vérification annonçait avoir
+couvert — le jumeau `formatCount`, copie mot pour mot, dans
+`packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityListView.swift`.
+Merger l'app seule aurait rendu les deux cartes communauté **incohérentes** :
+« 1,5 k » d'un côté, « 1.5k » de l'autre.
+
+L'aggravant : l'itération **citait la leçon 236i** — « un grep de fermeture part
+de la CLÉ, jamais de la SURFACE » — dans le paragraphe même où elle la violait.
+Citer une leçon n'est pas l'appliquer.
+
+> **Un `grep -rn --include=*.swift .` coûte une seconde. Le restreindre à un
+> sous-arbre parce qu'« évidemment le reste ne peut pas contenir ça » coûte une
+> revue — et, si la revue avait laissé passer, une incohérence en production.**
+> Sur ce dépôt en particulier, le réflexe `apps/ios` est faux par construction :
+> `packages/MeeshySDK/Sources/MeeshyUI/` contient des VUES, donc les mêmes
+> défauts d'affichage que l'app.
+
+Effet secondaire instructif : le grep refait pour de bon a trouvé **six sites de
+plus** de la même famille (`FeedPostCard`, `PostDetailReachAndVisibility`,
+`ReelFeedCard`, `ReelsPlayerView`, `ConversationDashboardView` ×2). Ils ne sont
+pas byte-identiques — le tableau de bord bascule à `>= 10_000` là où le feed
+bascule à `>= 1_000` — donc les absorber demandait de trancher si ce seuil est
+intentionnel. Ils sont documentés pour l'itération suivante plutôt qu'avalés en
+passant : **la bonne réponse à « le correctif est incomplet » n'est pas toujours
+« élargir la PR »**, mais elle est toujours « dire exactement ce qui reste ».
+
+Corollaire sur la forme du correctif :
+
+> **Quand un défaut existe des deux côtés d'une frontière de module, porter
+> l'APPEL duplique la règle ; déplacer le HELPER la garde unique.** La revue
+> proposait de recopier l'appel dans le fichier SDK. Un formateur sans état à
+> paramètres opaques relève de la case « rule engines stateless → SDK » du
+> tableau de placement : le déplacer dans `MeeshyUI` sert les deux appelants
+> sans rien dupliquer, ne change aucun site d'appel (l'app importait déjà
+> `MeeshyUI`), et rend même le `pbxproj` identique à `main` puisque les fichiers
+> neufs vivent alors dans le package SPM.
+
+## Leçon — une charge utile non gouvernée ne se trompe jamais (2026-08-22, cycle 94)
+
+`FROZEN_INVENTORY` ne portait plus qu'une ligne, laissée en place par trois
+cycles avec une raison écrite et juste : aligner ce schéma « est un lot en soi,
+sans quoi la déclaration tronquerait ce qui passe aujourd'hui ».
+
+Le lot fait, deux défauts sont apparus **dans le même geste** — et aucun des
+deux n'était nouveau. `translations` sortait en CARTE Mongo là où les trois
+clients décodent un TABLEAU ; `encryptionMode` était absent de `messageSchema`,
+donc supprimé de chaque message de chaque page de la liste, pour des clients
+E2EE qui recevaient le chiffré sans savoir sous quel régime déchiffrer.
+
+Ils vivaient depuis longtemps derrière un 200 vert et des témoins verts. La
+raison est structurelle, pas accidentelle :
+
+> **Tant qu'une réponse n'est gouvernée par aucun schéma, aucune forme n'y est
+> fausse — il n'y a pas de contrat à contredire.** Gouverner, c'est créer la
+> possibilité même du désaccord. Les désaccords étaient là depuis le début ;
+> c'est l'absence de contrat qui les rendait inobservables.
+
+Corollaire de méthode, et c'est le seul qui protège :
+
+> **Les clés servies se relèvent MÉCANIQUEMENT, puis se passent au vrai
+> sérialiseur.** La réutilisation naïve du schéma partagé perdait ici CINQ
+> choses. Aucune lecture attentive du schéma ne l'aurait dit — quatre cycles de
+> suite (84, 89, 91, 94), la « bonne forme d'à côté » était fausse contre le
+> producteur de la route qu'on réparait.
+
+Et sur l'endroit où un tel défaut se manifeste :
+
+> **Le silence d'un défaut ne mesure pas sa gravité, il mesure qui le regarde.**
+> Le seul consommateur de cette route est une extension de notification iOS.
+> Son décodeur échouait, supprimait le blob, et laissait une ligne de log dans
+> un processus qui meurt en quelques secondes. Pour l'utilisateur : un écran
+> qui met un peu plus longtemps à se remplir. Aucun signal ne remonte jamais
+> d'un chemin pareil — il faut aller l'y chercher.
+
+Enfin, ce qui a bien fonctionné et qu'il faut garder : **le piège armé par le
+cycle 88 a tenu son rôle.** `message-detail-sender-presence.test.ts` portait un
+témoin qui disait explicitement garder contre « une future *correction* du
+schéma qui, elle, tronquerait pour de bon ». Il est resté vert — et c'est ce
+vert-là qui prouve que `sender` et son `user` imbriqué ont survécu au lot. Un
+témoin posé sur une non-fuite ACCIDENTELLE vaut exactement ce que le cycle 84
+promettait qu'il vaudrait.
+
+## Leçon — un angle mort DOCUMENTÉ reste un angle mort (2026-08-22, cycle 95)
+
+Le cycle 95 devait donner un contrat de réponse à `GET /sync`. Il l'a fait, et
+la mesure a trouvé trois défauts. Le plus large ne concernait pas `/sync`.
+
+`messageAttachmentSchema.metadata` — un schéma PARTAGÉ, donc servi par toutes
+les routes qui l'importent, la liste de messages comprise — était un objet NU :
+`{ type: 'object', nullable: true }`. Le champ étant LISTÉ, fast-json-stringify
+applique `additionalProperties: false` et le vide. **L'omettre l'aurait mieux
+servi.** Sa jumelle, l'attachement inline de `messageSchema`, portait le même
+défaut avec une description qui NOMMAIT `audioEffectsTimeline` pendant qu'elle
+le supprimait. Côté web,
+`message-formatting.tsx` lit `attachment.metadata?.audioEffectsTimeline` : la
+timeline d'effets d'une note vocale n'a jamais atteint un client.
+
+Ce que ce défaut a d'instructif n'est pas sa nature — le dépôt a un balayage
+outillé et en cliquet pour exactement cette famille depuis le cycle 87 bis.
+C'est qu'il vivait dans la limite ÉCRITE de cet outil, dans le CLAUDE.md du
+service, dans la section même qui explique le défaut :
+
+> Le balayage ne lit que `services/gateway/src/routes` : les schémas de
+> `packages/shared`, dont un défaut se propage le plus loin, lui échappent.
+
+Huit cycles ont lu cette phrase sans que rien n'en sorte.
+
+> **Écrire une limite ne la garde pas ; seul un cliquet la garde.** Une limite
+> documentée se lit comme une excuse recevable, pas comme du travail restant —
+> et plus elle est bien écrite, mieux elle se lit ainsi. C'est le même
+> mécanisme que le commentaire qui scellait la connexion 2FA en la décrivant
+> (cycle 91 bis) : dire un défaut à voix haute peut le rendre permanent.
+
+Corollaire, et c'est la mesure du lot :
+
+> **Gouverner une route en révèle plus que ce qu'elle contient.** Le contrat
+> d'une route est un instrument de mesure braqué sur tout ce qu'elle importe.
+> Ce défaut-ci n'est apparu que parce qu'une charge utile de `/sync` est passée
+> au vrai sérialiseur ; il vivait sur des routes qui, elles, marchaient.
+
+### Corollaire de méthode — le double Prisma rend le `select` INOBSERVABLE
+
+La mutation la plus utile du cycle est celle qui est restée VERTE. Retirer
+`id: true` du `select` des appartenances n'a fait tomber aucun témoin : le
+double rend sa ligne quel que soit le `select`, donc `id` y était présent même
+une fois la requête amputée.
+
+> **Un témoin de VALEUR ne peut jamais garder un `select`.** Entre les deux il y
+> a un double qui ignore la projection. La garde d'un champ chargé assert sur la
+> REQUÊTE (`findMany.mock.calls[0][0].select`), et c'est un témoin SÉPARÉ — le
+> dépôt portait déjà l'idiome dans le fichier même (« DEMANDE ces champs à
+> Prisma — une charge utile vide ne prouve rien »).
+
+Et sur la forme des rangées de témoin, deux fois dans le même lot :
+
+> **Une rangée de témoin doit rendre ce que la REQUÊTE rend, pas ce qui suffit à
+> l'assertion.** Les rangées de la suite omettaient `attachments` (une relation
+> sélectionnée revient en tableau VIDE, jamais `undefined`) parce que rien ne
+> les lisait tant que la charge traversait non gouvernée. Et une traduction de
+> pièce jointe INVENTÉE (`{ url, segments }`) a fait rendre 500 à la route :
+> `messageAttachmentSchema` déclare `type`/`transcription`/`createdAt`
+> **`required`**. Le schéma partagé faisait son travail ; c'est la fiction qui a
+> cédé — en 500, pas en assertion, donc bien plus tard qu'il n'aurait fallu.

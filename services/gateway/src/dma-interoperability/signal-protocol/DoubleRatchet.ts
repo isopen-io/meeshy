@@ -196,7 +196,7 @@ export class DoubleRatchet {
     const newDHKeyPair = this.generateDHKeyPair();
 
     // Step 2: Perform DH with remote key (if provided, we're receiving)
-    let dhOutput = Buffer.alloc(32);
+    let dhOutput: Buffer = Buffer.alloc(32);
 
     if (remotePublicKey) {
       // Responder: DH with initiator's ephemeral key

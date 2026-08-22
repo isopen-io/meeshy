@@ -2,6 +2,69 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-22 **share-link entry-fact resolver shipped** (slice `sharelink-entry-resolver`,
+> feature-parity §Chat — "Anonymous-session conversation mode; guest join-via-share-link flow"; the
+> umbrella box stays `[~]` — the `MeeshyApp.kt` deep-link rewire is now the single named follow-up).
+> This lands the app-side brain that assembles the five `ShareLinkEntryFacts` and asks the pure
+> `ShareLinkEntryPolicy` how a person enters, closing the gap between the policy (shipped last-but-one
+> slice) and the endpoint (`ShareLinkJoinRepository`, shipped last slice).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` →
+> `[]`, zero open PRs repo-wide). Prior android iteration (`sharelink-join-authenticated`) already
+> merged into main. Branched off freshly-fetched `origin/main` (`d84fc807`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). `platforms;android-37.0` recipe
+> worked; ran the full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally,
+> **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **Placement correction (parity note was a hypothesis).** Last slice's "Next" proposed a `:sdk-core`
+> `ShareLinkEntryResolver`. Re-scouting iOS proved that wrong: iOS's `ShareLinkEntryResolver.swift`
+> lives **app-side** (`apps/ios/Meeshy/Features/Main/Navigation/`), and its own header states "App-side
+> et non SDK : elle appelle un service réseau et consulte l'état de l'app." Putting it in `:sdk-core`
+> would break SDK purity (I/O + device-state consult = product orchestration). Landed it in
+> `:feature:auth` (where the guest-join flow already lives) instead. The pure decision stays in
+> `:core:model` (`ShareLinkEntryPolicy`); the resolver only gathers facts and delegates.
+>
+> **`:feature:auth` `ShareLinkEntryResolver`** (new, app-side): a `ShareLinkPreviewProviding` `fun
+> interface` seam (decouples from the concrete `AnonymousSessionRepository`; the consumer binds it to
+> `repository::preview`) + `AnonymousSessionStore`. `resolve(identifier, isAuthenticated,
+> knownConversationIds): ShareLinkEntryResolution?` where `ShareLinkEntryResolution = (intent,
+> conversationTitle)`. Assembles the five facts — `conversationId` (trimmed), `isAuthenticated`,
+> `isAlreadyMember` (`knownConversationIds.contains`), `linkRequiresAccount` (`info.requireAccount`),
+> `hasStoredGuestSession` — then returns `ShareLinkEntryPolicy.intent(facts)` with the conversation
+> title threaded. SOTA over the iOS force-unwrapping original: (a) a blank identifier is inert (returns
+> `null`, no doomed empty-preview request); (b) a preview with no conversation, or a blank conversation
+> id, resolves to `null` (graceful caller fallback, never a crash). Android divergence made explicit: the
+> guest store is single-valued, so "stored session for THIS link" is `store.load()?.linkId?.trim() ==
+> identifier` — a session opened on a *different* link must never resume here (iOS keys its store by
+> linkId; Android compares).
+>
+> **Tests: +15** — `ShareLinkEntryResolverTest` (drives public `resolve`, recording preview seam +
+> `InMemoryAnonymousSessionStore`; the policy itself is exhaustively covered by `ShareLinkEntryPolicyTest`,
+> so these assert only the resolver's own contribution): blank-identifier-inert-no-network /
+> preview-failure→null / no-conversation→null / blank-conversation-id→null / unauth-open-link→JoinAnonymously /
+> unauth-stored-this-link→ResumeGuestSession / stored-different-link→JoinAnonymously (the linkId compare) /
+> auth-member→OpenConversation(id) / auth-nonmember-requireAccount→JoinWithAccount / auth-nonmember-open→
+> ChooseIdentity / title-threaded / null-title→null-not-crash / identifier-trimmed-before-preview-and-compare /
+> padded-conversation-id-trimmed-for-membership. **Mutation (RED proof) ×2**: (a) linkId equality dropped
+> (`load() != null`) → **exactly** `a stored session for a different link does not count as stored for this
+> one` fails (1 of 15); (b) preview called with the untrimmed identifier → **exactly** `the identifier is
+> trimmed before the preview and the stored-session compare` fails (1 of 15). Both restored via `cp` of a
+> pre-mutation backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer
+> PASS. Diff is `apps/android` only (1 new code file in `:feature:auth` + 1 new test + tracking docs).
+> Verdict: **PASS** — app-side orchestration addition, behavioural tests through the public API, pure
+> decision left in the SDK model, no production logic outside apps/android.
+>
+> **Next**: rewire `MeeshyApp.kt`'s guest-join deep-link route (`Routes.GUEST_JOIN`) to call the resolver
+> before presenting a screen, and branch the navigation on the returned intent —
+> `OpenConversation`/`JoinWithAccount` (call `ShareLinkJoinRepository.joinAuthenticated`, then navigate to
+> chat) / `ResumeGuestSession` (restore + navigate) / `JoinAnonymously` (the current `GuestJoinScreen`) /
+> `ChooseIdentity` (a new choice sheet) / `RequiresAccount` (steer to login). This flips the umbrella box to
+> `[x]`. The Compose glue is JVM-untestable — push all decidable logic into a small VM/state holder and cover
+> that. Re-scout read-only before committing — parity notes are hypotheses (this slice corrected one).
+
 > On 2026-08-22 **authenticated share-link join shipped** (slice `sharelink-join-authenticated`,
 > feature-parity §Chat — "Anonymous-session conversation mode; guest join-via-share-link flow"; the
 > umbrella box stays `[~]` — the `ShareLinkEntryResolver` + `MeeshyApp.kt` rewire are the last named

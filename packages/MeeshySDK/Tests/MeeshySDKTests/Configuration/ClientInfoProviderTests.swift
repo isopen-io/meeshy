@@ -11,7 +11,8 @@ final class ClientInfoProviderTests: XCTestCase {
         "X-Meeshy-OS",
         "X-Meeshy-Locale",
         "X-Device-Locale",
-        "X-Meeshy-Timezone"
+        "X-Meeshy-Timezone",
+        "X-Canvas-Caps"
     ]
 
     // MARK: - Required Keys
@@ -28,6 +29,25 @@ final class ClientInfoProviderTests: XCTestCase {
     func test_buildHeaders_platformKey_isAlwaysIOS() async {
         let headers = await ClientInfoProvider.shared.buildHeaders()
         XCTAssertEqual(headers["X-Meeshy-Platform"], "ios")
+    }
+
+    // MARK: - Capacités canvas
+
+    /// Sans cet en-tête, le gateway prend iOS pour un client du passé et lui
+    /// sert la SENTINELLE — un fond `1E1B4B` uni à la place du canevas
+    /// (`storyEffectsV3.ts:467`, table de négociation O17). Or les DEUX
+    /// composers écrivent déjà du v3 natif : le web (`StoryComposer.tsx:288`)
+    /// et iOS lui-même (`StoryEffects.encode(to:)` passe par
+    /// `CanvasV3(migrating:)`). Le parc natif ne voyait donc plus AUCUN canevas
+    /// de story, y compris les siens, alors que son décodeur v3
+    /// (`StoryModels.swift:1769`) sait les peindre depuis le lot B.
+    ///
+    /// La valeur est le NIVEAU que ce binaire sait lire, pas un booléen : le
+    /// gateway compare `caps >= 3`. Un jour où v4 existera, c'est ce nombre qui
+    /// devra monter — et ce test le dira.
+    func test_buildHeaders_annonceLeNiveauDeCanvasQueCeBinaireSaitLire() async {
+        let headers = await ClientInfoProvider.shared.buildHeaders()
+        XCTAssertEqual(headers["X-Canvas-Caps"], "3")
     }
 
     // MARK: - Locale Format

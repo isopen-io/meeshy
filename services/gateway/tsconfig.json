@@ -54,12 +54,12 @@
     "src/websocket/**/*",
     "src/grpc/**/*",
     "src/types/**/*",
+    "src/dma-interoperability/**/*",
     "shared/**/*"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "src/dma-interoperability/**/*",
     "../../packages/shared/encryption/**/*",
     "src/**/__tests__/**/*",
     "src/**/*.test.ts",

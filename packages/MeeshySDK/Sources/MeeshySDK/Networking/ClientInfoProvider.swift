@@ -61,7 +61,20 @@ public actor ClientInfoProvider {
             "X-Meeshy-Build": appBuild(),
             "X-Meeshy-Platform": "ios",
             "X-Meeshy-Device": deviceModel(),
-            "X-Meeshy-OS": osVersion()
+            "X-Meeshy-OS": osVersion(),
+            // Niveau de canvas que ce binaire sait LIRE (O17). Sans lui, le
+            // gateway nous prend pour un client du passé et sert la SENTINELLE
+            // — un fond `1E1B4B` uni à la place du canevas
+            // (`storyEffectsV3.ts:467`). Or les deux composers écrivent déjà du
+            // v3 natif, le web (`StoryComposer.tsx:288`) comme iOS
+            // (`StoryEffects.encode(to:)` → `CanvasV3(migrating:)`) : le parc
+            // natif ne voyait plus aucun canevas de story, pas même les siens,
+            // alors que son décodeur (`StoryModels.swift:1769`) sait les peindre.
+            //
+            // Un NIVEAU, pas un booléen : le gateway compare `caps >= 3`. C'est
+            // une constante du binaire, d'où sa place ici plutôt que dans
+            // `buildHeaders()` — rien dans l'environnement ne la fait varier.
+            "X-Canvas-Caps": "3"
         ]
         cachedStaticHeaders = headers
         return headers
