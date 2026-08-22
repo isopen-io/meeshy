@@ -397,10 +397,94 @@ autorisé si c'est compliqué : deux bulles distinctes.
 - [x] #3328 (cycle 92 bis, présence gardée sur les mutations de participant — gateway/shared/iOS/SDK/Android) : fusion propre avec #3310/#3322 ; tsc 0 ; shared 48/48 ; gateway 261/261 ; SDK 85/0 (témoins `participantRoleUpdated` passed) ; app build-for-testing ✓ + 138/0 (sockets, participants, 4 gardes).
 - [x] #3330 (web/calls `void negotiate().catch`), #3329 (web `sanitizeFileName`), #3332 (web hook traductions = pendant de #3324, SSOT `normalizeLanguageForDedup`) : jest ciblé 258/258 ; journaux 244/244b désenchevêtrés.
 - [x] #3331 (shared `callSessionMinimalSchema.mode` p2p|sfu, aligné sur le jumeau `223e07134`) : Test gateway de la PR vert, vitest 2/2, calls-routes 86/86.
-- [x] #3327 (237i, `CompactCountLabel` déplacé dans MeeshyUI après mon commentaire : `.compactName`, jumeau SDK unifié, pointeur corrigé ; plus de pbxproj) : gate SDK + build incrémental + suites app en cours.
+- [x] #3327 (237i, `CompactCountLabel` déplacé dans MeeshyUI après mon commentaire : `.compactName`, jumeau SDK unifié, pointeur corrigé ; plus de pbxproj) : SDK 7/7 exécutés, build incrémental ✓, app 47/0 → poussé `ab8629378` (CI ✓ gateway/web/shared, Android ✓, Docker ✓).
+- [x] #3333 (cycle 94, sous-arbre DMA/Signal sous `tsc` — il était exclu et mort ; IV de fil → `SignalProtocolLimits.AES_GCM_IV_SIZE`, ferme le suivi de #3266 côté fil ; repos reste 16 volontairement) : branche privée `integ/…`, tsc 0, émission 0, jest 36/36, vitest 58/58, CI PR verte → `20f4f4f11`. **0 PR ouverte.**
 - Suivis : 6ᵉ surface de présence `GET …/participants/:id/profile` non gardée ; `liveOnline` sans appelant ; `errorResponseBuilder` du rate-limit sérialise `"[object Object]"` ; exposition de `error.message` en 5xx (16 sites) ; `callSessionMinimalSchema` importé mais inutilisé dans calls.ts.
 - Leçons de coordination : un commit sur `main` local n'est jamais « retenu » (ref partagée) → branche privée `integ/<date>` pour accumuler ; annoncer toute charge iOS lourde ; `uptime` > 10 ⇒ rouge local sans valeur.
 
 ## Review
 - Incident : un script de résolution en échec + chaîne `&&` filtrée par `grep` a committé des marqueurs (`bce89832a`, worktree privé) → repris par `reset --hard` sur le merge précédent, rejoué proprement ; règle consignée (Leçon 243). Deuxième occurrence du motif (`grep -c` à 0 rend 1) sans dégât.
 - Suivis ouverts (hors périmètre, signalés par les revues) : `SignalProtocolEngine` émet des IV de 16 octets alors que `SignalSchemas.encryptedMessage.iv` (mort) en attend 12 ; `offset` non borné dans `admin-schemas.ts` ; trois idiomes de clamp `limit` (helper Zod SSOT à créer) ; #3324 laisse le corps des messages web (`use-message-translations.ts`) comparer des codes bruts ; règle de rang du kick d'appel plus stricte que `participants.ts` ; 2 `#expect` Swift à greffer dans `ComposerMentionQueryTests` (bob@alice, marie-claire).
+
+# Cycle 94 — Le sous-arbre DMA / Signal Protocol remis sous le compilateur (2026-08-22)
+
+- [x] Constat : `src/dma-interoperability/` (3 231 lignes de prod + 1 642 de suites), 6 modules + 3 suites, exclu de
+      `tsconfig.json` (build ET type-check), ignoré par `jest.config.json`, absent de
+      `collectCoverageFrom`, et importé par AUCUN module du dépôt. Les deux lignes d'exclusion sont
+      les seules occurrences de `dma-interoperability` hors du sous-arbre.
+- [x] Preuve que rien ne l'avait compilé : 4 modules importaient `'../../../shared/prisma/client'`,
+      chemin inexistant dans le dépôt comme dans l'image Docker → repointés sur `@meeshy/shared/prisma/client`.
+- [x] Sous-arbre ajouté à l'`include` de `tsconfig.json` → 8 erreurs, dont 4 défauts d'exécution :
+      X3DH construit sans dépendances (`new X3DHKeyAgreement()`), deux appels à des méthodes privées
+      dont un générateur brut sans id masqué par un `(pk: any)`, et le paquet X3DH du moteur à la
+      forme des colonnes `DMAEnrollment` au lieu de `PreKeyBundle` (DH1/DH3 lèvent, DH4 jamais
+      calculé, `registrationId.toString()` sur `undefined`). Tous corrigés — `tsc --noEmit` à 0.
+- [x] Largeur du nonce AES-GCM : les deux producteurs du FIL (`SignalProtocolEngine`,
+      `SignalProtocolAdapter`) passent par `SignalProtocolLimits.AES_GCM_IV_SIZE` (12 octets) au lieu
+      du littéral `16`. Aucune migration : l'IV voyage avec le chiffré.
+- [x] 6 témoins neufs exécutés par jest (`src/__tests__/unit/dma-signal-wire-crypto.test.ts`).
+      ROUGE prouvé deux fois : échec de chargement de suite avant correctif (TS2554/TS2341), et
+      3 échecs / 6 en remettant le littéral `16`.
+- [x] Gates : `tsc --noEmit` 0 · `tsc` (émission) 0 · suite ciblée 6/6.
+- [ ] Suivi — `SignalKeyManager.encryptKey` : cadre auto-porté à offsets FIXES (`iv(16)|authTag(16)`),
+      lecteur codé en dur ; migrer exige un préfixe de version ou un repli discriminé par
+      l'authentification GCM, sous peine de rendre illisible le matériel de clé persisté. Non fait :
+      bénéfice cosmétique (nonce privé, hors fil), risque sur des clés privées.
+- [ ] Suivi — X3DH ne VÉRIFIE jamais `signedPreKey.signature` : c'est le lien qui rattache la pré-clé
+      signée à la clé d'identité, donc l'accord de clés n'est pas authentifié. La signature est
+      désormais posée à sa place dans le paquet, prête à l'être. **Le plus important des trois.**
+- [ ] Suivi — les 3 suites du sous-arbre restent ignorées par jest : mesuré 56 échecs / 114 témoins
+      (compteurs `DoubleRatchet` à 0, `new PrismaClient()` réel supposant une base). À instruire un
+      par un, jamais en desserrant des assertions. Le sous-arbre entrera dans `collectCoverageFrom`
+      quand ses suites tourneront.
+- [ ] Suivi — `SignalProtocolAdapter.performX3DH` garde un `as any` : `ISignalProtocolAdapter` ne
+      transporte pas la signature de la pré-clé signée que `PreKeyBundle` déclare obligatoire.
+
+## Cycle 94 bis (2026-08-22) — la dernière enveloppe inerte, et les deux défauts qu'elle couvrait
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle94-bis.md`.
+
+- [x] `GET /messages/:messageId` aligné sur son enveloppe réelle (`{success, data}`) — dernière
+      ligne de `FROZEN_INVENTORY`, seule de la **forme 3** (schéma décrivant le MESSAGE quand
+      `sendSuccess` répond `{success, data}` : déclarations inertes, charge utile traversant
+      entière et non gouvernée). 42 clés relevées MÉCANIQUEMENT depuis le `select` + les
+      surcharges du handler, passées au vrai `fast-json-stringify` : 42 entrent, 42 sortent.
+- [x] **Défaut 1 découvert par l'alignement** — `translations` servi en CARTE Mongo là où le
+      contrat déclare un TABLEAU et où les TROIS clients décodent un tableau. Les deux autres
+      transports du MÊME fichier appliquaient déjà `transformTranslationsToArray` (lignes 600,
+      950) ; ce GET étalait `...message`. Chemin d'impact : extension de notification iOS →
+      App Group → `NSEPendingMessageConsumer` → `APIMessage` (dont `translations` se décode
+      avec un `try` NON tolérant) ⇒ décodage du message ENTIER en échec, blob SUPPRIMÉ,
+      **démarrage à froid depuis une notification sans son message** pour tout message portant
+      au moins une traduction.
+- [x] **Défaut 2** — `encryptionMode` absent de `messageSchema` sur la foi d'un commentaire
+      (« only on Conversation ») que `schema.prisma` contredit. Corrigé dans le schéma PARTAGÉ :
+      la LISTE de messages le charge aussi et le servait par un `items: messageSchema` qui le
+      retirait — un client E2EE recevait `isEncrypted: true` + le chiffré sans savoir sous quel
+      régime déchiffrer. Aucune ligne du fichier de la liste n'a changé.
+- [x] `sender` déclaré LOCALEMENT (participant + `user` imbriqué + `isOnline` gaté à la source),
+      **différent** de `editedMessageSenderSchema` du cycle 93 : fusionner exigerait de porter
+      `isOnline` dans un schéma commun, ce qui désarmerait sa décision fail-closed. Raison
+      écrite sur les deux sites.
+- [x] `conversation` et `statusSummary` DÉCLARÉS tels qu'ils sont servis, pas retirés — un
+      changement de contrat se décide sur des preuves de consommation client, pas dans un lot
+      dont le but est de ne rien tronquer.
+- [x] Témoins : `message-detail-serialization.test.ts` (9), montant le VRAI module de route sur
+      une vraie instance Fastify (`app.inject()`), double Prisma rendant la CARTE comme Mongo.
+      **ROUGE prouvé isolément** : retrait du transform ⇒ 9/9 tombent (la carte ne traverse plus
+      le schéma, 500) ; retrait d'`encryptionMode` ⇒ 1/9 (`Expected "e2ee", Received undefined`).
+      Le piège du cycle 88 (`message-detail-sender-presence.test.ts`) reste VERT : preuve que
+      `sender` et son `user` ont survécu.
+- [x] `FROZEN_INVENTORY` : 1 → **0**. Les trois cliquets sont à inventaire vide en même temps.
+- [x] Gates : tsc gateway 0 · vitest shared 2428/2428 · suites ciblées 24/24.
+- [x] Jumelle instruite (8 sites `routes/` chargeant `Message.translations`) : liste, recherche,
+      threads, édition, suppression, `GET /:id/translations` transforment déjà ; `core.ts` a son
+      champ dédié `lastMessageTranslations`. **`GET /sync` porte le MÊME défaut** (carte brute,
+      et AUCUN schéma de réponse) — zéro appelant sur les trois clients ⇒ piège armé, pas panne.
+      NON corrigé ici par décision : lui donner sa forme exige de lui donner d'abord un contrat,
+      ce qui est un lot en soi et ferait perdre la mesure « 42 entrent, 42 sortent » de ce lot-ci.
+- Suivis ouverts : `GET /sync` (ci-dessus) ; `GET /messages/:messageId` n'agrège pas les réactions de pièce jointe
+  (relation `reactions` brute chargée, contrat = `reactionSummary`+`currentUserReactions`) ;
+  `APIMessage.translations` en `try` non tolérant quand ses trois voisins sont en `try?` (lot
+  iOS) ; **le quatrième balayage n'existe pas** — rien ne garde contre une déclaration présente,
+  bien formée et FAUSSE contre son producteur, ce qu'étaient les deux défauts de ce cycle.

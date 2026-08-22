@@ -1,5 +1,52 @@
 # Lessons
 
+## Leçon 244 — une ligne d'`exclude` dans `tsconfig` retire le code de TOUT ce qui mesure, d'un seul geste (2026-08-22, routine messagerie, cycle 94)
+
+Toutes les autres façons de rendre du code invisible ont un coût que quelqu'un
+voit :
+
+| geste | ce qui se voit |
+|---|---|
+| retirer un test | la couverture baisse |
+| supprimer un fichier | un import casse |
+| poser un `any` | le reste du fichier reste sous contrôle |
+| **`exclude` dans `tsconfig`** | **rien** |
+
+Une ligne d'`exclude` retire le code de la compilation, du type-check, de
+l'émission — et, si `jest.config.json` porte la ligne jumelle, du banc de test et
+de la couverture. Aucun avertissement ne se lève, aucune suite ne rougit, aucun
+seuil ne bouge. **Le répertoire reste là, plein, crédible, cité dans les documents
+d'architecture.**
+
+Coût mesuré sur `services/gateway/src/dma-interoperability/` : 3 231 lignes de
+Signal Protocol (X3DH, Double Ratchet, gestion de clés, moteur, adaptateurs) hors
+compilateur et hors banc, importées par personne. Quatre de ses modules
+importaient un chemin qui ne résout **nulle part** — ni dans le dépôt, ni dans
+l'image Docker. Remis sous le compilateur : **8 erreurs, dont 4 défauts
+d'exécution**, dont trois qui cassaient l'établissement de session par des chemins
+indépendants.
+
+Et le détail qui donne la mesure exacte de ce que le silence coûte : le seul
+endroit du chemin fautif où le compilateur AURAIT pu parler malgré l'exclusion
+portait un `(pk: any)`.
+
+> **Avant de conclure qu'un défaut est un oubli d'auteur, demander ce qui aurait
+> dû le voir.** Le suivi qui a ouvert ce cycle nommait un IV de 4 octets de trop.
+> Ce qu'il fallait aller chercher, c'est ce qui laissait un écart pareil vivre
+> entre trois déclarations partagées et leur unique producteur : deux lignes de
+> configuration, écrites une fois, jamais relues.
+
+Corollaire de manœuvre, pour ne pas transformer la remise sous compilateur en lot
+sans fin : **ce qu'on rallume et ce qu'on laisse éteint se DÉCIDENT séparément, et
+se disent.** Ici — le compilateur : oui, tout de suite (8 erreurs, tractable). Les
+3 suites du sous-arbre : non (mesuré 56 échecs / 114 ; les rendre vertes est un lot
+qui se fait en regardant chaque échec, pas en desserrant des assertions). La
+couverture : non (3 231 lignes quasi non couvertes feraient rougir la CI sous le
+seuil, ce qui n'a aucun rapport avec le défaut). La suppression : non — c'est une
+obligation réglementaire, donc une décision de feuille de route, pas un arbitrage
+d'hygiène de code. **Publier la mesure de ce qu'on n'a pas fait est ce qui permet
+au cycle suivant de partir d'un chiffre plutôt que d'une estimation.**
+
 ## Leçon 243 — un outil trouve la forme qu'on lui a décrite ; l'autre moitié du défaut n'en a aucune (2026-08-22, routine messagerie, cycle 91)
 
 Le cycle 86 a nommé la règle « un objet de réponse sans `properties` EFFACE »,
@@ -12032,3 +12079,48 @@ Corollaire sur la forme du correctif :
 > sans rien dupliquer, ne change aucun site d'appel (l'app importait déjà
 > `MeeshyUI`), et rend même le `pbxproj` identique à `main` puisque les fichiers
 > neufs vivent alors dans le package SPM.
+
+## Leçon — une charge utile non gouvernée ne se trompe jamais (2026-08-22, cycle 94)
+
+`FROZEN_INVENTORY` ne portait plus qu'une ligne, laissée en place par trois
+cycles avec une raison écrite et juste : aligner ce schéma « est un lot en soi,
+sans quoi la déclaration tronquerait ce qui passe aujourd'hui ».
+
+Le lot fait, deux défauts sont apparus **dans le même geste** — et aucun des
+deux n'était nouveau. `translations` sortait en CARTE Mongo là où les trois
+clients décodent un TABLEAU ; `encryptionMode` était absent de `messageSchema`,
+donc supprimé de chaque message de chaque page de la liste, pour des clients
+E2EE qui recevaient le chiffré sans savoir sous quel régime déchiffrer.
+
+Ils vivaient depuis longtemps derrière un 200 vert et des témoins verts. La
+raison est structurelle, pas accidentelle :
+
+> **Tant qu'une réponse n'est gouvernée par aucun schéma, aucune forme n'y est
+> fausse — il n'y a pas de contrat à contredire.** Gouverner, c'est créer la
+> possibilité même du désaccord. Les désaccords étaient là depuis le début ;
+> c'est l'absence de contrat qui les rendait inobservables.
+
+Corollaire de méthode, et c'est le seul qui protège :
+
+> **Les clés servies se relèvent MÉCANIQUEMENT, puis se passent au vrai
+> sérialiseur.** La réutilisation naïve du schéma partagé perdait ici CINQ
+> choses. Aucune lecture attentive du schéma ne l'aurait dit — quatre cycles de
+> suite (84, 89, 91, 94), la « bonne forme d'à côté » était fausse contre le
+> producteur de la route qu'on réparait.
+
+Et sur l'endroit où un tel défaut se manifeste :
+
+> **Le silence d'un défaut ne mesure pas sa gravité, il mesure qui le regarde.**
+> Le seul consommateur de cette route est une extension de notification iOS.
+> Son décodeur échouait, supprimait le blob, et laissait une ligne de log dans
+> un processus qui meurt en quelques secondes. Pour l'utilisateur : un écran
+> qui met un peu plus longtemps à se remplir. Aucun signal ne remonte jamais
+> d'un chemin pareil — il faut aller l'y chercher.
+
+Enfin, ce qui a bien fonctionné et qu'il faut garder : **le piège armé par le
+cycle 88 a tenu son rôle.** `message-detail-sender-presence.test.ts` portait un
+témoin qui disait explicitement garder contre « une future *correction* du
+schéma qui, elle, tronquerait pour de bon ». Il est resté vert — et c'est ce
+vert-là qui prouve que `sender` et son `user` imbriqué ont survécu au lot. Un
+témoin posé sur une non-fuite ACCIDENTELLE vaut exactement ce que le cycle 84
+promettait qu'il vaudrait.

@@ -43,7 +43,7 @@ import {
   AttachmentStatusBodySchema,
 } from '../validation/messages-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
-import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { errorResponseSchema, messageSchema } from '@meeshy/shared/types/api-schemas';
 import {
   sendSuccess,
   sendPaginatedSuccess,
@@ -70,6 +70,129 @@ interface MessageStatusBody {
   timestamp?: string;
   language?: string;
 }
+
+/**
+ * L'expéditeur tel que `GET /messages/:messageId` le CHARGE — un `Participant`,
+ * et son `User` imbriqué.
+ *
+ * `messageSchema.sender` est `userMinimalSchema` : il couvre le participant
+ * (il déclare `userId` et `type` pour lui) mais reste MINIMAL, et ce `select`
+ * charge en plus le bloc `user`. Le grain juste est celui qui CHARGE — c'est
+ * cette route qui charge plus, c'est elle qui déclare plus, localement.
+ *
+ * **Différence assumée avec `editedMessageSenderSchema`** (cycle 93,
+ * `conversations/messages-advanced.ts`), et c'est pourquoi les deux ne
+ * fusionnent pas en un `participantSenderSchema` partagé : les deux routes ne
+ * chargent pas le même participant. Là-bas c'est `role` + `language` sans
+ * `isOnline` (fail-closed : le `select` ne le charge pas). Ici c'est l'inverse
+ * — pas de `role`/`language`, mais `isOnline` sur les DEUX porteurs, chargé
+ * DÉLIBÉRÉMENT et gaté à la source par `applyPresenceVisibilityAsOffline`
+ * (régime prefs-only : l'appelant est un participant actif, vérifié par le 403
+ * du handler). Le déclarer est donc juste, et la garde reste où elle doit être :
+ * dans le handler, pas dans le sérialiseur.
+ */
+const messageDetailSenderSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    id: { type: 'string', description: 'Participant ID' },
+    userId: { type: 'string', nullable: true, description: 'Real User ID (null for anonymous participants)' },
+    displayName: { type: 'string', nullable: true },
+    avatar: { type: 'string', nullable: true },
+    isOnline: { type: 'boolean', description: 'Presence — gated by applyPresenceVisibilityAsOffline in the handler' },
+    type: { type: 'string', enum: ['user', 'anonymous', 'bot'] },
+    user: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        id: { type: 'string' },
+        username: { type: 'string' },
+        avatar: { type: 'string', nullable: true },
+        isOnline: { type: 'boolean', description: 'Presence — gated with the same visibility as its participant' }
+      }
+    }
+  }
+} as const;
+
+/**
+ * L'enveloppe RÉELLE de `GET /messages/:messageId`.
+ *
+ * Ce qu'elle remplace était la dernière ligne de `FROZEN_INVENTORY`, et la
+ * seule de la **forme 3** : un schéma qui décrit le MESSAGE (`id`, `content`,
+ * `sender`…) quand `sendSuccess` répond `{ success, data }`. Aucune de ses
+ * déclarations ne matchait, `success`/`data` n'étaient pas déclarés, et
+ * l'`additionalProperties: true` du bloc laissait la charge utile traverser
+ * ENTIÈRE et non gouvernée. Le balayage la signalait donc en FAUX POSITIF —
+ * `sender: { type: 'object' }` n'y vidait rien, il masquait au contraire une
+ * fuite de présence ACTIVE, fermée au cycle 88 par le gate du handler.
+ *
+ * Aligner ce schéma était « un lot en soi » parce que déclarer partiellement ce
+ * qui passait entier TRONQUE. Les 42 clés servies ont donc été relevées
+ * mécaniquement depuis le `select` et les surcharges du handler, puis passées
+ * au sérialiseur : la mesure a fait apparaître les DEUX défauts que
+ * l'enveloppe inerte cachait — `translations` servi en CARTE là où le contrat
+ * dit tableau (corrigé dans le handler), et `encryptionMode` absent de
+ * `messageSchema` (corrigé dans le schéma partagé, où il manquait pour la
+ * liste aussi). *Réparer une enveloppe rend lisibles les défauts de ce qu'elle
+ * contenait.*
+ *
+ * Composée depuis `messageSchema` et **non** en descendant dans
+ * `messageResponseSchema.properties.data` : plusieurs suites mockent
+ * `@meeshy/shared/types/api-schemas` avec un sous-ensemble des exports, et une
+ * chaîne d'accès y lève à l'IMPORT (cycles 91 bis et 93, deux suites qui ont
+ * cessé de CHARGER).
+ */
+export const messageDetailResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      ...messageSchema,
+      description: 'The message, served flat — never wrapped under `data.message`',
+      properties: {
+        ...messageSchema.properties,
+        sender: messageDetailSenderSchema,
+        // Le `select` charge la conversation POUR LE CONTRÔLE D'ACCÈS (le 403
+        // vingt lignes plus bas), et l'étalement `...message` la sert depuis
+        // toujours. Le `where` ne rend que la ligne de l'APPELANT
+        // (`{ userId, isActive: true }`) : c'est sa propre appartenance, jamais
+        // celle d'un tiers. Déclarée telle qu'elle est servie — la retirer
+        // serait un changement de contrat, qui se décide sur des preuves de
+        // consommation client, pas en passant.
+        conversation: {
+          type: 'object',
+          nullable: true,
+          description: "Caller's own participation row, loaded for the access check",
+          properties: {
+            participants: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  userId: { type: 'string', nullable: true },
+                  role: { type: 'string', nullable: true }
+                }
+              }
+            }
+          }
+        },
+        // Les trois compteurs sont servis DEUX fois : à plat (les trois clients
+        // y décodent leurs coches) et groupés ici. Le doublon est antérieur à ce
+        // lot et parfaitement servi aujourd'hui ; le déclarer maintient la
+        // charge utile à l'identique.
+        statusSummary: {
+          type: 'object',
+          description: 'Grouped mirror of the three flat delivery counters',
+          properties: {
+            deliveredCount: { type: 'number' },
+            readCount: { type: 'number' },
+            recipientCount: { type: 'number' }
+          }
+        }
+      }
+    }
+  }
+} as const;
 
 export default async function messageRoutes(fastify: FastifyInstance) {
   // Récupérer prisma décoré par le serveur
@@ -102,41 +225,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       response: {
         200: {
           description: 'Message details',
-          type: 'object',
-          // Le schéma ne liste qu'un sous-ensemble illustratif des champs
-          // (déjà le cas avant ce correctif — metadata/messageType/etc. n'y
-          // figuraient pas non plus). `additionalProperties: true` empêche
-          // fast-json-stringify de tronquer silencieusement tout champ non
-          // listé ici — dont le `location` hissé par hoistLocationOnto —
-          // à la sérialisation de la réponse.
-          additionalProperties: true,
-          properties: {
-            id: { type: 'string' },
-            content: { type: 'string' },
-            // ATTENTION — aucune de ces déclarations ne s'applique.
-            //
-            // Ce schéma décrit le MESSAGE (id, content, sender…) alors que
-            // `sendSuccess` répond `{ success, data }`. Les six propriétés
-            // listées ici ne correspondent donc à aucune clé de l'objet réel ;
-            // `success` et `data` sont non déclarés et traversent par
-            // l'`additionalProperties: true` ci-dessus, **entiers et non
-            // gouvernés**. Vérifié en isolant le compilateur.
-            //
-            // Conséquence à retenir avant de « corriger » ce bloc : le
-            // `sender: { type: 'object' }` nu qu'il portait ne vidait RIEN, et
-            // la présence brute de l'expéditeur atteignait bel et bien le fil —
-            // ce n'est pas une non-fuite accidentelle, c'était une fuite. Le
-            // gate posé dans le handler est ce qui la ferme.
-            //
-            // Aligner ce schéma sur l'enveloppe est un lot en soi : il faudrait
-            // décrire TOUT ce que la route sert (une trentaine de colonnes,
-            // pièces jointes et bloc de statut compris), sans quoi la
-            // déclaration tronquerait ce qui passe aujourd'hui.
-            sender: { type: 'object' },
-            attachments: { type: 'array' },
-            translations: { type: 'array' },
-            createdAt: { type: 'string', format: 'date-time' }
-          }
+          ...messageDetailResponseSchema
         },
         404: {
           description: 'Message not found',
@@ -313,6 +402,28 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, hoistLocationOnto({
         ...message,
         sender: gatedSender,
+        // `Message.translations` est une CARTE Mongo (`langue → {text, …}`),
+        // jamais un tableau — le contrat, lui, déclare un TABLEAU d'objets
+        // `{targetLanguage, translatedContent, …}`, et c'est ce que décodent
+        // les clients (`APIMessage.translations: [APITextTranslation]?`).
+        //
+        // Les DEUX autres transports de ce fichier appliquaient déjà
+        // `transformTranslationsToArray` (l'édition, la suppression) ; ce
+        // GET-ci étalait `...message` et servait donc la carte BRUTE. Le
+        // symptôme n'était pas côté web (permissif) mais sur le chemin PUSH :
+        // l'extension de notification appelle cette route, dépose le blob dans
+        // l'App Group, et `NSEPendingMessageConsumer` le décode en `APIMessage`
+        // — où `translations` se décode avec un `try` NON tolérant, contrairement
+        // à ses voisins `callSummary`/`trackingLinks`. Une carte y fait donc
+        // échouer le décodage du message ENTIER, le consommateur SUPPRIME le
+        // fichier, et le démarrage à froid depuis une notification se retrouve
+        // sans son message — la garantie même que cette route avait été choisie
+        // pour rétablir, reperdue une couche plus bas, pour tout message portant
+        // au moins une traduction.
+        translations: transformTranslationsToArray(
+          messageId,
+          (message as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
+        ),
         // Les mêmes valeurs écrasent aussi les champs de premier niveau issus
         // du `select` : les trois clients y décodent leurs coches de livraison.
         // Les laisser au contenu de la ligne aurait servi zéro ici pendant que
