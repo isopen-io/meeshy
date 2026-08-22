@@ -32,8 +32,25 @@ public actor DiskCacheStore: ReadableCacheStore {
         let task: Task<Data, Error>
     }
 
-    public init(policy: CachePolicy, baseDirectory: URL? = nil) {
+    /// Budget mémoire du L1 (Data brut par entrée). 80 MB par défaut — les
+    /// stores audio/vidéo reçoivent un budget réduit du CacheCoordinator :
+    /// leur consommation passe par des file URLs (players), pas par des Data
+    /// résidents, et 4 × 80 MB de plafonds théoriques dépassaient à eux seuls
+    /// la cible mémoire de l'app (150 MB).
+    private let memoryBudgetBytes: Int
+
+    /// Insertion L1 gardée : un payload unique dépassant la moitié du budget
+    /// (ex. une vidéo de 40 MB dans un store à 8 MB) éjecterait tout le reste
+    /// pour un blob que personne ne relit en Data — il reste servi par le
+    /// disque.
+    private func cacheInMemory(_ data: Data, fileKey: String) {
+        guard data.count <= memoryBudgetBytes / 2 else { return }
+        memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
+    }
+
+    public init(policy: CachePolicy, baseDirectory: URL? = nil, memoryBudgetBytes: Int = 80 * 1024 * 1024) {
         self.policy = policy
+        self.memoryBudgetBytes = memoryBudgetBytes
         let subdir: String
         if case .disk(let sub, _) = policy.storageLocation {
             subdir = sub
@@ -49,7 +66,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
         let cache = NSCache<NSString, CacheBox>()
         cache.countLimit = 100
-        cache.totalCostLimit = 80 * 1024 * 1024
+        cache.totalCostLimit = memoryBudgetBytes
         self.memoryCache = cache
         FileManager.default.createDirectoryLogging(at: self.baseDirectory, context: "disk cache root", logger: logger)
 
@@ -105,12 +122,12 @@ public actor DiskCacheStore: ReadableCacheStore {
         let freshness = policy.freshness(age: age)
         switch freshness {
         case .fresh:
-            memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
+            cacheInMemory(data, fileKey: fileKey)
             fileTimestamps[fileKey] = modDate
             noteAccess(fileKey: fileKey, atPath: filePath.path, lastKnown: modDate)
             return .fresh([data], age: age)
         case .stale:
-            memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
+            cacheInMemory(data, fileKey: fileKey)
             fileTimestamps[fileKey] = modDate
             noteAccess(fileKey: fileKey, atPath: filePath.path, lastKnown: modDate)
             return .stale([data], age: age)
@@ -155,7 +172,7 @@ public actor DiskCacheStore: ReadableCacheStore {
             logger.error("Failed to write file for key \(fileKey): \(error.localizedDescription)")
             return
         }
-        memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
+        cacheInMemory(data, fileKey: fileKey)
         fileTimestamps[fileKey] = Date()
 
         // E1 — auto-trigger eviction when the latest write may have
