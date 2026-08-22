@@ -922,6 +922,44 @@ struct ReelPageView: View {
                 statInline(icon: "eye.fill", count: reel.viewCount,
                            a11yLabel: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main))
             }
+
+            // Annonce du fond (B3.3-5), résolveur unique partagé avec la
+            // carte de post et le viewer story (E1) — BackgroundSoundBadge
+            // rend EmptyView sans piste (B3.5). Résolue UNE fois : le bouton
+            // muet (B3.6, Task E2) juste après partage la MÊME valeur — un
+            // seul prédicat, jamais une seconde résolution qui pourrait
+            // diverger.
+            let announcement = BackgroundSoundBadge.announcement(for: reel.storyEffects)
+            BackgroundSoundBadge(announcement: announcement, accentHex: accentColor)
+                .equatable()
+
+            // Muet LOCAL du fond storyEffects — distinct de l'audio NATIF du
+            // réel (toujours actif, `drive()` réaffirme `manager.isMuted =
+            // false`, non touché ici). Gate renforcée (correctif revue DoD,
+            // BLOQUANT #1) : le bouton ne se monte QUE si un lecteur LOCAL
+            // existe réellement pour le piloter (`borrowedSoundTrack`,
+            // chargé dans `audioPlayer` par `startBorrowedSoundIfNeeded()`)
+            // — l'annonce seule peut être vraie sans qu'aucun moteur pilotable
+            // ne joue localement (ex. audio incrusté dans une vidéo). Le tap
+            // pilote RÉELLEMENT `audioPlayer` (pause/reprise, position
+            // conservée) — l'icône et le libellé a11y suivent
+            // `audioPlayer.isPlaying`, jamais un état local séparé qui
+            // pourrait diverger du son réellement audible.
+            if BackgroundSoundBadge.showsMuteButton(for: announcement), borrowedSoundTrack != nil {
+                Button {
+                    audioPlayer.togglePlayPause()
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying))
+                        .font(MeeshyFont.relative(10, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.85))
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(audioPlayer.isPlaying
+                    ? String(localized: "reels.action.mute", defaultValue: "Couper le son de fond", bundle: .main)
+                    : String(localized: "reels.action.unmute", defaultValue: "Réactiver le son de fond", bundle: .main))
+            }
         }
     }
 
