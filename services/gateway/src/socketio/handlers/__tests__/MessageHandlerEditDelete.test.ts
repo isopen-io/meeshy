@@ -251,6 +251,30 @@ function makeSocketUser(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// `createdAt` et `messageType` appartiennent au socle, pas aux surcharges.
+//
+// Le socle décrivait un enregistrement SANS `createdAt`. La charge utile
+// diffusée n'en souffrait pas — `buildMessageEditedCore` replie les deux champs
+// (`message.createdAt || new Date()`, `message.messageType || 'text'`), et c'est
+// mesuré, pas supposé. Le dommage était en amont, sur la porte d'ADMISSION :
+//
+//   - `admitMessageEdit` lit `createdAt` pour la fenêtre de 24h. Absent, il
+//     donne `NaN`, et la comparaison est écrite exprès de sorte que `!(NaN > w)`
+//     ADMETTE. Presque tous les témoins de ce fichier franchissaient donc la
+//     fenêtre par ABSENCE de date, jamais par fraîcheur — la porte était
+//     traversée sans être exercée ;
+//   - le seul témoin qui vérifie les sept champs requis par `SocketIOMessage`
+//     avait donc besoin d'un vrai `createdAt`, et il l'a écrit en DATE ABSOLUE
+//     (`2026-08-22T10:00:00Z`). Vingt-quatre heures plus tard la fenêtre l'a
+//     refusé : plus aucune diffusion, et le gardien du CONTRAT tombait pour un
+//     motif étranger au contrat qu'il garde. Un correctif pressé (repousser le
+//     littéral) réarmerait la même bombe pour le lendemain.
+//
+// Le socle porte donc un message FRAIS et complet, et l'admission redevient un
+// verdict sur la fraîcheur. Les témoins de fenêtre gardent leurs surcharges
+// RELATIVES (`twentyFiveHoursAgo`, `tenMinutesAgo`) — l'idiome déjà employé
+// partout ailleurs ici : une date d'entrée comparée à `Date.now()` ne s'écrit
+// jamais en littéral absolu.
 function makeMessageRecord(overrides: Record<string, unknown> = {}) {
   return {
     id: VALID_MSG_ID,
@@ -258,6 +282,8 @@ function makeMessageRecord(overrides: Record<string, unknown> = {}) {
     senderId: PARTICIPANT_ID,
     content: 'Original content',
     originalLanguage: 'fr',
+    messageType: 'text',
+    createdAt: new Date(),
     sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null },
     attachments: [],
     conversation: {
@@ -591,10 +617,7 @@ describe('MessageHandler — handleMessageEdit', () => {
   // mauvaise identité » sont deux pannes différentes, et la seconde serait le
   // résultat exact d'un correctif naïf (`senderId: message.senderId`).
   it('sert le noyau que `SocketIOMessage` EXIGE — sans quoi le décodeur iOS jette la charge utile entière', async () => {
-    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord({
-      createdAt: new Date('2026-08-22T10:00:00Z'),
-      messageType: 'text',
-    }));
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
     await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
@@ -615,9 +638,7 @@ describe('MessageHandler — handleMessageEdit', () => {
   // muette — et les deux autres producteurs de `message:edited` servent bien
   // l'identité utilisateur.
   it('sert le `User.id` de l\'expéditeur, jamais le `Participant.id` de la colonne', async () => {
-    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord({
-      createdAt: new Date('2026-08-22T10:00:00Z'),
-    }));
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
     await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);

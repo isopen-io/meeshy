@@ -1431,3 +1431,64 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle107-bis.md`
       `VideoCallInterface.tsx`. Le défaut de ce lot, reproduit côté client.
 - [ ] Suivi — trois services prennent encore un `Server` NU pour ÉMETTRE ; ni le
       balayage de réception (par construction) ni celui d'émission ne les couvre.
+
+## Cycle 108 bis — la panne n'était dans aucun environnement : elle était dans l'horloge
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108-bis.md`
+Écrit en parallèle du cycle 108 (PR #3385) par une autre session, sur le MÊME
+symptôme et avec une conclusion opposée.
+
+- [x] **Ce lot n'a pas commencé par un suivi : `main` était ROUGE.** Le job
+      *Test gateway* échouait sur `MessageHandlerEditDelete.test.ts`, 2 témoins,
+      835 autres suites vertes. Reproduit localement, déterministe.
+- [x] **Une bombe à retardement de 24 heures.** Les deux témoins fabriquaient
+      leur message avec `createdAt: new Date('2026-08-22T10:00:00Z')`, et
+      `admitMessageEdit` refuse l'auteur au-delà de `MESSAGE_EDIT_WINDOW_MS`
+      (24 h) comptées depuis `Date.now()`. La CI a tourné le 08-23 à 10:15Z —
+      **24 h 15 min** plus tard. Écrits verts au cycle 101, rouges par la seule
+      horloge : aucun commit n'est coupable.
+- [x] **Le littéral n'était pas la faute mais sa conséquence.**
+      `makeMessageRecord` ne portait ni `createdAt` ni `messageType` ; or
+      `NaN > w` est faux, donc un `createdAt` absent **ADMET**. Presque tous les
+      témoins franchissaient la fenêtre par ABSENCE de date — la porte était
+      traversée sans être exercée. Le seul témoin vérifiant les sept champs
+      requis devait donc s'écrire une date, et l'a écrite en absolu.
+- [x] **Correctif structurel** : la fabrique porte un message FRAIS et complet ;
+      les deux surcharges disparaissent ; les cinq témoins de fenêtre gardent
+      leurs offsets RELATIFS, idiome déjà employé partout ailleurs dans le
+      fichier. Repousser le littéral d'un jour aurait réarmé la bombe.
+- [x] **Le message d'échec accusait la mauvaise étape.** `Received array: []`
+      désignait la DIFFUSION alors que la panne était dans l'ADMISSION. Vérifié
+      plutôt que supposé : `buildMessageEditedCore` replie les deux champs
+      (`|| new Date()`, `|| 'text'`) — la charge utile était INTACTE. Une
+      première rédaction du commentaire l'avait affirmé faux ; c'est le code du
+      constructeur qui a tranché.
+- [x] **ROUGE prouvé sur 2 mutations**, une par garde, chacune faisant tomber
+      exactement son témoin et aucun autre.
+- [x] **Le désaccord avec la PR #3385, et sa résolution.** Cette session-là a vu
+      les deux mêmes témoins rouges et a conclu « ce n'est pas une régression de
+      `main` : ils échouent à l'identique au commit `f69cbd26`, dont le job Test
+      gateway est vert ». Raisonnement correct, prémisse tacite fausse : **un
+      vert de CI est une propriété du commit ET de l'INSTANT du run.** Pour une
+      panne datée les deux se séparent — la CI de `f69cbd26` avait tourné AVANT
+      l'expiration. Le run de `main` à HEAD (10:15Z) est rouge sur exactement ces
+      deux témoins. Un défaut attribué à l'outil de mesure cesse d'être cherché
+      dans le produit.
+- [x] **Le +3 du cliquet de dette : trouvé, mesuré, et LAISSÉ à #3385.** Cause
+      identifiée (`shared-law-dist-parity.test.ts` importe `packages/shared/dist`
+      en chemin relatif ⇒ 1242 sans build, 1239 avec), mais #3385 la corrige
+      mieux — en résolvant la déclaration `.d.ts` consultée par TypeScript, ce
+      qui détecte aussi un build partiel, là où ma version ne testait qu'un
+      répertoire. Correctif retiré de ce lot : deux PR sur le même bloc d'en-tête
+      = conflit certain pour zéro gain.
+- [x] Leçons 252 et 253.
+- [ ] Suivi — **dépendance** : si #3385 ne fusionne pas, le défaut du cliquet
+      reste ouvert.
+- [ ] Suivi — recomptage du cast web : le cycle 107 bis annonçait **trois**
+      sites, j'en compte **cinq** dans `VideoCallInterface.tsx` (229, 488, 522,
+      549, 638) et #3385 en recense **13** sur 4 fichiers. Le motif
+      `(x as unknown).m` est un `TS2571` franc — **108** occurrences dans la
+      dette web, cicatrice d'un codemod `any` → `unknown` rendue invisible par
+      `ignoreBuildErrors: true`. Les fermer FAIT DESCENDRE le cliquet.
+- [ ] Suivi hérité — bivariance / `strictFunctionTypes`.
+- [ ] Suivi hérité — trois services prenant un `Server` NU pour émettre.
