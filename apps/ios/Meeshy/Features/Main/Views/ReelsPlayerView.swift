@@ -968,14 +968,13 @@ struct ReelPageView: View {
     }
 
     private func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon).font(MeeshyFont.relative(10, weight: .semibold))
-            Text(CompactCountLabel.text(count)).font(.caption2.weight(.medium))
-        }
-        .foregroundColor(.white.opacity(0.85))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(a11yLabel)
-        .accessibilityValue("\(count)")
+        ReachMetricLabel(
+            icon: icon,
+            count: count,
+            label: a11yLabel,
+            tint: .white.opacity(0.85),
+            iconFont: MeeshyFont.relative(10, weight: .semibold)
+        )
     }
 
     /// Légende du reel rendue par `MessageTextRenderer` pour teinter `@mention`
