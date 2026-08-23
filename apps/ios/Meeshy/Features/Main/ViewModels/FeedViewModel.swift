@@ -543,7 +543,7 @@ class FeedViewModel: ObservableObject {
     ///   écrire — note sous le contenu, métadonnée silencieuse. `nil` quand il
     ///   n'en a déclaré aucune : le serveur relit alors les `@handle` du texte
     ///   lui-même, et déclarer `[]` lui ferait entendre un effacement.
-    func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil) async {
+    func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil) async {
         publishError = nil
         publishSuccess = false
 
@@ -564,7 +564,7 @@ class FeedViewModel: ObservableObject {
         if isDurableTextOnly,
            let text = content,
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            await enqueueDurableTextPost(content: text, visibility: visibility, originalLanguage: originalLanguage, location: location, mentions: mentions)
+            await enqueueDurableTextPost(content: text, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, location: location, mentions: mentions)
             return
         }
 
@@ -573,6 +573,7 @@ class FeedViewModel: ObservableObject {
                 content: content,
                 type: type,
                 visibility: visibility,
+                visibilityUserIds: visibilityUserIds,
                 moodEmoji: nil,
                 mediaIds: mediaIds,
                 audioUrl: audioUrl,
@@ -648,7 +649,7 @@ class FeedViewModel: ObservableObject {
     /// echoes the cmid on `post:created`, where FeedViewModel reconciles the
     /// optimistic post in place (cmid -> server id). Rolls back if the outbox
     /// refuses the row synchronously, or later exhausts its retry budget.
-    private func enqueueDurableTextPost(content: String, visibility: String, originalLanguage: String?, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil) async {
+    private func enqueueDurableTextPost(content: String, visibility: String, visibilityUserIds: [String]? = nil, originalLanguage: String?, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil) async {
         let cmid = ClientMutationId.generate()
         let currentUser = AuthManager.shared.currentUser
         var optimistic = FeedPost(
@@ -672,6 +673,7 @@ class FeedViewModel: ObservableObject {
             attachmentIds: [],
             visibility: visibility,
             originalLanguage: originalLanguage,
+            visibilityUserIds: visibilityUserIds,
             location: location,
             // `nil` et non `[]` quand rien n'est déclaré : le payload persisté
             // porte un VERDICT, et « je n'en parle pas » n'est pas « efface ».
@@ -750,6 +752,7 @@ class FeedViewModel: ObservableObject {
         localMediaURLs: [URL],
         content: String?,
         visibility: String = "PUBLIC",
+        visibilityUserIds: [String]? = nil,
         originalLanguage: String? = nil,
         type: String = "POST",
         location: SharedPlace? = nil,
@@ -791,6 +794,7 @@ class FeedViewModel: ObservableObject {
                 clientMutationId: cmid,
                 content: content,
                 visibility: visibility,
+                visibilityUserIds: visibilityUserIds,
                 originalLanguage: originalLanguage,
                 type: type,
                 location: location,
@@ -980,7 +984,16 @@ class FeedViewModel: ObservableObject {
     /// are cleared (the gateway re-translates in background and pushes
     /// `post:updated` via socket). Rolls back the snapshot on API failure.
     /// No-op if the post isn't found in the current feed.
-    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async {
+    func updatePost(
+        _ postId: String,
+        content: String,
+        language: String? = nil,
+        type: String? = nil,
+        removeMediaIds: [String]? = nil,
+        location: PostLocationUpdate? = nil,
+        visibility: String? = nil,
+        visibilityUserIds: [String]? = nil
+    ) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
         // Apply optimistic mutation: new content + clear translations so the
@@ -995,10 +1008,17 @@ class FeedViewModel: ObservableObject {
         case .remove: optimistic.location = nil
         case nil: break
         }
+        // L'audience bouge tout de suite, comme le texte : sans cela le badge
+        // de visibilité garde l'ancienne valeur jusqu'au prochain
+        // rafraîchissement et l'auteur croit son resserrement perdu.
+        if let visibility {
+            optimistic.visibility = visibility
+            optimistic.visibilityUserIds = visibilityUserIds
+        }
         posts[idx] = optimistic
         debouncedCacheSave()
         do {
-            let updated = try await postService.update(postId: postId, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            let updated = try await postService.update(postId: postId, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
             // Re-hydrate from the server response so the gateway-authoritative
             // fields (updatedAt, isEdited, sanitized content, …) replace the
             // optimistic in-memory copy. Preserves the resolved translation

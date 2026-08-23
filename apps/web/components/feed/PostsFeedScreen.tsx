@@ -169,7 +169,9 @@ export function PostsFeedScreen() {
   const updatePostMutation = useUpdatePostMutation();
 
   // Edit + Repost + Audio modals
-  const [editingPost, setEditingPost] = useState<{ id: string; content: string; visibility: string } | null>(null);
+  const [editingPost, setEditingPost] = useState<
+    { id: string; content: string; visibility: PostVisibility; visibilityUserIds: readonly string[] } | null
+  >(null);
   /**
    * Le `type` est transporté DÈS l'ouverture de la modale : la loi du miroir
    * exige le format de la source au moment d'envoyer, et le retrouver plus tard
@@ -272,10 +274,11 @@ export function PostsFeedScreen() {
     return group ? group.map(postToStoryData) : [];
   }, [activeStoryAuthorId, storyGroups]);
 
-  // PostService.repostPost (gateway) 403s on any non-PUBLIC original, and the
-  // web default story visibility is FRIENDS (user-preferences-store.ts) — the
-  // "Republier" entry is withheld unless every story in the open session is
-  // PUBLIC, or it fails into "Couldn't repost" in the common case.
+  // PostService.repostPost (gateway) 403s on any non-PUBLIC original. Stories
+  // now DEFAULT to PUBLIC (règle produit 2026-08-23,
+  // DEFAULT_PUBLICATION_VISIBILITY) but the author can still narrow the
+  // audience per story — the "Republier" entry stays withheld unless every
+  // story in the open session is PUBLIC, or it fails into "Couldn't repost".
   const activeStoryGroupIsRepostable = useMemo(() => {
     if (!activeStoryAuthorId) return false;
     const group = storyGroups.find((g) => g[0]?.authorId === activeStoryAuthorId);
@@ -567,18 +570,29 @@ export function PostsFeedScreen() {
   const handleEditPost = useCallback(
     (postId: string) => {
       const post = posts.find((p) => p.id === postId);
-      if (post) setEditingPost({ id: post.id, content: post.content ?? '', visibility: post.visibility });
+      if (post) {
+        setEditingPost({
+          id: post.id,
+          content: post.content ?? '',
+          visibility: post.visibility,
+          visibilityUserIds: post.visibilityUserIds ?? [],
+        });
+      }
     },
     [posts],
   );
 
   const handleSaveEdit = useCallback(
-    (data: { content: string; visibility: string }) => {
+    (data: { content: string; visibility: PostVisibility; visibilityUserIds: string[] }) => {
       if (!editingPost) return;
       updatePostMutation.mutate(
         {
           postId: editingPost.id,
-          data: { content: data.content, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
+          data: {
+            content: data.content,
+            visibility: data.visibility,
+            visibilityUserIds: data.visibilityUserIds,
+          },
         },
         {
           onSuccess: () => {
@@ -966,7 +980,8 @@ export function PostsFeedScreen() {
         <PostEditor
           open
           initialContent={editingPost.content}
-          initialVisibility={editingPost.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE'}
+          initialVisibility={editingPost.visibility}
+          initialVisibilityUserIds={editingPost.visibilityUserIds}
           onSave={handleSaveEdit}
           onClose={() => setEditingPost(null)}
           saving={updatePostMutation.isPending}

@@ -34,6 +34,10 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         let clientMutationId: String
         let content: String?
         let visibility: String
+        /// Destinataires nommés d'une audience EXCEPT/ONLY — observables ici,
+        /// sinon un post hors-ligne pourrait les perdre sans qu'aucun test ne
+        /// puisse le voir.
+        let visibilityUserIds: [String]?
         let originalLanguage: String?
         let type: String?
         let location: SharedPlace?
@@ -51,6 +55,7 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         clientMutationId: String,
         content: String?,
         visibility: String,
+        visibilityUserIds: [String]?,
         originalLanguage: String?,
         type: String?,
         location: SharedPlace?,
@@ -61,6 +66,7 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
             clientMutationId: clientMutationId,
             content: content,
             visibility: visibility,
+            visibilityUserIds: visibilityUserIds,
             originalLanguage: originalLanguage,
             type: type,
             location: location,

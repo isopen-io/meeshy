@@ -962,9 +962,11 @@ struct PostDetailView: View {
                     originalType: post.type,
                     media: post.media.map { EditablePostMedia($0) },
                     originalLocation: post.location,
+                    originalVisibility: post.visibility,
+                    originalVisibilityUserIds: post.visibilityUserIds ?? [],
                     isRepost: post.repost != nil,
                     onSave: { draft in
-                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds)
                     },
                     onDismiss: { isEditing = false }
                 )
@@ -1199,10 +1201,10 @@ struct PostDetailView: View {
                     }
                     HStack(spacing: 3) {
                         Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                        Text(PostReachFormatter.compact(post.viewCount)).font(.caption2.weight(.medium))
+                        Text(CompactCountLabel.text(post.viewCount)).font(.caption2.weight(.medium))
                         Text("·").font(.caption2)
                         Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
-                        Text(PostReachFormatter.compact(post.impressionCount)).font(.caption2.weight(.medium))
+                        Text(CompactCountLabel.text(post.impressionCount)).font(.caption2.weight(.medium))
                     }
                     .foregroundColor(theme.textMuted)
                     .accessibilityElement(children: .ignore)

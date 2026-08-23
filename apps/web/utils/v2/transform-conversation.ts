@@ -6,6 +6,7 @@
 
 import type { Conversation, Message } from '@meeshy/shared/types';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { getUserDisplayNameOrNull } from '@/utils/user-display-name';
 import type { ConversationItemData, ConversationTag } from '@/components/v2';
 
@@ -117,7 +118,9 @@ export function transformToConversationItem(
       (otherMember as any)?.nickname ||
       conversation.title ||
       'Utilisateur';
-    languageCode = otherUser?.systemLanguage || otherUser?.regionalLanguage || 'fr';
+    languageCode = otherUser
+      ? resolveUserLanguagesOrdered(otherUser, { deviceLocale: otherUser.deviceLocale })[0] ?? 'fr'
+      : 'fr';
     avatar = otherUser?.avatar || otherMember?.avatar;
   }
 

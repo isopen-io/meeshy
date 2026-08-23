@@ -73,6 +73,7 @@ import {
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import { resolveForwardSourceForBroadcast } from '../../services/preferences/forward-source-visibility.js';
+import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
 import {
   carriesForwardSource,
   withoutForwardSource,
@@ -126,6 +127,7 @@ import {
   SocketMessageEditSchema,
   SocketMessageDeleteSchema,
 } from '../../validation/socket-event-schemas.js';
+import { toEncryptedPayload } from '../../validation/encryption-envelope.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import type { QueuedVariantFor } from '../queuedEventContract';
@@ -164,6 +166,29 @@ export interface MessageHandlerDependencies {
    */
   trackingLinkService?: LinkReconciler | null;
 }
+
+/**
+ * Le retrait COMPLET d'une source de transfert : le nom ET le chemin.
+ *
+ * `withoutForwardSource` (shared, pur) retire `forwardedFrom` et
+ * `forwardedFromConversation`. Il ne peut pas faire plus : la seconde fuite ne
+ * vit pas dans ces champs mais dans `attachments[].fileUrl`, où le chemin de
+ * stockage de la copie porte le `User.id` de l'auteur d'origine — un transfert
+ * réutilise le fichier plutôt que de le recopier.
+ *
+ * Les trois émissions qui masquent une source passent par ici, et non par le
+ * seul `withoutForwardSource` : masquer sur un canal en laissant l'autre ouvert
+ * ne masque rien. La porte REST ferme la même fuite avec le même helper.
+ */
+const withoutForwardSourceOrItsPath = <T extends object>(payload: T): T => {
+  const stripped = withoutForwardSource(payload) as T & { attachments?: unknown };
+  if (!Array.isArray(stripped.attachments)) return stripped;
+
+  return {
+    ...stripped,
+    attachments: redactForwardedAttachmentUrlsIn(stripped.attachments as never[]),
+  } as T;
+};
 
 export class MessageHandler {
   private io: MeeshyIOServer;
@@ -251,7 +276,6 @@ export class MessageHandler {
       replyToId?: string;
       forwardedFromId?: string;
       forwardedFromConversationId?: string;
-      encryptedPayload?: unknown;
       location?: unknown;
     },
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
@@ -304,6 +328,13 @@ export class MessageHandler {
         return;
       }
 
+      // L'enveloppe de chiffrement est recomposée depuis le VALIDÉ, par la même
+      // unité que la route REST (`validation/encryption-envelope.ts`). Elle
+      // était lue sur le `data` BRUT, sous un nom — `encryptedPayload` —
+      // qu'aucun client n'émet et qu'aucun schéma ne produit : seul champ de
+      // tout ce chemin à échapper au schéma, donc toujours `undefined`.
+      const encryptedPayload = toEncryptedPayload(validated);
+
       // RÈGLE JUMELLE de `MessageValidator.validateRequest` : un transfert rend
       // le corps non-vide autrement — ses pièces jointes sont copiées CÔTÉ
       // SERVEUR (`MessageProcessor.copyForwardedAttachments`), le client
@@ -318,10 +349,14 @@ export class MessageHandler {
       // copiées côté serveur par `copyAttachments.ts`, le client n'envoie ni
       // texte ni `attachmentIds`). Cette troisième porte est restée fermée
       // pendant que les deux autres s'ouvraient.
+      //
+      // QUATRIÈME porteur de la même exemption : un corps chiffré. Le
+      // déclencheur est désormais l'enveloppe VALIDÉE ci-dessus, non plus un
+      // champ brut que le fil ne portait jamais.
       const validation = validateMessageLength(validated.content);
       if (
         !validation.isValid &&
-        !data.encryptedPayload &&
+        !encryptedPayload &&
         !validated.forwardedFromId &&
         !validated.copyAttachmentsFromMessageId
       ) {
@@ -383,7 +418,7 @@ export class MessageHandler {
         // serveur (`MessageProcessor.saveMessage` → `copyAttachments`). Franchir
         // la garde sans transmettre le champ laisserait la copie muette.
         copyAttachmentsFromMessageId: validated.copyAttachmentsFromMessageId,
-        encryptedPayload: data.encryptedPayload as MessageRequest['encryptedPayload'],
+        encryptedPayload,
         // Effets de message — parité avec POST /messages. Le bitfield final
         // `effectFlags` est recomposé par `MessageProcessor.saveMessage`
         // depuis `isBlurred` / `expiresAt` / `isViewOnce`, donc on transmet
@@ -397,6 +432,14 @@ export class MessageHandler {
         // Lieu partagé — champ dédié transmis tel quel ; validé et écrit
         // dans `metadata.location` par `MessageProcessor.saveMessage`.
         location: validated.location,
+        // Mentionnés nommés par l'ÉMETTEUR — parité avec POST /messages, qui
+        // les honore depuis toujours. Sans cette propagation, la résolution
+        // retombe sur l'extraction des `@` du CONTENU : un repli suffisant tant
+        // que le contenu porte le texte, et VIDE en mode `e2ee`, où le client
+        // a remplacé `content` par le littéral `[Encrypted]` avant d'émettre.
+        // Nommer quelqu'un dans une conversation chiffrée ne produisait alors
+        // ni ligne `Mention`, ni `validatedMentions`, ni notification.
+        mentionedUserIds: validated.mentionedUserIds,
         metadata: {
           source: 'websocket',
           socketId: socket.id,
@@ -626,6 +669,15 @@ export class MessageHandler {
         attachmentIds: validated.attachmentIds,
         // Lieu partagé — même contrat que handleMessageSend ci-dessus.
         location: validated.location,
+        // Mentionnés nommés par l'émetteur — même contrat que handleMessageSend.
+        // Ce path porte TOUT l'audio : la légende d'un média y est souvent le
+        // seul texte, et c'est là qu'un `@` a le plus de chances de manquer.
+        mentionedUserIds: validated.mentionedUserIds,
+        // Enveloppe de chiffrement — même unité que handleMessageSend. Ce
+        // chemin-ci ne la portait pas du tout : une pièce jointe envoyée dans
+        // une conversation chiffrée perdait son chiffré sans qu'aucun type ni
+        // schéma ne puisse le dire.
+        encryptedPayload: toEncryptedPayload(validated),
         metadata: {
           source: 'websocket',
           socketId: socket.id,
@@ -1409,7 +1461,7 @@ export class MessageHandler {
           // L'auteur s'est retiré : plus personne n'apprend la provenance —
           // sauf lui-même, servi par `senderPayload` (se cacher des autres
           // n'est pas s'aveugler).
-          peerPayload = withoutForwardSource(broadcastPayload);
+          peerPayload = withoutForwardSourceOrItsPath(broadcastPayload);
         } else {
           forwardSourceHiddenUserIds = verdict.refusingReaderIds;
           forwardSourceHiddenRooms = [...verdict.refusingReaderIds].map((userId) => ROOMS.user(userId));
@@ -1472,7 +1524,7 @@ export class MessageHandler {
       if (forwardSourceHiddenRooms.length > 0) {
         this.io
           .to(forwardSourceHiddenRooms)
-          .emit(SERVER_EVENTS.MESSAGE_NEW, withoutForwardSource(peerPayload));
+          .emit(SERVER_EVENTS.MESSAGE_NEW, withoutForwardSourceOrItsPath(peerPayload));
       }
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
@@ -1609,7 +1661,7 @@ export class MessageHandler {
             ? {
                 resolvePayloadForReader: (queueKey: string) =>
                   forwardSourceHiddenUserIds.has(queueKey)
-                    ? withoutForwardSource(peerPayload)
+                    ? withoutForwardSourceOrItsPath(peerPayload)
                     : peerPayload,
               }
             : {}),

@@ -12,6 +12,21 @@ import type { PostReference, ReferenceAccess } from './post-reference.js';
 export type PostType = 'POST' | 'REEL' | 'STORY' | 'STATUS';
 export type PostVisibility = 'PUBLIC' | 'FRIENDS' | 'COMMUNITY' | 'PRIVATE' | 'EXCEPT' | 'ONLY';
 
+/**
+ * Audience par défaut de TOUTE publication — POST, REEL, STORY, STATUS
+ * confondus (règle produit 2026-08-23) : on publie public, on restreint
+ * ensuite. Le composer expose les six `PostVisibility` avant l'envoi et
+ * l'édition permet de resserrer après coup ; ce qui est fixé ici, c'est
+ * uniquement la case cochée à l'ouverture.
+ *
+ * Source unique : les clients qui laissent `visibility` absent (web
+ * `storyService.createStory`, optimiste `useCreateStoryMutation`, composer
+ * story) DOIVENT lire cette constante — un défaut recopié en littéral est
+ * exactement ce qui avait laissé les stories web à `FRIENDS` pendant que les
+ * posts et les réels naissaient publics.
+ */
+export const DEFAULT_PUBLICATION_VISIBILITY = 'PUBLIC' as const satisfies PostVisibility;
+
 // =====================================================
 // TRACKING LINKS (parité avec Message — metadata.trackingLinks)
 // =====================================================

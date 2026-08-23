@@ -12,9 +12,23 @@ export type EncryptionProtocol = 'signal_v3' | 'aes-256-gcm';
 export type EncryptionPreference = 'disabled' | 'optional' | 'always';
 
 /**
- * Encryption metadata stored with each message
+ * Encryption metadata stored with each message.
+ *
+ * `type` et non `interface`, et ce n'est pas cosmétique : une INTERFACE n'a pas
+ * de signature d'index implicite, donc elle n'est assignable à AUCUNE carte
+ * ouverte. Le contrat de fil (`MessageSendData.encryptionMetadata`) déclare la
+ * métadonnée en `Readonly<Record<string, unknown>>` — délibérément, parce que
+ * les trois clients y posent des formes différentes et que la passerelle la
+ * range en JSON opaque. Tant que ce type était une interface, aucun émetteur
+ * typé ne pouvait remplir ce champ : c'est ce qui rendait le cast du web
+ * inévitable, et le cast, à son tour, empêchait de le remarquer.
+ *
+ * Un alias de type d'objet obtient l'index implicite, et devient assignable
+ * sans rien perdre de ses champs nommés. (Règle de style du dépôt, par
+ * ailleurs : `type` pour une donnée, `interface` pour un contrat de
+ * comportement.)
  */
-export interface EncryptionMetadata {
+export type EncryptionMetadata = {
   mode: EncryptionMode;
   protocol: EncryptionProtocol;
   keyId: string;

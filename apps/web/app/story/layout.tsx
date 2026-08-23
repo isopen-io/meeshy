@@ -5,9 +5,10 @@ import { FeedProviders } from '@/components/feed/FeedProviders';
 /**
  * `/story/[postId]` — immersive deep-linked story.
  *
- * Server Component so it can export `metadata`. Stories default to FRIENDS
- * visibility and are 24h-ephemeral, so these auth-gated deep links MUST stay
- * out of search indexes (a stale indexed snippet would outlive the story). The
+ * Server Component so it can export `metadata`. Stories default to PUBLIC but
+ * remain restrictable (FRIENDS/EXCEPT/ONLY/PRIVATE) and are 24h-ephemeral, so
+ * these auth-gated deep links MUST stay out of search indexes (a stale indexed
+ * snippet would outlive the story, and could expose a narrowed one). The
  * provider stack (V2 theme + toast + split-view + AuthGuard) lives in the
  * client {@link FeedProviders}.
  */

@@ -284,8 +284,9 @@ extension StoryComposerView {
     ///   auto-appliqué ne compte pas, cf. `composerHasContent`) ;
     /// - **publication partie** : l'upload possède l'état.
     ///
-    /// Les écritures EXPLICITES (« Sauvegarder » à la sortie) ne passent PAS
-    /// par ce gate : l'utilisateur les demande, elles ont le droit d'écraser.
+    /// Les écritures EXPLICITES ne passent PAS par ce gate : l'utilisateur les
+    /// demande, elles ont le droit d'écraser. Depuis M10 il n'en reste qu'une,
+    /// et c'est la fermeture elle-même (`handleDismiss` → `saveDraftAndDismiss`).
     nonisolated static func mayOverwriteStoredDraft(
         draftResume: DraftResumeState,
         isAutosaveSuspended: Bool,
@@ -298,12 +299,20 @@ extension StoryComposerView {
             && !didHandOffPublish
     }
 
-    /// D1 — auto-save au passage en background : une story en cours d'édition
-    /// survit au kill de l'app. JAMAIS sur onDisappear : le discard fire
-    /// onDisappear et re-persisterait le draft que l'utilisateur vient de
-    /// jeter. Un discard explicite postérieur (`cancelAndDismiss` →
-    /// `clearAllDrafts`) efface ce qui a été auto-sauvé.
-    func autoSaveDraftForBackground() {
+    /// Écriture silencieuse d'une session INTERROMPUE — deux entrées, un seul
+    /// chemin :
+    /// - **D1**, le passage en background : la story en cours survit au kill de
+    ///   l'app. JAMAIS sur onDisappear — le discard fire onDisappear et
+    ///   re-persisterait le brouillon que l'utilisateur vient de jeter ;
+    /// - **C6b**, le 426 : le binaire est périmé, une porte bloquante va
+    ///   recouvrir le composer. Perdre le travail parce que la version a
+    ///   expiré serait une double peine.
+    ///
+    /// Les deux sont des interruptions SUBIES, pas des commandes : elles
+    /// passent donc par le gate des écritures silencieuses, là où la fermeture
+    /// par la croix (`handleDismiss`) écrit sans condition — l'utilisateur l'a
+    /// demandé en fermant.
+    func autoSaveDraftOnInterruption() {
         guard mayOverwriteStoredDraft else { return }
         persistDraft()
     }
@@ -475,11 +484,11 @@ extension StoryComposerView {
         return true
     }
 
-    /// Application aux magasins vivants. Les DEUX sorties non explicites
-    /// l'empruntent : la fermeture par le X (`handleDismiss`) et la publication
-    /// d'un composer sans contenu (`publishAllSlides`). Les discards EXPLICITES
-    /// (« Quitter », « Recommencer ») passent, eux, par `clearAllDrafts()` :
-    /// l'utilisateur les a demandés.
+    /// Application aux magasins vivants. Les DEUX fermetures SANS TRAVAIL
+    /// l'empruntent : la croix sur un composer vierge (`handleDismiss`) et la
+    /// publication d'un composer sans contenu (`publishAllSlides`). Le discard
+    /// EXPLICITE (« Recommencer ») passe, lui, par `clearCurrentDraft()` :
+    /// l'utilisateur l'a demandé.
     func clearPhantomDraftsOnly() {
         Self.clearPhantomDrafts(store: .shared, defaults: .standard)
     }

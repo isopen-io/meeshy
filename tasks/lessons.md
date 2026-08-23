@@ -12625,3 +12625,571 @@ code sans la sortie.
 C'est d'autant plus piégeux qu'un gate qui échoue en disant « améliore-toi »
 (dette regagnée, cliquet à resserrer) n'a pas la forme d'un échec : le texte est
 une bonne nouvelle, et seul le code de retour dit que la CI sera rouge.
+
+## Leçon 252 — une date ABSOLUE en entrée d'une fenêtre glissante est une bombe à retardement
+
+Cycle 108. `main` était ROUGE, sur deux témoins qui passaient la veille et que
+personne n'avait touchés depuis le cycle 101.
+
+`MessageHandlerEditDelete.test.ts` fabriquait son message avec
+`createdAt: new Date('2026-08-22T10:00:00Z')`. `admitMessageEdit` refuse toute
+édition d'auteur au-delà de `MESSAGE_EDIT_WINDOW_MS` (24 h) comptées depuis
+`Date.now()`. La CI du 2026-08-23 a tourné à 10:15Z — **24 h 15 min** après le
+littéral. La porte a refusé l'édition, plus rien n'a été diffusé, et les deux
+`expect` sont tombés.
+
+> **Un littéral de date comparé à `Date.now()` n'est pas une donnée de test :
+> c'est un compte à rebours.** Il passe le jour où on l'écrit, et il tombe une
+> fenêtre plus tard — sans commit, sans revue, sans coupable. Une entrée destinée
+> à une règle temporelle s'écrit TOUJOURS relativement à l'horloge :
+> `new Date(Date.now() - 10 * 60 * 1000)`.
+
+Le fichier connaissait déjà l'idiome : cinq témoins de fenêtre y utilisent
+`twentyFiveHoursAgo` / `tenMinutesAgo`. Les deux fautifs étaient les seuls à
+écrire une date absolue — et ce n'était pas un oubli, c'était une CONSÉQUENCE.
+
+### Le vrai défaut était dans la fabrique, pas dans le littéral
+
+`makeMessageRecord` ne portait NI `createdAt` NI `messageType`. Or la règle est
+écrite pour ne bloquer personne sur une date illisible : `NaN > w` est faux, donc
+un `createdAt` absent **ADMET**. Presque tous les témoins du fichier franchissaient
+donc la fenêtre par ABSENCE de date — la porte était traversée sans être exercée.
+Le seul témoin qui vérifie les sept champs requis par `SocketIOMessage` avait
+besoin d'un vrai `createdAt` : n'en trouvant pas au socle, il s'en est écrit un,
+en absolu. La bombe a été armée par le TROU de la fabrique.
+
+> **Quand un seul témoin doit se fabriquer une donnée que la fabrique aurait dû
+> fournir, ce n'est pas ce témoin qui est bizarre : c'est la fabrique qui est
+> incomplète.** Corriger le littéral (le repousser d'un jour) aurait réarmé la
+> bombe pour le lendemain. Compléter le socle la désarme structurellement.
+
+### Un refus muet ressemble à une régression de contrat
+
+Le témoin tombé est le GARDIEN du défaut du cycle 101 (`message:edited` servi
+sans `senderId`/`messageType`/`createdAt`, décodage iOS du message entier rejeté).
+Sa chute affichait `Received array: []` : aucune émission. Le message d'échec
+accuse donc la DIFFUSION, alors que la panne est dans l'ADMISSION, deux étages
+plus haut. Vérifié par mutation dans les deux sens avant de conclure — et la
+charge utile, elle, était intacte (`buildMessageEditedCore` replie
+`message.createdAt || new Date()`).
+
+> **Un témoin qui tombe pour un motif étranger à ce qu'il garde est pire qu'un
+> témoin absent** : il fait croire que la propriété gardée a régressé, et il
+> pousse au correctif qui la rendrait vraiment fausse.
+
+## Leçon 253 — « la CI était verte à ce commit » ne prouve rien contre une panne DATÉE
+
+Même cycle, et c'est une leçon sur la façon dont deux sessions parallèles se
+sont trompées en sens inverse sur le MÊME symptôme.
+
+Une session sœur (PR #3385) a rencontré les deux mêmes témoins rouges de
+`MessageHandlerEditDelete` en local. Elle a conclu — et écrit dans sa PR :
+
+> Ce n'est pas une régression de `main` : ils échouent à l'identique au commit
+> `f69cbd26`, dont le job « Test gateway » est vert. La recette locale ne
+> reproduit donc pas la CI aussi complètement qu'elle l'affirme.
+
+Le raisonnement est bon et la conclusion fausse, parce que la prémisse tacite
+est fausse : **« la CI de ce commit est verte » se lit comme une propriété du
+COMMIT, alors que c'est une propriété du commit ET de l'INSTANT où le job a
+tourné.** Pour une panne pilotée par l'horloge, les deux se séparent. La CI de
+`f69cbd26` avait tourné AVANT l'expiration des 24 h ; la session, elle, mesurait
+après. Même arbre, même commande, deux verdicts — et aucun défaut de recette.
+
+Quelques heures plus tard la CI de `main` (`HEAD` e87b7b0d) a viré au rouge sur
+exactement ces deux témoins, ce que le log du job nomme explicitement.
+
+> **Un vert de CI est horodaté.** Devant un rouge local qu'un vert distant
+> contredit, la question n'est pas seulement « quel arbre ? » mais « QUAND ? ».
+> Si l'écart entre les deux mesures franchit une frontière temporelle du code
+> testé (une fenêtre, un TTL, une expiration, un changement de jour), le vert
+> distant est PÉRIMÉ, pas contradictoire.
+
+Le prix concret de l'inversion : la session sœur a rangé un `main` en train de
+casser dans ses « Future Considerations », comme un défaut d'outillage local.
+Un défaut attribué à l'outil de mesure cesse d'être cherché dans le produit.
+
+> **L'hypothèse « mon outil de mesure est en cause » est la plus coûteuse des
+> hypothèses confortables** : elle explique n'importe quel écart, elle n'accuse
+> personne, et elle clôt l'enquête. Elle mérite donc la charge de preuve la plus
+> lourde, pas la plus légère — ici, un `git log` de l'horaire du job aurait suffi
+> à la renverser.
+
+### Le corollaire de méthode
+
+Les deux sessions ont vu le même symptôme. Celle qui a cherché POURQUOI la
+fenêtre refusait (`admitMessageEdit`, `MESSAGE_EDIT_WINDOW_MS`, l'horaire du run)
+a trouvé une bombe à retardement ; celle qui a cherché ce qui DIFFÉRAIT entre
+local et CI a trouvé une explication plausible et s'est arrêtée.
+
+> Quand deux environnements divergent, l'explication « les environnements
+> diffèrent » est toujours disponible et presque toujours insuffisante. Elle ne
+> devient une conclusion qu'une fois nommée la variable EXACTE — et ici la
+> variable n'était dans aucun environnement : elle était dans l'horloge.
+## Un littéral de date sous une FENÊTRE n'est pas une constante, c'est une échéance (cycle 108)
+
+`MessageHandlerEditDelete.test.ts` épinglait le `createdAt` d'un message à
+`2026-08-22T10:00:00Z`. `admitMessageEdit` refuse toute édition passé **24 h**
+depuis `createdAt`. Les deux cas ont donc été verts pendant exactement vingt-quatre
+heures, puis rouges le lendemain à 10:00 UTC — pour toutes les branches, tous les
+contributeurs, et **définitivement**. Un dépôt entier bloqué par une fixture.
+
+> **Une fixture de date lue par un code qui la compare à MAINTENANT doit être
+> écrite RELATIVEMENT à maintenant.** `new Date(Date.now() - 60_000)`, jamais un
+> littéral. Le test ne dit pas « le 22 août » ; il dit « dans la fenêtre ».
+
+Deux choses rendent la famille difficile à voir :
+
+1. **Le symptôme désigne le mauvais coupable.** `emitsTo(...)` rendait `[]`, ce
+   qui se lit « le producteur n'émet plus » — un défaut de production, gros et
+   effrayant. Le producteur allait bien : la garde refusait en amont. La vraie
+   cause était dans le `callback`, que le cas n'assertait pas. *Quand une
+   assertion d'émission tombe à vide, lire d'abord le canal de REFUS ; « rien
+   n'est parti » et « quelque chose a dit non » ont le même symptôme.*
+2. **Le cas VOISIN restait vert**, et c'est lui qui a livré le diagnostic : sa
+   fixture n'a pas de `createdAt`, donc rien à périmer. Les cas qui tombaient
+   étaient exactement ceux qui en AJOUTAIENT un. *Un échec qui suit les
+   surcharges d'une factory désigne le champ, pas le producteur.*
+
+Et le corollaire de méthode, celui qui a évité d'accuser le mauvais lot :
+**avant de réparer un rouge apparu après un merge, mesurer la BASE.** Une copie
+vierge d'`origin/main` a rendu les deux mêmes échecs, sans une ligne de la
+branche. Sans cette mesure, une heure serait partie à chercher la régression
+dans un diff qui, hors `apps/android`, n'était fait que de commentaires.
+---
+
+## 2026-08-23 — Une « décision produit » différée se tranche en lisant la branche voisine (238i)
+
+237i a laissé six copies de l'abrégé compact non traitées, avec ce motif :
+« le tableau de bord bascule à `>= 10_000` là où le feed bascule à `>= 1_000` —
+consolider demande de trancher si ce seuil est **intentionnel**, ce qui est une
+décision produit ». Le motif était bon, la conclusion trop large : le doute
+portait sur DEUX sites, pas sur six, et les deux se sont tranchés à la lecture
+sans avoir à consulter qui que ce soit.
+
+- `ConversationDashboardView.formatNumber` : le seuil de 10 000 est réel, et sa
+  preuve est la branche EN DESSOUS — la bande 1 000–9 999 rendait le nombre
+  entier et groupé (`n.formatted()`). La règle produit n'est pas « abrège à
+  10 000 », c'est « ne dégrade pas un compte de mots tant qu'il reste lisible ».
+- `StatRing.displayValue` : le même seuil de 10 000 y était **mort** — la
+  branche suivante (`>= 1_000`) lui était identique au caractère près, même
+  division, même format. Trois relectures l'avaient laissé passer précisément
+  parce qu'il ne changeait rien.
+
+Corollaires :
+
+- **Un seuil ne se lit pas seul : il se lit contre la branche qui le suit.**
+  Deux branches consécutives qui rendent la même chose ne portent aucune
+  décision — c'est un artefact de copie, et le traiter comme un arbitrage
+  produit gèle du code mort en règle métier.
+- **Différer un arbitrage, c'est différer tout ce qui voyage avec lui.** Le
+  doute sur 2 sites a reporté la correction des 4 autres, byte-identiques et
+  sans aucune ambiguïté. Découper le lot par NIVEAU DE DOUTE, pas par famille.
+- **Une famille qui repousse à chaque itération se ferme par une garde, pas par
+  un correctif.** Sept copies, trois itérations de consolidation (234i, 236i,
+  237i) : chacune a corrigé ce qu'elle voyait, aucune n'a empêché la suivante.
+  Le geste qui termine n'est pas le septième correctif, c'est la garde de source
+  qui interdit le huitième.
+
+---
+
+## 2026-08-23 — Une CI verte qui n'a rien exécuté, et une garde qui rougit sur du code correct (238i)
+
+Deux leçons du même run, toutes deux sur la **fiabilité du signal** plutôt que
+sur le code.
+
+### 1. Lire le NOM du check, pas seulement sa couleur
+
+Le premier run de la PR 238i est revenu **tout vert** — et n'avait exécuté
+aucun test iOS. Le job `ios-tests` est nommé DYNAMIQUEMENT (`ios.yml:250`) :
+`Build app + tests unitaires` quand la suite tourne, `Build app (app + cibles de
+test)` quand elle ne fait que compiler. La suite est en **opt-in** : poussée
+réelle sur `main`, `workflow_dispatch`, ou `smoke test|run test|to test` dans le
+**SUJET** du commit de tête — le corps ne compte pas.
+
+Le lot dont l'apport tenait à **une garde neuve et une suite réécrite** allait
+être annoncé vert sans qu'aucun des deux n'ait tourné. C'est la « suite verte
+par omission » de la leçon 236i, par un autre chemin : non plus le pbxproj mais
+la portée du run.
+
+- **Avant d'annoncer « CI verte », vérifier que le check a fait ce que son nom
+  promet.** Un projet qui nomme ses jobs dynamiquement le fait précisément
+  parce que la distinction compte.
+- **Un lot dont la valeur EST un test doit forcer l'exécution de ce test.**
+  Amender le sujet du commit (même arbre, force-push sur sa propre branche)
+  n'est pas un commit vide : c'est le mécanisme documenté du dépôt.
+
+### 2. Une fenêtre en NOMBRE DE CARACTÈRES est une bombe à retardement
+
+`test_statRing_isSingleVoiceOverElement_withLabelAndValue` a rougi alors que le
+code de production la satisfaisait toujours. La garde découpait le corps de la
+struct avec `prefix(2600)` ; un doc-comment ajouté plus haut a déplacé le motif
+de l'offset 2411 à 2595, et comme le motif fait 30 caractères, sa **FIN** est
+passée hors fenêtre.
+
+**La marge résiduelle sur `main` était de 5 caractères.**
+
+- **Une garde qui rougit sur du code correct est le PIRE mode d'échec possible** —
+  pire qu'un faux vert, parce qu'elle envoie corriger ce qui n'est pas cassé,
+  et qu'elle entraîne à se méfier des gardes.
+- **Borner une garde de source SÉMANTIQUEMENT** (jusqu'à la déclaration
+  suivante), jamais par un nombre. Une borne sémantique n'a pas de marge à
+  épuiser.
+- **Ne pas « faire rentrer » son code dans la fenêtre.** C'était la correction
+  tentante ici : raccourcir le commentaire. Elle réarme le piège avec ENCORE
+  MOINS de marge, pour le prochain qui touchera la struct.
+- **Élargir une borne exige de prouver qu'on ne crée pas de faux vert.** Ici la
+  struct suivante (`ArcGauge`) porte le même `.accessibilityElement(children:
+  .ignore)` : sans borne elle satisferait les assertions à la place de
+  `StatRing`. D'où un test dédié qui vérifie la borne dans les deux sens.
+
+## Leçon 253 — un RED intentionnel qui survit à son lot cesse d'être un marqueur
+
+Train d'intégration beta du 2026-08-23. `main` portait un témoin ADVERSAIRE
+rouge en permanence : `messages-list-forward-source-attachment-url-leak`. Le
+commit qui l'a posé l'annonce dans son propre sujet — « socle posé, FUITE ENCORE
+OUVERTE » — et son corps énumère huit points restés ouverts. Le rouge était donc
+DÉLIBÉRÉ, honnête, et documenté.
+
+Il était aussi, en pratique, invisible. « Test gateway » était rouge sur `main`
+depuis assez longtemps pour que le rouge soit devenu la couleur normale du job.
+Quand une seconde suite s'y est ajoutée — une bombe à retardement de 24 h,
+étrangère — le job a affiché **deux** échecs au lieu d'un, et personne ne l'a vu :
+on lisait « Test gateway rouge », ce qu'on lisait déjà la veille.
+
+> **Un test laissé rouge à dessein est une alarme qu'on apprend à ignorer, donc
+> une protection déjà morte.** Il ne protège plus le défaut qu'il décrit, et il
+> masque tout défaut qui atterrit dans le même job. Le coût n'est pas le sien :
+> c'est celui du PROCHAIN rouge, qui se noiera dedans.
+
+Trois façons de tenir un défaut connu sans payer ce prix, par ordre de
+préférence : le FERMER (ici, une trentaine de lignes) ; le marquer `it.failing`,
+qui rougit si le défaut disparaît sans que le témoin bouge ; ou le sortir du job
+bloquant vers un rapport à part. Le laisser vert-par-omission n'est pas dans la
+liste.
+
+### Le corollaire, mesuré le même jour
+
+Quatre PR ouvertes corrigeaient la MÊME bombe de 24 h, de quatre façons
+concurrentes : trois patchaient chaque site d'appel, une seule corrigeait la
+fabrique. Quatre sessions ont diagnostiqué le même rouge en parallèle parce
+qu'aucune ne pouvait savoir qu'une autre s'en occupait — le rouge partagé de
+`main` est un aimant à travail dupliqué. La fusion a retenu la correction de la
+fabrique ; les trois rustines par site auraient chacune passé les tests.
+
+## Leçon 254 — l'absolu d'une mesure ne traverse pas les machines, le delta oui
+
+Le cliquet de dette de types (`scripts/check-type-debt.sh`) compare un COMPTE à
+une baseline écrite dans le script. Mesuré le même jour, sur le même commit :
+**1223 sur cette machine, 1209 sur le runner**. Quatorze erreurs d'écart, stable,
+reproduit à quatre états différents du dépôt, sans rapport avec le code.
+
+Qui remesure localement et écrit ce qu'il lit fait rougir la CI de 14 — et pire,
+qui *baisse* la baseline depuis une mesure locale offre 14 points de budget de
+dette à qui suivra, silencieusement.
+
+> **Ce qui traverse les machines, c'est le DELTA, jamais l'absolu.** La bonne
+> méthode : mesurer `main` ET sa branche dans le MÊME environnement, prendre la
+> différence, et l'appliquer à la valeur que la CI a rendue. Ici : CI 1240 sur
+> `main`, delta local −5 (mesuré fichier par fichier), donc 1235.
+
+Le garde lui-même connaissait un tiers du problème : le cycle 108 avait fermé le
+cas `packages/shared/dist` absent (+3), en refusant de MESURER plutôt que de
+rendre un verdict faux. La bonne réaction ; simplement, l'inventaire des sources
+de dérive n'était pas clos, et rien dans le script ne le dit.
+
+### Et la fusion peut casser un garde en gardant les DEUX moitiés
+
+Deux lots ont écrit la même précondition sous deux noms — `shared_dist_is_built`
+et `unresolved_dist_imports`. La fusion a retenu la DÉFINITION du premier et
+l'APPEL du second, collés l'un derrière l'autre. Le garde mourait sur
+« command not found », donc rendait non-zéro, donc la CI aurait rougi **sur le
+garde lui-même en nommant une régression de dette inexistante** : exactement le
+faux verdict que le cycle 108 venait de fermer. Un `git merge` sans conflit n'est
+pas une revue.
+
+---
+
+## 2026-08-23 — Le contrat promettait, l'émetteur envoyait autre chose, et `unknown` tenait la porte (109)
+
+### 1. Un suivi hérité se MESURE avant d'être recopié — et celui-ci coûtait 3 cycles
+
+« La bivariance reste la limite, elle dépasse Socket.IO, décision à instruire »
+a voyagé de journal en journal du cycle 107 bis au 108 ter **sans que personne
+ne lance la commande**. Elle tient en une ligne : `strictFunctionTypes: true`
+sur la passerelle ⇒ 52 erreurs, dont **9 dans le cœur temps réel**, et ces
+neuf-là nommaient un défaut de production vieux de quatre incidents.
+
+C'est la leçon 107 (« un suivi hérité est une AFFIRMATION ») rejouée à
+l'identique, un cran plus cher : là-bas le suivi était FAUX, ici il était
+VRAI — et différer sa mesure a différé la découverte, pas seulement la
+correction.
+
+- **Un suivi qui dit « c'est une grande décision » mérite d'abord une MESURE,
+  pas un arbitrage.** Le chiffre décide s'il y a un lot ; l'intuition, non.
+- **Un gros total peut cacher un petit lot mûr.** 52 erreurs se lisent comme
+  « intouchable » ; leur DISTRIBUTION disait 43 Fastify (un autre sujet) + 9
+  réactions (mon domaine, et un bug réel).
+
+### 2. `unknown` sur un rappel n'est pas une commodité, c'est l'absence du contrat
+
+Le contrat promettait `ReactionUpdateEventData` ; le handler prenait
+`SocketIOResponse<unknown>` et envoyait une ligne brute, ou
+`{ message: 'Reaction already absent' }`. **Aucune des deux moitiés du fil ne
+vérifiait l'autre.**
+
+Même famille exacte que `Record<string, unknown>` sur `emitWithSeq` (cycle 105)
+et que le cast sur un objet de contrat (cycles 103/104) : la forme opaque n'est
+jamais un choix de typage, c'est **la MARQUE de la gouvernance qui manque**.
+
+- **Le geste qui ferme n'est pas de retyper à la main, c'est de DÉRIVER.**
+  `AckOf<'reaction:add'> = NonNullable<Parameters<ClientToServerEvents['reaction:add']>[1]>`
+  n'est pas une copie du contrat, c'est une lecture : il n'existe plus qu'une
+  déclaration, donc plus rien à faire diverger.
+- **Et il faut typer les LOCALES aussi.** `const successResponse:
+  SocketIOResponse<unknown> = {…}; callback(successResponse)` rouvre au ligne
+  suivante la porte que la signature vient de fermer. D'où `AckResponseOf<E>`.
+
+### 3. Le compilateur trouve ce que quatre relectures ont manqué
+
+À la première compilation sous la porte typée, `TS2353` a nommé **deux sites que
+je n'avais pas vus** : le chemin idempotent des familles COMMENTAIRE et POST
+portait encore la phrase anglaise, alors que leur chemin nominal était réparé
+depuis longtemps — recopiée du site message, avec le commentaire qui l'avoue
+(« Mirrors ReactionHandler.handleReactionRemove »).
+
+Et c'est le chemin du **double-tap**, celui qu'un accusé idempotent existe pour
+absorber : le plus fréquent des trois.
+
+- **« J'ai lu le code » n'est pas une mesure.** Le prouver en posant la garde
+  et en regardant ce qu'elle refuse en est une.
+- **Une réparation à MOITIÉ est le pire état d'une famille** : le chemin nominal
+  vert donne le dossier pour clos, et le chemin résiduel n'a plus personne pour
+  le chercher.
+
+### 4. Ne pas aligner une famille sur sa jumelle sans lire ce que chacune GARANTIT
+
+La tentation évidente était de copier « ACK == broadcast » (comment/post) sur la
+famille message. **C'eût été une régression** : la famille message acquitte dès
+la PERSISTANCE, délibérément, pour qu'un accroc de lecture post-succès ne
+retourne jamais l'accusé en échec (ce qui ferait annuler au client une réaction
+déjà en base). Porter l'agrégation exige d'acquitter APRÈS elle.
+
+- **La consistance juste n'est pas « toutes envoient la même chose », c'est
+  « chacune déclare ce qu'elle envoie ».** Trois émetteurs aux garanties
+  différentes doivent avoir trois déclarations différentes ; les forcer à une
+  seule casse celui qui avait raison.
+- **Devant deux jumelles qui divergent, la question n'est pas « laquelle
+  copier ? » mais « qu'est-ce que chacune garantit que l'autre ne garantit
+  pas ? ».**
+
+### 5. Un balayage se discrimine sur le TYPE, jamais sur le NOM
+
+Mon `grep` de recensement cherchait `callback?: (response: SocketIOResponse` et a
+rendu 11 sites. Le balayage écrit ensuite, discriminant sur la RÉDACTION du
+type, en a trouvé un douzième : `AttachmentReactionHandler` nomme son paramètre
+`r`.
+
+Règle du cycle 107 (« un balayage qui cherche UN idiome mesure sa popularité »)
+retrouvée par l'autre bout — et elle a payé dans la même heure.
+
+### 6. Geler un inventaire est une DÉCISION, et elle se motive par une mesure
+
+Les 11 portes restantes ont été **ouvertes une par une** : aucune ne ment
+(`MessageHandler` déclare `SocketIOResponse<{ messageId }>` là où le contrat
+déclare `MessageSendResponseData`, qui EST `{ messageId }`). Jumeaux
+structurels ⇒ risque de DÉRIVE, pas divergence.
+
+- **Distinguer « ment » de « redit »** décide de l'urgence : les premières se
+  ferment dans le lot qui les trouve, les secondes se drainent ensuite.
+- **Et surtout pas dans le même lot** : 4 des 11 sont sur le chemin d'envoi de
+  message, le plus fréquenté du produit. Un lot de consistance n'y entre pas
+  sans ses propres témoins.
+
+## 2026-08-23 — Le repli couvrait tout, sauf le mode où il était seul (cycle 112)
+
+### 1. Une mesure PUBLIÉE est une affirmation, au même titre qu'un suivi hérité
+
+Le cycle 110 a instruit `mentionedUserIds` — champ que le web émet, que le schéma
+socket strippe, que REST honore — et l'a classé sous un titre sans ambiguïté :
+« Ce qui a été **MESURÉ CORRECT**, et pourquoi on l'écrit ». Motif : la passerelle
+retombe sur l'extraction des `@` du CONTENU quand la liste explicite est vide.
+
+Chaque phrase était vraie. La conclusion manquait une condition — et le titre,
+plus qu'un suivi ordinaire, décourageait d'y revenir.
+
+- **Un inventaire de NON-défauts se relit avec le soupçon d'un inventaire de
+  suivis.** La règle du cycle 107 (« un suivi hérité est une AFFIRMATION ») vaut
+  par l'autre bout : ce qu'un cycle déclare mesuré et sain est aussi une
+  affirmation, et elle se vérifie.
+
+### 2. Deux canaux qui lisent la MÊME variable ne sont pas deux canaux
+
+Le repli existe bien : `if (explicit.length === 0 && !content.includes('@'))`.
+Reste à savoir ce que `content` porte, et c'est le CLIENT qui en décide douze
+fichiers plus tôt :
+
+```ts
+if (encryptionMode === 'e2ee') messageData.content = '[Encrypted]';
+```
+
+| mode | `content` sur le fil | liste explicite | mentions |
+|---|---|---|---|
+| clair / `server` / `hybrid` | `coucou @alice` | strippée | extraites — rien n'est perdu |
+| **`e2ee`** | **`[Encrypted]`** | strippée | **AUCUNE** |
+
+Nommer quelqu'un dans une conversation chiffrée ne produisait ni ligne `Mention`,
+ni `validatedMentions` (le web surligne depuis ce champ), ni notification — le
+compositeur affichant la pastille du mentionné, l'expéditeur voyait un succès.
+
+- **Une redondance ne se mesure pas à ce que chaque voie PORTE, mais à ce qui les
+  fait TOMBER.** Deux voies qui échouent sur la même cause n'en font qu'une. La
+  question n'est pas « existe-t-il un autre chemin ? » mais « cet autre chemin,
+  dans quel état est-il quand celui-ci est coupé ? ».
+- **Un repli mal conditionné n'est jamais silencieux là où on le teste.** Trois
+  modes sur quatre n'en avaient aucun besoin et le rendaient invisible ; le
+  quatrième en dépendait entièrement et n'en recevait rien.
+
+### 3. Un plafond appartient à la RÉSOLUTION, pas au transport — et il TRONQUE
+
+L'extraction depuis le contenu borne à 50 depuis toujours ; la liste EXPLICITE
+n'était bornée nulle part. Déclarer le champ sur le transport qui porte le trafic
+sans le borner aurait ouvert une entrée non bornée de plus.
+
+Posé à la CONVERGENCE des deux sources, jamais dans les schémas :
+
+- dans un schéma, `.max(50)` **REJETTE** l'envoi ;
+- à la convergence, il **TRONQUE** — ce que l'autre source fait déjà.
+
+- **Deux sources de la même donnée doivent subir la même règle ET le même
+  comportement.** Aligner la règle en divergeant sur l'issue (rejet contre
+  troncature) fabrique une seconde incohérence en fermant la première.
+
+### 4. Fermer l'ENTRÉE avant la SORTIE n'était pas un ordre de commodité
+
+Le suivi n°1 du cycle 110 — typer la charge d'émission du web, qui naissait
+`Record<string, unknown>` et partait sous deux `as unknown as` — ne pouvait pas
+être exécuté plus tôt : **le contrat était faux**. Il ne déclarait ni l'enveloppe
+de chiffrement ni les dix champs que la passerelle honore. Typer l'émetteur
+d'abord aurait produit des erreurs sur un contrat mensonger, qu'on aurait fait
+taire par des casts.
+
+- **Un `Record<string, unknown>` de charge est un symptôme de CONSTRUCTION, pas
+  de typage.** Tant que l'objet se complétait par MUTATION (chiffrement, puis
+  pièces jointes), aucun type ne pouvait le décrire. Le corriger commence par
+  rendre la construction immuable — résoudre le chiffrement en VALEUR — pas par
+  écrire une annotation.
+- **Rendre l'émission à l'appelant supprime le besoin de corréler.** Deux
+  branches monomorphes portant chacune un nom d'événement LITTÉRAL sont vérifiées
+  par le socket typé ; l'enveloppe de délai n'a plus à connaître ni le nom ni la
+  charge. Les deux casts n'ont pas été contournés, ils sont devenus inutiles.
+
+### 5. Ce que la porte typée a fait tomber — trois déclarations manquantes
+
+À la première compilation, et aucune n'avait été nommée par une relecture :
+
+1. **`SendMessageRequest`** (contrat REST des clients) ne déclarait pas
+   `mentionedUserIds` — troisième site du même champ ;
+2. **le repli REST du web** ne l'envoyait pas non plus : même défaut que le lot,
+   sur le chemin de secours du MÊME envoi, et invisible parce que rien ne relie
+   visuellement les deux sites ;
+3. **`EncryptionMetadata` était une `interface`** — donc sans signature d'index
+   implicite, donc assignable à AUCUNE carte ouverte. Le contrat de fil déclare
+   la métadonnée en `Readonly<Record<string, unknown>>` délibérément (trois
+   clients, trois formes, JSON opaque en base). Tant que ce type était une
+   interface, **aucun émetteur typé ne pouvait remplir ce champ** : c'est ce qui
+   rendait le cast du web inévitable, et le cast, à son tour, empêchait de le
+   remarquer.
+
+- **Un cast sur un objet de contrat NOMME la déclaration qui manque** (cycle 96),
+  et la troisième vivait dans le paquet PARTAGÉ, à deux fichiers du contrat
+  qu'elle empêchait de satisfaire.
+
+### 6. Un commentaire qui justifie de GARDER quelque chose est une affirmation
+
+La charge socket portait `messageType` sous cette phrase :
+
+```ts
+// Elle reste posée — et posée JUSTE — parce que l'objet sert aussi de charge
+// au repli REST, où elle est, elle, autoritative (cf. `sendMessageViaRest`).
+```
+
+Le contrat ne déclare aucun champ de ce nom et le schéma le STRIPPE : ce motif
+justifiait, seul, de continuer à le poser. Il était faux — `sendMessageViaRest`
+reconstruit sa charge depuis `options` et recalcule `messageType` lui-même. Les
+deux objets ne se touchent jamais.
+
+Rien n'était perdu (le serveur dérive la même règle), mais **huit témoins
+attestaient une clé que la passerelle ne reçoit jamais**. Recalibrés sur le repli
+REST — seul site où la valeur est autoritative, donc le seul dont un changement
+casse quelque chose — plus un neuvième, en négatif, qui gèle son absence sur la
+charge socket.
+
+- Même famille que le compte (93) et le tri (86 bis) : **une justification de
+  maintien s'ouvre avant d'être crue**, et celle-ci tenait en vie le seul champ
+  que le typage refuserait.
+
+## Leçon 255 — un gate qui s'exprime par un PROXY peut être incapable de dire NON à l'un de ses membres
+
+Le drain de la file hors ligne ne demande pas à une entrée « quelle est ta
+forme ? ». Il lui demande **« sais-tu te diffuser ? »**, et lit la réponse dans
+la longueur d'une liste :
+
+```ts
+const emissions = _drainedEmissions(entry);
+if (emissions.length === 0) { dropEntry(entry, 'unresolvable-event-type'); continue; }
+```
+
+Le contrat est écrit dans la fonction elle-même : « une liste VIDE dit *je ne
+sais pas diffuser ceci*. C'est la seule réponse honnête. » Onze `eventType` sur
+douze passent par une table qui peut rendre `undefined`, donc `[]`. Le douzième —
+`'link-message'`, le seul dont la charge se **DÉPLIE** — passait par
+`linkMessageEmissions`, qui poussait l'enveloppe INCONDITIONNELLEMENT avant de
+regarder ce qu'elle contenait. **Il ne pouvait pas rendre `[]`.**
+
+Le refus du message dérivé était pourtant là, ancien et juste. Il ne servait à
+rien : il retirait la seule émission qui compte et laissait la liste à 1.
+
+Ce que l'enveloppe seule livre : rien (son unique auditeur, le web, lit
+`data.message` ; iOS et Android n'écoutent que le `message:new` refusé). Ce que
+la liste non vide AFFIRMAIT, en revanche, coûtait trois signaux — `count`
+comptait la remise, `conversationIds` ne nommait pas la conversation (donc rien
+n'envoyait le client rechercher un message toujours en base), et l'accusé de
+remise partait, avançant un curseur **MONOTONE** : la coche de l'auteur passait
+à « remis » pour un message qu'aucun destinataire n'a reçu. Sur le seul
+transport d'envoi dont dispose un participant anonyme.
+
+> La question à poser à tout gate qui s'exprime par un proxy (une longueur, un
+> `null`, un booléen dérivé) n'est pas « est-il correct ? » mais **« chaque
+> membre de ce qu'il arbitre peut-il le faire répondre NON ? »**. Le proxy avait
+> l'air uniforme parce qu'il est écrit UNE FOIS, au-dessus de la boucle — c'est
+> exactement ce qui cache l'exception.
+
+- Corollaire de journal : quand un refus a plusieurs causes, la `reason` les
+  SÉPARE. `'unresolvable-event-type'` accuse la file,
+  `'link-envelope-without-message'` accuse le producteur de l'enveloppe.
+
+## Leçon 256 — un témoin qui nomme correctement la moitié qu'il garde GÈLE l'autre
+
+Quatre des six témoins du cycle 114 ne sont pas des ajouts : ce sont des
+**retournements**. Ils existaient, ils étaient verts, et ils assertaient le
+défaut mot pour mot :
+
+```ts
+it("n'ajoute PAS `message:new` quand l'enveloppe ne porte aucun message", () => {
+  expect(linkMessageEmissions({}).map((e) => e.event)).toEqual([SERVER_EVENTS.LINK_MESSAGE_NEW]);
+});
+```
+
+L'intitulé dit VRAI, et c'est précisément cette vérité qui a rendu la seconde
+moitié de l'assertion invisible : `⇒ [LINK_MESSAGE_NEW]` se relit comme le RESTE
+de la phrase, pas comme une affirmation à instruire. Deux cycles de gardes
+posées à cette même frontière de désérialisation sont passés à côté.
+
+> **Un `toEqual` sur une liste entière affirme autant sur ce qu'il GARDE que sur
+> ce qu'il ADMET.** Les deux moitiés se relisent séparément — et l'intitulé du
+> témoin ne couvre en général que la première.
+
+- Même famille que le compte (93), le tri (86 bis) et le commentaire qui énonce
+  une contrainte (94) : **une affirmation portée par un témoin vert reste une
+  affirmation.**

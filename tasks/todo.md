@@ -1300,6 +1300,224 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle107-bis.md`
 - [ ] Suivi — trois services prennent encore un `Server` NU pour ÉMETTRE ; ni le
       balayage de réception (par construction) ni celui d'émission ne les couvre.
 
+## Cycle 108 bis — la panne n'était dans aucun environnement : elle était dans l'horloge
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108-bis.md`
+Écrit en parallèle du cycle 108 (PR #3385) par une autre session, sur le MÊME
+symptôme et avec une conclusion opposée.
+
+- [x] **Ce lot n'a pas commencé par un suivi : `main` était ROUGE.** Le job
+      *Test gateway* échouait sur `MessageHandlerEditDelete.test.ts`, 2 témoins,
+      835 autres suites vertes. Reproduit localement, déterministe.
+- [x] **Une bombe à retardement de 24 heures.** Les deux témoins fabriquaient
+      leur message avec `createdAt: new Date('2026-08-22T10:00:00Z')`, et
+      `admitMessageEdit` refuse l'auteur au-delà de `MESSAGE_EDIT_WINDOW_MS`
+      (24 h) comptées depuis `Date.now()`. La CI a tourné le 08-23 à 10:15Z —
+      **24 h 15 min** plus tard. Écrits verts au cycle 101, rouges par la seule
+      horloge : aucun commit n'est coupable.
+- [x] **Le littéral n'était pas la faute mais sa conséquence.**
+      `makeMessageRecord` ne portait ni `createdAt` ni `messageType` ; or
+      `NaN > w` est faux, donc un `createdAt` absent **ADMET**. Presque tous les
+      témoins franchissaient la fenêtre par ABSENCE de date — la porte était
+      traversée sans être exercée. Le seul témoin vérifiant les sept champs
+      requis devait donc s'écrire une date, et l'a écrite en absolu.
+- [x] **Correctif structurel** : la fabrique porte un message FRAIS et complet ;
+      les deux surcharges disparaissent ; les cinq témoins de fenêtre gardent
+      leurs offsets RELATIFS, idiome déjà employé partout ailleurs dans le
+      fichier. Repousser le littéral d'un jour aurait réarmé la bombe.
+- [x] **Le message d'échec accusait la mauvaise étape.** `Received array: []`
+      désignait la DIFFUSION alors que la panne était dans l'ADMISSION. Vérifié
+      plutôt que supposé : `buildMessageEditedCore` replie les deux champs
+      (`|| new Date()`, `|| 'text'`) — la charge utile était INTACTE. Une
+      première rédaction du commentaire l'avait affirmé faux ; c'est le code du
+      constructeur qui a tranché.
+- [x] **ROUGE prouvé sur 2 mutations**, une par garde, chacune faisant tomber
+      exactement son témoin et aucun autre.
+- [x] **Le désaccord avec la PR #3385, et sa résolution.** Cette session-là a vu
+      les deux mêmes témoins rouges et a conclu « ce n'est pas une régression de
+      `main` : ils échouent à l'identique au commit `f69cbd26`, dont le job Test
+      gateway est vert ». Raisonnement correct, prémisse tacite fausse : **un
+      vert de CI est une propriété du commit ET de l'INSTANT du run.** Pour une
+      panne datée les deux se séparent — la CI de `f69cbd26` avait tourné AVANT
+      l'expiration. Le run de `main` à HEAD (10:15Z) est rouge sur exactement ces
+      deux témoins. Un défaut attribué à l'outil de mesure cesse d'être cherché
+      dans le produit.
+- [x] **Le +3 du cliquet de dette : trouvé, mesuré, et LAISSÉ à #3385.** Cause
+      identifiée (`shared-law-dist-parity.test.ts` importe `packages/shared/dist`
+      en chemin relatif ⇒ 1242 sans build, 1239 avec), mais #3385 la corrige
+      mieux — en résolvant la déclaration `.d.ts` consultée par TypeScript, ce
+      qui détecte aussi un build partiel, là où ma version ne testait qu'un
+      répertoire. Correctif retiré de ce lot : deux PR sur le même bloc d'en-tête
+      = conflit certain pour zéro gain.
+- [x] Leçons 252 et 253.
+- [ ] Suivi — **dépendance** : si #3385 ne fusionne pas, le défaut du cliquet
+      reste ouvert.
+- [ ] Suivi — recomptage du cast web : le cycle 107 bis annonçait **trois**
+      sites, j'en compte **cinq** dans `VideoCallInterface.tsx` (229, 488, 522,
+      549, 638) et #3385 en recense **13** sur 4 fichiers. Le motif
+      `(x as unknown).m` est un `TS2571` franc — **108** occurrences dans la
+      dette web, cicatrice d'un codemod `any` → `unknown` rendue invisible par
+      `ignoreBuildErrors: true`. Les fermer FAIT DESCENDRE le cliquet.
+- [ ] Suivi hérité — bivariance / `strictFunctionTypes`.
+- [ ] Suivi hérité — trois services prenant un `Server` NU pour émettre.
+## Cycle 108 — le garde disait « RÉGRESSION » sur un arbre intact
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108.md`
+
+- [x] **Le cliquet de dette de types rendait un verdict FAUX, en rouge, sur un
+      arbre que personne n'avait touché.** Sur un clone frais aux commandes que
+      le `CLAUDE.md` prescrit (`bun install --ignore-scripts`), il annonçait
+      « RÉGRESSION : 1242 erreurs, baseline 1239 (+3) » — alors que `main` était
+      vert, la CI l'ayant prouvé au même arbre. Les dix fichiers qu'il désignait
+      comme « les plus touchés » n'avaient aucun rapport avec les trois erreurs.
+- [x] **Le tiers exact, mesuré** : `packages/shared/dist` absent → 1242 ;
+      présent → 1239. Le delta est constitué des trois seuls TS2307 de
+      `__tests__/lentille/shared-law-dist-parity.test.ts`, qui importe
+      `packages/shared/dist/utils/*.js` par chemin RELATIF.
+- [x] **Un invariant documenté peut être exact sur le mécanisme qu'il inspecte
+      et faux sur le système.** L'en-tête jurait que le build de `shared` ne
+      change rien, « puisque les `paths` résolvent vers la SOURCE ». Vrai du
+      spécificateur — et c'est exactement pourquoi le fichier de parité le
+      contourne par chemin relatif, comme son propre en-tête l'explique. La
+      dérive passait par la porte que le raisonnement déclarait infranchissable.
+- [x] Octave suivante de la leçon du cycle 107 bis : là, la sortie du gate était
+      silencée ; ici elle est lue, le code de sortie honnête, le compteur
+      self-testé — et le verdict faux quand même, parce que la PRÉCONDITION de
+      la mesure n'était ni vérifiée ni vérifiable.
+- [x] `unresolved_dist_imports()` : le garde REFUSE DE MESURER tant que les
+      artefacts manquent, et nomme les modules non résolus + la commande qui y
+      remédie. Ni les chemins ni le fichier ne sont codés en dur — un import
+      ajouté demain est couvert sans retouche. C'est la déclaration `.d.ts` qui
+      est consultée, pas le `.js` : un build partiel reste détecté.
+- [x] 3 cas de self-test neufs ; **RED prouvé sur 4 mutations**, chacune tombant
+      sur le cas écrit pour elle, + RED sur l'arbre réel (`dist/` mis de côté).
+      Gates : self-test 6/6, cliquet ✓ 1239 inchangé, `bash -n` propre.
+- [x] **Recensement corrigé du suivi web** : le cycle 107 bis annonçait « trois
+      casts d'émission » ; il y en a **13**, dans 4 fichiers (`CallManager.tsx`
+      6, `VideoCallInterface.tsx` 5, `use-video-call.ts` 1,
+      `messaging.service.ts` 1).
+- [ ] Suivi — les 13 casts sont eux-mêmes des ERREURS de type (TS2571) comptées
+      dans les 1239 et tolérées par le cliquet. Les fermer fait DESCENDRE la
+      dette.
+- [x] **Lot 2 du même cycle — les quatre acks que le contrat exigeait et que
+      personne n'envoie.** `ClientToServerEvents` déclarait 4 acks REQUIS contre
+      18 optionnels, et les quatre étaient les événements d'appel
+      (INITIATE/JOIN/SIGNAL/END). Les deux moitiés du fil les contredisent : la
+      passerelle déclare `ack?` sur les quatre et les appelle en `ack?.(…)` ;
+      cinq émetteurs sur sept n'en envoient aucun (3 web, 2 iOS). Le MÊME
+      fichier iOS émet `call:end` avec ET sans ack — l'optionalité est une
+      CONCEPTION, pas un oubli.
+- [x] **Le prix du mensonge se lisait dans le code appelant.** Les 4 émissions
+      `call:signal` du web sont typées (pas de cast) : le compilateur exigeait
+      le second argument, elles fabriquent donc un `() => {}` VIDE
+      (`use-webrtc-p2p.ts` 290/329/674/761). Le serveur acquitte bien
+      (`ack?.({success:true})`), donc chaque candidat ICE paie un paquet d'ACK
+      pour une fonction qui ne fait rien. Là où la cérémonie n'a pas été écrite,
+      c'est un cast qui soustrait le site. **Un contrat que tout site d'appel
+      doit contourner pour dire la vérité ne gouverne plus rien.**
+- [x] Les quatre passent à `ack?`, motif écrit au-dessus avec les numéros de
+      ligne des handlers ET des émetteurs. Cliquet de type
+      `_CallAcksAreOptional` + témoin NÉGATIF ; RED prouvé sur 2 mutations.
+      Gates : tsc shared 0, tsc passerelle 0, suites d'appel passerelle 36/36
+      (608), shared 2467, suites d'appel web 46/46 (598), cliquet web ✓ 1239.
+- [ ] Suivi — les 4 `() => {}` de `use-webrtc-p2p.ts` sont retirables ; les
+      retirer supprime un aller-retour d'ACK par candidat ICE. Changement de
+      COMPORTEMENT sur la signalisation d'appel : mérite sa propre mesure.
+- [ ] Suivi neuf — **`CallJoinAck` transcrit en ligne DEUX fois dans le même
+      fichier** (`CallManager.tsx:810` et `:1005`), divergentes, et toutes deux
+      rendant `success` optionnel là où le contrat le déclare requis.
+
+### Lot 3 du cycle 108 — le témoin qui a viré au rouge tout seul, à 10:00:00Z
+
+- [x] **`main` était ROUGE, et personne ne pouvait le savoir.** `Test gateway`
+      échouait sur `main` @ `e87b7b0d` (2 failed / 19214 passed / 836 suites) —
+      chiffres IDENTIQUES à ceux de la PR de ce cycle, donc la PR n'y ajoutait
+      rien. Entre `f69cbd26` (dernier vert PROUVÉ) et `e87b7b0d`, **tous les runs
+      de `main` ont été ANNULÉS par concurrence** : « main est-il vert ? » n'était
+      pas une question à laquelle le dépôt pouvait répondre.
+- [x] **La cause n'est aucun commit : c'est l'HORLOGE.** Les 2 témoins portaient
+      `createdAt: new Date('2026-08-22T10:00:00Z')`, et `admitMessageEdit` refuse
+      l'auteur au-delà de `MESSAGE_EDIT_WINDOW_MS` (24 h). Verts exactement 24
+      heures, rouges ensuite pour toujours, sur TOUTE branche. Bascule prouvée à
+      la minute : run 09:12 vert, run 10:15 rouge.
+- [x] **Un témoin dont le verdict dépend de l'horloge murale n'est pas un témoin,
+      il est une bombe à retardement.** Il ne tombe pas quand la production casse,
+      il tombe quand l'heure tourne — indiscernable d'une régression de la base.
+- [x] Corrigé par `withinEditWindow()` (`Date.now() - 60_000`), commenté avec
+      l'horaire de bascule et les deux runs qui l'encadrent. **66/66** (contre
+      64/66).
+- [x] **La signature d'une bombe n'est pas « une date en dur »** mais « une date
+      en dur ENCORE dans une fenêtre » — seule celle-là a un instant de bascule
+      devant elle. Les dates de 2025/2026-01 du sous-arbre sont inertes (déjà
+      expirées, ou hors de toute règle de fenêtre).
+- [x] **Deux rouges lus de travers dans le même cycle, même remède.** Le `+3` du
+      lot 1 (cru régression, en fait défaut du garde) et ces 2 témoins (crus
+      environnementaux, en fait bombes). Rejouer un arbre historique **ne rejoue
+      pas son environnement** : l'heure fait partie de l'entrée, et une
+      bissection qui change l'arbre en gardant l'horloge ne peut pas distinguer
+      « le code a changé » de « le temps a passé ». Ce qui tranche : remonter au
+      dernier verdict que la CI a PROUVÉ, et comparer des runs CI entre eux.
+- [ ] Suivi — aucun garde n'empêche la prochaine bombe. Un balayage « date en dur
+      passée à une règle de fenêtre » est possible mais demande de relier un
+      littéral à la règle qui le consomme : à instruire, pas à improviser.
+## Cycle 108 — le contrat citait un test qui prouvait l'inverse
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108.md` · PR #3381
+
+- [x] Instruit le suivi hérité « `_seq` déclaré sur le seul
+      `NotificationEventData` » en posant la seule question dont dépend la
+      validité du dispositif : **qui lit ce champ ?**
+- [x] Le contrat partagé affirmait « **les trois clients le lisent** » en citant
+      `MessageSocketManagerNotificationTest` pour Android. Mesuré : Android le
+      **jetait** (`Json.ignoreUnknownKeys`, dit par son propre commentaire), et
+      `grep "SyncSeq\|detectGap\|lastSeq" apps/android` rendait **zéro fichier**.
+- [x] **Le test cité prouvait l'INVERSE** : `"_seq":42` en fixture, assertions sur
+      `id`/`type`/`state.isRead` seulement — il prouve que le décodage SURVIT au
+      champ, jamais qu'il le lit.
+- [x] `emitWithSeq.ts` disait la vérité pendant ce temps (« les DEUX clients »).
+      **Deux documents, un champ, deux comptes.** Celui qui comptait trois était
+      le contrat — celui qu'on lit en premier.
+- [x] **Leçon : une CITATION n'est pas une MESURE.** Le cycle 107 avait établi
+      qu'un suivi hérité se mesure avant d'être recopié ; voici la variante plus
+      coûteuse — l'affirmation accompagnée d'une preuve qui n'en est pas une.
+      Elle résiste plus longtemps parce qu'elle a déjà l'air d'avoir été mesurée.
+      Citer un test comme preuve d'une LECTURE exige de vérifier qu'il l'ASSERTE.
+- [x] Conséquence réelle : Android n'avait **aucune détection de trou exacte**, et
+      la règle LOCKSTEP aurait fait juger sûre l'extension de l'estampillage à
+      une 2ᵉ famille — le 3ᵉ client aurait vu un faux trou à CHAQUE event.
+- [x] Fermé le trou, pas la phrase : 3ᵉ miroir Kotlin de la règle pure
+      (`SyncSeqState.kt`), lecture de `_seq` sur la charge BRUTE avant décodage,
+      trou ⇒ `refresh()` idempotent app-side, `reset()` au logout.
+- [ ] **Gate distant** : le toolchain Android n'est pas exécutable dans le
+      conteneur (`dl.google.com` refusé). Le workflow `android.yml` EST le gate —
+      noté plutôt que de laisser croire à une vérification locale.
+- [ ] Suivi — l'estampillage reste limité à `notification:new` ; l'étendre oblige
+      à étendre l'observation sur les TROIS clients dans le même train.
+- [ ] Suivi — Android consomme le trou à la portée de l'écran (là où iOS le câble
+      au boot). Limitation DÉJÀ existante de son temps réel, pas une nouvelle.
+
+### Cycle 108 bis — `main` était rouge pour tout le monde, et ce n'était pas ce lot
+
+- [x] Le merge de `main` a rendu « Test gateway » rouge sur 2 cas de
+      `MessageHandlerEditDelete.test.ts`. **Mesuré sur une copie VIERGE
+      d'`origin/main` : les deux mêmes cas y tombent**, sans une ligne de la
+      branche (dont l'écart avec `main` hors `apps/android` est exclusivement
+      fait de commentaires — vérifié mécaniquement).
+- [x] Cause : `createdAt` épinglé à `2026-08-22T10:00:00Z` sous une garde
+      `admitMessageEdit` de **24 h**. Vert vingt-quatre heures, rouge le
+      2026-08-23 à 10:00 UTC, pour toutes les branches et définitivement.
+- [x] Le symptôme désignait le mauvais coupable : `emitsTo(...)` rendait `[]`,
+      qui se lit « le producteur n'émet plus ». Le producteur va bien — le
+      `callback` portait la vraie cause, jamais assertée
+      (`24-hour limit exceeded`).
+- [x] Le cas VOISIN restait vert parce que sa fixture n'a pas de `createdAt` :
+      les cas qui tombaient étaient ceux qui en AJOUTAIENT un. C'est ce
+      contraste qui a désigné la fenêtre.
+- [x] Corrigé en rendant l'instant RELATIF — ces cas portent sur la FORME de la
+      charge et l'identité de `senderId`, jamais sur l'âge du message.
+- [x] Gates : `MessageHandlerEditDelete` **66/66** · passerelle complète
+      **836/836 suites, 19216/19216**, en local sous bun.
+- [x] Leçon consignée dans `tasks/lessons.md`.
 ## Cycle 108 — le garde avait raison, et il gardait plus qu'un chiffre
 
 Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108.md`
@@ -1343,3 +1561,144 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108.md`
       le chemin E2EE.
 - [ ] Suivi — **79 autres `(x as unknown).membre` dans `apps/web`**, hors socket.
       ~1/3 de la dette web, mais chacun demande une décision de domaine.
+
+## Cycle 108 ter — le `Server` NU, la porte qu'aucun balayage ne pouvait voir
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108-ter.md`
+Écrit en PARALLÈLE des cycles 108 et 108 bis, sur le MÊME suivi, par une TROISIÈME session.
+Suite directe des DEUX suivis du cycle 107 bis, tous deux instruits et réels.
+
+- [x] **Les deux suivis étaient bas sur le COMPTE.** Cinq casts côté web (pas
+      trois), et cinq porteurs du `Server` nu côté passerelle (pas trois) — les
+      trois services nommés, plus `AgentAdminRelay`, plus le helper PARTAGÉ
+      `emitWithSeq` qui prenait le `Server` nu pour tous ses appelants. Un suivi
+      hérité est une affirmation (cycle 107) ; son compte en est une aussi
+      (cycle 93). Les deux se remesurent.
+- [x] **`Server` nu = absence TOTALE de contrat, mesuré.** Sans paramètres de
+      type il retombe sur `DefaultEventsMap` — `emit(ev: string, ...args: any[])`.
+      Un nom d'événement INVENTÉ (`"totally:invented-event"`) et une charge de
+      forme FAUSSE compilent tous deux à **zéro erreur**. ~16 émissions temps
+      réel traversaient ces portes : les 4 familles de demande d'ami,
+      `user:updated`, les compteurs/suppressions de notification, `call:ended`
+      vers l'audience de terminaison complète, les 2 traductions de story.
+- [x] **Ni l'un ni l'autre des deux cliquets existants ne pouvait le voir** : le
+      cliquet de TYPE garde `serverEmit.ts`, que ces services n'importaient pas ;
+      le balayage cherche une signature `emit` RÉÉCRITE, et ici **rien n'est
+      réécrit**. Troisième instance de « chercher une forme fautive par sa
+      DÉCLARATION, c'est manquer tous les sites qui l'obtiennent autrement »
+      (cycle 105) — et la plus discrète des trois : ni déclaration ni assertion,
+      seulement un import qui a l'air normal.
+- [x] Porte élargie à la MESURE des porteurs : `to(string | string[])` (audience
+      de terminaison complète en une émission, élargissement CONTRAVARIANT donc
+      sans effet sur les sites existants) et `ServerEmitIOWithRooms` avec
+      `in().fetchSockets()`. `ServerRoomSocket` réduit à `leave` — tout ce qu'on
+      en lit ; `NotificationService` n'en lit que la LONGUEUR.
+- [x] **`tsc` 0 erreur à la fermeture — les ~16 charges étaient déjà justes.**
+      C'est le résultat honnête, et il ne rend pas le lot vide : ce qui était vrai
+      par ACCIDENT est désormais vrai par CONSTRUCTION. Le 107 bis a trouvé 4
+      divergences en fermant sa porte, celui-ci aucune — même geste, deux issues,
+      et annoncer une divergence non mesurée coûte la confiance (cycle 103).
+- [x] **RED prouvé deux fois** : la même mutation rend 0 erreur avant / 2 après ;
+      et `AgentAdminRelay` rendu à son `Server` nu fait tomber le balayage en le
+      NOMMANT. Gardes disjointes — porte RELÂCHÉE vs porte CONTOURNÉE.
+- [x] `sweepRawServerEmitters` — inventaire VIDE, **aucune liste d'exemptions**.
+      Discriminant étroit par DÉCISION (`import type` + `.emit(`), en réponse
+      directe aux 7 faux positifs du cycle 107 : `MeeshySocketIOManager` importe
+      `Server` en VALEUR parce qu'il le CONSTRUIT, et un détenteur qui n'émet pas
+      sort par construction, pas par exemption.
+- [x] **La fixture a pris le cliquet en défaut** : `rawServerAliases` écrit avec
+      un `exec` simple ne rendait que le PREMIER import du fichier. Une erreur
+      commise en écrivant un cliquet est le meilleur cas de test qu'il aura
+      jamais (cycle 104) — la fixture porte les deux formes pour cette raison.
+- [x] **Miroir web : le cycle 107 bis avait déjà rendu les 5 casts INUTILES sans
+      le savoir.** Ils existaient pour taire une divergence réelle
+      (`CallMediaToggleClientEvent` exigeait `mediaType`/`participantId`/ack, le
+      web n'envoie que `{callId, enabled}`) ; le 107 bis a corrigé le contrat
+      contre les émetteurs réels le jour même. Variante douce de la règle du
+      cycle 105 : **un lot peut rendre un contournement inutile sans le faire
+      disparaître** — il reste alors, soustrayant son site à toute vérification
+      pour une raison qui n'existe plus.
+- [x] Dette web **1239 → 1234**, cinq points, **un par cast** — la mesure exacte
+      de ce qu'un `as unknown` coûtait.
+- [ ] Suivi — **la bivariance** (hérité 107 bis) : `strictFunctionTypes: false`
+      ⇒ aucune porte typée n'attrape une charge divergente assignable dans un
+      seul sens. Décision à instruire, elle dépasse Socket.IO.
+- [ ] Suivi — **neuf** : les 6 `as unknown` restants de `VideoCallInterface.tsx`
+      (`window.__preauthorizedMediaStream`, `constraints.facingMode`, `event`).
+      Hors contrat Socket.IO ; le premier nomme un canal window-global entre deux
+      composants, qui mérite un type.
+- [ ] Suivi — **neuf** : l'en-tête de `check-type-debt.sh` affirme que l'absence
+      du client Prisma « ne change rien » pour web. Mesuré : **1242 sans, 1239
+      avec**. Fausse de trois points, sans conséquence (la CI génère toujours),
+      mais jamais confrontée — famille du cycle 94.
+
+## Train d'intégration beta du 2026-08-23 — 9 PR alignées, `main` déverrouillé
+
+Contexte : un merge forcé avait laissé `main` rouge et désynchronisé les 7 PR
+ouvertes (6 sur 7 en conflit). Deux PR se sont ajoutées en cours de route.
+
+### Ce que le rouge était vraiment
+
+- [x] **`main` rouge — cause unique bloquante** : `PostsFeedScreen.tsx` lisait
+      `repostingPost.type` sur un état qui ne portait pas ce champ. `targetType`
+      partait donc à `undefined` à CHAQUE repost, le gateway retombait sur son
+      défaut `?? POST`, et un REEL republié depuis le fil quittait le fil des
+      reels — **le défaut même que le lot annonçait corriger**. Le compilateur
+      était seul à le voir, noyé dans une dette de 1239 erreurs où le cliquet ne
+      montre qu'un total : le `+1` faisait rougir sans nommer la cause.
+- [x] **Le step `Lint` est `continue-on-error: true`** — le « eslint: not found »
+      de `@meeshy/shared` était donc du BRUIT, jamais la cause. Diagnostiquer
+      dessus aurait coûté une demi-journée pour rien.
+
+### Trois gardes qui ne gardaient rien
+
+- [x] `CommentDraftStoreTests.swift` et `CompactCountConsolidationSourceGuardTests.swift`
+      vivaient hors du `pbxproj` : **vertes en ne s'exécutant jamais**.
+- [x] Le cliquet de dette appelait `unresolved_dist_imports`, fonction que la
+      fusion de deux lots concurrents avait emportée en gardant la DÉFINITION de
+      l'autre. Il mourait AVANT de compter, donc rendait non-zéro **en nommant
+      une régression de dette qui n'existait pas** — le faux verdict exact que
+      le cycle 108 avait fermé.
+- [x] Les scripts `lint` de `shared`, `gateway` et `agent` déclaraient
+      `eslint src/` sans eslint, sans config, et pour `shared` **sans `src/`**.
+
+### Une fuite de confidentialité laissée ouverte par contrat
+
+- [x] Le témoin adversaire `messages-list-forward-source-attachment-url-leak`
+      était ROUGE en permanence sur `main`, le commit qui le pose annonçant
+      lui-même « FUITE ENCORE OUVERTE ». Un transfert réutilise le chemin de
+      stockage de l'original, qui porte le `User.id` de son auteur : la réponse
+      qui refusait de NOMMER la source livrait son identifiant par `fileUrl`.
+      Fermée par ADRESSAGE (`/attachments/:id`) sur les **quatre** émissions —
+      un canal fermé et l'autre ouvert ne ferme rien.
+      **Un RED intentionnel qui survit au lot qui le pose cesse d'être un
+      marqueur : on apprend à lire le rouge comme normal.**
+
+### Lots produit livrés dans le même train
+
+- [x] **Le corps d'un post s'affichait en DOUBLE** : `PostDetail` montait
+      `TranslationToggle` en variante `block` avec `showContent={false}`, drapeau
+      que cette variante IGNORAIT. Rangée de drapeaux (une par langue servie,
+      sans plafond) sous le corps, rendu une seule fois.
+- [x] **Un transfert peut porter un mot** — envoyé APRÈS le transfert, et
+      seulement s'il a abouti.
+- [x] **Publier une pièce jointe reçue** (`POST /posts/from-attachment`) sans la
+      retélécharger. Le fichier est **dupliqué, jamais partagé** :
+      `reclaimMediaRowBytes` n'interroge que la table `Sound` avant d'effacer des
+      octets, donc un `PostMedia` pointant sur le fichier d'un
+      `MessageAttachment` aurait fait de la suppression d'un post une
+      suppression DANS la conversation.
+- [x] **Publier une capture se confirme** — la provenance ne peut pas être
+      décidée par le serveur : rien dans un fichier ne distingue une photo prise
+      à l'instant d'une photo importée.
+
+### Reste ouvert
+
+- [ ] **iOS n'a pas la publication depuis le partage** : la règle est dans
+      `packages/shared/utils/forward-to-publication.ts`, prête pour les trois
+      clients, mais seule la feuille web l'appelle.
+- [ ] **8 rouges iOS ANTÉRIEURS** (gardes du chantier Lentille) : pilule de
+      section non montée, `LentilleBridgeLine` dimensionnant son point par un
+      littéral, L06/L09 du rang plat, littéral « 900 » dans
+      `ConversationListView`, `call:join` non ré-émis à la reconnexion. Vérifiés
+      présents sur `main` avant ce train, qui en portait 13.

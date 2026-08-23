@@ -56,9 +56,108 @@ export const DRAINED_EVENT = {
 /**
  * L'événement serveur qu'une entrée de file rejoue. L'absence d'`eventType`
  * vaut `'new'` — la forme héritée.
+ *
+ * **Le type de retour porte `undefined`, et ce n'est pas une précaution :
+ * c'est la seule chose vraie que cette fonction puisse dire.** Son argument est
+ * typé `QueuedEventType`, mais il ne l'est qu'à l'ÉCRITURE. À la lecture il
+ * sort d'un `JSON.parse(...) as QueuedMessagePayload` — une AFFIRMATION, jamais
+ * une vérification — sur des octets écrits jusqu'à 48 h plus tôt
+ * (`DELIVERY_QUEUE_TTL_SECONDS`) par une version de la passerelle qui n'est pas
+ * forcément celle qui relit. Un déploiement progressif suffit : deux versions
+ * se partagent la même file Redis, et celle qui ne connaît pas un `eventType`
+ * neuf le lit quand même.
+ *
+ * Déclarer `ServerEventName` tout court rendait cette recherche INFAILLIBLE au
+ * compilateur alors qu'elle rend `undefined` en production — et le seul
+ * consommateur émettait donc sous un nom absent. `emit(undefined, payload)` ne
+ * lève PAS sur socket.io 4.8 (mesuré) : l'événement part anonyme, nul ne
+ * l'écoute, et le destinataire hors ligne perd le message SANS TRACE. C'est la
+ * famille « une déclaration présente, bien formée, et fausse contre son
+ * producteur » — ici le producteur est Redis, pas un émetteur du dépôt.
+ *
+ * Rendre l'`undefined` VISIBLE au typage oblige chaque appelant à décider quoi
+ * faire d'une entrée qu'il ne sait pas nommer. C'est tout l'objet du
+ * changement : la valeur était déjà là, seul le type la cachait.
  */
-export function drainedEventName(eventType: QueuedMessagePayload['eventType']): ServerEventName {
+export function drainedEventName(
+  eventType: QueuedMessagePayload['eventType'],
+): ServerEventName | undefined {
   return DRAINED_EVENT[eventType ?? 'new'];
+}
+
+/**
+ * La charge relue est-elle seulement DIFFUSABLE ?
+ *
+ * Jumelle de `drainedEventName` pour l'autre moitié du couple. Le cycle 109 bis
+ * a fermé le NOM ; celui-ci ferme le plancher de la CHARGE, et il s'arrête au
+ * plancher — les douze événements de `DRAINED_EVENT` portent tous un objet, et
+ * c'est la seule chose que les douze aient en commun. Valider chacune des douze
+ * FORMES serait un autre lot, avec ses douze schémas ; refuser ce qui ne peut
+ * être aucune des douze ne coûte qu'un `typeof`.
+ *
+ * Le trou qu'il ferme est celui que `drainedEventName` documente déjà pour le
+ * nom, mot pour mot : `JSON.parse(…) as QueuedMessagePayload`
+ * (`RedisDeliveryQueue.parseRawEntries`) est une AFFIRMATION, jamais une
+ * vérification, et elle porte sur des octets écrits jusqu'à 48 h plus tôt
+ * (`DELIVERY_QUEUE_TTL_SECONDS`) par une version de la passerelle qui n'est pas
+ * forcément celle qui relit.
+ *
+ * **L'asymétrie qui l'a rendu invisible** : `linkMessageEmissions` EXIGE déjà
+ * cette forme du message qu'il DÉPLIE — « un tableau est un `object` : sans ce
+ * refus, une enveloppe dérivée enverrait une liste là où le client attend un
+ * message » — pendant que l'enveloppe DONT il le dérive partait sans contrôle.
+ * La valeur dérivée était gardée plus strictement que la valeur source.
+ *
+ * Une charge informe ne LÈVE nulle part : socket.io l'encode sans broncher, elle
+ * part sous un nom d'événement parfaitement valide, et chaque décodeur client la
+ * jette en silence. Le drain étant DESTRUCTIF, le message est alors perdu sans
+ * recours et sans trace — exactement le coût qu'un nom absent avait avant le
+ * cycle 109 bis.
+ */
+export function isDeliverableQueuedPayload(payload: unknown): payload is Record<string, unknown> {
+  return typeof payload === 'object' && payload !== null && !Array.isArray(payload);
+}
+
+const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
+
+/**
+ * L'entrée relue porte-t-elle une conversation qu'on puisse INTERROGER ?
+ *
+ * Troisième garde de la frontière de désérialisation, et la seule des trois qui
+ * ne protège pas l'entrée d'elle-même : elle protège **les AUTRES entrées**
+ * d'elle.
+ *
+ * `drainedEventName` ferme le NOM et `isDeliverableQueuedPayload` la CHARGE ;
+ * les deux se prononcent sur une entrée en la lisant seule, et une entrée
+ * refusée n'emporte qu'elle. `conversationId` n'a pas cette propriété : le drain
+ * l'AGRÈGE — un seul `conversationId: { in: [...] }` porte la totalité du lot —
+ * pour deux requêtes qui décident du sort de tous :
+ *
+ * 1. `_dropEndedMemberships`, le gate d'AUTORISATION du rejeu ;
+ * 2. la résolution des participants qui porte les accusés de remise.
+ *
+ * **Le plancher est la forme ObjectId, pas « une chaîne ».** Mesuré contre le
+ * client Prisma généré du dépôt, sans base : `undefined`, `null`, un nombre et
+ * un objet sont refusés côté CLIENT (`PrismaClientValidationError`) ; une chaîne
+ * qui n'est pas un ObjectId atteint le moteur et lève
+ * `PrismaClientKnownRequestError: Malformed ObjectID`. Les deux moitiés
+ * atterrissent dans le même `catch`, donc s'arrêter à `typeof === 'string'`
+ * laisserait la seconde ouverte — et la seconde est la plus plausible, le dépôt
+ * portant DEUX façons de nommer une conversation (`normalizeConversationId`
+ * traduit un identifiant lisible en ObjectId).
+ *
+ * Ce que la garde vaut, et c'est le point : le `catch` de
+ * `_dropEndedMemberships` échoue OUVERT **par décision** — « une absence de
+ * réponse n'autorise rien à conclure », écrite pour une base indisponible. Il ne
+ * peut pas distinguer « la base n'a pas répondu » de « nous ne lui avons jamais
+ * posé de question valide », et la seconde rend le gate d'autorisation
+ * INOPÉRANT pour le lot ENTIER — l'arriéré des conversations qu'un lecteur a
+ * quittées, ou d'où il a été banni, rejoué en entier à cause d'une seule entrée
+ * illisible. Aucun `catch` ne peut réparer ça : la seule réponse est de ne pas
+ * mettre l'entrée dans la question.
+ */
+export function isAddressableConversationId(conversationId: unknown): conversationId is string {
+  return typeof conversationId === 'string' && OBJECT_ID.test(conversationId);
 }
 
 /**

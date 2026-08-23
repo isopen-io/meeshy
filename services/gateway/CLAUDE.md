@@ -1608,6 +1608,75 @@ chercher. Le balayage voit désormais les deux formes (`emit(ev: string` et
 **chercher une forme fautive par son NOM de déclaration, c'est manquer tous les
 sites qui l'obtiennent autrement.**
 
+### La TROISIÈME forme : ne rien réécrire, et prendre le `Server` NU
+
+La règle ci-dessus a une instance de plus, et c'est la plus discrète des trois —
+il n'y a ni déclaration ni assertion à chercher, seulement un import qui a l'air
+parfaitement normal (cycle 108) :
+
+```ts
+import type { Server } from 'socket.io';
+constructor(private io: Server) {}
+this.io.to(room).emit(SERVER_EVENTS.X, payload);   // ← vérifié par RIEN
+```
+
+**Ce n'est pas un défaut de style, c'est une absence totale de contrat.** `Server`
+sans paramètres de type retombe sur `DefaultEventsMap`, dont la signature est
+`emit(ev: string, ...args: any[])`. Mesuré sous le `tsconfig` de production :
+
+| ce qu'on émet à travers un `Server` NU | verdict |
+|---|---|
+| un nom d'événement **entièrement inventé** | **0 erreur** |
+| une charge de forme **fausse** sous un vrai nom | **0 erreur** |
+
+C'est la forme exacte du défaut du cycle 101 — `message:edited` servi sans
+`senderId`/`messageType`/`createdAt`, rejeté en silence par tous les décodeurs
+iOS pendant des mois.
+
+Cinq porteurs au cycle 108, ~16 émissions temps réel (les quatre familles de
+demande d'ami, `user:updated`, les compteurs de notification, `call:ended`) —
+dont le helper PARTAGÉ `emitWithSeq`, qui prenait le `Server` nu **pour le compte
+de tous ses appelants** : sa charge était gouvernée (il émet par
+`emitServerEvent`), son CANAL ne l'était pas.
+
+> **Aucun des deux cliquets existants ne pouvait le voir.** Celui du TYPE garde
+> `serverEmit.ts`, que ces services n'importaient pas ; celui du BALAYAGE cherche
+> une signature `emit` réécrite, et ici **rien n'est réécrit**. Une porte se
+> ferme, une porte se contourne — et une porte peut aussi n'avoir jamais été
+> construite parce qu'on a pris celle de la dépendance.
+
+`sweepRawServerEmitters` (`socketio/__tests__/server-emit-door-sweep.ts`) garde
+l'inventaire à VIDE. Son discriminant est ÉTROIT par décision — `import type` +
+`.emit(` :
+
+- **`import type`** exclut `MeeshySocketIOManager`, qui importe `Server` en
+  VALEUR parce qu'il le CONSTRUIT. Un `import type` ne peut, lui, que DÉCLARER.
+- **`.emit(`** exclut par CONSTRUCTION tout fichier qui détient un `Server` sans
+  émettre. **Détenir n'est pas ÉMETTRE** — sans cette condition le balayage
+  mesurerait la popularité d'un import au lieu d'une propriété (cycle 107, sept
+  faux positifs, balayage JETÉ plutôt que gelé).
+
+**Quand il tombe** : la réparation est de dériver (`ServerEmitIO`, ou
+`ServerEmitIOWithRooms` si le porteur lit aussi ses rooms), jamais d'ajouter une
+ligne à un inventaire — il n'y a pas de `Server` nu légitime pour émettre.
+
+### Un lot peut rendre un contournement INUTILE sans le faire disparaître
+
+Variante douce de « le lot qui rend une chose possible doit relire les
+commentaires qui la déclaraient impossible » (§ suivant), et elle coûte autant.
+
+Les cinq `(socket as unknown).emit(…)` de `VideoCallInterface.tsx` (web)
+n'étaient pas gratuits : `CallMediaToggleClientEvent` exigeait `mediaType`,
+`participantId` et un ack, quand le web n'envoie que `{ callId, enabled }`. Le
+cycle 107 bis a mesuré ce que les clients émettent RÉELLEMENT et corrigé le
+contrat — rendant les cinq casts sans objet le jour même, sans que personne le
+remarque. Ils sont restés un cycle de plus, continuant de soustraire cinq
+émissions d'appel à toute vérification **pour une raison qui n'existait plus**.
+
+> Quand un lot répare un contrat contre ses émetteurs réels, la question à poser
+> dans le même lot est : **qui avait contourné ce contrat, et pourquoi ?** Un
+> contournement ne se périme pas tout seul, et il ne rougit jamais.
+
 ### Le lot qui rend une chose possible doit relire les commentaires qui la déclaraient IMPOSSIBLE
 
 Le cast ci-dessus vivait sous cette phrase :
@@ -1698,6 +1767,116 @@ Trois règles en sont sorties :
 > et non le message nu ; le typage aurait été un cran trop bas, et un appelant
 > qui enfilait le message nu aurait compilé pour produire un rejeu non routable.
 > L'assertion qui gèle ce point est née de l'erreur elle-même.
+
+### À une frontière de désérialisation, un champ AGRÉGÉ n'a pas de correctif local
+
+Les trois gardes de la file de rejeu ne sont pas de même nature, et c'est ce qui
+a fait rater la troisième pendant deux cycles. `drainedEventName` (le NOM,
+cycle 109 bis) et `isDeliverableQueuedPayload` (la CHARGE, cycle 111) se
+prononcent sur une entrée en la lisant **seule** : une entrée refusée n'emporte
+qu'elle. `isAddressableConversationId` (cycle 112) garde le seul champ que le
+drain **met en commun** — un unique `conversationId: { in: [...] }` porte tout le
+lot, pour le gate d'autorisation (`_dropEndedMemberships`) comme pour les accusés
+de remise.
+
+Une entrée dont l'id n'est pas interrogeable faisait donc lever la requête pour
+TOUT le monde. Mesuré contre le client Prisma généré, sans base : `undefined`,
+`null`, un nombre, un objet ⇒ `PrismaClientValidationError` côté client ; toute
+chaîne non-ObjectId (`''`, un identifiant lisible non normalisé) ⇒
+`Malformed ObjectID` côté moteur. **Le plancher est donc la forme ObjectId, pas
+`typeof === 'string'`** — s'arrêter à la chaîne laisse ouverte la moitié la plus
+plausible, le dépôt portant deux façons de nommer une conversation.
+
+> **Le test à faire passer à chaque champ d'une frontière de désérialisation
+> n'est pas « que vaut-il quand il est faux ? » mais « est-il lu SEUL, ou mis en
+> commun avec ceux des autres entrées ? »** — la seconde forme n'a pas de
+> correctif local.
+
+#### Un `catch` fail-open couvre aussi la question qu'on a mal posée
+
+Le corollaire, et il vaut au-delà de la file. `_dropEndedMemberships` échoue
+OUVERT **par décision écrite** : « une absence de réponse n'autorise rien à
+conclure », le drain étant destructif et une tempête de reconnexions étant
+exactement le moment où la base est sous pression. C'est juste pour ce qu'il
+vise.
+
+Ce qu'il ne peut pas faire, c'est distinguer « la dépendance n'a pas répondu »
+de « nous ne lui avons jamais posé de question valide ». La première est une
+panne subie et le fail-open est la bonne réponse ; la seconde est un défaut à
+nous, et le fail-open y devient l'**amplificateur** — ici, une seule entrée
+corrompue désactivait le gate d'autorisation du rejeu, et l'arriéré d'une
+conversation quittée ou d'où le lecteur avait été banni repartait en entier
+(jusqu'à 48 h et 500 entrées).
+
+**La garde va donc AVANT l'appel, jamais dedans**, et à l'endroit où l'entrée
+fautive est encore nommable une par une (`dropEntry`, journal par entrée). Un
+`catch` ne peut pas réparer ce qu'il ne peut pas attribuer.
+
+Seule exception à la règle du cycle 111 (« `conversationIds` ne se resserre
+pas ») : une entrée refusée POUR son `conversationId` n'a rien à nommer, et
+publier son id enverrait le client invalider une conversation qui n'existe pas.
+
+#### Un gate qui s'exprime par un PROXY ne couvre pas forcément tous ses membres
+
+Le drain ne demande pas à une entrée « quelle est ta forme ? ». Il lui demande
+« sais-tu te diffuser ? », et lit la réponse dans `emissions.length === 0` —
+`_drainedEmissions` écrivant lui-même le contrat : « une liste VIDE dit *je ne
+sais pas diffuser ceci* ».
+
+Onze `eventType` sur douze passent par la table `DRAINED_EVENT`, qui peut rendre
+`undefined` donc `[]`. Le douzième, `'link-message'`, est le seul dont la charge
+se **DÉPLIE** — et `linkMessageEmissions` poussait l'enveloppe
+INCONDITIONNELLEMENT avant de regarder ce qu'elle contient. **Il ne pouvait pas
+rendre `[]`.** Le refus du message dérivé, ancien et gardé par ses propres
+témoins, retirait donc la seule émission qui compte et laissait la liste à 1.
+
+Ce que l'enveloppe seule livre : rien — son unique auditeur (le web) lit
+`data.message` ; iOS et Android n'écoutent que le `message:new` dérivé, celui
+qu'on vient de refuser. Ce que la liste non vide AFFIRME, en revanche, coûte
+trois signaux (cycle 114) : `count` comptait la remise, `conversationIds` ne
+nommait PAS la conversation (donc rien n'envoyait le client rechercher un
+message qui est pourtant toujours en base), et — `announcesMessageArrival('link-message')`
+étant vrai — l'accusé partait : le curseur `lastDeliveredAt` de l'auteur
+avançait, et il est **MONOTONE** (`_advanceCursor` ne recule jamais). Sur le
+SEUL transport d'envoi dont dispose un participant anonyme.
+
+> La question à poser à tout gate qui s'exprime par un proxy (une longueur, un
+> `null`, un booléen dérivé) n'est pas « est-il correct ? » mais **« chaque
+> membre de ce qu'il arbitre peut-il le faire répondre NON ? »**. S'il en est un
+> qui ne le peut pas, le gate ne le couvre pas — quelle que soit la place qu'il
+> occupe dans le code.
+
+Corollaire de journal : quand un refus a plusieurs causes possibles, la `reason`
+les SÉPARE. `'unresolvable-event-type'` accuse la file (un `eventType` d'une
+version voisine) ; `'link-envelope-without-message'` accuse le producteur de
+l'enveloppe. Les deux n'envoient pas chercher au même endroit.
+
+#### Un témoin qui nomme correctement la moitié qu'il garde GÈLE l'autre
+
+Trois témoins de `linkMessageEmissions` assertaient
+`n'ajoute PAS 'message:new' ⇒ [LINK_MESSAGE_NEW]`. Leur intitulé disait VRAI, et
+c'est cette vérité qui a rendu la seconde moitié de l'assertion invisible : elle
+se relisait comme le reste de la phrase, pas comme une affirmation à instruire.
+Deux cycles de gardes posées à cette frontière sont passés à côté.
+
+> **Un `toEqual` sur une liste entière affirme autant sur ce qu'il GARDE que sur
+> ce qu'il ADMET.** Les deux moitiés se relisent séparément — et l'intitulé du
+> témoin ne couvre en général que la première.
+
+#### Un double de test ment aussi par ce qu'il ACCEPTE
+
+La leçon connue — « un double Prisma qui rend `[]` rend tout témoin de contenu
+trivialement vert » — porte sur ce que le double RÉPOND. Son jumeau porte sur ce
+qu'il ACCEPTE, et il est plus discret : un double qui répond faux finit par se
+voir ; **un double qui accepte un argument impossible ne se voit jamais, parce
+que le test qu'il sert PASSE.**
+
+Les fixtures de rejeu portaient `'conv-1'`, `'conv-kept'` — que la colonne
+ObjectId ne peut pas prendre — et onze entrées n'avaient pas de `conversationId`
+du tout. Toute la suite `_drainPendingMessages` attestait un drain dont la
+requête d'appartenance aurait levé en production. Le correctif est un double qui
+REFUSE ce que le vrai client refuse (`strictMembership`), et des ids de fixture
+de la forme de production (`convId('kept')`).
 
 ### Une clé venue d'un SPREAD est invisible au contrôle des propriétés excédentaires
 

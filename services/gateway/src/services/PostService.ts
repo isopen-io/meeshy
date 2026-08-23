@@ -134,6 +134,8 @@ export class PostService {
     audioUrl?: string;
     audioDuration?: number;
     mediaIds?: string[];
+    /** Texte alternatif par média — clé = un id de `mediaIds`, ignoré sinon. */
+    mediaAlt?: Record<string, string>;
     mobileTranscription?: MobileTranscription;
     repostOfId?: string;
     /** Opt-in auteur : extraction de la bande-son des VIDÉOS vers la bibliothèque de sons. */
@@ -315,6 +317,8 @@ export class PostService {
           postId: post.id, authorId: userId, requested: data.mediaIds.length,
         });
       }
+
+      await this.applyMediaAlt(post.id, data.mediaIds, data.mediaAlt);
 
       // Locate the first audio PostMedia for transcription processing
       const audioMedia = await this.prisma.postMedia.findFirst({
@@ -904,6 +908,41 @@ export class PostService {
   }
 
   /**
+   * Applique le texte alternatif (accessibilité) fourni par le client aux
+   * médias qu'il vient RÉELLEMENT de rattacher à `postId`.
+   *
+   * Deux gardes, pas une :
+   * - `mediaAlt` est filtré aux clés présentes dans `requestedMediaIds` — un
+   *   id absent de la carte de la requête est ignoré, jamais interprété
+   *   comme « touche un média que l'appelant n'a pas nommé » ;
+   * - le `where` porte `postId` (déjà réécrit par le claim qui précède cet
+   *   appel) — un id dont le claim a échoué (propriété refusée) garde son
+   *   ancien `postId` et cette clause ne le trouve pas, donc ne le modifie
+   *   pas. Pas de second contrôle de propriété à dupliquer ici.
+   *
+   * Une chaîne vide EFFACE `alt` (`null`) plutôt que de laisser une valeur
+   * strictement vide sur le fil : cohérent avec `caption`/`content`, où le
+   * client retire un texte en envoyant `''`, jamais en omettant la clé.
+   */
+  private async applyMediaAlt(
+    postId: string,
+    requestedMediaIds: string[] | undefined,
+    mediaAlt: Record<string, string> | undefined,
+    client: Pick<PrismaClient, 'postMedia'> = this.prisma,
+  ): Promise<void> {
+    if (!mediaAlt || !requestedMediaIds?.length) return;
+    const requested = new Set(requestedMediaIds);
+    const entries = Object.entries(mediaAlt).filter(([id]) => requested.has(id));
+    if (entries.length === 0) return;
+    await Promise.all(entries.map(([id, alt]) =>
+      client.postMedia.updateMany({
+        where: { id, postId },
+        data: { alt: alt.trim().length > 0 ? alt : null },
+      }),
+    ));
+  }
+
+  /**
    * Pistes de capture COMPLÈTES d'un post : celles du blob `storyEffects`
    * (composer riche) + celles synthétisées depuis ses médias attachés (posts
    * vocaux sans blob, vidéos sous opt-in d'extraction). Les médias déjà
@@ -970,6 +1009,8 @@ export class PostService {
     type?: PostType;
     removeMediaIds?: string[];
     mediaIds?: string[];
+    /** Texte alternatif par média — clé = un id de `mediaIds`, ignoré sinon. */
+    mediaAlt?: Record<string, string>;
     /** Opt-in extraction bande-son vidéo — `undefined` = inchangé. */
     allowSoundExtraction?: boolean;
     /// Tri-état : `undefined` = inchangé, `null` = retirer, objet = remplacer.
@@ -1006,7 +1047,7 @@ export class PostService {
 
     // The edit-only fields are handled explicitly below; keep them out of the
     // blind spread so they are never written unconditionally.
-    const { type: requestedType, originalLanguage: requestedLanguage, removeMediaIds, mediaIds, location: locationUpdate, ...rest } = data;
+    const { type: requestedType, originalLanguage: requestedLanguage, removeMediaIds, mediaIds, mediaAlt, location: locationUpdate, ...rest } = data;
 
     const updateData: any = {
       ...rest,
@@ -1170,6 +1211,7 @@ export class PostService {
         if (shortfall) {
           enhancedLogger.warn(`[PostService] updatePost: ${shortfall}`, { postId, authorId: userId });
         }
+        await this.applyMediaAlt(postId, mediaIdsToAttach, mediaAlt, tx);
       }
       if (storyContentEdit) {
         await tx.postView.deleteMany({ where: { postId } });

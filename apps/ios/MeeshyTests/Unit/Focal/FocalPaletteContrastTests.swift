@@ -215,10 +215,20 @@ final class FocalPaletteContrastTests: XCTestCase {
             "FocalIdentityHeader.swift ne contient plus `.black.opacity(0.88)` — test_name_lightTheme_… mesure " +
             "une valeur qui ne correspond plus au code réel, à réaligner"
         )
+        // Directive 2026-08-23 : l'en-tête ne porte plus de méta — l'heure et
+        // les coches sont descendues dans `FocalMetaRow`. La constante
+        // partagée n'a donc plus qu'UN lecteur, et c'est lui qu'on garde :
+        // exiger encore la référence dans l'en-tête ferait rougir le test
+        // pour une teinte que ce fichier n'utilise plus.
+        XCTAssertFalse(
+            identityHeader.contains("FocalMetrics.MetaText"),
+            "FocalIdentityHeader.swift ne porte plus de texte méta — s'il relit MetaText, c'est que " +
+            "l'heure ou les coches y sont revenues (directive « toujours en bas »)"
+        )
         XCTAssertTrue(
-            identityHeader.contains("FocalMetrics.MetaText.lightOpacity") && identityHeader.contains("FocalMetrics.MetaText.darkOpacity"),
-            "FocalIdentityHeader.swift ne référence plus FocalMetrics.MetaText — la constante partagée qui " +
-            "empêche FocalMetaRow/FocalIdentityHeader de dériver l'une de l'autre (régression F-083)"
+            metaRow.contains("FocalMetrics.MetaText.lightOpacity") && metaRow.contains("FocalMetrics.MetaText.darkOpacity"),
+            "FocalMetaRow.swift ne référence plus FocalMetrics.MetaText — la constante partagée qui tient " +
+            "la teinte méta au niveau AA (régression F-083)"
         )
     }
 }

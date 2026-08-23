@@ -92,9 +92,11 @@ jest.mock('@/components/ui/button', () => ({
 }));
 
 jest.mock('@/components/ui/input', () => ({
-  Input: ({ value, onChange, placeholder }: any) => (
-    <input data-testid="input" value={value} onChange={onChange} placeholder={placeholder} />
-  ),
+  // Les props sont transmises TELLES QUELLES : le mock qui n'en recopiait que
+  // trois effaçait le `data-testid` de chaque champ, si bien que la feuille
+  // n'avait qu'un seul nom pour tous ses champs. Le jour où un second champ est
+  // apparu, les témoins se sont mis à viser « le textbox » et à en trouver deux.
+  Input: ({ ...props }: any) => <input {...props} />,
 }));
 
 jest.mock('@/components/ui/avatar', () => ({
@@ -228,7 +230,7 @@ describe('ForwardMessageModal', () => {
   it('filtre la liste par la recherche', () => {
     renderModal();
 
-    fireEvent.change(screen.getByTestId('input'), { target: { value: 'génér' } });
+    fireEvent.change(screen.getByTestId('forward-search'), { target: { value: 'génér' } });
 
     expect(screen.getByText('Général')).toBeInTheDocument();
     expect(screen.queryByText('Équipe produit')).not.toBeInTheDocument();
@@ -247,7 +249,7 @@ describe('ForwardMessageModal', () => {
   it("trouve une conversation directe en cherchant le nom de l'interlocuteur", () => {
     renderModal();
 
-    fireEvent.change(screen.getByTestId('input'), { target: { value: 'alice' } });
+    fireEvent.change(screen.getByTestId('forward-search'), { target: { value: 'alice' } });
 
     expect(screen.getByText('Alice Martin')).toBeInTheDocument();
     expect(screen.queryByText('Équipe produit')).not.toBeInTheDocument();
@@ -392,7 +394,7 @@ describe('ForwardMessageModal', () => {
     const loadMore = jest.fn();
     renderModal({ hasMore: true, isLoadingMore: false, onLoadMore: loadMore });
 
-    await userEvent.type(screen.getByRole('textbox'), 'alice');
+    await userEvent.type(screen.getByTestId('forward-search'), 'alice');
 
     expect(screen.queryByTestId('forward-load-more-sentinel')).toBeNull();
     expect(loadMore).not.toHaveBeenCalled();
@@ -430,7 +432,7 @@ describe('ForwardMessageModal', () => {
     mockDirectoryList.mockRejectedValue(new Error('network down'));
     renderModal();
 
-    await userEvent.type(screen.getByRole('textbox'), 'zzzintrouvable');
+    await userEvent.type(screen.getByTestId('forward-search'), 'zzzintrouvable');
 
     await waitFor(() => {
       expect(screen.getByTestId('forward-search-error')).toBeInTheDocument();
@@ -440,7 +442,7 @@ describe('ForwardMessageModal', () => {
   it("n'affiche aucune erreur quand la recherche unifiée ne trouve simplement rien", async () => {
     renderModal();
 
-    await userEvent.type(screen.getByRole('textbox'), 'zzzintrouvable');
+    await userEvent.type(screen.getByTestId('forward-search'), 'zzzintrouvable');
 
     await waitFor(() => expect(mockDirectoryList).toHaveBeenCalled());
     expect(screen.queryByTestId('forward-search-error')).toBeNull();
@@ -462,7 +464,7 @@ describe('ForwardMessageModal', () => {
       .mockResolvedValue({ id: 'conv-bob' } as never);
     renderModal();
 
-    await userEvent.type(screen.getByRole('textbox'), 'bob carnet');
+    await userEvent.type(screen.getByTestId('forward-search'), 'bob carnet');
 
     await waitFor(() => expect(screen.getByTestId('forward-row-user:u42')).toBeInTheDocument());
 
@@ -519,7 +521,7 @@ describe('ForwardMessageModal', () => {
     ] as never);
     renderModal();
 
-    await userEvent.type(screen.getByRole('textbox'), 'photo');
+    await userEvent.type(screen.getByTestId('forward-search'), 'photo');
 
     await waitFor(() =>
       expect(screen.getByTestId('forward-row-conv-public-joined')).toBeInTheDocument(),
@@ -549,7 +551,7 @@ describe('ForwardMessageModal', () => {
     ] as never);
     renderModal();
 
-    await userEvent.type(screen.getByRole('textbox'), 'photo');
+    await userEvent.type(screen.getByTestId('forward-search'), 'photo');
 
     await waitFor(() =>
       expect(screen.getByTestId('forward-row-conv-public-big')).toBeInTheDocument(),
@@ -581,7 +583,7 @@ describe('ForwardMessageModal', () => {
     ] as never);
     renderModal();
 
-    await userEvent.type(screen.getByRole('textbox'), 'photo');
+    await userEvent.type(screen.getByTestId('forward-search'), 'photo');
 
     await waitFor(() =>
       expect(screen.getByTestId('forward-row-conv-legacy-joined')).toBeInTheDocument(),
@@ -599,7 +601,7 @@ describe('ForwardMessageModal', () => {
     );
     renderModal();
 
-    const input = screen.getByRole('textbox');
+    const input = screen.getByTestId('forward-search');
     // « alice » (5 caractères) déclenche une recherche distante — sa réponse
     // reste délibérément EN VOL (promesse contrôlée manuellement ci-dessus).
     await userEvent.type(input, 'alice');

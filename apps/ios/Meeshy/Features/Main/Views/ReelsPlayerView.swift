@@ -205,9 +205,11 @@ struct ReelsPlayerView: View {
                 originalType: reel.type,
                 media: reel.media.map { EditablePostMedia($0) },
                 originalLocation: reel.location,
+                originalVisibility: reel.visibility,
+                originalVisibilityUserIds: reel.visibilityUserIds ?? [],
                 isRepost: reel.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds)
                 },
                 onDismiss: { editingReel = nil }
             )
@@ -970,7 +972,7 @@ struct ReelPageView: View {
     private func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
         HStack(spacing: 3) {
             Image(systemName: icon).font(MeeshyFont.relative(10, weight: .semibold))
-            Text(ReelActionButton.compact(count)).font(.caption2.weight(.medium))
+            Text(CompactCountLabel.text(count)).font(.caption2.weight(.medium))
         }
         .foregroundColor(.white.opacity(0.85))
         .accessibilityElement(children: .ignore)
@@ -1297,7 +1299,7 @@ private struct ReelActionButton: View {
                 }
                 .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
                 if let count, count > 0 {
-                    Text(Self.compact(count))
+                    Text(CompactCountLabel.text(count))
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.white)
                         .shadow(color: .black.opacity(0.35), radius: 2)
@@ -1317,12 +1319,6 @@ private struct ReelActionButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    fileprivate static func compact(_ value: Int) -> String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
     }
 }
 

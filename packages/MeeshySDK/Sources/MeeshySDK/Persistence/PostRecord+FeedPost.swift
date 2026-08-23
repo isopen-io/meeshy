@@ -46,6 +46,8 @@ public extension PostRecord {
         feedPost.viewCount = viewCount
         feedPost.audioUrl = audioUrl
         feedPost.location = location
+        feedPost.visibility = visibility
+        feedPost.visibilityUserIds = visibilityUserIds
         return feedPost
     }
 }

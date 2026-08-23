@@ -242,6 +242,11 @@ export const CreatePostSchema = z.object({
   originalLanguage: z.string().min(2).max(5).optional(),
   // Media IDs (already uploaded)
   mediaIds: z.array(z.string()).max(10).optional(),
+  // Texte alternatif par média (accessibilité, `PostMedia.alt`) — clé = un id
+  // de `mediaIds` ci-dessus, IGNORÉ pour tout id absent de `mediaIds` (le
+  // service ne l'applique qu'aux lignes qu'il vient réellement de rattacher
+  // à CE post, jamais à un média tiers glissé dans la carte).
+  mediaAlt: z.record(z.string(), z.string().max(1000)).optional(),
   // Références DÉCLARÉES — celles que le texte ne porte pas (badge sur le
   // canevas d'une story, note sous le contenu, métadonnée silencieuse). Chacune
   // porte son mode d'exposition, que l'édition relit pour savoir lesquelles
@@ -353,6 +358,11 @@ export const UpdatePostSchema = z.object({
   // to attach during the edit — same contract and bound as CreatePostSchema.
   // On a STORY this counts as a content edit (engagement reset).
   mediaIds: z.array(z.string()).max(10).optional(),
+  // Texte alternatif par média — même contrat que `CreatePostSchema.mediaAlt`
+  // (clé = un id de `mediaIds` ci-dessus, ignoré sinon). Édite l'accessibilité
+  // d'un média qui vient d'être rattaché ; les médias déjà attachés au post ne
+  // se réécrivent pas par ce canal (pas de renvoi d'`id` déjà lié).
+  mediaAlt: z.record(z.string(), z.string().max(1000)).optional(),
   // Lieu partagé — tri-état : clé ABSENTE = inchangé, `null` = retrait,
   // objet = remplacement (validé par parseSharedPlace côté route, comme à
   // la création). Écrit/effacé dans metadata.location par le service.
@@ -529,3 +539,24 @@ export interface UserParams {
 export interface CommunityParams {
   communityId: string;
 }
+
+/**
+ * Publier une pièce jointe déjà reçue en conversation.
+ *
+ * `target` est OPTIONNEL : omis, la règle partagée choisit d'après le type MIME
+ * (image → POST, vidéo/son → REEL). Une STORY ne sort jamais de cette
+ * déduction — elle expire en 24 h, donc elle se demande explicitement.
+ *
+ * `capturedInApp` est DÉCLARÉ par le client, et il est le seul à pouvoir le
+ * faire : rien dans un fichier ne distingue une photo prise à l'instant d'une
+ * photo importée. Le serveur ne s'en sert pas pour décider — il l'enregistre
+ * dans le journal de mutation, pour que « publié depuis une capture » reste
+ * lisible après coup.
+ */
+export const PublishAttachmentSchema = z.object({
+  attachmentId: z.string().min(1),
+  target: z.enum(['POST', 'REEL', 'STORY']).optional(),
+  content: z.string().max(5000).optional(),
+  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
+  capturedInApp: z.boolean().optional(),
+});

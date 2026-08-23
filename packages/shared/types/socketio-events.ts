@@ -99,6 +99,9 @@ import type {
   PostReactionRemoveData,
 } from './post.js';
 
+// La ligne de réaction persistée — ce que l'accusé de `reaction:add` porte.
+import type { ReactionData } from './reaction.js';
+
 // ===== ROOM HELPERS =====
 // Convention: entity:${id} (colons, jamais underscores)
 
@@ -923,15 +926,23 @@ export interface NotificationEventData {
    *
    * C'est le signal de détection de TROU du SyncEngine : un client qui reçoit
    * `_seq = N+2` après `N` sait qu'un événement lui a échappé et déclenche une
-   * resynchronisation. **Les trois clients le lisent** — web
+   * resynchronisation. **Les trois clients l'OBSERVENT** — web
    * (`observeSyncSeq(this.syncSeq, data?._seq)`,
-   * `notification-socketio.singleton.ts`), iOS (`case seq = "_seq"`,
-   * `MeeshySDK/Sockets/MessageSocketManager.swift`), Android
-   * (`MessageSocketManagerNotificationTest`).
+   * `notification-socketio.singleton.ts`), iOS (`case seq = "_seq"` →
+   * `SyncSeqTracker.observe`, `MeeshySDK/Sockets/MessageSocketManager.swift`),
+   * Android (`syncSeqTracker.observe(raw.opt("_seq"))`,
+   * `sdk-core/.../socket/MessageSocketManager.kt`).
+   *
+   * Ce paragraphe a dit « les trois le lisent » pendant que **Android le
+   * jetait** : son décodeur (`Json.ignoreUnknownKeys`) déposait le champ, et la
+   * preuve citée — `MessageSocketManagerNotificationTest` — n'assertait rien sur
+   * `_seq` ; elle prouvait exactement l'inverse, que le décodage SURVIT au champ.
+   * Une citation n'est pas une mesure : le test cité prouvait la tolérance, pas
+   * la lecture. Android observe depuis que ce miroir a été écrit (cycle 108).
    *
    * **Déclaré ici parce qu'il ne l'était NULLE PART** (cycle 105). Il ne
    * voyageait que parce que `emitWithSeq` prenait
-   * `payload: Record<string, unknown>` : un champ porteur, lu par trois
+   * `payload: Record<string, unknown>` : un champ porteur, traversant trois
    * décodeurs, dont aucun contrat ne parlait — exactement le cas de `location`
    * sur `ConversationUpdatedEventData` avant qu'on ne le déclare, et la même
    * conséquence : la parité entre émetteurs ne tenait qu'à la lecture du code
@@ -2254,6 +2265,29 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.NOTIFICATION_COUNTS]: (data: NotificationCountsEventData) => void;
 
   // Delivery queue — includes affected conversationIds so clients can scope invalidation
+  /**
+   * Fin du rejeu de la file hors ligne, au reconnect.
+   *
+   * **Les deux champs ne portent PAS la même population, et c'est délibéré.**
+   *
+   * - `count` — le nombre d'entrées RÉELLEMENT rejouées. C'est une affirmation
+   *   de livraison : elle ne compte jamais une entrée que la passerelle n'a pas
+   *   su diffuser (`eventType` que la table `DRAINED_EVENT` ne résout pas, ou
+   *   émission qui a levé). Même règle que les accusés de réception, qui
+   *   descendent de la même liste.
+   * - `conversationIds` — les conversations TOUCHÉES par le drain, rejeu réussi
+   *   ou entrée perdue. Plus large que `count` par construction.
+   *
+   * L'écart entre les deux est ce qui rend une perte de rejeu RÉCUPÉRABLE. Le
+   * drain est destructif : une entrée qu'on ne sait pas diffuser sort de la
+   * file sans que rien n'atteigne le client. Les messages qu'elle transportait
+   * sont pourtant toujours en base — seul leur rejeu temps réel a échoué. En
+   * nommant quand même la conversation, l'événement envoie le client les
+   * relire ; l'omettre ferait d'un incident de transport un trou permanent.
+   *
+   * Un `count: 0` accompagné d'une conversation nommée est donc une forme
+   * VALIDE, et se lit « rien n'a pu être rejoué, va relire celle-ci ».
+   */
   [SERVER_EVENTS.PENDING_MESSAGES_DELIVERED]: (data: { count: number; conversationIds: string[] }) => void;
 
   // Conversation lifecycle
@@ -2290,7 +2324,53 @@ export interface MessageSendData {
   readonly messageType?: string;
   readonly replyToId?: string;
   readonly clientMessageId: string;
+  /** Réponse privée à une story — DM porteur du contexte de la story. */
+  readonly storyReplyToId?: string;
+  /** Transfert : le message source, et sa conversation si elle diffère. */
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
+  /**
+   * Diffusion à plusieurs destinataires (PAS un transfert) : la passerelle
+   * copie CÔTÉ SERVEUR les pièces jointes du message désigné, si bien que
+   * l'émetteur n'envoie ni texte ni `attachmentIds`.
+   */
+  readonly copyAttachmentsFromMessageId?: string;
+  readonly isBlurred?: boolean;
+  /** ISO 8601 — la passerelle en recompose le bit EPHEMERAL. */
+  readonly expiresAt?: string;
+  readonly effectFlags?: number;
+  readonly isViewOnce?: boolean;
+  readonly maxViewOnceCount?: number;
+  /**
+   * Lieu partagé — champ dédié, JAMAIS un `metadata` brut. La forme n'est pas
+   * contrainte ici : la validation stricte vit côté passerelle
+   * (`services/location/sharedPlace.ts`).
+   */
+  readonly location?: unknown;
+  /**
+   * Les mentionnés que l'ÉMETTEUR nomme, plutôt que ceux que la passerelle
+   * déduit du texte.
+   *
+   * Ce n'est pas une commodité : c'est le seul canal qui survit au chiffrement.
+   * La passerelle retombe sur l'extraction des `@username` du CONTENU quand la
+   * liste est absente — mais en mode `e2ee` le client remplace `content` par le
+   * littéral `[Encrypted]` avant d'émettre, si bien qu'il n'y a plus rien à
+   * extraire. La liste explicite est alors la seule chose qui rattache un
+   * message à ceux qu'il nomme.
+   */
+  readonly mentionedUserIds?: readonly string[];
+  readonly encryptedContent?: string;
+  readonly encryptionMode?: EncryptionModeOnWire;
+  readonly encryptionMetadata?: Readonly<Record<string, unknown>>;
+  readonly isEncrypted?: boolean;
 }
+
+/**
+ * Le mode de chiffrement TEL QU'IL VOYAGE. La passerelle normalise la casse à
+ * l'entrée (iOS émet « E2EE »), mais le jeu de valeurs est FERMÉ : ce sont les
+ * trois que le schéma accepte, ni plus ni moins.
+ */
+export type EncryptionModeOnWire = 'e2ee' | 'server' | 'hybrid';
 
 /**
  * Réponse d'envoi de message
@@ -2314,6 +2394,21 @@ export interface MessageSendWithAttachmentsData {
   readonly attachmentIds: readonly string[];
   readonly replyToId?: string;
   readonly clientMessageId: string;
+  readonly storyReplyToId?: string;
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
+  readonly isBlurred?: boolean;
+  readonly expiresAt?: string;
+  readonly effectFlags?: number;
+  readonly isViewOnce?: boolean;
+  readonly maxViewOnceCount?: number;
+  readonly location?: unknown;
+  /** Même contrat que `MessageSendData.mentionedUserIds` ci-dessus. */
+  readonly mentionedUserIds?: readonly string[];
+  readonly encryptedContent?: string;
+  readonly encryptionMode?: EncryptionModeOnWire;
+  readonly encryptionMetadata?: Readonly<Record<string, unknown>>;
+  readonly isEncrypted?: boolean;
 }
 
 /**
@@ -2415,15 +2510,86 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.TYPING_STOP]: (data: TypingActionData) => void;
   [CLIENT_EVENTS.AUTHENTICATE]: (data: AuthenticateData) => void;
   [CLIENT_EVENTS.REQUEST_TRANSLATION]: (data: RequestTranslationData) => void;
-  [CLIENT_EVENTS.REACTION_ADD]: (data: ReactionAddData, callback?: (response: SocketIOResponse<ReactionUpdateEventData>) => void) => void;
-  [CLIENT_EVENTS.REACTION_REMOVE]: (data: ReactionRemoveData, callback?: (response: SocketIOResponse<ReactionUpdateEventData>) => void) => void;
-  [CLIENT_EVENTS.ATTACHMENT_REACTION_ADD]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<unknown>) => void) => void;
-  [CLIENT_EVENTS.ATTACHMENT_REACTION_REMOVE]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<unknown>) => void) => void;
+  /**
+   * L'accusé de réception d'un `reaction:add` porte la LIGNE PERSISTÉE
+   * (`ReactionData`), et non l'`ReactionUpdateEventData` du broadcast.
+   *
+   * Ce n'est pas un relâchement du contrat, c'est ce que cet accusé PEUT tenir.
+   * `ReactionUpdateEventData` porte une `aggregation`, qui ne s'obtient qu'au
+   * prix de deux lectures supplémentaires APRÈS la persistance
+   * (`message.findUnique` puis `createUpdateEvent`). Or ce handler acquitte
+   * délibérément dès la persistance : une défaillance transitoire de ces
+   * lectures ne doit jamais retourner l'accusé en échec, sans quoi le client
+   * annule une réaction déjà écrite en base. Déclarer l'agrégation ici, c'est
+   * réclamer un champ que le seul émetteur ne peut produire sans abandonner
+   * cette garantie de livraison — et c'est exactement pourquoi il ne l'a jamais
+   * produit.
+   *
+   * Les familles COMMENTAIRE et POST déclarent, elles, leur `updateEvent`
+   * (`comment:reaction-*`, `post:reaction-*`) : leurs handlers acquittent APRÈS
+   * l'agrégation, et l'iOS décode ces accusés. Les trois familles ne sont donc
+   * pas interchangeables — chacune déclare ce que SON émetteur envoie.
+   *
+   * Historique : la forme opaque (`SocketIOResponse<unknown>` côté handler) a
+   * déjà coûté trois incidents de décodage à l'iOS — deux `malformedResponse`
+   * sur les accusés post/commentaire, un `DecodingError` sur le REST
+   * `/reactions` (d'où `DiscardedReactionResponse`). Le quatrième site est
+   * celui-ci ; il est fermé par la déclaration, et par le fait que les
+   * handlers prennent désormais CE type et non plus `unknown`.
+   */
+  [CLIENT_EVENTS.REACTION_ADD]: (data: ReactionAddData, callback?: (response: SocketIOResponse<ReactionData>) => void) => void;
+  /**
+   * Un retrait ne laisse RIEN derrière lui qui mérite le fil : `data` est
+   * absent, et `never` le rend inexprimable plutôt que simplement vide.
+   *
+   * L'émetteur envoyait `{ message: 'Reaction removed successfully' }` et
+   * `{ message: 'Reaction already absent' }` — deux phrases anglaises non
+   * localisées, qu'aucun des trois clients ne lit (le web n'inspecte que
+   * `success`/`error`, l'iOS passe par le REST, Android n'émet pas cet
+   * événement). Dans un produit dont la promesse est de traduire tout le
+   * contenu, un texte anglais en dur sur le fil est un piège pour le premier
+   * client qui l'affichera.
+   */
+  [CLIENT_EVENTS.REACTION_REMOVE]: (data: ReactionRemoveData, callback?: (response: SocketIOResponse<never>) => void) => void;
+  /**
+   * La QUATRIÈME famille de réactions, et la seule qui ait toujours eu raison :
+   * son handler acquitte `{ success: true }` sur TOUS ses chemins — nominal
+   * comme idempotent — et laisse l'`AttachmentReactionUpdateEventData` voyager
+   * sur la diffusion, qui est son seul lecteur.
+   *
+   * `never` grave ce qu'elle fait déjà. Il ne remplace pas `unknown` pour la
+   * forme : `unknown` accepte TOUTE charge, donc n'aurait pas empêché ce site
+   * de dériver vers la ligne brute ou la phrase anglaise que portaient les
+   * trois autres — c'est exactement l'opacité qui les a laissées diverger.
+   */
+  [CLIENT_EVENTS.ATTACHMENT_REACTION_ADD]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<never>) => void) => void;
+  [CLIENT_EVENTS.ATTACHMENT_REACTION_REMOVE]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<never>) => void) => void;
   [CLIENT_EVENTS.REACTION_REQUEST_SYNC]: (messageId: string, callback?: (response: SocketIOResponse<ReactionSyncEventData>) => void) => void;
-  [CLIENT_EVENTS.CALL_INITIATE]: (data: CallInitiateEvent, ack: (response: CallInitiateAck) => void) => void;
-  [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent, ack: (response: CallJoinAck) => void) => void;
+  // Les quatre `ack?` ci-dessous — INITIATE, JOIN, SIGNAL, END — étaient les
+  // seuls acks REQUIS de tout le contrat (4 contre 18 optionnels). Ils
+  // promettaient une chose qu'aucune des deux moitiés du fil ne tient :
+  //
+  //   - la passerelle déclare les QUATRE `ack?` et les appelle toutes en
+  //     `ack?.(…)` (`CallEventsHandler.ts` 2453 / 2776 / 3487 / 3851) : elle est
+  //     écrite pour fonctionner quand il n'y en a pas ;
+  //   - et des émetteurs réels n'en envoient pas — les trois `call:end` du web,
+  //     `call:join` et `call:signal` d'iOS (`MessageSocketManager.swift` 2898 /
+  //     3037 / 3077 / 3086), tandis que d'autres sites du MÊME fichier iOS
+  //     utilisent `emitWithAck` : l'ack est optionnel PAR CONCEPTION.
+  //
+  // Le prix du mensonge se lisait dans le code appelant : les quatre émissions
+  // `call:signal` du web fabriquent un `() => {}` VIDE (`use-webrtc-p2p.ts` 290
+  // / 329 / 674 / 761) pour satisfaire un paramètre requis que le serveur
+  // n'exige pas — une cérémonie qui coûte un paquet d'ACK par candidat ICE.
+  // Là où le contrat n'était pas contourné par une cérémonie, il l'était par un
+  // cast : les trois `call:end` du web passent par `(socket as unknown).emit`.
+  //
+  // Un contrat que tout site d'appel doit contourner pour dire la vérité ne
+  // gouverne plus rien. Cf. le cliquet `_CallAcksAreOptional` sous l'interface.
+  [CLIENT_EVENTS.CALL_INITIATE]: (data: CallInitiateEvent, ack?: (response: CallInitiateAck) => void) => void;
+  [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent, ack?: (response: CallJoinAck) => void) => void;
   [CLIENT_EVENTS.CALL_LEAVE]: (data: { callId: string }) => void;
-  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack: (response: { success: boolean }) => void) => void;
+  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack?: (response: { success: boolean }) => void) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: CallMediaToggleClientEvent) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: CallMediaToggleClientEvent) => void;
   /**
@@ -2495,6 +2661,96 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.ADMIN_AGENT_SUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.ADMIN_AGENT_UNSUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
 }
+
+/**
+ * Le type de l'accusé de réception d'un événement client, LU SUR LE CONTRAT.
+ *
+ * Un handler de la passerelle qui écrit `callback?: (r: SocketIOResponse<X>) =>
+ * void` de sa main REDÉCLARE ce que cette interface déclare déjà, et les deux
+ * peuvent alors diverger sans que rien ne l'empêche — c'est précisément ce qui
+ * s'est produit sur les trois familles de réactions, où les handlers portaient
+ * `SocketIOResponse<unknown>` pendant que le contrat promettait une charge
+ * précise. `unknown` accepte tout : aucune des deux moitiés du fil ne vérifiait
+ * l'autre, et le désaccord a coûté trois incidents de décodage à l'iOS.
+ *
+ * `AckOf<'reaction:add'>` n'est pas une COPIE du contrat, c'est une LECTURE :
+ * il n'existe plus qu'une seule déclaration, et changer la charge d'un accusé
+ * fait rougir tous ses `callback(...)` au lieu de les laisser passer.
+ *
+ * Le `NonNullable` retire l'optionalité du paramètre (`callback?`) sans toucher
+ * à la charge ; l'appel reste facultatif côté handler, c'est sa SIGNATURE qui
+ * cesse de l'être.
+ */
+export type AckOf<E extends keyof ClientToServerEvents> =
+  NonNullable<Parameters<ClientToServerEvents[E]>[1]>;
+
+/**
+ * La RÉPONSE que cet accusé transporte — `Parameters<AckOf<E>>[0]`.
+ *
+ * Les handlers construisent souvent la réponse dans une variable locale avant
+ * de l'acquitter (`const successResponse: … = { … }; callback(successResponse)`).
+ * Annotée `SocketIOResponse<unknown>`, cette locale rouvrait la porte que la
+ * signature venait de fermer : elle accepte n'importe quelle charge, et le
+ * `callback(successResponse)` qui suit ne compare plus rien au contrat.
+ * `AckResponseOf<E>` la referme au même endroit et depuis la même source.
+ */
+export type AckResponseOf<E extends keyof ClientToServerEvents> =
+  Parameters<AckOf<E>>[0];
+
+/* ------------------------------------------------------------------------- *
+ * Le cliquet des acks d'appel — au TYPE, sans une ligne exécutable.
+ *
+ * Même emplacement et même raison que ses jumeaux de la passerelle
+ * (`socketio/serverEmit.ts`, `socketio/clientReceive.ts`) : les tests sont
+ * exclus du `tsconfig` et l'`ignoreCodes` de `ts-jest` couvre `2322`/`2345`, si
+ * bien que **la production est le seul endroit d'où un cliquet de type peut
+ * mordre**. Ici, en plus, `packages/shared` type-check en BLOQUANT dans la CI.
+ *
+ * Ce cliquet garde une propriété que rien d'autre ne peut garder : rendre l'un
+ * de ces acks à nouveau REQUIS casse la compilation ICI, à l'endroit où la
+ * mesure est écrite, plutôt que chez le prochain appelant qui contournera par
+ * un `() => {}` vide ou par un cast.
+ *
+ * EXPORTÉS, contrairement à leurs jumeaux de la passerelle : `packages/shared`
+ * compile avec `noUnusedLocals`, qui refuse un alias de type local jamais
+ * référencé. L'export est donc la façon de garder le cliquet ADJACENT à ce
+ * qu'il garde — l'emplacement fait la moitié de son travail. Types purs, donc
+ * effacés à l'exécution ; leur présence dans la surface publique ne coûte rien.
+ * ------------------------------------------------------------------------- */
+
+/** Échoue à compiler dès que `T` n'est plus `true`. */
+type AssertContract<T extends true> = T;
+
+/**
+ * Émettre ces quatre événements avec la CHARGE SEULE est permis par le contrat.
+ *
+ * `Parameters<…>` d'un ack REQUIS est un tuple de longueur 2, auquel un tuple
+ * de longueur 1 n'est pas assignable — c'est exactement l'erreur (`TS2554`,
+ * « Expected 2 arguments, but got 1 ») que les sites d'appel contournaient.
+ * Avec `ack?`, le tuple devient `[data, ack?]` et la ligne passe.
+ *
+ * Le cas ci-dessous est le plus fort des quatre : `call:end` est émis SANS ack
+ * par cinq des sept émetteurs du dépôt (trois web, deux iOS).
+ */
+export type _CallAcksAreOptional = AssertContract<
+  [
+    [CallInitiateEvent] extends Parameters<ClientToServerEvents[typeof CLIENT_EVENTS.CALL_INITIATE]> ? true : false,
+    [CallJoinEvent] extends Parameters<ClientToServerEvents[typeof CLIENT_EVENTS.CALL_JOIN]> ? true : false,
+    [CallSignalEvent] extends Parameters<ClientToServerEvents[typeof CLIENT_EVENTS.CALL_SIGNAL]> ? true : false,
+    [{ callId: string }] extends Parameters<ClientToServerEvents[typeof CLIENT_EVENTS.CALL_END]> ? true : false,
+  ] extends [true, true, true, true] ? true : false
+>;
+
+/**
+ * Le témoin NÉGATIF, sans lequel le précédent ne prouve rien : un ack requis
+ * REFUSE bien la charge seule. Sans cette ligne, un `Parameters<…>` qui
+ * rendrait `any` (ou une refonte qui rendrait l'assignabilité toujours vraie)
+ * laisserait `_CallAcksAreOptional` passer pour un cliquet qui garde quelque
+ * chose. Un témoin qu'on n'a pas vu échouer n'est pas un témoin.
+ */
+export type _RequiredAckWouldRefusePayloadAlone = AssertContract<
+  [{ callId: string }] extends Parameters<(data: { callId: string }, ack: () => void) => void> ? false : true
+>;
 
 // ===== TYPES DE BASE =====
 

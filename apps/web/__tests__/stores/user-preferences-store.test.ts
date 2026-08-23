@@ -75,7 +75,7 @@ function resetStore() {
         translationTargetLanguage: 'fr',
       },
       story: {
-        defaultVisibility: 'FRIENDS',
+        defaultVisibility: 'PUBLIC',
         storyNotificationsEnabled: true,
       },
       encryptionKeys: {

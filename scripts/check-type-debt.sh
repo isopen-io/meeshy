@@ -46,7 +46,19 @@
 #     job. Web does not import it (`@prisma/client` and `@meeshy/shared/prisma`
 #     appear in zero web sources), so its absence changes nothing.
 #   - `@meeshy/shared` is resolved by web's `paths` to the shared package's
-#     SOURCE, not to its `dist/`, so whether shared was built does not matter.
+#     SOURCE, not to its `dist/`. That is true OF THAT SPECIFIER — and it is
+#     exactly why one web suite bypasses it: `__tests__/lentille/
+#     shared-law-dist-parity.test.ts` replays the frozen law vectors THROUGH the
+#     build boundary, and its own header explains that reaching `dist/` is
+#     impossible via `@meeshy/shared/...`, so it imports
+#     `../../../../packages/shared/dist/utils/*.js` by RELATIVE path. Three
+#     imports, `packages/shared/dist/` gitignored: on any fresh clone the count
+#     is +3 (three TS2307) until shared is built. This bullet used to claim the
+#     opposite outright, and the claim cost a cycle — the guard printed
+#     "RÉGRESSION +3" on an untouched tree and named ten innocent files as the
+#     most affected. The drift is therefore NOT absent; it is GUARDED, by
+#     `unresolved_dist_imports` below, which refuses to report a number at all
+#     while the artifacts the count depends on are missing.
 #
 # That third bullet was TRUE OF THE ALIAS AND FALSE OF THE PACKAGE, and the gap
 # is the fourth source of drift — found at cycle 108, by walking into it.
@@ -105,7 +117,32 @@ NC='\033[0m'
 # contrat existait déjà (`TypedSocket`, `getSocket()` le rend typé) : ces casts ne
 # désactivaient aucune vérification, ils en FABRIQUAIENT l'échec — `.emit` sur un
 # `unknown` est une erreur à chaque site. Aucun fichier n'a monté.
-readonly WEB_BASELINE=1209
+# 1209 → 1205 au train beta du 2026-08-23 : `components/common/BubbleMessage.tsx`
+# 5 → 1, effet du routage des comparaisons de langue vers la SSOT (itération 251,
+# PR #3375). Mesuré par FICHIER, pas déduit d'un total — c'est le seul fichier
+# qui bouge entre `main` et ce train.
+#
+# La valeur est ancrée sur la mesure du RUNNER, jamais sur une mesure locale :
+# cet arbre compte 14 erreurs de plus que la CI (1223 ici pour 1209 là-bas), un
+# écart d'environnement stable, vérifié deux fois à des états différents du
+# dépôt. Seul le DELTA est transportable d'une machine à l'autre ; l'absolu ne
+# l'est pas. Qui remesure ici et pose ce qu'il lit fera rougir la CI de 14.
+#
+# 1205 → 1196 au Vague 166 (fusionné sur ce train, instruit en parallèle du
+# cycle 108 sur le même suivi cycle-107-bis, sans recouvrement de fichier avec
+# le fix BubbleMessage ci-dessus) : neuf erreurs restantes que le cycle 108
+# avait laissées vivre sur les MÊMES fichiers de la surface d'appel —
+# cinq listeners `CallManager.attachedListeners` passaient encore `data:
+# unknown` tel quel aux handlers typés (`data as CallXEvent` au point
+# d'écoute, où le contrat serveur garantit la forme), trois
+# `VideoCallInterface.handleParticipantLeft(event: unknown)` typé
+# `CallParticipantLeftEvent`, et un `(event as unknown).anonymousId` mort
+# dupliqué dans `CallManager` (déjà retiré côté `VideoCallInterface` au
+# Vague 133 — le champ n'existe pas sur `CallParticipantLeftEvent`).
+# DELTA mesuré en LOCAL sur cette même machine, jamais l'absolu (cf. écart de
+# 14 documenté ci-dessus) : 9 erreurs de moins entre l'arbre fusionné avec et
+# sans ce correctif, appliquées à la baseline ancrée CI (1205 → 1196).
+readonly WEB_BASELINE=1196
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
@@ -278,6 +315,7 @@ main() {
   fi
 
   echo "Type debt ratchet — apps/web (baseline $WEB_BASELINE)"
+
   local actual
   actual="$(count_type_errors "$web_dir")"
 

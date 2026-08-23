@@ -39,24 +39,33 @@ describe('linkMessageEmissions', () => {
   // Sans cette garde, un appelant dont l'enveloppe a dérivé diffuserait
   // `message:new` avec `undefined` : un client qui lit `.conversationId` d'un
   // payload absent ne peut que jeter le message — ou lever.
-  it("n'ajoute PAS `message:new` quand l'enveloppe ne porte aucun message", () => {
-    expect(linkMessageEmissions({}).map((e) => e.event)).toEqual([SERVER_EVENTS.LINK_MESSAGE_NEW]);
+  //
+  // Ces trois témoins attestaient jusqu'ici `[LINK_MESSAGE_NEW]` : le refus du
+  // message dérivé, et l'enveloppe seule maintenue. La seconde moitié était le
+  // défaut. L'enveloppe seule ne livre RIEN (son unique auditeur, le web, lit
+  // `data.message` ; iOS et Android n'écoutent que le `message:new` refusé), et
+  // une liste non vide dit au rejeu hors ligne « je sais diffuser ceci » —
+  // faisant compter comme REMISE une entrée qui n'atteint personne, et avancer
+  // la coche de son auteur. Cf. la doc de `linkMessageEmissions`.
+  it("ne diffuse RIEN quand l'enveloppe ne porte aucun message", () => {
+    expect(linkMessageEmissions({})).toEqual([]);
   });
 
-  it("n'ajoute PAS `message:new` quand `message` n'est pas un objet", () => {
-    expect(linkMessageEmissions({ message: null }).map((e) => e.event)).toEqual([
-      SERVER_EVENTS.LINK_MESSAGE_NEW,
-    ]);
-    expect(linkMessageEmissions({ message: 'msg-1' }).map((e) => e.event)).toEqual([
-      SERVER_EVENTS.LINK_MESSAGE_NEW,
-    ]);
+  it("ne diffuse RIEN quand `message` n'est pas un objet", () => {
+    expect(linkMessageEmissions({ message: null })).toEqual([]);
+    expect(linkMessageEmissions({ message: 'msg-1' })).toEqual([]);
   });
 
   // Un tableau est un objet en JS : sans un test qui le nomme, `typeof === 'object'`
   // le laisserait passer et le client recevrait une liste là où il attend un message.
-  it("n'ajoute PAS `message:new` quand `message` est un tableau", () => {
-    expect(linkMessageEmissions({ message: [MESSAGE] }).map((e) => e.event)).toEqual([
-      SERVER_EVENTS.LINK_MESSAGE_NEW,
-    ]);
+  it('ne diffuse RIEN quand `message` est un tableau', () => {
+    expect(linkMessageEmissions({ message: [MESSAGE] })).toEqual([]);
+  });
+
+  // L'enveloppe elle-même peut manquer : la charge relue de Redis est une
+  // AFFIRMATION, et `isDeliverableQueuedPayload` n'en garde que le plancher.
+  it("ne diffuse RIEN quand l'enveloppe elle-même est absente", () => {
+    expect(linkMessageEmissions(null)).toEqual([]);
+    expect(linkMessageEmissions(undefined)).toEqual([]);
   });
 });

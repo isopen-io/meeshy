@@ -56,4 +56,45 @@ final class UnreadCountBadgeTests: XCTestCase {
         XCTAssertEqual(UnreadCountBadge.shadowRadius, 3)
         XCTAssertEqual(UnreadCountBadge.shadowOpacity, 0.25)
     }
+
+    // MARK: - Le rouge est SÉMANTIQUE — protection MIGRÉE depuis la peau
+
+    /// **Cette garde vient d'ailleurs, et c'est le point.**
+    ///
+    /// Elle vivait dans `LentilleRowSourceGuardTests`, sur le bloc
+    /// `private var unreadBadge` de la rangée. Le 2026-08-23, la rangée a été
+    /// rebranchée sur cet atome (matrice L06 : « via l'atome partagé
+    /// UnreadCountBadge ») et ce bloc a disparu — emportant l'assertion avec
+    /// lui si on n'y avait pas pris garde.
+    ///
+    /// Une protection doit suivre le code qu'elle protège. La supprimer parce
+    /// que son site a bougé aurait rendu la suite verte en perdant l'invariant :
+    /// exactement le motif qui a laissé sept gardes s'évaporer dans une fusion
+    /// de ce même chantier.
+    ///
+    /// L'invariant, lui, est inchangé : un compte à rattraper se peint en ROUGE
+    /// sémantique, jamais avec l'accent de la conversation — l'accent est une
+    /// décoration, il ne dit pas « il te reste ceci à lire ».
+    func test_theBadgeIsSemanticRed_neverTheConversationAccent() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Primitives
+            .deletingLastPathComponent()   // .../MeeshyUITests
+            .deletingLastPathComponent()   // .../Tests
+            .deletingLastPathComponent()   // .../MeeshySDK
+            .appendingPathComponent("Sources/MeeshyUI/Primitives/UnreadCountBadge.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        XCTAssertTrue(
+            source.contains("public struct UnreadCountBadge"),
+            "Source de l'atome introuvable — les assertions ci-dessous ne mesureraient RIEN"
+        )
+        XCTAssertTrue(
+            source.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"),
+            "La pastille est peinte par le jeton sémantique de non-lus."
+        )
+        XCTAssertFalse(
+            source.contains("fill(accent)"),
+            "… jamais l'accent de la conversation : ce serait une décoration, pas un compte à rattraper."
+        )
+    }
 }

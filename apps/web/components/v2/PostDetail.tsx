@@ -237,6 +237,15 @@ function PostDetail({
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const { t } = useI18n('components');
   const translationItems = useMemo(() => postTranslationsToItems(post.translations), [post.translations]);
+
+  // Le corps effectivement servi, tenu par la rangée de drapeaux. `null` tant
+  // qu'elle n'a rien annoncé : on retombe alors sur le contenu du post, ce qui
+  // est exactement l'état d'un post sans traduction.
+  const [displayedContent, setDisplayedContent] = useState<string | null>(null);
+  const handleDisplayedChange = useCallback(
+    (version: { content: string }) => setDisplayedContent(version.content),
+    [],
+  );
   const isAuthor = currentUserId === post.authorId;
   const hasReactions = post.reactionSummary && Object.keys(post.reactionSummary).length > 0;
 
@@ -363,17 +372,29 @@ function PostDetail({
             <div className="mb-4">
               {translationItems.length > 0 ? (
                 <>
+                  {/* Le corps passe par `PostContentText` — lui seul sait rendre
+                      mentions et références — donc la rangée ne rend PAS le texte
+                      et se contente de dire, sous lui, dans quelle langue on lit.
+                      Le contenu servi est celui que la rangée annonce : sans ce
+                      relais, le drapeau afficherait « Français » au-dessus d'un
+                      paragraphe resté en version originale. */}
+                  <PostContentText
+                    content={displayedContent ?? post.content}
+                    references={post.mentions}
+                    className="text-[var(--gp-text-primary)]"
+                  />
+                  <ReferenceNoteRow references={post.mentions ?? []} viewerId={currentUserId ?? undefined} />
                   <TranslationToggle
                     originalContent={post.content}
                     originalLanguage={post.originalLanguage ?? 'unknown'}
                     originalLanguageName={post.originalLanguage ? getLanguageName(post.originalLanguage) : undefined}
                     translations={translationItems}
                     userLanguage={userLanguage}
-                    variant="block"
+                    variant="flags"
                     showContent={false}
+                    onDisplayedChange={handleDisplayedChange}
+                    className="mt-1.5"
                   />
-                  <PostContentText content={post.content} references={post.mentions} className="text-[var(--gp-text-primary)]" />
-                  <ReferenceNoteRow references={post.mentions ?? []} viewerId={currentUserId ?? undefined} />
                 </>
               ) : (
                 <>
