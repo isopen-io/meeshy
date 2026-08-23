@@ -165,23 +165,28 @@ export interface ServerEmitSocket {
  * chacune été écrite de bonne foi. Ces alias échouent à la COMPILATION si la
  * porte cesse de refuser ce pour quoi elle existe.
  *
- * **Ce qui les rend ROUGES en CI est `ts-jest`, pas l'étape de type-check** — et
- * c'est mesuré, pas supposé : l'étape « Type-check » de `ci.yml` est
- * `continue-on-error: true`, donc un `tsc --noEmit` rouge ne fait échouer aucun
- * job. Ce qui bloque, c'est le job de TEST : `ts-jest` compile ce module parce
- * que les suites l'atteignent par leurs imports, et `TS2344` n'est pas dans son
- * `diagnostics.ignoreCodes`. Vérifié en relâchant `ServerEmitArgs` : la suite
- * `broadcastMessageMutation` refuse de se charger, en nommant les trois lignes.
+ * **Ce qui les rend rouges en CI a CHANGÉ, et la note qui suit a déjà été
+ * périmée une fois** — appliquons-lui la règle du cycle 105 plutôt que de la
+ * laisser vieillir.
  *
- * Corollaire à ne pas perdre : **un fichier de production qu'AUCUN test
- * n'atteint n'a, en CI, aucune vérification de type du tout.** Ce module-ci est
- * atteint largement ; un cliquet posé ailleurs doit se poser la question.
+ * Au cycle 104, l'étape « Type-check » de `ci.yml` portait
+ * `continue-on-error: true` : un `tsc --noEmit` rouge ne faisait échouer aucun
+ * job, et seul `ts-jest` (job de TEST) rougissait, parce que les suites
+ * atteignent ce module par leurs imports et que `TS2344` n'est pas dans son
+ * `diagnostics.ignoreCodes`.
  *
- * Ces alias vivent ICI, dans le module qu'ils gardent, plutôt que dans
- * `__tests__/` : `tsconfig.json` EXCLUT les tests, et n'inclut `src/socketio/**`
- * que par atteignabilité depuis `server.ts`. Un cliquet posé dans un fichier que
- * personne n'importe n'est lu par aucun des deux compilateurs — donc jamais
- * rouge, ni en local ni en CI.
+ * Le cycle 105 bis a retiré cette amnistie : le type-check des trois packages
+ * de contrat (`shared`, `gateway`, `agent`) est désormais BLOQUANT, et le
+ * `include` du `tsconfig` est passé de dix-huit répertoires énumérés à la main
+ * à un glob RÉCURSIF sur `src`. Les deux voies gardent donc ce cliquet
+ * aujourd'hui, et la seconde ne dépend plus de l'atteignabilité depuis
+ * `server.ts`.
+ *
+ * Ce qui NE change pas, et qui reste la raison de les poser ici : `tsconfig.json`
+ * EXCLUT les tests. Un cliquet de type posé dans `__tests__/` n'est lu que par
+ * `ts-jest`, dont l'`ignoreCodes` couvre précisément `2322` et `2345` — les deux
+ * codes qu'un couple `(événement, charge)` dépareillé produit. **La production
+ * est le seul endroit d'où ce cliquet peut mordre.**
  * ------------------------------------------------------------------------- */
 
 /** Échoue à compiler dès que `T` n'est plus `true`. */

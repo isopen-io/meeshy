@@ -1,240 +1,159 @@
-# Cycle 106 — retirer la carte ouverte ne ferme rien : c'est le SPREAD qui fait taire le compilateur
+# Cycle 106 — la file rejoint le contrat : ce qu'on ENFILE est tenu à ce qu'on ÉMET
 
 **Date** : 2026-08-23
-**Branche** : `claude/keen-hamilton-dnabek`
-**Prédécesseur** : cycle 105 (PR #3370) — un cast est une porte, et `_seq` n'était
-déclaré nulle part
+**Branche** : `claude/keen-hamilton-qqnnp5`
+**Prédécesseur** : cycle 105 (PR #3370) — un cast est une porte, et `_seq`
+n'était déclaré nulle part
 
 ---
 
-## Le point de départ, et pourquoi il était faux
+## Le point de départ
 
-Le cycle 105 laissait ce suivi, hérité de plusieurs cycles :
+Le suivi nommé par les cycles 104 et 105, dans les mêmes termes deux fois :
 
-> `ConversationUpdatedEventData` porte une signature d'index ;
-> `lastMessagePreview` y voyage sans contrat.
+> La charge REJOUÉE n'est pas vérifiée contre la charge ÉMISE.
+> `QueuedMessagePayload.payload` est un `Record<string, unknown>` unique pour
+> onze `eventType`. C'est le seul endroit où un rejeu hors ligne peut diverger
+> en silence de la diffusion directe.
 
-La suite prescrite se lisait toute seule : fermer la carte ouverte, et le
-compilateur verra enfin les champs qui passaient dessous. **Ce lot commence par
-exécuter cette prescription et par mesurer ce qu'elle produit.**
-
-```
-retrait de `readonly [key: string]: unknown`
-→ packages/shared  : 0 erreur
-→ services/gateway : 0 erreur
-```
-
-Zéro. La prescription était **inerte**, et il a fallu comprendre pourquoi avant
-de pouvoir faire le vrai lot.
+« En silence » est le mot juste, et c'est ce qui rendait ce suivi le plus urgent
+des quatre : le seul témoin d'une divergence entre l'émission directe et le
+rejeu est un destinataire qui était **hors ligne au mauvais moment**,
+c'est-à-dire personne.
 
 ---
 
-## D1 — une clé venue d'un SPREAD est invisible au contrôle des propriétés excédentaires
+## Ce qui a été fait
 
-Mesuré sous `--strict`, isolément :
+### Une table, et le contrat qui en découle
 
-```ts
-type Target = { readonly a: string; readonly b?: number };
-declare function take(t: Target): void;
+`queuedEventContract.ts` porte **la** correspondance `eventType` de file →
+événement serveur. Elle vivait dans une chaîne de onze `if`
+(`_drainedEventName`), la forme sous laquelle une règle se met à diverger : rien
+n'y oblige à traiter un `eventType` neuf, et le repli final
+(`return MESSAGE_NEW`) l'aurait rejoué sous le mauvais nom, sans bruit.
 
-take({ a: 'x', zzz: 1 });          // TS2353 — attrapé
-const built = { a: 'x', zzz: 1 };
-take({ ...built });                // SILENCE
-take({ ...built, www: 2 });        // TS2353 sur `www` SEULEMENT
-take(built);                       // SILENCE
-```
+Le `satisfies Record<QueuedEventType, ServerEventName>` la rend **totale au
+compilateur**. De la table se dérive `QueuedPayloadFor<T>`, et de là un
+`QueuedEventVariant` corrélé : la charge qu'on ENFILE est désormais tenue à la
+forme que le contrat associe à l'événement qu'on REJOUERA.
 
-Or les **quatre** émetteurs de `conversation:updated` composent tous leur charge
-dans une variable — `updatePayload`, `basePayload`, `changedFields` — avant de la
-répandre dans l'appel à `emit`. Le contrôle des propriétés excédentaires n'avait
-donc jamais lieu sur aucun d'eux, avec ou sans signature d'index.
+### La corrélation devait remonter SIX étages
 
-> **La signature d'index ne supprimait qu'un contrôle que le spread supprimait
-> déjà.** Elle avait l'air d'être la cause parce qu'elle est la seule des deux
-> qui soit ÉCRITE. Le spread, lui, est la forme normale du code.
+Typer la file n'a rien gardé tant que les relais au-dessus déclaraient encore un
+`eventType` en union ET un `payload: Record<string, unknown>` — deux unions
+indépendantes de plus, à chaque étage, et le contrat se perdait donc **avant**
+d'atteindre la file :
 
-### Ce qui SURVIT au spread, en revanche
-
-Même protocole, et c'est la moitié qui décide du lot :
-
-```ts
-const partial = { b: 1 };
-take({ ...partial });     // TS2345 — champ requis ABSENT : attrapé
-const wrongType = { a: 42 };
-take({ ...wrongType });   // TS2345 — champ DÉCLARÉ de type faux : attrapé
-```
-
-Le spread ne désarme QUE l'excédent. Le contrôle d'un champ **déclaré** passe à
-travers.
-
-> **Le levier n'est donc pas de fermer la carte, c'est de DÉCLARER les champs.**
-> Les deux gestes se ressemblent, portent sur la même interface, et ne font pas
-> le même travail. Le premier est cosmétique ; le second est le seul qui vérifie
-> quoi que ce soit.
-
----
-
-## D2 — le contrat déclarait 7 champs ; les clients en lisent 17
-
-Relevé mécaniquement, pas de mémoire.
-
-| | champs |
+| relais | ce qu'il déclarait |
 |---|---|
-| **déclarés** (avant) | `conversationId`, `updatedBy`, `updatedAt`, `lastMessageTranslations`, `lastMessageOriginalLanguage`, `location`, `previewRecalculated` |
-| **groupe d'aperçu, non déclarés** | `lastMessageId`, `lastMessageAt`, `lastMessagePreview`, `senderId` |
-| **groupe métadonnées, non déclarés** | `title`, `description`, `avatar`, `banner`, `defaultWriteRole`, `isAnnouncementChannel`, `slowModeSeconds`, `autoTranslateEnabled` |
+| `MessageMutationManager.enqueueOfflineMessageMutation` | `'edited' \| 'deleted'` + sac de clés |
+| `MeeshySocketIOManager.enqueueOfflineMessageMutation` | 4 types + sac de clés |
+| `MeeshySocketIOManager.enqueueOfflineLinkMessage` | sac de clés |
+| `LinkMessageManager.enqueueOfflineLinkMessage` | sac de clés |
+| `ReactionOfflineQueueParams` | 2 types + sac de clés |
+| `MessageHandler._enqueueOfflineEventForParticipants` | 2 types + sac de clés |
+| `AttachmentReactionHandler._enqueueOfflineAttachmentReactionEvent` | 2 types + sac de clés |
 
-Les douze non déclarés voyagent depuis toujours et **iOS les décode tous les
-douze** (`ConversationUpdatedEvent`, `Sockets/MessageSocketManager.swift`). Le
-suivi hérité n'en nommait qu'un.
+> **Gouverner une frontière ne sert à rien tant que ses relais ne la relaient
+> pas.** C'est la même leçon que le cycle 98 sur la symétrie de X3DH : « un
+> correctif prouvé à une couche peut être défait par la couche qui le consomme »
+> — ici, par les sept couches qui l'alimentent.
 
-Les quatre du groupe d'aperçu sont les champs **PORTEURS** : l'identité du
-message, son horodatage, son texte, son auteur. Les trois qui étaient déclarés
-sont ceux qui les DÉCORENT. Le contrat déclarait la décoration et taisait le
-sujet.
+### Cinq doubles casts de plus
 
----
-
-## D3 — `lastMessageAt` était le seul horodatage dont le type était décidé par l'ENCODEUR
-
-Les trois émetteurs d'aperçu passaient l'objet `Date` de Prisma, quand
-`updatedAt` — son jumeau, dans le même payload, à deux lignes — est une chaîne
-ISO depuis toujours.
-
-Sur le fil la différence ne se voit pas : la passerelle n'installe aucun parseur
-socket.io personnalisé (vérifié — aucun `createAdapter`, aucun `parser:`), donc
-l'encodeur par défaut est `JSON.stringify`, qui rend exactement `toISOString()`.
-**Ce n'est pas une panne, et ce lot ne la présente pas comme telle.**
-
-Ce que ça coûtait est ailleurs : un champ dont le type n'est énoncé nulle part
-est un champ dont le type est décidé par la couche de transport — et **tout
-témoin en cours de route atteste alors une forme que personne ne reçoit.** Il y
-en avait un, et il est tombé au premier typage :
-
-```
-- expect(toA.payload.lastMessageAt).toEqual(new Date('2026-07-09T09:00:00Z'));
-+ expect(toA.payload.lastMessageAt).toBe('2026-07-09T09:00:00.000Z');
-```
-
-Le repli va dans `toIsoOrNull` (`utils/lastMessagePreviewPrism.ts`), à côté du
-résolveur de Prisme — pas trois fois à la main, ce qui rouvrirait l'écart que le
-lot ferme.
+`editedPayload as unknown as Record<string, unknown>`,
+`updateEvent as unknown as …` (×3), `translationData as unknown as …`. Toujours
+la même marque, toujours au même endroit : là où un objet de contrat doit
+franchir une frontière qui n'en veut pas.
 
 ---
 
-## D4 — `senderId` est servi dans DEUX espaces d'ids, et le cycle 104 bis s'est trompé sur ses lecteurs
+## Une erreur commise, mesurée, et transformée en cliquet
 
-Le suivi hérité disait : *« Piège ARMÉ, pas panne : aucun client ne le lit —
-mesuré sur les trois. »* La première moitié tient, la seconde est fausse :
+En écrivant la table, j'ai mappé `'link-message'` vers `MESSAGE_NEW`. C'est
+faux, et de la façon la plus discrète possible : ce type rejoue **deux**
+événements, et ce que la file STOCKE est l'ENVELOPPE `{ message }`
+(`LinkMessageNewEventData`), pas le message nu. Mapper vers `MESSAGE_NEW` typait
+la charge enfilée **un cran trop bas** — un appelant qui aurait enfilé le
+message nu aurait compilé, pour produire un rejeu non routable (pas de
+`conversationId` au premier niveau, donc jeté par les clients mobiles).
 
-- **le web LE LIT** — `neutralLastMessage` (`use-socket-cache-sync.ts:251`) le
-  recopie dans le `Message.senderId` de sa ligne neutre ;
-- **iOS LE DÉCODE** — `ConversationUpdatedEvent.senderId: String?`.
+Le compilateur l'a signalé au premier branchement de `broadcastLinkMessage`.
+L'assertion `_LinkMessageStoresTheEnvelope` gèle désormais ce point précis.
 
-Ce qui sauve le cas, c'est l'étage d'APRÈS : le web n'a aucun lecteur pour ce
-`senderId` (une seule assertion de test le nomme), et `mapConversationUpdated`
-ne le transmet pas au store iOS — le champ « décodé et non mappé » que le code
-iOS nomme lui-même deux lignes plus haut à propos de `location`.
-
-> **« Personne ne le lit » et « personne n'en tire de rendu » ne sont pas la même
-> mesure**, et seule la seconde était vraie. La conclusion ne change pas ; la
-> qualité de la preuve, si. Un piège armé se documente par ce qu'on a
-> effectivement mesuré, sinon le cycle suivant hérite d'une affirmation au lieu
-> d'un fait.
-
-L'espace canonique est le `Participant.id` — `schema.prisma` :
-`sender Participant @relation("MessageSender", fields: [senderId], references: [id])`.
-Le chemin socket sert un `User.id`. **Unifier est un changement de SÉMANTIQUE sur
-le chemin le plus chaud du service, et les deux espaces sont délibérément
-exploités ailleurs** (l'exclusion d'expéditeur du rejeu hors ligne les passe tous
-les deux, précisément parce qu'ils ne se télescopent jamais). Ce lot le DÉCLARE
-et écrit l'avertissement dans le contrat ; il ne le change pas. Suivi ouvert.
+> **Une erreur qu'on commet en écrivant un cliquet est le meilleur cas de test
+> qu'il aura jamais** : elle est exactement ce que le prochain refera.
 
 ---
 
-## Le cliquet : ce que le typage ne peut pas tenir
+## Ce que le lot n'a PAS trouvé, et pourquoi c'est le résultat
 
-Déclarer les douze champs arme les contrôles qui survivent au spread (requis
-absent, type faux). Reste le trou qui a produit le défaut d'origine : **un champ
-NOUVEAU, ajouté à un émetteur et à aucun contrat, redevient invisible au premier
-spread.** C'est exactement ce qui était arrivé à `location` (#3122), omise par le
-seul chemin REST/ZMQ pendant que les deux autres la portaient.
+**Aucun écrivain n'enfilait une charge divergente.** Les huit passent au contrat
+sans une correction de valeur, et **aucune fixture de test n'est tombée** — ce
+qui, sur un lot qui resserre un type, est la mesure elle-même : les doubles
+portaient déjà des charges de la bonne forme.
 
-Le cliquet est donc un balayage, pas un type —
-`socketio/__tests__/conversation-updated-declared-fields.ts` : il lit le jeu de
-champs DÉCLARÉS **à la source du contrat** (jamais une seconde liste écrite dans
-le témoin, qui dériverait) et le confronte aux clés que les émetteurs émettent
-RÉELLEMENT, sur les trois.
-
-**ROUGE prouvé, et la démonstration est le résultat du lot** : en injectant
-`probeUndeclaredField: 'x'` dans le payload de `MessageHandler`,
-
-```
-npx tsc --noEmit  → 0 erreur          ← le compilateur ne voit rien
-jest              → ROUGE, en nommant `transport: "socket"` et `probeUndeclaredField`
-```
-
-Les deux mesures côte à côte sont l'argument entier de ce cycle.
-
-Le détecteur de signature d'index a d'ailleurs commencé par se lire lui-même : le
-commentaire qui EXPLIQUE pourquoi la signature n'est plus là en cite la forme.
-Dépouillement des commentaires, même précaution que `server-emit-door-sweep.ts`
-— *« les commentaires citent la forme fautive pour l'expliquer, c'est leur
-rôle »*.
+Piège armé, pas panne. Et la distinction est mesurée, pas supposée : c'est la
+troisième fois de suite (104, 105, 106) qu'un canal non gouverné se révèle
+correct en valeur, et le dire chaque fois est ce qui rendra crédible le cycle
+où il ne le sera pas.
 
 ---
 
-## Ce que le lot ne fait pas
+## Ce qui reste une AFFIRMATION, et le restera
 
-- **Il n'unifie pas `senderId`** (D4) — changement de sémantique, son propre lot.
-- **Il ne touche à aucun client.** Les douze champs déclarés sont déclarés TELS
-  QU'ILS SONT SERVIS ; c'est la règle du cycle 94 (gouverner une charge jusque-là
-  libre ne doit rien y décider d'autre), sans quoi la mesure « rien n'a été
-  perdu » cesse d'être vérifiable.
-- **`lastMessageAt` ne change pas d'octet sur le fil.** `JSON.stringify(Date)` et
-  `toISOString()` rendent la même chaîne.
+Le typage borne ce qu'on **écrit**, pas ce qu'on **relit**. Que l'octet sorti de
+Redis soit bien celui qu'on y a mis reste une affirmation, faute de validation à
+l'exécution — et `_drainedEmissions` la porte explicitement, en un `as` nommé.
+La différence avec avant tient en une phrase : **l'affirmation ne couvre plus
+que la persistance, là où elle couvrait aussi la construction.**
+
+---
+
+## Les cliquets
+
+- **Exhaustivité** : `satisfies` — retirer un `eventType` de la table ne compile
+  plus.
+- **Justesse** : cinq assertions d'assignabilité, ancrées sur les
+  correspondances dont une inversion serait SILENCIEUSE parce que les deux
+  charges se ressemblent (les deux réactions, `new`/`edited`, l'enveloppe du
+  lien). Une table peut être totale et dire faux ; `satisfies` ne voit que la
+  première moitié.
+
+**RED prouvé sur trois mutations** :
+
+| mutation | ce qui tombe |
+|---|---|
+| les deux réactions CROISÉES | 2 assertions |
+| `'link-message'` → `MESSAGE_NEW` (l'erreur réellement commise) | 1 assertion |
+| un `eventType` retiré de la table | l'exhaustivité `satisfies` |
 
 ---
 
 ## Gates
 
-| gate | résultat |
-|---|---|
-| `tsc --noEmit` passerelle | **0 erreur** |
-| `packages/shared` build | vert |
-| suite passerelle complète | **836/836 suites, 19258/19258 tests** (+5) |
-| `packages/shared` | **103/103 fichiers, 2467/2467 tests** |
-| `apps/web` `tsc` | **1241 avant, 1241 après** — mesuré des DEUX côtés (`git stash`), inchangé |
+- `tsc --noEmit` passerelle : **0 erreur**
+- suite complète passerelle : **836/836 suites, 19253/19253 témoins**
+- 5 doubles casts retirés · 7 relais corrélés · une chaîne de onze `if`
+  remplacée par une table exhaustive
 
 ---
 
 ## Suivis
 
-- [ ] **`senderId` : deux espaces d'ids sous un seul nom** (D4). Le déclarer ne
-      l'unifie pas. L'espace canonique est `Participant.id` ; le chemin socket
-      sert un `User.id`. Aucun client n'en tire de rendu aujourd'hui — mesuré,
-      cette fois.
-- [ ] **Les trois autres contrats à signature d'index** — `LinkMessagePayload`
-      en porte une, `SocketIOMessage` est à vérifier. Le balayage de ce lot est
-      écrit POUR `conversation:updated` ; le généraliser demande de relever
-      d'abord les émetteurs de chacun.
-- [ ] Suivi hérité — la charge REJOUÉE est AFFIRMÉE, pas PROUVÉE
-      (`QueuedMessagePayload.payload`, un `Record<string, unknown>` unique pour
-      onze `eventType`). **Même famille que ce lot** : une carte ouverte dans un
-      contrat est une absence de déclaration.
-- [ ] Suivi hérité — `_seq` n'est déclaré que sur `NotificationEventData`.
-- [ ] Suivi hérité — `ReactionUpdateEvent` / `ReactionUpdateEventData`, deux
-      exemplaires de la même déclaration.
-- [ ] Suivi hérité — le miroir client→serveur n'est pas gouverné.
-
----
-
-## La leçon, pour le cycle suivant
-
-> **Un suivi hérité est une PRESCRIPTION, et une prescription se vérifie avant de
-> s'exécuter.** Celui-ci nommait le bon endroit et le mauvais geste. L'exécuter
-> tel quel aurait produit un lot vert, propre, et sans effet — la signature
-> d'index retirée, le mécanisme intact, et le suivi rayé de la liste. Le seul
-> moyen de s'en apercevoir était de MESURER ce que le geste prescrit produit
-> (0 erreur), au lieu de le tenir pour acquis parce qu'un cycle précédent l'avait
-> écrit.
+- [ ] La lecture depuis Redis reste non validée à l'exécution. Un `zod.parse`
+      par `eventType` au DRAIN transformerait la dernière affirmation en
+      vérification — mais il coûte une validation par entrée rejouée sur le
+      chemin de reconnexion, donc c'est une décision de PERFORMANCE avant d'être
+      une décision de typage, et elle demande une mesure.
+- [ ] `_seq` n'est déclaré que sur `NotificationEventData` (suivi du cycle 105).
+- [ ] `ReactionUpdateEvent` / `ReactionUpdateEventData` : deux exemplaires
+      structurellement identiques.
+- [ ] `ConversationUpdatedEventData` porte une signature d'index ;
+      `lastMessagePreview` y voyage sans contrat.
+- [ ] **Le miroir client→serveur n'est toujours pas gouverné** — trois cycles
+      que ce suivi est reporté, et il est désormais le plus gros restant :
+      `ClientToServerEvents` n'a aucun équivalent de `serverEmit.ts`, et
+      `socket.on(...)` reste libre de déclarer la forme qu'il veut de ce qu'il
+      REÇOIT. C'est la moitié HOSTILE du contrat.

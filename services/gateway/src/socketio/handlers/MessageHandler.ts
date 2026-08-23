@@ -123,6 +123,7 @@ import {
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
+import type { QueuedVariantFor } from '../queuedEventContract';
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -1649,10 +1650,8 @@ export class MessageHandler {
     actorParticipantId?: string | null;
     /** `User.id` de l'acteur. Les deux espaces d'id ne se croisent jamais. */
     actorUserId?: string | null;
-    eventType: 'edited' | 'deleted';
     messageId: string;
-    payload: Record<string, unknown>;
-  }): Promise<void> {
+  } & QueuedVariantFor<'edited' | 'deleted'>): Promise<void> {
     await enqueueForOfflineParticipants(
       { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
       params

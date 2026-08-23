@@ -7,6 +7,7 @@ import {
   type PreviewPrisma,
 } from './emitConversationPreviewUpdate';
 import type { Anonymized, ServerEmitTarget } from './serverEmit';
+import type { QueuedVariantFor } from './queuedEventContract';
 
 // Ce relais ne lit rien lui-même : il transmet le prisma de l'aperçu tel quel.
 // Le dériver plutôt que le redéclarer est ce qui empêche les deux listes de
@@ -23,10 +24,8 @@ export interface MessageMutationManager {
   enqueueOfflineMessageMutation(params: {
     conversationId: string;
     actorUserId: string | null | undefined;
-    eventType: 'edited' | 'deleted';
     messageId: string;
-    payload: Record<string, unknown>;
-  }): Promise<void>;
+  } & QueuedVariantFor<'edited' | 'deleted'>): Promise<void>;
   emitUnreadCountsToRecipients?(params: {
     conversationId: string;
     senderId: string | null | undefined;
@@ -139,6 +138,21 @@ function emitToConversationRoom(
  * successful edit into a 500. `onError` lets callers log against the
  * originating request.
  */
+/**
+ * Le couple `(eventType, payload)` de la FILE, narrowé une fois.
+ *
+ * `broadcastMessageMutation` reçoit une union discriminée et la destructurait :
+ * `eventType` et `payload` redevenaient alors deux unions indépendantes, et
+ * l'appel à la file ne pouvait plus être vérifié — le même défaut que le
+ * cycle 104 a corrigé sur l'ÉMISSION, une couche plus bas et pour la même
+ * raison.
+ */
+function queuedVariant(params: MessageMutationParams): QueuedVariantFor<'edited' | 'deleted'> {
+  return params.eventType === 'edited'
+    ? { eventType: 'edited', payload: params.payload }
+    : { eventType: 'deleted', payload: params.payload };
+}
+
 export async function broadcastMessageMutation(params: MessageMutationParams): Promise<void> {
   const { prisma, manager, conversationId, actorUserId, eventType, messageId, payload, onError } = params;
   if (!manager) return;
@@ -197,9 +211,11 @@ export async function broadcastMessageMutation(params: MessageMutationParams): P
       manager.enqueueOfflineMessageMutation({
         conversationId,
         actorUserId,
-        eventType,
         messageId,
-        payload,
+        // Le couple part CORRÉLÉ (cycle 106) : le destructurer le rendrait à
+        // deux unions indépendantes, et la file cesserait d'être gardée à
+        // l'étage même où elle vient de l'être.
+        ...queuedVariant(params),
       })
     ).catch((error: unknown) => onError?.(error));
   } catch (error) {
