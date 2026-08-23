@@ -330,6 +330,15 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
+     * Sets the text backing (none / solid / glass) of the on-canvas element [id] (inert on
+     * unknown id). Selection and editing are untouched — you restyle the element you are
+     * editing. The wire mapping ([StoryTextElement.toTextObject]) carries it on publish.
+     */
+    fun onTextElementBackground(id: String, background: StoryTextBackground) {
+        _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(background = background) }) }
+    }
+
+    /**
      * Pinch-scales / rotates the on-canvas element [id] by the incremental gesture
      * deltas ([scaleBy] is the multiplicative pinch factor, [rotateByDeg] the additive
      * rotation; clamped/wrapped by the pure [StoryTextElement.transformed]). Selection
