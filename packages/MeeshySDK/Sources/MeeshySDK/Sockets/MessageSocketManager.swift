@@ -2898,14 +2898,36 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.emit("call:join", ["callId": callId])
     }
 
-    /// ACK-aware join: emits `call:join` and awaits gateway confirmation (3 s
-    /// timeout). Returns `true` when the gateway has put the socket in the call
-    /// room. Use this on socket reconnect before sending room-scoped events
-    /// (call:request-ice-servers, call:toggle-video) — the gateway guards those
-    /// with `socket.rooms.has(ROOMS.call(callId))` which is only true after the
-    /// async joinCall() DB work completes and socket.join() runs.
-    public func emitCallJoinWithAck(callId: String) async -> Bool {
-        guard let socket else { return false }
+    /// Detailed outcome of an ACK-aware `call:join` — mirrors the gateway's
+    /// `CallJoinAck` shape (`packages/shared/types/video-call.ts`) instead of
+    /// collapsing it to a bare `Bool`. `endReason` carries the RAW server
+    /// string (Prisma `CallSession.endReason`, populated only when
+    /// `errorCode == "CALL_ENDED"`) — the SDK stays pure and does not map it;
+    /// the app layer maps it via `CallEndReasonMapper`, same convention
+    /// already used for `call:ended`/`call:missed`.
+    public struct CallJoinAckResult: Sendable {
+        public let joined: Bool
+        public let errorCode: String?
+        public let endReason: String?
+
+        public init(joined: Bool, errorCode: String? = nil, endReason: String? = nil) {
+            self.joined = joined
+            self.errorCode = errorCode
+            self.endReason = endReason
+        }
+    }
+
+    /// ACK-aware join: emits `call:join` and awaits gateway confirmation (6 s
+    /// timeout), returning the full ack (success + error detail) rather than
+    /// just success. Use this on socket reconnect before sending room-scoped
+    /// events (call:request-ice-servers, call:toggle-video) — the gateway
+    /// guards those with `socket.rooms.has(ROOMS.call(callId))` which is only
+    /// true after the async joinCall() DB work completes and socket.join()
+    /// runs. Also lets a reconnect distinguish "the call already ended
+    /// server-side while we were disconnected" (`errorCode == "CALL_ENDED"`)
+    /// from a plain ACK timeout — see Vague 162.
+    public func emitCallJoinWithAckDetailed(callId: String) async -> CallJoinAckResult {
+        guard let socket else { return CallJoinAckResult(joined: false) }
         let payload: [String: Any] = ["callId": callId]
         return await withCheckedContinuation { continuation in
             var resumed = false
@@ -2920,10 +2942,23 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             socket.emitWithAck("call:join", payload).timingOut(after: 6) { items in
                 guard !resumed else { return }
                 resumed = true
-                let success = (items.first as? [String: Any])?["success"] as? Bool ?? false
-                continuation.resume(returning: success)
+                let response = items.first as? [String: Any]
+                let success = response?["success"] as? Bool ?? false
+                let error = response?["error"] as? [String: Any]
+                let errorCode = error?["code"] as? String
+                let endReason = error?["endReason"] as? String
+                continuation.resume(returning: CallJoinAckResult(
+                    joined: success, errorCode: errorCode, endReason: endReason
+                ))
             }
         }
+    }
+
+    /// Boolean-only convenience over `emitCallJoinWithAckDetailed` — kept for
+    /// callers (e.g. the incoming-call cold-start join) that only care whether
+    /// the room join succeeded, not why it didn't.
+    public func emitCallJoinWithAck(callId: String) async -> Bool {
+        await emitCallJoinWithAckDetailed(callId: callId).joined
     }
 
     public func emitCallLeave(callId: String) {
