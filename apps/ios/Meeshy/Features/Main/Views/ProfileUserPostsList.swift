@@ -966,8 +966,12 @@ final class ProfileUserPostsViewModel: ObservableObject {
         do {
             // `visibility: nil` = héritage de l'original. Un repost simple
             // depuis le profil n'offre aucun sélecteur d'audience.
-            _ = try await postService.repost(postId: postId, targetType: nil, content: nil,
-                                             isQuote: false, visibility: nil)
+            let cible = RepostTargeting.target(
+                cardId: postId, cardType: post.type,
+                repostOfId: post.repost?.id, originalRepostOfId: post.repost?.originalRepostOfId
+            )
+            _ = try await postService.repost(postId: cible.postId, targetType: cible.targetType,
+                                             content: nil, isQuote: false, visibility: nil)
             FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.repost.success", defaultValue: "Repartagé", bundle: .main))
         } catch {
             repostedOverrides[postId] = nil

@@ -23,7 +23,13 @@ nonisolated struct ComposerIntent: Equatable {
 /// à elle : elle est matérialisée par les valeurs associées ci-dessous.
 nonisolated enum ComposerOrigin: Equatable {
     case storyTray, feedComposer, reelTab, moodChip
-    case repost(ofPostId: String), edit(postId: String), draft(id: String), share
+    /// Deux portes PORTENT leur format au lieu de le deviner : l'appelant l'a
+    /// déjà en main, puisqu'on tape « reposter » ou « modifier » sur une carte
+    /// RENDUE. Ce format n'est pas une graine — il fait partie de l'identité de
+    /// la porte, et deux reposts de formats différents ouvrent deux composers.
+    case repost(ofPostId: String, sourceFormat: ComposerFormat)
+    case edit(postId: String, documentFormat: ComposerFormat)
+    case draft(id: String), share
     case conversationMedia(messageId: String, attachmentId: String)
 }
 
@@ -68,6 +74,13 @@ nonisolated enum LegacyComposer: Equatable { case statusComposer, repostComposer
 /// de `f(formatCourant, graine)`, jamais de ce profil figé.
 nonisolated struct ComposerProfile: Equatable {
     let initialFormat: ComposerFormat
+    /// Les formats ATTEIGNABLES depuis l'ouverture. Contient TOUJOURS
+    /// `initialFormat` — on ne peut pas ouvrir sur un format qu'on n'offre pas.
+    ///
+    /// Contrainte de la loi 4 pour le consommateur : un format absent d'ici
+    /// n'est pas grisé, il n'est **pas affiché**. Un éventail à une seule
+    /// entrée ne montre donc aucun sélecteur.
+    let offeredFormats: [ComposerFormat]
     let showsSlides: Bool
     let showsTimeline: Bool
     let opensWith: ComposerOpening
@@ -94,11 +107,24 @@ nonisolated extension ComposerProfile {
     /// - **ce qui route vers un composer historique annonce le format que ce
     ///   composer sait produire** — annoncer autre chose promettrait une surface
     ///   qui n'existe pas.
-    static func profile(for origin: ComposerOrigin) -> ComposerProfile {
+    /// - Parameter compositionQualifiesAsReel: `qualifiesAsReel` de la
+    ///   composition COURANTE. Le gate AJOUTE le réel, il ne RETIRE jamais le
+    ///   format propre d'une porte — sans quoi l'invariant « l'éventail
+    ///   contient toujours le format initial » tomberait pour l'onglet réels,
+    ///   dont la composition n'existe pas encore quand la caméra s'ouvre.
+    static func profile(
+        for origin: ComposerOrigin,
+        compositionQualifiesAsReel: Bool = false
+    ) -> ComposerProfile {
+        func plusReel(_ base: [ComposerFormat]) -> [ComposerFormat] {
+            compositionQualifiesAsReel ? base + [.reel] : base
+        }
+
         switch origin {
         case .storyTray:
             return ComposerProfile(
                 initialFormat: .story,
+                offeredFormats: plusReel([.story, .post]),
                 showsSlides: true,
                 showsTimeline: true,
                 opensWith: .cameraReady,
@@ -114,6 +140,7 @@ nonisolated extension ComposerProfile {
             // sans elle serait une régression sèche : la bascule est post-v1.
             return ComposerProfile(
                 initialFormat: .post,
+                offeredFormats: plusReel([.post, .story]),
                 showsSlides: true,
                 showsTimeline: true,
                 opensWith: .keyboardOnContent,
@@ -127,6 +154,7 @@ nonisolated extension ComposerProfile {
             // sans bouton de création (revue Fable n°5).
             return ComposerProfile(
                 initialFormat: .reel,
+                offeredFormats: [.reel, .post],
                 showsSlides: false,
                 showsTimeline: true,
                 opensWith: .videoCameraReady,
@@ -137,6 +165,7 @@ nonisolated extension ComposerProfile {
         case .moodChip:
             return ComposerProfile(
                 initialFormat: .status,
+                offeredFormats: [.status],
                 showsSlides: false,
                 showsTimeline: false,
                 opensWith: .moodGrid,
@@ -144,9 +173,17 @@ nonisolated extension ComposerProfile {
                 routesToLegacy: .statusComposer
             )
 
-        case .repost:
+        case .repost(_, let sourceFormat):
+            // Le format d'un repost MIROITE celui de sa source. Changer de
+            // format est le geste d'ANCRAGE — « garder la chose pour de bon » :
+            // l'éphémère reste éphémère par défaut (story 20 h, statut 1 h), et
+            // le post est la seule cible permanente, donc la seule option
+            // ajoutée. Reposter un post ne le propose pas deux fois : il est
+            // déjà son propre ancrage, et un éventail à une entrée n'affiche
+            // aucun sélecteur (loi 4).
             return ComposerProfile(
-                initialFormat: .post,
+                initialFormat: sourceFormat,
+                offeredFormats: sourceFormat == .post ? [.post] : [sourceFormat, .post],
                 showsSlides: true,
                 showsTimeline: true,
                 opensWith: .keyboardOnContent,
@@ -154,9 +191,21 @@ nonisolated extension ComposerProfile {
                 routesToLegacy: .repostComposer
             )
 
-        case .edit:
+        case .edit(_, let documentFormat):
+            // L'édition ne convertit qu'entre POST et RÉEL : `UpdatePostSchema`
+            // type est un `z.enum(['POST','REEL'])`, le serveur refuse le reste.
+            // Changer le format d'un contenu déjà publié est le rôle du REPOST,
+            // pas de l'édition — éditer une story ou un statut n'offre donc
+            // AUCUN choix.
+            let offerts: [ComposerFormat]
+            switch documentFormat {
+            case .story, .status: offerts = [documentFormat]
+            case .reel: offerts = [.reel, .post]
+            case .post: offerts = plusReel([.post])
+            }
             return ComposerProfile(
-                initialFormat: .story,
+                initialFormat: documentFormat,
+                offeredFormats: offerts,
                 showsSlides: true,
                 showsTimeline: true,
                 opensWith: .resume,
@@ -171,6 +220,7 @@ nonisolated extension ComposerProfile {
             // document pour le deviner.
             return ComposerProfile(
                 initialFormat: .post,
+                offeredFormats: plusReel([.post, .story]),
                 showsSlides: true,
                 showsTimeline: true,
                 opensWith: .resume,
@@ -181,8 +231,16 @@ nonisolated extension ComposerProfile {
         case .conversationMedia:
             // e9/O13 : le média reçu est déjà posé par la porte, il ne reste que
             // le mot à écrire. Profil DÉFINI, câblage lot G.
+            //
+            // Le format d'ouverture est une STORY, pas un post (directive du
+            // 2026-08-23, doctrine alignée en rév. 3). Le coût de l'erreur est
+            // ASYMÉTRIQUE : ouvrir une story quand l'utilisateur voulait un post
+            // se répare d'un tap dans l'éventail, tandis qu'un post publié ne se
+            // dé-publie pas. Le défaut tombe donc du côté réversible, et le
+            // geste courant sur un média reçu est bref.
             return ComposerProfile(
-                initialFormat: .post,
+                initialFormat: .story,
+                offeredFormats: plusReel([.story, .post]),
                 showsSlides: true,
                 showsTimeline: true,
                 opensWith: .keyboardOnContent,
@@ -190,5 +248,49 @@ nonisolated extension ComposerProfile {
                 routesToLegacy: nil
             )
         }
+    }
+}
+
+/// Ce que vise un repost : la RACINE, et le format de la CARTE.
+///
+/// Deux choses différentes, qu'il est naturel de confondre — la confusion a
+/// été faite puis rattrapée en revue le 2026-08-23, et c'est pour qu'elle ne
+/// se refasse pas que la règle vit ici plutôt que recopiée sur six sites.
+///
+/// - La RÉFÉRENCE remonte à la racine (`originalRepostOfId`), sans quoi le
+///   repost d'un repost embarquerait une carte de partage vide.
+/// - Le FORMAT reste celui de la carte sur laquelle l'utilisateur a agi. Il ne
+///   suit PAS la racine : reposter depuis son fil le repost-de-story de
+///   quelqu'un doit donner un post dans son fil, jamais une story de 20 h dans
+///   son tray. L'utilisateur a agi sur une carte de fil ; il veut son fil.
+nonisolated struct RepostTarget: Equatable {
+    let postId: String
+    /// Le vocabulaire du SDK (`PostType`), pas celui du composer : c'est ce que
+    /// `PostService.repost(postId:targetType:…)` attend, et donc ce qui part
+    /// sur le fil. `nil` laisse le repli du gateway décider (`?? POST`) — c'est
+    /// le FILET, jamais l'intention.
+    let targetType: PostType?
+}
+
+nonisolated enum RepostTargeting {
+    /// - Parameters:
+    ///   - cardId: la carte sur laquelle l'utilisateur a agi.
+    ///   - cardType: son type tel que le fil l'a servi. `nil` laisse le repli
+    ///     du gateway décider — c'est le filet, jamais l'intention.
+    ///   - repostOfId: la publication que la carte repartage, s'il y en a une.
+    ///   - originalRepostOfId: la racine de la chaîne, si le serveur l'a
+    ///     hydratée. Elle prime, parce qu'une chaîne se replie sur sa racine.
+    static func target(
+        cardId: String,
+        cardType: String?,
+        repostOfId: String? = nil,
+        originalRepostOfId: String? = nil
+    ) -> RepostTarget {
+        let reference = originalRepostOfId ?? repostOfId ?? cardId
+        let brut = cardType?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() ?? ""
+        // Un type que le SDK ne connaît pas retombe sur `nil` plutôt que
+        // d'inventer un format : le filet du gateway vaut mieux qu'une
+        // supposition.
+        return RepostTarget(postId: reference, targetType: PostType(rawValue: brut))
     }
 }

@@ -876,9 +876,18 @@ class FeedViewModel: ObservableObject {
 
     func repostPost(_ postId: String, content: String? = nil, isQuote: Bool = false) async {
         do {
+            // La RÉFÉRENCE remonte à la racine, le FORMAT reste celui de la
+            // carte : reposter depuis le fil le repost-de-story de quelqu'un
+            // doit donner un post dans son fil, jamais une story dans son tray.
+            let cible = RepostTargeting.target(
+                cardId: postId,
+                cardType: posts.first(where: { $0.id == postId })?.type,
+                repostOfId: posts.first(where: { $0.id == postId })?.repost?.id,
+                originalRepostOfId: posts.first(where: { $0.id == postId })?.repost?.originalRepostOfId
+            )
             _ = try await postService.repost(
-                postId: resolveRepostTargetId(postId),
-                targetType: nil,           // nil = le serveur cree un POST (2026-08-19)
+                postId: cible.postId,
+                targetType: cible.targetType,
                 content: isQuote ? content : nil,
                 isQuote: isQuote ? (content != nil) : false,
                 // Le feed ne propose pas de sélecteur d'audience : on hérite de l'original.

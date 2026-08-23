@@ -296,9 +296,15 @@ struct PostDetailView: View {
         Task {
             defer { Task { @MainActor in isRepostInFlight = false } }
             do {
+                let carte = await MainActor.run { displayPost }
+                let cible = RepostTargeting.target(
+                    cardId: postId, cardType: carte?.type,
+                    repostOfId: carte?.repost?.id,
+                    originalRepostOfId: carte?.repost?.originalRepostOfId
+                )
                 _ = try await PostService.shared.repost(
-                    postId: postId,
-                    targetType: nil,
+                    postId: cible.postId,
+                    targetType: cible.targetType,
                     content: nil,
                     isQuote: quote
                 )
