@@ -2,6 +2,66 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-23 **story keyframe animation plays back on the viewer canvas** (slice
+> `story-keyframe-interpolation`, feature-parity §E — the `Next` pointer's preferred candidate: a genuinely
+> wire-backed keyframe interpolation reducer, chosen over glue-only work). iOS animates a canvas clip's
+> position/scale/opacity over time from its `StoryKeyframe[]` (the wire model Android already decodes); the
+> Android viewer projection explicitly **dropped** keyframes ("keyframe animation … not applied in this
+> projection"), so a shifting/fading foreground clip rendered frozen at its static base.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3404 (web it. 255), #3395 (iOS 239i),
+> #3392 (gateway it. 254): none is a `claude/apps/android/*` slice, none in this routine's scope, none touched.
+> Prior iteration (`story-text-element-rtl-direction`, #3402) already merged into main. Branched off
+> freshly-fetched `origin/main` (`0656f14a`).
+>
+> **Three pure units, ported 1:1 from iOS's canonical SOTA path** (`KeyframeInterpolator.swift` +
+> `StoryReaderResolvers.swift`): (1) `StoryEasing.eased(t)` — linear/easeIn/easeOut/easeInOut, ports
+> `StoryEasing.apply`; (2) `StoryKeyframeInterpolator.interpolate(samples, at)` — 0→null, 1→constant,
+> `t≤t0`/`t≥tn` clamp, else find the straddling segment, `u=(t-lo)/(hi-lo)`, apply the LOWER keyframe's easing,
+> lerp; unsorted-safe via an O(n) sorted-check before the O(n log n) fallback (runs per animation frame);
+> (3) `StoryKeyframeResolver.resolve(...)` — projects the four independently-optional wire channels
+> (x/y/scale/opacity) each onto their own sample list, returns a complete `ResolvedKeyframeTransform` (un-keyed
+> channels hold the clip's static base) or `null` when nothing is keyed. **Deliberate improvement over iOS**:
+> iOS subtracts the clip `startTime` for the position channel but forgets to for scale/opacity
+> (`StoryReaderResolvers.swift:117/129` pass raw `currentTime`); per timeline spec §2.1 `keyframe.time` is a
+> `startTime`-relative offset for EVERY channel, so this port subtracts it uniformly. A `startTime==0` clip
+> (the common case) is unaffected.
+>
+> **Real wiring (not orphan logic)**: `StoryForegroundMediaView` now carries `keyframes`+`startTime` (threaded
+> through `toForegroundMediaView`, previously discarded) + an `opacity` base, and exposes the pure
+> `animated(atSeconds)` (returns `this` when nothing animates, else a copy with interpolated x/y/scale/opacity).
+> **Compose glue (exempt)**: `StoryForegroundLayer` takes the slide `progress` clock (`progress.value *
+> SLIDE_DURATION_MS/1000`), calls `.animated(playhead)`, and applies `.alpha(opacity)` — a keyed foreground
+> clip now moves/scales/fades during playback instead of sitting frozen.
+>
+> **SDK bootstrap — recipe FLIPPED**: the four-edit copy→patch `android-37` (correct `package.xml`) STILL died
+> `Failed to find target with hash string 'android-37'` on this image; the **pristine** `android-37.0`
+> (no patching) worked instead — opposite of the last two entries. NOTES updated: try pristine FIRST next run.
+>
+> **Tests: +26** — 13 `StoryKeyframeInterpolatorTest` (5 easing: endpoints-pinned, linear identity, easeIn/
+> easeOut/easeInOut midpoints; empty→null; single→constant; clamp-low; clamp-high; linear midpoint; lower-kf
+> easing; segment-crossing switches easing; same-time no-divide-by-zero; unsorted≡sorted), 8
+> `StoryKeyframeResolverTest` (null/empty/no-channel→null; keyed-channel-only; four-channels; startTime offset
+> uniform; no-easing linear; per-channel easing), 4 `StoryForegroundKeyframeTest` (no-keyframes→identity;
+> no-channel→identity; keyed follows animation + identity fields preserved; startTime offsets the clock), +1
+> `StoryViewerViewModelTest` (foreground projection carries keyframes/startTime, animates). **Mutation
+> RED-proof ×2 (isolated, restored after)**: `EASE_IN → t` (linear) failed EXACTLY the 3 ease-in tests; dropping
+> the `startTime` subtraction failed EXACTLY the 2 startTime-offset tests — 5 of 26 failed, the other 21 stayed
+> green. Genuine discrimination; production verified clean after restore.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, **BUILD SUCCESSFUL** (973 tasks, 5m46s, no test
+> failures). Reviewer PASS. Diff is `apps/android` only (2 new pure files, 1 view-model data-class + projection
+> threading, Compose glue in the viewer screen, +26 tests across 4 files, tracking docs). Verdict: **PASS** —
+> pure app-side reducers reading an existing wire model + exempt Compose glue, behavioural tests through the
+> public API, no production logic outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) V2-timeline neighbours of this slice — the **clip-transition** reader resolver
+> (crossfade/dissolve opacity ramp, iOS `ReaderTransitionResolver` + `StoryRenderer.clipTransitionOpacity`, also
+> wire-backed via `StoryClipTransition`) is the natural pure-logic follow-up, OR extend keyframe application to
+> **text** clips (the wire `StoryTextObject.keyframes` already decode — a text element could animate the same way
+> the foreground media now does). Both are genuinely wire-backed. Prefer the one with the cleaner pure core;
+> scout read-only first to confirm the wire fields and avoid glue-only work.
+
 > On 2026-08-23 **story text elements resolve their base writing direction (RTL) from content** (slice
 > `story-text-element-rtl-direction`, feature-parity §E — the last named text-element attribute, the `Next`
 > pointer's RTL item). This **completes §E text-element attribute parity** (style, colour, size, alignment,

@@ -58,6 +58,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -401,7 +402,10 @@ fun StoryViewerScreen(
 
         slide?.foregroundMedia?.forEach { foreground ->
             key(foreground.url) {
-                StoryForegroundLayer(media = foreground)
+                StoryForegroundLayer(
+                    media = foreground,
+                    playheadSeconds = progress.value * SLIDE_DURATION_MS / 1000f,
+                )
             }
         }
 
@@ -775,22 +779,30 @@ private fun ReactionFlightOverlay(
 /**
  * A foreground video/image layer positioned at [StoryForegroundMediaView.x]/[y]
  * (canvas-normalised, 0..1) as its center anchor, sized to a fraction of the
- * canvas width scaled by the object's own `scale`. Keyframe animation,
- * rotation and inter-slide transitions are not applied in this projection —
- * see [StoryForegroundMediaView].
+ * canvas width scaled by the object's own `scale`. The [playheadSeconds] clock
+ * drives keyframe animation via the pure [StoryForegroundMediaView.animated]:
+ * position/scale/opacity follow the clip's keyframes for the current instant, or
+ * hold their static base when the clip has none. Rotation and inter-slide
+ * transitions are still not applied in this projection.
  */
 @Composable
-private fun StoryForegroundLayer(media: StoryForegroundMediaView, modifier: Modifier = Modifier) {
+private fun StoryForegroundLayer(
+    media: StoryForegroundMediaView,
+    playheadSeconds: Float,
+    modifier: Modifier = Modifier,
+) {
+    val animated = media.animated(playheadSeconds)
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val aspectRatio = media.aspectRatio.toFloat().takeIf { it > 0f } ?: 1f
-        val targetWidth = maxWidth * FOREGROUND_WIDTH_FRACTION * media.scale.toFloat().coerceIn(0.2f, 3f)
+        val aspectRatio = animated.aspectRatio.toFloat().takeIf { it > 0f } ?: 1f
+        val targetWidth = maxWidth * FOREGROUND_WIDTH_FRACTION * animated.scale.toFloat().coerceIn(0.2f, 3f)
         val targetHeight = targetWidth / aspectRatio
-        val offsetX = maxWidth * media.x.toFloat() - targetWidth / 2
-        val offsetY = maxHeight * media.y.toFloat() - targetHeight / 2
+        val offsetX = maxWidth * animated.x.toFloat() - targetWidth / 2
+        val offsetY = maxHeight * animated.y.toFloat() - targetHeight / 2
         val layerModifier = Modifier
             .offset(x = offsetX, y = offsetY)
             .width(targetWidth)
             .aspectRatio(aspectRatio)
+            .alpha(animated.opacity.toFloat().coerceIn(0f, 1f))
         if (media.isVideo) {
             ReelVideoSurface(mediaUrl = media.url, isActive = true, muted = false, modifier = layerModifier)
         } else {

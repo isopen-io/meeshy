@@ -5,6 +5,37 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-23 — SDK recipe flipped AGAIN: on THIS container the copy→patch `android-37` FAILS, pristine `android-37.0` WORKS (opposite of the previous entry)
+
+Slice `story-keyframe-interpolation`. The full four-edit copy→patch (`source.properties` ApiLevel,
+`package.xml` `<api-level>` + `path=`, `build.prop` `sdk_full` — even the extra
+`ro.system.build.version.sdk_full`) produced a folder whose `package.xml` was demonstrably correct
+(`path="platforms;android-37"`, `<api-level>37</api-level>`, `AndroidVersion.ApiLevel=37`), yet EVERY
+`./gradlew` still died with **`Failed to find target with hash string 'android-37'`** — with a fresh
+daemon, with `-Pandroid.builder.sdkDownload=false`, with android-37.0 removed. AGP 8.13.0 on this
+image simply would not load the hand-patched `android-37` as a target.
+
+What worked instead: install the **pristine** platform and leave it as-is —
+```bash
+sdkmanager --channel=3 "platforms;android-37.0"   # let AGP map compileSdk 37 → android-37.0
+# do NOT create android-37; do NOT patch anything
+```
+`assembleDebug testDebugUnitTest` was then BUILD SUCCESSFUL (973 tasks). NB the very first build with
+this present will print `Installing Android SDK Platform 37.0` (AGP re-materialises it) and then
+succeed — that install line is NOT the failure, unlike the copy→patch runs where it preceded the hash
+error. **Net rule: the recipe is image-dependent and flips between runs. Try pristine `android-37.0`
+FIRST (cheapest, no patching); only fall back to the copy→patch if pristine yields the hash error.**
+Read the first `./gradlew` outcome and pick the branch — do not assume the last run's recipe holds.
+
+## 2026-08-23 — Float easing → widen interpolation-value test tolerances to ~1e-4, not 1e-9
+
+Same slice. `KeyframeChannelSample.easing.eased(u)` returns a **Float**; a fraction like `0.2f`
+carries ~3e-7 absolute error, and scaled by a delta of 100–200 the interpolated Double lands
+~1e-5 off. A `Truth.isWithin(1e-9)` assertion on such a value fails on a CORRECT implementation
+(caught here: `interpolate([(0,0),(10,100)], at=2f)` gave 20.0000003). Use `isWithin(1e-4)` for any
+value that passes through Float easing — still tight enough to catch a wrong curve (whole-unit
+differences). Endpoint/`eased()` assertions on exact fractions (0, 0.5, 0.25, 0.75) stay at `1e-6f`.
+
 ## 2026-08-23 — `android-37` copy→patch needs `build.prop`'s `ro.build.version.sdk_full` too (4th edit); and NEVER run two file-mutating gradle jobs at once
 
 Slice `story-text-element-rtl-direction`. Ran the documented three-edit copy→patch (`source.properties`
