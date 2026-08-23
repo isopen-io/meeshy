@@ -256,3 +256,19 @@ carte rendue). Figer la signature sans lui obligerait à la rouvrir aussitôt.
 - **`CommentDraftStoreTests.swift` était sur `main` sans être enregistré au
   projet** — sa suite ne s'exécutait pas. `xcodegen` l'a ramassée au lot C2 ;
   elle tourne désormais.
+
+- **Le chemin d'upload tus échappe au funnel d'en-têtes.**
+  `packages/MeeshySDK/Sources/MeeshySDK/Networking/TusUploadManager.swift`
+  construit ses requêtes À LA MAIN (lignes 316-319, 447-449, 480-481) et
+  n'appelle JAMAIS `ClientInfoProvider.buildHeaders()` — vérifié : zéro
+  occurrence. Il ne pose donc que l'auth et les en-têtes `Tus-*`, et **aucun**
+  des en-têtes de plateforme : ni `X-App-Version`, ni `X-App-Platform`, ni
+  `X-Canvas-Caps`.
+  **Inoffensif aujourd'hui** — la porte serveur de rupture ne juge que
+  `POST /posts`, et `isBelowFloor` rend `false` sur l'absence, donc un upload
+  n'est jamais bloqué à tort. **Le jour où une porte serait posée sur la route
+  d'upload, les binaires périmés passeraient au travers sans être vus.**
+  Non corrigé par C4b : hors des fichiers nommés par son plan, et le correctif
+  demande ses propres tests plus un gate. À arbitrer — la question est de savoir
+  si le funnel d'en-têtes doit être une garantie du CLIENT (un seul chemin
+  sortant, garde de source à l'appui) ou une simple convention.
