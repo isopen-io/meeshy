@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 
 const SCENE_ASPECT_RATIO = '9 / 16';
 const STORY_DESIGN_WIDTH = 1080;
+const STORY_DESIGN_HEIGHT = 1920;
 const BAND_INSET = '6%';
 const DEFAULT_STICKER_SIZE = 140;
 const PLANE_Z = { bg: 0, content: 10, fg: 20 } as const;
@@ -110,6 +111,10 @@ export interface CanvasV3SceneProps {
   /// `OVERLAY_Z`) — la scène ne sait pas CE QUE c'est ni POURQUOI (voile de
   /// lisibilité, ou tout futur habillage d'hôte), seulement OÙ l'empiler.
   overlay?: ReactNode;
+  /// Repli du libellé d'un objet `place` sans nom ni adresse — miroir de la
+  /// `defaultValue` d'iOS (`story.location.here`). La scène reste PURE : elle
+  /// ne traduit pas, l'hôte lui passe le mot de la locale active.
+  hereLabel?: string;
 }
 
 const str = (v: unknown): string | undefined =>
@@ -575,6 +580,161 @@ function StickerObject({ o, anim }: ObjectRenderProps) {
   );
 }
 
+/**
+ * W1 — la pastille de lieu, miroir de `StoryLocationLayer` (SDK iOS).
+ *
+ * Les quatre mesures sont les CONSTANTES du layer, exprimées dans le même
+ * espace de design 1080 puis projetées en `cqw` comme le reste de la scène —
+ * jamais des valeurs choisies à l'œil côté web, qui divergeraient au premier
+ * ajustement iOS. Idem pour la palette : `indigo50` à 94 %, texte `indigo900`,
+ * épingle `error`, tirés de `MeeshyColors`.
+ */
+const PLACE_DESIGN_FONT_SIZE = 42;
+const PLACE_DESIGN_H_PAD = 22;
+const PLACE_DESIGN_V_PAD = 14;
+const PLACE_DESIGN_ICON_GAP = 10;
+const PLACE_PILL_BG = 'rgba(238, 242, 255, 0.94)'; // MeeshyColors.indigo50Hex EEF2FF @ 94 %
+const PLACE_LABEL_COLOR = '#312E81'; // MeeshyColors.indigo900Hex
+const PLACE_PIN_COLOR = '#F87171'; // MeeshyColors.errorHex
+
+const cqw = (designPx: number): string => `${((designPx / STORY_DESIGN_WIDTH) * 100).toFixed(4)}cqw`;
+
+/**
+ * Le libellé d'un lieu — repli EXACT de `StoryLocationLayer.resolvedLabel` :
+ * nom, puis adresse, puis « Ici ». Un lieu posé par l'auteur reste affiché même
+ * sans métadonnée : c'est un objet du canevas, pas une donnée facultative.
+ */
+export function canvasV3PlaceLabel(place: Record<string, unknown>, fallback: string): string {
+  return str(place.name) ?? str(place.address) ?? fallback;
+}
+
+function PlaceObject({ o, anim, hereLabel }: ObjectRenderProps & { hereLabel: string }) {
+  const place = o.payload.place;
+  if (place === null || place === undefined || typeof place !== 'object') return null;
+  const label = canvasV3PlaceLabel(place as Record<string, unknown>, hereLabel);
+
+  return (
+    <div
+      data-testid={`canvas-v3-object-${o.id}`}
+      data-kind="place"
+      className={cn('pointer-events-none select-none flex items-center', bandClass(o.anchor))}
+      style={{
+        ...objectStyle(o, anim),
+        gap: cqw(PLACE_DESIGN_ICON_GAP),
+        padding: `${cqw(PLACE_DESIGN_V_PAD)} ${cqw(PLACE_DESIGN_H_PAD)}`,
+        borderRadius: '9999px',
+        background: PLACE_PILL_BG,
+        color: PLACE_LABEL_COLOR,
+        fontSize: cqw(PLACE_DESIGN_FONT_SIZE),
+        fontWeight: 600,
+        fontFamily: SYSTEM_SANS,
+        lineHeight: 1,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {/* `mappin.circle.fill` — l'épingle cerclée d'iOS, redessinée en SVG. */}
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        style={{ width: '0.82em', height: '0.82em', flex: '0 0 auto', color: PLACE_PIN_COLOR }}
+      >
+        <circle cx="12" cy="12" r="11" fill="currentColor" />
+        <path
+          d="M12 5.6c-2.32 0-4.2 1.85-4.2 4.13 0 3.1 4.2 8.67 4.2 8.67s4.2-5.57 4.2-8.67c0-2.28-1.88-4.13-4.2-4.13zm0 5.75a1.7 1.7 0 1 1 0-3.4 1.7 1.7 0 0 1 0 3.4z"
+          fill="#FFFFFF"
+        />
+      </svg>
+      {label}
+    </div>
+  );
+}
+
+/**
+ * W1 — la largeur d'un trait, miroir EXACT de `StrokeWidthMapping` (SDK).
+ *
+ *   base = width × (marqueur ? 2 : 1)
+ *   captureVersion 0 ⇒ largeur CONSTANTE (le legacy d'avant la pression)
+ *   captureVersion ≥ 1 ⇒ min(base, max(1, base × (0,4 + 0,6 × pression)))
+ *
+ * L'ordre des deux bornes est celui du SDK et il compte : le plafond passe
+ * APRÈS le plancher, si bien qu'un trait dont la base est déjà sous l'unité y
+ * reste — le « plancher d'une unité » ne le relève pas. Miroiter le CODE, pas
+ * l'intention de son commentaire : c'est la seule façon que les deux
+ * plateformes peignent la même épaisseur pour le même trait.
+ */
+const STROKE_MIN_PRESSURE_FACTOR = 0.4;
+const STROKE_MIN_WIDTH = 1;
+const MARKER_ALPHA = 0.45; // `StoryStrokeRasterizer.draw` — miroir du PKInkingTool(.marker)
+
+export function canvasV3StrokeWidth(
+  stroke: { width: number; tool?: string; captureVersion?: number },
+  pressure: number,
+): number {
+  const base = stroke.width * (stroke.tool === 'marker' ? 2 : 1);
+  if ((stroke.captureVersion ?? 0) < 1) return Math.max(STROKE_MIN_WIDTH, base);
+  const factor = STROKE_MIN_PRESSURE_FACTOR + (1 - STROKE_MIN_PRESSURE_FACTOR) * pressure;
+  return Math.min(base, Math.max(STROKE_MIN_WIDTH, base * factor));
+}
+
+/**
+ * W1 — le dessin. Un objet PLEIN CADRE : iOS rastérise ses traits dans l'espace
+ * de design entier (`StoryStrokeRasterizer.image(designSize:)`), le web pose le
+ * même espace en `viewBox` SVG — les points du fil sont donc peints tels quels,
+ * sans conversion, ce qui rend la parité vérifiable point à point.
+ *
+ * Deux écarts assumés, tous deux au bénéfice du web :
+ *   - la largeur varie PAR SEGMENT (moyenne des pressions de ses extrémités) là
+ *     où iOS tessellise un ruban continu — l'œil ne les distingue pas, et le
+ *     SVG reste un élément par trait plutôt qu'un maillage ;
+ *   - le blob `data` (le PNG opaque du legacy, transporté en base64 par le pont
+ *     Swift) n'est PAS décodé : son format n'est garanti par aucun contrat, et
+ *     `strokes` est la forme vectorielle qui le remplace.
+ */
+function DrawingObject({ o, anim }: ObjectRenderProps) {
+  const raw = Array.isArray(o.payload.strokes) ? o.payload.strokes : [];
+  const strokes = raw
+    .map(record)
+    .filter((s) => s.tool !== 'eraser' && Array.isArray(s.points) && s.points.length > 0);
+  if (strokes.length === 0) return null;
+
+  return (
+    <div
+      data-testid={`canvas-v3-object-${o.id}`}
+      data-kind="drawing"
+      className={cn('pointer-events-none select-none', bandClass(o.anchor))}
+      style={{ ...objectStyle(o, anim), width: '100%', height: '100%' }}
+    >
+      <svg
+        viewBox={`0 0 ${STORY_DESIGN_WIDTH} ${STORY_DESIGN_HEIGHT}`}
+        preserveAspectRatio="none"
+        aria-hidden="true"
+        style={{ width: '100%', height: '100%', display: 'block' }}
+      >
+        {strokes.map((s, i) => {
+          const points = (s.points as unknown[]).map(record);
+          const width = numeric(s.width) ?? 1;
+          const tool = str(s.tool);
+          const captureVersion = numeric(s.captureVersion) ?? 0;
+          const meanPressure =
+            points.reduce((sum, p) => sum + (numeric(p.pressure) ?? 1), 0) / points.length;
+          return (
+            <polyline
+              key={str(s.id) ?? `stroke-${i}`}
+              points={points.map((p) => `${numeric(p.x) ?? 0},${numeric(p.y) ?? 0}`).join(' ')}
+              fill="none"
+              stroke={`#${hex(s.colorHex) ?? '000000'}`}
+              strokeOpacity={tool === 'marker' ? MARKER_ALPHA : 1}
+              strokeWidth={canvasV3StrokeWidth({ width, tool, captureVersion }, meanPressure)}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 function CanvasV3Object({
   o,
   anim,
@@ -582,11 +742,13 @@ function CanvasV3Object({
   preferredLanguages,
   muted,
   videoGateHandlers,
+  hereLabel,
 }: ObjectRenderProps & {
   mediaById?: Map<string, CanvasV3MediaResolution>;
   preferredLanguages: readonly string[];
   muted: boolean;
   videoGateHandlers?: CanvasV3VideoGateHandlers;
+  hereLabel: string;
 }) {
   if (o.kind === 'text') return <TextObject o={o} anim={anim} preferredLanguages={preferredLanguages} />;
   if (o.kind === 'media') {
@@ -596,18 +758,28 @@ function CanvasV3Object({
   }
   if (o.kind === 'audio') return <AudioObject o={o} anim={anim} mediaById={mediaById} muted={muted} />;
   if (o.kind === 'sticker') return <StickerObject o={o} anim={anim} />;
+  if (o.kind === 'place') return <PlaceObject o={o} anim={anim} hereLabel={hereLabel} />;
+  if (o.kind === 'drawing') return <DrawingObject o={o} anim={anim} />;
   return null;
 }
 
 /// Rendu d'UNE scène v3, composant PUR. `playheadSec` joue les keyframes et les
 /// transitions de clip du slide ; sans lui la scène rend sa pose statique.
-/// Tout kind non rendu ici — réservé (`interactive`) ou hors périmètre v1 — est
-/// ignoré EN SILENCE : la lecture d'un blob v3 ne casse jamais l'écran qui
-/// l'affiche.
+/// Tout kind non rendu ici — RÉSERVÉ (`interactive`) — est ignoré EN SILENCE :
+/// la lecture d'un blob v3 ne casse jamais l'écran qui l'affiche.
+///
+/// W1 (2026-08-23) a refermé le trou que cette tolérance masquait : elle avalait
+/// aussi `place` et `drawing`, deux kinds bel et bien ACTIFS et réellement émis
+/// par iOS — une story avec une épingle de lieu s'affichait donc au web SANS son
+/// lieu, sans rien signaler. Les six kinds actifs qui ont un écrivain sont
+/// désormais tous peints. Le septième, `mention`, n'a AUCUN écrivain : ni iOS ni
+/// le gateway ne l'émet, et iOS fait `continue` à la lecture — ne pas lui écrire
+/// de rendu, il n'arrivera jamais.
 ///
 /// Dette assumée : un document MULTI-SCÈNES (le contrat en autorise 10) ne rend
 /// que `sceneIndex`, sans enchaînement ni transition inter-scènes. iOS n'en émet
-/// qu'une aujourd'hui ; l'enchaînement appartient aux lots C/E.
+/// qu'une aujourd'hui ; l'enchaînement est la tâche W2, qui se cale AVANT le
+/// multi-diapositives du lot C — après lui, ce serait une régression.
 export function CanvasV3Scene({
   doc,
   sceneIndex = 0,
@@ -618,6 +790,7 @@ export function CanvasV3Scene({
   playheadSec,
   videoGateHandlers,
   overlay,
+  hereLabel = 'Ici',
 }: CanvasV3SceneProps) {
   const scene = doc.scenes?.[sceneIndex];
   if (!scene) return null;
@@ -646,6 +819,7 @@ export function CanvasV3Scene({
               preferredLanguages={preferredLanguages}
               muted={muted}
               videoGateHandlers={videoGateHandlers}
+              hereLabel={hereLabel}
             />
           </CanvasV3ObjectBoundary>
         );

@@ -3536,7 +3536,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `onTextElementBackground` (inert on unknown id, selection untouched) mirrors the style/color/align
       wrappers. `TextElementLayer` paints the backing behind the glyphs (solid fill / frosted glass scrim /
       none), and a `BackgroundSwatch` chip row joins the `TextStyleToolbar`. +14 tests (8 model+presets+wire,
-      4 element defaults+wire, 2 VM). Pending: size/outline/RTL/fade.
+      4 element defaults+wire, 2 VM).
+      **Outline/stroke done** (`story-text-element-outline`): a pure `StoryTextOutline` `(width, color?)` pair
+      (flat, not sealed — iOS keeps the chosen colour across a zero width so re-thickening never re-asks) plus a
+      `StoryTextOutlineCycle.advance` that mirrors iOS `StoryTextAttributeCycle.advance(.border)` exactly: the
+      discrete thicknesses `[2,4,8,12]` thin→thick, one tap advances to the next HIGHER step (a between-steps
+      width jumps up, never thins), wraps past the thickest back to no-stroke, and posts the default white the
+      first time a stroke leaves zero uncoloured. `StoryTextElement.outline` (defaulted no-stroke) rides through
+      `toTextObject` → `borderColor`/`borderWidth` (both omitted while width is 0, so a retained colour never
+      leaks onto the wire without a width). The VM's `onTextElementCycleOutline` (inert on unknown id, selection
+      untouched) advances one tap; a `BorderColor` toolbar button (tinted when a stroke is visible) drives it,
+      and the canvas paints a stroked underlay of the same glyphs beneath the fill. +17 tests (10
+      model+cycle, 4 element defaults+wire, 3 VM); mutation-RED-proven (nulling the wire / dropping the
+      white-post fails exactly the 3 positive tests). Pending: size/RTL/fade.
 - [~] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
       **Floating style toolbar + keyboard-aware shift done** (`story-floating-toolbar`): while a text
       element is edited the `TextStyleToolbar` no longer sits in a fixed bottom band — it floats

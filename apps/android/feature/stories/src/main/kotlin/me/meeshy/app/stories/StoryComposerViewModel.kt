@@ -339,6 +339,24 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
+     * Advances the stroke outline of the on-canvas element [id] by one tap — thicken to the
+     * next step, wrap past the thickest back to no-stroke, posting the default white the first
+     * time a stroke appears (all decided by the pure [StoryTextOutlineCycle.advance]). Inert on
+     * an unknown id; selection and editing are untouched — you outline the element you are
+     * editing. The wire mapping ([StoryTextElement.toTextObject]) carries `borderColor`/
+     * `borderWidth` on publish.
+     */
+    fun onTextElementCycleOutline(id: String) {
+        _state.update {
+            it.copy(
+                deck = it.deck.updateTextElement(id) { element ->
+                    element.copy(outline = StoryTextOutlineCycle.advance(element.outline))
+                },
+            )
+        }
+    }
+
+    /**
      * Pinch-scales / rotates the on-canvas element [id] by the incremental gesture
      * deltas ([scaleBy] is the multiplicative pinch factor, [rotateByDeg] the additive
      * rotation; clamped/wrapped by the pure [StoryTextElement.transformed]). Selection

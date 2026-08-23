@@ -5,6 +5,23 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-23 — SDK recipe flipped AGAIN: on THIS container the `cp→android-37` patch works, pristine `android-37.0` FAILS (opposite of the 08-21 note)
+
+Slice `story-text-element-outline`. The 2026-08-21 NOTES said "install pristine `android-37.0`, patch NOTHING,
+let AGP map `compileSdk 37 → android-37.0`". This run that FAILED: the first `./gradlew` died with
+**`Failed to find target with hash string 'android-37'`** against the pristine dir — AGP 8.13.0 here looks up the
+integer hash `android-37`, not `android-37.0`. The recipe that worked (and that the three 2026-08-23 PROGRESS
+entries already used) is the **copy+patch**:
+```bash
+sdkmanager --channel=3 "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+cd $ANDROID_SDK/platforms && cp -r android-37.0 android-37
+sed -i 's/^AndroidVersion\.ApiLevel=.*/AndroidVersion.ApiLevel=37/' android-37/source.properties
+```
+Net lesson: the two recipes flip-flop between container images, so **don't trust either note blindly** — run the
+first `./gradlew` and read the hash string in its error. `'android-37'` → do the copy+patch (this run); a
+diagnostic naming `37.0` → leave pristine. Both dirs coexisting is harmless. `build-tools;35.0.0` still gets
+auto-installed by a module that pins it — let it. UTF-8 locale (`LANG=C.utf8`) still mandatory for `:sdk-core`.
+
 ## 2026-08-23 — Background Bash runs from the SESSION cwd (repo root), not `apps/android` — use `gradlew -p`
 
 A **background** Bash command (`run_in_background: true`) executes from the session working directory

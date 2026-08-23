@@ -170,11 +170,19 @@ export function PostsFeedScreen() {
 
   // Edit + Repost + Audio modals
   const [editingPost, setEditingPost] = useState<{ id: string; content: string; visibility: string } | null>(null);
-  // `type` fait partie de l'identité reportée de la source, pas d'un détail
-  // d'affichage : c'est lui qui porte la loi du miroir jusqu'aux DEUX gestes du
-  // modal. Sans lui, les deux retombent sur le `?? POST` du gateway et un réel
-  // repartagé depuis le fil quitte le fil des réels.
-  const [repostingPost, setRepostingPost] = useState<{ id: string; type: PostType; author?: string; content?: string } | null>(null);
+  /**
+   * Le `type` est transporté DÈS l'ouverture de la modale : la loi du miroir
+   * exige le format de la source au moment d'envoyer, et le retrouver plus tard
+   * demanderait de re-chercher le post dans le fil — qui a pu bouger entretemps.
+   *
+   * Il est REQUIS, et non optionnel : c'est précisément en le laissant absent de
+   * cet état que les deux gestes ont émis `undefined` puis rien, et que le fil a
+   * fabriqué des POST à partir de réels. Requis, la construction ne peut plus
+   * l'oublier — le compilateur tient la loi à la place de la relecture.
+   */
+  const [repostingPost, setRepostingPost] = useState<
+    { id: string; author?: string; content?: string; type: PostType } | null
+  >(null);
   const [audioComposerOpen, setAudioComposerOpen] = useState(false);
 
   // Constat 2 (F7c) — état muet du lecteur LOCAL du badge B3.3-6, par post
@@ -587,7 +595,13 @@ export function PostsFeedScreen() {
   const handleRepostOpen = useCallback(
     (postId: string) => {
       const post = posts.find((p) => p.id === postId);
-      if (post) setRepostingPost({ id: post.id, type: post.type, author: post.author?.displayName ?? post.author?.username, content: post.content ?? undefined });
+      if (post)
+        setRepostingPost({
+          id: post.id,
+          author: post.author?.displayName ?? post.author?.username,
+          content: post.content ?? undefined,
+          type: post.type,
+        });
     },
     [posts],
   );
