@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MentionParticipant } from '@meeshy/shared/utils/mention-parser';
+import { MAX_MENTIONS_PER_MESSAGE } from '../../validation/mention-list.js';
 
 /**
  * Le message tel que la résolution de mentions le lit. Structural et minimal :
@@ -426,7 +427,17 @@ async function computeValidatedMentions(
   let candidateUserIds: string[] = [];
 
   if (explicit.length > 0) {
-    candidateUserIds = Array.from(explicit);
+    // Le plafond est celui de l'AUTRE source de la même donnée : l'extraction
+    // depuis le contenu tronque à `MAX_MENTIONS_PER_MESSAGE` sur ses deux sites
+    // (`MentionService`). La liste explicite n'était bornée nulle part — écart
+    // sans conséquence tant qu'elle n'était honorée que par REST, et une entrée
+    // non bornée de plus le jour où le transport socket la déclare.
+    //
+    // Elle TRONQUE, comme l'extraction, plutôt que de rejeter l'envoi : les
+    // deux sources décrivent la même intention, et un message ne doit pas
+    // échouer pour avoir nommé trop de monde là où l'autre chemin se contente
+    // d'en retenir cinquante.
+    candidateUserIds = Array.from(explicit).slice(0, MAX_MENTIONS_PER_MESSAGE);
   } else {
     const participants = await loadMentionParticipants(prisma, message.conversationId, onError);
     const extracted = mentionService.extractMentionsWithParticipants(content, participants);

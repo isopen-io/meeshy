@@ -17,6 +17,48 @@ struct EditPostDraft {
     /// Non-nil UNIQUEMENT quand l'auteur a touché à la position : `.set` la
     /// remplace, `.remove` la retire. `nil` = inchangée (clé absente du PATCH).
     var location: PostLocationUpdate? = nil
+    /// Non-nil UNIQUEMENT quand l'auteur a changé d'audience. Recopier la
+    /// visibilité courante à chaque édition écraserait un resserrement fait
+    /// entre-temps depuis une autre surface (le menu du lecteur, le web).
+    var visibility: String? = nil
+    /// Accompagne `visibility` quand celle-ci exige une liste nommée
+    /// (EXCEPT/ONLY) ; vide dès que l'auteur quitte ces deux modes.
+    var visibilityUserIds: [String]? = nil
+}
+
+/// Règles PURES de l'audience en édition — extraites de la vue pour être
+/// jugées directement (`FeedViewModelTests`), et partagées mot pour mot avec
+/// la loi du composer : `PostVisibility.requiresUserSelection`.
+enum EditPostAudienceRule {
+    /// La visibilité à envoyer. Deux garde-fous se croisent ici :
+    ///
+    /// - `touched == false` ⇒ toujours `nil`. Ouvrir puis fermer la sheet ne
+    ///   doit RIEN dire sur l'audience, sinon un post dont la visibilité n'a
+    ///   pas pu être hydratée (cache antérieur au champ) repartirait
+    ///   silencieusement en « Public ».
+    /// - une fois le sélecteur posé, un original INCONNU ne peut plus servir
+    ///   de comparaison : le choix explicite fait foi, sinon choisir « Privé »
+    ///   sur ce même post ne partirait jamais.
+    static func draftVisibility(selected: PostVisibility, original: String?, touched: Bool) -> String? {
+        guard touched else { return nil }
+        guard let original, let originalMode = PostVisibility(rawValue: original.uppercased()) else {
+            return selected.rawValue
+        }
+        return selected == originalMode ? nil : selected.rawValue
+    }
+
+    /// La liste nommée n'a de sens que sous EXCEPT/ONLY : quitter ces modes la
+    /// vide explicitement plutôt que de laisser traîner des destinataires que
+    /// plus rien ne gouverne.
+    static func draftAudience(selected: PostVisibility, ids: [String]) -> [String] {
+        selected.requiresUserSelection ? ids : []
+    }
+
+    /// EXCEPT sans exclus = privé fantôme ; ONLY sans inclus = invisible pour
+    /// tous. Dans les deux cas l'enregistrement doit rester bloqué.
+    static func isComplete(visibility: PostVisibility, audienceCount: Int) -> Bool {
+        !visibility.requiresUserSelection || audienceCount > 0
+    }
 }
 
 /// Lightweight, presentation-only view of an attached media item for the edit
@@ -78,6 +120,11 @@ struct EditPostSheet: View {
     /// Position actuellement attachée au post (`FeedPost.location`) — affichée
     /// dans la sheet avec « retirer » / « changer » (picker).
     var originalLocation: SharedPlace? = nil
+    /// Audience actuelle du post (`FeedPost.visibility`) et sa liste nommée.
+    /// Rouvrir SANS elles renverrait une liste vide au gateway : les
+    /// destinataires d'un post en ONLY disparaîtraient en silence.
+    var originalVisibility: String? = nil
+    var originalVisibilityUserIds: [String] = []
     /// A repost mirrors its source; its type is not editable.
     var isRepost: Bool = false
     var maxLength: Int = 5000
@@ -97,6 +144,12 @@ struct EditPostSheet: View {
     /// l'auteur n'y a pas touché (la clé ne part pas au PATCH).
     @State private var locationEdit: PostLocationUpdate? = nil
     @State private var showEditLocationPicker = false
+    @State private var selectedVisibility: PostVisibility = .public
+    @State private var selectedAudience: [String] = []
+    @State private var audiencePickerMode: PostVisibility? = nil
+    /// L'auteur a-t-il POSÉ un choix d'audience dans cette session d'édition ?
+    /// Sans ce drapeau, l'état initial de la sheet parlerait à sa place.
+    @State private var audienceTouched: Bool = false
 
     private var trimmedContent: String {
         draftContent.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -128,7 +181,20 @@ struct EditPostSheet: View {
     private var typeChanged: Bool { showTypePicker && selectedType != normalizedOriginalType }
     private var mediaChanged: Bool { !removedMediaIds.isEmpty }
     private var locationChanged: Bool { locationEdit != nil }
-    private var hasChanges: Bool { contentChanged || languageChanged || typeChanged || mediaChanged || locationChanged }
+    private var draftVisibility: String? {
+        EditPostAudienceRule.draftVisibility(
+            selected: selectedVisibility, original: originalVisibility, touched: audienceTouched
+        )
+    }
+    private var draftAudience: [String] {
+        EditPostAudienceRule.draftAudience(selected: selectedVisibility, ids: selectedAudience)
+    }
+    private var audienceChanged: Bool {
+        audienceTouched && (draftVisibility != nil || draftAudience != originalVisibilityUserIds)
+    }
+    private var hasChanges: Bool {
+        contentChanged || languageChanged || typeChanged || mediaChanged || locationChanged || audienceChanged
+    }
 
     /// Position telle qu'elle sera après sauvegarde : l'édition locale prime,
     /// sinon la position d'origine.
@@ -144,6 +210,12 @@ struct EditPostSheet: View {
 
     private var isValid: Bool {
         guard trimmedContent.count <= maxLength else { return false }
+        // La garde ne mord que sur un choix ACTIF : un post déjà en ONLY dont
+        // la liste n'a pas pu être hydratée ne doit pas interdire de corriger
+        // son texte — rien ne partira sur l'audience dans ce cas.
+        guard !audienceChanged
+            || EditPostAudienceRule.isComplete(visibility: selectedVisibility, audienceCount: selectedAudience.count)
+        else { return false }
         // A media-only post (no text) stays valid as long as media remains.
         return !trimmedContent.isEmpty || remainingMediaCount > 0
     }
@@ -184,6 +256,8 @@ struct EditPostSheet: View {
 
                     locationSection
 
+                    audienceSection
+
                     metadataSection
 
                     HStack {
@@ -222,6 +296,12 @@ struct EditPostSheet: View {
                     .disabled(!isValid || !hasChanges || isSaving)
                 }
             }
+            .sheet(item: $audiencePickerMode) { mode in
+                AudienceUserPickerView(mode: mode, initialSelection: selectedAudience) { ids in
+                    selectedAudience = ids
+                    audienceTouched = true
+                }
+            }
             .sheet(isPresented: $showLanguagePicker) {
                 ProfileLanguagePickerSheet(
                     title: String(localized: "feed.post.edit.language", defaultValue: "Langue du contenu", bundle: .main),
@@ -238,6 +318,9 @@ struct EditPostSheet: View {
         .onAppear {
             draftContent = originalContent
             selectedLanguage = originalLanguage ?? ""
+            selectedVisibility = originalVisibility
+                .flatMap { PostVisibility(rawValue: $0.uppercased()) } ?? .public
+            selectedAudience = originalVisibilityUserIds
             // Corpus hérité (E11) : un REEL existant dont la composition ne
             // qualifie plus (ex. une seule image) est rebasculé sur POST dès
             // l'ouverture — le picker l'affiche, et la sauvegarde envoie le
@@ -252,6 +335,81 @@ struct EditPostSheet: View {
             }
         }
         .interactiveDismissDisabled(isSaving)
+    }
+
+    // MARK: - Audience
+
+    /// Les SIX audiences du modèle, offertes ici comme au composer : une
+    /// publication naît publique et son auteur la resserre — ou la rouvre — à
+    /// tout moment. EXCEPT/ONLY ouvrent le même sélecteur de personnes que le
+    /// composer story ; tant qu'il reste vide, `isValid` bloque « Publier ».
+    @ViewBuilder
+    private var audienceSection: some View {
+        VStack(spacing: 8) {
+            Menu {
+                ForEach(PostVisibility.allCases) { mode in
+                    Button {
+                        selectedVisibility = mode
+                        audienceTouched = true
+                        if mode.requiresUserSelection {
+                            isFocused = false
+                            audiencePickerMode = mode
+                        } else {
+                            selectedAudience = []
+                        }
+                    } label: {
+                        Label(mode.label, systemImage: mode.icon)
+                    }
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: selectedVisibility.icon)
+                        .foregroundColor(theme.textSecondary)
+                        .accessibilityHidden(true)
+                    Text(String(localized: "feed.post.edit.audience", defaultValue: "Audience", bundle: .main))
+                        .font(MeeshyFont.relative(15))
+                        .foregroundColor(theme.textPrimary)
+                    Spacer()
+                    Text(selectedVisibility.label)
+                        .font(MeeshyFont.relative(15, weight: .medium))
+                        .foregroundColor(theme.textSecondary)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 14)
+                .background(RoundedRectangle(cornerRadius: 12).fill(theme.inputBackground))
+            }
+            .disabled(isSaving)
+
+            if selectedVisibility.requiresUserSelection {
+                Button {
+                    isFocused = false
+                    audiencePickerMode = selectedVisibility
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "person.2.badge.gearshape")
+                            .accessibilityHidden(true)
+                        Text(
+                            selectedAudience.isEmpty
+                                ? String(localized: "feed.post.edit.audience.choose", defaultValue: "Choisir les personnes", bundle: .main)
+                                : String(
+                                    format: String(localized: "feed.post.edit.audience.count", defaultValue: "%d personne(s) sélectionnée(s)", bundle: .main),
+                                    selectedAudience.count
+                                )
+                        )
+                        .font(MeeshyFont.relative(13))
+                        Spacer()
+                    }
+                    .foregroundColor(selectedAudience.isEmpty ? MeeshyColors.warning : theme.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .disabled(isSaving)
+            }
+        }
+        .padding(.horizontal, 16)
     }
 
     // MARK: - Language + type controls
@@ -489,7 +647,9 @@ struct EditPostSheet: View {
             language: languageChanged ? selectedLanguage : nil,
             type: typeChanged ? selectedType : nil,
             removeMediaIds: Array(removedMediaIds),
-            location: locationEdit
+            location: locationEdit,
+            visibility: audienceChanged ? selectedVisibility.rawValue : nil,
+            visibilityUserIds: audienceChanged ? draftAudience : nil
         )
         await onSave(draft)
         isSaving = false

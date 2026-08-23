@@ -1,16 +1,17 @@
 /**
- * Constat 2 (F7c, rattrapage revue Opus, BLOQUANT) — `PostsFeedScreen` ne
- * passait JAMAIS `backgroundSound`/`backgroundSoundMeta`/`backgroundSoundMuted`/
- * `onToggleBackgroundSoundMute` à `PostCard` : le badge B3.3-6, bien que
- * déclaré par le composant, n'était alimenté par aucun appelant réel — la
- * carte (1re des 3 surfaces B3.6) n'existait pas.
+ * Loi produit 2026-08-23 — l'auteur change l'audience à TOUT MOMENT.
+ *
+ * Le feed est le point d'entrée principal de l'édition : il doit (1) rouvrir
+ * l'éditeur avec l'audience nommée que le post porte déjà — sinon un post en
+ * ONLY repart avec une liste vide et perd ses destinataires — et (2) faire
+ * suivre `visibilityUserIds` jusqu'à la mutation. Le cast local en
+ * `'PUBLIC' | 'FRIENDS' | 'PRIVATE'` qui régnait ici rendait les trois autres
+ * audiences intransmissibles.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn() }),
-}));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 
 jest.mock('@/components/layout/DashboardLayout', () => ({
   DashboardLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -23,26 +24,13 @@ jest.mock('@/hooks/use-i18n', () => ({
   }),
 }));
 
-type PostCardStubProps = {
-  backgroundSound?: unknown;
-  backgroundSoundMeta?: { title?: string; username?: string; durationSeconds?: number };
-  backgroundSoundMuted?: boolean;
-  onToggleBackgroundSoundMute?: () => void;
-};
 jest.mock('@/components/v2', () => ({
   Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button onClick={onClick}>{children}</button>
   ),
   useToast: () => ({ addToast: jest.fn() }),
-  PostCard: ({ backgroundSound, backgroundSoundMeta, backgroundSoundMuted, onToggleBackgroundSoundMute }: PostCardStubProps) => (
-    <div>
-      <div data-testid="post-card-background-sound">{JSON.stringify(backgroundSound ?? null)}</div>
-      <div data-testid="post-card-background-sound-meta">{JSON.stringify(backgroundSoundMeta ?? null)}</div>
-      <div data-testid="post-card-background-sound-muted">{String(backgroundSoundMuted)}</div>
-      {onToggleBackgroundSoundMute && (
-        <button data-testid="post-card-toggle-mute" onClick={onToggleBackgroundSoundMute}>Toggle</button>
-      )}
-    </div>
+  PostCard: ({ onEdit }: { onEdit?: () => void }) => (
+    <button data-testid="post-card-edit" onClick={onEdit}>Edit</button>
   ),
   StoryTray: () => null,
   StatusBar: () => null,
@@ -51,8 +39,39 @@ jest.mock('@/components/v2', () => ({
   StatusComposer: () => null,
 }));
 
+type EditorStubProps = {
+  initialVisibility?: string;
+  initialVisibilityUserIds?: readonly string[];
+  onSave: (data: {
+    content: string;
+    visibility: string;
+    visibilityUserIds: string[];
+    removeMediaIds: string[];
+  }) => void;
+};
+jest.mock('@/components/v2/PostEditor', () => ({
+  PostEditor: ({ initialVisibility, initialVisibilityUserIds, onSave }: EditorStubProps) => (
+    <div>
+      <span data-testid="editor-initial-visibility">{initialVisibility}</span>
+      <span data-testid="editor-initial-audience">{(initialVisibilityUserIds ?? []).join(',')}</span>
+      <button
+        data-testid="editor-save"
+        onClick={() =>
+          onSave({
+            content: 'Texte réécrit',
+            visibility: 'ONLY',
+            visibilityUserIds: ['user-9'],
+            removeMediaIds: [],
+          })
+        }
+      >
+        Save
+      </button>
+    </div>
+  ),
+}));
+
 jest.mock('@/components/v2/PostComposer', () => ({ PostComposer: () => null }));
-jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
 jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
 jest.mock('@/components/v2/AudioPostComposer', () => ({ AudioPostComposer: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
@@ -82,10 +101,11 @@ jest.mock('@/hooks/social/use-statuses', () => ({
 
 const mockPost = {
   id: 'post-1',
-  authorId: 'author-2',
+  authorId: 'viewer-1',
   type: 'POST',
-  visibility: 'PUBLIC',
-  content: '',
+  visibility: 'EXCEPT',
+  visibilityUserIds: ['user-3', 'user-4'],
+  content: 'Texte original',
   likeCount: 0,
   commentCount: 0,
   repostCount: 0,
@@ -96,18 +116,6 @@ const mockPost = {
   isEdited: false,
   createdAt: '2026-08-01T00:00:00.000Z',
   updatedAt: '2026-08-01T00:00:00.000Z',
-  storyEffects: {
-    v: 3,
-    sound: { source: { t: 'library', soundId: 'snd1' }, volume: 0.5 },
-    scenes: [{
-      id: 's1',
-      objects: [{
-        id: 'a1', kind: 'audio', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'content', z: 0,
-        transform: { scale: 1, rotation: 0, opacity: 1 },
-        payload: { isBackground: true, name: 'Chill Beat', soundAuthorUsername: 'dj_zoe', duration: 42 },
-      }],
-    }],
-  },
 };
 
 jest.mock('@/hooks/queries/use-feed-query', () => ({
@@ -127,6 +135,7 @@ jest.mock('@/hooks/queries/use-feed-query', () => ({
   usePrefetchPost: () => jest.fn(),
 }));
 
+const mockUpdate = jest.fn();
 jest.mock('@/hooks/queries/use-post-mutations', () => ({
   useCreatePostMutation: () => ({ mutate: jest.fn(), isPending: false }),
   useLikePostMutation: () => ({ mutate: jest.fn() }),
@@ -137,7 +146,7 @@ jest.mock('@/hooks/queries/use-post-mutations', () => ({
   useDeletePostMutation: () => ({ mutate: jest.fn() }),
   usePinPostMutation: () => ({ mutate: jest.fn() }),
   useRepostMutation: () => ({ mutate: jest.fn() }),
-  useUpdatePostMutation: () => ({ mutate: jest.fn(), isPending: false }),
+  useUpdatePostMutation: () => ({ mutate: (...args: unknown[]) => mockUpdate(...args), isPending: false }),
 }));
 
 jest.mock('@/hooks/queries/use-comment-mutations', () => ({
@@ -158,25 +167,32 @@ jest.mock('@/services/tusUploadService', () => ({ TusUploadService: jest.fn() })
 
 import { PostsFeedScreen } from '@/components/feed/PostsFeedScreen';
 
-describe('PostsFeedScreen — background sound wiring (constat 2)', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+describe('PostsFeedScreen — changing a published post audience', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('reopens the editor on the audience the post already carries', () => {
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('post-card-edit'));
+
+    expect(screen.getByTestId('editor-initial-visibility')).toHaveTextContent('EXCEPT');
+    expect(screen.getByTestId('editor-initial-audience')).toHaveTextContent('user-3,user-4');
   });
 
-  it('passes the v3 sound AND its library credit through to PostCard', () => {
+  it('forwards the new visibility AND its named audience to the update mutation', () => {
     render(<PostsFeedScreen />);
-    expect(screen.getByTestId('post-card-background-sound')).toHaveTextContent(
-      JSON.stringify({ source: { t: 'library', soundId: 'snd1' }, volume: 0.5 }),
-    );
-    expect(screen.getByTestId('post-card-background-sound-meta')).toHaveTextContent(
-      JSON.stringify({ title: 'Chill Beat', username: 'dj_zoe', durationSeconds: 42 }),
-    );
-  });
+    fireEvent.click(screen.getByTestId('post-card-edit'));
+    fireEvent.click(screen.getByTestId('editor-save'));
 
-  it('starts muted and toggles on click', () => {
-    render(<PostsFeedScreen />);
-    expect(screen.getByTestId('post-card-background-sound-muted')).toHaveTextContent('true');
-    fireEvent.click(screen.getByTestId('post-card-toggle-mute'));
-    expect(screen.getByTestId('post-card-background-sound-muted')).toHaveTextContent('false');
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postId: 'post-1',
+        data: expect.objectContaining({
+          content: 'Texte réécrit',
+          visibility: 'ONLY',
+          visibilityUserIds: ['user-9'],
+        }),
+      }),
+      expect.anything(),
+    );
   });
 });

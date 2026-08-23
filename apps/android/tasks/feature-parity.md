@@ -3776,7 +3776,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] thumbHash blur-placeholder generation per slide
 - [ ] **V2 timeline editor**: multi-track, Quick + Pro modes, size-class adaptive, zoomable
 - [ ] Clip add / move / trim / split / delete with full undo/redo (command stack, FIFO 50, persisted)
-- [ ] Keyframe animation (position/scale/opacity, easing) per clip/element
+- [~] Keyframe animation (position/scale/opacity, easing) per clip/element — **reader/playback
+      interpolation shipped** (slice `story-keyframe-interpolation`, 2026-08-23): pure
+      `StoryKeyframeInterpolator` (clamp/ease/lerp, unsorted-safe) + `StoryEasing.eased`
+      (linear/easeIn/easeOut/easeInOut, ports `StoryEasing.apply`) + `StoryKeyframeResolver`
+      (per-channel x/y/scale/opacity projection, ports iOS `ReaderKeyframeResolver`), wired into
+      the story viewer's foreground layer via `StoryForegroundMediaView.animated(atSeconds)` driven
+      by the slide progress clock — keyframes are no longer dropped from the projection. Improves on
+      iOS by subtracting the clip `startTime` uniformly across ALL channels (iOS omits it for
+      scale/opacity). Pending: keyframe **editing** (add/move/delete + undo/redo, part of the V2
+      timeline editor) and text/audio clip keyframe application.
 - [ ] Clip transitions (crossfade / dissolve, adjustable duration); slide opening animations
 - [ ] Per-clip inspector (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
