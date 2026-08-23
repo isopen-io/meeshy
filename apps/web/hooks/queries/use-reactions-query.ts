@@ -166,6 +166,29 @@ async function fetchReactions(messageId: string): Promise<ReactionState> {
   });
 }
 
+const EMPTY_REACTION_STATE: ReactionState = { reactions: [], userReactions: [] };
+
+/**
+ * Résout l'agrégat d'une DIFFUSION pour le lecteur qui la reçoit.
+ *
+ * `ReactionBroadcastAggregation` ne porte aucune réponse par-lecteur, et c'est
+ * délibéré : le même objet part vers toute la room, donc `hasCurrentUser` n'y
+ * aurait de valeur juste pour personne (cf. `packages/shared/types/reaction.ts`).
+ * La seule vérité du lecteur est `userReactions`, tenue ici et alimentée par le
+ * `userId` de l'acteur — c'est d'elle que le drapeau se dérive.
+ *
+ * Le recopier depuis l'agrégat reçu attribuait au lecteur la réaction de
+ * l'ACTEUR : allumé sur l'ajout d'un tiers, éteint sur le retrait d'un tiers.
+ * C'est le défaut que la jumelle COMMENTAIRE a déjà produit en production, où
+ * iOS le contourne dans deux ViewModels.
+ */
+function resolveAggregationForReader(
+  aggregation: ReactionUpdateEvent['aggregation'],
+  userReactions: readonly string[],
+): ReactionAggregation {
+  return { ...aggregation, hasCurrentUser: userReactions.includes(aggregation.emoji) };
+}
+
 /**
  * W4: Update reactionSummary on the message object inside messages.infinite cache.
  * Scans all cached infinite message queries to find the message by ID.
@@ -174,7 +197,7 @@ function updateReactionSummaryInMessageCache(
   qc: QueryClient,
   messageId: string,
   emoji: string,
-  aggregation: ReactionAggregation,
+  aggregation: ReactionUpdateEvent['aggregation'],
 ) {
   const allQueries = qc.getQueriesData<{
     pages: { messages: Array<{ id: string; reactionSummary?: Record<string, number> }> }[];
@@ -552,32 +575,31 @@ export function useReactionsQuery({
       if (event.messageId !== messageId) return;
 
       queryClient.setQueryData<ReactionState>(reactionKeys.message(messageId), (old) => {
-        if (!old) return { reactions: [event.aggregation], userReactions: [] };
+        const previous = old ?? EMPTY_REACTION_STATE;
 
-        const existing = old.reactions.find(r => r.emoji === event.emoji);
-        let newReactions: ReactionAggregation[];
-
-        if (existing) {
-          newReactions = old.reactions.map(r =>
-            r.emoji === event.emoji ? event.aggregation : r
-          );
-        } else {
-          newReactions = [...old.reactions, event.aggregation];
-        }
-
-        // Mettre à jour userReactions si c'est nous. On compare le User.id du
-        // réacteur (`event.userId`), PAS `event.participantId` : ce dernier est un
-        // Participant.id scopé conversation, jamais égal à un User.id (ObjectIds de
-        // collections distinctes). Comparer participantId à currentUserId (un
-        // User.id) échouait toujours — sur un 2e appareil du même utilisateur la
-        // réaction n'était pas surlignée et un tap la ré-ajoutait au lieu de la
-        // retirer. Aligné sur le chemin réaction de post (use-post-socket-cache-sync).
-        let newUserReactions = old.userReactions;
+        // L'ORDRE compte : `userReactions` est la vérité du LECTEUR, et c'est
+        // d'elle que `hasCurrentUser` se dérive — jamais de l'agrégat reçu, qui
+        // décrit l'ACTEUR. On la calcule donc en premier.
+        //
+        // On compare le User.id du réacteur (`event.userId`), PAS
+        // `event.participantId` : ce dernier est un Participant.id scopé
+        // conversation, jamais égal à un User.id (ObjectIds de collections
+        // distinctes). Comparer participantId à currentUserId (un User.id)
+        // échouait toujours — sur un 2e appareil du même utilisateur la réaction
+        // n'était pas surlignée et un tap la ré-ajoutait au lieu de la retirer.
+        // Aligné sur le chemin réaction de post (use-post-socket-cache-sync).
+        let newUserReactions = previous.userReactions;
         if (event.userId && event.userId === currentUserId) {
-          if (!old.userReactions.includes(event.emoji)) {
-            newUserReactions = [...old.userReactions, event.emoji];
+          if (!previous.userReactions.includes(event.emoji)) {
+            newUserReactions = [...previous.userReactions, event.emoji];
           }
         }
+
+        const aggregation = resolveAggregationForReader(event.aggregation, newUserReactions);
+        const existing = previous.reactions.find(r => r.emoji === event.emoji);
+        const newReactions: ReactionAggregation[] = existing
+          ? previous.reactions.map(r => (r.emoji === event.emoji ? aggregation : r))
+          : [...previous.reactions, aggregation];
 
         return { reactions: newReactions, userReactions: newUserReactions };
       });
@@ -598,24 +620,25 @@ export function useReactionsQuery({
       if (event.messageId !== messageId) return;
 
       queryClient.setQueryData<ReactionState>(reactionKeys.message(messageId), (old) => {
-        if (!old) return { reactions: [], userReactions: [] };
+        const previous = old ?? EMPTY_REACTION_STATE;
 
-        let newReactions: ReactionAggregation[];
-        if (event.aggregation.count === 0) {
-          newReactions = old.reactions.filter(r => r.emoji !== event.emoji);
-        } else {
-          newReactions = old.reactions.map(r =>
-            r.emoji === event.emoji ? event.aggregation : r
-          );
-        }
-
-        // Mettre à jour userReactions si c'est nous (User.id du réacteur, pas
-        // participantId — cf. handleReactionAdded). Un écho de retrait émis par un
-        // autre appareil du même utilisateur doit retirer l'emoji de userReactions.
-        let newUserReactions = old.userReactions;
+        // Même ordre qu'à l'ajout, et pour la même raison. Un retrait émis par un
+        // TIERS ne dit rien de MA réaction : `userReactions` ne bouge que si
+        // l'acteur est moi, et `hasCurrentUser` suit `userReactions`. Recopier
+        // l'agrégat éteignait le drapeau du lecteur sur le retrait de n'importe
+        // qui.
+        let newUserReactions = previous.userReactions;
         if (event.userId && event.userId === currentUserId) {
-          newUserReactions = old.userReactions.filter(e => e !== event.emoji);
+          newUserReactions = previous.userReactions.filter(e => e !== event.emoji);
         }
+
+        const newReactions: ReactionAggregation[] = event.aggregation.count === 0
+          ? previous.reactions.filter(r => r.emoji !== event.emoji)
+          : previous.reactions.map(r =>
+              r.emoji === event.emoji
+                ? resolveAggregationForReader(event.aggregation, newUserReactions)
+                : r
+            );
 
         return { reactions: newReactions, userReactions: newUserReactions };
       });

@@ -114,6 +114,16 @@ public struct ReactionAggregationEvent: Decodable, Sendable {
     public let emoji: String
     public let count: Int
     public let participantIds: [String]?
+    /// **Ne jamais lire ce champ.** Il n'est plus émis (gateway, cycle 115) et
+    /// reste décodable pour la seule raison qu'il peut encore arriver : la file
+    /// hors-ligne rejoue jusqu'à 48 h la charge telle qu'elle a été ENFILÉE.
+    ///
+    /// Quand il arrive, il vaut ce que la passerelle avait calculé pour
+    /// l'**ACTEUR** de l'événement — donc `true` pour la réaction d'un TIERS.
+    /// Une diffusion de room n'a pas de lecteur : il n'y a pas de « moi » à y
+    /// résoudre. « Ma réaction » se dérive de `ReactionUpdateEvent.userId`
+    /// confronté au `currentUser`, comme le font déjà `PostDetailViewModel` et
+    /// `StoryViewerView+Content` sur la famille commentaire.
     public let hasCurrentUser: Bool?
 }
 
