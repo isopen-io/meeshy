@@ -60,6 +60,12 @@ data class ApiRepostOf(
     val likeCount: Int? = null,
     val commentCount: Int? = null,
     val isQuote: Boolean? = null,
+    /**
+     * The reposted (source) post's shared place, hoisted by the gateway from
+     * `metadata.location` — mirror of iOS `APIRepostOf.location` (PostModels.swift).
+     * Rendered as a tappable sticker inside the quote embed.
+     */
+    val location: SharedPlace? = null,
 )
 
 /** A comment on a post — port of APIPostComment (PostModels.swift). */
