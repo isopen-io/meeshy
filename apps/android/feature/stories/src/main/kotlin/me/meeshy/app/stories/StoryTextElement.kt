@@ -117,6 +117,7 @@ data class StoryTextElement(
     val color: String = DEFAULT_COLOR,
     val align: StoryTextAlign = StoryTextAlign.CENTER,
     val background: StoryTextBackground = StoryTextBackground.None,
+    val outline: StoryTextOutline = StoryTextOutline(),
     val x: Float = CENTER,
     val y: Float = CENTER,
     val scale: Float = DEFAULT_SCALE,
@@ -179,6 +180,8 @@ data class StoryTextElement(
         textColor = color,
         textAlign = align.wire,
         backgroundStyle = background.toStyleWire(),
+        borderColor = outline.color?.takeIf { outline.width > StoryTextOutline.NONE_WIDTH },
+        borderWidth = outline.width.takeIf { it > StoryTextOutline.NONE_WIDTH }?.toDouble(),
         sourceLanguage = sourceLanguage,
     )
 

@@ -137,6 +137,42 @@ class StoryTextElementTest {
     }
 
     @Test
+    fun `a fresh element has no outline`() {
+        val outline = StoryTextElement(id = "e1").outline
+        assertThat(outline.width).isEqualTo(StoryTextOutline.NONE_WIDTH)
+        assertThat(outline.color).isNull()
+    }
+
+    @Test
+    fun `toTextObject omits the border when the element has no outline`() {
+        val wire = StoryTextElement(id = "e1", text = "hi").toTextObject(sourceLanguage = "fr")
+        assertThat(wire.borderWidth).isNull()
+        assertThat(wire.borderColor).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries a stroked outline as borderColor and borderWidth`() {
+        val wire = StoryTextElement(
+            id = "e1",
+            text = "hi",
+            outline = StoryTextOutline(width = 4f, color = "FF2E63"),
+        ).toTextObject(sourceLanguage = "fr")
+        assertThat(wire.borderWidth).isWithin(1e-9).of(4.0)
+        assertThat(wire.borderColor).isEqualTo("FF2E63")
+    }
+
+    @Test
+    fun `toTextObject keeps a retained colour off the wire while the outline has no width`() {
+        val wire = StoryTextElement(
+            id = "e1",
+            text = "hi",
+            outline = StoryTextOutline(width = 0f, color = "FF2E63"),
+        ).toTextObject(sourceLanguage = "fr")
+        assertThat(wire.borderWidth).isNull()
+        assertThat(wire.borderColor).isNull()
+    }
+
+    @Test
     fun `every style and align exposes a distinct lowercase wire token`() {
         assertThat(StoryTextStyle.entries.map { it.wire })
             .containsExactly("bold", "neon", "typewriter", "handwriting", "classic")
