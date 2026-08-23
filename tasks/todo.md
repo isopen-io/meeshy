@@ -1360,3 +1360,103 @@ symptôme et avec une conclusion opposée.
       `ignoreBuildErrors: true`. Les fermer FAIT DESCENDRE le cliquet.
 - [ ] Suivi hérité — bivariance / `strictFunctionTypes`.
 - [ ] Suivi hérité — trois services prenant un `Server` NU pour émettre.
+## Cycle 108 — le garde disait « RÉGRESSION » sur un arbre intact
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108.md`
+
+- [x] **Le cliquet de dette de types rendait un verdict FAUX, en rouge, sur un
+      arbre que personne n'avait touché.** Sur un clone frais aux commandes que
+      le `CLAUDE.md` prescrit (`bun install --ignore-scripts`), il annonçait
+      « RÉGRESSION : 1242 erreurs, baseline 1239 (+3) » — alors que `main` était
+      vert, la CI l'ayant prouvé au même arbre. Les dix fichiers qu'il désignait
+      comme « les plus touchés » n'avaient aucun rapport avec les trois erreurs.
+- [x] **Le tiers exact, mesuré** : `packages/shared/dist` absent → 1242 ;
+      présent → 1239. Le delta est constitué des trois seuls TS2307 de
+      `__tests__/lentille/shared-law-dist-parity.test.ts`, qui importe
+      `packages/shared/dist/utils/*.js` par chemin RELATIF.
+- [x] **Un invariant documenté peut être exact sur le mécanisme qu'il inspecte
+      et faux sur le système.** L'en-tête jurait que le build de `shared` ne
+      change rien, « puisque les `paths` résolvent vers la SOURCE ». Vrai du
+      spécificateur — et c'est exactement pourquoi le fichier de parité le
+      contourne par chemin relatif, comme son propre en-tête l'explique. La
+      dérive passait par la porte que le raisonnement déclarait infranchissable.
+- [x] Octave suivante de la leçon du cycle 107 bis : là, la sortie du gate était
+      silencée ; ici elle est lue, le code de sortie honnête, le compteur
+      self-testé — et le verdict faux quand même, parce que la PRÉCONDITION de
+      la mesure n'était ni vérifiée ni vérifiable.
+- [x] `unresolved_dist_imports()` : le garde REFUSE DE MESURER tant que les
+      artefacts manquent, et nomme les modules non résolus + la commande qui y
+      remédie. Ni les chemins ni le fichier ne sont codés en dur — un import
+      ajouté demain est couvert sans retouche. C'est la déclaration `.d.ts` qui
+      est consultée, pas le `.js` : un build partiel reste détecté.
+- [x] 3 cas de self-test neufs ; **RED prouvé sur 4 mutations**, chacune tombant
+      sur le cas écrit pour elle, + RED sur l'arbre réel (`dist/` mis de côté).
+      Gates : self-test 6/6, cliquet ✓ 1239 inchangé, `bash -n` propre.
+- [x] **Recensement corrigé du suivi web** : le cycle 107 bis annonçait « trois
+      casts d'émission » ; il y en a **13**, dans 4 fichiers (`CallManager.tsx`
+      6, `VideoCallInterface.tsx` 5, `use-video-call.ts` 1,
+      `messaging.service.ts` 1).
+- [ ] Suivi — les 13 casts sont eux-mêmes des ERREURS de type (TS2571) comptées
+      dans les 1239 et tolérées par le cliquet. Les fermer fait DESCENDRE la
+      dette.
+- [x] **Lot 2 du même cycle — les quatre acks que le contrat exigeait et que
+      personne n'envoie.** `ClientToServerEvents` déclarait 4 acks REQUIS contre
+      18 optionnels, et les quatre étaient les événements d'appel
+      (INITIATE/JOIN/SIGNAL/END). Les deux moitiés du fil les contredisent : la
+      passerelle déclare `ack?` sur les quatre et les appelle en `ack?.(…)` ;
+      cinq émetteurs sur sept n'en envoient aucun (3 web, 2 iOS). Le MÊME
+      fichier iOS émet `call:end` avec ET sans ack — l'optionalité est une
+      CONCEPTION, pas un oubli.
+- [x] **Le prix du mensonge se lisait dans le code appelant.** Les 4 émissions
+      `call:signal` du web sont typées (pas de cast) : le compilateur exigeait
+      le second argument, elles fabriquent donc un `() => {}` VIDE
+      (`use-webrtc-p2p.ts` 290/329/674/761). Le serveur acquitte bien
+      (`ack?.({success:true})`), donc chaque candidat ICE paie un paquet d'ACK
+      pour une fonction qui ne fait rien. Là où la cérémonie n'a pas été écrite,
+      c'est un cast qui soustrait le site. **Un contrat que tout site d'appel
+      doit contourner pour dire la vérité ne gouverne plus rien.**
+- [x] Les quatre passent à `ack?`, motif écrit au-dessus avec les numéros de
+      ligne des handlers ET des émetteurs. Cliquet de type
+      `_CallAcksAreOptional` + témoin NÉGATIF ; RED prouvé sur 2 mutations.
+      Gates : tsc shared 0, tsc passerelle 0, suites d'appel passerelle 36/36
+      (608), shared 2467, suites d'appel web 46/46 (598), cliquet web ✓ 1239.
+- [ ] Suivi — les 4 `() => {}` de `use-webrtc-p2p.ts` sont retirables ; les
+      retirer supprime un aller-retour d'ACK par candidat ICE. Changement de
+      COMPORTEMENT sur la signalisation d'appel : mérite sa propre mesure.
+- [ ] Suivi neuf — **`CallJoinAck` transcrit en ligne DEUX fois dans le même
+      fichier** (`CallManager.tsx:810` et `:1005`), divergentes, et toutes deux
+      rendant `success` optionnel là où le contrat le déclare requis.
+
+### Lot 3 du cycle 108 — le témoin qui a viré au rouge tout seul, à 10:00:00Z
+
+- [x] **`main` était ROUGE, et personne ne pouvait le savoir.** `Test gateway`
+      échouait sur `main` @ `e87b7b0d` (2 failed / 19214 passed / 836 suites) —
+      chiffres IDENTIQUES à ceux de la PR de ce cycle, donc la PR n'y ajoutait
+      rien. Entre `f69cbd26` (dernier vert PROUVÉ) et `e87b7b0d`, **tous les runs
+      de `main` ont été ANNULÉS par concurrence** : « main est-il vert ? » n'était
+      pas une question à laquelle le dépôt pouvait répondre.
+- [x] **La cause n'est aucun commit : c'est l'HORLOGE.** Les 2 témoins portaient
+      `createdAt: new Date('2026-08-22T10:00:00Z')`, et `admitMessageEdit` refuse
+      l'auteur au-delà de `MESSAGE_EDIT_WINDOW_MS` (24 h). Verts exactement 24
+      heures, rouges ensuite pour toujours, sur TOUTE branche. Bascule prouvée à
+      la minute : run 09:12 vert, run 10:15 rouge.
+- [x] **Un témoin dont le verdict dépend de l'horloge murale n'est pas un témoin,
+      il est une bombe à retardement.** Il ne tombe pas quand la production casse,
+      il tombe quand l'heure tourne — indiscernable d'une régression de la base.
+- [x] Corrigé par `withinEditWindow()` (`Date.now() - 60_000`), commenté avec
+      l'horaire de bascule et les deux runs qui l'encadrent. **66/66** (contre
+      64/66).
+- [x] **La signature d'une bombe n'est pas « une date en dur »** mais « une date
+      en dur ENCORE dans une fenêtre » — seule celle-là a un instant de bascule
+      devant elle. Les dates de 2025/2026-01 du sous-arbre sont inertes (déjà
+      expirées, ou hors de toute règle de fenêtre).
+- [x] **Deux rouges lus de travers dans le même cycle, même remède.** Le `+3` du
+      lot 1 (cru régression, en fait défaut du garde) et ces 2 témoins (crus
+      environnementaux, en fait bombes). Rejouer un arbre historique **ne rejoue
+      pas son environnement** : l'heure fait partie de l'entrée, et une
+      bissection qui change l'arbre en gardant l'horloge ne peut pas distinguer
+      « le code a changé » de « le temps a passé ». Ce qui tranche : remonter au
+      dernier verdict que la CI a PROUVÉ, et comparer des runs CI entre eux.
+- [ ] Suivi — aucun garde n'empêche la prochaine bombe. Un balayage « date en dur
+      passée à une règle de fenêtre » est possible mais demande de relier un
+      littéral à la règle qui le consomme : à instruire, pas à improviser.

@@ -46,7 +46,19 @@
 #     job. Web does not import it (`@prisma/client` and `@meeshy/shared/prisma`
 #     appear in zero web sources), so its absence changes nothing.
 #   - `@meeshy/shared` is resolved by web's `paths` to the shared package's
-#     SOURCE, not to its `dist/`, so whether shared was built does not matter.
+#     SOURCE, not to its `dist/`. That is true OF THAT SPECIFIER — and it is
+#     exactly why one web suite bypasses it: `__tests__/lentille/
+#     shared-law-dist-parity.test.ts` replays the frozen law vectors THROUGH the
+#     build boundary, and its own header explains that reaching `dist/` is
+#     impossible via `@meeshy/shared/...`, so it imports
+#     `../../../../packages/shared/dist/utils/*.js` by RELATIVE path. Three
+#     imports, `packages/shared/dist/` gitignored: on any fresh clone the count
+#     is +3 (three TS2307) until shared is built. This bullet used to claim the
+#     opposite outright, and the claim cost a cycle — the guard printed
+#     "RÉGRESSION +3" on an untouched tree and named ten innocent files as the
+#     most affected. The drift is therefore NOT absent; it is GUARDED, by
+#     `unresolved_dist_imports` below, which refuses to report a number at all
+#     while the artifacts the count depends on are missing.
 #
 # What CAN legitimately move the number is a TypeScript version bump. That is a
 # feature: a bump that adds errors must be seen, and a bump that removes them
@@ -113,6 +125,26 @@ count_type_errors() {
     | tr -d ' '
 }
 
+# Les imports RELATIFS de `packages/shared/dist/**` faits depuis `apps/web`
+# dont l'artefact de build est ABSENT — cf. en-tête.
+#
+# Un compte n'est comparable à la baseline que si le compilateur a pu résoudre
+# ce que le code importe. Ces trois imports-là ne passent pas par les `paths` du
+# tsconfig (c'est tout leur objet), donc rien dans la configuration ne les
+# rattrape : sans build, chacun rend un TS2307 de plus.
+#
+# TypeScript résout un spécificateur `.js` par sa DÉCLARATION `.d.ts` — c'est
+# elle, et non le `.js`, qui décide du compte.
+unresolved_dist_imports() {
+  local web_dir="$1" root="$2"
+  { grep -rhoE 'packages/shared/dist/[A-Za-z0-9_./-]+\.js' "$web_dir" \
+      --include='*.ts' --include='*.tsx' 2>/dev/null || true; } \
+    | sort -u \
+    | while read -r spec; do
+        [ -f "$root/${spec%.js}.d.ts" ] || printf '%s\n' "$spec"
+      done
+}
+
 # Les fichiers qui portent le plus d'erreurs — pour qu'un échec soit
 # actionnable et non seulement rouge.
 top_offenders() {
@@ -168,6 +200,34 @@ EOF
   echo 'export const nope: number = "generated";' > "$tmp/generated/.next/types/gen.ts"
   assert_eq "une erreur sous .next/ est exclue" "0" "$(count_type_errors "$tmp/generated")"
 
+  # 4. Un import RELATIF vers `packages/shared/dist/**` dont la DÉCLARATION est
+  #    absente est DÉTECTÉ. C'est le cas qui faisait rendre au garde un « +3 »
+  #    imaginaire sur tout clone frais — la mesure y était fausse, et rouge.
+  mkdir -p "$tmp/root/apps/web/__tests__"
+  cat > "$tmp/root/apps/web/__tests__/parity.test.ts" <<'EOF'
+import { focusCurve } from '../../../packages/shared/dist/utils/focus-curve.js';
+export const used = focusCurve;
+EOF
+  assert_eq "un dist non bâti est détecté" \
+    "packages/shared/dist/utils/focus-curve.js" \
+    "$(unresolved_dist_imports "$tmp/root/apps/web" "$tmp/root")"
+
+  # 5. La MÊME arborescence, déclaration présente : plus rien à signaler. Sans
+  #    ce second cas, un garde qui dirait « non résolu » de tout passerait le
+  #    cas 4 et bloquerait la CI en permanence.
+  mkdir -p "$tmp/root/packages/shared/dist/utils"
+  : > "$tmp/root/packages/shared/dist/utils/focus-curve.d.ts"
+  assert_eq "un dist bâti ne signale rien" "" \
+    "$(unresolved_dist_imports "$tmp/root/apps/web" "$tmp/root")"
+
+  # 6. Le `.js` SEUL ne suffit pas : c'est la déclaration que tsc consulte. Un
+  #    build partiel (émission JS sans `declaration`) doit rester détecté.
+  rm -f "$tmp/root/packages/shared/dist/utils/focus-curve.d.ts"
+  : > "$tmp/root/packages/shared/dist/utils/focus-curve.js"
+  assert_eq "un build sans déclarations reste détecté" \
+    "packages/shared/dist/utils/focus-curve.js" \
+    "$(unresolved_dist_imports "$tmp/root/apps/web" "$tmp/root")"
+
   rm -rf "$tmp"
 
   if [ "$failures" -ne 0 ]; then
@@ -190,6 +250,28 @@ main() {
   local web_dir="$REPO_ROOT/apps/web"
 
   echo "Type debt ratchet — apps/web (baseline $WEB_BASELINE)"
+
+  # Refuser de MESURER plutôt que rendre un verdict faux. Un garde qui annonce
+  # « RÉGRESSION » alors que rien n'a régressé envoie chercher une faute qui
+  # n'existe pas, et discrédite les fois où il a raison.
+  local unresolved
+  unresolved="$(unresolved_dist_imports "$web_dir" "$REPO_ROOT")"
+  if [ -n "$unresolved" ]; then
+    echo -e "${RED}✗ MESURE IMPOSSIBLE : \`packages/shared\` n'est pas bâti.${NC}"
+    echo ""
+    echo "apps/web importe ces modules par chemin RELATIF vers le build, et"
+    echo "leur déclaration est absente :"
+    printf '%s\n' "$unresolved" | while read -r spec; do echo "    $spec"; done
+    echo ""
+    echo "Chacun ajoute un TS2307 : le compte ne vaut PAS la baseline tant"
+    echo "qu'ils manquent. Bâtir shared d'abord :"
+    echo ""
+    echo "    (cd packages/shared && bun run build)"
+    echo ""
+    echo "La CI le fait avant ce garde ; ce cas ne s'y produit pas."
+    return 1
+  fi
+
   local actual
   actual="$(count_type_errors "$web_dir")"
 
