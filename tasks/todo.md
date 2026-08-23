@@ -154,3 +154,61 @@ dérivée et non magique.
 - **`list.row.height` est partagé avec le web** : les rangées web passent à 88 px avec
   leur ancien contenu à 2 bandes. À désolidariser ou à faire suivre.
 - **Doublon header épinglé / pilule** : jamais diagnostiqué, en cours de contre-expertise.
+
+### Rectification du 2026-08-23 — la contre-expertise renverse 3 des 6 faux positifs
+
+Un agent adversaire a contesté mes classements. **Le bilan réel est 7 vrais défauts sur 8,
+pas 3.** Les 3 faux positifs confirmés le sont pour de MEILLEURES raisons que les miennes.
+
+| | Mon classement | Verdict | État |
+|---|---|---|---|
+| D4 trail collée | faux positif | **VRAI DÉFAUT** | corrigé, mesuré 8,0 pt |
+| D5 section repliée | faux positif | **VRAI DÉFAUT** | corrigé (chevron) |
+| D7 chevauchement | faux positif | **VRAI DÉFAUT** | diagnostiqué, arbitrage |
+| D1-header, D3, D6 | faux positifs | confirmés | — |
+| doublon pilule | jamais diagnostiqué | **VRAI DÉFAUT** | correctif prêt, non appliqué |
+
+**D7 — ma dispense était fausse.** J'avais invoqué « `idb` rend le cadre transformé par
+l'échelle ». Or l'échelle ne PEUT PAS mordre un header : `scale = 1 − 0.04f ≤ 1`, ancrée,
+donc une rangée qui rétrécit ÉLOIGNE ses bords de ses voisins. Le coupable est
+`LentilleFocusBreathing`, une TRANSLATION de ±18 pt posée sur les rangs seuls et jamais sur
+les headers. Deux relevés indépendants (9,6/8,9 puis 9,2/9,1 pt) et l'arithmétique boucle :
+`18 − 8 − (88 − h)/2 = 9,6` pour `h = 87,3`.
+
+Mon correctif — faire porter la même loi au sticker — a été **rejeté par la mesure** : sur
+un élément ÉPINGLÉ, l'`.offset` étend le cadre d'accessibilité de façon durable (h 21,3 →
+39,3, encore à 3 s). J'ai failli conclure « aggravation » sur ce chiffre : le même piège que
+la contre-expertise venait de me reprocher, en sens inverse. **Critère de validité retenu :
+`h` du header == 21,3, sinon la mesure ne vaut rien.**
+
+Les deux issues restantes touchent un réglage PRODUIT — écrêter la respiration à la marge
+(18 → 8, effet réduit) ou porter le gap de section à 18 (densité réduite). Non tranché.
+
+**D4 s'est réfuté avec mon propre chiffre** : ma note d'origine mesurait déjà 199,3/199,3
+AU REPOS ; l'argument « liste défilée » valait pour D6, pas pour D4. Cause : le rail iOS
+n'avait aucun padding vertical là où le jumeau web porte `py-2`. Corrigé par jeton +
+2 miroirs ; jonction re-mesurée à **8,0 pt**.
+
+**D5 — le sticker taisait ce qu'il savait.** `LentilleSticker` DÉCLARAIT et STOCKAIT
+`isExpanded` sans jamais le lire : paramètre mort, zéro test. Replier une section rendait
+deux bandes identiques empilées, indiscernables d'un défaut de rendu. Corrigé par un chevron
+conditionné à `onToggle != nil` (`chevron.forward`, qui s'inverse en RTL).
+
+**Rectification documentaire** : le commentaire justifiant la pleine largeur du sticker par
+« sinon les rangs réapparaissent dans les gouttières » est FAUX — rien n'entre jamais dans
+ces 8 pt. Bonne conclusion, mauvaise preuve ; le vrai motif est la parité avec la peau web.
+
+### Collision de chantier — DEUX implémentations de la même demande
+
+`feat/lentille-row-chrome` (autre session) est déjà sur `main` (`266fcb765`) et recouvre mes
+lots 2/3/4 fichier pour fichier. Les deux lisent des directives différentes données à des
+moments différents : « la date à l'intérieur de la bulle » (moi) contre « enlever le contour
+sur le dernier message » (eux). Captures comparées envoyées au porteur produit ; **ma branche
+ne peut pas remonter tant que ce n'est pas tranché**. Ni l'un ni l'autre lot ne re-merge sur
+ces fichiers en attendant.
+
+### Non-régression après D2/D8/D1
+
+63 suites, **736 tests exécutés**, aucune à 0 test. Les échecs sont tous PRÉEXISTANTS : le
+crash `malloc 0x262c5a6f0` est daté à 17:13, 1 h 34 avant le premier commit, même adresse,
+même test.
