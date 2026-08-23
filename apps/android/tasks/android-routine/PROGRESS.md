@@ -2,7 +2,63 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-23 **story text elements resolve their base writing direction (RTL) from content** (slice
+> `story-text-element-rtl-direction`, feature-parity §E — the last named text-element attribute, the `Next`
+> pointer's RTL item). This **completes §E text-element attribute parity** (style, colour, size, alignment,
+> background, outline/stroke, fade, RTL).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3398 (iOS Vague 167), #3395 (iOS
+> 239i), #3392 (gateway it. 254): none is a `claude/apps/android/*` slice, none in this routine's scope, none
+> touched. Prior iteration (`story-text-element-fade-timing`) already merged into main. Branched off
+> freshly-fetched `origin/main` (`0fb38477`).
+>
+> **Scout confirmed the note's hypothesis**: the wire `StoryTextObject` has NO RTL/direction field (`textAlign`
+> is the only alignment-ish field). iOS derives direction from content at render time. So the honest,
+> iOS-parity design is a **content-derived resolver**, NOT a stored field or a manual override (an override
+> couldn't persist with no wire field — it would be a dead-end feature). Did NOT invent a wire field.
+>
+> **The resolver is real, testable pure logic**: new `StoryTextBidi.resolveBaseDirection(text) ->
+> StoryTextDirection` (LTR/RTL) implementing the **Unicode Bidi Algorithm P2/P3 "first strong character"
+> rule** — scan for the first strong char (skipping neutrals, whitespace, digits, punctuation, and the whole
+> content of any directional isolate LRI/RLI/FSI…PDI via a depth counter), take RTL iff it is R or AL, default
+> LTR when none. Classification uses `Character.getDirectionality` (the JDK's UBA table) — the SOTA choice
+> over hand-rolled ranges — so Arabic/Hebrew/Adlam (incl. supplementary-plane surrogate pairs) and the strong
+> marks LRM/RLM/ALM all resolve correctly. `StoryTextElement.baseDirection` is a **derived** property (no
+> stored field → `toTextObject` untouched, honest parity). **Compose glue (exempt)**: the canvas sets
+> `TextStyle.textDirection` from `baseDirection` on both the stroked underlay and the fill, so an Arabic
+> caption lays its paragraph out right-to-left instead of the previous forced LTR. **No VM intent** —
+> direction follows the text automatically, mirroring iOS's render-time derivation.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (200). NEW gotcha (NOTES): the `android-37` copy→patch
+> also needs **`build.prop`'s `ro.build.version.sdk_full=37.0` → `37`** patched, not only `source.properties`
+> ApiLevel + `package.xml` `<api-level>`/`path=`. With only the first three edits, `./gradlew` STILL died with
+> `Failed to find target with hash string 'android-37'` (AGP 8.13 reads `sdk_full`). Also deleted the pristine
+> `android-37.0` dir so only `android-37` remains. With all four fixes, the local gate ran.
+>
+> **Tests: +20** — 17 `StoryTextDirectionTest` (no-strong→LTR ×3: empty/digits/emoji; first-strong-L ×3:
+> latin, latin-before-arabic, leading-LRM; first-strong-R ×2: hebrew, RLM; first-strong-AL ×3: arabic, ALM,
+> arabic-before-latin; neutral-skip ×2: whitespace/punct→arabic, digits→hebrew; supplementary-plane Adlam;
+> isolate ×3: arabic-in-isolate→LTR, FSI→LTR, unmatched-PDI→hebrew) + 3 element `baseDirection` (empty→LTR,
+> latin→LTR, arabic→RTL). **Mutation RED-proven ×2 (isolated runs after an earlier collision was detected and
+> discarded)**: RTL branch→LTR failed EXACTLY the 9 RTL-detection tests (the 8 LTR/default/isolate stayed
+> green); removing the `if (isolateDepth > 0) continue` guard failed EXACTLY the 2 isolate tests. Genuine
+> discrimination, files restored + verified clean afterward.
+>
+> **Verified**: `:feature:stories:testDebugUnitTest` green (17/17 direction, 44/44 element, 0 failures/skips);
+> full `assembleDebug testDebugUnitTest` local gate [see run log below]. Reviewer PASS. Diff is `apps/android`
+> only (1 new pure resolver file, 1 derived model property, Compose glue in the composer, +20 tests across 2
+> files, tracking docs). Verdict: **PASS** — pure app-side resolver + derived property + exempt Compose glue,
+> behavioural tests through the public API, no production logic outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) moves past text-element attributes (now complete) to the story-canvas **Effets** tiles
+> — filters / drawing / timeline (named pending in the composer-band slice) — or on-canvas sticker/drawing
+> elements. Scout read-only first: check whether the wire `StoryEffects`/`StoryTextObject` already carry
+> filter/keyframe fields (keyframes DO exist on the wire — `StoryKeyframe`), so a timeline/keyframe slice may
+> be genuinely wire-backed and testable, unlike RTL. Prefer a candidate with real pure logic (a filter
+> enum+wire mapping, or a keyframe interpolation reducer) over glue-only work.
+
 > On 2026-08-23 **story text elements get per-element fade in/out timing (fadeIn/fadeOut)** (slice
+> `story-text-element-fade-timing`, feature-parity §E — the fade item the size/outline slices named as pending,
 > `story-text-element-fade-timing`, feature-parity §E — the fade item the size/outline slices named as pending,
 > the `Next` pointer's preferred candidate (2): two existing `Double?` wire fields, mirroring the size/outline
 > shape). iOS's `StoryTextEditorView` exposes two independent `0…5 s` timing sliders (`fadeIn`/`fadeOut`, `0`
