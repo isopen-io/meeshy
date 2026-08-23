@@ -1,4 +1,6 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { MessageDeletedEventData } from '@meeshy/shared/types/socketio-events';
+import type { buildMessageEditedCore } from './messageEditedPayload';
 import {
   emitConversationPreviewUpdate,
   type PreviewEmitIO,
@@ -30,13 +32,49 @@ export interface MessageMutationManager {
   }): Promise<void>;
 }
 
-type MessageMutationBase = {
+/**
+ * Un type anonyme DÉRIVÉ du contrat, jamais recopié.
+ *
+ * Le mappage homomorphe préserve les modificateurs (`readonly` compris) et ne
+ * change rien à la forme ; ce qu'il change, c'est que le résultat est un type
+ * OBJET anonyme et non une `interface`. Seuls les premiers reçoivent la
+ * signature d'index implicite qui les rend assignables à
+ * `Record<string, unknown>` — ce que la file hors ligne attend de sa charge.
+ * Sans lui, gouverner ce champ obligerait à réintroduire au site d'appel le
+ * cast que ce lot retire.
+ */
+type Anonymized<T> = { [K in keyof T]: T[K] };
+
+/**
+ * Ce que ce transport a le droit de mettre sur le fil, par événement.
+ *
+ * `broadcastMessageMutation` prenait `payload: Record<string, unknown>` : un
+ * sac de clés ne satisfait AUCUN champ du contrat, donc le cliquet de
+ * `messageEditedPayload.ts` — qui dérive de `SocketIOMessage` la liste des
+ * champs REQUIS et refuse de compiler si le noyau en perd un — n'avait aucune
+ * prise sur les TROIS entrées REST. Elles servaient le contrat par ACCIDENT,
+ * en étalant la ligne Prisma brute qu'un `include` large rendait assez
+ * fournie : les sept clés y étaient, avec la mauvaise VALEUR dans `senderId`
+ * (le `Participant.id` de la colonne, là où les clients attendent un
+ * `User.id`).
+ *
+ * Exiger le NOYAU plutôt que le contrat entier est délibéré : les extras que
+ * chaque transport sert en propre (`sender`, `translations`,
+ * `validatedMentions`, `meta`) restent libres — TypeScript n'applique pas le
+ * contrôle des propriétés excédentaires aux clés apportées par étalement — et
+ * le lot reste ADDITIF. Ce qui cesse d'être libre, c'est de composer soi-même
+ * les champs que le contrat exige.
+ */
+export type MessageEditedMutationPayload = ReturnType<typeof buildMessageEditedCore>;
+export type MessageDeletedMutationPayload = Anonymized<MessageDeletedEventData>;
+
+type MessageMutationBase<TPayload> = {
   prisma: MutationPrisma;
   manager: MessageMutationManager | null | undefined;
   conversationId: string;
   actorUserId: string;
   messageId: string;
-  payload: Record<string, unknown>;
+  payload: TPayload;
   onError?: (error: unknown) => void;
 };
 
@@ -51,8 +89,11 @@ type MessageMutationBase = {
  * badge y coûterait deux requêtes par frappe validée, pour zéro delta.
  */
 export type MessageMutationParams =
-  | (MessageMutationBase & { eventType: 'edited' })
-  | (MessageMutationBase & { eventType: 'deleted'; authorId: string | null | undefined });
+  | (MessageMutationBase<MessageEditedMutationPayload> & { eventType: 'edited' })
+  | (MessageMutationBase<MessageDeletedMutationPayload> & {
+      eventType: 'deleted';
+      authorId: string | null | undefined;
+    });
 
 const EVENT_NAME = {
   edited: SERVER_EVENTS.MESSAGE_EDITED,
