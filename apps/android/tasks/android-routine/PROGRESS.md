@@ -2,6 +2,67 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-23 **story text elements get per-element fade in/out timing (fadeIn/fadeOut)** (slice
+> `story-text-element-fade-timing`, feature-parity §E — the fade item the size/outline slices named as pending,
+> the `Next` pointer's preferred candidate (2): two existing `Double?` wire fields, mirroring the size/outline
+> shape). iOS's `StoryTextEditorView` exposes two independent `0…5 s` timing sliders (`fadeIn`/`fadeOut`, `0`
+> folds to `nil`); Android's on-canvas text element carried style/colour/align/size/background/outline but no
+> fade, so a caption could never ease in or out.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3395 (iOS 239i) and #3392 (gateway
+> it. 254): neither is a `claude/apps/android/*` slice, neither in this routine's scope, neither touched. Prior
+> iteration (`story-text-element-font-size`, #3384-line) already merged into main. Branched off freshly-fetched
+> `origin/main` (`396ae223`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). New gotcha recorded in NOTES: the
+> copy→patch for `android-37` also needs `package.xml`'s **`path="platforms;android-37.0"` → `android-37`**
+> patched, not only `<api-level>` + `source.properties`. Without it the first `./gradlew` died with *"Observed
+> package id 'platforms;android-37.0' in inconsistent location"* → `Failed to find target with hash string
+> 'android-37'`. With all THREE metadata edits, full `assembleDebug testDebugUnitTest` ran locally, **BUILD
+> SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **Model, not duplication**: the wire `StoryTextObject.fadeIn`/`fadeOut` (`Double?`, seconds) already existed —
+> this slice adds only the **app-side** model that projects onto them. New pure `StoryTextFade`
+> `(inSeconds, outSeconds)` — held FLAT (two independent ends, exactly as iOS binds two separate sliders), each
+> defaulting to `NONE_SECONDS = 0`. `StoryTextFadeCycle.advance` is the Android tap-friendly form of the iOS
+> `0…5 s` slider: discrete steps `[0.5,1,2,3,5]` short→long, one tap advances to the first step STRICTLY greater
+> than the current value (a between-steps value jumps UP, a tap never shortens), wraps past the longest back to
+> no-fade; every step stays within the iOS-accepted `0…5 s` range so a cycled value round-trips the wire.
+>
+> **`StoryTextElement`**: gained `fade: StoryTextFade = StoryTextFade()` (defaulted no-fade); `toTextObject` sets
+> `fadeIn`/`fadeOut`, EACH omitted while its end is 0 (the value iOS folds to `nil` — same "absent = no styling,
+> minimal payload" law the outline/background slices set). **VM** `onTextElementCycleFadeIn(id)` /
+> `onTextElementCycleFadeOut(id)` each advance ONLY their own end via the pure cycle, inert on unknown id,
+> selection/editing untouched — mirrors the size/outline wrappers. **Compose glue (exempt)**: two toolbar buttons
+> (`Login`/`Logout` AutoMirrored icons, tinted `primary` when that end fades, else `onSurfaceVariant`) drive the
+> taps; the style row that holds align/size/outline/fade/duplicate is now `horizontalScroll`-wrapped so the two
+> extra buttons never clip on a narrow phone. 4 locales get `stories_composer_fade_in`/`_fade_out`.
+>
+> **Tests: +20** — 10 `StoryTextFadeTest` (model visibility ×3; `cycledIn`/`cycledOut` each touch only their end
+> ×2; cycle: every-step-then-wrap, between-steps jump-up, past-longest wrap, beyond-longest wrap, the five steps
+> all ≤5s), 5 `StoryTextElementTest` (fresh element no fade; `toTextObject` omits both when none, carries in-only,
+> out-only, both), 5 `StoryComposerViewModelTest` (fade-in advances only in, fade-out advances only out, fade-in
+> wraps, both inert on unknown id). **Mutation RED-proof ×2**: nulling `toTextObject`'s `fadeIn` failed EXACTLY
+> the 3 fade-in projection tests + a no-op `advance` (return `current`) failed EXACTLY the 7 cycle/cycled tests —
+> 10 of 195 failed, genuine discrimination (the omit/inert tests stayed green). Restored via backup; production
+> diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, **BUILD SUCCESSFUL** (4m37s, no test failures);
+> stories suite re-run green on the restored files. Reviewer PASS. Diff is `apps/android` only (1 new pure model
+> file, 1 model field + wire wiring, 2 VM methods, Compose glue in the composer screen + a scrollable row, strings
+> ×4 locales, +20 tests across 3 files, tracking docs). Verdict: **PASS** — pure app-side model projecting onto
+> two existing wire fields + exempt Compose glue, behavioural tests through the public API, no production logic
+> outside apps/android.
+>
+> **Next**: §E (Stories), the last named text-element attribute — **RTL** (a per-element writing-direction
+> override). Scout read-only first: the wire `StoryTextObject` has NO dedicated RTL/direction field (confirmed
+> this run — `textAlign` is the only alignment-ish field), so iOS likely derives direction from the text content
+> at render time. Decide whether Android RTL is a client-only concern (derive from the caption's script, no wire
+> field, glue-only) or genuinely needs a new wire field (in which case it's cross-cutting, not an apps/android-only
+> slice, and should be deferred/flagged). If RTL turns out to be non-wire-backed like `frame` was, skip it and
+> move to the story-canvas **Effets** tiles (filters / drawing / timeline) or another §E gap. Do NOT invent a wire
+> field for RTL — that would touch shared/gateway and break the merge gate.
+
 > On 2026-08-23 **story text elements get a discrete font size (fontSize), born at the iOS-parity 96** (slice
 > `story-text-element-font-size`, feature-parity §E — the `story-text-element-styling` backlog's **size** item,
 > the follow-up the outline slice named). iOS births a fresh text element at `fontSize: 96` design units
