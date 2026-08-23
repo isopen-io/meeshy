@@ -19,7 +19,6 @@
     "test:all": "jest --config=jest.config.temp.json --testTimeout=30000",
     "test:watch": "jest --config=jest.config.json --watch",
     "test:coverage": "jest --config=jest.config.json --coverage",
-    "lint": "eslint src/",
     "type-check": "pnpm --filter @meeshy/shared build && tsc --noEmit",
     "clean": "rm -rf dist node_modules coverage"
   },

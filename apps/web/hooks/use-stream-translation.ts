@@ -13,6 +13,18 @@ import { useState, useCallback } from 'react';
 import { useMessageTranslation } from '@/hooks/useMessageTranslation';
 import { getLanguageInfo } from '@meeshy/shared/types';
 import type { User } from '@meeshy/shared/types';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+
+/**
+ * Égalité de langue conforme au Prisme : `targetLanguage` (traductions reçues) et
+ * les préférences du lecteur sont verbatim et peuvent être région-tagués (`fr-FR`),
+ * 3-lettres (`fra`) ou legacy (`iw`). Sans canonicalisation, `fr` et `fr-FR` sont
+ * dédupliqués comme deux traductions distinctes (doublons en cache) et une
+ * traduction pertinente pour le lecteur n'est jamais détectée.
+ * SSOT : normalizeLanguageForDedup (packages/shared/utils/language-normalize.ts).
+ */
+const sameLanguage = (a?: string, b?: string): boolean =>
+  !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
 
 interface UseStreamTranslationOptions {
   user: User;
@@ -103,7 +115,7 @@ export function useStreamTranslation({
 
         // Chercher si une traduction existe déjà
         const existingIndex = updatedTranslations.findIndex(
-          t => t.targetLanguage === targetLang
+          t => sameLanguage(t.targetLanguage, targetLang)
         );
 
         const translationObject = {
@@ -140,7 +152,7 @@ export function useStreamTranslation({
     ].filter(Boolean);
 
     const relevantTranslation = translations.find(t =>
-      userLanguages.includes(t.targetLanguage)
+      userLanguages.some(lang => sameLanguage(lang as string, t.targetLanguage))
     );
 
     if (relevantTranslation) {
