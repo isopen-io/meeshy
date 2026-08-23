@@ -44,7 +44,7 @@ symbole retiré → capté par `tsc`.
 - [x] Tests nettoyés (mock + import + 3 `describe` retirés)
 - [x] `tsc --noEmit` gateway exit 0
 - [x] Suites auth vertes (65/65)
-- [ ] `test:coverage` complète verte (en cours)
+- [x] `test:coverage` complète verte — 843 suites, 19283 tests, exit 0 ; couverture 95.4/89.48/93.36/96.11 (seuils 87/80/86/83 tenus)
 - [ ] Merge main
 
 ## Future improvements
