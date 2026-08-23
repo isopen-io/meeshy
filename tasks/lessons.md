@@ -13128,3 +13128,68 @@ charge socket.
 - Même famille que le compte (93) et le tri (86 bis) : **une justification de
   maintien s'ouvre avant d'être crue**, et celle-ci tenait en vie le seul champ
   que le typage refuserait.
+
+## Leçon 255 — un gate qui s'exprime par un PROXY peut être incapable de dire NON à l'un de ses membres
+
+Le drain de la file hors ligne ne demande pas à une entrée « quelle est ta
+forme ? ». Il lui demande **« sais-tu te diffuser ? »**, et lit la réponse dans
+la longueur d'une liste :
+
+```ts
+const emissions = _drainedEmissions(entry);
+if (emissions.length === 0) { dropEntry(entry, 'unresolvable-event-type'); continue; }
+```
+
+Le contrat est écrit dans la fonction elle-même : « une liste VIDE dit *je ne
+sais pas diffuser ceci*. C'est la seule réponse honnête. » Onze `eventType` sur
+douze passent par une table qui peut rendre `undefined`, donc `[]`. Le douzième —
+`'link-message'`, le seul dont la charge se **DÉPLIE** — passait par
+`linkMessageEmissions`, qui poussait l'enveloppe INCONDITIONNELLEMENT avant de
+regarder ce qu'elle contenait. **Il ne pouvait pas rendre `[]`.**
+
+Le refus du message dérivé était pourtant là, ancien et juste. Il ne servait à
+rien : il retirait la seule émission qui compte et laissait la liste à 1.
+
+Ce que l'enveloppe seule livre : rien (son unique auditeur, le web, lit
+`data.message` ; iOS et Android n'écoutent que le `message:new` refusé). Ce que
+la liste non vide AFFIRMAIT, en revanche, coûtait trois signaux — `count`
+comptait la remise, `conversationIds` ne nommait pas la conversation (donc rien
+n'envoyait le client rechercher un message toujours en base), et l'accusé de
+remise partait, avançant un curseur **MONOTONE** : la coche de l'auteur passait
+à « remis » pour un message qu'aucun destinataire n'a reçu. Sur le seul
+transport d'envoi dont dispose un participant anonyme.
+
+> La question à poser à tout gate qui s'exprime par un proxy (une longueur, un
+> `null`, un booléen dérivé) n'est pas « est-il correct ? » mais **« chaque
+> membre de ce qu'il arbitre peut-il le faire répondre NON ? »**. Le proxy avait
+> l'air uniforme parce qu'il est écrit UNE FOIS, au-dessus de la boucle — c'est
+> exactement ce qui cache l'exception.
+
+- Corollaire de journal : quand un refus a plusieurs causes, la `reason` les
+  SÉPARE. `'unresolvable-event-type'` accuse la file,
+  `'link-envelope-without-message'` accuse le producteur de l'enveloppe.
+
+## Leçon 256 — un témoin qui nomme correctement la moitié qu'il garde GÈLE l'autre
+
+Quatre des six témoins du cycle 114 ne sont pas des ajouts : ce sont des
+**retournements**. Ils existaient, ils étaient verts, et ils assertaient le
+défaut mot pour mot :
+
+```ts
+it("n'ajoute PAS `message:new` quand l'enveloppe ne porte aucun message", () => {
+  expect(linkMessageEmissions({}).map((e) => e.event)).toEqual([SERVER_EVENTS.LINK_MESSAGE_NEW]);
+});
+```
+
+L'intitulé dit VRAI, et c'est précisément cette vérité qui a rendu la seconde
+moitié de l'assertion invisible : `⇒ [LINK_MESSAGE_NEW]` se relit comme le RESTE
+de la phrase, pas comme une affirmation à instruire. Deux cycles de gardes
+posées à cette même frontière de désérialisation sont passés à côté.
+
+> **Un `toEqual` sur une liste entière affirme autant sur ce qu'il GARDE que sur
+> ce qu'il ADMET.** Les deux moitiés se relisent séparément — et l'intitulé du
+> témoin ne couvre en général que la première.
+
+- Même famille que le compte (93), le tri (86 bis) et le commentaire qui énonce
+  une contrainte (94) : **une affirmation portée par un témoin vert reste une
+  affirmation.**
