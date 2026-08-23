@@ -1,0 +1,62 @@
+# Plan — Iteration-238i : fermeture de la famille « abrégé compact »
+
+**Date** : 2026-08-23 · **Piste** : iOS (`i`) · **Base** : `main` HEAD `2e24d7cc`
+**Branche** : `claude/intelligent-noether-4m5rwq`
+**Analyse** : `docs/analyses/uiux/2026-08-23-iteration-238i-compact-count-family-closure.md`
+
+## Objectif
+
+Router les **six** derniers abrégés compacts composés à la main vers
+`CompactCountLabel` (source unique posée en 237i), puis **fermer la famille**
+par une garde de source — trois itérations de consolidation successives n'ont
+jamais empêché la copie suivante.
+
+## Préalables (faits)
+
+- [x] `origin/main` synchronisé — HEAD `2e24d7cc`, aucun écart local.
+- [x] Collision d'essaim : **0 PR iOS ouverte** (#3352 = gateway).
+- [x] Numéro : plus haute itération mergée = 237i ⇒ **238i**.
+- [x] 237i vérifiée atterrie **en entier** (helper + suite + 2 sites d'appel).
+
+## Étapes
+
+- [x] **1. Trancher l'arbitrage différé par 237i** (les deux seuils `10_000`).
+      `formatNumber` : seuil **réel**, prouvé par la branche en dessous
+      (`n.formatted()` — un compte de MOTS ne se dégrade pas tant qu'il est
+      lisible) ⇒ conservé. `StatRing.displayValue` : seuil **mort**, la branche
+      suivante lui est identique au caractère près ⇒ supprimé.
+- [x] **2. Router les 4 sites byte-identiques** — `FeedPostCard` (2 appels),
+      `ReelFeedCard` (1), `ReelsPlayerView` (2), `PostDetailView` (2).
+      Supprimer les 3 helpers `static`.
+- [x] **3. `PostReachFormatter`** — supprimer `compact`, ajouter `locale` à
+      `components` (seul site sous test : sans paramètre, la suite jugerait la
+      locale du simulateur). Ajouter `import MeeshyUI`.
+- [x] **4. `ConversationDashboardView`** — `formatNumber` délègue au-dessus de
+      10 000 et rend `formatted()` en dessous (le repli `"\(n)"` gravait les
+      chiffres latins sous 1 000 alors que la bande du dessus rendait déjà ceux
+      de la locale) ; `StatRing.displayValue` délègue entièrement.
+- [x] **5. Réécrire `PostDetailReachAndVisibilityTests`** en propriétés — la
+      régression testée est la **variance à la locale**, pas une chaîne CLDR.
+- [x] **6. Garde `CompactCountConsolidationSourceGuardTests`** — interdiction
+      (`"%.1fk"` / `"%.1fM"`, commentaires dépouillés) + consolidation (8 hôtes
+      nomment la source unique) + auto-garde + non-régression sur `"%.1fMB"` et
+      `"%.1fMbps"`.
+- [x] **7. Doc-comment `CompactCountLabel`** — déclarer le rôle de source unique
+      et nommer la garde.
+- [x] **8. Leçon** consignée dans `tasks/lessons.md`.
+
+## Vérification (sans toolchain Swift)
+
+- [x] Garde rejouée hors Swift sur les 6 racines : 1216 fichiers, **0 contrevenant**, **8 hôtes OK**.
+- [x] Équilibre `{}` / `()` / `[]` au tokenizer sur les 9 fichiers : 0 / 0 / 0.
+- [x] 0 occurrence vivante des 3 helpers supprimés (`grep` dépôt entier).
+- [x] 0 clé i18n neuve.
+- [x] `pbxproj` non touché — globbing `project.yml` + `xcodegen generate` en CI.
+- [ ] **Gate réel : CI « iOS Tests »** (compile Xcode 26.1.1, run simu 18.2).
+
+## Hors périmètre (documenté en suites)
+
+- Unifier les deux seuils survivants (1 000 pour `StatRing`, 10 000 pour le
+  compte de mots) — vraie décision produit, chacun tenant à sa contrainte propre.
+- Les `accessibilityValue` interpolant l'entier brut sur 4 sites (suite 3).
+- `MeeshyAppIntents.swift:272` — demande un compilateur ⇒ **tâche macOS**.

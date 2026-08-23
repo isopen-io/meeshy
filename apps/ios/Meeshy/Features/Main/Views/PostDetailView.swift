@@ -1193,10 +1193,10 @@ struct PostDetailView: View {
                     }
                     HStack(spacing: 3) {
                         Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                        Text(PostReachFormatter.compact(post.viewCount)).font(.caption2.weight(.medium))
+                        Text(CompactCountLabel.text(post.viewCount)).font(.caption2.weight(.medium))
                         Text("·").font(.caption2)
                         Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
-                        Text(PostReachFormatter.compact(post.impressionCount)).font(.caption2.weight(.medium))
+                        Text(CompactCountLabel.text(post.impressionCount)).font(.caption2.weight(.medium))
                     }
                     .foregroundColor(theme.textMuted)
                     .accessibilityElement(children: .ignore)
