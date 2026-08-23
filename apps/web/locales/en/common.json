@@ -266,11 +266,12 @@
       "video": "video",
       "audio": "audio"
     },
-    "storyVisibility": {
+    "publicationVisibility": {
+      "label": "Audience",
       "public": "Public",
       "friends": "Friends",
       "community": "Community",
-      "except": "All except…",
+      "except": "Friends except…",
       "only": "Only…",
       "private": "Private"
     },
@@ -286,13 +287,6 @@
       "addPhoto": "Add photo",
       "addVideo": "Add video",
       "changeVisibility": "Change visibility",
-      "visibility": {
-        "public": "Public",
-        "friends": "Friends",
-        "except": "Friends except...",
-        "only": "Only...",
-        "private": "Private"
-      },
       "reelToggle": {
         "groupLabel": "Post type",
         "reel": "Reel",

@@ -69,7 +69,7 @@ describe('StoryComposer default audience', () => {
   it('lets the author narrow the audience before publishing', () => {
     const { published } = renderComposer();
     fireEvent.change(screen.getByPlaceholderText('storyPlaceholder'), { target: { value: 'Bonjour' } });
-    fireEvent.click(screen.getByText('storyVisibility.friends'));
+    fireEvent.click(screen.getByText('publicationVisibility.friends'));
     fireEvent.click(screen.getByText('publish'));
 
     expect(published().visibility).toBe('FRIENDS');

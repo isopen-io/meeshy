@@ -15,6 +15,7 @@ import { useReferences } from '@/hooks/composer/useReferences';
 import { removingHandle } from '@meeshy/shared/utils/composer-references';
 import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/types/post-reference';
 import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
+import { PUBLICATION_VISIBILITY_OPTIONS } from './publication-visibility';
 import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
 
 // ============================================================================
@@ -85,14 +86,6 @@ const TEXT_STYLES: { id: TextStyle; label: string }[] = [
   { id: 'handwriting', label: 'Hh' },
 ];
 
-export const VISIBILITY_OPTIONS: { id: StoryVisibility; labelKey: string; icon: string }[] = [
-  { id: 'PUBLIC', labelKey: 'storyVisibility.public', icon: '\uD83C\uDF0D' },
-  { id: 'FRIENDS', labelKey: 'storyVisibility.friends', icon: '\uD83D\uDC65' },
-  { id: 'COMMUNITY', labelKey: 'storyVisibility.community', icon: '\uD83C\uDFD8\uFE0F' },
-  { id: 'EXCEPT', labelKey: 'storyVisibility.except', icon: '\uD83D\uDEAB' },
-  { id: 'ONLY', labelKey: 'storyVisibility.only', icon: '\uD83C\uDFAF' },
-  { id: 'PRIVATE', labelKey: 'storyVisibility.private', icon: '\uD83D\uDD12' },
-];
 
 // ============================================================================
 // Helpers
@@ -677,7 +670,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = DEFAULT_P
 
           {/* Visibility Selector */}
           <div className="flex flex-wrap items-center justify-center gap-2">
-            {VISIBILITY_OPTIONS.map((opt) => (
+            {PUBLICATION_VISIBILITY_OPTIONS.map((opt) => (
               <button
                 key={opt.id}
                 type="button"
