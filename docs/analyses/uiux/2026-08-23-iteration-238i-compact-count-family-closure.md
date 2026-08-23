@@ -232,3 +232,85 @@ supprimées, la source unique est nommée par ses 8 hôtes, et
 `CompactCountConsolidationSourceGuardTests` interdit la réintroduction sur
 l'app, ses quatre extensions et le SDK. Les itérations suivantes n'ont pas à
 re-balayer cette famille : la garde est le balayage.
+
+---
+
+## Résultat CI — et ce que la suite complète a réellement appris
+
+**PR [#3364](https://github.com/isopen-io/meeshy/pull/3364)** · têtes successives `4c2512f2` → `e678a9e0` → `e28fcc8a`.
+
+### Le premier run n'a rien exécuté, et il fallait le voir
+
+Le run initial est revenu **tout vert** — mais sous le nom
+`Build app (app + cibles de test)`, pas `Build app + tests unitaires`. Ces deux
+noms sont le **même job** (`ios.yml:250`), nommé dynamiquement selon
+`needs.scope.outputs.run_tests` ; `scope` ne l'active que sur poussée réelle
+sur `main`, `workflow_dispatch`, ou le motif `smoke test|run test|to test` dans
+le **SUJET** du commit de tête (le corps ne compte pas).
+
+Autrement dit : un lot dont l'apport tient à **une garde neuve et une suite
+réécrite** était sur le point d'être annoncé vert sans qu'aucun des deux
+fichiers n'ait été exécuté. C'est littéralement la « suite verte par omission »
+de la leçon 236i, par un autre chemin — non plus le pbxproj, mais la portée du
+run. Le sujet du commit a donc été amendé (` — run test`, convention observée
+sur 5 des 200 derniers commits de `main`), même arbre, force-push sur ma propre
+branche. Pas de commit vide.
+
+### Ce que la suite a trouvé : 2 échecs sur 7534
+
+| Test | Verdict |
+|---|---|
+| `ConversationDashboardViewAccessibilityTests.test_statRing_isSingleVoiceOverElement_withLabelAndValue` | **à moi** — corrigé `e28fcc8a` |
+| `CallManagerSocketReconnectMediaResyncTests.test_socketReconnect_reEmitsCallJoin` | **rouge sur `main`** — signalé, non corrigé |
+
+### Le mien : une garde qui rougit sur du code correct
+
+`.accessibilityValue("\(value)")` était **intact et inchangé par ce lot**. La
+garde découpait le corps de `StatRing` avec `prefix(2600)` — un nombre magique.
+Le doc-comment posé sur `displayValue` a déplacé le motif de l'offset **2411 à
+2595** ; le motif faisant 30 caractères, sa **fin** est passée hors fenêtre et
+`contains` a rendu `false`.
+
+**La marge résiduelle sur `main` était de 5 caractères.** N'importe quelle
+édition de `StatRing` l'aurait déclenchée — mon lot n'a pas créé le défaut, il
+l'a révélé.
+
+Deux corrections étaient possibles : raccourcir mon commentaire pour repasser
+sous 2600, ou borner sémantiquement. La première réarme le piège avec **encore
+moins** de marge ; c'est la seconde qui est retenue — `structBody(named:in:)`
+borne à la déclaration suivante. Pas de marge à épuiser, et pas de faux vert
+possible : la borne s'arrête AVANT `ArcGauge`, qui porte le même
+`.accessibilityElement(children: .ignore)` et satisferait donc les assertions
+pour la mauvaise struct. `test_statRingBody_isBoundedToItsOwnStruct` vérifie
+les deux sens.
+
+Ce n'est pas un affaiblissement : la fenêtre passe de 2600 (arbitraire) à 2656
+(l'étendue exacte de la struct), et les 3 assertions d'origine sont conservées
+mot pour mot.
+
+### L'autre : rouge sur la base
+
+`CallManager.swift` est **identique à `main`** dans ce lot (`git diff origin/main`
+→ 0 ligne). La garde lit le fichier sur disque : elle échoue donc à l'identique
+sur `main`. Cause : **`60f94f99`** (Vague 162) a renommé l'émission en
+`emitCallJoinWithAckDetailed(callId:)` sans mettre à jour le motif
+`emitCallJoinWithAck(callId:` de la garde. Les 3 tests frères passent — ils
+cherchent `emitCallToggleVideo` / `emitCallToggleAudio`, que le renommage n'a
+pas touchés, ce qui explique qu'un seul des quatre soit rouge.
+
+Correctif proposé en commentaire de PR (`body.contains("emitCallJoinWithAck")` —
+le préfixe couvre les deux noms et continue d'exiger la variante **avec ack**),
+**à porter par la piste calls** : élargir une PR UI/UX jusqu'à la pile d'appels
+serait le mauvais arbitrage, et la règle de conduite sur un rouge de base est de
+signaler, pas de pousser.
+
+### État final
+
+**17 checks verts** (Quality/Security/Build bun, gateway, web, shared, agent,
+Python, Voice API, Audio, TTS-STT, Prisma, Summary, Portée, `sdk-tests` phase 0,
+Trivy neutre, Voice E2E sauté) · **1 rouge, rouge sur `main`**.
+
+**Tout ce que ce lot apporte est exécuté et vert** — y compris les 5 tests de
+`CompactCountConsolidationSourceGuardTests` et les 7 de
+`PostDetailReachAndVisibilityTests` réécrits, qui n'avaient jamais tourné au
+premier run.

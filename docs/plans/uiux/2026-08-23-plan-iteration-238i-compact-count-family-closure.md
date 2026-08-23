@@ -52,7 +52,25 @@ jamais empêché la copie suivante.
 - [x] 0 occurrence vivante des 3 helpers supprimés (`grep` dépôt entier).
 - [x] 0 clé i18n neuve.
 - [x] `pbxproj` non touché — globbing `project.yml` + `xcodegen generate` en CI.
-- [ ] **Gate réel : CI « iOS Tests »** (compile Xcode 26.1.1, run simu 18.2).
+- [x] **Gate réel : CI « iOS Tests »** — PR #3364, tête `e28fcc8a`. **17 verts,
+      1 rouge rouge-sur-`main`.** Détail en fin d'analyse.
+- [x] **Piège évité : le premier run n'exécutait RIEN.** Tout vert, mais sous le
+      nom `Build app (app + cibles de test)` — la suite iOS est en opt-in par
+      mot-clé dans le SUJET du commit (`ios.yml:250` + job `scope`). Un lot dont
+      l'apport est une garde neuve + une suite réécrite allait être annoncé vert
+      sans que ni l'une ni l'autre n'ait tourné. Sujet amendé (` — run test`),
+      même arbre, force-push sur ma branche.
+- [x] **Échec 1/2 — le mien, corrigé (`e28fcc8a`).** La garde VoiceOver de
+      `StatRing` découpait avec `prefix(2600)` ; mon doc-comment a poussé la FIN
+      du motif hors fenêtre (offset 2411 → 2595, motif de 30 car.). Marge
+      résiduelle sur `main` : **5 caractères**. Borne rendue sémantique plutôt
+      que raccourcir le commentaire — raccourcir réarme le piège avec moins de
+      marge encore.
+- [x] **Échec 2/2 — rouge sur `main`, signalé et NON corrigé.**
+      `test_socketReconnect_reEmitsCallJoin` : `60f94f99` (Vague 162) a renommé
+      l'émission en `emitCallJoinWithAckDetailed` sans mettre à jour le motif de
+      sa garde. `CallManager.swift` est identique à `main` dans ce lot. Correctif
+      proposé en commentaire de PR, à porter par la piste **calls**.
 
 ## Hors périmètre (documenté en suites)
 
