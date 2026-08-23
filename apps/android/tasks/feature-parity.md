@@ -3561,7 +3561,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       selection untouched) advances one tap; a `FormatSize` toolbar button (tinted when non-default)
       drives it, and the canvas previews the size in sp. +11 tests (5 size model+ladder+cycle, 3 element
       defaults+wire, 3 VM); mutation-RED-proven (dropping the wire `fontSize` fails exactly the 2 fontSize
-      tests; a no-advance cycle fails exactly the 4 cycle tests). Pending: RTL/fade.
+      tests; a no-advance cycle fails exactly the 4 cycle tests). Pending: RTL.
+      **Fade timing done** (`story-text-element-fade-timing`): a pure `StoryTextFade` `(inSeconds, outSeconds)`
+      flat pair (the two ends are independent, exactly as iOS binds `fadeIn`/`fadeOut` to two separate
+      `StoryTextEditorView` controls) plus `StoryTextFadeCycle.advance` — a tap-friendly form of the iOS
+      `0…5 s` slider: discrete durations `[0.5,1,2,3,5]` short→long, one tap advances to the next HIGHER step
+      (a between-steps value jumps up, never shortens), wraps past the longest back to no-fade; every step stays
+      within the iOS-accepted `0…5 s` range. `StoryTextElement.fade` (defaulted no-fade) rides through
+      `toTextObject` → `fadeIn`/`fadeOut`, each omitted while its end is 0 (the value iOS folds to `nil`). The
+      VM's `onTextElementCycleFadeIn`/`onTextElementCycleFadeOut` (inert on unknown id, selection untouched, each
+      advancing only its own end) drive it; two toolbar buttons (Login/Logout icons, tinted when that end fades)
+      sit in a now-horizontally-scrollable style row. +20 tests (10 model+cycle, 5 element defaults+wire, 5 VM);
+      mutation-RED-proven (nulling the wire `fadeIn` / a no-op `advance` fail exactly the projection & cycle
+      tests, 10 total). Pending: RTL.
 - [~] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
       **Floating style toolbar + keyboard-aware shift done** (`story-floating-toolbar`): while a text
       element is edited the `TextStyleToolbar` no longer sits in a fixed bottom band — it floats

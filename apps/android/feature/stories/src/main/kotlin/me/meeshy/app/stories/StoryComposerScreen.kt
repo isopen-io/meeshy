@@ -17,6 +17,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
@@ -38,6 +40,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -256,6 +260,8 @@ fun StoryComposerScreen(
                             onBackground = { bg -> viewModel.onTextElementBackground(element.id, bg) },
                             onCycleSize = { viewModel.onTextElementCycleSize(element.id) },
                             onCycleOutline = { viewModel.onTextElementCycleOutline(element.id) },
+                            onCycleFadeIn = { viewModel.onTextElementCycleFadeIn(element.id) },
+                            onCycleFadeOut = { viewModel.onTextElementCycleFadeOut(element.id) },
                             onDuplicate = { viewModel.onDuplicateTextElement(element.id) },
                             onReorder = { op -> viewModel.onReorderTextElement(element.id, op) },
                         )
@@ -1054,6 +1060,8 @@ private fun TextStyleToolbar(
     onBackground: (StoryTextBackground) -> Unit,
     onCycleSize: () -> Unit,
     onCycleOutline: () -> Unit,
+    onCycleFadeIn: () -> Unit,
+    onCycleFadeOut: () -> Unit,
     onDuplicate: () -> Unit,
     onReorder: (StoryZOrder) -> Unit,
     modifier: Modifier = Modifier,
@@ -1071,6 +1079,7 @@ private fun TextStyleToolbar(
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
         ) {
             AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
             AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
@@ -1091,6 +1100,28 @@ private fun TextStyleToolbar(
                     Icons.Filled.BorderColor,
                     contentDescription = stringResource(R.string.stories_composer_outline),
                     tint = if (element.outline.isVisible) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            IconButton(onClick = onCycleFadeIn) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Login,
+                    contentDescription = stringResource(R.string.stories_composer_fade_in),
+                    tint = if (element.fade.hasFadeIn) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            IconButton(onClick = onCycleFadeOut) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Logout,
+                    contentDescription = stringResource(R.string.stories_composer_fade_out),
+                    tint = if (element.fade.hasFadeOut) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant

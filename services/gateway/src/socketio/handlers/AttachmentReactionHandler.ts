@@ -6,7 +6,7 @@
 import type { MeeshySocket as Socket, MeeshyIOServer as SocketIOServer } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
+import type { AckOf } from '@meeshy/shared/types/socketio-events';
 import { resolveParticipantFromMessage } from '../utils/participant-resolver';
 import type { SocketUser } from '../utils/socket-helpers';
 import { AttachmentReactionService } from '../../services/AttachmentReactionService';
@@ -47,7 +47,7 @@ export class AttachmentReactionHandler {
   async handleAdd(
     socket: Socket,
     data: { attachmentId: string; messageId: string; emoji: string },
-    callback?: (r: SocketIOResponse<unknown>) => void
+    callback?: AckOf<'attachment:reaction-add'>
   ): Promise<void> {
     await this._apply(socket, data, 'add', callback);
   }
@@ -55,7 +55,7 @@ export class AttachmentReactionHandler {
   async handleRemove(
     socket: Socket,
     data: { attachmentId: string; messageId: string; emoji: string },
-    callback?: (r: SocketIOResponse<unknown>) => void
+    callback?: AckOf<'attachment:reaction-remove'>
   ): Promise<void> {
     await this._apply(socket, data, 'remove', callback);
   }
@@ -64,7 +64,9 @@ export class AttachmentReactionHandler {
     socket: Socket,
     data: { attachmentId: string; messageId: string; emoji: string },
     action: 'add' | 'remove',
-    callback?: (r: SocketIOResponse<unknown>) => void
+    // Les deux accusés de la famille ont la MÊME forme (un reçu) ; ce chemin
+    // partagé prend donc l'un des deux, lu sur le contrat comme ses appelants.
+    callback?: AckOf<'attachment:reaction-add'>
   ): Promise<void> {
     try {
       if (!data?.attachmentId || !data?.messageId || !data?.emoji) {
