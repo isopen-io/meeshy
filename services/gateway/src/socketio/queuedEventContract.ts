@@ -86,6 +86,39 @@ export function drainedEventName(
 }
 
 /**
+ * La charge relue est-elle seulement DIFFUSABLE ?
+ *
+ * Jumelle de `drainedEventName` pour l'autre moitié du couple. Le cycle 109 bis
+ * a fermé le NOM ; celui-ci ferme le plancher de la CHARGE, et il s'arrête au
+ * plancher — les douze événements de `DRAINED_EVENT` portent tous un objet, et
+ * c'est la seule chose que les douze aient en commun. Valider chacune des douze
+ * FORMES serait un autre lot, avec ses douze schémas ; refuser ce qui ne peut
+ * être aucune des douze ne coûte qu'un `typeof`.
+ *
+ * Le trou qu'il ferme est celui que `drainedEventName` documente déjà pour le
+ * nom, mot pour mot : `JSON.parse(…) as QueuedMessagePayload`
+ * (`RedisDeliveryQueue.parseRawEntries`) est une AFFIRMATION, jamais une
+ * vérification, et elle porte sur des octets écrits jusqu'à 48 h plus tôt
+ * (`DELIVERY_QUEUE_TTL_SECONDS`) par une version de la passerelle qui n'est pas
+ * forcément celle qui relit.
+ *
+ * **L'asymétrie qui l'a rendu invisible** : `linkMessageEmissions` EXIGE déjà
+ * cette forme du message qu'il DÉPLIE — « un tableau est un `object` : sans ce
+ * refus, une enveloppe dérivée enverrait une liste là où le client attend un
+ * message » — pendant que l'enveloppe DONT il le dérive partait sans contrôle.
+ * La valeur dérivée était gardée plus strictement que la valeur source.
+ *
+ * Une charge informe ne LÈVE nulle part : socket.io l'encode sans broncher, elle
+ * part sous un nom d'événement parfaitement valide, et chaque décodeur client la
+ * jette en silence. Le drain étant DESTRUCTIF, le message est alors perdu sans
+ * recours et sans trace — exactement le coût qu'un nom absent avait avant le
+ * cycle 109 bis.
+ */
+export function isDeliverableQueuedPayload(payload: unknown): payload is Record<string, unknown> {
+  return typeof payload === 'object' && payload !== null && !Array.isArray(payload);
+}
+
+/**
  * La charge que le CONTRAT associe au rejeu de ce `eventType`.
  *
  * C'est la clé du lot : elle relie la file au contrat de fil, si bien qu'une

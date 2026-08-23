@@ -3748,6 +3748,12 @@ final class CallManager: ObservableObject {
                             Logger.calls.error("unhold video recovery failed: \(error.localizedDescription)")
                             self.isVideoEnabled = false
                             self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                            // Same discipline as the cameraPermissionDenied branch above:
+                            // isVideoEnabled=false alone only resets survival state on its
+                            // NEXT quality tick, and `handle()` no-ops entirely while a
+                            // transition is already in flight — leaving a stale
+                            // isVideoSuspended/isTransitioning behind this generic failure.
+                            self.videoSurvivalController.reset()
                             if let callId = self.currentCallId {
                                 MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
                             }

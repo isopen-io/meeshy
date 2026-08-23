@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -31,8 +32,11 @@ import javax.inject.Inject
 /**
  * A foreground media layer on a slide — a non-background [StoryMediaObject]
  * (video or image) composited on top of the background. Position/scale are
- * normalised canvas fractions (0..1), matching the wire model; keyframe
- * animation, rotation and transitions are not applied in this projection.
+ * normalised canvas fractions (0..1), matching the wire model. [x]/[y]/[scale]/
+ * [opacity] are the layer's *static* base transform; when the clip carries
+ * [keyframes], call [animated] with the playhead to obtain the interpolated
+ * transform for that instant. Rotation and inter-slide transitions are still not
+ * applied in this projection.
  */
 @Immutable
 data class StoryForegroundMediaView(
@@ -42,7 +46,36 @@ data class StoryForegroundMediaView(
     val y: Double,
     val scale: Double,
     val aspectRatio: Double,
-)
+    val opacity: Double = 1.0,
+    val startTime: Double = 0.0,
+    val keyframes: List<StoryKeyframe> = emptyList(),
+) {
+    /**
+     * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
+     * unchanged when the clip has no keyframes that animate any channel; otherwise
+     * a copy whose [x]/[y]/[scale]/[opacity] follow the interpolated animation,
+     * un-keyed channels holding their static base. Keyframe times are offsets from
+     * [startTime], per the timeline spec. Pure — the Compose canvas ticks a clock
+     * into this and renders the result.
+     */
+    fun animated(atSeconds: Float): StoryForegroundMediaView {
+        val resolved = StoryKeyframeResolver.resolve(
+            keyframes = keyframes,
+            currentTime = atSeconds,
+            startTime = startTime.toFloat(),
+            baseX = x,
+            baseY = y,
+            baseScale = scale,
+            baseOpacity = opacity,
+        ) ?: return this
+        return copy(
+            x = resolved.x,
+            y = resolved.y,
+            scale = resolved.scale,
+            opacity = resolved.opacity,
+        )
+    }
+}
 
 /**
  * A single slide projected for the viewer. Pure data.
@@ -518,6 +551,8 @@ class StoryViewerViewModel @Inject constructor(
             y = y,
             scale = scale,
             aspectRatio = aspectRatio,
+            startTime = startTime ?: 0.0,
+            keyframes = keyframes.orEmpty(),
         )
     }
 

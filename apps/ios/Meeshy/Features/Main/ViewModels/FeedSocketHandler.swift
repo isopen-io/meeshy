@@ -316,7 +316,11 @@ extension PostRecord {
             // Sans ce hissage, une position affichée juste après l'envoi
             // disparaît au prochain chargement du cache : `locationJson`
             // resterait nil pour toujours (Task 16).
-            locationJson: Self.encode(post.location).flatMap { String(data: $0, encoding: .utf8) }
+            locationJson: Self.encode(post.location).flatMap { String(data: $0, encoding: .utf8) },
+            // Même hissage que `locationJson` : sans lui, l'audience nommée
+            // d'un post EXCEPT/ONLY ne survit pas au démarrage à froid.
+            visibilityUserIdsJson: Self.encode(post.visibilityUserIds)
+                .flatMap { String(data: $0, encoding: .utf8) }
         )
     }
 

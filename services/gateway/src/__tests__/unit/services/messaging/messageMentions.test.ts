@@ -74,6 +74,36 @@ describe('resolveMessageMentions — court-circuit', () => {
     expect(mentionService.extractMentionsWithParticipants).not.toHaveBeenCalled();
   });
 
+  // Le plafond appartient à la RÉSOLUTION, pas au transport : l'extraction
+  // depuis le contenu tronque à `MAX_MENTIONS_PER_MESSAGE` depuis toujours
+  // (`MentionService`, deux sites), la liste EXPLICITE n'était bornée nulle
+  // part. L'écart était sans conséquence tant qu'elle n'était honorée que par
+  // REST ; le déclarer sur le transport socket — celui qui porte le trafic —
+  // aurait ouvert une entrée non bornée de plus.
+  //
+  // Elle TRONQUE comme l'extraction plutôt que de rejeter l'envoi : les deux
+  // sources décrivent la même intention, et un message ne doit pas échouer pour
+  // avoir nommé trop de monde là où l'autre chemin en retient cinquante.
+  it('tronque la liste explicite au même plafond que l’extraction', async () => {
+    const explicit = Array.from({ length: 60 }, (_, i) => `u-${i}`);
+    const prisma = makePrisma({
+      user: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    });
+    const mentionService = makeMentionService({
+      validateMentionPermissions: jest.fn<any>().mockResolvedValue({ validUserIds: [] }),
+    });
+
+    await resolveMessageMentions({
+      prisma, mentionService, message: MESSAGE,
+      content: 'sans arobase', explicitMentionedUserIds: explicit,
+    });
+
+    const candidates = mentionService.validateMentionPermissions.mock.calls[0][1];
+    expect(candidates).toHaveLength(50);
+    expect(candidates[0]).toBe('u-0');
+    expect(candidates).not.toContain('u-50');
+  });
+
   it('rend le lot vide sans service de mentions câblé', async () => {
     const prisma = makePrisma();
 

@@ -1,27 +1,36 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/use-i18n';
 import { Button } from './Button';
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from './Dialog';
+import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
+import { PUBLICATION_VISIBILITY_OPTIONS } from './publication-visibility';
 import type { PostVisibility, PostMedia } from '@meeshy/shared/types/post';
 
 export interface PostEditorProps {
   open: boolean;
   initialContent?: string;
   initialVisibility?: PostVisibility;
+  /// Audience nommée d'un post déjà en EXCEPT/ONLY. La rouvrir SANS elle
+  /// rejouerait une liste vide dans le payload, donc effacerait les
+  /// destinataires que l'auteur avait choisis.
+  initialVisibilityUserIds?: readonly string[];
   media?: readonly PostMedia[];
   postType?: string;
-  onSave: (data: { content: string; visibility: PostVisibility; removeMediaIds: string[] }) => void;
+  onSave: (data: {
+    content: string;
+    visibility: PostVisibility;
+    visibilityUserIds: string[];
+    removeMediaIds: string[];
+  }) => void;
   onClose: () => void;
   saving?: boolean;
 }
 
-const VISIBILITY_OPTIONS: { value: PostVisibility; label: string }[] = [
-  { value: 'PUBLIC', label: '🌍 Public' },
-  { value: 'FRIENDS', label: '👥 Friends' },
-  { value: 'PRIVATE', label: '🔒 Private' },
-];
+const needsExplicitAudience = (visibility: PostVisibility): boolean =>
+  (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility);
 
 function mediaKindLabel(mime: string): string {
   if (mime.startsWith('image/')) return '🖼️';
@@ -34,15 +43,26 @@ function PostEditor({
   open,
   initialContent = '',
   initialVisibility = 'PUBLIC',
+  initialVisibilityUserIds,
   media,
   postType,
   onSave,
   onClose,
   saving = false,
 }: PostEditorProps) {
+  const { t } = useI18n('common');
   const [content, setContent] = useState(initialContent);
   const [visibility, setVisibility] = useState<PostVisibility>(initialVisibility);
+  const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([...(initialVisibilityUserIds ?? [])]);
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+
+  // Une audience nommée n'a de sens que sous EXCEPT/ONLY : la retenir sous
+  // PUBLIC enverrait une liste que le gateway ignorerait, et la ré-afficherait
+  // au prochain aller-retour comme si elle gouvernait encore quelque chose.
+  const effectiveAudience = useMemo(
+    () => (needsExplicitAudience(visibility) ? visibilityUserIds : []),
+    [visibility, visibilityUserIds],
+  );
 
   const mediaList = media ?? [];
   const remainingCount = mediaList.length - removedIds.size;
@@ -62,14 +82,27 @@ function PostEditor({
     });
   }, [isReel, mediaList.length]);
 
-  const isValid = content.trim().length <= 5000 && (content.trim().length > 0 || remainingCount > 0);
+  const initialAudienceKey = [...(initialVisibilityUserIds ?? [])].join(',');
+  const audienceIncomplete = isAudienceIncomplete(visibility, effectiveAudience.length);
+  const isValid =
+    content.trim().length <= 5000 &&
+    (content.trim().length > 0 || remainingCount > 0) &&
+    !audienceIncomplete;
   const hasChanges =
-    content.trim() !== initialContent.trim() || visibility !== initialVisibility || removedIds.size > 0;
+    content.trim() !== initialContent.trim() ||
+    visibility !== initialVisibility ||
+    effectiveAudience.join(',') !== initialAudienceKey ||
+    removedIds.size > 0;
 
   const handleSave = useCallback(() => {
     if (!isValid) return;
-    onSave({ content: content.trim(), visibility, removeMediaIds: [...removedIds] });
-  }, [isValid, content, visibility, removedIds, onSave]);
+    onSave({
+      content: content.trim(),
+      visibility,
+      visibilityUserIds: effectiveAudience,
+      removeMediaIds: [...removedIds],
+    });
+  }, [isValid, content, visibility, effectiveAudience, removedIds, onSave]);
 
   return (
     <Dialog open={open} onClose={onClose}>
@@ -146,18 +179,28 @@ function PostEditor({
         )}
 
         <div className="flex items-center gap-2 mt-3">
-          <span className="text-sm text-[var(--gp-text-muted)]">Visibility:</span>
+          <span className="text-sm text-[var(--gp-text-muted)]">{t('publicationVisibility.label')}</span>
           <select
             value={visibility}
             onChange={(e) => setVisibility(e.target.value as PostVisibility)}
             className="text-sm rounded-lg border border-[var(--gp-border)] bg-[var(--gp-parchment)] px-2 py-1 text-[var(--gp-text-primary)] outline-none"
-            aria-label="Post visibility"
+            aria-label={t('publicationVisibility.label')}
           >
-            {VISIBILITY_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            {PUBLICATION_VISIBILITY_OPTIONS.map((opt) => (
+              <option key={opt.id} value={opt.id}>{`${opt.icon} ${t(opt.labelKey)}`}</option>
             ))}
           </select>
         </div>
+
+        {needsExplicitAudience(visibility) && (
+          <div className="mt-3">
+            <AudienceUserPicker
+              mode={visibility as 'EXCEPT' | 'ONLY'}
+              selectedIds={visibilityUserIds}
+              onChange={setVisibilityUserIds}
+            />
+          </div>
+        )}
 
         {content.length > 4500 && (
           <p className={cn('text-xs mt-2', content.length > 4900 ? 'text-red-500' : 'text-[var(--gp-text-muted)]')}>

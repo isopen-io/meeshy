@@ -1041,6 +1041,93 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(postService.lastUpdateRemoveMediaIds, ["m1", "m2"])
     }
 
+    // MARK: - updatePost() — audience
+
+    /// Loi produit 2026-08-23 : l'auteur change l'audience de sa publication à
+    /// TOUT MOMENT. Le chemin d'édition envoyait `visibility: nil` en dur, donc
+    /// la sheet ne pouvait rien resserrer une fois le post parti.
+    func test_updatePost_forwardsVisibilityAndNamedAudienceToService() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "body", visibility: "ONLY", visibilityUserIds: ["u1", "u2"])
+
+        XCTAssertEqual(postService.lastUpdateVisibility, "ONLY")
+        XCTAssertEqual(postService.lastUpdateVisibilityUserIds, ["u1", "u2"])
+    }
+
+    /// Après l'aller-retour, le post local PORTE la nouvelle audience — c'est
+    /// ce qui fait bouger son badge sans attendre un rafraîchissement.
+    ///
+    /// Le service rend ici un post déjà resserré, comme le vrai gateway : la
+    /// réponse serveur fait foi et écrase l'écriture optimiste. Stubber une
+    /// réponse SANS visibilité prouverait l'inverse de ce qu'on croit (la
+    /// valeur nil du stub effacerait l'audience et le test le lirait comme un
+    /// défaut du ViewModel).
+    func test_updatePost_leavesThePostCarryingItsNewAudience() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+        postService.createResult = .success(JSONStub.decode("""
+        {"id":"p1","type":"POST","visibility":"PRIVATE","content":"body",
+         "createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"stub"}}
+        """))
+
+        await sut.updatePost("p1", content: "body", visibility: "PRIVATE", visibilityUserIds: [])
+
+        XCTAssertEqual(sut.posts.first?.visibility, "PRIVATE")
+    }
+
+    /// Une édition qui ne touche PAS à l'audience ne doit rien envoyer sur ce
+    /// champ : un `visibility` recopié écraserait une audience changée
+    /// entre-temps depuis une autre surface.
+    func test_updatePost_withoutAudienceChange_leavesVisibilityAbsent() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "body")
+
+        XCTAssertNil(postService.lastUpdateVisibility)
+        XCTAssertNil(postService.lastUpdateVisibilityUserIds)
+    }
+
+    // MARK: - EditPostSheet — règle d'audience (pure)
+
+    func test_editPostAudience_reportsUnchangedVisibilityAsAbsent() {
+        XCTAssertNil(EditPostAudienceRule.draftVisibility(selected: .public, original: "PUBLIC", touched: true))
+        XCTAssertEqual(
+            EditPostAudienceRule.draftVisibility(selected: .only, original: "PUBLIC", touched: true), "ONLY"
+        )
+    }
+
+    /// Ouvrir puis fermer la sheet sans toucher au sélecteur ne dit RIEN sur
+    /// l'audience — y compris quand l'original est inconnu, cas où l'état
+    /// initial (« Public ») parlerait à la place de l'auteur.
+    func test_editPostAudience_untouchedSelectorStaysSilent() {
+        XCTAssertNil(EditPostAudienceRule.draftVisibility(selected: .public, original: nil, touched: false))
+        XCTAssertNil(EditPostAudienceRule.draftVisibility(selected: .only, original: "PUBLIC", touched: false))
+    }
+
+    /// Mais une fois le choix POSÉ sur un post dont la visibilité n'a pas pu
+    /// être hydratée, il part : sans cela, choisir « Privé » ne ferait rien.
+    func test_editPostAudience_touchedChoiceWinsOverAnUnknownOriginal() {
+        XCTAssertEqual(
+            EditPostAudienceRule.draftVisibility(selected: .private, original: nil, touched: true), "PRIVATE"
+        )
+    }
+
+    func test_editPostAudience_dropsTheListWhenLeavingExceptOrOnly() {
+        XCTAssertEqual(EditPostAudienceRule.draftAudience(selected: .only, ids: ["u1"]), ["u1"])
+        XCTAssertEqual(EditPostAudienceRule.draftAudience(selected: .public, ids: ["u1"]), [])
+    }
+
+    func test_editPostAudience_blocksSavingExceptOrOnlyWithNobody() {
+        XCTAssertFalse(EditPostAudienceRule.isComplete(visibility: .only, audienceCount: 0))
+        XCTAssertFalse(EditPostAudienceRule.isComplete(visibility: .except, audienceCount: 0))
+        XCTAssertTrue(EditPostAudienceRule.isComplete(visibility: .only, audienceCount: 1))
+        XCTAssertTrue(EditPostAudienceRule.isComplete(visibility: .public, audienceCount: 0))
+        XCTAssertTrue(EditPostAudienceRule.isComplete(visibility: .community, audienceCount: 0))
+    }
+
     // MARK: - refresh()
 
     func test_refresh_resetsNewPostsCountAndReloads() async {

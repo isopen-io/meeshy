@@ -633,7 +633,15 @@ class PostDetailViewModel: ObservableObject {
     /// Updates the loaded post's body content. Optimistic UX mirrors
     /// FeedViewModel.updatePost: flip the in-memory post immediately, clear
     /// translations so the bubble re-renders, rollback on API failure.
-    func updatePost(content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async {
+    func updatePost(
+        content: String,
+        language: String? = nil,
+        type: String? = nil,
+        removeMediaIds: [String]? = nil,
+        location: PostLocationUpdate? = nil,
+        visibility: String? = nil,
+        visibilityUserIds: [String]? = nil
+    ) async {
         guard let snapshot = post else { return }
         var optimistic = snapshot
         optimistic.content = content
@@ -644,9 +652,16 @@ class PostDetailViewModel: ObservableObject {
         case .remove: optimistic.location = nil
         case nil: break
         }
+        // L'audience bouge tout de suite, comme le texte : sans cela le badge
+        // de visibilité garde l'ancienne valeur jusqu'au prochain
+        // rafraîchissement et l'auteur croit son resserrement perdu.
+        if let visibility {
+            optimistic.visibility = visibility
+            optimistic.visibilityUserIds = visibilityUserIds
+        }
         self.post = optimistic
         do {
-            let updated = try await postService.update(postId: snapshot.id, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            let updated = try await postService.update(postId: snapshot.id, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
             self.post = updated.toFeedPost(preferredLanguages: preferredLanguages)
             FeedbackToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
         } catch {

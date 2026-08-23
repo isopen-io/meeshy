@@ -10,6 +10,7 @@ import { getCacheStore, type CacheStore } from './CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { parseMentions, MENTION_HANDLE_CHARS, NAME_BOUNDARY_LEFT, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
 import type { MentionedUser } from '@meeshy/shared/types';
+import { MAX_MENTIONS_PER_MESSAGE } from '../validation/mention-list.js';
 
 // Logger dédié pour MentionService
 const logger = enhancedLogger.child({ module: 'MentionService' });
@@ -48,8 +49,10 @@ export class MentionService {
   // Limite de suggestions pour l'autocomplete
   private readonly MAX_SUGGESTIONS = 10;
 
-  // Limite maximale de mentions par message (protection anti-spam)
-  private readonly MAX_MENTIONS_PER_MESSAGE = 50;
+  // Le plafond de mentions par message vivait ici, en champ privé. Il vit
+  // désormais dans `validation/mention-list.ts` (importé ci-dessus) : il borne
+  // AUSSI la liste EXPLICITE du compositeur, l'autre source de la même donnée,
+  // et deux déclarations se périmeraient séparément.
 
   // Limite maximale de longueur de contenu à traiter (10KB)
   private readonly MAX_CONTENT_LENGTH = 10000;
@@ -178,8 +181,8 @@ export class MentionService {
         mentions.add(username);
 
         // SÉCURITÉ: Limiter le nombre de mentions
-        if (mentions.size >= this.MAX_MENTIONS_PER_MESSAGE) {
-          logger.warn(`[MentionService] Max mentions limit reached (${this.MAX_MENTIONS_PER_MESSAGE}), truncating`);
+        if (mentions.size >= MAX_MENTIONS_PER_MESSAGE) {
+          logger.warn(`[MentionService] Max mentions limit reached (${MAX_MENTIONS_PER_MESSAGE}), truncating`);
           break;
         }
       }
@@ -225,7 +228,7 @@ export class MentionService {
         }
       }
 
-      if (usernames.length >= this.MAX_MENTIONS_PER_MESSAGE) break;
+      if (usernames.length >= MAX_MENTIONS_PER_MESSAGE) break;
     }
 
     return usernames;

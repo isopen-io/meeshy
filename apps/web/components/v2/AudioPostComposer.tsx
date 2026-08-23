@@ -9,6 +9,8 @@ import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { Button } from './Button';
 import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
 import type { MobileTranscription, MobileTranscriptionSegment } from '@/services/posts.service';
+import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
+import { PUBLICATION_VISIBILITY_OPTIONS } from './publication-visibility';
 import type { PostVisibility } from '@meeshy/shared/types/post';
 
 // ---------------------------------------------------------------------------
@@ -31,13 +33,6 @@ export interface AudioPostComposerProps {
 
 type Phase = 'idle' | 'recording' | 'transcribing' | 'preview';
 
-const VISIBILITY_OPTIONS: { value: PostVisibility; labelKey: string; icon: string }[] = [
-  { value: 'PUBLIC', labelKey: 'postComposer.visibility.public', icon: '🌍' },
-  { value: 'FRIENDS', labelKey: 'postComposer.visibility.friends', icon: '👥' },
-  { value: 'EXCEPT', labelKey: 'postComposer.visibility.except', icon: '🚫' },
-  { value: 'ONLY', labelKey: 'postComposer.visibility.only', icon: '🎯' },
-  { value: 'PRIVATE', labelKey: 'postComposer.visibility.private', icon: '🔒' },
-];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -98,7 +93,7 @@ function AudioPostComposer({
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [visibility, setVisibility] = useState<PostVisibility>('PUBLIC');
+  const [visibility, setVisibility] = useState<PostVisibility>(DEFAULT_PUBLICATION_VISIBILITY);
   const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
 
@@ -337,7 +332,8 @@ function AudioPostComposer({
     });
   }, [audioBlob, disabled, transcript, transcriptLang, transcriptConfidence, duration, transcriptSegments, caption, visibility, visibilityUserIds, onPublish]);
 
-  const selectedVisibility = VISIBILITY_OPTIONS.find((v) => v.value === visibility) ?? VISIBILITY_OPTIONS[0];
+  const selectedVisibility =
+    PUBLICATION_VISIBILITY_OPTIONS.find((v) => v.id === visibility) ?? PUBLICATION_VISIBILITY_OPTIONS[0];
 
   if (!open) return null;
 
@@ -475,19 +471,19 @@ function AudioPostComposer({
 
                 {showVisibilityPicker && (
                   <div className="absolute bottom-full left-0 mb-1 bg-[var(--gp-surface)] border border-[var(--gp-border)] rounded-xl shadow-lg z-20 min-w-[160px]">
-                    {VISIBILITY_OPTIONS.map((opt) => (
+                    {PUBLICATION_VISIBILITY_OPTIONS.map((opt) => (
                       <button
-                        key={opt.value}
+                        key={opt.id}
                         onClick={() => {
-                          setVisibility(opt.value);
-                          if (!(AUDIENCE_VISIBILITIES as readonly string[]).includes(opt.value)) {
+                          setVisibility(opt.id);
+                          if (!(AUDIENCE_VISIBILITIES as readonly string[]).includes(opt.id)) {
                             setVisibilityUserIds([]);
                           }
                           setShowVisibilityPicker(false);
                         }}
                         className={cn(
                           'flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-[var(--gp-parchment)] transition-colors first:rounded-t-xl last:rounded-b-xl',
-                          visibility === opt.value && 'text-[var(--gp-terracotta)] font-medium',
+                          visibility === opt.id && 'text-[var(--gp-terracotta)] font-medium',
                         )}
                       >
                         <span>{opt.icon}</span>
