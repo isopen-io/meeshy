@@ -88,6 +88,12 @@ function isStaleCursorMessageId(params: {
 // `/sync`, qui ne peut pas importer ce module de routes) et reste ré-exporté ici
 // pour les appelants historiques.
 import { messageSenderUserSelect } from './utils/message-sender-select';
+import {
+  ENCRYPTION_ENVELOPE_SHAPE,
+  noSilentDowngrade,
+  NO_SILENT_DOWNGRADE_ISSUE,
+  toEncryptedPayload,
+} from '../../validation/encryption-envelope.js';
 export { messageSenderUserSelect };
 
 // `content` est optionnel : un message média-seul (image/vidéo/fichier sans
@@ -150,12 +156,6 @@ export const SendMessageBodySchema = z.object({
   { message: 'Le message ne peut pas être vide', path: ['content'] },
 ).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
-import {
-  ENCRYPTION_ENVELOPE_SHAPE,
-  noSilentDowngrade,
-  NO_SILENT_DOWNGRADE_ISSUE,
-  toEncryptedPayload,
-} from '../../validation/encryption-envelope.js';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
 
