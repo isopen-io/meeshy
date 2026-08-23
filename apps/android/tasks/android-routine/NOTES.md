@@ -5,6 +5,34 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-23 — Background Bash runs from the SESSION cwd (repo root), not `apps/android` — use `gradlew -p`
+
+A **background** Bash command (`run_in_background: true`) executes from the session working directory
+(`/home/user/meeshy`), even though foreground calls in the same session may have `cd`'d into
+`apps/android` earlier — that `cd` does **not** carry into background invocations. `./apps/android/meeshy.sh`
+and a bare `./gradlew` both resolve against repo root and die with *"No such file or directory"* (there is no
+gradlew at repo root; it lives at `apps/android/gradlew`). I burned four backgrounded attempts on this.
+The robust form, cwd-independent, is:
+
+```bash
+/home/user/meeshy/apps/android/gradlew -p /home/user/meeshy/apps/android assembleDebug testDebugUnitTest
+```
+
+Absolute path to the wrapper + `-p <projectDir>`. Works identically foreground or background. (Foreground
+`cd /home/user/meeshy/apps/android && ./gradlew …` also works but only because the `cd` sticks for that one
+compound command.)
+
+## 2026-08-23 — Mutation RED-proof of a DELEGATING projection: mutate to the absent value, expect PARTIAL failure
+
+`feed-repost-embed-location`'s builder just delegates: `location = FeedPostLocationBuilder.build(repost.location)`.
+To prove the 3 new wiring tests aren't tautological, I forced `location = null` in the builder and re-ran the
+class. The right signal is **partial**: exactly the 2 positive-projection tests failed, and
+`absentLocationBecomesNull` stayed green (it asserts null for null input, so a null mutation can't break it).
+A blanket all-red would have meant my "absent" test was really just re-asserting the mutation. Partial,
+discriminating failure = the tests pin the behaviour, not the implementation. The label-resolution branches
+themselves stay covered where they live (`FeedPostLocationBuilderTest`), so the wiring tests don't re-test the
+delegate — they only prove the projection is wired.
+
 ## 2026-08-23 — Before adding a model to `Post.kt`, grep for it: `SharedPlace` already existed
 
 Building `feed-post-location-sticker`, I nearly re-declared `SharedPlace` inside `Post.kt` (I had grepped

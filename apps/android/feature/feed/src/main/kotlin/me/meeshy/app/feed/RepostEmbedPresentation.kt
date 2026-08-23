@@ -36,6 +36,14 @@ data class RepostEmbedPresentation(
     val isQuote: Boolean,
     val isStory: Boolean,
     val isReel: Boolean,
+    /**
+     * The reposted post's shared place, or `null` when absent — mirror of iOS
+     * `FeedPostCard.swift:989`, where the source post's `SharedPlace` renders as a
+     * tappable sticker inside the quote block. Projected through the same
+     * [FeedPostLocationBuilder] the outer feed card uses, so the label resolution
+     * has one source of truth.
+     */
+    val location: FeedLocationPresentation? = null,
 )
 
 object RepostEmbedBuilder {
@@ -73,6 +81,7 @@ object RepostEmbedBuilder {
             isQuote = repost.isQuote == true,
             isStory = repost.type.equals("story", ignoreCase = true),
             isReel = repost.type.equals("reel", ignoreCase = true),
+            location = FeedPostLocationBuilder.build(repost.location),
         )
     }
 }

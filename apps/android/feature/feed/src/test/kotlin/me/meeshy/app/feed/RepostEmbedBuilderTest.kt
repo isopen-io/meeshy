@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.ApiRepostOf
+import me.meeshy.sdk.model.SharedPlace
 import org.junit.Test
 
 class RepostEmbedBuilderTest {
@@ -27,6 +28,7 @@ class RepostEmbedBuilderTest {
         createdAt: String? = "2026-07-01T10:00:00Z",
         likeCount: Int? = null,
         moodEmoji: String? = null,
+        location: SharedPlace? = null,
     ) = ApiRepostOf(
         id = id,
         type = type,
@@ -39,6 +41,7 @@ class RepostEmbedBuilderTest {
         createdAt = createdAt,
         likeCount = likeCount,
         moodEmoji = moodEmoji,
+        location = location,
     )
 
     // --- absence / presence ---
@@ -199,5 +202,34 @@ class RepostEmbedBuilderTest {
     fun build_blankMoodEmojiBecomesNull() {
         val embed = RepostEmbedBuilder.build(repost(moodEmoji = "   "), Prefs(), null)
         assertThat(embed?.moodEmoji).isNull()
+    }
+
+    // --- reposted post's shared location (parity iOS FeedPostCard.swift:989 — the
+    //     source post's SharedPlace rendered inside the quote embed). Projected
+    //     through the same FeedPostLocationBuilder the outer card uses. ---
+
+    @Test
+    fun build_projectsRepostedPostLocation() {
+        val r = repost(location = SharedPlace(latitude = 48.8584, longitude = 2.2945, name = "Tour Eiffel"))
+        val embed = RepostEmbedBuilder.build(r, Prefs(), null)
+        assertThat(embed?.location).isNotNull()
+        assertThat(embed?.location?.label).isEqualTo("Tour Eiffel")
+        assertThat(embed?.location?.latitude).isEqualTo(48.8584)
+        assertThat(embed?.location?.longitude).isEqualTo(2.2945)
+    }
+
+    @Test
+    fun build_absentLocationBecomesNull() {
+        val embed = RepostEmbedBuilder.build(repost(location = null), Prefs(), null)
+        assertThat(embed?.location).isNull()
+    }
+
+    @Test
+    fun build_coordinateOnlyLocationStillProjectsWithNullLabel() {
+        val r = repost(location = SharedPlace(latitude = 12.0, longitude = 34.0))
+        val embed = RepostEmbedBuilder.build(r, Prefs(), null)
+        assertThat(embed?.location).isNotNull()
+        assertThat(embed?.location?.label).isNull()
+        assertThat(embed?.location?.latitude).isEqualTo(12.0)
     }
 }
