@@ -12,7 +12,9 @@ final class ClientInfoProviderTests: XCTestCase {
         "X-Meeshy-Locale",
         "X-Device-Locale",
         "X-Meeshy-Timezone",
-        "X-Canvas-Caps"
+        "X-Canvas-Caps",
+        "X-App-Version",
+        "X-App-Platform"
     ]
 
     // MARK: - Required Keys
@@ -48,6 +50,27 @@ final class ClientInfoProviderTests: XCTestCase {
     func test_buildHeaders_annonceLeNiveauDeCanvasQueCeBinaireSaitLire() async {
         let headers = await ClientInfoProvider.shared.buildHeaders()
         XCTAssertEqual(headers["X-Canvas-Caps"], "3")
+    }
+
+    // MARK: - Porte de version
+
+    /// La porte serveur (`services/gateway/src/utils/appVersion.ts`) ne juge
+    /// que les requêtes qui PORTENT un `X-App-Version` : `isBelowFloor` rend
+    /// `false` sur l'absence, délibérément — le web est exempt, et les binaires
+    /// d'avant l'en-tête sont attrapés par le FORMAT. Un iOS qui oublierait cet
+    /// en-tête ne serait donc jamais barré : la porte existerait sans jamais
+    /// s'appliquer à personne.
+    func test_buildHeaders_annonceLaVersionQueLaPorteServeurJuge() async {
+        let headers = await ClientInfoProvider.shared.buildHeaders()
+        XCTAssertEqual(headers["X-App-Version"], AppVersionHeader.value())
+    }
+
+    /// `getAppStoreUrl(platform)` : `android` ⇒ Play Store, tout le reste ⇒
+    /// App Store. Le `storeUrl` du 426 vient de là — sans cet en-tête, il
+    /// serait correct sur iOS par accident, jamais par contrat.
+    func test_buildHeaders_annonceLaPlateformeQuiResoutLUrlDuStore() async {
+        let headers = await ClientInfoProvider.shared.buildHeaders()
+        XCTAssertEqual(headers["X-App-Platform"], "ios")
     }
 
     // MARK: - Locale Format
