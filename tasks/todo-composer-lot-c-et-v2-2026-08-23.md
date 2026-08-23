@@ -42,6 +42,59 @@ revu, **rien n'est écrit**.
       portent leur format).
 - [ ] **C4b** — Rupture cliente restante : `UpgradeGateView` (426) + porte iPad
       + porte de mise à jour
+- [ ] **C5** — Collage O12 (la surface décide) + « Mes stickers » LRU.
+      **PÉRIMÈTRE ÉLARGI par la directive produit du 2026-08-23** : *« on doit
+      pouvoir coller des images, des documents dont les stickers, et ça doit
+      être pris en compte et propagé — sous iOS ET iPadOS. »* Le plan d'origine
+      ne nommait que des IMAGES ; or le composer sert quatre formats, dont le
+      post, qui porte des documents. Un collage limité aux images les aurait
+      avalés EN SILENCE — le pire comportement, le presse-papier ne disant
+      jamais pourquoi rien ne s'est passé.
+      **Le pipeline n'est pas à écrire, il est à RÉUTILISER** : constat vérifié
+      le 2026-08-23 — `ComposerDropResolver` + `ComposerIngestRouter`
+      (`apps/ios/Meeshy/Features/Main/Components/`) résolvent DÉJÀ image avec ou
+      sans fichier sous-jacent, document, vidéo, audio, refus des dossiers,
+      autorisation sandbox et toast nommant le fichier en échec. Ils sont
+      branchés sur la barre de conversation (`UniversalComposerBar`) et
+      `PostDetailView`. **Le composer de story/post/réel, lui, n'a AUCUN chemin
+      de collage** — zéro occurrence de `Paste`/`pasteboard` dans tout
+      `packages/MeeshySDK/Sources/MeeshyUI/Story/`. En écrire un second serait
+      se condamner à corriger deux fois chaque cas limite du presse-papier iOS.
+      **La règle a donc DEUX axes indépendants**, et non une table croisée : la
+      SURFACE décide du budget et de la mémorisation (`.scene` ⇒ 2048 px, pas
+      d'écriture bibliothèque ; `.stickers` ⇒ 512 px, écriture), le TYPE COLLÉ
+      décide du produit (image ⇒ objet média ou sticker ; vidéo/audio ⇒ objet
+      média ; **document ⇒ pièce jointe**, jamais un rejet muet). Une surface ne
+      peut pas transformer la NATURE de ce qui est collé.
+      **iPadOS fait partie de la définition de terminé**, pas d'un lot ultérieur.
+- [ ] **C2-C3** — Portes de présentation consommant `ComposerIntent`
+      (tray iPhone/iPad ; *le feed reste la sheet v1*)
+- [x] **C4b** — Rupture cliente restante ✅ *(gate vert 2026-08-23)*
+      `AppVersionHeader` (SDK) miroite ligne à ligne le comparateur du gateway
+      (`services/gateway/src/utils/appVersion.ts`) ; `X-App-Version` +
+      `X-App-Platform: ios` posés dans `ClientInfoProvider.staticHeaders()`, au
+      même point unique que `X-Canvas-Caps` ; sur `426` le funnel poste
+      `meeshyUpgradeRequired` **avant** de jeter, `minVersion`/`storeUrl` lus À
+      LA RACINE. `UpgradeGateView` sans aucun bouton de fermeture, montée en
+      `fullScreenCover` par `RootView` **et** `iPadRootView`, pilotée par la
+      notification OU par le bootstrap `GET /app/min-version` (best-effort,
+      silencieux). 4 libellés au catalogue en 7 langues.
+      Gate : `meeshy.sh test` COMPLET — phase 0 (SDK) 3751 + 3405 tests, 0 échec ; phase 1 3282 tests, **8 échecs tous antérieurs** (3 crashes de contention, verts en isolation ; 5 gardes Lentille lisant des fichiers identiques sur `origin/main`, que cette branche ne touche pas) ; phase 2 4321 tests, 0 échec ; phase 3 sautée (DEMO_USER absent). Suites C4b : SDK 40/40, app UpgradeGateTests 14/14. Les deux gardes négatives sont **prouvées rouges par réintroduction**.
+      **Renseignements laissés** : (1) le catalogue `Localizable.xcstrings`
+      porte une clé EN DOUBLE — `reading_mode.bubbles.subtitle`, deux valeurs
+      `de` DIVERGENTES ; un `json.load`/`json.dump` ne perdrait pas seulement
+      une entrée, il **changerait une traduction allemande en silence** — toute
+      édition scriptée de ce fichier doit être TEXTUELLE. (2) `is_build_running`
+      de `meeshy.sh` cherche `xcodebuild.*-derivedDataPath.*Build`, or la
+      **phase 0 ne passe aucun `-derivedDataPath`** : elle est INVISIBLE au
+      détecteur en plus d'échapper à l'isolation, d'où deux gates qui démarrent
+      en parallèle sans se voir et ne se découvrent qu'en phase 1.
+      **Dette laissée** : `TusUploadManager` construit ses requêtes à la main
+      (lignes 316-319, 447-449, 480-481) et ne passe pas par
+      `ClientInfoProvider.buildHeaders()` — le chemin d'upload tus ne porte donc
+      ni `X-App-Version` ni `X-App-Platform`. Inoffensif tant que la porte
+      serveur ne juge que `POST /posts` ; à refermer le jour où une porte est
+      posée sur la route d'upload.
 - [ ] **C5** — Collage O12 (la surface décide) + « Mes stickers » LRU
 - [ ] **C6-C6b** — Capture appui long + AUTO-BROUILLON (fermeture & 426)
 - [ ] **C7-C7b** — Étagère 4 onglets + alt text + `allowSoundExtraction`
@@ -272,3 +325,20 @@ carte rendue). Figer la signature sans lui obligerait à la rouvrir aussitôt.
   demande ses propres tests plus un gate. À arbitrer — la question est de savoir
   si le funnel d'en-têtes doit être une garantie du CLIENT (un seul chemin
   sortant, garde de source à l'appui) ou une simple convention.
+
+- **SEPT gardes du chantier Lentille sont ROUGES sur `main`** *(mesuré le
+  2026-08-23 sur un worktree `main` PUR, sans aucun diff composer)* :
+  `LentilleRowBehaviourAnchorTests` 3 (L06 badge de non-lus comptés absent, L09
+  glyphe outbox encore rendu par le rang plat), `ScrollPillStateTests` 2,
+  `LentilleRowSourceGuardTests` 1 (le point du pont dimensionné par un littéral
+  au lieu de `LentilleMetrics.UnreadDot.size`), `LentilleChromeSourceGuardTests` 1.
+  Elles n'appartiennent à aucune tâche du composer et ne sont corrigées par
+  aucune — elles sont consignées ICI parce qu'un gate complet du lot C les
+  rencontre et qu'il faut savoir, en les voyant, qu'elles PRÉCÈDENT le diff.
+  Le message de `ScrollPillStateTests` mérite d'être lu en entier : « I-061
+  l'avait écrite et testée SANS LA MONTER : une vue juste, compilée,
+  invisible. » C'est le motif que cette session a rencontré quatre fois dans la
+  même journée — du code juste que rien n'exécute, et un vert qui ne veut plus
+  rien dire.
+  **À trancher** : soit le chantier Lentille les reprend, soit elles deviennent
+  du bruit permanent qui masquera la prochaine vraie régression.
