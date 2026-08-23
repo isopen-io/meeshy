@@ -147,6 +147,22 @@ journal.
 > second alias traverser en silence. Sa propre fixture l'a pris en défaut, et
 > porte les deux formes pour cette raison.
 
+### Vérification de complétude : les quatre importateurs restants
+
+Un inventaire vide est une AFFIRMATION. Les quatre fichiers de production qui
+importent encore `socket.io` ont été ouverts un par un plutôt que comptés :
+
+| fichier | import | verdict |
+|---|---|---|
+| `socketio/typed-socket.ts` | `type { Server, Socket }` | **c'est le fichier qui PARAMÈTRE le `Server` nu** (`MeeshyIOServer = Server<ClientToServerEvents, ServerToClientEvents>`) — exactement ce qu'il faut en faire. Exclu par les DEUX conditions : son seul `.emit(` est dans un commentaire, et `= Server<` n'est pas `: Server` |
+| `socketio/MeeshySocketIOManager.ts` | `Server` en VALEUR | le CONSTRUIT (`new SocketIOServer(…)`) — seul site du dépôt qui le puisse |
+| `socketio/utils/socket-helpers.ts` | `type { Socket }` | `Socket`, pas `Server` — autre famille |
+| `utils/socket-rate-limiter.ts` | `Socket` | idem |
+
+Et les deux services frères (`agent`, `translator`) n'importent `socket.io` nulle
+part : la passerelle est le seul émetteur du dépôt, et le balayage la couvre en
+entier.
+
 ## 6. Le miroir web — ce que le cycle 107 bis avait déjà débloqué sans le savoir
 
 `VideoCallInterface.tsx` portait cinq `(socket as unknown).emit(…)`, alors que
