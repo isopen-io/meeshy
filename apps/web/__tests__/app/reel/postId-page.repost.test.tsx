@@ -109,6 +109,18 @@ describe('ReelPage — repost wiring', () => {
     mockRepostMutate.mockImplementation((_vars, opts) => opts?.onSuccess?.());
   });
 
+  /**
+
+   * Loi du miroir (directive 2026-08-23) : un réel repartagé RESTE un réel.
+
+   * Ce test assérait `{ isQuote: false }` sans `targetType` — donc il gravait
+
+   * la rétrogradation silencieuse : le gateway retombait sur `?? POST` et le
+
+   * repost quittait le fil des réels sans que rien ne le signale.
+
+   */
+
   it('opens RepostModal from the reel action rail and reposts via useRepostMutation', async () => {
     render(<ReelPage />);
 
@@ -121,7 +133,7 @@ describe('ReelPage — repost wiring', () => {
 
     await waitFor(() =>
       expect(mockRepostMutate).toHaveBeenCalledWith(
-        { postId: 'reel-1', data: { isQuote: false } },
+        { postId: 'reel-1', data: { isQuote: false, targetType: 'REEL' } },
         expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
       ),
     );

@@ -25,6 +25,7 @@ jest.mock('@/hooks/use-i18n', () => ({
 const mockAddToast = jest.fn();
 type StoryViewerStubProps = {
   onRepost?: (storyId: string) => void;
+  onRepostAsPost?: (storyId: string) => void;
   stories: Array<{ id: string }>;
 };
 jest.mock('@/components/v2', () => ({
@@ -37,11 +38,19 @@ jest.mock('@/components/v2', () => ({
     <button data-testid="story-tray-open" onClick={() => onStoryPress('author-2')}>Open story</button>
   ),
   StatusBar: () => null,
-  StoryViewer: ({ onRepost, stories }: StoryViewerStubProps) => (
+  StoryViewer: ({ onRepost, onRepostAsPost, stories }: StoryViewerStubProps) => (
     <div>
       {onRepost && (
         <button data-testid="story-viewer-repost" onClick={() => onRepost(stories[0]?.id ?? '')}>
           Repost story
+        </button>
+      )}
+      {onRepostAsPost && (
+        <button
+          data-testid="story-viewer-repost-as-post"
+          onClick={() => onRepostAsPost(stories[0]?.id ?? '')}
+        >
+          Keep on my feed
         </button>
       )}
     </div>
@@ -162,7 +171,14 @@ describe('PostsFeedScreen — minimal story repost', () => {
     mockRepostMutate.mockImplementation((_vars, opts) => opts?.onSuccess?.());
   });
 
-  it('reposts a story directly (no modal) via POST /posts/:id/repost, isQuote:false', async () => {
+  /**
+   * Loi du miroir (directive produit 2026-08-23). Ce test assérait
+   * `{ isQuote: false }` SANS `targetType` : il GRAVAIT le défaut. Le gateway
+   * retombait sur son `?? POST` et repartager une story depuis le tray du fil
+   * fabriquait un post PERMANENT — le geste disait « repartager », le résultat
+   * disait « ancrer ».
+   */
+  it('reposte une story EN STORY depuis le tray du fil — elle reste éphémère', async () => {
     render(<PostsFeedScreen />);
     fireEvent.click(screen.getByTestId('story-tray-open'));
 
@@ -172,7 +188,24 @@ describe('PostsFeedScreen — minimal story repost', () => {
 
     await waitFor(() =>
       expect(mockRepostMutate).toHaveBeenCalledWith(
-        { postId: 'story-1', data: { isQuote: false } },
+        { postId: 'story-1', data: { isQuote: false, targetType: 'STORY' } },
+        expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+      ),
+    );
+  });
+
+  /** L'ANCRAGE — « garder ça pour de bon » : le seul chemin vers le permanent. */
+  it("offre l'ancrage depuis le tray : reposter la story EN POST", async () => {
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('story-tray-open'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('story-viewer-repost-as-post'));
+    });
+
+    await waitFor(() =>
+      expect(mockRepostMutate).toHaveBeenCalledWith(
+        { postId: 'story-1', data: { isQuote: false, targetType: 'POST' } },
         expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
       ),
     );
@@ -184,6 +217,9 @@ describe('PostsFeedScreen — minimal story repost', () => {
     fireEvent.click(screen.getByTestId('story-tray-open'));
 
     expect(screen.queryByTestId('story-viewer-repost')).not.toBeInTheDocument();
+    // La garde d'audience vaut pour les DEUX gestes : l'ancrage publie autant
+    // que le miroir, il ne peut pas échapper au verrou de visibilité.
+    expect(screen.queryByTestId('story-viewer-repost-as-post')).not.toBeInTheDocument();
   });
 
   it('shows a failure toast if the repost 403s despite the gate', async () => {
