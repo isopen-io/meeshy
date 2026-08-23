@@ -28,6 +28,7 @@ import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.sync.SyncSeqTracker
 import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.socket.RealtimeSessionCoordinator
 import org.junit.After
@@ -89,7 +90,7 @@ class AuthViewModelTest {
     ): AuthViewModel {
         val api = FakeAuthApi(response)
         return AuthViewModel(
-            AuthRepository(api, store, SessionRepository(api, store), teardown),
+            AuthRepository(api, store, SessionRepository(api, store), teardown, SyncSeqTracker()),
             coordinator,
             savedAccountsStore,
             clock,

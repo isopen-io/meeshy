@@ -6,6 +6,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.sync.SyncSeqTracker
 import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -52,7 +53,7 @@ class MessageSocketManagerChannelNamesTest {
         every { socket.on(any(), any()) } answers {
             handlers[firstArg()] = secondArg()
         }
-        val manager = MessageSocketManager(socket, json)
+        val manager = MessageSocketManager(socket, json, SyncSeqTracker())
         manager.attach()
         return manager to handlers
     }

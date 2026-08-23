@@ -250,6 +250,17 @@ specified.
   (`MessageSocketEvent`, `SocialSocketEvent`); handlers write into Room (CQRS-ish).
 - Socket connection uses full-jitter exponential backoff (anti thundering-herd);
   reconnect re-joins rooms and runs gap-fill (§6).
+- **Exact gap detection (`_seq`).** The gateway stamps a monotonic per-user
+  cursor on user-scoped emissions (`emitWithSeq`; today only `notification:new`).
+  `MessageSocketManager` reads it off the RAW payload — the decoder drops it —
+  and hands it to `SyncSeqTracker` (`sdk-core/.../sync/SyncSeqState.kt`), which
+  reports a gap when `next > lastSeq + 1`. `NotificationsViewModel` turns a gap
+  into a `NotificationRepository.refresh()` (idempotent), and `AuthRepository.logout()`
+  resets the cursor — it is allocated per USER server-side. Third mirror of the
+  same pure rule as iOS `SyncSeqState.swift` and web `sync-seq-state.ts`; any
+  change to the rule touches all three. Detection is exact where the temporal
+  watermark (`updatedSince`/`after`) both misses same-timestamp events and
+  over-fetches.
 - **`NotificationCoordinator` authority model**: socket events are
   authoritative; cache/REST snapshots only *seed* unseen entries, never regress a
   socket-owned value. Socket errors never force logout (only an APIClient 401).
