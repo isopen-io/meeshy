@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 /// Collecte, PAR média du composer, le texte alternatif d'accessibilité et le
 /// choix d'extraction de son.
