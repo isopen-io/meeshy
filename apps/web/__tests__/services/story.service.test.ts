@@ -134,7 +134,7 @@ describe('storyService', () => {
   // ── createStory ────────────────────────────────────────────────────────────
 
   describe('createStory', () => {
-    it('creates a story with minimum fields and defaults visibility to FRIENDS', async () => {
+    it('creates a story with minimum fields and defaults visibility to PUBLIC', async () => {
       const story = makePost();
       mockApi.post.mockResolvedValue({ success: true, data: story });
 
@@ -145,7 +145,7 @@ describe('storyService', () => {
         expect.objectContaining({
           type: 'STORY',
           content: 'My story',
-          visibility: 'FRIENDS',
+          visibility: 'PUBLIC',
         }),
       );
       expect(result).toEqual(story);

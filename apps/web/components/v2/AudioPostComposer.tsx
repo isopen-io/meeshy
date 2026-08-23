@@ -9,6 +9,7 @@ import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { Button } from './Button';
 import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
 import type { MobileTranscription, MobileTranscriptionSegment } from '@/services/posts.service';
+import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import type { PostVisibility } from '@meeshy/shared/types/post';
 
 // ---------------------------------------------------------------------------
@@ -98,7 +99,7 @@ function AudioPostComposer({
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [visibility, setVisibility] = useState<PostVisibility>('PUBLIC');
+  const [visibility, setVisibility] = useState<PostVisibility>(DEFAULT_PUBLICATION_VISIBILITY);
   const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
 

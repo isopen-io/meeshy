@@ -272,10 +272,11 @@ export function PostsFeedScreen() {
     return group ? group.map(postToStoryData) : [];
   }, [activeStoryAuthorId, storyGroups]);
 
-  // PostService.repostPost (gateway) 403s on any non-PUBLIC original, and the
-  // web default story visibility is FRIENDS (user-preferences-store.ts) — the
-  // "Republier" entry is withheld unless every story in the open session is
-  // PUBLIC, or it fails into "Couldn't repost" in the common case.
+  // PostService.repostPost (gateway) 403s on any non-PUBLIC original. Stories
+  // now DEFAULT to PUBLIC (règle produit 2026-08-23,
+  // DEFAULT_PUBLICATION_VISIBILITY) but the author can still narrow the
+  // audience per story — the "Republier" entry stays withheld unless every
+  // story in the open session is PUBLIC, or it fails into "Couldn't repost".
   const activeStoryGroupIsRepostable = useMemo(() => {
     if (!activeStoryAuthorId) return false;
     const group = storyGroups.find((g) => g[0]?.authorId === activeStoryAuthorId);

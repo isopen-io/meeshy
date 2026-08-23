@@ -14,6 +14,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { AttachmentService } from '@/services/attachmentService';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { removingHandle } from '@meeshy/shared/utils/composer-references';
+import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import type { PostMedia, PostType, PostVisibility } from '@meeshy/shared/types/post';
 import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/types/post-reference';
 
@@ -74,7 +75,7 @@ function PostComposer({
 }: PostComposerProps) {
   const { t } = useI18n('common');
   const [content, setContent] = useState('');
-  const [visibility, setVisibility] = useState<PostVisibility>('PUBLIC');
+  const [visibility, setVisibility] = useState<PostVisibility>(DEFAULT_PUBLICATION_VISIBILITY);
   // W6 — audience explicite des visibilités EXCEPT/ONLY (fix : ces options
   // partaient sans liste → visibilité cassée). Même picker/gate que stories.
   const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);

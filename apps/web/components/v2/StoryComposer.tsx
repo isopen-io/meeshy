@@ -14,6 +14,7 @@ import { ReferenceChipRow } from '@/components/composer/ReferenceChipRow';
 import { useReferences } from '@/hooks/composer/useReferences';
 import { removingHandle } from '@meeshy/shared/utils/composer-references';
 import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/types/post-reference';
+import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
 
 // ============================================================================
@@ -292,7 +293,7 @@ function buildCanvasV3(state: CanvasComposerState): CanvasV3 {
 // StoryComposer
 // ============================================================================
 
-function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS' }: StoryComposerProps) {
+function StoryComposer({ open, onClose, onPublish, defaultVisibility = DEFAULT_PUBLICATION_VISIBILITY }: StoryComposerProps) {
   const { t } = useI18n('common');
   const [selectedBg, setSelectedBg] = useState<string>(BACKGROUND_COLORS[0].value);
   const [selectedTextStyle, setSelectedTextStyle] = useState<TextStyle>('bold');

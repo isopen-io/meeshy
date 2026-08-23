@@ -74,7 +74,7 @@ jest.mock('@/lib/story-transforms', () => ({
   groupToStoryItem: jest.fn(),
 }));
 jest.mock('@/stores/user-preferences-store', () => ({
-  useStoryPreferences: () => ({ preferences: { defaultVisibility: 'FRIENDS' } }),
+  useStoryPreferences: () => ({ preferences: { defaultVisibility: 'PUBLIC' } }),
 }));
 
 const mockCreateStatusMutate = jest.fn();
