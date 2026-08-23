@@ -15,6 +15,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { emitServerEvent } from '../serverEmit';
+import type { QueuedPayloadFor } from '../queuedEventContract';
 
 const logger = enhancedLogger.child({ module: 'AttachmentReactionHandler' });
 const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
@@ -205,7 +206,7 @@ export class AttachmentReactionHandler {
     actorParticipantId: string | null | undefined,
     eventType: 'attachment-reaction-added' | 'attachment-reaction-removed',
     data: { attachmentId: string; messageId: string; emoji: string },
-    payload: Record<string, unknown>,
+    payload: QueuedPayloadFor<'attachment-reaction-added'>,
   ): Promise<void> {
     await enqueueForOfflineParticipants(
       { deliveryQueue: this.deliveryQueue, prisma: this.deps.prisma, connectedUsers: this.deps.connectedUsers },

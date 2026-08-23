@@ -1538,6 +1538,45 @@ fonctionnalité aux trois clients sans faire tomber quoi que ce soit.
 > canal non gouverné transporte ne sont pas hypothétiques — ils sont déjà en
 > production, déjà lus, et déjà indispensables.
 
+### La file hors ligne est tenue au MÊME contrat que la diffusion directe
+
+`socketio/queuedEventContract.ts` porte **la** correspondance `eventType` de
+file → événement serveur (`DRAINED_EVENT`), et en dérive la charge que chaque
+type doit porter (`QueuedPayloadFor`, `QueuedEventVariant`). Un transport ne peut
+donc plus diffuser une forme et en ENFILER une autre.
+
+Pourquoi c'était le suivi le plus urgent : **le seul témoin d'une divergence
+entre l'émission directe et le rejeu est un destinataire qui était hors ligne au
+mauvais moment** — c'est-à-dire personne. Un défaut de cette famille ne produit
+aucun signal, jamais.
+
+Trois règles en sont sorties :
+
+1. **Une chaîne de `if` n'est pas une table.** `_drainedEventName` en portait
+   onze, avec un repli final (`return MESSAGE_NEW`) : un `eventType` neuf s'y
+   serait rejoué sous le mauvais nom, sans bruit. Un objet littéral
+   `as const satisfies Record<Union, …>` rend la couverture EXHAUSTIVE au
+   compilateur.
+2. **`satisfies` garde la totalité, jamais la JUSTESSE.** Une table peut être
+   complète et pointer le mauvais événement. Poser des assertions
+   d'assignabilité sur les correspondances dont une inversion serait SILENCIEUSE
+   — celles dont les deux charges se ressemblent (`reaction-added` /
+   `reaction-removed`, `new` / `edited`).
+3. **Gouverner une frontière ne sert à rien tant que ses RELAIS ne la relaient
+   pas.** Sept l'ont interrompue ici, chacun en redéclarant un `eventType` en
+   union et un `payload: Record<string, unknown>` — deux unions indépendantes de
+   plus, à chaque étage. Le contrat se perdait AVANT d'atteindre la file. Même
+   leçon que le cycle 98 sur la symétrie X3DH (« un correctif prouvé à une
+   couche peut être défait par la couche qui le consomme »), appliquée en
+   amont.
+
+> **Corollaire de méthode : une erreur commise en écrivant un cliquet est le
+> meilleur cas de test qu'il aura jamais.** `'link-message'` a d'abord été mappé
+> vers `MESSAGE_NEW` — faux, parce que la file stocke l'ENVELOPPE `{ message }`
+> et non le message nu ; le typage aurait été un cran trop bas, et un appelant
+> qui enfilait le message nu aurait compilé pour produire un rejeu non routable.
+> L'assertion qui gèle ce point est née de l'erreur elle-même.
+
 ## Une preuve TRANSPORTÉE n'est pas une preuve VÉRIFIÉE
 
 `signedPreKey.signature` est la seule chose qui rattache la pré-clé signée à la

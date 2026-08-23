@@ -19,6 +19,7 @@ import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rat
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import { enqueueOfflineReactionEvent, type ReactionEventType } from '../reactionOfflineQueue';
 import { emitServerEvent } from '../serverEmit';
+import { queuedVariantOf, type QueuedPayloadFor } from '../queuedEventContract';
 
 const logger = enhancedLogger.child({ module: 'ReactionHandler' });
 
@@ -179,7 +180,7 @@ export class ReactionHandler {
           // emoji précédent — aucun retrait compensatoire à diffuser.
           this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
             .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));
-          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, validated.emoji, updateEvent as unknown as Record<string, unknown>);
+          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, validated.emoji, updateEvent);
         }
       } catch (sideEffectError) {
         // Reaction is persisted and the client already ACKed; the broadcast is
@@ -296,7 +297,7 @@ export class ReactionHandler {
           );
           this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED)
             .catch(err => logger.error('reaction:remove broadcast failed', { error: err, conversationId: message.conversationId }));
-          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, validated.emoji, updateEvent as unknown as Record<string, unknown>);
+          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, validated.emoji, updateEvent);
         }
       } catch (sideEffectError) {
         // Removal is persisted and the client already ACKed; the broadcast is
@@ -470,11 +471,11 @@ export class ReactionHandler {
     eventType: ReactionEventType,
     messageId: string,
     emoji: string,
-    payload: Record<string, unknown>
+    payload: QueuedPayloadFor<ReactionEventType>
   ): Promise<void> {
     await enqueueOfflineReactionEvent(
       { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
-      { conversationId, actorParticipantId, eventType, messageId, emoji, payload }
+      { conversationId, actorParticipantId, messageId, emoji, ...queuedVariantOf(eventType, payload) }
     );
   }
 
