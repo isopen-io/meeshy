@@ -10,6 +10,7 @@ import {
   canEditMessage,
   generateDefaultConversationTitle,
   getRequiredLanguages,
+  generateCompactConversationIdentifier,
 } from '../utils/conversation-helpers';
 
 describe('resolveUserLanguage', () => {
@@ -166,18 +167,23 @@ describe('generateConversationIdentifier', () => {
   });
 
   it('should handle title with only special characters', () => {
+    // Un titre qui ne laisse rien apres sanitisation retombe sur le fallback
+    // COMPACT : plus de suffixe horodate, l'identifiant est opaque et court.
     const identifier = generateConversationIdentifier('!@#$%');
-    expect(identifier).toMatch(/^mshy_[a-z0-9]+-20240315103045$/);
+    expect(identifier).toMatch(/^mshy_[A-Za-z0-9_-]{12}$/);
   });
 
   it('should generate random identifier without title', () => {
+    // Sans titre, aucune lisibilite a preserver : on emet l'identifiant
+    // compact de 17 caracteres plutot que l'ancien `mshy_<base36>-<14>` (28).
     const identifier = generateConversationIdentifier();
-    expect(identifier).toMatch(/^mshy_[a-z0-9]+-20240315103045$/);
+    expect(identifier).toMatch(/^mshy_[A-Za-z0-9_-]{12}$/);
+    expect(identifier).toHaveLength(17);
   });
 
   it('should generate random identifier with empty title', () => {
     const identifier = generateConversationIdentifier('');
-    expect(identifier).toMatch(/^mshy_[a-z0-9]+-20240315103045$/);
+    expect(identifier).toMatch(/^mshy_[A-Za-z0-9_-]{12}$/);
   });
 
   it('should convert title to lowercase', () => {
@@ -712,5 +718,96 @@ describe('generateDefaultConversationTitle — name edge cases', () => {
     ];
     const result = generateDefaultConversationTitle(members as any, 'me');
     expect(result).toBe('Smith, Alice and 1 other(s)');
+  });
+});
+
+/**
+ * Identifiant compact de conversation directe.
+ *
+ * L'ancien format concaténait les deux ObjectId des participants —
+ * `mshy_<oid24>_<oid24>` (54 car.) ou `direct_<oid24>_<oid24>_<ms>` (69 car.).
+ * Deux défauts, pas un seul :
+ *   1. la LONGUEUR, qui dépasse le `max(50)` que l'API impose pourtant aux
+ *      identifiants fournis par les clients (validation.ts:1668) ;
+ *   2. la FUITE — un identifiant public exposait l'ObjectId des deux
+ *      participants à quiconque voyait une URL de conversation.
+ */
+describe('generateCompactConversationIdentifier', () => {
+  it('produit un identifiant de 17 caractères, contre 54 à 69 auparavant', () => {
+    const identifier = generateCompactConversationIdentifier();
+
+    expect(identifier).toHaveLength(17);
+    expect(identifier.length).toBeLessThanOrEqual(50);
+  });
+
+  it('reste dans l alphabet accepté par la validation de l API', () => {
+    for (let i = 0; i < 200; i++) {
+      expect(generateCompactConversationIdentifier()).toMatch(/^mshy_[A-Za-z0-9_-]{12}$/);
+    }
+  });
+
+  it('ne divulgue aucun identifiant de participant', () => {
+    const alice = '507f1f77bcf86cd799439011';
+    const bob = '507f191e810c19729de860ea';
+
+    const identifier = generateCompactConversationIdentifier();
+
+    expect(identifier).not.toContain(alice);
+    expect(identifier).not.toContain(bob);
+  });
+
+  it('ne collisionne pas sur un large tirage', () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 20000; i++) seen.add(generateCompactConversationIdentifier());
+
+    expect(seen.size).toBe(20000);
+  });
+
+  it('couvre tout l alphabet — un generateur biaise ou tronque echouerait ici', () => {
+    const chars = new Set<string>();
+    for (let i = 0; i < 3000; i++) {
+      for (const c of generateCompactConversationIdentifier().slice(5)) chars.add(c);
+    }
+
+    expect(chars.size).toBe(64);
+  });
+});
+
+/**
+ * Le plafond de 50 vaut AUSSI pour les conversations titrées.
+ *
+ * L'identifiant compact a réglé le cas des DM, mais la branche titrée
+ * conservait `mshy_<slug>-<YYYYMMDDHHMMSS>` avec un slug JAMAIS tronqué :
+ *   longueur = 5 (`mshy_`) + slug + 1 (`-`) + 14 (horodate) = 20 + slug
+ * donc tout titre donnant un slug de 31 caractères ou plus produisait un
+ * identifiant que l'API aurait refusé à un client (`validation.ts:1668`).
+ * Un titre de 37 caractères est ordinaire, pas pathologique.
+ */
+describe('generateConversationIdentifier — plafond de longueur', () => {
+  it('respecte max(50) meme pour un titre long', () => {
+    const identifier = generateConversationIdentifier('Coordination equipe produit et design');
+
+    expect(identifier.length).toBeLessThanOrEqual(50);
+  });
+
+  it('respecte max(50) pour un titre tres long', () => {
+    const identifier = generateConversationIdentifier(
+      'Reunion hebdomadaire de l equipe technique et produit'
+    );
+
+    expect(identifier.length).toBeLessThanOrEqual(50);
+  });
+
+  it('ne laisse jamais un tiret pendre au point de troncature', () => {
+    // « ...produit-et-design » tronque a 30 tomberait sur un tiret final :
+    // un slug qui se termine par `-` puis `-<horodate>` donne `--`.
+    const identifier = generateConversationIdentifier('Coordination equipe produit et design');
+
+    expect(identifier).not.toContain('--');
+    expect(identifier).toMatch(/^mshy_[a-z0-9-]+-\d{14}$/);
+  });
+
+  it('preserve integralement un titre court — la lisibilite reste la regle', () => {
+    expect(generateConversationIdentifier('Groupe')).toMatch(/^mshy_groupe-\d{14}$/);
   });
 });

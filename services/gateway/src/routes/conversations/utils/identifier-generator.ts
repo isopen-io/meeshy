@@ -1,5 +1,10 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { generateConversationIdentifier as sharedGenerateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
+import {
+  generateConversationIdentifier as sharedGenerateConversationIdentifier,
+  generateCompactConversationIdentifier
+} from '@meeshy/shared/utils/conversation-helpers';
+
+export { generateCompactConversationIdentifier };
 
 /**
  * Fonction utilitaire pour générer le linkId avec le format demandé
