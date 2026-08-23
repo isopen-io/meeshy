@@ -2964,6 +2964,154 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._drainPendingMessages('user-reg', false);
       expect(receiptsSpy).toHaveBeenCalledWith('user-reg', expect.any(Array), false);
     });
+
+    /**
+     * Le drain est DESTRUCTIF : `drain()` retire les entrées de Redis ET de la
+     * file mémoire avant que la moindre émission n'ait lieu. Tout ce qui n'est
+     * pas émis pendant cette fenêtre est perdu SANS RECOURS — il n'y a pas de
+     * seconde chance, pas de relecture, pas de trace.
+     *
+     * Les trois témoins ci-dessous gardent la frontière de DÉSÉRIALISATION,
+     * celle que `_drainedEmissions` documente comme une AFFIRMATION : « que
+     * l'octet relu de Redis soit bien ce qu'on y a écrit ». Le typage borne ce
+     * qu'on ÉCRIT, jamais ce qu'on RELIT, et la fenêtre de relecture est de
+     * 48 h (`DELIVERY_QUEUE_TTL_SECONDS`) — largement de quoi enjamber un
+     * déploiement progressif où deux versions se partagent la même file Redis.
+     */
+    it('ne diffuse RIEN sous un nom d’événement que la table ne résout pas', async () => {
+      // `DRAINED_EVENT['reaction-add']` (une faute de frappe, ou un `eventType`
+      // d'une version voisine) rend `undefined` — et `emit(undefined, payload)`
+      // ne LÈVE PAS sur socket.io 4.8 : il diffuse un événement anonyme que nul
+      // ne peut écouter. Mesuré. C'est la forme exacte du défaut du cycle 104,
+      // où `broadcastCommentUnliked` émettait sous le nom `undefined`.
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-known', conversationId: 'conv-1' } },
+          { payload: { id: 'msg-unnameable', conversationId: 'conv-1' }, eventType: 'reaction-add' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-unnameable', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, {
+        id: 'msg-known',
+        conversationId: 'conv-1',
+      });
+      // Le point du témoin : aucune émission ne porte un nom absent.
+      for (const call of ioState.toEmit.mock.calls) {
+        expect(typeof call[0]).toBe('string');
+      }
+    });
+
+    /**
+     * Un accusé de remise AFFIRME « ce message est arrivé chez son
+     * destinataire ». La règle est déjà écrite dans `_drainPendingMessages`,
+     * pour la garde d'appartenance : « l'affirmer d'un message qu'on vient de
+     * refuser de livrer mentirait à son auteur ». Elle ne couvrait pas
+     * l'entrée qu'on ne sait PAS NOMMER — qui n'est pas refusée, seulement
+     * indélivrable, et dont l'auteur voyait pourtant sa coche passer au double
+     * tic.
+     */
+    it('n’accuse pas la remise d’une entrée qu’il n’a pas su diffuser', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-ok' }, conversationId: 'conv-1', messageId: 'msg-ok' },
+          {
+            payload: { id: 'msg-lost' },
+            conversationId: 'conv-1',
+            messageId: 'msg-lost',
+            eventType: 'reaction-add',
+          },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const receiptsSpy = jest
+        .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
+        .mockResolvedValue(undefined);
+      await (manager as any)._drainPendingMessages('user-halflost', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.PENDING_MESSAGES_DELIVERED,
+        expect.objectContaining({ count: 1 })
+      );
+      const [, forwarded] = receiptsSpy.mock.calls[0] as [string, any[], boolean];
+      expect(forwarded.map((e: any) => e.messageId)).toEqual(['msg-ok']);
+    });
+
+    /**
+     * Le pendant du témoin précédent, et il tire dans l'autre sens : `count` se
+     * RESSERRE sur ce qui est parti, `conversationIds` NE SE RESSERRE PAS.
+     *
+     * C'est l'écart entre les deux qui rend une perte récupérable. Le message
+     * d'une entrée indélivrable est toujours en base — seul son rejeu a
+     * échoué — et le seul consommateur de cet événement invalide les messages
+     * des conversations nommées. Resserrer `conversationIds` sur les entrées
+     * livrées (le geste « symétrique » qu'une relecture pressée appelle) ferait
+     * d'un incident de transport un trou permanent dans le fil.
+     */
+    it('nomme la conversation d’une entrée PERDUE, pour que le client aille la relire', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-ok' }, conversationId: 'conv-delivered' },
+          {
+            payload: { id: 'msg-lost' },
+            conversationId: 'conv-lost',
+            eventType: 'reaction-add',
+          },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-recoverable', false);
+
+      const call = ioState.toEmit.mock.calls.find(
+        (c: any[]) => c[0] === SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      expect(call?.[1].count).toBe(1);
+      expect(call?.[1].conversationIds).toEqual(
+        expect.arrayContaining(['conv-delivered', 'conv-lost'])
+      );
+    });
+
+    /**
+     * `parseRawEntries` (`RedisDeliveryQueue`) isole DÉJÀ chaque entrée à la
+     * couche du dessous, et sa raison est écrite : « so one corrupt entry can
+     * never poison a whole drain/peek ». La couche qui la CONSOMME laissait
+     * tomber cette garantie — une seule émission qui lève emportait tout le
+     * reste d'un lot déjà retiré de la file, plus le signal
+     * `pending-messages:delivered` et TOUS les accusés de réception.
+     *
+     * `io.to(…).emit` lève réellement : la passerelle l'écrit elle-même
+     * (`NotificationService`, canal isolé par `emitBestEffort` pour cette
+     * raison exacte) et l'encodeur socket.io lève sur une charge non
+     * sérialisable — mesuré.
+     */
+    it('une émission qui lève n’emporte pas le reste du lot déjà drainé', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-a' }, conversationId: 'conv-1' },
+          { payload: { id: 'msg-boom' }, conversationId: 'conv-1' },
+          { payload: { id: 'msg-c' }, conversationId: 'conv-1' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      ioState.toEmit.mockImplementation((_event: string, payload: any) => {
+        if (payload?.id === 'msg-boom') throw new Error('adapter down');
+      });
+
+      await (manager as any)._drainPendingMessages('user-boom', false);
+
+      const emitted = ioState.toEmit.mock.calls
+        .filter((c: any[]) => c[0] === SERVER_EVENTS.MESSAGE_NEW)
+        .map((c: any[]) => c[1]?.id);
+      // `msg-c` suit l'entrée fautive : sans isolation il n'est jamais émis, et
+      // il est déjà sorti de Redis.
+      expect(emitted).toContain('msg-a');
+      expect(emitted).toContain('msg-c');
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.PENDING_MESSAGES_DELIVERED,
+        expect.objectContaining({ count: 2 })
+      );
+    });
   });
 
   // -------------------------------------------------------------------------

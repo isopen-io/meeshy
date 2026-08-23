@@ -2265,6 +2265,29 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.NOTIFICATION_COUNTS]: (data: NotificationCountsEventData) => void;
 
   // Delivery queue — includes affected conversationIds so clients can scope invalidation
+  /**
+   * Fin du rejeu de la file hors ligne, au reconnect.
+   *
+   * **Les deux champs ne portent PAS la même population, et c'est délibéré.**
+   *
+   * - `count` — le nombre d'entrées RÉELLEMENT rejouées. C'est une affirmation
+   *   de livraison : elle ne compte jamais une entrée que la passerelle n'a pas
+   *   su diffuser (`eventType` que la table `DRAINED_EVENT` ne résout pas, ou
+   *   émission qui a levé). Même règle que les accusés de réception, qui
+   *   descendent de la même liste.
+   * - `conversationIds` — les conversations TOUCHÉES par le drain, rejeu réussi
+   *   ou entrée perdue. Plus large que `count` par construction.
+   *
+   * L'écart entre les deux est ce qui rend une perte de rejeu RÉCUPÉRABLE. Le
+   * drain est destructif : une entrée qu'on ne sait pas diffuser sort de la
+   * file sans que rien n'atteigne le client. Les messages qu'elle transportait
+   * sont pourtant toujours en base — seul leur rejeu temps réel a échoué. En
+   * nommant quand même la conversation, l'événement envoie le client les
+   * relire ; l'omettre ferait d'un incident de transport un trou permanent.
+   *
+   * Un `count: 0` accompagné d'une conversation nommée est donc une forme
+   * VALIDE, et se lit « rien n'a pu être rejoué, va relire celle-ci ».
+   */
   [SERVER_EVENTS.PENDING_MESSAGES_DELIVERED]: (data: { count: number; conversationIds: string[] }) => void;
 
   // Conversation lifecycle
