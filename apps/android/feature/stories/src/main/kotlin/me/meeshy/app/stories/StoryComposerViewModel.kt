@@ -374,6 +374,40 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
+     * Advances the fade-in of the on-canvas element [id] by one tap — to the next longer
+     * step, wrapping past the longest back to no-fade (decided by the pure
+     * [StoryTextFadeCycle.advance]). The fade-out end is left untouched, mirroring iOS's two
+     * independent timing controls. Inert on an unknown id; selection and editing are
+     * untouched. The wire mapping ([StoryTextElement.toTextObject]) carries `fadeIn` on publish.
+     */
+    fun onTextElementCycleFadeIn(id: String) {
+        _state.update {
+            it.copy(
+                deck = it.deck.updateTextElement(id) { element ->
+                    element.copy(fade = element.fade.cycledIn())
+                },
+            )
+        }
+    }
+
+    /**
+     * Advances the fade-out of the on-canvas element [id] by one tap — to the next longer
+     * step, wrapping past the longest back to no-fade (decided by the pure
+     * [StoryTextFadeCycle.advance]). The fade-in end is left untouched. Inert on an unknown id;
+     * selection and editing are untouched. The wire mapping ([StoryTextElement.toTextObject])
+     * carries `fadeOut` on publish.
+     */
+    fun onTextElementCycleFadeOut(id: String) {
+        _state.update {
+            it.copy(
+                deck = it.deck.updateTextElement(id) { element ->
+                    element.copy(fade = element.fade.cycledOut())
+                },
+            )
+        }
+    }
+
+    /**
      * Pinch-scales / rotates the on-canvas element [id] by the incremental gesture
      * deltas ([scaleBy] is the multiplicative pinch factor, [rotateByDeg] the additive
      * rotation; clamped/wrapped by the pure [StoryTextElement.transformed]). Selection

@@ -99,6 +99,9 @@ import type {
   PostReactionRemoveData,
 } from './post.js';
 
+// La ligne de réaction persistée — ce que l'accusé de `reaction:add` porte.
+import type { ReactionData } from './reaction.js';
+
 // ===== ROOM HELPERS =====
 // Convention: entity:${id} (colons, jamais underscores)
 
@@ -2423,10 +2426,60 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.TYPING_STOP]: (data: TypingActionData) => void;
   [CLIENT_EVENTS.AUTHENTICATE]: (data: AuthenticateData) => void;
   [CLIENT_EVENTS.REQUEST_TRANSLATION]: (data: RequestTranslationData) => void;
-  [CLIENT_EVENTS.REACTION_ADD]: (data: ReactionAddData, callback?: (response: SocketIOResponse<ReactionUpdateEventData>) => void) => void;
-  [CLIENT_EVENTS.REACTION_REMOVE]: (data: ReactionRemoveData, callback?: (response: SocketIOResponse<ReactionUpdateEventData>) => void) => void;
-  [CLIENT_EVENTS.ATTACHMENT_REACTION_ADD]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<unknown>) => void) => void;
-  [CLIENT_EVENTS.ATTACHMENT_REACTION_REMOVE]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<unknown>) => void) => void;
+  /**
+   * L'accusé de réception d'un `reaction:add` porte la LIGNE PERSISTÉE
+   * (`ReactionData`), et non l'`ReactionUpdateEventData` du broadcast.
+   *
+   * Ce n'est pas un relâchement du contrat, c'est ce que cet accusé PEUT tenir.
+   * `ReactionUpdateEventData` porte une `aggregation`, qui ne s'obtient qu'au
+   * prix de deux lectures supplémentaires APRÈS la persistance
+   * (`message.findUnique` puis `createUpdateEvent`). Or ce handler acquitte
+   * délibérément dès la persistance : une défaillance transitoire de ces
+   * lectures ne doit jamais retourner l'accusé en échec, sans quoi le client
+   * annule une réaction déjà écrite en base. Déclarer l'agrégation ici, c'est
+   * réclamer un champ que le seul émetteur ne peut produire sans abandonner
+   * cette garantie de livraison — et c'est exactement pourquoi il ne l'a jamais
+   * produit.
+   *
+   * Les familles COMMENTAIRE et POST déclarent, elles, leur `updateEvent`
+   * (`comment:reaction-*`, `post:reaction-*`) : leurs handlers acquittent APRÈS
+   * l'agrégation, et l'iOS décode ces accusés. Les trois familles ne sont donc
+   * pas interchangeables — chacune déclare ce que SON émetteur envoie.
+   *
+   * Historique : la forme opaque (`SocketIOResponse<unknown>` côté handler) a
+   * déjà coûté trois incidents de décodage à l'iOS — deux `malformedResponse`
+   * sur les accusés post/commentaire, un `DecodingError` sur le REST
+   * `/reactions` (d'où `DiscardedReactionResponse`). Le quatrième site est
+   * celui-ci ; il est fermé par la déclaration, et par le fait que les
+   * handlers prennent désormais CE type et non plus `unknown`.
+   */
+  [CLIENT_EVENTS.REACTION_ADD]: (data: ReactionAddData, callback?: (response: SocketIOResponse<ReactionData>) => void) => void;
+  /**
+   * Un retrait ne laisse RIEN derrière lui qui mérite le fil : `data` est
+   * absent, et `never` le rend inexprimable plutôt que simplement vide.
+   *
+   * L'émetteur envoyait `{ message: 'Reaction removed successfully' }` et
+   * `{ message: 'Reaction already absent' }` — deux phrases anglaises non
+   * localisées, qu'aucun des trois clients ne lit (le web n'inspecte que
+   * `success`/`error`, l'iOS passe par le REST, Android n'émet pas cet
+   * événement). Dans un produit dont la promesse est de traduire tout le
+   * contenu, un texte anglais en dur sur le fil est un piège pour le premier
+   * client qui l'affichera.
+   */
+  [CLIENT_EVENTS.REACTION_REMOVE]: (data: ReactionRemoveData, callback?: (response: SocketIOResponse<never>) => void) => void;
+  /**
+   * La QUATRIÈME famille de réactions, et la seule qui ait toujours eu raison :
+   * son handler acquitte `{ success: true }` sur TOUS ses chemins — nominal
+   * comme idempotent — et laisse l'`AttachmentReactionUpdateEventData` voyager
+   * sur la diffusion, qui est son seul lecteur.
+   *
+   * `never` grave ce qu'elle fait déjà. Il ne remplace pas `unknown` pour la
+   * forme : `unknown` accepte TOUTE charge, donc n'aurait pas empêché ce site
+   * de dériver vers la ligne brute ou la phrase anglaise que portaient les
+   * trois autres — c'est exactement l'opacité qui les a laissées diverger.
+   */
+  [CLIENT_EVENTS.ATTACHMENT_REACTION_ADD]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<never>) => void) => void;
+  [CLIENT_EVENTS.ATTACHMENT_REACTION_REMOVE]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<never>) => void) => void;
   [CLIENT_EVENTS.REACTION_REQUEST_SYNC]: (messageId: string, callback?: (response: SocketIOResponse<ReactionSyncEventData>) => void) => void;
   // Les quatre `ack?` ci-dessous — INITIATE, JOIN, SIGNAL, END — étaient les
   // seuls acks REQUIS de tout le contrat (4 contre 18 optionnels). Ils
@@ -2524,6 +2577,41 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.ADMIN_AGENT_SUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.ADMIN_AGENT_UNSUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
 }
+
+/**
+ * Le type de l'accusé de réception d'un événement client, LU SUR LE CONTRAT.
+ *
+ * Un handler de la passerelle qui écrit `callback?: (r: SocketIOResponse<X>) =>
+ * void` de sa main REDÉCLARE ce que cette interface déclare déjà, et les deux
+ * peuvent alors diverger sans que rien ne l'empêche — c'est précisément ce qui
+ * s'est produit sur les trois familles de réactions, où les handlers portaient
+ * `SocketIOResponse<unknown>` pendant que le contrat promettait une charge
+ * précise. `unknown` accepte tout : aucune des deux moitiés du fil ne vérifiait
+ * l'autre, et le désaccord a coûté trois incidents de décodage à l'iOS.
+ *
+ * `AckOf<'reaction:add'>` n'est pas une COPIE du contrat, c'est une LECTURE :
+ * il n'existe plus qu'une seule déclaration, et changer la charge d'un accusé
+ * fait rougir tous ses `callback(...)` au lieu de les laisser passer.
+ *
+ * Le `NonNullable` retire l'optionalité du paramètre (`callback?`) sans toucher
+ * à la charge ; l'appel reste facultatif côté handler, c'est sa SIGNATURE qui
+ * cesse de l'être.
+ */
+export type AckOf<E extends keyof ClientToServerEvents> =
+  NonNullable<Parameters<ClientToServerEvents[E]>[1]>;
+
+/**
+ * La RÉPONSE que cet accusé transporte — `Parameters<AckOf<E>>[0]`.
+ *
+ * Les handlers construisent souvent la réponse dans une variable locale avant
+ * de l'acquitter (`const successResponse: … = { … }; callback(successResponse)`).
+ * Annotée `SocketIOResponse<unknown>`, cette locale rouvrait la porte que la
+ * signature venait de fermer : elle accepte n'importe quelle charge, et le
+ * `callback(successResponse)` qui suit ne compare plus rien au contrat.
+ * `AckResponseOf<E>` la referme au même endroit et depuis la même source.
+ */
+export type AckResponseOf<E extends keyof ClientToServerEvents> =
+  Parameters<AckOf<E>>[0];
 
 /* ------------------------------------------------------------------------- *
  * Le cliquet des acks d'appel — au TYPE, sans une ligne exécutable.

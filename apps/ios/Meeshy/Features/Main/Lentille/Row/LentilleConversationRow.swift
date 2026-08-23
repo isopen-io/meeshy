@@ -292,35 +292,30 @@ struct LentilleConversationRow: View {
                 // ligne, et l'aperçu commence à la même abscisse que lui.
                 Spacer(minLength: 0)
 
+                // Pile de non-lus — MÊME place et MÊME rouge qu'en magnification
+                // (retour produit 2026-08-22, soir : « enlever l'effectif sur les
+                // rows non magnifiées, mais mettre le chip rouge si messages non
+                // lus »). La loupe n'ajoute que l'effectif et la précision de la
+                // date : elle agrandit, elle ne recompose pas.
+                //
+                // **Supersession assumée du contrat §LWS-7** (« aucun badge
+                // chiffré nulle part », vol.5 « badge rouge 99+ supprimé ») :
+                // cette règle datait d'un rang où le non-lu se disait par le seul
+                // point accent du pont ✦. Or le pont n'apparaît QUE si la
+                // conversation en a un — une conversation non lue SANS pont ne
+                // disait donc rien du tout. Le chip, lui, parle toujours.
+                //
+                // Le chrome vient de l'ATOME PARTAGÉ, jamais d'une copie locale :
+                // la matrice L06 l'exige nommément (« via l'atome partagé
+                // UnreadCountBadge »), et c'est ce câblage qu'une fusion avait
+                // perdu — l'atome existait, testé, sans un seul consommateur.
                 if conversation.userState.unreadCount > 0 {
-                    unreadBadge
+                    UnreadCountBadge(count: conversation.userState.unreadCount, isDark: isDark)
                         .fixedSize()
                         .layoutPriority(1)
                 }
             }
         }
-    }
-
-    /// Pile de non-lus — MÊME place et MÊME rouge qu'en magnification (retour
-    /// produit 2026-08-22, soir : « enlever l'effectif sur les rows non
-    /// magnifiées, mais mettre le chip rouge si messages non lus »). La loupe
-    /// n'ajoute donc que l'effectif et la précision de la date : elle
-    /// agrandit, elle ne recompose pas.
-    ///
-    /// **Supersession assumée du contrat §LWS-7** (« aucun badge chiffré
-    /// nulle part », vol.5 « badge rouge 99+ supprimé ») : cette règle datait
-    /// d'un rang où le non-lu se disait par le seul point accent du pont ✦.
-    /// Le pont n'apparaît QUE si la conversation en a un (`showsBridge` exige
-    /// `bridge != nil`) — une conversation non lue SANS pont ne disait donc
-    /// rien du tout. Le chip, lui, parle toujours.
-    private var unreadBadge: some View {
-        Text(conversation.userState.unreadCount > 99 ? "99+" : "\(conversation.userState.unreadCount)")
-            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .heavy))
-            .foregroundColor(.white)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(Capsule(style: .continuous).fill(MeeshyColors.unreadBadgeBackground(isDark: isDark)))
-            .accessibilityLabel(UnreadCountLabel.messages(conversation.userState.unreadCount))
     }
 
     /// Troisième ligne — la date SEULE, poussée à droite (retour produit
