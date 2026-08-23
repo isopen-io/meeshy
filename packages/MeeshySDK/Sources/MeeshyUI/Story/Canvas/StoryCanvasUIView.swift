@@ -27,12 +27,32 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Public API
 
+    /// Mémo de `slide.computedTotalDuration()` — posé par le `didSet` de
+    /// `slide`, résolu paresseusement au premier accès (le `didSet` ne joue
+    /// pas à l'init). `internal` : lu par l'extension `+Playback` (une
+    /// propriété `private` serait inaccessible depuis un fichier frère).
+    var cachedSlideTotalDuration: TimeInterval?
+
+    /// Durée totale effective de la slide, sans reparcourir le contenu à
+    /// chaque tick de display-link.
+    var effectiveSlideTotalDuration: TimeInterval {
+        if let cachedSlideTotalDuration { return cachedSlideTotalDuration }
+        let computed = slide.computedTotalDuration()
+        cachedSlideTotalDuration = computed
+        return computed
+    }
+
     public var slide: StorySlide {
         didSet {
             // Refresh the cached background media id BEFORE early return paths
             // so handlePan can branch correctly even mid-gesture.
             backgroundMediaObjectId = slide.effects.mediaObjects?
                 .first(where: { $0.isBackground })?.id
+            // Durée totale mémoïsée AVANT les early returns : le tick du
+            // display-link la lisait via `computedTotalDuration()` (parcours de
+            // tous les media/audio/text objects) à chaque frame — elle ne
+            // change qu'à la réassignation de `slide`.
+            cachedSlideTotalDuration = slide.computedTotalDuration()
 
             // Skip expensive full-layer rebuild while a gesture is actively
             // manipulating an item (pan/pinch/rotate). The gesture handlers

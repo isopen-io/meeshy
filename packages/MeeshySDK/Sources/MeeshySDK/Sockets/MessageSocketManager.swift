@@ -2173,6 +2173,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             // SDP / ICE signaling (call stuck on "connecting"). The old "~35s the WS
             // dropped" was a ping timeout (gateway pingTimeout was 10s) — bumped to
             // 20s server-side, so the persistent WebSocket now holds.
+            //
+            // P4-1 évalué 2026-08-22 puis ÉCARTÉ : `.forceWebsockets(true)`
+            // économiserait 1-2 RTT par connect mais supprime le REPLI polling
+            // — contrairement au web (`transports: ['websocket','polling']`,
+            // WS d'abord AVEC repli), un réseau qui casse l'upgrade WebSocket
+            // (proxy TLS-inspectant, portail captif) perdrait tout temps réel.
+            // À reconsidérer seulement avec un repli après N échecs.
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .reconnects(true),
             .reconnectWait(1),

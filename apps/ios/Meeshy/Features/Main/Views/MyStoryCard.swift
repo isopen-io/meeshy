@@ -46,6 +46,10 @@ struct MyStoryCardModel: Equatable {
 }
 
 struct MyStoryCard: View {
+    /// Taille de rendu d'une cellule de grille (adaptive 150pt, ratio 9:16) —
+    /// borne le décodage de la vignette à la taille affichée.
+    static let thumbnailTargetSize = CGSize(width: 180, height: 320)
+
     let model: MyStoryCardModel
     let now: Date
     let accentColor: Color
@@ -190,24 +194,26 @@ struct MyStoryCard: View {
                 Rectangle().fill(storyBackgroundStyle(hex))
             }
 
-            if let path = model.localCoverPath, let image = UIImage(contentsOfFile: path) {
-                Image(uiImage: image).resizable().scaledToFill()
+            // P1-4a : plus de `UIImage(contentsOfFile:)` dans le body — le
+            // décodage plein format tournait sur le main thread À CHAQUE
+            // render de cellule. `CachedAsyncImage` décode off-main, borné à
+            // la taille de cellule, et son NSCache rend les re-renders
+            // synchrones. Pendant le chargement — et si le fichier local est
+            // illisible (tué mi-écriture) — le placeholder EST la chaîne de
+            // repli historique (thumbHash → miniature serveur), donc aucun
+            // état ne rend moins que l'ancien code.
+            if let path = model.localCoverPath, FileManager.default.fileExists(atPath: path) {
+                // showsStatusOverlays: false — surface décorative : ni spinner
+                // pendant le décodage, ni bouton Retry sans issue sur un
+                // fichier local illisible.
+                CachedAsyncImage(
+                    url: URL(fileURLWithPath: path).absoluteString,
+                    targetSize: Self.thumbnailTargetSize,
+                    showsStatusOverlays: false
+                ) { resolvedThumbnailFallback }
+                .scaledToFill()
             } else {
-                switch MyStoryThumbnailResolver.resolve(thumbHash: model.thumbHash,
-                                                        remoteURL: model.thumbnailURL) {
-                case .composite(let hash):
-                    if let image = UIImage.fromThumbHash(hash) {
-                        Image(uiImage: image).resizable().scaledToFill()
-                    } else if let url = model.thumbnailURL, !url.isEmpty {
-                        CachedAsyncImage(url: url) { emptyOrPlaceholder }
-                    } else {
-                        emptyOrPlaceholder
-                    }
-                case .remoteURL(let url):
-                    CachedAsyncImage(url: url) { emptyOrPlaceholder }
-                case .placeholder:
-                    emptyOrPlaceholder
-                }
+                resolvedThumbnailFallback
             }
 
             if isVeiled {
@@ -226,6 +232,31 @@ struct MyStoryCard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     .shadow(color: .black.opacity(0.5), radius: 2)
             }
+        }
+    }
+
+    /// Chaîne de repli historique de la vignette (thumbHash composite →
+    /// miniature serveur → placeholder), déléguée à `MyStoryThumbnailResolver`.
+    /// Sert de branche sans cover local ET de placeholder du cover local
+    /// (pendant son décodage, ou s'il est illisible).
+    @ViewBuilder
+    private var resolvedThumbnailFallback: some View {
+        switch MyStoryThumbnailResolver.resolve(thumbHash: model.thumbHash,
+                                                remoteURL: model.thumbnailURL) {
+        case .composite(let hash):
+            if let image = UIImage.fromThumbHash(hash) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else if let url = model.thumbnailURL, !url.isEmpty {
+                // targetSize ≈ cellule de grille 9:16 (adaptive 150pt) —
+                // décode downsamplé au lieu du plafond 1200 px plein format.
+                CachedAsyncImage(url: url, targetSize: Self.thumbnailTargetSize) { emptyOrPlaceholder }
+            } else {
+                emptyOrPlaceholder
+            }
+        case .remoteURL(let url):
+            CachedAsyncImage(url: url, targetSize: Self.thumbnailTargetSize) { emptyOrPlaceholder }
+        case .placeholder:
+            emptyOrPlaceholder
         }
     }
 

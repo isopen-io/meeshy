@@ -1823,19 +1823,27 @@ class ConversationViewModel: ObservableObject {
                     case .fresh(let data, _), .stale(let data, _):
                         // Update delivery counters on existing own-message records via GRDB;
                         // the store observation surfaces the changes to `messages` automatically.
+                        // Batché : 1 transaction + 1 refresh pour la rafale,
+                        // au lieu de N awaits → N notifications → N relectures.
                         let persistence = self.messagePersistence
-                        let ownMessages = self.messages.filter(\.isMe)
-                        for existing in ownMessages {
-                            guard let fresh = data.first(where: { $0.id == existing.id }),
-                                  fresh.deliveryStatus.isBetterThan(existing.deliveryStatus)
-                            else { continue }
-                            try? await persistence.updateDeliveryCounters(
-                                localId: existing.id,
-                                deliveredCount: fresh.deliveredCount,
-                                readCount: fresh.readCount,
-                                deliveredToAllAt: fresh.deliveredToAllAt,
-                                readByAllAt: fresh.readByAllAt
-                            )
+                        let freshById = Dictionary(data.map { ($0.id, $0) },
+                                                   uniquingKeysWith: { _, last in last })
+                        let updates: [MessagePersistenceActor.DeliveryCounterUpdate] = self.messages
+                            .filter(\.isMe)
+                            .compactMap { existing in
+                                guard let fresh = freshById[existing.id],
+                                      fresh.deliveryStatus.isBetterThan(existing.deliveryStatus)
+                                else { return nil }
+                                return MessagePersistenceActor.DeliveryCounterUpdate(
+                                    localId: existing.id,
+                                    deliveredCount: fresh.deliveredCount,
+                                    readCount: fresh.readCount,
+                                    deliveredToAllAt: fresh.deliveredToAllAt,
+                                    readByAllAt: fresh.readByAllAt
+                                )
+                            }
+                        if !updates.isEmpty {
+                            try? await persistence.updateDeliveryCounters(updates)
                         }
                         // Surface any messages in the cache that aren't yet in GRDB.
                         let currentIds = Set(self.messages.map(\.id))

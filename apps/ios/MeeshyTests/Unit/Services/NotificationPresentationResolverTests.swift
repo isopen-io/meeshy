@@ -112,7 +112,14 @@ final class NotificationPresentationResolverTests: XCTestCase {
         XCTAssertEqual(options, [.badge])
     }
 
-    func test_socketDown_dndWindowActive_suppressesBanner() {
+    func test_socketDown_dndWindowActive_suppressesBanner() throws {
+        // `now` FIXE (midi local) : évalué à l'horloge réelle, ce test devenait
+        // rouge chaque jour dans la minute 23:59 — la fenêtre est à fin
+        // EXCLUSIVE, « 00:00 → 23:59 » ne couvre pas [23:59, minuit). C'est
+        // arrivé en CI (run 32605462555, suite exécutée à 23:59 UTC).
+        let noon = try XCTUnwrap(Calendar.current.date(
+            from: DateComponents(year: 2026, month: 1, day: 15, hour: 12, minute: 0)
+        ))
         let options = NotificationPresentationResolver.options(
             socketConnected: false,
             prefs: makePrefs {
@@ -121,7 +128,8 @@ final class NotificationPresentationResolverTests: XCTestCase {
                 $0.dndEndTime = "23:59"
                 $0.dndDays = []
             },
-            rawType: "new_message", conversationType: "direct"
+            rawType: "new_message", conversationType: "direct",
+            now: noon
         )
         XCTAssertEqual(options, [.badge])
     }

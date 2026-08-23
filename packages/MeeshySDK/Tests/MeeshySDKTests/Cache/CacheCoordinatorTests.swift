@@ -397,6 +397,10 @@ final class CacheCoordinatorTests: XCTestCase {
         }
         let (sut, _, _) = try makeSUT(db: db)
         await sut.start()
+        // La réhydratation (et son GC) court hors du chemin critique du boot
+        // depuis 2026-08-22 — on l'attend explicitement : le contrat reste
+        // « le GC a lieu au boot », pas « le GC bloque start() ».
+        await sut.awaitTranslationCacheHydration()
 
         let count = try await db.read { db in try TranslationCacheRecord.fetchCount(db) }
         XCTAssertEqual(count, 0,

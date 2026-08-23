@@ -222,6 +222,42 @@ final class DiskCacheStoreTests: XCTestCase {
         XCTAssertNil(result)
     }
 
+    /// 2026-08-22 — sized decodes live under bucketed NSCache keys. A 132 px
+    /// avatar decode must never occupy (nor be served from) the bare slot a
+    /// full-screen surface reads — that was the blurry-banner hazard: first
+    /// sized decode won the shared slot, later full-format readers upscaled it.
+    func test_image_sizedRequest_isKeyedByBucket_notByBareKey() async {
+        let store = makeStore()
+        let pngData = make1x1PNGData()
+        let key = "https://example.com/sized-\(UUID().uuidString).png"
+
+        await store.save(pngData, for: key)
+        let sized = await store.image(for: key, maxPixelSize: 132)
+        XCTAssertNotNil(sized)
+
+        XCTAssertNil(DiskCacheStore.cachedImage(for: key),
+            "a sized decode must never occupy the bare full-format slot")
+        XCTAssertNotNil(DiskCacheStore.cachedImage(for: key, maxPixelSize: 132),
+            "the sized variant must be resident under its bucketed key")
+        XCTAssertNotNil(DiskCacheStore.cachedImage(for: key, maxPixelSize: 200),
+            "requests inside the same bucket (256) must share one variant")
+        XCTAssertNil(DiskCacheStore.cachedImage(for: key, maxPixelSize: 600),
+            "a different bucket (768) must not be served the 256 px variant")
+    }
+
+    /// Full-format requests (>= 1200 px) keep the historical bare key, so the
+    /// long-standing `image(for:)` → `cachedImage(for:)` contract holds.
+    func test_image_fullFormatRequest_keepsBareKey() async {
+        let store = makeStore()
+        let pngData = make1x1PNGData()
+        let key = "https://example.com/full-\(UUID().uuidString).png"
+
+        await store.save(pngData, for: key)
+        let image = await store.image(for: key, maxPixelSize: 1200)
+        XCTAssertNotNil(image)
+        XCTAssertNotNil(DiskCacheStore.cachedImage(for: key))
+    }
+
     // MARK: - cacheImageForPreview (2026-07-21: synchronous insert + budget guard)
 
     /// The optimistic-media-send path calls `cacheImageForPreview` and expects

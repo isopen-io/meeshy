@@ -90,7 +90,7 @@ struct PostDetailView: View {
     @State private var pendingPlace: SharedPlace? = nil
     @StateObject private var audioRecorder = AudioRecorderManager()
     @State private var isTextExpanded = false
-    @State private var headerScrollOffset: CGFloat = 0
+    @State private var headerScrollRelay = ScrollOffsetRelay()
     // Inline story canvas playback gating (audio active → pause when off-screen / in call).
     @State private var storyCanvasVisible: Bool = true
     @State private var isCallActive: Bool = false
@@ -717,8 +717,8 @@ struct PostDetailView: View {
                         // iOS 16–17 and overlay the native iOS 18+ scroll reader, which
                         // reports `contentOffset.y` (0 at top, positive scrolling down),
                         // negated to match the `minY` sign the preference path produced.
-                        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { headerScrollOffset = $0 }
-                        .trackScrollContentOffset { headerScrollOffset = -$0 }
+                        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { headerScrollRelay.offset = $0 }
+                        .trackScrollContentOffset { headerScrollRelay.offset = -$0 }
                         .background(
                             GeometryReader { geo in
                                 Color.clear.preference(key: ScrollViewportHeightKey.self, value: geo.size.height)
@@ -1153,17 +1153,21 @@ struct PostDetailView: View {
     }
 
     private func postDetailHeader(_ post: FeedPost) -> some View {
-        CollapsibleHeader(
-            title: "",
-            scrollOffset: headerScrollOffset,
-            showBackButton: true,
-            onBack: { HapticFeedback.light(); router.pop() },
-            titleColor: theme.textPrimary,
-            backArrowColor: theme.textPrimary,
-            backgroundColor: theme.backgroundPrimary,
-            centerReveal: { authorRevealView(post) },
-            trailing: { postMenu }
-        )
+        // Seul ce reader se re-rend au fil du scroll — la racine écrit
+        // `headerScrollRelay.offset` sans s'y abonner (P1-1).
+        ScrollOffsetReader(relay: headerScrollRelay) { offset in
+            CollapsibleHeader(
+                title: "",
+                scrollOffset: offset,
+                showBackButton: true,
+                onBack: { HapticFeedback.light(); router.pop() },
+                titleColor: theme.textPrimary,
+                backArrowColor: theme.textPrimary,
+                backgroundColor: theme.backgroundPrimary,
+                centerReveal: { authorRevealView(post) },
+                trailing: { postMenu }
+            )
+        }
     }
 
     // MARK: - Author Reach Line

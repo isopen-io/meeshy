@@ -176,11 +176,12 @@ struct EmojiPickerView: View {
     @State private var searchText = ""
     @State private var selectedCategory: EmojiGridCategory = .smileys
     @AppStorage("frequentEmojis") private var frequentEmojisData: Data = Data()
+    @State private var decodedFrequentEmojis: [String]?
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 8)
 
     private var frequentEmojis: [String] {
-        (try? JSONDecoder().decode([String].self, from: frequentEmojisData)) ?? recentEmojis
+        decodedFrequentEmojis ?? recentEmojis
     }
 
     private var emojisToDisplay: [String] {
@@ -297,6 +298,9 @@ struct EmojiPickerView: View {
                 .padding(.vertical, 8)
             }
         }
+        .task(id: frequentEmojisData) {
+            decodedFrequentEmojis = try? JSONDecoder().decode([String].self, from: frequentEmojisData)
+        }
     }
 
     // MARK: - Subviews
@@ -329,7 +333,7 @@ struct EmojiPickerView: View {
     // MARK: - Logic
 
     private func selectEmoji(_ emoji: String) {
-        var frequent = frequentEmojis
+        var frequent = (try? JSONDecoder().decode([String].self, from: frequentEmojisData)) ?? recentEmojis
         frequent.removeAll { $0 == emoji }
         frequent.insert(emoji, at: 0)
         if frequent.count > 24 {

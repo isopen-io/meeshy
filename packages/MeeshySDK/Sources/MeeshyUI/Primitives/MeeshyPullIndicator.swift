@@ -138,8 +138,13 @@ public struct MeeshyPullIndicator: View {
     }
 
     @State private var ringRotation: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.meeshyForceReduceMotion) private var userForced
 
     private func startRingRotation() {
+        // Reduce Motion (system or in-app): the gradient ring still marks the
+        // refreshing state, but stays still.
+        guard !MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) else { return }
         withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
             ringRotation = 360
         }

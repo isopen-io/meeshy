@@ -129,21 +129,32 @@ enum MyStoryCardPresentation {
         let threshold = calendar.date(byAdding: .month, value: -1, to: now) ?? now
 
         if date > threshold {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.locale = locale
-            formatter.unitsStyle = .full
+            let formatter = relativeFormatters[locale.identifier] ?? {
+                let f = RelativeDateTimeFormatter()
+                f.locale = locale
+                f.unitsStyle = .full
+                relativeFormatters[locale.identifier] = f
+                return f
+            }()
             // `localizedString(for:relativeTo:)` produit DÉJÀ « il y a … » :
             // le préfixer à la main donnait le « il y a il y a 3 jours »
             // qu'annonçait VoiceOver.
             return formatter.localizedString(for: date, relativeTo: now)
         }
 
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
+        let formatter = mediumDateFormatters[locale.identifier] ?? {
+            let f = DateFormatter()
+            f.locale = locale
+            f.dateStyle = .medium
+            f.timeStyle = .none
+            mediumDateFormatters[locale.identifier] = f
+            return f
+        }()
         return formatter.string(from: date)
     }
+
+    private static var relativeFormatters: [String: RelativeDateTimeFormatter] = [:]
+    private static var mediumDateFormatters: [String: DateFormatter] = [:]
 
     /// La bande basse. Une story publiée expose son engagement ; un brouillon
     /// n'a ni vue ni réaction à montrer — il a un bouton publier.

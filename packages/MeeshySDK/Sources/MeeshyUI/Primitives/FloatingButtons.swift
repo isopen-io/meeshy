@@ -659,6 +659,8 @@ public struct LegacyFloatingButton<Content: View>: View {
 public struct NotificationBadge: View {
     public let count: Int
     @State private var isPulsing = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.meeshyForceReduceMotion) private var userForced
 
     // MARK: - Trame (exposée pour les tests)
 
@@ -711,6 +713,9 @@ public struct NotificationBadge: View {
                 )
                 .offset(x: 16, y: -16)
                 .onAppear {
+                    // Reduce Motion (system or in-app): the halo stays static —
+                    // the badge keeps its intention, it loses its movement.
+                    guard !MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) else { return }
                     withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                         isPulsing = true
                     }

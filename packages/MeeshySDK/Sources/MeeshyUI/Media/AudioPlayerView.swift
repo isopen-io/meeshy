@@ -845,6 +845,8 @@ public struct AudioPlayerView: View {
     // simple dark/light read; ThemeManager.mode itself is kept in sync with
     // it (see `ThemeManager.syncWithSystem`).
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.meeshyForceReduceMotion) private var userForced
     @State private var isTranscriptionExpanded = false
     /// Seeded from `initialTranscriptionLanguage` in `init` (Prisme default),
     /// then owned by user interaction (language pill taps, `externalLanguage`)
@@ -1374,7 +1376,12 @@ public struct AudioPlayerView: View {
             .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
             value: transcriptionPulsePhase
         )
-        .onAppear { transcriptionPulsePhase = true }
+        .onAppear {
+            // Reduce Motion (system or in-app): static placeholder lines,
+            // no perpetual opacity pulse.
+            guard !MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) else { return }
+            transcriptionPulsePhase = true
+        }
         .onDisappear { transcriptionPulsePhase = false }
         .accessibilityLabel(Text(String(
             localized: "media.audio.transcribing",

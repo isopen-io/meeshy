@@ -271,10 +271,14 @@ struct iPadRootView: View {
                 // budget de reprise (cf. StoryPublishService.setExecutor).
                 StoryPublishService.shared.setExecutor(storyViewModel)
 
-                await storyViewModel.loadStories()
-                await statusViewModel.loadStatuses()
-                await conversationViewModel.loadConversations()
-                await notificationManager.refreshUnreadCount()
+                // Parallélisés comme sur RootView (iPhone) : les 4 chargements
+                // sont indépendants — en série, l'écran visible (conversations)
+                // attendait derrière stories et statuses.
+                async let storiesLoad: Void = storyViewModel.loadStories()
+                async let statusesLoad: Void = statusViewModel.loadStatuses()
+                async let conversationsLoad: Void = conversationViewModel.loadConversations()
+                async let unreadRefresh: Void = notificationManager.refreshUnreadCount()
+                _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh)
             }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToConversation)) { notification in
                 if let conversation = notification.object as? Conversation {

@@ -40,7 +40,7 @@ struct ProfileView: View {
     @State private var bannerItem: PhotosPickerItem?
     @State private var bannerImageForEditor: UIImage?
     @State private var isUploadingBanner = false
-    @State private var scrollOffset: CGFloat = 0
+    @State private var scrollRelay = ScrollOffsetRelay()
 
     private let accentColor = MeeshyColors.purple500Hex
 
@@ -146,9 +146,12 @@ struct ProfileView: View {
     // MARK: - Header
 
     private var header: some View {
+        // Seul ce reader se re-rend au fil du scroll — la racine écrit
+        // `scrollRelay.offset` sans s'y abonner (P1-1).
+        ScrollOffsetReader(relay: scrollRelay) { offset in
         CollapsibleHeader(
             title: String(localized: "profile.title", bundle: .main),
-            scrollOffset: scrollOffset,
+            scrollOffset: offset,
             onBack: {
                 if isEditing {
                     isEditing = false
@@ -182,6 +185,7 @@ struct ProfileView: View {
                 }
             }
         )
+        }
     }
 
     // MARK: - Scroll Content
@@ -224,8 +228,8 @@ struct ProfileView: View {
             .padding(.top, 0)
         }
         .coordinateSpace(name: "scroll")
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }      // iOS 16–17
-        .trackScrollContentOffset { scrollOffset = -$0 }                               // iOS 18+ (preference path is dead there)
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
+        .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+ (preference path is dead there)
     }
 
     // MARK: - Banner & Avatar Section
