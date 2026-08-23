@@ -431,19 +431,12 @@ struct ReelFeedCard: View, Equatable {
     private func metricInline(icon: String, count: Int, a11yLabel: String) -> some View {
         HStack(spacing: 3) {
             Image(systemName: icon).font(MeeshyFont.relative(10, weight: .semibold))
-            Text(Self.compactCount(count)).font(.caption2.weight(.medium))
+            Text(CompactCountLabel.text(count)).font(.caption2.weight(.medium))
         }
         .foregroundColor(.white.opacity(0.85))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(a11yLabel)
         .accessibilityValue("\(count)")
-    }
-
-    /// Compact count format (1.2k / 3.4M) — mirrors the reel viewer's badge.
-    static func compactCount(_ value: Int) -> String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
     }
 
     private var actionsRow: some View {

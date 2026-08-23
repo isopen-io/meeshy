@@ -226,7 +226,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   const emitVideoToggle = useCallback((enabled: boolean) => {
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled });
+      socket.emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled });
     }
   }, [callId]);
 
@@ -485,7 +485,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         logger.info('[VideoCallInterface]', 'Cleaning up call on unmount/unload - callId: ' + currentCall.id);
         const socket = meeshySocketIOService.getSocket();
         if (socket && socket.connected) {
-          (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, { callId: currentCall.id });
+          socket.emit(CLIENT_EVENTS.CALL_LEAVE, { callId: currentCall.id });
         }
       }
     };
@@ -519,7 +519,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled: newEnabled });
+      socket.emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled: newEnabled });
     }
   };
 
@@ -546,7 +546,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
       const socket = meeshySocketIOService.getSocket();
       if (socket) {
-        (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled: newEnabled });
+        socket.emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled: newEnabled });
       }
     } finally {
       videoToggleInFlightRef.current = false;
@@ -635,7 +635,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
+      socket.emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
     }
 
     // Reset immediately for instant UI feedback

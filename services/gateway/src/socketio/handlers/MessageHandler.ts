@@ -73,6 +73,7 @@ import {
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import { resolveForwardSourceForBroadcast } from '../../services/preferences/forward-source-visibility.js';
+import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
 import {
   carriesForwardSource,
   withoutForwardSource,
@@ -164,6 +165,29 @@ export interface MessageHandlerDependencies {
    */
   trackingLinkService?: LinkReconciler | null;
 }
+
+/**
+ * Le retrait COMPLET d'une source de transfert : le nom ET le chemin.
+ *
+ * `withoutForwardSource` (shared, pur) retire `forwardedFrom` et
+ * `forwardedFromConversation`. Il ne peut pas faire plus : la seconde fuite ne
+ * vit pas dans ces champs mais dans `attachments[].fileUrl`, où le chemin de
+ * stockage de la copie porte le `User.id` de l'auteur d'origine — un transfert
+ * réutilise le fichier plutôt que de le recopier.
+ *
+ * Les trois émissions qui masquent une source passent par ici, et non par le
+ * seul `withoutForwardSource` : masquer sur un canal en laissant l'autre ouvert
+ * ne masque rien. La porte REST ferme la même fuite avec le même helper.
+ */
+const withoutForwardSourceOrItsPath = <T extends object>(payload: T): T => {
+  const stripped = withoutForwardSource(payload) as T & { attachments?: unknown };
+  if (!Array.isArray(stripped.attachments)) return stripped;
+
+  return {
+    ...stripped,
+    attachments: redactForwardedAttachmentUrlsIn(stripped.attachments as never[]),
+  } as T;
+};
 
 export class MessageHandler {
   private io: MeeshyIOServer;
@@ -1409,7 +1433,7 @@ export class MessageHandler {
           // L'auteur s'est retiré : plus personne n'apprend la provenance —
           // sauf lui-même, servi par `senderPayload` (se cacher des autres
           // n'est pas s'aveugler).
-          peerPayload = withoutForwardSource(broadcastPayload);
+          peerPayload = withoutForwardSourceOrItsPath(broadcastPayload);
         } else {
           forwardSourceHiddenUserIds = verdict.refusingReaderIds;
           forwardSourceHiddenRooms = [...verdict.refusingReaderIds].map((userId) => ROOMS.user(userId));
@@ -1472,7 +1496,7 @@ export class MessageHandler {
       if (forwardSourceHiddenRooms.length > 0) {
         this.io
           .to(forwardSourceHiddenRooms)
-          .emit(SERVER_EVENTS.MESSAGE_NEW, withoutForwardSource(peerPayload));
+          .emit(SERVER_EVENTS.MESSAGE_NEW, withoutForwardSourceOrItsPath(peerPayload));
       }
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
@@ -1609,7 +1633,7 @@ export class MessageHandler {
             ? {
                 resolvePayloadForReader: (queueKey: string) =>
                   forwardSourceHiddenUserIds.has(queueKey)
-                    ? withoutForwardSource(peerPayload)
+                    ? withoutForwardSourceOrItsPath(peerPayload)
                     : peerPayload,
               }
             : {}),

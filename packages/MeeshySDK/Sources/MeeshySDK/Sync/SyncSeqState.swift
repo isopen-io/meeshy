@@ -13,11 +13,13 @@ import Foundation
 /// Valeur pure (struct), triviale à tester en isolation. Le câblage sur le
 /// vrai flux + le déclenchement d'une resync sur gap détecté = A5.2.
 ///
-/// **Jumeau web** : `apps/web/lib/sync/sync-seq-state.ts` porte la MÊME règle
-/// (détecter avant d'enregistrer, jamais de gap au premier event, jamais de
-/// régression du curseur, `nil`/absence de `_seq` = no-op). Toute évolution de
-/// la règle touche les DEUX fichiers — une divergence fabriquerait des faux
-/// trous sur une plateforme et des trous manqués sur l'autre.
+/// **Miroirs** : `apps/web/lib/sync/sync-seq-state.ts` et
+/// `apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/sync/SyncSeqState.kt`
+/// portent la MÊME règle (détecter avant d'enregistrer, jamais de gap au premier
+/// event, jamais de régression du curseur, `nil`/absence de `_seq` = no-op).
+/// Toute évolution de la règle touche les TROIS fichiers — une divergence
+/// fabriquerait des faux trous sur une plateforme et des trous manqués sur une
+/// autre.
 public struct SyncSeqState: Sendable, Equatable {
     /// Dernier `_seq` observé, `nil` avant tout event.
     public private(set) var lastSeq: Int64?

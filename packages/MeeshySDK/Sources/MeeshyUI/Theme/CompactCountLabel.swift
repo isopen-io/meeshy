@@ -3,12 +3,21 @@ import Foundation
 /// L'abrégé d'un grand nombre — « 1,5 k » / « 1.5K » / « ١٫٥ ألف » — rendu par
 /// **Foundation**, dans la locale du lecteur.
 ///
-/// Il remplace **deux** `formatCount` privés, copies l'un de l'autre, qui
-/// composaient l'abrégé à la main : celui de `ConversationListHelpers`
-/// (`ThemedCommunityCard`, app) et celui de `CommunityListView`
-/// (`VibrantCommunityCard`, SDK). Les deux rendent une carte « communauté » ;
-/// les corriger séparément aurait rendu les deux cartes incohérentes —
-/// « 1,5 k » d'un côté, « 1.5k » de l'autre.
+/// Il est la **source unique** de cet abrégé dans tout le produit iOS. Il a
+/// commencé par remplacer deux `formatCount` privés, copies l'un de l'autre
+/// (`ConversationListHelpers` / `ThemedCommunityCard` côté app et
+/// `CommunityListView` / `VibrantCommunityCard` côté SDK — deux cartes
+/// « communauté » que corriger séparément aurait rendues incohérentes,
+/// « 1,5 k » d'un côté et « 1.5k » de l'autre), puis a absorbé les **six
+/// dernières copies** de la même règle : `FeedPostCard.compactCount`,
+/// `ReelFeedCard.compactCount`, `ReelActionButton.compact`,
+/// `PostReachFormatter.compact`, `StatRing.displayValue` et l'abrègement de
+/// `ConversationDashboardView.formatNumber`.
+///
+/// Aucune de ces copies ne s'écartait de la règle — elles la répétaient. C'est
+/// pourquoi le défaut de locale a pu s'y propager sept fois : chaque nouvelle
+/// surface recopiait la voisine plutôt que d'appeler quoi que ce soit.
+/// `CompactCountConsolidationSourceGuardTests` interdit la huitième.
 ///
 /// Il vit dans le SDK parce que c'est un **moteur de règle sans état à
 /// paramètres opaques** — la case « rule engines stateless (pures functions)
