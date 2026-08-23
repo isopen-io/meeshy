@@ -3,12 +3,11 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events'
-import { presentMemberCount } from '@meeshy/shared/utils/member-visibility'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { resolveBanWrite, resolveUnbanWrite } from '../../services/conversations/conversationBanState'
 import { enhancedLogger } from '../../utils/logger-enhanced.js'
-import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants'
+import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 
 const logger = enhancedLogger.child({ module: 'ConversationBanRoutes' })
@@ -103,7 +102,10 @@ export function registerBanRoutes(
         // LISTE, qui rend pourtant cet effectif.
         const remaining = await prisma.participant.findMany({
           where: { conversationId: id, isActive: true },
-          select: { id: true, userId: true },
+          // `role` et `user.role` en plus : les deux titres qui ouvrent
+          // l'effectif ENTIER (`canViewExactMemberCount`), que le fanout doit
+          // connaître PAR DESTINATAIRE.
+          select: { id: true, userId: true, role: true, user: { select: { role: true } } },
         })
 
         // Le banni ferme la chaîne. La room de conversation ne l'atteint que
@@ -117,7 +119,7 @@ export function registerBanRoutes(
         // retire aucune ligne de sa liste, il n'y en avait plus. Le retrait
         // côté client est idempotent, c'est ce qui permet de ne pas gater ici.
         const audience = [...remaining, { id: targetParticipant.id, userId: targetUserId }]
-        emitToConversationParticipants({
+        emitConversationMemberCountEvent({
           io,
           conversationId: id,
           participants: audience,
@@ -133,8 +135,8 @@ export function registerBanRoutes(
             // ci-dessous rend ce raisonnement inutile pour qui le lit — le
             // drapeau reste pour les clients qui décomptent encore.
             membershipEnded: ban.membershipEnded,
-            ...presentMemberCount(remaining.length),
           },
+          memberCount: remaining.length,
         })
 
         // La fin d'appartenance, en un seul geste : `endConversationMembership`
@@ -256,10 +258,13 @@ export function registerBanRoutes(
         // liste, ce que la room de conversation ne pouvait pas lui dire.
         const remaining = await prisma.participant.findMany({
           where: { conversationId: id, isActive: true },
-          select: { id: true, userId: true },
+          // `role` et `user.role` en plus : les deux titres qui ouvrent
+          // l'effectif ENTIER (`canViewExactMemberCount`), que le fanout doit
+          // connaître PAR DESTINATAIRE.
+          select: { id: true, userId: true, role: true, user: { select: { role: true } } },
         })
 
-        emitToConversationParticipants({
+        emitConversationMemberCountEvent({
           io,
           conversationId: id,
           participants: remaining,
@@ -271,8 +276,8 @@ export function registerBanRoutes(
             // Les compteurs de membres des clients suivent ce champ, pas
             // l'événement.
             membershipRestored: unban.membershipRestored,
-            ...presentMemberCount(remaining.length),
           },
+          memberCount: remaining.length,
         })
       }
 

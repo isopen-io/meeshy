@@ -1,349 +1,217 @@
-# Focal Grandeur Nature §5 — réécriture fidèle du défilement iOS (2026-08-18)
+# Refonte de la liste des conversations (peau Lentille) — 2026-08-22
 
-Contrat : `docs/design/2026-08-15-focal-spec-integration.html` §5 fait foi (demande user 18/08).
-Les acquis d'architecture (six sites d'appel, `FocalPerspectiveCell` qui repose en
-`layoutSubviews`, `MessageListLayout` compensation d'offset, décoration CALayer,
-épingle d'élection, chrome escamoté, hauteur de rangée invariante à l'élection)
-sont CONSERVÉS — ils ne contredisent pas la spec, ils la font tenir à 120 Hz.
+Branche : `feat/conversation-list-revamp` · worktree `../v2_meeshy-liste-conv`
 
-## Lot 1 — Cœur du défilement (loi + pass + bogues)
+## Décisions produit actées
 
-- [ ] 1.1 Loi partagée : `FOCUS_CURVE_CONSTANTS.thread` → `{ maxDistance: 380, scaleDecay: 0.40, alphaDecay: 0.82 }`
-      (`packages/shared/utils/focus-curve.ts`) + bande thread dédiée
-      `THREAD_FOCUS_BAND_OFFSET = 150`, `THREAD_FOCUS_BAND_HYSTERESIS = 95`
-      (la bande `list` 140/45 de la Lentille/Rivière ne bouge PAS). Régénérer
-      vecteurs + tests TS.
-- [ ] 1.2 Miroir Swift `FocalFocusCurve` : mêmes constantes, pivot horizontal
-      0.18 → **0.16** (spec anchorPoint (0.16, 1.0) — mécanisme translation
-      équivalente conservé, documenté). `FocalPerspectiveGeometry.standard` :
-      bandLift 150, focusTolerance 95. Forme dynamique
-      `focusY = H − max(150, composeur + 8)` conservée (clavier).
-- [ ] 1.3 Fondu de distance RÉTABLI (spec) : `alpha = min(alphaCeiling, courbe.alpha)`
-      — plancher 0.18 par construction, optimiste = `min(0.7, alphaPerspective)`
-      littéralement. Supprimer `neighbourAlphaFloor` (mort).
-- [ ] 1.4 LOUPE SUPPRIMÉE (spec : échelle ≤ 1, l'élu est à 1.0 + carte + tenue de
-      focus) : retirer `magnification*` (constantes, geometry, zPosition
-      d'élévation, `magnifiedTrailingReserve`, réserve trailing de section →
-      retour à 12). `FocalCellTransform` sans zPosition (écrit 0).
-- [ ] 1.5 Bogue « chrome de focus fantôme » : `isFocused` à la config de cellule
-      gated par `!scrollingActive` ; à l'arrêt, reconfigure [ancien élu, élu].
-- [ ] 1.6 Bogue « atterrissage sans tenue » : drapeau d'atterrissage programmatique ;
-      `scrollViewDidEndScrollingAnimation` gère nudge ET atterrissage (rejoue le
-      pass, re-cible UNE fois si |visualMidY − focusY| > 8 — hauteurs estimées —
-      puis pose chrome + typographie + flush).
-- [ ] 1.7 Pose après auto-scroll message entrant : `scrollToBottom` animé passe
-      par le même chemin de pose (typographie du nouvel élu).
-- [ ] 1.8 Coûts par frame : suppression du double balayage d'inset
-      (`applyBottomInset` n'appelle plus le pass en propre), `syncFocalPassTheme`
-      hors chemin chaud (aux changements seulement), garde d'égalité
-      `ScrollTimePillState.isVisible`, code mort pilule flottante retiré
-      (`configureScrollTimePillOverlay` sans appelant).
-- [ ] 1.9 Rotation / changement de taille : rejouer pass + insets sur changement
-      de bounds (`viewDidLayoutSubviews` gardé par delta), typographie ensuite.
-- [ ] 1.10 Tests : mise à jour de la liste `wouldBreakOnSpecReturn` (géométrie,
-      write, magnificence supprimée, élection 95, focusY 150) + nouveaux tests
-      RED d'abord pour 1.3/1.5/1.6/1.7/1.9.
+| Sujet | Décision |
+|---|---|
+| Périmètre | Peau **Lentille** uniquement (`LentilleConversationRow`, `StoriesVivantsRail`, `LentilleFocusCard`). Exception : la remise à zéro des non-lus se vérifie dans **toutes** les versions de la vue. |
+| Catégorie | Sur la **carte de focus magnifiée**, coin haut-gauche, tapable → sous-menu « Déplacer vers… » déjà écrit. Assume le revirement du 2026-08-22. |
+| Effectif | **En bas à droite du cadre** de la rangée. Lecteur autorisé (admin de groupe OU plateforme ADMIN/BIGBOSS/**MODERATOR**) → entier **sans plafond**. Sinon plafond **199** → « 199+ ». Décision serveur. |
+| Date | **Dans la bulle** d'aperçu, en bas à droite (comme l'heure d'une bulle de message). |
+| Synchro | Icône ⟳ **retirée** de la rangée, renvoi automatique conservé. La **pastille rouge de non-lus** prend sa place. |
+| Non-lus | Remise à zéro **dès l'ouverture**, en réutilisant le cache + la base locale existants. Aucun nouveau chemin de données. |
 
-## Lot 2 — Matrice temps réel
+Tranché sans question (conventions du dépôt) : pas d'effectif sur un DM (`type != .direct`) ; preview de story en cercle recadré comme le tray ; anneau vu/non-vu rebranché ; mood et point de présence restent exclusifs (`MeeshyAvatar`).
 
-- [ ] 2.1 Reconfigures ciblés (traductions, transcriptions, audios traduits)
-      DIFFÉRÉS pendant le geste (§4.7ter), flush à la pose.
-- [ ] 2.2 Swap de traduction tardive : cross-fade 150 ms sur le bloc texte
-      (animation scopée au changement de texte effectif) + chip 🌐 INTERACTIF
-      (tap = V.O., appui long = sélecteur).
-- [ ] 2.3 Présence live : canal d'observation → reconfigure des rangées visibles
-      (différé pendant geste).
-- [ ] 2.4 Pilule non-lus : ne plus compter ses PROPRES messages.
-- [ ] 2.5 Typing indicator PLAT en Focal/Script (pastille 22 auteur + 3 points
-      accent, sans capsule) ; capsule conservée en bulles.
-- [ ] 2.6 Effets de message : `effects` réellement passé à `FocalRowInput`
-      (aujourd'hui jamais fourni — feature morte).
-- [ ] 2.7 Échec d'envoi : bande retry rendue en Focal (`onRetry` déjà câblé),
-      exclue de la perspective (plafond alpha inchangé pour .failed = 1).
-- [ ] 2.8 Élection : messages supprimés / système / appel / éphémère expiré
-      NON candidats et sans carte ; rangées système/appel CENTRÉES (spec).
+## Lots
 
-## Lot 3 — Parité contenu & accessibilité
+### Lot 1 — Droit de voir l'effectif exact (serveur)
+- [ ] RED `packages/shared/__tests__/member-visibility.test.ts` : MODERATOR et admin de groupe voient l'entier ; membre simple plafonné à 199 → « 199+ »
+- [ ] `packages/shared/utils/member-visibility.ts` : le droit combine platformRole (ADMIN|BIGBOSS|MODERATOR) **et** rôle de conversation (creator|admin)
+- [ ] 4 sites gateway : `conversations/core.ts:953,1219`, `search.ts:326`, `participants.ts:324`
+- [ ] 5 fanouts socket : `participants.ts:1060,1276`, `leave.ts:180`, `ban.ts:136,274`
+- [ ] Schémas : le champ traverse `api-schemas.ts` (1204 **et** 1385) — sinon strippé en silence
 
-- [ ] 3.1 Flou de message (`content.isBlurred`) appliqué au bloc contenu en
-      Focal avec révélation (parité bulle).
-- [ ] 3.2 Lieu / fichier : rendu réel (carte lieu, carte fichier + badge de
-      téléchargement + tap ouvrir) au lieu du repli texte inerte.
-- [ ] 3.3 Long-press iOS 26 : préview native = rangée Focal (pixels), plus
-      jamais une bulle en mode Focal.
-- [ ] 3.4 « Début de la conversation · {date} » (date du premier message).
-- [ ] 3.5 VoiceOver : libellés d'état d'envoi localisés (plus de français en dur
-      sans accents dans `MessageAccessibilityLabelComposer`).
+### Lot 2 — Rangée : bulle, date dedans, effectif, pastille non-lus
+- [ ] RED : la date n'est plus sur la ligne de titre ; elle est portée par la bulle, dans les 7 branches d'aperçu
+- [ ] RED : `RelativeTimestampText` reste le seul porteur de la date (garde anti-régression)
+- [ ] Bulle d'aperçu (fond, rayon, teinte clair/sombre) — cote dans `LentilleMetrics` + miroir `lentille-tokens.json`
+- [ ] Effectif en bas à droite du cadre
+- [ ] Pastille rouge de non-lus à la place de ⟳ ; retrait de l'icône de synchro
+- [ ] `renderFingerprint` replie `memberCount` + `unreadCount` (sinon gel silencieux)
 
-## Écarts spec ASSUMÉS (conservés, documentés au rapport)
-- Carte de focus = fond accent translucide SANS anneau (choix user 17/08,
-  postérieur à la spec) — `ringSize` 1.5 reste à une ligne.
-- Texte 15→16 remplacé par la tenue de focus à hauteur constante (pastille 34,
-  nom +2, barre) — la variation de corps re-mesurait la cellule à chaque arrêt.
-- Pilule « jour · heure » remplacée par le révélé d'heures (amendement P2).
-- Chrome escamoté pendant le défilement (demande user, absent de la spec).
-- `focusY` dynamique (suit clavier/composeur) plutôt que littéral H−150.
-- Carrousel audio multi-pistes : « inchangé » (spec) — garde sa carte.
-- Orchestrateur `noteOpened` jamais appelé (isReaderAbsent toujours vrai) —
-  hors périmètre défilement, signalé au rapport.
+### Lot 3 — Trail de stories : preview + mood animé
+- [ ] `LentilleRailEntry` gagne `previewURL`, `moodEmoji`, `hasUnviewed`
+- [ ] Mapping dans `lentilleRailEntries` / `lentilleRailSelfEntry` — résolveur **partagé** avec le tray (pas de 3e implémentation)
+- [ ] Badge mood animé, gardé reduce-motion
 
-## Review (2026-08-18, fin de passe)
+### Lot 4 — Catégorie sur la carte de focus
+- [ ] `notchChip` haut-gauche + hit-testing local ré-armé
+- [ ] Toucher → sous-menu « Déplacer vers… » existant, call site unique de `moveToSection`
+- [ ] Rien affiché si la conversation n'a pas de catégorie
+- [ ] `renderFingerprint` replie `sectionId`
 
-**Livré** : lots 1 et 2 COMPLETS + 3.1/3.5, plus deux correctifs de crash
-découverts en vérification :
-- Loi partagée réancrée spec §5 : thread 380/0.40/0.82 (fondu RÉTABLI),
-  bande fil 150/95 (`THREAD_FOCUS_BAND_*`), pivot 0.16 ; vecteurs régénérés,
-  parité TS/Swift verte, web intact (aucun consommateur production du thread).
-- Loupe Magnificence SUPPRIMÉE (échelle ≤ 1, réserve trailing retirée,
-  zPosition sans écrivain) ; `FocalSpecCurveTests` remplace
-  `FocalMagnificenceTests`.
-- Bogues de défilement corrigés : chrome de focus fantôme (gate
-  anti-recyclage), pose d'atterrissage programmatique (drapeau + re-ciblage
-  unique + épilogue commun de `scrollViewDidEndScrollingAnimation`),
-  double balayage d'inset, travail mort par frame (pilule, thème).
-- **CRASH long fling (SIGTRAP `_updateVisibleCellsNow` ×7, 3 .ips le
-  18/08)** : cascade compensation d'offset × solveur self-sizing — plafonné
-  à 3 compensations/transaction CA (`MessageListLayout`), réarmé au tour
-  suivant. 60 flings violents post-fix : zéro crash. Reconfigures (globaux,
-  ciblés, visibles/présence) TOUS différés pendant le geste.
-- Matrice : effets câblés (feature morte), flou de message en Focal
-  (`FocalProtectedContent`, conditionnel), bande retry, chip 🌐 interactif +
-  cross-fade 150 ms, présence vivante (refreshSignal), badge non-lus sans
-  ses propres envois, typing plat, fantômes/système exclus de l'élection,
-  notices centrées, VoiceOver localisé.
-- 581 tests Focal/Lentille verts ; garde `BetaFeatures…` (rouge sur main,
-  préexistant) résolue par exception étroite agent-grammar.
+### Lot 5 — Remise à zéro des non-lus (toutes versions de la vue)
+- [ ] Auditer : Lentille, Themed, carte focal, web
+- [ ] Vérifier la remise à zéro à l'ouverture sur chaque chemin (cache + GRDB)
 
-**Restes (prochaine passe)** :
-- Starvation de rendu hosting sur fling EXTRÊME (frames clairsemées à très
-  haute vélocité — préexistant, atténué par les reports ; piste : pré-chauffe
-  de cellules/`UICollectionViewDataSourcePrefetching`, simplification du
-  corps de FocalRow).
-- Lot 3 restant : lieu/fichier réels (3.2), préview iOS 26 en rangée plate
-  (3.3), date du premier message dans « Début de la conversation » (3.4).
-- `noteOpened` jamais appelé (orchestrateur : `isReaderAbsent` toujours
-  vrai) — hors périmètre défilement, signalé.
-- « Crash à l'ouverture » signalé en fin de passe = artefact d'installation
-  build-for-testing (dylib widget absente du bundle installé), PAS un défaut
-  du code — réinstallé via `meeshy.sh build`, lancement sain vérifié.
+### Lot 6 — Alignements et espacements
+- [ ] Rangs 8 pt / squelette 16 pt / header 16 pt → une seule constante
+- [ ] Bandes de section pleine largeur (`x=0 w=402`) vs rangs (`x=8 w=386`)
+- [ ] Bouton flottant « Flux » posé sur l'avatar d'un rang
+- [ ] Barre de recherche flottante qui coupe un rang
+- [ ] Trail collée au 1er header (0 pt)
+- [ ] Section rendue vide (2 headers empilés)
+- [ ] Carte focal qui recouvre la trail
+- [ ] Format de date « 1mois » (espace manquant)
 
-## Revue — Retrait du mode Focal iOS (2026-08-18, fin de chantier)
+## Vérification
+`./apps/ios/meeshy.sh test` complet + passe simulateur clair/sombre, DM/groupe, avec/sans non-lus.
 
-- [x] Mode Focal retiré de la compilation (Scroll/**, contrôles de focus,
-      12 suites de tests) ; Script = mode nominal ; clamp `.focal→.script`
-      à la consommation (`ReadingModeController.clampRetiredModes`), loi
-      partagée + vecteurs TS↔Swift INTACTS ; restauration : `bce87148c`.
-- [x] SIGTRAP fling/repos DÉFINITIVEMENT clos (4 itérations) : entonnoir
-      `MessageListLayout.invalidateLayout(with:)` — invalidations partielles
-      avalées au-delà de 4/transaction, rattrapage complet au tour suivant.
-      Vérifié : 2 × 100 flings violents + 90 s repos, zéro crash.
-- [x] Retours user : chrome de retour DÈS la levée du doigt (isDragging
-      seul) ; pagination haut cache-FIRST (fenêtre GRDB avant REST) ;
-      ouverture conversation mesurée < 1 s (cache-first sain — la lenteur
-      restante vient de la gateway locale éteinte).
-- [x] 568 tests Focal/Lentille + suites touchées verts ; docstrings périmées
-      purgées (aucune suite supprimée citée comme preuve vivante).
-- [x] Documentation : `docs/focal-retrait-ios-2026-08-18.md` +
-      `apps/ios/decisions.md` (entrée 2026-08-18) + mémoire mise à jour.
+## Revue
 
----
+### Ce qui est livré (branche `feat/conversation-list-revamp`, poussée)
 
-# Lecteur de stories — directives user 2026-08-20 (session story-viewer)
+| Lot | État | Preuve |
+|---|---|---|
+| 1 — droit de voir l'effectif exact (serveur) | livré | jest vert · **réserve A4** ci-dessous |
+| 2 — rangée : bulle, date dedans, effectif, pastille | livré | 236 tests iOS, `Row.height` 64→88 |
+| 3 — trail : preview + mood animé | livré | SDK vert, `MoodBadge` neuf |
+| 4 — catégorie sur la carte de focus | livré | 34/34, `renderFingerprint` replie `sectionId` |
+| 5 — audit des non-lus | rendu | I1–I4, W1–W2 documentés |
+| 6 — alignements | **3 vrais défauts sur 8** | ci-dessous |
 
-- [x] 1. Réaction : longpress-scrub du cœur supprimé — tap simple ouvre/ferme la barre d'émojis (la barre de langues garde son scrub)
-- [x] 2. Interlude : UNIQUEMENT au changement de groupe (lecture à la suite), plus jamais à la première ouverture du viewer
-- [x] 3. Interlude : durée nominale 500 ms (2,2 s avant) — recouvrement 200 ms conservé, slide révélé à 300 ms
-- [x] 4. Interlude : après « @ », le pseudo — `StoryGroup.username` portait `APIAuthor.name` (displayName) ; `applyIntroProfile` écrase désormais `intro.username` avec le vrai handle du profil
-- [x] 5. Prefetch : fenêtre d'entrée (`entryIndex` + 1 slide) des 2 groupes suivants pendant la lecture ; ouverture instantanée quand le média est local
+Gate complet du 2026-08-22 : **15 400 tests iOS, 0 échec**, web 490/0, `check-law-literals` vert.
+`origin/main` intégré (61 commits, sans conflit), build de validation `exit 0`.
 
-Note : le lecteur web fait DÉJÀ « clic = barre » (handleToggleReactionPicker) et n'a pas d'interlude — seul iOS divergeait, aucun changement web.
+### Lot 6 — le résultat le plus instructif du chantier
 
-## Review
-- Build app : vert (67 s). Tests ciblés : en cours (build-for-testing puis suites Story*).
+**3 défauts réels, corrigés :**
+- **D8** — `RelativeTimeFormatter` rendait « 1mois ». « mois » est un MOT entier, pas une
+  abréviation comme `s`/`h`/`j`. Android écrivait déjà `%1$d mois`
+  (`sdk-ui/values-fr/strings.xml:63`) : **c'est iOS qui divergeait de la référence en
+  place**, pas une préférence de goût. Corrigé au `defaultValue` ET au catalogue (fr, it) ;
+  diff catalogue de 2 lignes exactement, aucune resérialisation.
+- **D1-squelette** — `.padding(.horizontal, 16)` posé sur le CONTENEUR du `LazyVStack`
+  s'appliquait aux DEUX branches du mux, alors que le mux ne portait que sur le type de
+  rangée. La liste sautait de 8 pt latéralement au démarrage à froid.
+- **D2** — les boutons flottants mordaient la Dynamic Island (disque à `y=50`) et
+  recouvraient 60 % / 57 % de deux boutons du header. Voir la cause racine ci-dessous.
 
----
+**6 faux positifs** — et c'est la leçon : *six défauts sur huit venaient de ma méthode de
+mesure ou d'une lecture trop rapide.*
+- D1-header, D5 : comportements **documentés** (fond pleine largeur du sticker épinglé ;
+  section repliée)
+- D3 : la barre de recherche se masque d'elle-même au défilement
+- D4, D6, D7 : cotes prises sur une liste **en mouvement**
 
-# Listes iOS — fluidité du défilement + modes Bulles / Script / Focal (2026-08-21)
+### Pièges mesurés, à ne pas repayer
 
-Demande user (21/08) : « revoir entièrement les effets des listings de conversations et de
-messages, défilement le plus fluide possible, arranger et compléter la vue Script, Bulle et
-Focal pour la liste de conversation, itérer sur le simulateur Meeshy-iOS26 ».
+1. **`simctl install` par-dessus une app existante ne remplace pas le dylib.** Deux
+   mesures fausses avant de comprendre : je jugeais une UI antérieure aux lots.
+   `simctl uninstall` d'abord, toujours.
+2. **`idb` rend le cadre TRANSFORMÉ, pas le cadre de layout.** L'effet de scène met les
+   rangées à l'échelle : mesurer pendant un défilement fabrique des chevauchements qui
+   n'existent pas. Mesurer AU REPOS, et vérifier qu'on est bien en position 0 (si le
+   premier élément a un `y` négatif, la liste est défilée).
+3. **Un dialogue système réduit l'arbre d'accessibilité à ~5 éléments.** Ce n'est pas un
+   écran vide.
+4. **`grep -c` qui compte 0 rend exit 1.** Lu comme « build failed » alors que le build
+   disait `BUILD SUCCEEDED`.
+5. **`-only-testing` ne matche pas Swift Testing comme XCTest** : « Executed 0 tests » +
+   « TEST SUCCEEDED ». Toujours extraire le compte réel.
+6. **Un test peut passer en choisissant lui-même l'entrée que l'appelant ne fournit pas.**
+   Voir D2 ci-dessous — le cas le plus coûteux du lot.
 
-Lecture retenue (cartes Lentille / fil / docs du 21/08) : le triptyque Script · Bulles · Focal
-est celui du FIL (parité web `LensSwitcher`) ; il se choisit depuis la LISTE (encoche de la carte
-de focus, sous-menu, aperçu) et depuis le chip du fil. La liste elle-même (Lentille) n'a qu'une
-présentation (rangées plates + perspective douce + carte de focus) — ses effets sont revus ici.
+### D2 — la cause racine, et pourquoi aucun test ne l'a vue
 
-Branche `feat/ios-list-scroll-fluidity` (worktree `../v2_meeshy-ios-list-fluidity`, base
-`origin/main` bfd152fe2). Simulateur cible : `Meeshy-iOS26` `C295B364-8CA6-4214-BC52-E411A97EBFE2`.
+`FreeFloatingButtonsContainer` (`FloatingButtons.swift:124-176`) calcule
+`minY = safeArea.top + topSafeZone + halfButton` à partir du `GeometryReader` de son
+`body` — que le `.ignoresSafeArea()` de la ligne suivante étend à l'écran entier,
+ramenant les insets à **zéro**. La formule est juste ; son ENTRÉE est nulle en production.
+Les 50 pt censés protéger le haut étaient donc comptés depuis le bord PHYSIQUE, dont 59
+déjà mangés par l'encoche.
 
-## Lot A — harnais de mesure (sans code produit)
-- [x] Script de scène reproductible (idb) : liste 4 swipes, fil 4 swipes
-- [x] Métrique objective : `simctl io recordVideo` + `ffmpeg mpdecimate` (frames dupliquées
-      = hitches) + Time Profiler (`xctrace`, CPU main thread pendant le geste)
-- [x] Référence chiffrée sur `origin/main` (liste Lentille, fil Script, fil Bulles)
+`test_screenPoint_topLeft_matchesBoundsMinCorner` ne l'a jamais vu **parce qu'il choisit
+lui-même `safeArea.top = 59`**. Il valide la formule sur une entrée que l'appelant ne
+fournit pas : vert, pendant que le produit est faux. Le témoin neuf assied la garantie sur
+l'entrée RÉELLE (`EdgeInsets()` nul).
 
-## Lot B — liste de conversations (Lentille + peau historique)
-Fluidité (cartes H1-H19) :
-- [x] H1/H2 `LentilleFeatureFlag.isEnabled` : plus de `ProcessInfo.environment` par appel
-      (instantané d'environnement unique par processus) ; drapeau lu UNE fois par passe et
-      descendu aux rangs (`usesLentilleSkin`)
-- [x] H3 menu contextuel natif : construit À L'OUVERTURE (closure), plus à chaque passe
-- [x] H4 `preferredContentLanguages` hissé une fois par passe
-- [x] H18 `shouldAutoLoadPreview` O(1) (index) au lieu de `firstIndex` O(n) par rang
-- [x] H6 avatar Lentille : contexte dédié sans ressort `repeatForever` par rang
-- [x] H8 candidature focale via `onGeometryChange` (plus de `GeometryReader`+`onChange`/rang)
-- [x] H15/H17 aplatissement + tableau de candidats : pas d'allocation O(liste) par passe/tick
-- [~] H10 libellés `RelativeTimeFormatter` — ÉVALUÉ, NON FAIT : une lecture `String(localized:)` par appel
-      (~µs, table de chaînes déjà mise en cache par Foundation) contre le risque d'un libellé figé au
-      changement de langue in-app ; pas de gain mesurable, non modifié
-Effets :
-- [x] L1 carte de focus : suit la rangée élue à CHAQUE tick (position vivante), peinte
-      DERRIÈRE le contenu de la rangée (plus de masquage de la 2ᵉ ligne), jamais dans le vide
-- [x] L2 encoche : libellé cohérent avec les modes réellement offerts
-- [x] L4 pilule de section : libellé = section du haut de l'écran (plus de libellé périmé)
-- [x] L5 sticker épinglé vs en-tête replié (trail de stories) : plus de chevauchement
-- [x] L7 queue de liste : 400 pt de vide → juste ce qu'exigent barre de recherche + bande
-- [x] Vérification simulateur (captures avant/après, métrique Lot A)
+Le `50` vivait en **trois copies** devant rester d'accord au point près (`FloatingButtons`,
+`RootView.menuLadder`, `RootView.FeedButtonAnchor` — ce dernier se documente comme miroir
+EXACT du calcul du conteneur). Elles lisent maintenant `FloatingButtonSafeZone.top`
+= `maxTopInset` (62) + `CollapsibleHeaderMetrics.expandedHeight` (64) = **126**, cote
+dérivée et non magique.
 
-## Lot C — fil de messages (Bulles + Script)
-- [x] Verrou de scène : plus de `layoutAttributesForItem` ×2n par frame
-- [x] `FocalRowInput.==` sans allocation ; `statusForUser` O(1) ; direction de layout et
-      résolution de langue mises en cache par instantané (plus par cellule)
-- [x] Bulles : `BubbleContent` construit à la configuration, plus dans `body`
-- [x] Menu contextuel iOS 26 : vérifié — `nativeMessageContextMenu` passe `menu()` et `preview()` en
-      closures au `.contextMenu` natif (paresseux), la bulle/rangée est construite UNE fois et réutilisée
-- [x] `GeometryReader` par cellule (`MessageFramePreferenceKey`) → `onGeometryChange` ou retrait
-- [~] `MessageListView` : objets d'environnement (P1-5) — ÉVALUÉ : `updateUIViewController` n'est que
-      des affectations gardées (`didSet` à égalité) + insets gardés ; sans mesure d'un coût, non modifié
-- [x] Chrome (boutons/composeur/pilule) : retour à la levée du doigt vérifié au simulateur
-- [x] Vérification simulateur (3 modes, chrome, pose) — métrique Lot A non rejouée après le lot D
+### Restes assumés
 
-## Lot D — modes Bulles · Script · Focal complets et sélectionnables
-- [x] Bulles : entrée des menus (liste + chip) ; choix collant rendu en `.bubbles` drapeau ON
-      (règle de CONSOMMATION, loi partagée intacte — même chemin que le web)
-- [x] Focal : passe de perspective MINIMALE (transform + opacity CALayer sur les cellules
-      visibles, loi `.thread` partagée, zéro relayout, zéro élection/atterrissage/carte) ;
-      retrait du clamp `.focal → .script` ; retour dans `displayOrder` et `LentilleModeMenu`
-- [x] Script : bouton (+) réaction rapide (`FocalRowInput.isLastReceivedMessage`, règle unique
-      `BubbleReactionsOverlay.isMounted` partagée avec la bulle) ; `revealsTimestamp` SUPPRIMÉ (aucun
-      écrivain, aucun lecteur)
-- [x] Docs : `apps/ios/decisions.md` (entrée 2026-08-21), `docs/focal-retrait-ios-2026-08-18.md`
-      (addendum « réintroduction minimale »)
-- [x] Vérification simulateur des 3 modes (ouverture, défilement, bascule live par le chip) — captures
-      21/08 16:5x ; Focal à l'OUVERTURE réparé (carte + détails + heure permanente + sur-réserve)
+- **D2 résiduel — décision produit en attente.** Flux recouvre désormais les commandes de
+  la trail (82-87 %). Dégager la trail (fin `y=199.3`) demanderait `topSafeZone = 173.3`,
+  ce qui poserait le disque sur la 1re rangée (228.7-316.7) : **impasse géométrique**. En
+  position « coin haut », un bouton flottant recouvre forcément quelque chose. Recommandé :
+  passer la position par défaut en bas (idiome FAB), qui libère tout l'en-tête. 2 constantes.
+- **`.ignoresSafeArea()` non corrigé.** Faire remonter la vraie safe area demande une
+  refonte du conteneur, non validable sans passe visuelle. Symptôme majoré, cause racine
+  documentée sur `FloatingButtonSafeZone`.
+- **A4 — le correctif serveur est inatteignable en production.** `core.ts:401` et `:454`
+  filtrent sur `participants.some.userId`, or `Participant.userId` est **null** pour un
+  anonyme : `findMany` ne remonte rien et la boucle ne tourne jamais. Les 2 tests ne
+  passent que parce que `mockResolvedValue` **ignore le `where`**. Corriger « pour de
+  vrai » demande de brancher `whereClause` sur `isAnonymousViewer`, ce qui change ce que
+  la route rend aux anonymes — au-delà du périmètre demandé. **À arbitrer.**
+- **`list.row.height` est partagé avec le web** : les rangées web passent à 88 px avec
+  leur ancien contenu à 2 bandes. À désolidariser ou à faire suivre.
+- **Doublon header épinglé / pilule** : jamais diagnostiqué, en cours de contre-expertise.
 
-Ajouts 21/08 (retours user en cours de session) :
-- [x] Pull-to-refresh coincé sous Lentille (offset relatif à l'inset, SDK)
-- [x] Rail « moi » : 💭 / (+) / tap = listing « Mes stories »
-- [x] Carte de focus MAGNIFIÉE (contenu réel, suit le doigt, menu natif)
-- [x] Focal : compaction (proportions), carte accent du message en focus, détails à la pose
-- [x] `MessageListLayout` : plus de boucle dispatch du rattrapage (Time Profiler)
-- [ ] Mesure Instruments après (CPU main thread) — non rejouée
-- [x] Aperçu long-press = carte des DERNIERS MESSAGES (`ConversationPreviewView`) sur les deux chemins,
-      `LentillePeekView` (menu des modes dans l'aperçu) SUPPRIMÉE — décision user 21/08
-- [x] Pilule de section = sticker qui TIENT la ligne d'épinglage (plus « le plus haut », périmé)
-- [x] Focal : toute reconfiguration repose la perspective (carte perdue à l'ouverture) ; détails
-      synchronisés au repos ; `focalOverscan` posé au premier layout ; heure permanente en focus
+### Rectification du 2026-08-23 — la contre-expertise renverse 3 des 6 faux positifs
 
-## Review — session 2 du 21/08 (simulateur Meeshy-iOS26 + iPhone physique)
+Un agent adversaire a contesté mes classements. **Le bilan réel est 7 vrais défauts sur 8,
+pas 3.** Les 3 faux positifs confirmés le sont pour de MEILLEURES raisons que les miennes.
 
-**Livré** :
-- Déploiement device (`meeshy.sh device`, « Services CEO i16pm », build 1791) du code du simulateur.
-- Aperçu d'appui long = carte des DERNIERS MESSAGES (`ConversationPreviewView`) sur les deux
-  chemins OS ; `LentillePeekView` supprimée (décision user : le menu des modes dans l'aperçu
-  « ne sert à rien ») ; `LongPressPreviewGuardTests` ; recette L12 amendée.
-- Pilule de section périmée (« AUJOURD'HUI » sous « PLUS ANCIEN ») : règle « sticker qui tient
-  la ligne », ligne mesurée une fois sur le conteneur (6 tests).
-- Focal à l'ouverture : carte absente avant tout défilement (reconfigurations de cellule sans
-  repose) → repose en complétion de chaque apply ; détails synchronisés au repos ;
-  `focalOverscan` au premier layout ; heure du message en focus PERMANENTE
-  (`FocalIdentityHeader.revealsTimeAlways`, elle passait par le révélé) — 2 gardes.
-- Script/Focal : (+) d'ajout rapide de réaction (`isLastReceivedMessage`), règle unique
-  `BubbleReactionsOverlay.isMounted` ; `revealsTimestamp` supprimé (champ mort).
-- Bundle de tests de la branche : 2 erreurs de compilation héritées (b7c3adb08/87edb34a4,
-  jamais compilé) + 8 tests rouges jamais exécutés (chemin `#filePath` à 3 remontées, fixture
-  hors portée de la loi, attentes du clamp retiré, structure `passContext`, inset
-  `accessoryCollapsedHeight`) — corrigés.
-- Vérifié au simulateur : liste (carte magnifiée, pilule, aperçu), fil (ouverture, défilement,
-  bascule live Focal → Script → Bulles → Focal par le chip).
+| | Mon classement | Verdict | État |
+|---|---|---|---|
+| D4 trail collée | faux positif | **VRAI DÉFAUT** | corrigé, mesuré 8,0 pt |
+| D5 section repliée | faux positif | **VRAI DÉFAUT** | corrigé (chevron) |
+| D7 chevauchement | faux positif | **VRAI DÉFAUT** | diagnostiqué, arbitrage |
+| D1-header, D3, D6 | faux positifs | confirmés | — |
+| doublon pilule | jamais diagnostiqué | **VRAI DÉFAUT** | correctif prêt, non appliqué |
 
-**Évalué, non modifié** : H10 (gain ~µs contre libellé figé au changement de langue), P1-5
-(`update` borné à des affectations gardées), menu contextuel iOS 26 du fil (déjà paresseux).
+**D7 — ma dispense était fausse.** J'avais invoqué « `idb` rend le cadre transformé par
+l'échelle ». Or l'échelle ne PEUT PAS mordre un header : `scale = 1 − 0.04f ≤ 1`, ancrée,
+donc une rangée qui rétrécit ÉLOIGNE ses bords de ses voisins. Le coupable est
+`LentilleFocusBreathing`, une TRANSLATION de ±18 pt posée sur les rangs seuls et jamais sur
+les headers. Deux relevés indépendants (9,6/8,9 puis 9,2/9,1 pt) et l'arithmétique boucle :
+`18 − 8 − (88 − h)/2 = 9,6` pour `h = 87,3`.
 
-**Observations hors périmètre** : le header replié (`CollapsibleHeader`, SDK) laisse voir le
-sticker qui passe dessous (dégradé 0.75 → 0, design) ; la pilule de section double le libellé du
-sticker épinglé sur la même ligne (design I-063, à trancher) ; mesure Instruments après lot D non
-rejouée ; `meeshy.sh test` complet non rejoué (25 suites ciblées seulement).
+Mon correctif — faire porter la même loi au sticker — a été **rejeté par la mesure** : sur
+un élément ÉPINGLÉ, l'`.offset` étend le cadre d'accessibilité de façon durable (h 21,3 →
+39,3, encore à 3 s). J'ai failli conclure « aggravation » sur ce chiffre : le même piège que
+la contre-expertise venait de me reprocher, en sens inverse. **Critère de validité retenu :
+`h` du header == 21,3, sinon la mesure ne vaut rien.**
 
-## Review — session 3 du 21/08 (directives « magnificence au défilement »)
+Les deux issues restantes touchent un réglage PRODUIT — écrêter la respiration à la marge
+(18 → 8, effet réduit) ou porter le gap de section à 18 (densité réduite). Non tranché.
 
-**Livré** (vérifié au simulateur, modes clair ET sombre) :
-- Fil : perspective SEULEMENT sur geste utilisateur, aplatissement animé 2 s après la pose, ligne de
-  focus au centre (bord bas au repos sur le dernier message), compaction symétrique, sur-réserve
-  des deux côtés, plancher d'opacité (plus d'« arrivée/sortie » par fondu), entrée animée.
-- Liste : carte de focus et perspective des rangées SEULEMENT pendant le défilement (scène
-  `LentilleSceneActivity`), bande au centre qui remonte vers la première conversation au repos en
-  haut, accès rapides en queue (et état vide) — nouveau message, story, mood, post, invitation
-  (parrainage), lien raccourci — hauteur d'une demi-région visible.
-- Texte blanc en mode clair (rangée plate « Toi ») corrigé à la racine ; chip de mode lisible.
-- « Publier un post » réparé aussi pour le tableau de bord (drapeau `Router.pendingOpenFeedComposer`).
+**D4 s'est réfuté avec mon propre chiffre** : ma note d'origine mesurait déjà 199,3/199,3
+AU REPOS ; l'argument « liste défilée » valait pour D6, pas pour D4. Cause : le rail iOS
+n'avait aucun padding vertical là où le jumeau web porte `py-2`. Corrigé par jeton +
+2 miroirs ; jonction re-mesurée à **8,0 pt**.
 
-**Évalué, non modifié** : loi partagée `FOCUS_CURVE_CONSTANTS` (règles de consommation iOS à la
-place) ; détails du message en focus (toujours à la pose, rendus à l'aplatissement).
+**D5 — le sticker taisait ce qu'il savait.** `LentilleSticker` DÉCLARAIT et STOCKAIT
+`isExpanded` sans jamais le lire : paramètre mort, zéro test. Replier une section rendait
+deux bandes identiques empilées, indiscernables d'un défaut de rendu. Corrigé par un chevron
+conditionné à `onToggle != nil` (`chevron.forward`, qui s'inverse en RTL).
 
-**Restes** : mesure Instruments (CPU main thread, frames distinctes/s) sur la nouvelle scène ;
-`meeshy.sh test` complet ; déploiement device du résultat final.
+**Rectification documentaire** : le commentaire justifiant la pleine largeur du sticker par
+« sinon les rangs réapparaissent dans les gouttières » est FAUX — rien n'entre jamais dans
+ces 8 pt. Bonne conclusion, mauvaise preuve ; le vrai motif est la parité avec la peau web.
 
-## Review — session 4 du 21/08 (carte de focus, favoris, état vide, répertoire, bordure du focus)
-- [x] Carte de focus Lentille : date complète « à » (`FocalFocusTimestamp.listLabel`), dernier expéditeur
-      pour TOUTES les conversations, encoche CATÉGORIE haut-gauche (Menu → `moveToSection`), chips
-      d'étiquettes bord bas (filtrer / retirer le filtre / supprimer) ; `activeTagFilter` dans le VM
-      (`filterConversations(_:searchText:filter:tag:)`), callbacks passés par `LentilleFocusCardHost`.
-      Vérifié simulateur (Meeshy-iOS26) : « J. Charles N. M. · Lundi à 17:36 », « CATÉGORIE », expéditeur
-      sur un direct. Chips de tags NON vues (aucune conversation étiquetée dans le compte de test).
-- [x] Feuille d'infos · Options : « Réaction » → « Favori » (`star.fill`) ; champ Catégorie : retour = OK
-      (`submitLabel(.done)`, teinte système — limite iOS).
-- [x] État vide : deux gros boutons (membres à qui écrire → découverte ; mes contacts → répertoire) +
-      tuiles dégradées façon Dashboard ; 8 portes routées (garde `LentilleSceneActivityTests` mise à jour).
-- [x] Répertoire > 200 : `listAll` paginé (`DirectoryPaging.hasMore`, filet 25 pages) sur Phonebook et
-      Discover ; `DirectoryPagingTests` (450 contacts ⇒ 3 pages ; multiple exact ⇒ page vide qui clôt ; cap).
-- [x] Espace entre groupes : `groupTopPadding` 8 → 4, fin de groupe 10 → 6.
-- [x] Message en focus : bordure basse (drapeaux dispo + icône traduction + (+) emoji + réactions),
-      coches de l'en-tête → détails de lecture. Vérifié simulateur : « Aujourd'hui 14:36 », chips 🇫🇷 / 🅰 /
-      😂 / ☺ sur la bordure. Limite : la bordure arrive au POSÉ (détails synchronisés au repos).
-- [x] Lot 6 (directives 22/08) : chips du focus SUR la ligne de la carte (`FocusStrip.overhang`, cellule
-      sans clip + zPosition) — vérifié simulateur ; pastille de présence sur la carte (même source que la
-      rangée) — vérifié ; respiration ×3 autour de la rangée élue (`LentilleFocusBreathing`, 12 pt,
-      rampe) — vérifié ; « Conversations avec ce tag » ; héros « Voir mes affiliations » → `.affiliate` ;
-      badge non-lus non compressible.
-- [x] Lot 7 (directives 22/08 bis) : détails du focus INSTANTANÉS (superpositions sur les lignes, sync
-      au tick d'élection, date pré-calculée `FocalRowInput.focusTimestamp`) — vérifié simulateur pendant la
-      décélération (tête de groupe et continuation) ; ordre traduction → drapeaux → (+) → réactions (fond
-      plein si j'ai réagi) ; carte de liste : effectif + sync (bouton → `flushOutbox`) sur la ligne basse à
-      droite, nom original centré en haut si nom personnalisé (non vus : aucune conversation renommée /
-      groupe non élu pendant la capture).
-- [x] Lot 8 (retour capture 22/08) : carte du focus = FOND SwiftUI de la rangée (fini la dérive carte UIKit /
-      chips avant la pose) — chips et identité consolidées sur les lignes, vérifié en mouvement et au posé ;
-      crash `APPLYING_SNAPSHOTS_REENTRANTLY` corrigé (sync différée + coalescée, un apply en vol) — stress
-      6 balayages sans crash ; méta-rangée = heure seule.
-- [x] Lot 9 (directives 22/08 ter) : effectif → feuille des participants (vérifié) ; carte de liste 104 pt,
-      padding 14, respiration 18 (jeton partagé mis à jour) ; aperçu « Auteur : texte » sur 2 lignes (vérifié) ;
-      chips uniformes sur toutes les bulles en focus — identité à gauche, date + coche à droite, capsules en bas
-      (vérifié tête de groupe).
-- [x] Lot 10 (22/08) : scène désarmée à 4,5 s ; chips d'étiquettes 8 pt, respiration 30 (vérifiée) ; garde
-      aperçu vide. NON revérifié : chip d'étiquette sur une carte (élection de Meeshy Global impossible à la
-      main), carte vide observée 2× sur « charlie amah » (hypothèse `Text` vide + fixedSize, garde posée).
-- [x] Rivière : plan réconcilié ci-dessous (22/08, reprise en autonomie sur `main`).
+### Collision de chantier — DEUX implémentations de la même demande
 
-## Chantier Rivière iOS — reprise 22/08 (sur `main`, directive « poursuis en autonomie le reste des lots »)
+`feat/lentille-row-chrome` (autre session) est déjà sur `main` (`266fcb765`) et recouvre mes
+lots 2/3/4 fichier pour fichier. Les deux lisent des directives différentes données à des
+moments différents : « la date à l'intérieur de la bulle » (moi) contre « enlever le contour
+sur le dernier message » (eux). Captures comparées envoyées au porteur produit ; **ma branche
+ne peut pas remonter tant que ce n'est pas tranché**. Ni l'un ni l'autre lot ne re-merge sur
+ces fichiers en attendant.
 
-État trouvé : lots 1 et 2 LIVRÉS par la session Rivière (`4322bae1e`, `47b2612d7`, `aa25741e9`…) —
-montage au fil, avis système gravés pleine largeur (`LazyVStack` de rangs), heure en base, fenêtre
-de silence cherchée, pince, en-tête transparent, badges hors-champ. Reste : `tasks/riviere-r137-montage.md`
-§« Reste à faire » (R-3..R-8) + lots 3–5 ci-dessous, réconciliés. Branche distante
-`claude/riviere-conversation-navigation-x51rqq` = PR #3170/#3174 déjà mergées (0 commit d'avance).
+### Non-régression après D2/D8/D1
 
+63 suites, **736 tests exécutés**, aucune à 0 test. Les échecs sont tous PRÉEXISTANTS : le
+crash `malloc 0x262c5a6f0` est daté à 17:13, 1 h 34 avant le premier commit, même adresse,
+même test.
 Directive produit 22/08 (prioritaire) : **deux messages consécutifs d'un même groupe partagent une
 bordure JOINTE en pointillé** — jamais deux contours fermés + une couture pointillée en plus. Repli
 autorisé si c'est compliqué : deux bulles distinctes.
