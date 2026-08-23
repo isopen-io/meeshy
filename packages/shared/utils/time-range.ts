@@ -12,23 +12,42 @@
  * du même contrat : exactement le genre de duplication qu'une brique partagée
  * supprime définitivement.
  *
- * Deux sites voisins restent DÉLIBÉRÉMENT hors de cette brique :
- * - `playbackStretch` (gateway, `validation/messages-schemas.ts`) porte la
- *   même paire `startMs/endMs` mais une borne STRICTE (`endMs > startMs`,
- *   itération 237) : une écoute continue de durée nulle n'est pas une écoute,
- *   et le persisteur (`utils/playback-trace.ts`, `isUsable`) la jette — le
- *   wire miroite ce verdict. Ne pas le rattacher à `isMsRangeOrdered`.
- * - `CanvasV3` `TimingSchema` / `bounds` (itération 237) exprime le même
- *   invariant sous d'AUTRES noms de champ (`start`/`end`, en secondes).
+ * Un site voisin exprime le MÊME invariant sous d'AUTRES noms de champ :
+ * `CanvasV3` `TimingSchema` / `bounds` (itération 237) porte `start`/`end` en
+ * secondes — hors de cette brique, qui ne parle que de `startMs`/`endMs`.
  *
  * La durée nulle (`endMs === startMs`, segment/intervalle ponctuel) est
- * ACCEPTÉE — la borne est `>=`, jamais `>` : décision produit gelée par
- * l'itération 234.
+ * ACCEPTÉE par {@link isMsRangeOrdered} — la borne est `>=`, jamais `>` :
+ * décision produit gelée par l'itération 234. Le régime STRICT, où une durée
+ * nulle est REFUSÉE, a sa propre brique jumelle : {@link isMsRangeStrictlyOrdered}.
  */
 export const isMsRangeOrdered = (range: {
   readonly startMs: number;
   readonly endMs: number;
 }): boolean => range.endMs >= range.startMs;
+
+/**
+ * Variante STRICTE de {@link isMsRangeOrdered} : la borne haute doit dépasser la
+ * borne basse (`endMs > startMs`, PAS `>=`). Une durée nulle est REFUSÉE.
+ *
+ * Elle sert le domaine de la LECTURE MÉDIA, où une durée nulle n'est pas un
+ * intervalle ponctuel admissible mais un non-événement : « une écoute réellement
+ * CONTINUE » (`services/gateway/src/utils/playback-trace.ts`) ne peut pas durer
+ * zéro milliseconde. Déclarée UNE SEULE FOIS ici — comme sa jumelle non stricte —
+ * pour que ses trois consommateurs jusqu'ici indépendants (le gate de wire
+ * `playbackStretch` dans `validation/messages-schemas.ts`, et les filtres
+ * `isUsable` de `utils/playback-trace.ts` et `utils/playback-segments.ts`, que
+ * leurs propres commentaires décrivaient déjà comme des « miroirs explicites »
+ * l'un de l'autre) appliquent le MÊME prédicat sans le recopier.
+ *
+ * Ne PAS confondre les deux régimes : `>=` pour un segment/intervalle qui peut
+ * être ponctuel (transcription, canvas), `>` pour une écoute qui doit avoir eu
+ * une durée. Le choix appartient au domaine, pas au hasard du site.
+ */
+export const isMsRangeStrictlyOrdered = (range: {
+  readonly startMs: number;
+  readonly endMs: number;
+}): boolean => range.endMs > range.startMs;
 
 /**
  * Paramètres de `.refine()` associés à {@link isMsRangeOrdered} — le message et
