@@ -36,6 +36,12 @@ nonisolated public enum LentilleMetrics {
         public static let paddingVertical: CGFloat = 8
         public static let paddingHorizontal: CGFloat = 16
         public static let marginHorizontal: CGFloat = 8
+        /// Marge VERTICALE entre deux rangées, et entre une rangée et le
+        /// sticker suivant. Elle existait déjà comme littéral (`LazyVStack(spacing: 8)`)
+        /// mais n'avait jamais été NOMMÉE — c'est ce qui a permis à la
+        /// respiration de la carte de focus de valoir 18 pt sans que personne
+        /// ne rapproche les deux chiffres.
+        public static let marginVertical: CGFloat = 8
         public static let radius: CGFloat = 16
         /// Fraction `[0, 1]` de la largeur du rang — pivot du zoom/scale au
         /// défilement (perspective LWS-8). CSS `16%`.
@@ -95,6 +101,17 @@ nonisolated public enum LentilleMetrics {
 
     /// `list.unreadDot` — `8`, couleur accent. §0 : diamètre de design, pas
     /// un token repris d'ailleurs — sa seule maison est ici.
+    ///
+    /// **Plus AUCUN consommateur iOS depuis le lot 2 (2026-08-22)** : le
+    /// point ouvrait la ligne du pont ✦ sous `showsBridge`, c'est-à-dire
+    /// exactement sous `unreadCount > 0` — la pastille rouge CHIFFRÉE
+    /// rétablie en queue de ligne de titre porte la même nouvelle, en sachant
+    /// dire combien. Le miroir Swift SURVIT parce que le token, lui, est
+    /// toujours vivant : la peau WEB le consomme
+    /// (`apps/web/components/conversations/lentille/LentilleRow.tsx`,
+    /// `--lentille-list-unread-dot-size`), et le retirer du JSON y ferait un
+    /// point de 0×0 en silence. À solder quand le lot 2 web fera le même
+    /// arbitrage.
     nonisolated public enum UnreadDot {
         public static let size: CGFloat = 8
     }
@@ -134,7 +151,25 @@ nonisolated public enum LentilleMetrics {
         /// il est ANIMÉ, donc les trous s'ouvraient et se refermaient pendant
         /// le défilement. C'est la moitié « espaces compliqués » du retour
         /// produit. La cause retirée (bord bas désencombré), la valeur revient.
-        public static let breathing: CGFloat = 18
+        /// Amplitude de la respiration : de combien les rangées voisines
+        /// s'écartent de l'élue pendant la scène.
+        ///
+        /// **ÉCRÊTÉE À LA MARGE** (arbitrage produit 2026-08-23). Elle valait
+        /// 18 pt pour une marge de 8 : une rangée poussée mangeait donc la
+        /// marge et mordait le header suivant. Chevauchement mesuré à
+        /// géométrie stabilisée, deux frontières, deux relevés indépendants —
+        /// 9,6 / 8,9 puis 9,2 / 9,1 pt — et l'arithmétique bouclait exactement,
+        /// `18 − 8 − (88 − h)/2 = 9,6` pour `h = 87,3`.
+        ///
+        /// L'ancrer sur `Row.marginVertical` plutôt que d'ajouter un `min()`
+        /// rend le défaut structurellement impossible : la respiration ne peut
+        /// pas dépasser ce que la marge lui offre. Au-delà, elle ne déplace
+        /// plus les rangées, elle les fait se chevaucher.
+        ///
+        /// Ce n'était PAS l'échelle : `listScaleDecay = 0.04` donne un
+        /// `scale ≤ 1` ancré, donc une rangée qui rétrécit ÉLOIGNE ses bords de
+        /// ses voisins — elle ne peut mécaniquement pas mordre un header.
+        public static let breathing: CGFloat = Row.marginVertical
         /// Rampe : nulle jusqu'à une demi-rangée (la rangée élue ne bouge
         /// pas), pleine une rangée plus loin — jamais de saut au passage.
         public static let breathingRampStart: CGFloat = 36
@@ -187,6 +222,14 @@ nonisolated public enum LentilleMetrics {
     nonisolated public enum Rail {
         public static let size: CGFloat = 48
         public static let ringWidth: CGFloat = 3.5
+        /// Respiration VERTICALE du rail. Le rail iOS n'en avait AUCUNE —
+        /// `.padding(.horizontal)` seul — alors que son jumeau web porte
+        /// `py-2` depuis toujours (`LivesRail.tsx:55`). Mesure reproduite deux
+        /// fois au repos : la trail finissait a 199.3 et le premier sticker
+        /// commencait a 199.3, soit 0 pt de jonction, quand TOUTES les autres
+        /// jonctions de la liste valent 8 (header→rang 220.6→228.7,
+        /// 440.0→448.0, 659.3→667.3).
+        public static let paddingVertical: CGFloat = 8
         public static let maxEntries: Int = 6
     }
 

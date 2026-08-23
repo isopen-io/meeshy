@@ -363,3 +363,72 @@ describe('POST /conversations/:id/leave — les AUTRES appareils du partant', ()
     });
   });
 });
+
+/**
+ * Lot 1 — l'effectif ENTIER passe aussi par le canal socket.
+ *
+ * Le fanout ne portait qu'UNE présentation, la plafonnée : l'admin d'un groupe
+ * de 250 personnes, qui venait de lire 250 par REST, voyait son compteur
+ * retomber à « 199+ » au premier départ. Le canal partagé DÉGRADAIT ce que la
+ * règle produit lui accorde, et les deux clients persistent la valeur reçue.
+ */
+describe('POST /conversations/:id/leave — l\'effectif ENTIER pour l\'admin du groupe', () => {
+  let app: FastifyInstance;
+  let socket: ReturnType<typeof makeSocketIO>;
+  let prisma: ReturnType<typeof makePrisma>;
+
+  beforeAll(async () => {
+    (resolveConversationId as jest.MockedFunction<any>).mockResolvedValue(CONV_ID);
+    ({ app, socket, prisma } = await buildApp({
+      prismaOverrides: {
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: PARTICIPANT_ID,
+            userId: USER_ID,
+            conversationId: CONV_ID,
+            role: 'member',
+            isActive: true,
+            displayName: 'Alice',
+          }),
+          findMany: jest.fn<any>().mockResolvedValue([
+            { id: 'p-admin', userId: WITNESS_ID, role: 'admin', user: { role: 'USER' } },
+            ...Array.from({ length: 249 }, (_, i) => ({
+              id: `p-big-${i}`,
+              userId: null,
+              role: 'member',
+              user: null,
+            })),
+          ]),
+          update: jest.fn<any>().mockResolvedValue({}),
+        },
+      },
+    }));
+    await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave` });
+  });
+
+  afterAll(async () => { await app.close(); });
+
+  it('sert 250 à l\'admin du groupe et « 199+ » aux autres', () => {
+    const sends = socket.mockIo._sendsFor('conversation:participant-left');
+    expect(sends).toHaveLength(2);
+
+    expect(sends[0].payload).toMatchObject({ memberCount: 199, memberCountCapped: true });
+    // Sans l'exclusion, l'admin qui a le FIL ouvert recevrait AUSSI la copie
+    // plafonnée, par la room de conversation.
+    expect(sends[0].excepts).toEqual([`user:${WITNESS_ID}`]);
+
+    expect(sends[1].rooms).toEqual([`user:${WITNESS_ID}`]);
+    expect(sends[1].payload).toMatchObject({ memberCount: 250 });
+    expect((sends[1].payload as any).memberCountCapped).toBeUndefined();
+  });
+
+  it('demande le rôle de conversation ET le rôle plateforme des restants', () => {
+    const select = (prisma.participant.findMany as jest.MockedFunction<any>).mock.calls[0][0].select;
+    expect(select).toMatchObject({
+      id: true,
+      userId: true,
+      role: true,
+      user: { select: { role: true } },
+    });
+  });
+});

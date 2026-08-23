@@ -26,6 +26,10 @@ const mockResolveConversationId = jest.fn<any>();
 
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
   generateDefaultConversationTitle: (...args: any[]) => mockGenerateDefaultConversationTitle(...args),
+  // Résolu dès que l'appelant porte un `registeredUser` : sans le double, tout
+  // test qui donne un rôle plateforme au lecteur tombe dans le `catch` de la
+  // route et se lit comme un échec de la règle testée, pas du harnais.
+  resolveUserLanguagesOrdered: () => ['fr'],
 }));
 
 jest.mock('../../../services/MessageReadStatusService', () => ({
@@ -683,6 +687,128 @@ describe('registerSearchRoutes — GET /conversations/search', () => {
 
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result[0].memberCount).toBe(7);
+  });
+
+  // ── Cap 199+ : le droit de voir l'effectif ENTIER ────────────────────────
+  // Même règle que `GET /conversations` et `GET /conversations/:id` : trois
+  // surfaces, une seule présentation. La recherche résout DÉJÀ l'appartenance
+  // de l'appelant pour toute la page (`memberships`) — c'est cette lecture qui
+  // porte son rôle de conversation, sans requête de plus.
+
+  it('plafonne memberCount à 199 pour un simple membre sans rôle plateforme', async () => {
+    const { prisma, route, reply } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.conversation.findMany.mockResolvedValue([
+      makeConversation({ _count: { participants: 250 } }),
+    ]);
+    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+
+    await route.handler(makeSearchRequest('test'), reply);
+
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].memberCount).toBe(199);
+    expect(result[0].memberCountCapped).toBe(true);
+  });
+
+  it('sert l\'effectif ENTIER à l\'admin du GROUPE', async () => {
+    const { prisma, route, reply } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.conversation.findMany.mockResolvedValue([
+      makeConversation({ _count: { participants: 250 } }),
+    ]);
+    prisma.participant.findMany.mockImplementation(async (args: any) =>
+      (args?.where?.conversationId?.in ?? []).map((conversationId: string) => ({
+        conversationId,
+        role: 'admin',
+      }))
+    );
+    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+
+    await route.handler(makeSearchRequest('test'), reply);
+
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].memberCount).toBe(250);
+    expect(result[0].memberCountCapped).toBeUndefined();
+  });
+
+  // A4 — le jumeau du test de `GET /conversations` : même lecteur, même
+  // conversation, même réponse attendue. L'invité de lien partagé porte un
+  // `Participant.id` dans `authContext.userId`, donc la COLONNE interrogée doit
+  // être `id`. Le double ne rend le rôle QUE dans ce cas : une requête
+  // `userId: <Participant.id>` ne matche rien en base, et un double complaisant
+  // rendrait ce test tautologique.
+  it('sert l\'effectif ENTIER à un admin de groupe ANONYME', async () => {
+    const { prisma, route, reply } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.conversation.findMany.mockResolvedValue([
+      makeConversation({ _count: { participants: 250 } }),
+    ]);
+    prisma.participant.findMany.mockImplementation(async (args: any) =>
+      args?.where?.id === VALID_PARTICIPANT_ID
+        ? (args?.where?.conversationId?.in ?? []).map((conversationId: string) => ({
+            conversationId,
+            role: 'admin',
+          }))
+        : []
+    );
+    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+
+    await route.handler(
+      {
+        query: { q: 'test' },
+        authContext: {
+          userId: VALID_PARTICIPANT_ID,
+          type: 'anonymous',
+          isAnonymous: true,
+          isAuthenticated: true,
+        },
+      },
+      reply
+    );
+
+    expect(prisma.participant.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: VALID_PARTICIPANT_ID }) })
+    );
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].memberCount).toBe(250);
+    expect(result[0].memberCountCapped).toBeUndefined();
+  });
+
+  it('sert l\'effectif ENTIER à un MODERATOR plateforme', async () => {
+    const { prisma, route, reply } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.conversation.findMany.mockResolvedValue([
+      makeConversation({ _count: { participants: 250 } }),
+    ]);
+    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+
+    await route.handler(
+      {
+        query: { q: 'test' },
+        authContext: {
+          userId: VALID_USER_ID,
+          isAuthenticated: true,
+          registeredUser: { id: VALID_USER_ID, role: 'MODERATOR' },
+        },
+      },
+      reply
+    );
+
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].memberCount).toBe(250);
+    expect(result[0].memberCountCapped).toBeUndefined();
+  });
+
+  it('demande le rôle de conversation dans la lecture d\'appartenance', async () => {
+    const { prisma, route, reply } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.conversation.findMany.mockResolvedValue([makeConversation()]);
+    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+
+    await route.handler(makeSearchRequest('test'), reply);
+
+    const selects = prisma.participant.findMany.mock.calls.map((call: any[]) => call[0]?.select);
+    expect(selects.some((select: any) => select?.role === true)).toBe(true);
   });
 
   // ── Correct result shape ─────────────────────────────────────────────────

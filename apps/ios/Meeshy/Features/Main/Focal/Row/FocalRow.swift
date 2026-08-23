@@ -261,19 +261,19 @@ struct FocalRow: View {
     /// `FocalEphemeralBadge` (ce chantier) pour un countdown vivant sans
     /// faire porter le `@StateObject` par `FocalRow`.
     ///
-    /// `BubbleForwardedIndicator` accepte `senderName`/`conversationName`
-    /// pour un libellé enrichi (« Fwd. from X • Y ») — `BubbleContent` ne
-    /// porte que le booléen `isForwarded` (pas de `ForwardReference`
-    /// résolue), donc ces deux paramètres restent `nil` ici : repli sur le
-    /// libellé générique « Forwarded ». Écart signalé, pas une seconde
-    /// résolution inventée.
+    /// `BubbleForwardedIndicator` prend une `ForwardAttribution` déjà
+    /// tranchée — `BubbleContent` ne porte que le booléen `isForwarded` (pas
+    /// de `ForwardReference` résolue), donc l'attribution reste `.anonymous`
+    /// ici : repli sur le libellé générique « Transféré ». Écart signalé, pas
+    /// une seconde résolution inventée — et c'est le repli SÛR, jamais celui
+    /// qui nommerait quelqu'un.
     @ViewBuilder
     private var badgesSection: some View {
         if content.isPinned {
             BubblePinnedIndicator()
         }
         if content.isForwarded {
-            BubbleForwardedIndicator(isMe: content.isMe, isDark: input.isDark, senderName: nil, conversationName: nil)
+            BubbleForwardedIndicator(isMe: content.isMe, isDark: input.isDark, attribution: .anonymous)
         }
         if let ephemeral = content.ephemeral {
             FocalEphemeralBadge(expiresAt: ephemeral.expiresAt, isDark: input.isDark)

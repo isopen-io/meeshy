@@ -186,6 +186,19 @@ struct AboutView: View {
 
             VStack(spacing: 0) {
                 linkRow(icon: "globe", title: String(localized: "about.link.website", defaultValue: "Site web", bundle: .main), url: "https://meeshy.me", color: MeeshyColors.infoHex)
+                // Les pages du site font FOI : l'application y renvoie au lieu
+                // d'embarquer une seconde copie du texte, qui divergerait.
+                // `settings.terms` et `settings.privacy_policy` sont RÉUTILISÉES
+                // — elles nomment déjà ces documents ailleurs dans l'app.
+                //
+                // « /contact », pas « /contacts » : seule la première a une page
+                // (`apps/web/app/contact/page.tsx`) ; `/contacts` n'a aucun
+                // `page.tsx` et donnerait un lien mort.
+                linkRow(icon: "info.circle", title: String(localized: "about.link.about", defaultValue: "À propos de Meeshy", bundle: .main), url: "https://meeshy.me/about", color: MeeshyColors.infoHex)
+                linkRow(icon: "doc.text", title: String(localized: "settings.terms", defaultValue: "Conditions d'utilisation", bundle: .main), url: "https://meeshy.me/terms", color: MeeshyColors.infoHex)
+                linkRow(icon: "hand.raised", title: String(localized: "settings.privacy_policy", defaultValue: "Politique de confidentialité", bundle: .main), url: "https://meeshy.me/privacy", color: MeeshyColors.infoHex)
+                linkRow(icon: "envelope", title: String(localized: "about.link.contact", defaultValue: "Nous contacter", bundle: .main), url: "https://meeshy.me/contact", color: MeeshyColors.infoHex)
+                linkRow(icon: "person.2", title: String(localized: "about.link.partners", defaultValue: "Partenaires", bundle: .main), url: "https://meeshy.me/partners", color: MeeshyColors.infoHex)
                 linkRow(icon: "at", title: String(localized: "about.link.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: MeeshyColors.infoHex)
                 linkRow(icon: "chevron.left.forwardslash.chevron.right", title: String(localized: "about.link.github", defaultValue: "GitHub", bundle: .main), url: "https://github.com/meeshy", color: MeeshyColors.infoHex)
             }
