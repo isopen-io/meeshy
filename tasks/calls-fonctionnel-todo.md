@@ -11138,3 +11138,106 @@ en cours d'appel trouve donc `currentCallId` déjà égal et sort par ce guard s
 avec le web (qui gardait sur `incomingCall.callId !== event.callId`, actif seulement pour un callId
 DIFFÉRENT) explique pourquoi le même mécanisme serveur produisait un défaut sur un client et pas
 l'autre.
+
+## Vague 165 — `endCallParticipationForDepartedMember` était le 4ᵉ site à clear `ringingTimeouts` sans conditionner sur l'appel de groupe qui continue (gateway) (2026-08-23)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Vérifié avant
+de commencer : la Vague 164 (`call:end`/`call:leave`/`call:force-leave` cleared le timer même
+quand le groupe continuait) est bien mergée sur `main` (PR #3374, commit `9056634db`), et aucune
+branche `claude/upbeat-dirac-*` antérieure n'est en avance — branche redémarrée depuis
+`origin/main`. Note de suivi : le commit de la Vague 164 n'avait touché que le code et ses tests,
+pas ce journal (aucune section « Vague 164 » n'y existait avant celle-ci) — rien à retranscrire
+rétroactivement, cette entrée porte directement la Vague 165.
+
+### Root cause
+
+`ringingTimeouts` (`CallService.ts:225`) est une Map keyée par `callId`, pas par participant —
+c'est la SEULE chose qui distingue « un invité n'a jamais répondu » de sa notification d'appel
+manqué (`buildRingingTimeoutHandler`'s branche `count === 0`, `CallEventsHandler.ts:579`). La
+Vague 164 a fermé trois sites (`call:end`, `call:leave`, `call:force-leave`) qui le clearaient
+INCONDITIONNELLEMENT, y compris sur la branche atteinte uniquement quand l'appel de groupe est
+CONNU pour continuer pour d'autres participants. Un 4ᵉ site portait le même défaut, non touché par
+cette recherche parce qu'il ne s'appelle ni `call:end` ni `call:leave` ni `call:force-leave` :
+`endCallParticipationForDepartedMember` (`CallEventsHandler.ts:956`), le verbe déclenché quand un
+membre perd son appartenance au fil (banni, quitté, retiré par un modérateur, fil supprimé pour
+soi — voir `endConversationMembership.ts`).
+
+Cette méthode boucle sur les appels non-terminaux du partant et, pour chacun, appelle
+`leaveParticipationAndBroadcast` (qui délègue à `CallService.leaveCall`) PUIS, juste après,
+appelait inconditionnellement `this.callService.clearRingingTimeout(callId)`
+(`CallEventsHandler.ts:996`, avant ce correctif). Or `leaveCall()` lui-même clear déjà
+`ringingTimeouts` en interne, mais SEULEMENT dans sa branche `isLastParticipant`
+(`CallService.ts:1874-1888`, posée par la Vague 157) — un leave « mid-call » sur un appel de
+groupe qui continue prend l'autre branche et laisse le timer délibérément armé, exactement comme
+`call:signal` (answer) le fait pour la même raison (`CallEventsHandler.ts:3689-3703`). L'appel
+externe et inconditionnel de `endCallParticipationForDepartedMember` court-circuitait cette
+décision — même défaut, même famille, un site que la recherche par nom de handler ne pouvait pas
+trouver.
+
+**Preuve que ce n'était pas un oubli mais une assertion écrite en dur** : le test
+`CallEventsHandler-departed-member.test.ts` (« libère la minuterie de sonnerie du fil que le
+partant laisse derrière lui ») assertait explicitement
+`expect(mockClearRingingTimeoutDep).toHaveBeenCalledWith(CALL_ID)` — un témoin vert qui enchâssait
+le défaut, dans le même esprit que la Leçon 248 (« deux témoins verts qui exigent des réponses
+opposées à la même question »).
+
+Le jumeau correct existe dans le MÊME fichier : `onDisconnectGraceExpired`
+(`CallEventsHandler.ts:710`), l'autre appelant de `leaveParticipationAndBroadcast`, ne porte AUCUN
+appel de nettoyage redondant après lui — il fait déjà confiance à `leaveCall()` pour scoper
+correctement. `endCallParticipationForDepartedMember` est le seul des deux à ne pas s'y aligner.
+
+### Impact
+
+Scénario atteignable en production : un appel de groupe sonne pour plusieurs invités ; l'un d'eux
+est banni de la conversation (ou la quitte, ou est retiré par un modérateur, ou supprime le fil
+pour lui-même) PENDANT que l'appel sonne encore pour les autres invités qui n'ont pas encore
+répondu. `endCallParticipationForDepartedMember` sort le banni de l'appel (comportement correct et
+voulu) mais, en clearant le timer call-wide au passage, prive silencieusement TOUS LES AUTRES
+invités non-répondus de leur notification d'appel manqué — le
+`createMissedCallNotifications(callId)` que `buildRingingTimeoutHandler`'s branche `count === 0`
+existe pour appeler ne se déclenche plus jamais pour ce call, sans aucun recours (pas de second
+timer, pas de sweep de rattrapage sur cette voie précise). L'appel continue normalement pour qui a
+déjà répondu ; c'est uniquement le SIGNAL « appel manqué » pour les autres qui disparaît.
+
+### Fix
+
+Une ligne retirée, `CallEventsHandler.ts` — le `this.callService.clearRingingTimeout(callId)`
+inconditionnel après `leaveParticipationAndBroadcast`. `clearBufferedOfferFor` (scopé au partant,
+donc toujours sûr) reste inchangé juste en dessous. Aucun changement de signature, aucune nouvelle
+branche : la méthode fait désormais exactement ce que `onDisconnectGraceExpired` fait déjà pour le
+même appel partagé — rien — et laisse `leaveCall()` décider seul.
+
+### Tests (TDD, RED confirmé)
+
+Le témoin qui enchâssait le défaut a été réécrit pour affirmer l'inverse : « ne clear PAS
+elle-même la minuterie de sonnerie — `leaveCall()` la scope déjà selon que l'appel continue ou se
+termine », `expect(mockClearRingingTimeoutDep).not.toHaveBeenCalled()`. RED confirmé sur le code de
+production INCHANGÉ (avant le fix) : `1 failed, 10 passed` — la seule assertion visée échoue,
+`Received number of calls: 1` sur un mock attendu à `0`. GREEN après le retrait de la ligne :
+`11/11`. Sweep calling gateway complet (`--testPathPatterns="[Cc]all"`) : **58/58 suites, 1271/1271
+tests** verts, 0 régression. `tsc --noEmit` gateway : **0 erreur**, avant comme après (rien à
+diffuser par `git stash`, le fichier était déjà propre). Suite gateway COMPLÈTE
+(`bun run test:coverage`) : **836/836 suites, 19261/19261 tests** verts — compte IDENTIQUE au
+dernier full-run connu sur `main` (merge Vague 164/cycle 106), cohérent avec un correctif qui
+réécrit un témoin existant plutôt que d'en ajouter un.
+
+### Risk assessment
+
+Minimal — retrait d'un appel redondant et incorrect, aucun changement de signature, aucun nouvel
+état. Le comportement qui change est exactement celui que la Vague 164 avait déjà qualifié de bug
+sur ses trois sites frères ; celui-ci est le quatrième, dans le même fichier, avec le même
+mécanisme de réparation (déléguer entièrement à `leaveCall()`, ne rien faire de plus).
+
+### Non fait volontairement / reste ouvert
+
+Recherché et vérifié CLOS pour cette famille précise : `grep -n "this.callService.clearRingingTimeout"
+CallEventsHandler.ts` ne rend plus que 4 sites d'appel réels, tous déjà scopés à une branche
+terminale/directe (`call:leave`, `call:force-leave`, `call:signal` answer scopé à
+`conversation.type !== 'group'`, `call:end`) — plus les deux clears internes à `CallService.leaveCall`
+elle-même (branche `isLastParticipant`), correctement conditionnels depuis la Vague 157. Aucun site
+inconditionnel restant. Reconduits (inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS
+single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors
+périmètre calling) ; `handleHold`'s branche `catch` générique omet `videoSurvivalController.reset()`
+(iOS, actuellement inerte) ; `handleAudioRouteChange`'s `.newDeviceAvailable` ignore le résultat
+fallible d'`applySpeakerRoute()` (iOS, fenêtre étroite auto-corrigée).
