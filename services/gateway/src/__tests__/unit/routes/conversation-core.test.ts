@@ -30,6 +30,7 @@ const mockSendError = jest.fn<any>((reply: any, status: any, msg: any) => {
   return reply;
 });
 const mockGenerateConversationIdentifier = jest.fn<any>().mockReturnValue('auto-id');
+const mockGenerateCompactConversationIdentifier = jest.fn<any>().mockReturnValue('mshy_AbCdEfGhIjKl');
 const mockEnsureUniqueConversationIdentifier = jest.fn<any>().mockResolvedValue('mshy_unique');
 const mockBuildCursorPaginationMeta = jest.fn<any>().mockReturnValue({ nextCursor: null, hasMore: false });
 const mockSendWithETag = jest.fn<any>().mockReturnValue(false);
@@ -71,6 +72,7 @@ jest.mock('../../../utils/response', () => ({
 
 jest.mock('../../../routes/conversations/utils/identifier-generator', () => ({
   generateConversationIdentifier: (...args: any[]) => mockGenerateConversationIdentifier(...args),
+  generateCompactConversationIdentifier: (...args: any[]) => mockGenerateCompactConversationIdentifier(...args),
   ensureUniqueConversationIdentifier: (...args: any[]) => mockEnsureUniqueConversationIdentifier(...args),
 }));
 
@@ -332,6 +334,7 @@ describe('registerCoreRoutes', () => {
     mockBuildCursorPaginationMeta.mockReturnValue({ nextCursor: null, hasMore: false });
     mockEnsureUniqueConversationIdentifier.mockResolvedValue('mshy_unique');
     mockGenerateConversationIdentifier.mockReturnValue('auto-id');
+    mockGenerateCompactConversationIdentifier.mockReturnValue('mshy_AbCdEfGhIjKl');
     mockGenerateDefaultConversationTitle.mockReturnValue('Generated Title');
     mockValidateSchema.mockReturnValue({
       type: 'direct',
@@ -1760,7 +1763,12 @@ describe('registerCoreRoutes', () => {
 
       await getCreateHandler(fastify)(req, reply);
 
-      expect(mockGenerateConversationIdentifier).toHaveBeenCalled();
+      // Une DM emet desormais un identifiant COMPACT et opaque : elle n'a pas
+      // de titre a rendre lisible, et son ancien identifiant publiait les
+      // ObjectId de ses deux membres. Les conversations TITREES continuent de
+      // passer par generateConversationIdentifier.
+      expect(mockGenerateCompactConversationIdentifier).toHaveBeenCalled();
+      expect(mockGenerateConversationIdentifier).not.toHaveBeenCalled();
     });
 
     it('throws USER_BLOCKED when direct conversation participants are blocked', async () => {
@@ -2758,7 +2766,11 @@ describe('registerCoreRoutes', () => {
       const handler = getHandler(fastify, 'POST', '/conversations');
       const reply = makeReply();
       await handler(makeRequest({ body: {} }), reply);
-      expect(mockGenerateConversationIdentifier).toHaveBeenCalledWith(
+      // Plus de sentinelle « unknown » : l'identifiant d'une DM ne derive plus
+      // d'aucun participant, donc l'absence de participantIds ne se lit plus
+      // dans l'identifiant produit.
+      expect(mockGenerateCompactConversationIdentifier).toHaveBeenCalled();
+      expect(mockGenerateConversationIdentifier).not.toHaveBeenCalledWith(
         expect.stringContaining('unknown')
       );
     });

@@ -13,6 +13,7 @@ import {
   userMinimalSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
+import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 
 // Schemas de validation
 const createFriendRequestSchema = z.object({
@@ -552,8 +553,11 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         let acceptedConversationId = existingConversation?.id;
 
         if (!existingConversation) {
-          // Generer un identifier unique pour la conversation directe
-          const identifier = `direct_${friendRequest.senderId}_${friendRequest.receiverId}_${Date.now()}`;
+          // Identifiant COMPACT (17 car.) — il ne concatene plus les deux
+          // ObjectId des participants : un identifiant public ne doit pas
+          // publier qui parle a qui, et 69 caracteres depassaient la limite
+          // de 50 que l'API impose aux identifiants soumis par les clients.
+          const identifier = generateCompactConversationIdentifier();
 
           const [senderUser, receiverUser] = await Promise.all([
             fastify.prisma.user.findUnique({ where: { id: friendRequest.senderId }, select: { displayName: true, username: true } }),

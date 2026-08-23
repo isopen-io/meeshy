@@ -33,6 +33,7 @@ import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalE
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import {
   generateConversationIdentifier,
+  generateCompactConversationIdentifier,
   ensureUniqueConversationIdentifier
 } from './utils/identifier-generator';
 import type {
@@ -1326,9 +1327,15 @@ export function registerCoreRoutes(
         // Ensure uniqueness
         finalIdentifier = await ensureUniqueConversationIdentifier(prisma, finalIdentifier);
       } else {
-        // Generate automatic identifier
-        const identifierTitle = type === 'direct' ? `direct-${userId}-${participantIds[0] || 'unknown'}` : title;
-        const baseIdentifier = generateConversationIdentifier(identifierTitle);
+        // Une DM n'a pas de titre a rendre lisible : son ancien identifiant
+        // derivait des deux userId (`mshy_direct-<id1>-<id2>-<horodate>`,
+        // ~72 car.) et publiait donc ses deux membres. On emet un identifiant
+        // COMPACT et opaque. Les conversations TITREES gardent leur forme
+        // lisible — c'est ce que promet le schema Prisma, et un groupe nomme
+        // n'expose l'identite de personne.
+        const baseIdentifier = type === 'direct'
+          ? generateCompactConversationIdentifier()
+          : generateConversationIdentifier(title);
         finalIdentifier = await ensureUniqueConversationIdentifier(prisma, baseIdentifier);
       }
 

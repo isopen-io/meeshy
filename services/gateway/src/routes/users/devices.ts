@@ -14,6 +14,7 @@ import type { NotificationService } from '../../services/notifications/Notificat
 import type { EmailService } from '../../services/EmailService';
 import { validatePagination } from '../../utils/pagination';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { viewerFromRequest } from './presence-gate';
 
@@ -505,7 +506,8 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
 
           let conversationId: string | undefined;
           if (!existingConversation) {
-            const identifier = `direct_${friendRequest.senderId}_${friendRequest.receiverId}_${Date.now()}`;
+            // Identifiant COMPACT — voir routes/friends.ts, meme raison.
+            const identifier = generateCompactConversationIdentifier();
             const defaultPermissions = { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendAudio: true, canSendVideo: true, canSendLinks: true, canReact: true, canReply: true, canMention: true };
             const senderUser = await fastify.prisma.user.findUnique({ where: { id: friendRequest.senderId }, select: { displayName: true } });
             const receiverUser = await fastify.prisma.user.findUnique({ where: { id: friendRequest.receiverId }, select: { displayName: true } });
