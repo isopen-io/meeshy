@@ -1377,3 +1377,39 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle107.md`
       file vérifie donc les champs REQUIS et leur TYPE (l'assignabilité traverse
       le spread), mais PAS les clés en trop d'une charge composée en variable.
       Le journal du cycle 106 surestimait d'un cran ; corrigé dans celui du 107.
+
+## Cycle 108 — le contrat citait un test qui prouvait l'inverse
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108.md` · PR #3381
+
+- [x] Instruit le suivi hérité « `_seq` déclaré sur le seul
+      `NotificationEventData` » en posant la seule question dont dépend la
+      validité du dispositif : **qui lit ce champ ?**
+- [x] Le contrat partagé affirmait « **les trois clients le lisent** » en citant
+      `MessageSocketManagerNotificationTest` pour Android. Mesuré : Android le
+      **jetait** (`Json.ignoreUnknownKeys`, dit par son propre commentaire), et
+      `grep "SyncSeq\|detectGap\|lastSeq" apps/android` rendait **zéro fichier**.
+- [x] **Le test cité prouvait l'INVERSE** : `"_seq":42` en fixture, assertions sur
+      `id`/`type`/`state.isRead` seulement — il prouve que le décodage SURVIT au
+      champ, jamais qu'il le lit.
+- [x] `emitWithSeq.ts` disait la vérité pendant ce temps (« les DEUX clients »).
+      **Deux documents, un champ, deux comptes.** Celui qui comptait trois était
+      le contrat — celui qu'on lit en premier.
+- [x] **Leçon : une CITATION n'est pas une MESURE.** Le cycle 107 avait établi
+      qu'un suivi hérité se mesure avant d'être recopié ; voici la variante plus
+      coûteuse — l'affirmation accompagnée d'une preuve qui n'en est pas une.
+      Elle résiste plus longtemps parce qu'elle a déjà l'air d'avoir été mesurée.
+      Citer un test comme preuve d'une LECTURE exige de vérifier qu'il l'ASSERTE.
+- [x] Conséquence réelle : Android n'avait **aucune détection de trou exacte**, et
+      la règle LOCKSTEP aurait fait juger sûre l'extension de l'estampillage à
+      une 2ᵉ famille — le 3ᵉ client aurait vu un faux trou à CHAQUE event.
+- [x] Fermé le trou, pas la phrase : 3ᵉ miroir Kotlin de la règle pure
+      (`SyncSeqState.kt`), lecture de `_seq` sur la charge BRUTE avant décodage,
+      trou ⇒ `refresh()` idempotent app-side, `reset()` au logout.
+- [ ] **Gate distant** : le toolchain Android n'est pas exécutable dans le
+      conteneur (`dl.google.com` refusé). Le workflow `android.yml` EST le gate —
+      noté plutôt que de laisser croire à une vérification locale.
+- [ ] Suivi — l'estampillage reste limité à `notification:new` ; l'étendre oblige
+      à étendre l'observation sur les TROIS clients dans le même train.
+- [ ] Suivi — Android consomme le trou à la portée de l'écran (là où iOS le câble
+      au boot). Limitation DÉJÀ existante de son temps réel, pas une nouvelle.
