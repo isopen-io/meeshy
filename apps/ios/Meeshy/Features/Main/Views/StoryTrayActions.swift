@@ -208,6 +208,7 @@ struct StoryComposerCover: ViewModifier {
             .storyLocationPickerProvided()
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()
+            .storyPasteProvided()
             .fullScreenCover(item: $previewAssets, onDismiss: {
                 NotificationCenter.default.post(name: .storyComposerUnmuteCanvas, object: nil)
             }) { assets in

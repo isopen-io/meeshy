@@ -161,25 +161,39 @@ final class AppInitWireupTests: XCTestCase {
     }
 
     /// S5 — mêmes causes, mêmes effets : la caméra (AVCaptureSession,
-    /// permissions) et la pellicule (PhotoKit) restent app-side, le composer
-    /// SDK expose deux points d'injection. Un site de présentation qui les
+    /// permissions), la pellicule (PhotoKit) et la lecture du presse-papier
+    /// (`NSItemProvider`, autorisation sandbox) restent app-side, le composer
+    /// SDK expose TROIS points d'injection. Un site de présentation qui les
     /// oublie fait disparaître les amorces de la page blanche SANS le moindre
     /// signal — c'est exactement ce que ce jumeau du garde-fou « Lieu »
     /// interdit.
+    ///
+    /// C5b l'a vérifié dans le mauvais sens : `storyPasteProvided()` a été
+    /// écrit, testé, et n'a JAMAIS été appelé — donc `\.storyPaste` restait
+    /// `nil` partout, donc `BlankCanvasPasteStarter` ne rendait rien sur aucun
+    /// écran. Cette garde ne connaissait que deux des trois injections : c'est
+    /// l'omission qu'elle couvre désormais.
     func test_everyStoryComposerPresentation_injectsTheBlankCanvasStarters() throws {
+        let injections = [
+            ".storyCameraCaptureProvided()":
+                "sans injection caméra, l'amorce « Caméra » n'est pas rendue.",
+            ".storyRecentCameraRollProvided()":
+                "sans injection pellicule, la vignette « dernière photo » n'est pas rendue.",
+            ".storyPasteProvided()":
+                "sans injection presse-papier, la capsule « Coller » n'est pas rendue — "
+                    + "`\\.storyPaste` reste nil et `BlankCanvasPasteStarter` rend un corps vide."
+        ]
         for path in Self.storyComposerPresentationSites {
             let src = try appSource(path)
             let presentations = occurrences(of: "StoryComposerView(", in: src)
                 + occurrences(of: "UnifiedPostComposer(", in: src)
             XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
-            XCTAssertEqual(
-                occurrences(of: ".storyCameraCaptureProvided()", in: src), presentations,
-                "\(path) : sans injection caméra, l'amorce « Caméra » n'est pas rendue."
-            )
-            XCTAssertEqual(
-                occurrences(of: ".storyRecentCameraRollProvided()", in: src), presentations,
-                "\(path) : sans injection pellicule, la vignette « dernière photo » n'est pas rendue."
-            )
+            for (modifier, why) in injections {
+                XCTAssertEqual(
+                    occurrences(of: modifier, in: src), presentations,
+                    "\(path) : \(why)"
+                )
+            }
         }
     }
 

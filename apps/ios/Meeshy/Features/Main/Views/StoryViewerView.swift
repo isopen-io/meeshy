@@ -893,6 +893,7 @@ struct StoryViewerView: View {
             .storyLocationPickerProvided()
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()
+            .storyPasteProvided()
         }
         // Republication en STORY — le composeur s'ouvre prérempli avec la
         // slide source et un badge d'attribution VERROUILLÉ (le republieur ne
@@ -940,6 +941,7 @@ struct StoryViewerView: View {
             .storyLocationPickerProvided()
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()
+            .storyPasteProvided()
         }
     }
 

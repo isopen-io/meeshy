@@ -1,4 +1,6 @@
+import Foundation
 import SwiftUI
+import UIKit
 import MeeshySDK
 
 // MARK: - Amorces de page blanche — points d'injection app-side
@@ -136,5 +138,64 @@ extension EnvironmentValues {
     public var storyRecentCameraRollAsset: StoryRecentCameraRollProvider? {
         get { self[StoryRecentCameraRollAssetKey.self] }
         set { self[StoryRecentCameraRollAssetKey.self] = newValue }
+    }
+}
+
+// MARK: - Collage (C5b) — le presse-papier entre dans le composer
+
+/// Ce qu'un collage rend au composer, une fois le presse-papier résolu.
+///
+/// Le SDK ne référence JAMAIS les types du pipeline app-side (`ComposerIngest`,
+/// `ComposerDropResolver`, `PasteDestination`) : la frontière est cette valeur,
+/// exactement comme `StoryCameraCapture` l'est pour la caméra.
+///
+/// **Trois cas, et pas quatre.** Un DOCUMENT collé n'apparaît pas ici : la
+/// scène de story n'héberge aucune pièce jointe. Il n'est pas pour autant
+/// avalé — l'app l'annonce (règle O12 : « document ⇒ pièce jointe, jamais un
+/// rejet muet »), et le jour où une surface sait en héberger, c'est elle qui le
+/// reçoit. Faire passer par ici un cas que la scène ne sait pas poser
+/// obligerait le SDK à le jeter en silence, soit exactement ce que la directive
+/// produit du 2026-08-23 interdit.
+public nonisolated enum StoryPastedItem: @unchecked Sendable {
+    case image(UIImage)
+    case video(URL)
+    case audio(URL)
+}
+
+/// Résolution app-side d'un collage, **injectée par l'app**.
+///
+/// Même doctrine que `StoryCameraCaptureProvider` : le presse-papier iOS est
+/// une dépendance SYSTÈME dont la lecture (représentation fichier vs données,
+/// refus des dossiers, autorisation sandbox, nom d'origine) vit déjà app-side
+/// dans `ComposerDropResolver` / `ComposerIngestRouter`, branchés sur six sites
+/// de production. Le SDK ne réécrit pas ce lecteur — il lui passe les
+/// `NSItemProvider` que `PasteButton` lui remet et pose ce qui revient.
+///
+/// Le défaut `nil` est la règle produit, pas un détail : sans injection, la
+/// capsule « Coller » n'est pas rendue. Une amorce qui ouvre le vide est pire
+/// que pas d'amorce.
+public nonisolated struct StoryPasteProvider {
+    public typealias Resolve = @MainActor ([NSItemProvider]) async -> [StoryPastedItem]
+
+    private let resolve: Resolve
+
+    public init(resolve: @escaping Resolve) {
+        self.resolve = resolve
+    }
+
+    @MainActor
+    public func items(from providers: [NSItemProvider]) async -> [StoryPastedItem] {
+        await resolve(providers)
+    }
+}
+
+public struct StoryPasteKey: EnvironmentKey {
+    public static let defaultValue: StoryPasteProvider? = nil
+}
+
+extension EnvironmentValues {
+    public var storyPaste: StoryPasteProvider? {
+        get { self[StoryPasteKey.self] }
+        set { self[StoryPasteKey.self] = newValue }
     }
 }
