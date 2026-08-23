@@ -208,17 +208,23 @@ describe('generateConversationIdentifier', () => {
 
   it('falls back to random ID when title is empty string', () => {
     const result = generateConversationIdentifier('');
-    expect(result).toMatch(/^mshy_[a-z0-9]+-\d+$/);
+    // Le repli n a plus de suffixe horodate : sans titre a rendre lisible,
+    // l identifiant est COMPACT et opaque (mshy_ + 12 base64url = 17 car.).
+    expect(result).toMatch(/^mshy_[A-Za-z0-9_-]{12}$/);
   });
 
   it('falls back to random ID when title reduces to empty after sanitization', () => {
     const result = generateConversationIdentifier('!!! ---');
-    expect(result).toMatch(/^mshy_[a-z0-9]+-\d+$/);
+    // Le repli n a plus de suffixe horodate : sans titre a rendre lisible,
+    // l identifiant est COMPACT et opaque (mshy_ + 12 base64url = 17 car.).
+    expect(result).toMatch(/^mshy_[A-Za-z0-9_-]{12}$/);
   });
 
   it('falls back to random ID when title is undefined', () => {
     const result = generateConversationIdentifier(undefined);
-    expect(result).toMatch(/^mshy_[a-z0-9]+-\d+$/);
+    // Le repli n a plus de suffixe horodate : sans titre a rendre lisible,
+    // l identifiant est COMPACT et opaque (mshy_ + 12 base64url = 17 car.).
+    expect(result).toMatch(/^mshy_[A-Za-z0-9_-]{12}$/);
   });
 
   it('includes a numeric timestamp suffix', () => {
