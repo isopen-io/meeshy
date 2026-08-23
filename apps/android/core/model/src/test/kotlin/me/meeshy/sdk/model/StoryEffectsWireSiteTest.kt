@@ -97,4 +97,49 @@ class StoryEffectsWireSiteTest {
         assertThat(post.storyEffects!!.background).isEqualTo("color:#000")
         assertThat(post.storyEffects!!.textObjects.map { it.text }).containsExactly("Salut")
     }
+
+    /**
+     * Le schéma v3 ÉVOLUE côté serveur — `carrierAspect` y a été ajouté le
+     * 2026-08-22, d'autres suivront. La lecture doit donc rester tolérante aux
+     * champs inconnus QUELLE QUE SOIT la configuration de l'appelant.
+     *
+     * Le pont décodait le document avec l'instance `Json` reçue. Un appelant
+     * strict faisait alors échouer le décodage sur un champ neuf, le
+     * `runCatching` avalait l'exception, et la story s'affichait VIDE. Le
+     * repli masquait le défaut au lieu de le signaler : le mode de défaillance
+     * exact que ce lot combat, réintroduit par le correctif lui-même.
+     */
+    @Test
+    fun `un champ v3 inconnu ne vide pas la story, meme avec un decodeur strict`() {
+        val strict = Json {}
+        val futureDocument = """
+            { "v": 3, "champDuFutur": 42, "scenes": [ { "id": "s1", "cadenceInedite": true,
+              "objects": [
+                { "id": "t1", "kind": "text", "plane": "fg", "z": 1, "attributNeuf": "x",
+                  "anchor": { "t": "free", "x": 0.5, "y": 0.2 },
+                  "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                  "payload": { "text": "Salut" } } ] } ] }
+        """.trimIndent()
+
+        val effects = strict.decodeFromString(StoryEffectsWireSerializer, futureDocument)
+
+        assertThat(effects.textObjects.map { it.text }).containsExactly("Salut")
+    }
+
+    /** `carrierAspect` est un champ RÉEL du schéma, pas une hypothèse. */
+    @Test
+    fun `carrierAspect est honore meme via un decodeur strict`() {
+        val strict = Json {}
+        val document = """
+            { "v": 3, "scenes": [ { "id": "s1", "carrierAspect": 1.7777, "objects": [
+                { "id": "t1", "kind": "text", "plane": "fg", "z": 1,
+                  "anchor": { "t": "free", "x": 0.5, "y": 0.40507397198627443 },
+                  "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+                  "payload": { "text": "Salut" } } ] } ] }
+        """.trimIndent()
+
+        val effects = strict.decodeFromString(StoryEffectsWireSerializer, document)
+
+        assertThat(effects.textObjects.single().y).isWithin(1e-4).of(0.2)
+    }
 }

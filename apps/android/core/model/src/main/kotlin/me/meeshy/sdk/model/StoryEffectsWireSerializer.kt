@@ -4,6 +4,7 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -43,13 +44,34 @@ object StoryEffectsWireSerializer : KSerializer<StoryEffects> {
      */
     override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
 
+    /**
+     * Le schéma v3 ÉVOLUE côté serveur : `carrierAspect` y a été ajouté le
+     * 2026-08-22, d'autres champs suivront. Sa lecture doit donc tolérer
+     * l'inconnu QUELLE QUE SOIT la configuration de l'appelant — le document
+     * v3 est décodé par cette instance, jamais par `input.json`.
+     *
+     * Décoder avec celle de l'appelant rendait la tolérance dépendante d'un
+     * réglage lointain : un appelant strict échouait sur le premier champ neuf,
+     * l'échec était avalé, et la story s'affichait VIDE. Le mode de
+     * défaillance exact que ce pont combat, réintroduit par le pont lui-même.
+     *
+     * La branche v1, elle, garde `input.json` : c'est le chemin historique et
+     * il doit continuer d'obéir à l'appelant.
+     */
+    private val forwardTolerant = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        explicitNulls = false
+        coerceInputValues = true
+    }
+
     override fun deserialize(decoder: Decoder): StoryEffects {
         val input = decoder as? JsonDecoder ?: return decoder.decodeSerializableValue(legacy)
         val element = input.decodeJsonElement()
         val document = element as? JsonObject ?: return StoryEffects()
         val mark = (document["v"] as? JsonPrimitive)?.intOrNull ?: 0
         if (mark < 3) return input.json.decodeFromJsonElement(legacy, document)
-        val canvas = runCatching { input.json.decodeFromJsonElement(CanvasV3.serializer(), document) }
+        val canvas = runCatching { forwardTolerant.decodeFromJsonElement(CanvasV3.serializer(), document) }
             .getOrNull() ?: return StoryEffects()
         return StoryEffects.rendering(canvas, sceneIndex = 0)
     }
