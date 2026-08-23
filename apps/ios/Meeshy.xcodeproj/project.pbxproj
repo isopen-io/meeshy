@@ -597,6 +597,7 @@
 		7A4EEF90B99E0730EC46265F /* WebRTCTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F370AFA86F681D7252BA95A3 /* WebRTCTypes.swift */; };
 		7A9B61951A145A11654D51AC /* ShareMediaStaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8EFC95C0FF653255E36C2CC /* ShareMediaStaging.swift */; };
 		7AC762FB18903F582F246D4F /* IslandEmergingBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ABB29CBFAD404ABDE04E45F /* IslandEmergingBanner.swift */; };
+		7B24C9EF744FD0204D2945B2 /* LentilleMagnification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37D07D0722A84EAAE4553909 /* LentilleMagnification.swift */; };
 		7B264C44DD503DBB9439F8C6 /* EngagementTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 413D85A9F42FF8F82012FD2F /* EngagementTracker.swift */; };
 		7BD1726A1F5CBD11CE92472B /* FriendRequestListTouchTargetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BDA0DF28F7F548621297EA2 /* FriendRequestListTouchTargetTests.swift */; };
 		7BD33B53549C73EA947A68E5 /* StoryViewerCommentRollbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA122D0EA58DA2D0C5B3064 /* StoryViewerCommentRollbackTests.swift */; };
@@ -1606,6 +1607,7 @@
 		375D9BFF5525BD182EBEE637 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		3771B9F3633D6B2DA85EFB2C /* MockBlockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBlockService.swift; sourceTree = "<group>"; };
 		37AE533A7253CF94E729A57C /* PostModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostModels.swift; sourceTree = "<group>"; };
+		37D07D0722A84EAAE4553909 /* LentilleMagnification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleMagnification.swift; sourceTree = "<group>"; };
 		37FE3B19297E6805A0DD7017 /* LivingSummaryAssembly.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivingSummaryAssembly.swift; sourceTree = "<group>"; };
 		3806419CE3FB8E9FBB2D5529 /* StoryNotificationLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryNotificationLoadingView.swift; sourceTree = "<group>"; };
 		38409F8503C5B7515CB12B2A /* ShareSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSender.swift; sourceTree = "<group>"; };
@@ -4218,6 +4220,7 @@
 			children = (
 				D279BF271406A3DFE785C5DE /* LentilleFocusBreathing.swift */,
 				D04B3E337CE9827D1E706EFF /* LentilleFocusCard.swift */,
+				37D07D0722A84EAAE4553909 /* LentilleMagnification.swift */,
 				42EA7ADA718E12E472A91E7F /* LentilleModeLabels.swift */,
 				74CD7D2B0DCB9B18DCF93A88 /* LentilleModeMenu.swift */,
 				17BB341483F73555E2AE312A /* LentilleReadingModeContext.swift */,
@@ -5043,6 +5046,7 @@
 				A69F02AFC4AAB1072D630EC9 /* LentilleFocusCard.swift in Sources */,
 				14E67C01DEBB5BEA94E0BAC9 /* LentilleFocusElection.swift in Sources */,
 				08022232D6B6647CCE074A85 /* LentilleFocusElectionHost.swift in Sources */,
+				7B24C9EF744FD0204D2945B2 /* LentilleMagnification.swift in Sources */,
 				1444C6694DFE6800171B761D /* LentilleMetrics.swift in Sources */,
 				CC193C5CCE96C71E186BDAEF /* LentilleModeLabels.swift in Sources */,
 				4001D32427D0E074CF8C1381 /* LentilleModeMenu.swift in Sources */,
@@ -6090,7 +6094,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1793;
+				CURRENT_PROJECT_VERSION = 1794;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -6254,7 +6258,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1793;
+				CURRENT_PROJECT_VERSION = 1794;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				ENABLE_NS_ASSERTIONS = NO;

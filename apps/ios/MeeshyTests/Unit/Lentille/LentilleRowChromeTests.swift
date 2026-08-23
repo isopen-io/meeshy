@@ -9,8 +9,15 @@ import XCTest
 /// SUR la bordure, jamais dans le contenu, repos compris ».
 ///
 /// Gardes de FORME (lecture du source, comme `LentilleFocusCardTests`) +
-/// règles pures. Repos = `LentilleConversationRow` (Row/), magnificence =
-/// `LentilleFocusCard` (Mode/) : deux vues, une même grammaire.
+/// règles pures.
+///
+/// **2026-08-23 — une seule vue, deux états.** Repos ET magnificence sont
+/// désormais `LentilleConversationRow` (Row/), selon que son paramètre
+/// `magnification` est `nil` ou non ; `Lentille/Mode/` ne porte plus que les
+/// trois pastilles actionnables (mode, catégorie, étiquette) et l'effectif.
+/// Les témoins qui gardaient « deux vues, une même grammaire » deviennent donc
+/// des témoins de NON-DUPLICATION : ce qui garantissait l'accord des deux
+/// vues, c'est qu'il n'y en a plus qu'une.
 final class LentilleRowChromeTests: XCTestCase {
 
     private static var iosRoot: URL {
@@ -25,7 +32,7 @@ final class LentilleRowChromeTests: XCTestCase {
 
     private func rowSource() throws -> String { try source("Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift") }
     private func skeletonSource() throws -> String { try source("Meeshy/Features/Main/Lentille/Row/LentilleSkeletonRow.swift") }
-    private func cardSource() throws -> String { try source("Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift") }
+    private func magnificationSource() throws -> String { try source("Meeshy/Features/Main/Lentille/Mode/LentilleMagnification.swift") }
 
     /// Le corps d'une déclaration, de son en-tête à la prochaine déclaration
     /// de même niveau. Une garde de forme doit viser le BLOC, jamais le
@@ -65,9 +72,19 @@ final class LentilleRowChromeTests: XCTestCase {
         }
     }
 
-    func test_focusCard_previewUsesTheSameAuthorPrefixRule() throws {
-        let code = try cardSource()
-        XCTAssertTrue(code.contains("LentilleConversationRow.authorPrefix(name:"), "une seule règle « auteur : » pour les deux vues")
+    /// **SUPERSÈDE** `test_focusCard_previewUsesTheSameAuthorPrefixRule`.
+    /// La règle « auteur : » ne peut plus DIVERGER entre repos et
+    /// magnificence : il n'y a plus qu'une vue pour les deux. Ce témoin garde
+    /// la propriété qui rend cela vrai — `Lentille/Mode/` ne réécrit aucun
+    /// aperçu.
+    func test_theMagnifiedPreview_cannotDiverge_becauseThereIsOnlyOneView() throws {
+        let mode = try magnificationSource()
+        XCTAssertFalse(mode.contains("authorPrefix"), "aucune seconde règle « auteur : » dans Lentille/Mode/")
+        XCTAssertFalse(mode.contains("senderPrefix"))
+        XCTAssertTrue(
+            try rowSource().contains(".lineLimit(isMagnified ? 2 : 1)"),
+            "… la magnification ne fait qu'élargir l'aperçu de la MÊME vue : une ligne au repos, deux sous la loupe."
+        )
     }
 
     // MARK: - La date : seule, en dessous, à droite — repos ET magnificence
@@ -79,21 +96,21 @@ final class LentilleRowChromeTests: XCTestCase {
         XCTAssertFalse(header.contains("Text(\"·\")"), "plus de séparateur « · » sur la ligne du nom")
         let date = try viewBlock("dateLine", in: code)
         let spacer = try XCTUnwrap(date.range(of: "Spacer(minLength: 0)"))
-        let stamp = try XCTUnwrap(date.range(of: "LentilleRowTimestamp("))
+        let stamp = try XCTUnwrap(date.range(of: "timestampText"))
         XCTAssertLessThan(spacer.lowerBound, stamp.lowerBound, "la date est poussée à DROITE de sa ligne")
         XCTAssertTrue(code.contains("headerLine\n                line2\n                dateLine"), "ordre : nom, message, date")
     }
 
-    func test_focusCard_dateLeavesTheHeaderLine_andSitsTrailingUnderThePreview() throws {
-        let code = try cardSource()
+    /// « La date gardera cette place même en magnificence » — désormais
+    /// littéralement : c'est la MÊME ligne, au même endroit, dont seule la
+    /// précision change.
+    func test_magnifiedDate_keepsTheExactSamePlace_onlyItsPrecisionChanges() throws {
+        let code = try rowSource()
+        let stamp = try viewBlock("timestampText", in: code)
+        XCTAssertTrue(stamp.contains("LentilleFocusCard.fullTimestamp("), "date complète sous la loupe")
+        XCTAssertTrue(stamp.contains("LentilleRowTimestamp(date: conversation.lastMessageAt)"), "relatif court au repos")
         let header = try viewBlock("headerLine", in: code)
-        XCTAssertFalse(header.contains("fullTimestamp("), "plus de date sur la ligne du nom")
-        XCTAssertFalse(header.contains("Text(\"·\")"))
-        let date = try viewBlock("dateLine", in: code)
-        let spacer = try XCTUnwrap(date.range(of: "Spacer(minLength: 0)"))
-        let stamp = try XCTUnwrap(date.range(of: "Text(Self.fullTimestamp("))
-        XCTAssertLessThan(spacer.lowerBound, stamp.lowerBound, "la date complète garde sa place : à droite, sous l'aperçu")
-        XCTAssertTrue(code.contains("headerLine\n                line2\n                dateLine"), "ordre : nom, message, date")
+        XCTAssertFalse(header.contains("fullTimestamp("), "ni l'une ni l'autre sur la ligne du nom")
     }
 
     func test_skeleton_mirrorsTheDateLine() throws {
@@ -112,11 +129,18 @@ final class LentilleRowChromeTests: XCTestCase {
 
     // MARK: - Non-lus : rouge, toujours
 
-    func test_focusCard_unreadBadge_isAlwaysRed_neverAccent() throws {
-        let code = try cardSource()
-        let badge = try viewBlock("unreadBadge", in: code)
-        XCTAssertTrue(badge.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"), "fond ROUGE sémantique, magnificence comprise")
+    /// UN seul badge de non-lus dans tout le chantier, et il est rouge :
+    /// « la pile du nombre de messages non lus sera toujours sur fond rouge
+    /// même en magnificence ». La garantie ne vient plus d'un accord entre
+    /// deux vues — il n'y en a qu'une.
+    func test_unreadBadge_existsOnce_andIsAlwaysSemanticRed_magnifiedOrNot() throws {
+        let badge = try viewBlock("unreadBadge", in: try rowSource())
+        XCTAssertTrue(badge.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"), "fond ROUGE sémantique")
         XCTAssertFalse(badge.contains("fill(accent)"), "jamais l'accent de la conversation")
+        XCTAssertFalse(
+            try magnificationSource().contains("unreadBadgeBackground"),
+            "Lentille/Mode/ ne repeint aucun badge de non-lus : la rangée le porte, magnifiée ou non."
+        )
     }
 
     // MARK: - Effectif : sur la bordure, jamais dans le contenu — repos compris
@@ -129,12 +153,20 @@ final class LentilleRowChromeTests: XCTestCase {
     ///
     /// Ce témoin est le RENVERSEMENT assumé de celui qui, quelques heures
     /// plus tôt, exigeait l'effectif au bord bas de la rangée.
-    func test_flatRow_hasNoMemberCount_thatBelongsToTheMagnifiedCardAlone() throws {
+    func test_memberCount_appearsOnlyUnderMagnification_andIsAControl() throws {
         let code = try rowSource()
-        XCTAssertFalse(code.contains("memberCountBadge"), "l'effectif a quitté la rangée au repos")
-        XCTAssertFalse(code.contains("conversation.memberCount"), "… y compris sa donnée")
-        XCTAssertFalse(code.contains(".overlay(alignment: .bottomTrailing) {"), "plus d'ancrage de bord bas dans la rangée")
-        XCTAssertTrue(try cardSource().contains("typeBadge"), "il vit sur la carte, et là seulement")
+        XCTAssertFalse(code.contains("memberCountBadge"), "l'effectif ne s'affiche pas au repos")
+        XCTAssertFalse(code.contains("conversation.memberCount"), "… sa donnée non plus : elle vit dans la pastille")
+        XCTAssertFalse(code.contains(".overlay(alignment: .bottomTrailing) {"), "plus d'ancrage de bord dans la rangée")
+        // Il n'apparaît que gardé par la magnification, sur la ligne de date.
+        let date = try viewBlock("dateLine", in: code)
+        XCTAssertTrue(date.contains("LentilleMemberCountChip("), "il vit sur la ligne de date de la rangée magnifiée")
+        XCTAssertTrue(date.contains("if let magnification {"), "… et seulement là")
+        // Et c'est un CONTRÔLE depuis la directive du 2026-08-23.
+        XCTAssertTrue(
+            try magnificationSource().contains("Button(action: onShowParticipants)"),
+            "« la chip du nombre d'utilisateurs doit être actionnable (ouvrir la liste des participants) »"
+        )
     }
 
     /// Le chip rouge prend la place que le badge occupe DÉJÀ sur la carte : en
@@ -151,27 +183,34 @@ final class LentilleRowChromeTests: XCTestCase {
         XCTAssertTrue(chip.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"), "fond ROUGE sémantique")
         XCTAssertFalse(chip.contains("fill(accent)"), "jamais l'accent de la conversation")
 
-        // Même composition des deux côtés de la loupe.
-        let cardChip = try viewBlock("unreadBadge", in: try cardSource())
-        XCTAssertTrue(cardChip.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"))
     }
 
-    func test_focusCard_memberCount_isABubbleToo_sameGaugeAsTheTagChips() throws {
-        let code = try cardSource()
-        let badge = try viewBlock("typeBadge", in: code)
-        XCTAssertTrue(badge.contains("Capsule(style: .continuous)"), "même bulle qu'au repos : la loupe ne change pas la forme")
-        XCTAssertTrue(badge.contains("LentilleMetrics.Tags.chipPaddingHorizontal"), "au gabarit des chips d'étiquette")
-        XCTAssertFalse(badge.contains("strokeBorder"), "le contour d'accent reste l'exclusivité de l'anneau et de l'encoche")
+    /// Les quatre pastilles de la magnification ont le MÊME gabarit — mode,
+    /// catégorie, étiquette, effectif : une bulle teintée au padding des
+    /// chips. Aucune ne porte de contour d'accent (« pas de bordure »).
+    func test_theFourMagnifiedPills_shareOneGauge_andNoneCarriesAnAccentBorder() throws {
+        let code = try magnificationSource()
+        XCTAssertEqual(
+            code.components(separatedBy: "LentilleMetrics.Tags.chipPaddingHorizontal").count - 1, 4,
+            "quatre pastilles, un seul gabarit"
+        )
+        XCTAssertFalse(code.contains("strokeBorder(accent"), "aucun contour d'accent : « pas de bordure »")
     }
 
-    func test_focusCard_memberCount_staysOnTheBorder_neverInTheContent() throws {
-        let code = try cardSource()
-        let anchor = try XCTUnwrap(code.range(of: ".overlay(alignment: .bottomLeading) {"))
-        let tail = code[anchor.upperBound...]
-        XCTAssertTrue(tail.prefix(700).contains("typeBadge"), "l'effectif vit dans l'ancrage de bord bas")
-        XCTAssertTrue(tail.prefix(900).contains(".offset(y: -LentilleMetrics.ModeNotch.top)"), "… à cheval sur la bordure")
-        let content = try viewBlock("magnifiedContent", in: code)
-        XCTAssertFalse(content.contains("typeBadge"), "jamais dans le contenu")
+    /// **SUPERSÈDE** `test_focusCard_memberCount_staysOnTheBorder_neverInTheContent`.
+    /// « Sur la bordure » n'a plus de sens : il n'y a plus de bordure. Tout
+    /// tient dans les quatre lignes de la rangée, et c'est précisément la
+    /// directive du 2026-08-23 (« on complète juste les informations,
+    /// directement sur le row existant »).
+    func test_nothingAnchorsToABorderAnymore_everythingLivesInTheRowsLines() throws {
+        let code = try rowSource()
+        for anchor in [".overlay(alignment: .bottomLeading) {", ".overlay(alignment: .bottomTrailing) {", ".overlay(alignment: .top) {"] {
+            XCTAssertFalse(code.contains(anchor), "plus aucun ancrage de bord (« \(anchor) »)")
+        }
+        XCTAssertFalse(
+            try magnificationSource().contains("LentilleMetrics.ModeNotch.top"),
+            "… et plus aucune encoche qui déborde du cadre : elle est rentrée dans la ligne."
+        )
     }
 
 }
