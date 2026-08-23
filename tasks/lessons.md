@@ -12625,3 +12625,220 @@ code sans la sortie.
 C'est d'autant plus piégeux qu'un gate qui échoue en disant « améliore-toi »
 (dette regagnée, cliquet à resserrer) n'a pas la forme d'un échec : le texte est
 une bonne nouvelle, et seul le code de retour dit que la CI sera rouge.
+
+## Leçon 252 — une date ABSOLUE en entrée d'une fenêtre glissante est une bombe à retardement
+
+Cycle 108. `main` était ROUGE, sur deux témoins qui passaient la veille et que
+personne n'avait touchés depuis le cycle 101.
+
+`MessageHandlerEditDelete.test.ts` fabriquait son message avec
+`createdAt: new Date('2026-08-22T10:00:00Z')`. `admitMessageEdit` refuse toute
+édition d'auteur au-delà de `MESSAGE_EDIT_WINDOW_MS` (24 h) comptées depuis
+`Date.now()`. La CI du 2026-08-23 a tourné à 10:15Z — **24 h 15 min** après le
+littéral. La porte a refusé l'édition, plus rien n'a été diffusé, et les deux
+`expect` sont tombés.
+
+> **Un littéral de date comparé à `Date.now()` n'est pas une donnée de test :
+> c'est un compte à rebours.** Il passe le jour où on l'écrit, et il tombe une
+> fenêtre plus tard — sans commit, sans revue, sans coupable. Une entrée destinée
+> à une règle temporelle s'écrit TOUJOURS relativement à l'horloge :
+> `new Date(Date.now() - 10 * 60 * 1000)`.
+
+Le fichier connaissait déjà l'idiome : cinq témoins de fenêtre y utilisent
+`twentyFiveHoursAgo` / `tenMinutesAgo`. Les deux fautifs étaient les seuls à
+écrire une date absolue — et ce n'était pas un oubli, c'était une CONSÉQUENCE.
+
+### Le vrai défaut était dans la fabrique, pas dans le littéral
+
+`makeMessageRecord` ne portait NI `createdAt` NI `messageType`. Or la règle est
+écrite pour ne bloquer personne sur une date illisible : `NaN > w` est faux, donc
+un `createdAt` absent **ADMET**. Presque tous les témoins du fichier franchissaient
+donc la fenêtre par ABSENCE de date — la porte était traversée sans être exercée.
+Le seul témoin qui vérifie les sept champs requis par `SocketIOMessage` avait
+besoin d'un vrai `createdAt` : n'en trouvant pas au socle, il s'en est écrit un,
+en absolu. La bombe a été armée par le TROU de la fabrique.
+
+> **Quand un seul témoin doit se fabriquer une donnée que la fabrique aurait dû
+> fournir, ce n'est pas ce témoin qui est bizarre : c'est la fabrique qui est
+> incomplète.** Corriger le littéral (le repousser d'un jour) aurait réarmé la
+> bombe pour le lendemain. Compléter le socle la désarme structurellement.
+
+### Un refus muet ressemble à une régression de contrat
+
+Le témoin tombé est le GARDIEN du défaut du cycle 101 (`message:edited` servi
+sans `senderId`/`messageType`/`createdAt`, décodage iOS du message entier rejeté).
+Sa chute affichait `Received array: []` : aucune émission. Le message d'échec
+accuse donc la DIFFUSION, alors que la panne est dans l'ADMISSION, deux étages
+plus haut. Vérifié par mutation dans les deux sens avant de conclure — et la
+charge utile, elle, était intacte (`buildMessageEditedCore` replie
+`message.createdAt || new Date()`).
+
+> **Un témoin qui tombe pour un motif étranger à ce qu'il garde est pire qu'un
+> témoin absent** : il fait croire que la propriété gardée a régressé, et il
+> pousse au correctif qui la rendrait vraiment fausse.
+
+## Leçon 253 — « la CI était verte à ce commit » ne prouve rien contre une panne DATÉE
+
+Même cycle, et c'est une leçon sur la façon dont deux sessions parallèles se
+sont trompées en sens inverse sur le MÊME symptôme.
+
+Une session sœur (PR #3385) a rencontré les deux mêmes témoins rouges de
+`MessageHandlerEditDelete` en local. Elle a conclu — et écrit dans sa PR :
+
+> Ce n'est pas une régression de `main` : ils échouent à l'identique au commit
+> `f69cbd26`, dont le job « Test gateway » est vert. La recette locale ne
+> reproduit donc pas la CI aussi complètement qu'elle l'affirme.
+
+Le raisonnement est bon et la conclusion fausse, parce que la prémisse tacite
+est fausse : **« la CI de ce commit est verte » se lit comme une propriété du
+COMMIT, alors que c'est une propriété du commit ET de l'INSTANT où le job a
+tourné.** Pour une panne pilotée par l'horloge, les deux se séparent. La CI de
+`f69cbd26` avait tourné AVANT l'expiration des 24 h ; la session, elle, mesurait
+après. Même arbre, même commande, deux verdicts — et aucun défaut de recette.
+
+Quelques heures plus tard la CI de `main` (`HEAD` e87b7b0d) a viré au rouge sur
+exactement ces deux témoins, ce que le log du job nomme explicitement.
+
+> **Un vert de CI est horodaté.** Devant un rouge local qu'un vert distant
+> contredit, la question n'est pas seulement « quel arbre ? » mais « QUAND ? ».
+> Si l'écart entre les deux mesures franchit une frontière temporelle du code
+> testé (une fenêtre, un TTL, une expiration, un changement de jour), le vert
+> distant est PÉRIMÉ, pas contradictoire.
+
+Le prix concret de l'inversion : la session sœur a rangé un `main` en train de
+casser dans ses « Future Considerations », comme un défaut d'outillage local.
+Un défaut attribué à l'outil de mesure cesse d'être cherché dans le produit.
+
+> **L'hypothèse « mon outil de mesure est en cause » est la plus coûteuse des
+> hypothèses confortables** : elle explique n'importe quel écart, elle n'accuse
+> personne, et elle clôt l'enquête. Elle mérite donc la charge de preuve la plus
+> lourde, pas la plus légère — ici, un `git log` de l'horaire du job aurait suffi
+> à la renverser.
+
+### Le corollaire de méthode
+
+Les deux sessions ont vu le même symptôme. Celle qui a cherché POURQUOI la
+fenêtre refusait (`admitMessageEdit`, `MESSAGE_EDIT_WINDOW_MS`, l'horaire du run)
+a trouvé une bombe à retardement ; celle qui a cherché ce qui DIFFÉRAIT entre
+local et CI a trouvé une explication plausible et s'est arrêtée.
+
+> Quand deux environnements divergent, l'explication « les environnements
+> diffèrent » est toujours disponible et presque toujours insuffisante. Elle ne
+> devient une conclusion qu'une fois nommée la variable EXACTE — et ici la
+> variable n'était dans aucun environnement : elle était dans l'horloge.
+## Un littéral de date sous une FENÊTRE n'est pas une constante, c'est une échéance (cycle 108)
+
+`MessageHandlerEditDelete.test.ts` épinglait le `createdAt` d'un message à
+`2026-08-22T10:00:00Z`. `admitMessageEdit` refuse toute édition passé **24 h**
+depuis `createdAt`. Les deux cas ont donc été verts pendant exactement vingt-quatre
+heures, puis rouges le lendemain à 10:00 UTC — pour toutes les branches, tous les
+contributeurs, et **définitivement**. Un dépôt entier bloqué par une fixture.
+
+> **Une fixture de date lue par un code qui la compare à MAINTENANT doit être
+> écrite RELATIVEMENT à maintenant.** `new Date(Date.now() - 60_000)`, jamais un
+> littéral. Le test ne dit pas « le 22 août » ; il dit « dans la fenêtre ».
+
+Deux choses rendent la famille difficile à voir :
+
+1. **Le symptôme désigne le mauvais coupable.** `emitsTo(...)` rendait `[]`, ce
+   qui se lit « le producteur n'émet plus » — un défaut de production, gros et
+   effrayant. Le producteur allait bien : la garde refusait en amont. La vraie
+   cause était dans le `callback`, que le cas n'assertait pas. *Quand une
+   assertion d'émission tombe à vide, lire d'abord le canal de REFUS ; « rien
+   n'est parti » et « quelque chose a dit non » ont le même symptôme.*
+2. **Le cas VOISIN restait vert**, et c'est lui qui a livré le diagnostic : sa
+   fixture n'a pas de `createdAt`, donc rien à périmer. Les cas qui tombaient
+   étaient exactement ceux qui en AJOUTAIENT un. *Un échec qui suit les
+   surcharges d'une factory désigne le champ, pas le producteur.*
+
+Et le corollaire de méthode, celui qui a évité d'accuser le mauvais lot :
+**avant de réparer un rouge apparu après un merge, mesurer la BASE.** Une copie
+vierge d'`origin/main` a rendu les deux mêmes échecs, sans une ligne de la
+branche. Sans cette mesure, une heure serait partie à chercher la régression
+dans un diff qui, hors `apps/android`, n'était fait que de commentaires.
+---
+
+## 2026-08-23 — Une « décision produit » différée se tranche en lisant la branche voisine (238i)
+
+237i a laissé six copies de l'abrégé compact non traitées, avec ce motif :
+« le tableau de bord bascule à `>= 10_000` là où le feed bascule à `>= 1_000` —
+consolider demande de trancher si ce seuil est **intentionnel**, ce qui est une
+décision produit ». Le motif était bon, la conclusion trop large : le doute
+portait sur DEUX sites, pas sur six, et les deux se sont tranchés à la lecture
+sans avoir à consulter qui que ce soit.
+
+- `ConversationDashboardView.formatNumber` : le seuil de 10 000 est réel, et sa
+  preuve est la branche EN DESSOUS — la bande 1 000–9 999 rendait le nombre
+  entier et groupé (`n.formatted()`). La règle produit n'est pas « abrège à
+  10 000 », c'est « ne dégrade pas un compte de mots tant qu'il reste lisible ».
+- `StatRing.displayValue` : le même seuil de 10 000 y était **mort** — la
+  branche suivante (`>= 1_000`) lui était identique au caractère près, même
+  division, même format. Trois relectures l'avaient laissé passer précisément
+  parce qu'il ne changeait rien.
+
+Corollaires :
+
+- **Un seuil ne se lit pas seul : il se lit contre la branche qui le suit.**
+  Deux branches consécutives qui rendent la même chose ne portent aucune
+  décision — c'est un artefact de copie, et le traiter comme un arbitrage
+  produit gèle du code mort en règle métier.
+- **Différer un arbitrage, c'est différer tout ce qui voyage avec lui.** Le
+  doute sur 2 sites a reporté la correction des 4 autres, byte-identiques et
+  sans aucune ambiguïté. Découper le lot par NIVEAU DE DOUTE, pas par famille.
+- **Une famille qui repousse à chaque itération se ferme par une garde, pas par
+  un correctif.** Sept copies, trois itérations de consolidation (234i, 236i,
+  237i) : chacune a corrigé ce qu'elle voyait, aucune n'a empêché la suivante.
+  Le geste qui termine n'est pas le septième correctif, c'est la garde de source
+  qui interdit le huitième.
+
+---
+
+## 2026-08-23 — Une CI verte qui n'a rien exécuté, et une garde qui rougit sur du code correct (238i)
+
+Deux leçons du même run, toutes deux sur la **fiabilité du signal** plutôt que
+sur le code.
+
+### 1. Lire le NOM du check, pas seulement sa couleur
+
+Le premier run de la PR 238i est revenu **tout vert** — et n'avait exécuté
+aucun test iOS. Le job `ios-tests` est nommé DYNAMIQUEMENT (`ios.yml:250`) :
+`Build app + tests unitaires` quand la suite tourne, `Build app (app + cibles de
+test)` quand elle ne fait que compiler. La suite est en **opt-in** : poussée
+réelle sur `main`, `workflow_dispatch`, ou `smoke test|run test|to test` dans le
+**SUJET** du commit de tête — le corps ne compte pas.
+
+Le lot dont l'apport tenait à **une garde neuve et une suite réécrite** allait
+être annoncé vert sans qu'aucun des deux n'ait tourné. C'est la « suite verte
+par omission » de la leçon 236i, par un autre chemin : non plus le pbxproj mais
+la portée du run.
+
+- **Avant d'annoncer « CI verte », vérifier que le check a fait ce que son nom
+  promet.** Un projet qui nomme ses jobs dynamiquement le fait précisément
+  parce que la distinction compte.
+- **Un lot dont la valeur EST un test doit forcer l'exécution de ce test.**
+  Amender le sujet du commit (même arbre, force-push sur sa propre branche)
+  n'est pas un commit vide : c'est le mécanisme documenté du dépôt.
+
+### 2. Une fenêtre en NOMBRE DE CARACTÈRES est une bombe à retardement
+
+`test_statRing_isSingleVoiceOverElement_withLabelAndValue` a rougi alors que le
+code de production la satisfaisait toujours. La garde découpait le corps de la
+struct avec `prefix(2600)` ; un doc-comment ajouté plus haut a déplacé le motif
+de l'offset 2411 à 2595, et comme le motif fait 30 caractères, sa **FIN** est
+passée hors fenêtre.
+
+**La marge résiduelle sur `main` était de 5 caractères.**
+
+- **Une garde qui rougit sur du code correct est le PIRE mode d'échec possible** —
+  pire qu'un faux vert, parce qu'elle envoie corriger ce qui n'est pas cassé,
+  et qu'elle entraîne à se méfier des gardes.
+- **Borner une garde de source SÉMANTIQUEMENT** (jusqu'à la déclaration
+  suivante), jamais par un nombre. Une borne sémantique n'a pas de marge à
+  épuiser.
+- **Ne pas « faire rentrer » son code dans la fenêtre.** C'était la correction
+  tentante ici : raccourcir le commentaire. Elle réarme le piège avec ENCORE
+  MOINS de marge, pour le prochain qui touchera la struct.
+- **Élargir une borne exige de prouver qu'on ne crée pas de faux vert.** Ici la
+  struct suivante (`ArcGauge`) porte le même `.accessibilityElement(children:
+  .ignore)` : sans borne elle satisferait les assertions à la place de
+  `StatRing`. D'où un test dédié qui vérifie la borne dans les deux sens.

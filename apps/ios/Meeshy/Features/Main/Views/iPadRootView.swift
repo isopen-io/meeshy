@@ -84,6 +84,12 @@ struct iPadRootView: View {
     /// U1 inc.2 — namespace zoom tray→viewer (parité RootView iPhone).
     @Namespace var storyZoomNamespace
 
+    /// C4b — rupture cliente, jumeau de `RootView`. Rév. 2 du plan, remarque
+    /// G6 : l'iPad a sa racine PROPRE. Sans cette observation-là, un iPad prend
+    /// des 426 bruts en pleine publication et ne voit JAMAIS l'écran de mise à
+    /// jour — les deux racines ne partagent pas une ligne.
+    @StateObject private var upgradeGate = UpgradeGateController()
+
     private var isConversationOpen: Bool {
         activeConversation != nil
     }
@@ -274,11 +280,14 @@ struct iPadRootView: View {
                 // Parallélisés comme sur RootView (iPhone) : les 4 chargements
                 // sont indépendants — en série, l'écran visible (conversations)
                 // attendait derrière stories et statuses.
+                // C4b — plancher de version lu au démarrage, best-effort et
+                // silencieux (miroir de RootView).
+                async let versionFloor: Void = upgradeGate.checkFloor()
                 async let storiesLoad: Void = storyViewModel.loadStories()
                 async let statusesLoad: Void = statusViewModel.loadStatuses()
                 async let conversationsLoad: Void = conversationViewModel.loadConversations()
                 async let unreadRefresh: Void = notificationManager.refreshUnreadCount()
-                _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh)
+                _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh, versionFloor)
             }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToConversation)) { notification in
                 if let conversation = notification.object as? Conversation {
@@ -350,6 +359,15 @@ struct iPadRootView: View {
                 handleDeepLink(newValue)
             }
         )
+        // C4b — la rupture, posée PAR-DESSUS `applyingSheets` : elle recouvre
+        // les feuilles de l'iPad, elle ne passe pas derrière. Binding CONSTANT
+        // — le contrôleur n'expose aucun retour à `nil` et un `fullScreenCover`
+        // sur constante n'a aucun geste de fermeture.
+        .fullScreenCover(isPresented: .constant(upgradeGate.isBlocked)) {
+            if let requirement = upgradeGate.requirement {
+                UpgradeGateView(requirement: requirement)
+            }
+        }
     }
 
     // MARK: - Left Column

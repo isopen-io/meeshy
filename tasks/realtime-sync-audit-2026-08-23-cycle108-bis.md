@@ -1,283 +1,230 @@
-# Cycle 108 bis — le `Server` NU : la porte qu'aucun des deux balayages ne pouvait voir
+# Cycle 108 bis — `main` était rouge, et la panne n'était dans aucun environnement : elle était dans l'horloge
 
-> Écrit en PARALLÈLE du cycle 108 (`tasks/realtime-sync-audit-2026-08-23-cycle108.md`),
-> sur le MÊME suivi du cycle 107 bis, par une autre session. Les deux lots se
-> partagent proprement : celui-ci prend la moitié PASSERELLE (le `Server` nu),
-> l'autre la moitié WEB (les casts de socket client) — et les deux ont trouvé
-> les cinq mêmes casts de `VideoCallInterface.tsx`, au caractère près. Voir §10.
+Écrit en parallèle du cycle 108 (PR #3385), sur le même dépôt, par une autre
+session. Les deux lots ont rencontré **le même symptôme** et en ont tiré des
+conclusions opposées. Ce journal dit lequel a raison, et pourquoi l'autre
+raisonnement était bon tout en étant faux.
 
-Suite directe des deux suivis laissés par le cycle 107 bis, tous deux instruits
-et tous deux réels. Le lot ferme la TROISIÈME forme de la famille « porte
-d'émission » sur la passerelle, et la forme MIROIR sur le client web.
+Suite directe du cycle 107 bis. Ce lot n'a pas commencé par un suivi : il a
+commencé par mesurer l'état de `main`, et `main` était ROUGE.
 
-## 1. Le point de départ : deux suivis, et ce qu'ils cachaient
+## 0. Ce que le cycle précédent laissait
 
-Le cycle 107 bis se clôt sur :
+Trois suivis ouverts (bivariance `strictFunctionTypes` ; le même cast côté web
+dans `VideoCallInterface.tsx` ; trois services prenant un `Server` nu pour
+émettre). Aucun n'est traité ici : un `main` rouge prime. Ils restent ouverts
+en §5, avec un recomptage qui en corrige un.
 
-> - **Neuf — le même cast, côté WEB.** `apps/web` déclare pourtant un
->   `TypedSocket` et `VideoCallInterface.tsx` l'ouvre trois fois par
->   `(socket as unknown).emit(…)`.
-> - **Neuf** — trois services (`CallCleanupService`,
->   `StoryTextObjectTranslationService`, `NotificationService`) prennent encore
->   un `Server` NU pour ÉMETTRE.
+## 1. La mesure d'ouverture, et ce qu'elle a corrigé de ma propre lecture
 
-Les deux comptes étaient bas. Il y a **cinq** casts côté web, et **cinq**
-porteurs du `Server` nu côté passerelle — les trois services nommés, plus
-`AgentAdminRelay`, plus le helper PARTAGÉ `emitWithSeq`, qui prenait le `Server`
-nu pour le compte de tous ses appelants.
+`git status` : branche synchronisée avec `origin/main`, 0/0 — le cycle 107 bis a
+bien fusionné.
 
-> **Un suivi hérité est une AFFIRMATION** (règle du cycle 107), et son COMPTE en
-> est une aussi (règle du cycle 93). Les deux se remesurent. Ici la piste était
-> juste sur l'adresse et basse sur le chiffre — l'inverse du cycle 107, où elle
-> était fausse sur le motif et juste sur l'adresse.
+Premier réflexe : lancer le cliquet de dette de types. Il rend **1242 contre une
+baseline de 1239**. Lecture immédiate et FAUSSE : « `main` a régressé sur le
+cliquet ».
 
-## 2. Ce que le `Server` nu ne garde pas : mesuré, pas supposé
+La vérification l'a renversée. La CI du `HEAD` de `main` (run `32633238504`)
+montre l'étape *Type-check (apps/web — debt ratchet)* en **success**. La CI lit
+1239, moi 1242 : ce n'est pas une régression, c'est une **divergence local/CI**.
+Et le vrai échec de `main` est ailleurs — le job **Test gateway**.
 
-`Server` sans paramètres de type retombe sur `DefaultEventsMap`, dont la
-signature est `emit(ev: string, ...args: any[])`. Injecté dans
-`StoryTextObjectTranslationService`, sous le `tsconfig` de production, prisma
-généré et `shared` construit :
+> Deux défauts distincts se cachaient derrière un seul chiffre inattendu.
+> Prendre le premier pour le second aurait fait corriger un `main` qui n'avait
+> pas ce défaut-là, et laissé le vrai en place.
+
+Le +3 est réel, mesuré, et **appartient à la PR #3385** (§3).
+
+## 2. `main` rouge — une bombe à retardement de 24 heures
+
+`Test gateway` : 835 suites vertes, **1 rouge**, 2 témoins.
+`src/socketio/handlers/__tests__/MessageHandlerEditDelete.test.ts`.
+
+Reproduit localement, **déterministe** — pas un flottement :
+
+```
+● sert le noyau que `SocketIOMessage` EXIGE …    expect(edited).toBeDefined() → undefined
+● sert le `User.id` de l'expéditeur …            Received array: []
+```
+
+### La cause
+
+Les deux témoins fabriquent leur message avec
+`createdAt: new Date('2026-08-22T10:00:00Z')`.
+
+`admitMessageEdit` (`services/messaging/messageEditAdmission.ts`) refuse à
+l'auteur toute édition au-delà de `MESSAGE_EDIT_WINDOW_MS` = **24 h**, comptées
+depuis `Date.now()`.
+
+La CI a tourné le **2026-08-23 à 10:15Z** — soit **24 h 15 min** après le
+littéral. La fenêtre venait de se fermer. L'édition est refusée, la diffusion
+n'a pas lieu, les deux `expect` tombent.
+
+Écrits au cycle 101 (`ed4c45f6`), verts ce jour-là, verts le lendemain matin,
+rouges à 10:15. **Aucun commit n'est coupable** : le seul changement est
+l'horloge.
+
+### Le trou qui a armé la bombe
+
+Le littéral n'est pas la faute — il en est la conséquence.
+
+`makeMessageRecord`, la fabrique du fichier, ne portait **ni `createdAt` ni
+`messageType`**. Or la règle est écrite pour ne bloquer personne sur une date
+illisible :
 
 ```ts
-this.io.to(ROOMS.feed(userId)).emit("totally:invented-event", { nothing: true });
-this.io.to(ROOMS.feed(userId)).emit(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, { wrong: "shape" });
+const ageMs = now - new Date(message.createdAt ?? NaN).getTime();
+if (!(ageMs > MESSAGE_EDIT_WINDOW_MS)) return { admitted: true, … };
 ```
 
-```
-TSC_EXIT=0        ← zéro erreur, les DEUX lignes
-```
+`NaN > w` est faux ⇒ un `createdAt` absent **ADMET**. Presque tous les témoins du
+fichier franchissaient donc la fenêtre par ABSENCE de date : **la porte était
+traversée sans jamais être exercée.**
 
-Un nom d'événement **entièrement inventé** et une charge de forme **fausse**
-compilent l'un comme l'autre. Ce n'est pas un défaut de style : c'est l'absence
-totale de contrat, et c'est la forme exacte du défaut du cycle 101 —
-`message:edited` servi sans `senderId`/`messageType`/`createdAt`, rejeté en
-silence par tous les décodeurs iOS pendant des mois.
+Le seul témoin qui vérifie les sept champs requis par `SocketIOMessage` avait
+besoin d'un vrai `createdAt`. Ne le trouvant pas au socle, il s'en est écrit un —
+en absolu. La fabrique incomplète a armé la bombe.
 
-**~16 émissions temps réel traversaient ces portes**, dont les quatre familles de
-demande d'ami, `user:updated`, les compteurs et suppressions de notification,
-`call:ended` vers l'audience de terminaison complète, et les deux mises à jour de
-traduction de story.
+### Ce que le message d'échec accusait, et ce qui était vraiment cassé
 
-### Pourquoi ni l'un ni l'autre des deux cliquets existants ne pouvait le voir
+`Received array: []` : aucune émission. Le témoin qui GARDE le contrat de
+diffusion du cycle 101 tombait donc en désignant la **diffusion** — alors que la
+panne est dans l'**admission**, deux étages plus haut.
 
-| cliquet | ce qu'il cherche | pourquoi il rate celui-ci |
-|---|---|---|
-| `ServerEmitRatchet` (type, cycle 104) | ce que la porte REFUSE | il garde `serverEmit.ts` ; ces services ne l'importaient pas |
-| `sweepUntypedEmitDoors` (cycle 104/105) | une signature `emit` RÉÉCRITE trop librement | il n'y a **aucune** signature `emit` à trouver — rien n'est réécrit |
+Vérifié plutôt que supposé : `buildMessageEditedCore` replie les deux champs
+(`message.createdAt || new Date()`, `message.messageType || 'text'`). **La charge
+utile était intacte.** Une première rédaction de mon commentaire affirmait qu'un
+`createdAt` indéfini atteignait le fil ; c'était faux, et c'est le code du
+constructeur qui l'a dit, pas moi.
 
-> **Chercher une forme fautive par sa DÉCLARATION, c'est manquer tous les sites
-> qui l'obtiennent autrement.** La règle est écrite au cycle 105 pour le CAST.
-> Elle a une troisième instance, et c'est la plus discrète des trois : ne rien
-> écrire du tout, et prendre le type nu de la dépendance. Il n'y a ni
-> déclaration ni assertion à chercher — seulement un import qui a l'air normal.
+> Un témoin qui tombe pour un motif étranger à ce qu'il garde est pire qu'un
+> témoin absent : il fait croire que la propriété gardée a régressé, et il pousse
+> au correctif qui la rendrait vraiment fausse.
 
-## 3. Ce que le lot change
+### Le correctif
 
-**La porte élargie** (`socketio/serverEmit.ts`) — à la MESURE de ce que les
-porteurs font réellement, jamais une recopie de socket.io :
+Structurel, pas cosmétique. Repousser le littéral d'un jour aurait réarmé la
+bombe pour le lendemain.
 
-- `ServerEmitIO.to` accepte désormais `string | string[]` — `CallCleanupService`
-  diffuse `call:ended` vers l'audience complète en une émission. Élargir un
-  PARAMÈTRE est contravariant : les dizaines de sites qui passent une chaîne
-  restent vérifiés à l'identique.
-- `ServerEmitIOWithRooms` ajoute `in(room).fetchSockets()` — deux services
-  diffusent ET inspectent la room qu'ils viennent de servir (présence avant
-  repli e-mail ; éviction après terminaison d'appel). `ServerRoomSocket` est
-  réduit à `leave` : c'est tout ce qu'on en lit, et `NotificationService` n'en
-  lit même que la LONGUEUR.
+- `makeMessageRecord` porte désormais `messageType: 'text'` et
+  `createdAt: new Date()` — un message FRAIS et complet au socle ;
+- les deux témoins perdent leur surcharge : `makeMessageRecord()` nu ;
+- les cinq témoins de fenêtre gardent leurs surcharges **relatives**
+  (`twentyFiveHoursAgo`, `tenMinutesAgo`) — l'idiome que le fichier employait
+  déjà partout ailleurs, et qui rendait ces deux-là visiblement singuliers.
 
-**Les cinq porteurs retypés** : `NotificationService`, `CallCleanupService`,
-`StoryTextObjectTranslationService`, `AgentAdminRelay`, et `emitWithSeq` — ce
-dernier n'utilisait déjà son `io` que pour `.to()`, et émettait par
-`emitServerEvent` : sa charge était gouvernée, son CANAL ne l'était pas.
+L'admission redevient un verdict sur la **fraîcheur** au lieu d'un laissez-passer
+sur l'absence.
 
-**Résultat de la fermeture : `tsc` 0 erreur.** Les ~16 charges étaient déjà
-justes. C'est le résultat le plus honnête à publier — et il ne rend pas le lot
-vide, il le rend VÉRIFIABLE : ce qui était vrai par accident est désormais vrai
-par construction, et le restera.
+### ROUGE prouvé — les deux gardes peuvent toujours tomber
 
-> **Une charge NON gouvernée ne se trompe jamais** (cycle 94) — il n'y a pas de
-> contrat à contredire. Le cycle 107 bis a trouvé quatre divergences en fermant
-> sa porte ; celui-ci n'en trouve aucune. Les deux issues sont le même geste, et
-> annoncer une divergence qu'on n'a pas mesurée coûte la confiance dans les
-> cycles où il y en a une (règle du cycle 103).
+Un correctif qui rend un témoin vert en le rendant incapable de tomber n'est pas
+un correctif. Deux mutations, appliquées puis annulées, sur
+`socketio/messageEditedPayload.ts` :
 
-## 4. La preuve du ROUGE, dans les deux sens
+| mutation | témoins tombés |
+|---|---|
+| `createdAt` retiré du noyau | **1** — le témoin des sept champs |
+| `senderId: message.senderId` (le `Participant.id` brut) | **1** — le témoin d'identité |
 
-**Après** fermeture, la MÊME mutation :
+Chacune fait tomber **exactement** le témoin qui la garde, et aucun autre.
 
-```
-src/services/posts/StoryTextObjectTranslationService.ts(163,45): error TS2345:
-  Type '"totally:invented-event"' is not assignable to type '"heartbeat:ack"'.
-src/services/posts/StoryTextObjectTranslationService.ts(164,88): error TS2345:
-  Object literal may only specify known properties, and 'wrong' does not exist
-  in type 'StoryTranslationUpdatedEventData'.
-```
+## 3. Le +3 : trouvé, mesuré, et laissé à la PR #3385
 
-Zéro erreur avant, deux après, sur des lignes identiques.
+Le cliquet de dette rend 1242 en local et 1239 en CI. Cause mesurée, une seule
+variable changée :
 
-**Et le balayage tombe aussi** — `AgentAdminRelay` rendu à son `Server` nu :
+| état | compte |
+|---|---|
+| sans `packages/shared/dist` | **1242** |
+| après `bun run build` dans `packages/shared` | **1239** |
 
-```
-+ "file": "socketio/AgentAdminRelay.ts"
-Tests: 1 failed, 5 passed
-```
+Le delta est constitué des trois seuls `TS2307` de
+`apps/web/__tests__/lentille/shared-law-dist-parity.test.ts`, qui importe
+`packages/shared/dist/utils/*.js` en chemin **relatif** — hors des `paths`, par
+construction, puisque vérifier la parité source/`dist` est sa raison d'être.
+L'en-tête du garde jurait l'inverse, en troisième de trois sources de dérive
+« vérifiées et absentes ».
 
-Les deux gardes sont DISJOINTES et aucune ne subsume l'autre : la première voit
-une porte RELÂCHÉE, la seconde une porte CONTOURNÉE — rien n'oblige un émetteur
-neuf à importer `serverEmit.ts`.
+**Ce défaut est déjà corrigé par la PR #3385**, et mieux que ne le faisait ma
+première rédaction : là où j'avais écrit un `require_shared_dist` vérifiant
+l'existence d'un RÉPERTOIRE, #3385 résout la **déclaration `.d.ts`** effectivement
+consultée par TypeScript — ce qui détecte aussi un build PARTIEL, sans coder en
+dur ni chemin ni nom de fichier. Mon correctif a donc été **retiré de ce lot** :
+deux PR réécrivant le même bloc d'en-tête produiraient un conflit certain pour
+zéro gain.
 
-## 5. Le balayage, et son étroitesse assumée
+Ce lot n'y laisse qu'un fait : ce que #3385 conclut du symptôme §2.
 
-`sweepRawServerEmitters` — inventaire VIDE, aucune liste d'exemptions.
+## 4. Le désaccord entre les deux sessions, et sa résolution
 
-Discriminant : le fichier importe `Server` depuis `socket.io` en **`import type`**
-ET contient `.emit(`. Les deux conditions comptent :
+La PR #3385 a rencontré **les deux mêmes témoins rouges**, et a écrit :
 
-- **`import type`** exclut `MeeshySocketIOManager`, qui importe `Server` en
-  VALEUR parce qu'il le CONSTRUIT (`new SocketIOServer(httpServer, …)`). C'est le
-  seul site du dépôt qui le peut ; lui interdire l'import n'aurait aucun sens.
-- **`.emit(`** exclut par CONSTRUCTION tout fichier qui détient un `Server` sans
-  jamais émettre. Détenir n'est pas émettre — sans cette condition, le balayage
-  mesurerait la popularité d'un import au lieu d'une propriété.
+> Ce n'est pas une régression de `main` : ils échouent à l'identique au commit
+> `f69cbd26`, dont le job « Test gateway » est vert. La recette ne reproduit donc
+> pas la CI aussi complètement qu'elle l'affirme.
 
-C'est la réponse directe aux **sept faux positifs du cycle 107**, dont le
-balayage a été JETÉ plutôt que gelé : geler un inventaire faux transforme une
-erreur de mesure en vérité de dépôt, et un cliquet ment plus longtemps qu'un
-journal.
+Le raisonnement est correct ; sa prémisse tacite ne l'est pas.
+**« La CI de ce commit est verte » se lit comme une propriété du COMMIT, alors
+que c'est une propriété du commit ET de l'INSTANT où le job a tourné.** Pour une
+panne pilotée par l'horloge, les deux se séparent : la CI de `f69cbd26` avait
+tourné avant l'expiration des 24 h, la session mesurait après. Même arbre, même
+commande, deux verdicts — et aucun défaut de recette.
 
-> **Une erreur commise en écrivant un cliquet est le meilleur cas de test qu'il
-> aura jamais** (cycle 104). Première rédaction de `rawServerAliases` : un `exec`
-> simple, qui ne rend que le PREMIER import du fichier — un fichier important
-> `Server` puis `Server as SocketIOServer` sur deux lignes aurait laissé le
-> second alias traverser en silence. Sa propre fixture l'a pris en défaut, et
-> porte les deux formes pour cette raison.
+Le run de `main` à `HEAD` (`32633238504`, 10:15Z) tranche : *Test gateway* en
+**failure**, sur exactement ces deux témoins, nommés dans le log.
 
-### Vérification de complétude : les quatre importateurs restants
+> Un vert de CI est **horodaté**. Devant un rouge local qu'un vert distant
+> contredit, la question n'est pas seulement « quel arbre ? » mais « QUAND ? ».
+> Si l'écart entre les deux mesures franchit une frontière temporelle du code
+> testé, le vert distant est PÉRIMÉ, pas contradictoire.
 
-Un inventaire vide est une AFFIRMATION. Les quatre fichiers de production qui
-importent encore `socket.io` ont été ouverts un par un plutôt que comptés :
+Le prix de l'inversion est concret : un `main` en train de casser a été rangé
+dans des « Future Considerations », comme un défaut d'outillage local. **Un
+défaut attribué à l'outil de mesure cesse d'être cherché dans le produit.**
 
-| fichier | import | verdict |
-|---|---|---|
-| `socketio/typed-socket.ts` | `type { Server, Socket }` | **c'est le fichier qui PARAMÈTRE le `Server` nu** (`MeeshyIOServer = Server<ClientToServerEvents, ServerToClientEvents>`) — exactement ce qu'il faut en faire. Exclu par les DEUX conditions : son seul `.emit(` est dans un commentaire, et `= Server<` n'est pas `: Server` |
-| `socketio/MeeshySocketIOManager.ts` | `Server` en VALEUR | le CONSTRUIT (`new SocketIOServer(…)`) — seul site du dépôt qui le puisse |
-| `socketio/utils/socket-helpers.ts` | `type { Socket }` | `Socket`, pas `Server` — autre famille |
-| `utils/socket-rate-limiter.ts` | `Socket` | idem |
+Aucun reproche de méthode dans l'autre sens : #3385 a trouvé et corrigé le défaut
+du cliquet (§3) que ce lot-ci n'aurait pas su corriger aussi bien.
 
-Et les deux services frères (`agent`, `translator`) n'importent `socket.io` nulle
-part : la passerelle est le seul émetteur du dépôt, et le balayage la couvre en
-entier.
+## 5. Ce que le lot pose
 
-## 6. Le miroir web — ce que le cycle 107 bis avait déjà débloqué sans le savoir
+- [x] `makeMessageRecord` complétée (`createdAt` frais, `messageType`) — la
+      fenêtre d'édition est exercée par fraîcheur, non contournée par `NaN`.
+- [x] Les deux littéraux de date absolue retirés ; le job *Test gateway* de
+      `main` repasse au vert.
+- [x] ROUGE prouvé sur 2 mutations, une par garde, sans débordement.
+- [x] Leçons 252 (la bombe à retardement, et la fabrique qui l'arme) et 253
+      (un vert de CI est horodaté).
+- [x] Correctif du cliquet **retiré** au profit de #3385, plus complet.
 
-`VideoCallInterface.tsx` portait cinq `(socket as unknown).emit(…)`, alors que
-`getSocket()` rend un `Socket<ServerToClientEvents, ClientToServerEvents>` et
-que la ligne 199 du MÊME fichier émet sans cast.
+## 6. Suivis
 
-Ces casts n'étaient pas gratuits : `CallMediaToggleClientEvent` exigeait
-`mediaType` et `participantId` et un ack, quand le web n'envoie que
-`{ callId, enabled }`. **Le cycle 107 bis a mesuré ce que les clients envoient
-réellement et corrigé le contrat** — rendant les cinq casts sans objet le jour
-même, sans que personne le remarque.
-
-> **Le lot qui rend une chose possible doit relire ce qui la déclarait
-> impossible** (cycle 105). Ici la variante est plus douce et tout aussi
-> coûteuse : un lot peut rendre un contournement INUTILE sans que le
-> contournement disparaisse. Il reste alors en place, et continue de soustraire
-> son site à toute vérification pour une raison qui n'existe plus.
-
-Retirés : dette web **1239 → 1234**, cinq points, **un par cast** — la mesure
-exacte de ce qu'un `as unknown` coûtait. Les cinq émissions d'appel du web sont
-désormais vérifiées contre `ClientToServerEvents`. Les six autres erreurs du
-fichier (`window`, `constraints`, `event`) sont sans rapport avec le contrat
-Socket.IO : hors du lot, toujours dans la dette.
-
-## 7. Gates
-
-- `tsc --noEmit` passerelle : **0 erreur** — code de sortie lu DIRECTEMENT,
-  jamais à travers un pipe (règle du cycle 107 bis : le code de retour d'un
-  pipeline est celui de sa dernière commande).
-- `tsc --noEmit` shared : **0 erreur**.
-- `scripts/check-type-debt.sh` : vert à 1234, baseline abaissée avec sa raison.
-- Suite passerelle complète : voir §9.
-- Balayage `server-emit-door-sweep` : 6/6, inventaire de production VIDE sur les
-  deux formes, RED prouvé sur les deux fixtures ET sur une régression réelle.
-
-## 8. Note de mesure — la dérive de 3, et mon erreur d'ATTRIBUTION
-
-J'ai mesuré **1242 puis 1239** sur un arbre inchangé, et attribué l'écart au
-client Prisma, dont l'en-tête du cliquet affirme qu'il « ne change rien » pour
-`apps/web`.
-
-**L'écart est réel, l'attribution était fausse.** Le cycle 108 (session
-parallèle, `…-cycle108.md` §3) a instruit la même dérive et l'a mesurée
-proprement : **1243 sans le build, 1240 avec**, même delta de 3, et la cause est
-`__tests__/lentille/shared-law-dist-parity.test.ts`, qui atteint la sortie
-construite par chemin RELATIF (`../../../../packages/shared/dist/utils/*.js`) et
-ne consulte donc jamais `paths`. Sans `packages/shared/dist`, ces imports lèvent
-TS2307.
-
-Entre mes deux mesures j'avais lancé `prisma generate` **et** `bun run build` sur
-`shared` : deux variables changées d'un coup, et j'ai nommé la mauvaise. C'est
-`dist/` qui bougeait le chiffre, pas Prisma.
-
-> **Un delta correctement mesuré ne prouve rien sur sa CAUSE.** Le chiffre était
-> juste des deux côtés ; seule la session qui n'a changé qu'une variable à la
-> fois pouvait dire laquelle. Même famille que « un compte est une affirmation »
-> (cycle 93), un cran plus loin : ici c'est l'EXPLICATION du compte qui en est
-> une, et elle se mesure séparément.
-
-Le cliquet porte désormais `shared_dist_is_built`, garde de cette quatrième
-source de dérive, dans ses deux états — pris de la session parallèle au merge
-(§10).
-
-## 9. Suivis
-
-- [ ] **La bivariance reste la limite, et elle est générale** (hérité, 107 bis).
-      `strictFunctionTypes: false` ⇒ aucune porte typée n'attrape une charge
-      divergente assignable dans un seul sens. Décision à instruire, elle dépasse
-      Socket.IO.
-- [ ] Hérité (106) — la LECTURE depuis Redis reste non validée à l'exécution.
-- [ ] Hérité — `_seq` n'est déclaré que sur `NotificationEventData`.
-- [ ] Hérité — `ReactionUpdateEvent` / `ReactionUpdateEventData`, deux
-      exemplaires de la même déclaration.
-- [ ] Hérité — `ConversationUpdatedEventData` et sa signature d'index.
-- [ ] **Neuf** — les six `as unknown` restants de `VideoCallInterface.tsx`
-      (`window.__preauthorizedMediaStream`, `constraints.facingMode`, `event`).
-      Aucun ne touche le contrat Socket.IO ; le premier nomme un canal
-      window-global entre deux composants, qui mérite un type.
-- [ ] **Neuf** — l'en-tête du cliquet de dette (§8), fausse de trois points.
-
-## 10. Intégration avec le cycle 108 parallèle
-
-Les deux sessions ont travaillé le même suivi du cycle 107 bis en même temps, et
-se sont partagé la matière sans se concerter :
-
-| | ce lot (bis) | le cycle 108 |
-|---|---|---|
-| moitié PASSERELLE — le `Server` nu | **5 porteurs fermés** | non traitée |
-| moitié WEB — les casts de socket client | les 5 de `VideoCallInterface` | **16 casts**, dont ces 5 |
-| la dérive de 3 du cliquet | mesurée, **mal attribuée** (§8) | mesurée ET **cause prouvée** (`shared/dist`) |
-
-**Trois résolutions de merge, toutes à la main :**
-
-1. `VideoCallInterface.tsx` — les deux diffs sont **identiques au caractère
-   près**. Git a fusionné tout seul. Deux sessions parties du même contrat réparé
-   ont retiré les mêmes cinq casts de la même façon : c'est la meilleure preuve
-   qu'on puisse avoir que le geste était le bon, et pas une préférence.
-2. `scripts/check-type-debt.sh` — **leur version prise en entier**, baseline
-   **1209** et non mon 1234. Leur chiffre compte déjà ces cinq casts (leurs 16
-   les incluent), et leur cliquet porte en plus le garde `shared_dist_is_built`
-   qui ferme la quatrième source de dérive. Garder ma baseline aurait réintroduit
-   un chiffre faux de 25 points ET perdu le garde.
-3. `tasks/todo.md` et le journal — collision de NOM de fichier (les deux
-   s'appelaient `…-cycle108.md`). Le canonique reste au cycle 108 ; celui-ci
-   devient `-bis`, selon la convention déjà employée aux cycles 104, 107 et 108.
-
-> **Deux sessions sur le même suivi ne se dupliquent pas nécessairement — mais
-> elles ne se coordonnent pas non plus.** Le partage passerelle/web est arrivé
-> par chance, pas par conception ; la collision de nom de journal et la double
-> baseline, elles, étaient garanties. Ce qui les a rendues sans danger est que
-> les deux lots portent leur MESURE : deux baselines concurrentes se départagent
-> en recomptant, pas en arbitrant.
+- [ ] **Dépendance** — si la PR #3385 ne fusionne pas, le défaut du cliquet
+      (§3) reste ouvert : le garde continuera d'accuser d'un +3 tout poste qui
+      n'a pas construit shared, avec un `top_offenders` nommant des fichiers
+      étrangers à la modification.
+- [ ] **Hérité du cycle 107 bis — la bivariance.** Aucune porte typée
+      n'attrapera une charge divergente tant que `strictFunctionTypes` vaut
+      `false`. Décision à instruire, elle dépasse Socket.IO.
+- [ ] **Hérité, avec recomptage** — le cast côté web. Le cycle 107 bis annonçait
+      **trois** sites dans `VideoCallInterface.tsx` ; j'en compte **cinq**
+      (229, 488, 522, 549, 638), plus trois du même motif sur `window` et
+      `constraints` dans ce seul fichier. #3385 en recense **13** sur 4 fichiers.
+      À noter avant de s'y attaquer : `(x as unknown).membre` est une erreur
+      `TS2571` franche — **108** occurrences de ce code dans la dette de
+      `apps/web`, dont 95 sites `as unknown).`. C'est une cicatrice de codemod
+      (`any` → `unknown` appliqué sans relecture), rendue invisible par
+      `ignoreBuildErrors: true` dans `next.config.ts`. Les fermer **fait
+      descendre** le cliquet.
+- [ ] **Hérité** — trois services (`CallCleanupService`,
+      `StoryTextObjectTranslationService`, `NotificationService`) prennent encore
+      un `Server` NU pour ÉMETTRE.
+- [ ] **Neuf — la classe « bombe à retardement » est-elle peuplée ?** 1057
+      littéraux de date absolue dans les témoins de la passerelle. La classe est
+      largement **auto-purgeante** : une date absolue contre une fenêtre COURTE
+      tombe le jour même, donc tout ce qui passe aujourd'hui est soit injecté par
+      `now`, soit indépendant de la fenêtre. Le cas dangereux est étroit — une
+      fenêtre LONGUE (24 h) et un littéral écrit le jour même. Aucun balayage
+      n'est proposé ici : le cycle 107 a payé sept faux positifs pour un garde
+      trop large, et je n'ai pas de discriminant sans bruit. À reprendre si un
+      second cas apparaît — deux occurrences feraient un motif.

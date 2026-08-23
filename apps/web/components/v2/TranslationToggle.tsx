@@ -4,6 +4,16 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/use-i18n';
 import { getFlag } from './flags';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+
+/**
+ * Égalité de langue conforme au Prisme : `languageCode` (traductions) et
+ * `userLanguage` sont verbatim. Un `startsWith` de préfixe sur-matche (`fry`
+ * Frisian matche une préférence `fr` ; `fil` Filipino matche `fi`) ET sous-matche
+ * (un alias legacy `iw` ne matche pas `he`). SSOT : normalizeLanguageForDedup.
+ */
+const sameLanguage = (a?: string, b?: string): boolean =>
+  !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
 
 export interface TranslationItem {
   languageCode: string;
@@ -68,7 +78,7 @@ function TranslationToggle({
   // as they land and a change of preferred language re-resolves live.
   const autoResolved = useMemo(() => {
     const matching = userLanguage
-      ? translations.find((t) => t.languageCode.toLowerCase().startsWith(userLanguage.toLowerCase()))
+      ? translations.find((t) => sameLanguage(t.languageCode, userLanguage))
       : undefined;
     return matching ? { ...matching, isOriginal: false as const } : originalVersion;
   }, [userLanguage, translations, originalVersion]);

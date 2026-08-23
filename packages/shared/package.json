@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/shared",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "description": "Shared library for Meeshy - Types, Prisma Schema, Utilities",
   "private": true,
   "type": "module",
@@ -97,7 +97,6 @@
     "generate:python": "prisma generate --schema=./prisma/schema.prisma --generator client_py",
     "clean": "rm -rf dist node_modules",
     "type-check": "tsc --noEmit --project tsconfig.json",
-    "lint": "eslint src/",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

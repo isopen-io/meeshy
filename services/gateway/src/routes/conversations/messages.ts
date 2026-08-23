@@ -14,6 +14,7 @@ import {
 } from '../../services/messaging/postReplySnapshot';
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
+import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { historyFloorFor } from '../../services/shareLinkHistoryFloor';
@@ -1284,7 +1285,15 @@ export function registerMessagesRoutes(
           // trois politiques clientes nomment le groupe à partir du seul
           // `forwardedFromConversation` et l'auteur d'origine à partir du seul
           // `forwardedFrom.sender`. N'en taire qu'un laisse l'autre nommer.
-          if (!forwardSourceGate(msg.sender?.userId ?? null)) continue;
+          if (!forwardSourceGate(msg.sender?.userId ?? null)) {
+            // Taire le NOM ne suffit pas : la copie de transfert réutilise le
+            // chemin de stockage de l'original, qui porte le `User.id` de son
+            // auteur. La même réponse livrait l'identité qu'elle refusait de
+            // nommer. Les pièces jointes passent donc à l'adressage par
+            // identifiant — mêmes octets, même autorisation, aucun chemin.
+            msg.attachments = redactForwardedAttachmentUrlsIn(msg.attachments);
+            continue;
+          }
           if (msg.forwardedFromId) {
             const original = forwardedMap.get(msg.forwardedFromId);
             if (original) {

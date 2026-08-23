@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/agent",
-  "version": "1.0.30",
+  "version": "1.0.31",
   "description": "Autonomous conversation agent service for Meeshy",
   "private": true,
   "main": "dist/src/server.js",
@@ -12,7 +12,6 @@
     "test": "jest --config=jest.config.json",
     "test:watch": "jest --config=jest.config.json --watch",
     "test:coverage": "jest --config=jest.config.json --coverage",
-    "lint": "eslint src/",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist node_modules coverage"
   },

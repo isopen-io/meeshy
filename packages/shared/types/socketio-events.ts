@@ -923,15 +923,23 @@ export interface NotificationEventData {
    *
    * C'est le signal de détection de TROU du SyncEngine : un client qui reçoit
    * `_seq = N+2` après `N` sait qu'un événement lui a échappé et déclenche une
-   * resynchronisation. **Les trois clients le lisent** — web
+   * resynchronisation. **Les trois clients l'OBSERVENT** — web
    * (`observeSyncSeq(this.syncSeq, data?._seq)`,
-   * `notification-socketio.singleton.ts`), iOS (`case seq = "_seq"`,
-   * `MeeshySDK/Sockets/MessageSocketManager.swift`), Android
-   * (`MessageSocketManagerNotificationTest`).
+   * `notification-socketio.singleton.ts`), iOS (`case seq = "_seq"` →
+   * `SyncSeqTracker.observe`, `MeeshySDK/Sockets/MessageSocketManager.swift`),
+   * Android (`syncSeqTracker.observe(raw.opt("_seq"))`,
+   * `sdk-core/.../socket/MessageSocketManager.kt`).
+   *
+   * Ce paragraphe a dit « les trois le lisent » pendant que **Android le
+   * jetait** : son décodeur (`Json.ignoreUnknownKeys`) déposait le champ, et la
+   * preuve citée — `MessageSocketManagerNotificationTest` — n'assertait rien sur
+   * `_seq` ; elle prouvait exactement l'inverse, que le décodage SURVIT au champ.
+   * Une citation n'est pas une mesure : le test cité prouvait la tolérance, pas
+   * la lecture. Android observe depuis que ce miroir a été écrit (cycle 108).
    *
    * **Déclaré ici parce qu'il ne l'était NULLE PART** (cycle 105). Il ne
    * voyageait que parce que `emitWithSeq` prenait
-   * `payload: Record<string, unknown>` : un champ porteur, lu par trois
+   * `payload: Record<string, unknown>` : un champ porteur, traversant trois
    * décodeurs, dont aucun contrat ne parlait — exactement le cas de `location`
    * sur `ConversationUpdatedEventData` avant qu'on ne le déclare, et la même
    * conséquence : la parité entre émetteurs ne tenait qu'à la lecture du code
@@ -2420,10 +2428,31 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.ATTACHMENT_REACTION_ADD]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<unknown>) => void) => void;
   [CLIENT_EVENTS.ATTACHMENT_REACTION_REMOVE]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<unknown>) => void) => void;
   [CLIENT_EVENTS.REACTION_REQUEST_SYNC]: (messageId: string, callback?: (response: SocketIOResponse<ReactionSyncEventData>) => void) => void;
-  [CLIENT_EVENTS.CALL_INITIATE]: (data: CallInitiateEvent, ack: (response: CallInitiateAck) => void) => void;
-  [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent, ack: (response: CallJoinAck) => void) => void;
+  // Les quatre `ack?` ci-dessous — INITIATE, JOIN, SIGNAL, END — étaient les
+  // seuls acks REQUIS de tout le contrat (4 contre 18 optionnels). Ils
+  // promettaient une chose qu'aucune des deux moitiés du fil ne tient :
+  //
+  //   - la passerelle déclare les QUATRE `ack?` et les appelle toutes en
+  //     `ack?.(…)` (`CallEventsHandler.ts` 2453 / 2776 / 3487 / 3851) : elle est
+  //     écrite pour fonctionner quand il n'y en a pas ;
+  //   - et des émetteurs réels n'en envoient pas — les trois `call:end` du web,
+  //     `call:join` et `call:signal` d'iOS (`MessageSocketManager.swift` 2898 /
+  //     3037 / 3077 / 3086), tandis que d'autres sites du MÊME fichier iOS
+  //     utilisent `emitWithAck` : l'ack est optionnel PAR CONCEPTION.
+  //
+  // Le prix du mensonge se lisait dans le code appelant : les quatre émissions
+  // `call:signal` du web fabriquent un `() => {}` VIDE (`use-webrtc-p2p.ts` 290
+  // / 329 / 674 / 761) pour satisfaire un paramètre requis que le serveur
+  // n'exige pas — une cérémonie qui coûte un paquet d'ACK par candidat ICE.
+  // Là où le contrat n'était pas contourné par une cérémonie, il l'était par un
+  // cast : les trois `call:end` du web passent par `(socket as unknown).emit`.
+  //
+  // Un contrat que tout site d'appel doit contourner pour dire la vérité ne
+  // gouverne plus rien. Cf. le cliquet `_CallAcksAreOptional` sous l'interface.
+  [CLIENT_EVENTS.CALL_INITIATE]: (data: CallInitiateEvent, ack?: (response: CallInitiateAck) => void) => void;
+  [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent, ack?: (response: CallJoinAck) => void) => void;
   [CLIENT_EVENTS.CALL_LEAVE]: (data: { callId: string }) => void;
-  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack: (response: { success: boolean }) => void) => void;
+  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack?: (response: { success: boolean }) => void) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: CallMediaToggleClientEvent) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: CallMediaToggleClientEvent) => void;
   /**
@@ -2495,6 +2524,61 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.ADMIN_AGENT_SUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.ADMIN_AGENT_UNSUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
 }
+
+/* ------------------------------------------------------------------------- *
+ * Le cliquet des acks d'appel — au TYPE, sans une ligne exécutable.
+ *
+ * Même emplacement et même raison que ses jumeaux de la passerelle
+ * (`socketio/serverEmit.ts`, `socketio/clientReceive.ts`) : les tests sont
+ * exclus du `tsconfig` et l'`ignoreCodes` de `ts-jest` couvre `2322`/`2345`, si
+ * bien que **la production est le seul endroit d'où un cliquet de type peut
+ * mordre**. Ici, en plus, `packages/shared` type-check en BLOQUANT dans la CI.
+ *
+ * Ce cliquet garde une propriété que rien d'autre ne peut garder : rendre l'un
+ * de ces acks à nouveau REQUIS casse la compilation ICI, à l'endroit où la
+ * mesure est écrite, plutôt que chez le prochain appelant qui contournera par
+ * un `() => {}` vide ou par un cast.
+ *
+ * EXPORTÉS, contrairement à leurs jumeaux de la passerelle : `packages/shared`
+ * compile avec `noUnusedLocals`, qui refuse un alias de type local jamais
+ * référencé. L'export est donc la façon de garder le cliquet ADJACENT à ce
+ * qu'il garde — l'emplacement fait la moitié de son travail. Types purs, donc
+ * effacés à l'exécution ; leur présence dans la surface publique ne coûte rien.
+ * ------------------------------------------------------------------------- */
+
+/** Échoue à compiler dès que `T` n'est plus `true`. */
+type AssertContract<T extends true> = T;
+
+/**
+ * Émettre ces quatre événements avec la CHARGE SEULE est permis par le contrat.
+ *
+ * `Parameters<…>` d'un ack REQUIS est un tuple de longueur 2, auquel un tuple
+ * de longueur 1 n'est pas assignable — c'est exactement l'erreur (`TS2554`,
+ * « Expected 2 arguments, but got 1 ») que les sites d'appel contournaient.
+ * Avec `ack?`, le tuple devient `[data, ack?]` et la ligne passe.
+ *
+ * Le cas ci-dessous est le plus fort des quatre : `call:end` est émis SANS ack
+ * par cinq des sept émetteurs du dépôt (trois web, deux iOS).
+ */
+export type _CallAcksAreOptional = AssertContract<
+  [
+    [CallInitiateEvent] extends Parameters<ClientToServerEvents[typeof CLIENT_EVENTS.CALL_INITIATE]> ? true : false,
+    [CallJoinEvent] extends Parameters<ClientToServerEvents[typeof CLIENT_EVENTS.CALL_JOIN]> ? true : false,
+    [CallSignalEvent] extends Parameters<ClientToServerEvents[typeof CLIENT_EVENTS.CALL_SIGNAL]> ? true : false,
+    [{ callId: string }] extends Parameters<ClientToServerEvents[typeof CLIENT_EVENTS.CALL_END]> ? true : false,
+  ] extends [true, true, true, true] ? true : false
+>;
+
+/**
+ * Le témoin NÉGATIF, sans lequel le précédent ne prouve rien : un ack requis
+ * REFUSE bien la charge seule. Sans cette ligne, un `Parameters<…>` qui
+ * rendrait `any` (ou une refonte qui rendrait l'assignabilité toujours vraie)
+ * laisserait `_CallAcksAreOptional` passer pour un cliquet qui garde quelque
+ * chose. Un témoin qu'on n'a pas vu échouer n'est pas un témoin.
+ */
+export type _RequiredAckWouldRefusePayloadAlone = AssertContract<
+  [{ callId: string }] extends Parameters<(data: { callId: string }, ack: () => void) => void> ? false : true
+>;
 
 // ===== TYPES DE BASE =====
 
