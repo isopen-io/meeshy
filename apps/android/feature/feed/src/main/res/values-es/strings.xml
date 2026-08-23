@@ -23,6 +23,8 @@
     <string name="feed_repost_quoted">Citado</string>
     <string name="feed_repost_story">Historia</string>
     <string name="feed_repost_open">Abrir la publicación republicada</string>
+    <string name="feed_location_shared">Ubicación compartida</string>
+    <string name="feed_location_open">Abrir la ubicación en el mapa</string>
     <string name="feed_repost_more_media">+%1$d</string>
     <string name="bookmarks_title">Guardados</string>
     <string name="bookmarks_empty">Aún no hay publicaciones guardadas</string>

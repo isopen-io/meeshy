@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.ApiRepostOf
+import me.meeshy.sdk.model.SharedPlace
 import org.junit.Test
 
 class FeedPostBuilderTest {
@@ -31,6 +32,7 @@ class FeedPostBuilderTest {
         moodEmoji: String? = null,
         viewCount: Int? = null,
         impressionCount: Int? = null,
+        location: SharedPlace? = null,
     ) = ApiPost(
         id = "p1",
         content = content,
@@ -47,7 +49,27 @@ class FeedPostBuilderTest {
         originalLanguage = "fr",
         viewCount = viewCount,
         impressionCount = impressionCount,
+        location = location,
     )
+
+    @Test
+    fun build_projectsPostLocationWithResolvedLabel() {
+        val p = post(location = SharedPlace(latitude = 48.8584, longitude = 2.2945, name = "Tour Eiffel"))
+
+        val result = FeedPostBuilder.build(p, Prefs(), mediaBaseUrl = null)
+
+        assertThat(result.location).isNotNull()
+        assertThat(result.location!!.label).isEqualTo("Tour Eiffel")
+        assertThat(result.location!!.latitude).isEqualTo(48.8584)
+        assertThat(result.location!!.longitude).isEqualTo(2.2945)
+    }
+
+    @Test
+    fun build_absentLocationProjectsToNull() {
+        val result = FeedPostBuilder.build(post(location = null), Prefs(), mediaBaseUrl = null)
+
+        assertThat(result.location).isNull()
+    }
 
     @Test
     fun build_carriesTheThumbHashThroughToTheProjectedImage() {

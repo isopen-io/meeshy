@@ -5,6 +5,19 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-23 — Before adding a model to `Post.kt`, grep for it: `SharedPlace` already existed
+
+Building `feed-post-location-sticker`, I nearly re-declared `SharedPlace` inside `Post.kt` (I had grepped
+`class ApiRepostOf`/`ApiRepostOf(` and it didn't surface it). It already lives in its **own** file
+`:core:model/SharedPlace.kt` — the composer's outgoing-location slice created it. A duplicate `data class`
+in the same package would have been a hard compile error, but the deeper trap is the shape drift: the
+existing `SharedPlace` is `{latitude, longitude, name, address, category}` (mirrors the **gateway**), with
+**no `id`** — iOS's has `id`, and I'd have copied iOS's. Lesson: before declaring any model type, `grep -rn
+"class <Name>"` across `apps/android`, and when a type exists, MIRROR THE ANDROID SSOT's shape, not iOS's.
+Corollary confirmed this slice: a field can be plumbed OUT (composer attaches `SharedPlace`) yet dropped on
+the way IN (`ApiPost` had no `location`) — "the model exists" ≠ "the field round-trips"; check the specific
+API struct.
+
 ## 2026-08-22 — SDK bootstrap: the `android-37` symlink is NO LONGER enough — copy + rewrite ApiLevel
 
 The prior note's symlink fix (`ln -sf android-37.0 android-37`) **stopped working** this run. AGP does not
