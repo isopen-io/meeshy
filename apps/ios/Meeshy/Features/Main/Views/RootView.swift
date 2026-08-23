@@ -267,6 +267,11 @@ struct RootView: View {
     /// question posée.
     @State private var shareLinkChoice: ShareLinkIdentityChoice?
 
+    /// C4b — rupture cliente. Deux entrées (le 426 vécu, le plancher lu au
+    /// démarrage), une porte qui ne se referme pas. `iPadRootView` porte le
+    /// jumeau : l'iPad a sa racine PROPRE et n'hérite rien d'ici.
+    @StateObject private var upgradeGate = UpgradeGateController()
+
     // Helper to get ButtonPosition for menu ladder alignment
     private var menuButtonPos: ButtonPosition {
         let parts = menuButtonPosition.split(separator: ",")
@@ -783,11 +788,16 @@ struct RootView: View {
             // guaranteed-fail call.
             StoryPublishService.shared.setExecutor(storyViewModel)
 
+            // C4b — plancher de version lu au démarrage. Best-effort et
+            // SILENCIEUX : sans lui, un binaire périmé qui ne fait que LIRE ne
+            // rencontre jamais de 426 et se croit à jour indéfiniment.
+            // Parallélisé comme les autres : il ne doit rien retenir.
+            async let versionFloor: Void = upgradeGate.checkFloor()
             async let storiesLoad: Void = storyViewModel.loadStories()
             async let statusesLoad: Void = statusViewModel.loadStatuses()
             async let conversationsLoad: Void = conversationViewModel.loadConversations()
             async let unreadRefresh: Void = notificationManager.refreshUnreadCount()
-            _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh)
+            _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh, versionFloor)
         }
         .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
             StoryViewerContainer(
@@ -1090,6 +1100,19 @@ struct RootView: View {
         // to process.
         .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
             handleDeepLink(newValue)
+        }
+        // C4b — la rupture. Posée EN DERNIER dans la chaîne, donc la plus
+        // extérieure : elle doit recouvrir les feuilles et les covers déjà
+        // montés, pas passer derrière eux.
+        //
+        // Le binding est CONSTANT, et c'est le point : `UpgradeGateController`
+        // n'expose aucun moyen de repasser à `nil`, et un `fullScreenCover`
+        // piloté par une constante n'a aucun geste de fermeture. La porte est
+        // une rupture, pas un avertissement.
+        .fullScreenCover(isPresented: .constant(upgradeGate.isBlocked)) {
+            if let requirement = upgradeGate.requirement {
+                UpgradeGateView(requirement: requirement)
+            }
         }
     }
 
