@@ -1236,33 +1236,3 @@ export const CALL_ERROR_CODES = {
 } as const;
 
 export type CallErrorCode = typeof CALL_ERROR_CODES[keyof typeof CALL_ERROR_CODES];
-
-// ===== TYPE GUARDS =====
-
-/**
- * Vérifie si un CallSession est actif
- */
-export function isActiveCall(call: CallSession): boolean {
-  return call.status === 'active' || call.status === 'ringing' || call.status === 'connecting' || call.status === 'reconnecting';
-}
-
-/**
- * Vérifie si un appel est en mode P2P
- */
-export function isP2PCall(call: CallSession): boolean {
-  return call.mode === 'p2p';
-}
-
-/**
- * Vérifie si un appel est en mode SFU
- */
-export function isSFUCall(call: CallSession): boolean {
-  return call.mode === 'sfu';
-}
-
-/**
- * Détermine le mode d'appel basé sur le nombre de participants
- */
-export function determineCallMode(participantCount: number): CallMode {
-  return participantCount <= 2 ? 'p2p' : 'sfu';
-}
