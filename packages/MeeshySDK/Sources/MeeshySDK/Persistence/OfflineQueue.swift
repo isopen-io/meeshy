@@ -1853,7 +1853,12 @@ public actor OfflineQueue {
         /// relu au flush) — rien ne les y METTAIT : un post hors-ligne à
         /// audience nommée partait donc sans sa liste, et le gateway le
         /// refusait (`CreatePostSchema`).
-        visibilityUserIds: [String]?,
+        ///
+        /// Défaut `nil` : une audience nommée est l'EXCEPTION. Sans lui, ce
+        /// paramètre — glissé avant des paramètres à valeur par défaut —
+        /// casserait tout appelant existant, ce que le build de l'app n'a pas
+        /// vu (les appelants vivent dans les tests du PACKAGE, compilés à part).
+        visibilityUserIds: [String]? = nil,
         originalLanguage: String? = nil,
         type: String? = nil,
         location: SharedPlace? = nil,
