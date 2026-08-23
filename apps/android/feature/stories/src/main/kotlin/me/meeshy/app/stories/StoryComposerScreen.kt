@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignRight
+import androidx.compose.material.icons.filled.FormatColorReset
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerticalAlignBottom
@@ -249,6 +250,7 @@ fun StoryComposerScreen(
                             onStyle = { style -> viewModel.onTextElementStyle(element.id, style) },
                             onColor = { color -> viewModel.onTextElementColor(element.id, color) },
                             onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
+                            onBackground = { bg -> viewModel.onTextElementBackground(element.id, bg) },
                             onDuplicate = { viewModel.onDuplicateTextElement(element.id) },
                             onReorder = { op -> viewModel.onReorderTextElement(element.id, op) },
                         )
@@ -766,22 +768,28 @@ private fun TextElementLayer(
     ) {
         val typography = element.style.typography()
         val textColor = parseHexColor(element.color)
-        Text(
-            text = element.text.ifBlank { stringResource(R.string.stories_composer_text_placeholder) },
-            color = textColor,
-            fontWeight = FontWeight(typography.fontWeight),
-            fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-            fontFamily = typography.family.toFontFamily(),
-            letterSpacing = typography.letterSpacingEm.em,
-            textAlign = element.align.toTextAlign(),
-            style = if (typography.glow) {
-                LocalTextStyle.current.copy(
-                    shadow = Shadow(color = textColor, blurRadius = 24f),
-                )
-            } else {
-                LocalTextStyle.current
-            },
-        )
+        Box(
+            modifier = Modifier
+                .storyTextBacking(element.background)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+        ) {
+            Text(
+                text = element.text.ifBlank { stringResource(R.string.stories_composer_text_placeholder) },
+                color = textColor,
+                fontWeight = FontWeight(typography.fontWeight),
+                fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
+                fontFamily = typography.family.toFontFamily(),
+                letterSpacing = typography.letterSpacingEm.em,
+                textAlign = element.align.toTextAlign(),
+                style = if (typography.glow) {
+                    LocalTextStyle.current.copy(
+                        shadow = Shadow(color = textColor, blurRadius = 24f),
+                    )
+                } else {
+                    LocalTextStyle.current
+                },
+            )
+        }
         if (selected) {
             Surface(
                 onClick = onRemove,
@@ -1010,6 +1018,7 @@ private fun TextStyleToolbar(
     onStyle: (StoryTextStyle) -> Unit,
     onColor: (String) -> Unit,
     onAlign: (StoryTextAlign) -> Unit,
+    onBackground: (StoryTextBackground) -> Unit,
     onDuplicate: () -> Unit,
     onReorder: (StoryZOrder) -> Unit,
     modifier: Modifier = Modifier,
@@ -1064,6 +1073,59 @@ private fun TextStyleToolbar(
                     onClick = { onColor(hex) },
                 )
             }
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(StoryTextBackgroundPresets.all) { preset ->
+                BackgroundSwatch(
+                    background = preset,
+                    selected = element.background == preset,
+                    onClick = { onBackground(preset) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One text-backing choice in the toolbar: a rounded swatch previewing the backing
+ * (a slash for None, the frosted scrim for Glass, the fill for Solid), ringed when it
+ * is the element's current backing. Tap forwards the pure [StoryTextBackground] preset
+ * to [onClick]; the decision logic lives in the unit-tested model.
+ */
+@Composable
+private fun BackgroundSwatch(
+    background: StoryTextBackground,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val ring = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+    val fill = when (background) {
+        StoryTextBackground.None -> Color.Transparent
+        is StoryTextBackground.Solid -> parseBackingColor(background.hex)
+        is StoryTextBackground.Glass -> Color.White.copy(alpha = 0.18f)
+    }
+    val label = when (background) {
+        StoryTextBackground.None -> stringResource(R.string.stories_composer_bg_none)
+        is StoryTextBackground.Solid -> "#${background.hex}"
+        is StoryTextBackground.Glass -> stringResource(R.string.stories_composer_bg_glass)
+    }
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(fill)
+            .border(BorderStroke(if (selected) 2.dp else 1.dp, ring), RoundedCornerShape(8.dp))
+            .pointerInput(background) { detectTapGestures { onClick() } }
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (background is StoryTextBackground.None) {
+            Icon(
+                Icons.Filled.FormatColorReset,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }
@@ -1121,6 +1183,35 @@ private fun ColorSwatch(hex: String, selected: Boolean, onClick: () -> Unit) {
 /** Parses a `RRGGBB` (or `#RRGGBB`) hex colour, falling back to white on anything unexpected. */
 private fun parseHexColor(hex: String): Color =
     runCatching { Color(("ff" + hex.removePrefix("#")).toLong(16)) }.getOrDefault(Color.White)
+
+/**
+ * Parses a `RRGGBB` **or** `RRGGBBAA` (optionally `#`-prefixed) hex into a Compose [Color],
+ * reordering the trailing alpha of the 8-digit form into Compose's `AARRGGBB`. Falls back to
+ * transparent on anything unexpected so a malformed preset never crashes the canvas.
+ */
+private fun parseBackingColor(hex: String): Color = runCatching {
+    val h = hex.removePrefix("#")
+    val argb = when (h.length) {
+        8 -> h.substring(6, 8) + h.substring(0, 6)
+        6 -> "ff$h"
+        else -> return Color.Transparent
+    }
+    Color(argb.toLong(16))
+}.getOrDefault(Color.Transparent)
+
+/**
+ * Paints the element's text backing behind the glyphs (glue): a rounded solid fill for
+ * [StoryTextBackground.Solid], a translucent frosted scrim approximating the iOS blur for
+ * [StoryTextBackground.Glass], and nothing for [StoryTextBackground.None]. The *choice* of
+ * backing is the unit-tested [StoryTextBackground]; this only renders it.
+ */
+private fun Modifier.storyTextBacking(background: StoryTextBackground): Modifier = when (background) {
+    StoryTextBackground.None -> this
+    is StoryTextBackground.Solid ->
+        this.background(parseBackingColor(background.hex), RoundedCornerShape(10.dp))
+    is StoryTextBackground.Glass ->
+        this.background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
+}
 
 /**
  * Mini-preview strip of the multi-slide deck — the structural surface of the
