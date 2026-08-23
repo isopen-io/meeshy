@@ -94,6 +94,7 @@ import {
   NO_SILENT_DOWNGRADE_ISSUE,
   toEncryptedPayload,
 } from '../../validation/encryption-envelope.js';
+import { MENTIONED_USER_IDS_SHAPE } from '../../validation/mention-list.js';
 export { messageSenderUserSelect };
 
 // `content` est optionnel : un message média-seul (image/vidéo/fichier sans
@@ -141,7 +142,10 @@ export const SendMessageBodySchema = z.object({
   effectFlags: z.number().int().optional(),
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
-  mentionedUserIds: z.array(z.string()).optional(),
+  // Liste explicite de mentionnés — déclarée dans `validation/mention-list.ts`,
+  // la MÊME que celle des deux schémas socket. Elle vivait ici seule ; le
+  // transport SOCKET, qui porte le trafic, la strippait.
+  ...MENTIONED_USER_IDS_SHAPE,
   // Lieu partagé — champ dédié, JAMAIS un `metadata` brut (cf.
   // services/location/sharedPlace.ts). Validation stricte déléguée à
   // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
