@@ -1528,3 +1528,15 @@ across calls — a `cd /home/user/meeshy` earlier will make `./gradlew` (which l
   dashboard, avoids a double-fetch of the same endpoint, and keeps the chat header uncluttered. The
   existing Empty tests stayed green precisely because they carried no profiles — verify that before
   relying on it.
+
+## 2026-08-23 — Confirm a gateway payload field is on the wire via the iOS SDK decoder
+
+Several §F candidates were parked as "needs gateway payload confirmation first" (mood emoji / location in
+the repost embed). The cheap, reliable confirmation **without touching or running the gateway**: check whether
+the iOS SDK model *decodes* the field. If `packages/MeeshySDK/.../PostModels.swift` declares
+`public let moodEmoji: String?` on `APIRepostOf` and its `init(from:)` does
+`decodeIfPresent(String.self, forKey: .moodEmoji)`, then a shipping iOS client already receives it — i.e. the
+gateway serializes it — and Android is simply dropping it. That turns an "unverified-backend, model-plumbing"
+risk into a pure Android model+projection gap (add the `@Serializable` field, project it, render it), diff stays
+`apps/android`-only. Applied for `feed-repost-embed-mood-emoji` (iOS `PostModels.swift:87,281`). The mirror still
+open — `ApiRepostOf.location` — is confirmable the same way (`APIRepostOf.location: SharedPlace?` is on the wire).

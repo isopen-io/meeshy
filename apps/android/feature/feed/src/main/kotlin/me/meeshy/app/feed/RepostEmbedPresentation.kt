@@ -26,6 +26,13 @@ data class RepostEmbedPresentation(
     val previewImageUrl: String?,
     val extraMediaCount: Int,
     val likeCount: Int,
+    /**
+     * The reposted post's mood emoji, or `null` when absent/blank (mirror of iOS
+     * `FeedPostCard.swift`'s `repost.moodEmoji`). A reposted STATUS carries an empty
+     * body, so the cell prefixes this to the content — without it a republished mood
+     * would render an empty embed.
+     */
+    val moodEmoji: String?,
     val isQuote: Boolean,
     val isStory: Boolean,
     val isReel: Boolean,
@@ -62,6 +69,7 @@ object RepostEmbedBuilder {
                 ?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
             extraMediaCount = (mediaCount - 1).coerceAtLeast(0),
             likeCount = (repost.likeCount ?: 0).coerceAtLeast(0),
+            moodEmoji = repost.moodEmoji?.takeIf { it.isNotBlank() },
             isQuote = repost.isQuote == true,
             isStory = repost.type.equals("story", ignoreCase = true),
             isReel = repost.type.equals("reel", ignoreCase = true),

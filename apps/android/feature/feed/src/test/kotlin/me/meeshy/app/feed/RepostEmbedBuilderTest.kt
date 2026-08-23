@@ -26,6 +26,7 @@ class RepostEmbedBuilderTest {
         isQuote: Boolean? = false,
         createdAt: String? = "2026-07-01T10:00:00Z",
         likeCount: Int? = null,
+        moodEmoji: String? = null,
     ) = ApiRepostOf(
         id = id,
         type = type,
@@ -37,6 +38,7 @@ class RepostEmbedBuilderTest {
         isQuote = isQuote,
         createdAt = createdAt,
         likeCount = likeCount,
+        moodEmoji = moodEmoji,
     )
 
     // --- absence / presence ---
@@ -176,5 +178,26 @@ class RepostEmbedBuilderTest {
     fun build_clampsNegativeLikeCountToZero() {
         val embed = RepostEmbedBuilder.build(repost(likeCount = -3), Prefs(), null)
         assertThat(embed?.likeCount).isEqualTo(0)
+    }
+
+    // --- reposted post's mood emoji (parity iOS FeedPostCard.swift:966 — a reposted
+    //     STATUS carries an empty body, so without the emoji the embed shows nothing) ---
+
+    @Test
+    fun build_projectsRepostedPostMoodEmoji() {
+        val embed = RepostEmbedBuilder.build(repost(moodEmoji = "🎉"), Prefs(), null)
+        assertThat(embed?.moodEmoji).isEqualTo("🎉")
+    }
+
+    @Test
+    fun build_absentMoodEmojiBecomesNull() {
+        val embed = RepostEmbedBuilder.build(repost(moodEmoji = null), Prefs(), null)
+        assertThat(embed?.moodEmoji).isNull()
+    }
+
+    @Test
+    fun build_blankMoodEmojiBecomesNull() {
+        val embed = RepostEmbedBuilder.build(repost(moodEmoji = "   "), Prefs(), null)
+        assertThat(embed?.moodEmoji).isNull()
     }
 }
