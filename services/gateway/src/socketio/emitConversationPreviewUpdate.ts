@@ -5,6 +5,7 @@ import { participantUserRoomTargets } from './emitToConversationParticipants';
 import {
   PREVIEW_PRISM_PARTICIPANT_SELECT,
   resolveLastMessagePreviewPrism,
+  toIsoOrNull,
 } from './utils/lastMessagePreviewPrism';
 import { resolvePersonalPreviewOverrides } from './utils/personalPreviewOverride';
 import type { ServerEmitIO } from './serverEmit';
@@ -233,7 +234,9 @@ export async function emitConversationPreviewUpdate(
     const messagePayloadFor = (message: PreviewMessage | null) => {
       const place = sharedPlaceFromMetadata(message?.metadata);
       return {
-        lastMessageAt: message?.createdAt ?? null,
+        // Chaîne ISO — voir `toIsoOrNull`. `null` reste une VALEUR ici : c'est
+        // ainsi que ce chemin dit « ce lecteur n'a plus aucun message visible ».
+        lastMessageAt: toIsoOrNull(message?.createdAt),
         lastMessageId: message?.id ?? null,
         // `lastMessagePreview` n'est PAS ici : il sort de
         // `resolveLastMessagePreviewPrism` avec le reste de la paire, plafonné

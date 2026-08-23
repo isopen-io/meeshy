@@ -42,6 +42,26 @@ import type {
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import type { ConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+
+/**
+ * Les huit réglages que `PUT /conversations/:id` peut annoncer sur
+ * `conversation:updated`, DÉRIVÉS du contrat plutôt que redéclarés.
+ *
+ * Ce que la dérivation garde, et qu'un `Record<string, unknown>` ne gardait
+ * pas : un neuvième réglage ajouté ici ne compile pas tant qu'il n'est pas
+ * déclaré sur `ConversationUpdatedEventData`. C'est par cette carte ouverte que
+ * les huit voyageaient sans contrat, alors que les trois clients les lisent.
+ *
+ * Une clé ABSENTE veut dire « ce réglage n'a pas bougé », jamais « remets-le à
+ * zéro » — d'où la composition par spreads conditionnels, qui n'en pose aucune
+ * quand la requête ne l'a pas changée.
+ */
+type ConversationMetadataChanges = Partial<Pick<
+  ConversationUpdatedEventData,
+  'title' | 'description' | 'avatar' | 'banner' | 'defaultWriteRole'
+  | 'isAnnouncementChannel' | 'slowModeSeconds' | 'autoTranslateEnabled'
+>>;
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { announceConversationClosed } from '../../socketio/announceConversationClosed';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
@@ -1751,15 +1771,22 @@ export function registerCoreRoutes(
         }
       });
 
-      const changedFields: Record<string, unknown> = {}
-      if (title !== undefined) changedFields.title = title
-      if (description !== undefined) changedFields.description = description
-      if (avatar !== undefined) changedFields.avatar = avatar
-      if (banner !== undefined) changedFields.banner = banner
-      if (defaultWriteRole !== undefined) changedFields.defaultWriteRole = defaultWriteRole
-      if (isAnnouncementChannel !== undefined) changedFields.isAnnouncementChannel = isAnnouncementChannel
-      if (slowModeSeconds !== undefined) changedFields.slowModeSeconds = slowModeSeconds
-      if (autoTranslateEnabled !== undefined) changedFields.autoTranslateEnabled = autoTranslateEnabled
+      // Typé sur le contrat, pas `Record<string, unknown>` : une carte ouverte
+      // est une absence de déclaration qui a l'air d'en être une, et c'est par
+      // celle-ci que les huit réglages voyageaient sans contrat. La forme
+      // `Pick` est ce qui garde la liste D'ICI et celle du contrat ensemble —
+      // un neuvième réglage ajouté ici ne compile pas tant qu'il n'est pas
+      // déclaré là-bas.
+      const changedFields: ConversationMetadataChanges = {
+        ...(title !== undefined && { title }),
+        ...(description !== undefined && { description }),
+        ...(avatar !== undefined && { avatar }),
+        ...(banner !== undefined && { banner }),
+        ...(defaultWriteRole !== undefined && { defaultWriteRole }),
+        ...(isAnnouncementChannel !== undefined && { isAnnouncementChannel }),
+        ...(slowModeSeconds !== undefined && { slowModeSeconds }),
+        ...(autoTranslateEnabled !== undefined && { autoTranslateEnabled }),
+      }
 
       const socketIOHandler = fastify.socketIOHandler
       const io = socketIOHandler?.getManager()?.getIO()

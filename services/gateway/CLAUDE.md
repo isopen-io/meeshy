@@ -1353,6 +1353,128 @@ au motif que personne n'a encore marché dessus), mais change tout au récit :
 annoncer une panne qu'on n'a pas mesurée coûte la confiance dans les cycles où
 il y en a une.
 
+## Une porte de TYPE garde le sortant ; seule l'exécution garde l'entrant
+
+Les cycles 104 à 106 ont bâti la porte d'émission, et trois journaux de suite se
+sont clos sur le même suivi : « le miroir client→serveur n'est pas gouverné,
+`ClientToServerEvents` n'a aucun équivalent de `serverEmit.ts` ». Le cycle 107
+l'a instruit et l'a **mesuré faux**.
+
+Le constat de départ était exact ; la conclusion ne l'était pas, et l'écart tient
+en une distinction :
+
+| sens | ce qu'une porte de TYPE garde |
+|---|---|
+| SORTANT | **tout** — une diffusion Socket.IO n'a aucun sérialiseur, donc ce que le compilateur laisse passer part sur le fil |
+| ENTRANT | **rien** — le client n'est pas compilé par nous. Un `socket.on` typé décrit ce que le serveur CROIT recevoir, jamais ce qu'il ACCEPTE |
+
+> **Pour de l'entrant, la seule garde possible est à l'EXÉCUTION** — et c'est
+> celle qui existait déjà : 37 validations zod (`validateSocketEvent`), des
+> gardes manuscrites dans deux familles (`_validateCoordinates`,
+> `OBJECT_ID.test`), et un limiteur de débit sur CHAQUE famille.
+
+La faute de méthode a un nom : la symétrie était **lexicale**. « Le miroir » a
+suffi à transposer la conclusion du sortant sur l'entrant, sans ré-instruire la
+question — trois cycles durant, par recopie du suivi précédent. **Un suivi
+hérité est une AFFIRMATION, exactement comme un compte ou un tri : il se mesure
+avant d'être recopié, et le recopier trois fois ne le rend pas vrai.**
+
+### Corollaire : un balayage qui cherche UN idiome mesure sa popularité, pas une propriété
+
+Le premier outil écrit pour ce cycle cherchait `validateSocketEvent` et a rendu
+**sept faux positifs** — `LocationHandler` et `AttachmentReactionHandler`
+valident, simplement autrement, et `REACTION_REQUEST_SYNC` valide par zod dans un
+fichier que le suivi de délégation n'atteignait pas.
+
+C'est la règle du cycle 84 rejouée par inadvertance (« un audit qui liste des
+`select:` ne liste pas des fuites »). **Le balayage a été JETÉ, pas gelé** :
+geler un inventaire faux aurait transformé une erreur de mesure en vérité de
+dépôt, et un cliquet ment plus longtemps qu'un journal.
+
+### Ce qui reste, à sa taille
+
+Deux familles sur douze valident à la main. Écart de CONSISTANCE, pas de
+couverture : les gardes sont réelles et lisibles. La question utile n'est pas
+« sont-elles gardées ? » mais « la douzième famille le sera-t-elle ? ».
+
+### Et pourtant le CAST, lui, effaçait les DEUX sens
+
+La section ci-dessus est juste, et ce qui suit ne la contredit pas : **une porte
+d'écoute typée n'est pas une garde de sécurité, c'est un instrument de
+COMPLÉTUDE DE CONTRAT.** Mesuré au compilateur sous le `tsconfig` réel, voici
+exactement ce qu'elle refuse — ni plus, et il faut le dire :
+
+| ce qu'on écoute | verdict |
+|---|---|
+| un nom d'événement ABSENT du contrat | **refusé** (TS2345) |
+| une charge SANS RECOUVREMENT avec la déclarée | **refusé** |
+| une charge divergente mais assignable dans UN sens | **ACCEPTÉ** |
+
+La troisième ligne est structurelle (`strictFunctionTypes: false` ⇒ paramètres
+bivariants). **Une porte annoncée plus stricte qu'elle n'est vaut moins que pas
+de porte** : personne n'ira vérifier derrière.
+
+Ce qu'elle garde vraiment, et qui suffit à la justifier : **aucun événement ne
+peut plus être ÉCOUTÉ sans être DÉCLARÉ.** `call:analytics` a vécu écouté,
+validé par zod (donc GARDÉ, au sens de la section précédente) et agrégé en
+production, ses dix-neuf champs transcrits dans la signature du listener, **sans
+figurer dans `ClientToServerEvents`** — pendant que les trois clients
+l'émettaient chacun contre sa propre transcription. Une validation d'exécution
+irréprochable ne dit rien de la dérive de contrat : ce sont deux propriétés
+disjointes, et il en faut une garde chacune.
+
+**Le point qui a fait la différence de production** : le socket et le serveur
+d'un handler viennent de `socketio/typed-socket.ts` (`MeeshySocket`,
+`MeeshyIOServer`), **jamais** de `socket.io`. Quand `MeeshySocketIOManager`
+passait son `io` par `this.io as SocketIOServer` — six sites — il ne relâchait
+pas seulement l'écoute : il relâchait **tout ce que `CallEventsHandler` ÉMET**,
+c'est-à-dire précisément la moitié dont le tableau ci-dessus dit qu'aucune autre
+garde ne la couvre.
+
+> **Un `as` vers le type NU d'une dépendance ne relâche pas un appel, il relâche
+> tout ce que la valeur castée porte** — ici les deux sens d'un sous-système
+> entier. Et il est plus discret qu'une redéclaration : il ne crée aucun type
+> nommé qu'on puisse chercher.
+
+Quatre divergences SORTANTES sont tombées à la première compilation sous la
+porte, dont `iceServers` sur `call:initiated` — les identifiants TURN, calculés
+par destinataire, que le SDK iOS décode pour traverser un NAT dès la SONNERIE,
+émis par les deux producteurs et déclarés par aucun contrat (famille `_seq` /
+`location`, cycle 105) — et `CallEndedEvent.endedBy`, que le contrat promettait
+alors que l'émetteur l'élargit délibérément en optionnel.
+
+> **Une piste peut être fausse sur son MOTIF et juste sur son ADRESSE.** Mesurer
+> la prémisse d'un suivi hérité fait abandonner la piste ; mesurer le SITE la
+> résout. La conclusion complète n'est pas « le suivi est faux, on passe », mais
+> « le suivi est faux, ET voilà ce qu'il y a effectivement à cette adresse ».
+
+### Un `.refine` Zod ne restreint pas `z.infer`
+
+Un objet PLAT gardé par un `.refine` transversal et une union DISCRIMINÉE
+expriment les mêmes contraintes à l'EXÉCUTION, et des types INFÉRÉS différents.
+Quand le contrat partagé déclare l'union (`WebRTCSignal`), c'est le SCHÉMA qu'on
+répare — jamais le site d'émission par un cast, ce qui rouvrirait la porte qu'on
+vient de fermer. Bénéfice réel de l'union : zod RETIRE les champs de l'autre
+membre, ce dont un relais qui émet `validation.data` plutôt que `data` dépend
+déjà pour sa sécurité.
+
+### Un gate rend DEUX verdicts, et ils peuvent se contredire
+
+Le texte ET le code de retour. Deux fois dans le même cycle, un seul des deux a
+été lu, et pas le même :
+
+- un `bun run build` échoué redirigé vers `/dev/null` a laissé la passerelle
+  compiler contre un `dist` PÉRIMÉ — une preuve de ROUGE semblait ne pas tomber ;
+- `bash check-type-debt.sh 2>&1 | tail -20` a rendu `exit 0` sur un gate qui
+  ÉCHOUAIT : **le code de retour d'un pipeline est celui de sa DERNIÈRE
+  commande**, ici `tail`.
+
+**Ne jamais passer un gate par un pipe quand c'est son code de sortie qu'on
+interroge** (`set -o pipefail`, ou rediriger et lire `$?` avant toute autre
+commande). Et se méfier particulièrement d'un gate qui échoue en annonçant une
+bonne nouvelle — le cliquet de dette de types échoue sur une AMÉLIORATION non
+enregistrée, ce qui n'a pas la forme d'un échec.
+
 ## La porte d'ÉMISSION se DÉRIVE du contrat, elle ne se redéclare pas
 
 Gouverner la CHARGE d'un événement sans gouverner le CANAL ne garde que le site
@@ -1577,86 +1699,90 @@ Trois règles en sont sorties :
 > qui enfilait le message nu aurait compilé pour produire un rejeu non routable.
 > L'assertion qui gèle ce point est née de l'erreur elle-même.
 
-## La porte d'ÉCOUTE se dérive aussi — et c'est la moitié HOSTILE
+### Une clé venue d'un SPREAD est invisible au contrôle des propriétés excédentaires
 
-`serverEmit.ts` gouverne ce que la passerelle ÉMET. Sa jumelle est
-`socketio/clientReceive.ts` (cycle 107), dérivée de `ClientToServerEvents`. La
-distinction n'est pas symétrique : **ce qu'on émet vient de soi, ce qu'on écoute
-vient du réseau** — donc d'un émetteur que le dépôt ne contrôle pas.
+Corollaire direct du paragraphe précédent, et il change ce qu'il faut faire d'un
+contrat trop libre. Mesuré sous `--strict` (cycle 106) :
 
-Le socket et le serveur d'un handler viennent de `socketio/typed-socket.ts`
-(`MeeshySocket`, `MeeshyIOServer`), **jamais** de `socket.io`. Le type nu porte
-`DefaultEventsMap` (`[event: string]: (...args: any[]) => void`) : sous lui,
-`socket.on(n'importe quoi, (data: n'importe quoi) => …)` compile.
+```ts
+type Target = { readonly a: string; readonly b?: number };
+declare function take(t: Target): void;
 
-### Ce que le cast d'un `io` typé ouvre
+take({ a: 'x', zzz: 1 });        // TS2353 — attrapé
+const built = { a: 'x', zzz: 1 };
+take({ ...built });              // SILENCE
+take({ ...built, www: 2 });      // TS2353 sur `www` SEULEMENT
+take(built);                     // SILENCE
+```
 
-La porte n'a pas été laissée ouverte par un oubli de déclaration, mais par un
-CAST — `this.io as SocketIOServer`, **six fois**, vers un `Server` sans
-générique. Un `as` vers le type NU d'une dépendance efface un contrat aussi
-complètement qu'une redéclaration, et il est plus discret : il ne crée aucun type
-nommé qu'on puisse chercher.
+Or **la charge d'un événement se compose presque toujours dans une variable**
+(`updatePayload`, `basePayload`, `changedFields`) avant d'être répandue dans
+l'appel à `emit`. Le contrôle des propriétés excédentaires n'a donc jamais lieu
+sur ces sites-là.
 
-> Celui-ci n'ouvrait pas un appel, il ouvrait un SOUS-SYSTÈME — les 22 sites
-> d'écoute de la signalisation d'appel **et** tout ce que le même handler émet.
+> **Conséquence contre-intuitive : retirer un `readonly [key: string]: unknown`
+> d'un contrat d'événement ne fait tomber AUCUNE compilation.** Mesuré sur
+> `ConversationUpdatedEventData` — 0 erreur sur `packages/shared` +
+> `services/gateway`. La signature d'index ne supprimait qu'un contrôle que le
+> spread supprimait déjà. Elle a l'air d'être la cause parce qu'elle est la
+> seule des deux qui soit ÉCRITE ; le spread, lui, est la forme normale du code.
 
-Coût mesuré : `call:analytics` a vécu écouté, validé par Zod et agrégé en
-production **sans figurer dans `ClientToServerEvents`**, ses dix-neuf champs
-transcrits dans la signature du listener, pendant que les trois clients
-l'émettaient chacun contre sa propre transcription. C'est
-`conversation:join-error` (cycle 99) dans l'autre sens.
+**Ce qui SURVIT au spread**, en revanche, et c'est ce sur quoi il faut s'appuyer :
 
-### Portée MESURÉE de la garde — elle est modeste, et il faut le dire
-
-Passée au compilateur sous le `tsconfig` réel avant d'être annoncée :
-
-| ce qu'on écoute | verdict |
+| à travers un spread | verdict |
 |---|---|
-| un nom d'événement ABSENT du contrat | **refusé** (TS2345) |
-| une charge SANS RECOUVREMENT avec la déclarée | **refusé** |
-| une charge divergente mais assignable dans UN sens | **ACCEPTÉ** |
+| champ NON déclaré (excédent) | **silence** |
+| champ requis ABSENT | TS2345 — attrapé |
+| champ déclaré de TYPE FAUX | TS2345 — attrapé |
 
-La troisième ligne est structurelle : la passerelle compile en
-`strictFunctionTypes: false`, donc les paramètres se comparent **bivariamment**.
-Un type de DIFFUSION réemployé en réception (`CallMediaToggleEvent` sous
-`call:toggle-audio`) passe sans un mot.
+> **Le levier n'est donc pas de fermer la carte, c'est de DÉCLARER les champs.**
+> Les deux gestes se ressemblent, portent sur la même interface, et ne font pas
+> le même travail : le premier est cosmétique, le second est le seul qui vérifie
+> quoi que ce soit. Devant un suivi qui prescrit « retirer la signature
+> d'index », l'exécuter D'ABORD pour mesurer ce qu'il produit — un lot vert,
+> propre et sans effet est le résultat par défaut.
 
-> **Une porte annoncée plus stricte qu'elle n'est vaut moins que pas de porte** :
-> personne n'ira vérifier derrière. Ce que celle-ci garde vraiment, et qui suffit
-> à la justifier : **aucun événement ne peut plus être ÉCOUTÉ sans être DÉCLARÉ.**
+**Et le trou que le typage ne peut pas boucher** : un champ NOUVEAU, ajouté à un
+émetteur et à aucun contrat, redevient invisible au premier spread. C'est
+exactement ce qui était arrivé à `location` (#3122), omise par le seul chemin
+REST/ZMQ pendant que les deux autres la portaient. Ce trou-là se ferme par un
+BALAYAGE, jamais par un type — qui lit le jeu de champs déclarés **à la source
+du contrat** (jamais une seconde liste écrite dans le témoin, qui dériverait) et
+le confronte aux clés que les émetteurs émettent réellement. Référence :
+`socketio/__tests__/conversation-updated-declared-fields.ts`.
 
-### Trois sources peuvent décrire le même événement, et se contredire
+La double mesure à reproduire quand on pose un tel cliquet : sur la même
+mutation, `tsc --noEmit` rend **0 erreur** pendant que le balayage tombe en
+NOMMANT le transport et le champ. Les deux côte à côte sont ce qui prouve que le
+balayage n'est pas redondant avec le compilateur.
 
-Sur `call:toggle-*` : le contrat, la signature du listener, et le schéma Zod
-disaient trois choses différentes — plus un ack REQUIS au contrat que **aucun
-client n'envoie et que la passerelle n'appelle jamais**. Les deux seules sources
-qui décident sont **ce que les clients ENVOIENT** (lire le fil) et **ce que Zod
-ACCEPTE** (l'autorité d'exécution). Le type TypeScript n'arbitre rien tant qu'il
-n'a pas été confronté aux deux.
+### Un contrat peut déclarer la DÉCORATION et taire le SUJET
 
-Et déclarer un ack qui n'existe pas n'est pas une tolérance, c'est une
-**promesse** : un client écrit contre le contrat l'attend indéfiniment.
+`ConversationUpdatedEventData` déclarait sept champs ; les trois clients en
+lisent dix-sept (iOS les décode tous). Les non déclarés n'étaient pas des
+détails : c'étaient les champs **PORTEURS** — l'identité du dernier message, son
+horodatage, son texte, son auteur — pendant que les déclarés étaient ceux qui les
+DÉCORENT (la carte du Prisme, la langue d'origine, le drapeau de recalcul).
 
-### Un `.refine` Zod ne restreint pas `z.infer`
+Le biais est mécanique et vaut d'être connu : **on déclare ce qu'on vient
+d'ajouter, pas ce qui était déjà là.** Chaque champ décoratif a été déclaré par
+le lot qui l'a introduit ; les porteurs, présents depuis l'origine, n'ont jamais
+eu de lot à eux. Devant un contrat partiellement déclaré, la question n'est donc
+pas « que manque-t-il ? » mais **« les champs déclarés sont-ils les plus
+importants, ou seulement les plus récents ? »**
 
-Un objet PLAT gardé par un `.refine` transversal et une union DISCRIMINÉE
-expriment les mêmes contraintes à l'EXÉCUTION, et des types INFÉRÉS différents :
-le premier sort `{ type: union, sdp?: …, candidate?: … }`, le second une vraie
-union où chaque membre exige son champ. Quand le contrat partagé déclare l'union,
-c'est le SCHÉMA qu'on répare — jamais le site d'émission par un cast, ce qui
-rouvrirait la porte qu'on vient de fermer.
+### Un horodatage dont le type n'est pas énoncé est décidé par l'ENCODEUR
 
-Bénéfice réel de l'union : Zod RETIRE les champs de l'autre membre. Un relais qui
-émet `validation.data` plutôt que `data` en dépend déjà pour sa sécurité.
+`lastMessageAt` partait en objet `Date` sur les trois émetteurs, quand
+`updatedAt` — son jumeau, dans le même payload — est une chaîne ISO. Sur le fil
+la différence ne se voit pas : la passerelle n'installe aucun parseur socket.io
+personnalisé, donc `JSON.stringify` rend exactement `toISOString()`.
 
-### Et un gate dont on silence la sortie ne mesure plus ce qu'on croit
+Ce que ça coûte n'est pas une panne, c'est une divergence de MESURE : **tout
+témoin en cours de route atteste alors une forme que personne ne reçoit.** Il y
+en avait un, qui assertait `toEqual(new Date(…))` sur une charge que le client
+reçoit en chaîne. Énoncer le type dans le contrat est ce qui aligne les deux.
 
-Un RED annoncé « ne tombe pas » était en réalité un `bun run build` du paquet
-partagé ÉCHOUÉ, dont la sortie partait dans `/dev/null` : la passerelle compilait
-contre un `dist` périmé, et le vert mesurait un artefact. **Un build intermédiaire
-raté ne ressemble pas à une panne — il ressemble à un test qui passe.** Vérifier
-le CODE DE SORTIE de chaque étape d'une chaîne de mesure, surtout quand on mute
-volontairement le code pour prouver un rouge.
 
 ## Une preuve TRANSPORTÉE n'est pas une preuve VÉRIFIÉE
 

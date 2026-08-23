@@ -1443,6 +1443,30 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onTextElementBackground re-backs only the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementBackground(id, StoryTextBackground.Solid(hex = "6366F1"))
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.background).isEqualTo(StoryTextBackground.Solid(hex = "6366F1"))
+        assertThat(element.style).isEqualTo(StoryTextStyle.BOLD)
+    }
+
+    @Test
+    fun `onTextElementBackground on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementBackground("ghost", StoryTextBackground.Glass(radius = 24.0))
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().background)
+            .isEqualTo(StoryTextBackground.None)
+    }
+
+    @Test
     fun `onTextElementTransform pinch-scales and rotates the edited element`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()

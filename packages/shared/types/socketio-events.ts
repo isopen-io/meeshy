@@ -1891,6 +1891,64 @@ export interface ConversationUpdatedEventData {
   readonly updatedBy: { readonly id: string };
   readonly updatedAt: string;
   /**
+   * Identité du message que la ligne de liste doit décrire après cet
+   * événement. Membre porteur du groupe d'aperçu : c'est LUI que les trois
+   * clients lisent en premier, et les autres champs du groupe ne valent que
+   * pour le message qu'il nomme.
+   *
+   * Tri-état, et les trois branches sont distinctes :
+   * - **clé ABSENTE** — cet événement ne parle pas du dernier message (un
+   *   renommage, un réglage). Ne rien toucher.
+   * - **`null`** — « ce lecteur n'a plus AUCUN message visible ici » : il vient
+   *   de masquer pour lui le dernier qui lui restait. Seul
+   *   `emitConversationPreviewUpdate` produit cette forme.
+   * - **plein** — la ligne décrit ce message. Il peut être celui qu'elle
+   *   décrivait déjà (édition, traduction qui atterrit) ou un AUTRE (masquage
+   *   personnel, suppression pour tous) ; seule l'identité les sépare.
+   */
+  readonly lastMessageId?: string | null;
+  /**
+   * Horodatage du message nommé par `lastMessageId` — le RANG de la
+   * conversation dans la liste, donc ce que le tri des trois clients lit.
+   *
+   * **Chaîne ISO**, comme `updatedAt` son jumeau ci-dessus. Les trois
+   * émetteurs passaient l'objet `Date` de Prisma : le fil ne montrait pas la
+   * différence (l'encodeur par défaut de socket.io est `JSON.stringify`, qui
+   * rend exactement `toISOString()`), mais c'était le seul horodatage du
+   * payload dont le type était décidé par l'encodeur au lieu d'être énoncé —
+   * et tout témoin en cours de route voyait donc une `Date` là où les clients
+   * reçoivent une chaîne.
+   */
+  readonly lastMessageAt?: string | null;
+  /**
+   * Texte d'aperçu du message nommé, PLAFONNÉ (`truncateMessagePreview`).
+   *
+   * Vide n'est pas absent : un message position-seule a un `content` vide que
+   * le client compose depuis `location`. Sort de `resolveLastMessagePreviewPrism`
+   * avec la carte du Prisme, sous le même plafond qu'elle — la paire est
+   * indissociable par construction, un appelant ne peut pas en émettre une
+   * moitié plafonnée et l'autre non.
+   */
+  readonly lastMessagePreview?: string | null;
+  /**
+   * Auteur du message nommé par `lastMessageId`.
+   *
+   * **Deux espaces d'ids, et le contrat ne les distingue pas.** La colonne
+   * `Message.senderId` est un `Participant.id`
+   * (`sender Participant @relation("MessageSender")`), et c'est ce que servent
+   * le chemin REST/ZMQ et `emitConversationPreviewUpdate`. Le chemin socket
+   * (`message:send`) sert un `User.id` — les deux espaces ne se télescopent
+   * jamais, si bien que rien ne rougit.
+   *
+   * Piège ARMÉ, pas panne : aucun client n'en tire de rendu aujourd'hui. Le web
+   * l'écrit dans le `Message.senderId` de sa ligne neutre, que rien ne relit ;
+   * iOS le décode et ne le mappe pas. Déclaré ici pour que le prochain client
+   * qui voudra l'utiliser trouve l'avertissement AVANT de résoudre un nom avec.
+   * L'unifier est un changement de SÉMANTIQUE sur le chemin le plus chaud du
+   * service — son propre lot, pas celui-ci.
+   */
+  readonly senderId?: string | null;
+  /**
    * Prisme Linguistique de la ligne de liste, résolu POUR CE destinataire —
    * jumeaux des champs que `GET /conversations` pose déjà sur la conversation.
    *
@@ -1955,7 +2013,52 @@ export interface ConversationUpdatedEventData {
    * exactement le comportement d'avant.
    */
   readonly previewRecalculated?: boolean;
-  readonly [key: string]: unknown;
+  /**
+   * Groupe MÉTADONNÉES — l'autre moitié de l'événement, et la seule que
+   * `PUT /conversations/:id` émet (`routes/conversations/core.ts`).
+   *
+   * Ces huit champs voyagent depuis toujours et les trois clients les lisent
+   * (iOS les décode tous sur `ConversationUpdatedEvent`) ; aucun n'était
+   * déclaré. Ils passaient par la signature d'index, en compagnie des quatre
+   * champs porteurs du groupe d'aperçu ci-dessus.
+   *
+   * Ils sont posés UN PAR UN, seulement quand la requête les a changés : une
+   * clé absente veut dire « ce réglage n'a pas bougé », jamais « remets-le à
+   * zéro ». C'est la même règle de tri-état que le groupe d'aperçu, et c'est
+   * pourquoi aucun d'eux n'est requis.
+   *
+   * Le payload de ce chemin ne porte AUCUNE clé `lastMessage*`, délibérément :
+   * un `lastMessageTranslations: null` posé par un renommage effacerait une
+   * traduction parfaitement valide sur toutes les lignes de liste.
+   */
+  readonly title?: string;
+  readonly description?: string;
+  readonly avatar?: string | null;
+  readonly banner?: string | null;
+  readonly defaultWriteRole?: string;
+  readonly isAnnouncementChannel?: boolean;
+  readonly slowModeSeconds?: number;
+  readonly autoTranslateEnabled?: boolean;
+  /*
+   * PAS de `readonly [key: string]: unknown` ici, et la raison mérite d'être
+   * écrite parce qu'elle n'est PAS celle qu'on croit.
+   *
+   * La signature d'index vivait ici pour laisser passer les douze champs
+   * ci-dessus, qu'aucune ligne ne déclarait. La retirer ne fait tomber AUCUNE
+   * compilation — mesuré, 0 erreur sur `packages/shared` + `services/gateway` —
+   * parce que les quatre émetteurs composent tous leur charge dans une variable
+   * avant de la répandre dans l'appel à `emit`, et qu'une clé venue d'un spread
+   * est invisible au contrôle des propriétés excédentaires de TypeScript.
+   *
+   * Elle ne supprimait donc qu'un contrôle que le spread supprimait déjà. Ce
+   * qui SURVIT au spread — un champ requis absent, un champ de type faux — ne
+   * porte que sur les champs DÉCLARÉS : c'est la déclaration qui fait le
+   * travail, pas la fermeture de la carte. Le cliquet qui garde le reste est un
+   * balayage
+   * (`services/gateway/src/socketio/__tests__/conversation-updated-declared-fields.ts`),
+   * et il n'a de sens que tant que cette signature reste absente — avec elle,
+   * tout serait déclaré d'avance et il ne pourrait plus tomber.
+   */
 }
 
 export interface ConversationClosedEventData {
