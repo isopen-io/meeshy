@@ -14,7 +14,7 @@ export interface UntypedEmitDoor {
 }
 
 /**
- * `emit(` suivi d'un premier paramètre `string` — la marque d'une porte qui ne
+ * `emit` suivi d'un premier paramètre `string` — la marque d'une porte qui ne
  * dérive pas de `ServerToClientEvents`.
  *
  * Le discriminant est le TYPE du premier paramètre, pas son nom : `event`,
@@ -22,8 +22,26 @@ export interface UntypedEmitDoor {
  * dont le premier paramètre est autre chose qu'un `string` nu — un
  * `ServerEventName`, un `E extends ServerEventName`, un `...args:
  * ServerEmitArgs` — est par construction rattaché au contrat.
+ *
+ * **DEUX formes, parce qu'une porte ne s'ouvre pas que par déclaration**
+ * (cycle 105). La première rédaction ne connaissait que la méthode abrégée
+ * — `emit(event: string, …)`, celle des huit interfaces du cycle 104 — et une
+ * NEUVIÈME porte lui a échappé pour cette seule raison : le rejeu hors ligne
+ * l'ouvrait par ASSERTION DE TYPE, en forme de propriété-flèche.
+ *
+ * ```ts
+ * const userRoom = this.io.to(ROOMS.user(userId)) as unknown as {
+ *   emit: (event: string, payload: unknown) => void;   // ← invisible au balayage
+ * };
+ * ```
+ *
+ * Un cast est une porte : il produit exactement la même liberté que la
+ * déclaration, sur exactement le même appel, et il est plus discret puisqu'il
+ * ne crée pas de type nommé qu'on puisse chercher. Le balayage voit désormais
+ * `emit(ev: string` ET `emit: (ev: string`.
  */
-const UNTYPED_EMIT = /\bemit\s*(?:<[^>]*>)?\s*\(\s*(?:readonly\s+)?[A-Za-z_$][\w$]*\s*:\s*string\b/;
+const UNTYPED_EMIT =
+  /\bemit\s*(?::\s*)?(?:<[^>]*>)?\s*\(\s*(?:readonly\s+)?[A-Za-z_$][\w$]*\s*:\s*string\b/;
 
 /** Les commentaires citent la forme fautive pour l'expliquer — c'est leur rôle. */
 function stripComments(source: string): string {
