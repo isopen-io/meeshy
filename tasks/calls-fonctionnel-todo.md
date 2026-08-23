@@ -11405,3 +11405,92 @@ Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~6300 lign
 sur `conversations/participants.ts` (hors périmètre calling). Aucun suivi ponctuel restant identifié
 pour cette famille précise à ce stade — les prochaines Vagues devront soit rouvrir un audit large du
 fichier, soit s'attaquer à l'un des trois chantiers architecturaux ci-dessus.
+
+## Vague 169 — `toggleVideo()`'s three video-disabling failure paths never reset `videoSurvivalController` (iOS) (2026-08-23)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit ciblé
+(subagent) sur le pattern « branches jumelles asymétriques » ouvert par les Vagues 166-168, en
+excluant explicitement les items déjà recensés « reste ouvert » ci-dessus. Branche redémarrée depuis
+`origin/main` (Vague 168 déjà mergée, PR #3403, aucune branche `claude/upbeat-dirac-*` en avance).
+
+### Root cause
+
+`toggleVideo()`'s SUCCESS path resète explicitement `videoSurvivalController` juste après avoir posé
+le nouvel état vidéo, avec le commentaire en place : « User intent is authoritative: forget any
+survival state so the controller never fights a manual toggle ». Cette même fonction a TROIS branches
+d'ÉCHEC qui désactivent la vidéo (`isVideoEnabled = false`) — le pré-flight permission caméra (refus
+détecté avant tout appel WebRTC), le `catch WebRTCError.cameraPermissionDenied`, et le `catch {}`
+générique (toute autre erreur `upgradeToVideo()`/`downgradeFromVideo()`) — et **aucune des trois**
+n'appelait ce reset, alors que le même raisonnement s'applique à l'identique quand le toggle ÉCHOUE :
+`isVideoEnabled = false` seul ne fait retomber l'état de survie qu'au PROCHAIN tick de qualité, et ce
+`handle()` est un no-op complet tant qu'une transition suspend/resume est déjà en vol (`guard
+!isTransitioning else { return }`). Les branches jumelles exactes dans `handleHold` (Vagues 167/168)
+et `actuateSurvivalVideoSend` appellent déjà ce reset pour le même échec sous-jacent — `toggleVideo()`
+elle-même, citée en commentaire par ces jumelles comme référence (« mirrors toggleVideo's handling »),
+était la seule à ne pas l'appliquer à ses propres branches d'échec.
+
+### Impact
+
+Fenêtre étroite mais réelle (même famille que Vagues 167/168) : un appel vidéo dont le lien s'est
+dégradé assez longtemps pour qu'un tick de qualité en arrière-plan démarre une transition
+suspend/resume (`isTransitioning = true`) sur `VideoSurvivalController`. Avant/pendant que cette
+transition en vol se stabilise, l'utilisateur tape manuellement le bouton vidéo pour l'activer et soit
+la permission caméra est déjà révoquée (pré-flight), soit `upgradeToVideo()` échoue pour une autre
+raison (caméra occupée, permission révoquée en cours d'appel, échec SDP). `isVideoEnabled` retombe
+correctement à `false`, mais le contrôleur de survie garde `isTransitioning == true` (ou un
+`isVideoSuspended` obsolète) jusqu'à l'expiration naturelle de son propre timeout de transition
+(jusqu'à 20s) — pendant cette fenêtre, `handle()` reste no-op à chaque tick de qualité au lieu de
+retomber immédiatement sur `.initial`, exactement la classe de défaut « indicateur trompeur » corrigée
+par la Vague 168 pour `handleHold`.
+
+### Fix
+
+Trois ajouts, purement additifs, miroir exact du geste déjà appliqué par le chemin de succès de la
+même fonction et par les branches jumelles de `handleHold`/`actuateSurvivalVideoSend` :
+`self.videoSurvivalController.reset()` après chacun des trois `self.isVideoEnabled = false` (pré-flight
+permission, catch permission refusée, catch générique). Aucun changement de signature, aucune nouvelle
+branche.
+
+### Tests (TDD, RED confirmé)
+
+Nouveau `CallManagerToggleVideoSurvivalResetSourceTests.swift` (même patron source-level que les
+Vagues 166-168 — pas de host XCTest disponible dans ce conteneur), trois tests bornant chacune des
+trois branches SÉMANTIQUEMENT (marqueur de log unique ou appel unique jusqu'au marqueur de fin
+suivant — pas de fenêtre en nombre de caractères, leçon Vague 167 / cycle 238i). **RED confirmé par
+`git stash` du seul fichier de production** : les trois branches rendent `reset(): False` avant le
+correctif, `reset(): True` après, vérifié par un script reproduisant exactement la logique de
+bornage des trois tests.
+
+### Risk assessment
+
+Minimal — additif pur (trois lignes), aucun changement de signature, aucune nouvelle branche de code
+atteignable qui n'existait pas déjà. Le comportement qui change est exactement celui que le chemin de
+succès de `toggleVideo()` applique déjà, et que `handleHold`/`actuateSurvivalVideoSend` appliquent déjà
+pour le même échec sous-jacent (`upgradeToVideo()` qui jette) ; ce correctif aligne la dernière
+fonction du fichier qui désactivait la vidéo sans ce reset.
+
+### Non fait volontairement / reste ouvert
+
+Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~6350 lignes, iOS) ; ADR
+`actor CallEventQueue` non implémenté ; iOS single-peer côté groupe ; même gap de hiérarchie de rôle
+sur `conversations/participants.ts` (hors périmètre calling). Aucun autre site de désactivation vidéo
+sans reset identifié dans ce fichier à ce stade (5 sites confirmés : `toggleVideo` ×3 — désormais
+corrigés —, `handleHold` ×2, `actuateSurvivalVideoSend` ×1, plus le chemin de succès de `toggleVideo`
+et le reset de fin d'appel — tous cohérents) ; les prochaines Vagues devront rouvrir un audit large du
+fichier ou s'attaquer à l'un des trois chantiers architecturaux ci-dessus.
+
+### Triage CI (PR #3408, hors périmètre de ce lot)
+
+Après merge de `origin/main` dans la branche (nécessaire pour repartir de l'état courant avant
+merge), `Test shared` échoue sur le head final : `__tests__/types/post.test.ts > loads without error
+and exports no runtime values` attend `Object.keys(mod)` de longueur 0 et obtient
+`['DEFAULT_PUBLICATION_VISIBILITY']`. **Confirmé pré-existant sur `main` lui-même**, sans lien avec ce
+lot ou avec le fichier `CallManager.swift` — vérifié directement sur le contenu de
+`origin/main:packages/shared/types/post.ts` (const `DEFAULT_PUBLICATION_VISIBILITY` ajoutée par
+`843e41481`, « une publication naît publique ») et `origin/main:packages/shared/__tests__/types/post.test.ts`
+(assertion « zéro export runtime » toujours en place, non mise à jour par ce même lot ou un suivant) :
+les deux coexistent sur `main` avant toute action de cette PR. Domaine visibilité de publication —
+hors périmètre calling, non corrigé ici (règle « ne pas élargir le lot » + règle CI rouge « base déjà
+rouge, ne pas pousser de correctif dedans »). PR laissée sous surveillance jusqu'à ce que `main`
+récupère ce test, puis remerge avant fusion — pas de merge sur un CI rouge hérité tant que la cause
+n'est pas confirmée résolue en amont.

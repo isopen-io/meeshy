@@ -2921,10 +2921,23 @@ describe('MeeshySocketIOManager', () => {
       });
     });
 
-    // The envelope is what every writer of this eventType produces, but a drain
-    // must never blast `message:new` with `undefined` if one ever drifts: the
-    // recipient would take a message it cannot route for a real one.
-    it('replays a shapeless link-message entry under LINK_MESSAGE_NEW alone', async () => {
+    /**
+     * `'link-message'` est le SEUL `eventType` dont la charge se DÉPLIE, donc le
+     * seul dont l'échec puisse venir d'autre chose que de son nom — et il était
+     * le seul que le verdict d'indélivrabilité du drain ne pouvait pas atteindre.
+     *
+     * Le drain lit la longueur de la liste rendue par `_drainedEmissions` comme
+     * « sais-je diffuser ceci ? » (« une liste VIDE dit *je ne sais pas diffuser
+     * ceci* »). `linkMessageEmissions` gardait l'enveloppe même privée de son
+     * message : la liste faisait donc toujours au moins 1, et le verdict ne
+     * pouvait JAMAIS être négatif pour cette famille.
+     *
+     * Ce que l'enveloppe seule livre : rien. Son unique auditeur est le web, qui
+     * lit `data.message` ; iOS et Android n'écoutent que le `message:new`
+     * dérivé, celui-là même qu'on vient de refuser. Le témoin que ce test
+     * remplace gelait exactement ça — il assertait l'enveloppe émise seule.
+     */
+    it('ne diffuse RIEN d’une enveloppe de lien privée de son message', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
           { payload: { messageId: 'msg-shapeless' }, conversationId: convId('link'), messageId: 'msg-shapeless', eventType: 'link-message' },
@@ -2932,10 +2945,52 @@ describe('MeeshySocketIOManager', () => {
       };
       manager.setDeliveryQueue(fakeQueue as any);
       await (manager as any)._drainPendingMessages('user-drain-shapeless', false);
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, {
-        messageId: 'msg-shapeless',
-      });
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, expect.anything());
       expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
+    });
+
+    /**
+     * Le coût RÉEL de la garde ci-dessus, et il ne se mesure pas sur les
+     * émissions : sur les trois signaux que le cycle 109 bis a rendus
+     * solidaires du LIVRÉ.
+     *
+     * `announcesMessageArrival('link-message')` est VRAI — un message envoyé par
+     * lien est une arrivée pleine et entière. Une enveloppe dégradée comptée
+     * comme livrée emportait donc l'accusé de remise avec elle : le curseur
+     * `lastDeliveredAt` de l'auteur avançait, et il est MONOTONE
+     * (`_advanceCursor` ne recule jamais). La coche de l'auteur passait à
+     * « remis » pour un message qu'aucun destinataire n'a reçu — sur le SEUL
+     * transport d'envoi dont dispose un participant anonyme.
+     *
+     * Et le troisième signal était retiré au moment où il servait le plus : la
+     * conversation n'était pas nommée dans `conversationIds`, donc rien
+     * n'envoyait le client rechercher le message, qui est pourtant toujours en
+     * base.
+     */
+    it('n’accuse pas la remise d’une enveloppe de lien vide, mais nomme sa conversation', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { message: { id: 'msg-ok', conversationId: convId('link-ok') } }, conversationId: convId('link-ok'), messageId: 'msg-ok', eventType: 'link-message' },
+          { payload: {}, conversationId: convId('link-empty'), messageId: 'msg-empty', eventType: 'link-message' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const receiptsSpy = jest
+        .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
+        .mockResolvedValue(undefined);
+      await (manager as any)._drainPendingMessages('user-link-receipt', false);
+
+      const call = ioState.toEmit.mock.calls.find(
+        (c: any[]) => c[0] === SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      expect(call?.[1].count).toBe(1);
+      expect(call?.[1].conversationIds).toEqual(
+        expect.arrayContaining([convId('link-ok'), convId('link-empty')])
+      );
+      // Le point du témoin : l'entrée vide n'est pas transmise à l'accusé, donc
+      // la coche de son auteur reste à « envoyé ».
+      const [, forwarded] = receiptsSpy.mock.calls[0] as [string, any[], boolean];
+      expect(forwarded.map((e: any) => e.messageId)).toEqual(['msg-ok']);
     });
 
     /**
