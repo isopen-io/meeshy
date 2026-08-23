@@ -116,6 +116,7 @@ data class ApiPost(
     val currentUserReactions: List<String>? = null,
     val mentionedUsers: List<MentionedUser>? = null,
     val viaUsername: String? = null,
+    val location: SharedPlace? = null,
 )
 
 /**
