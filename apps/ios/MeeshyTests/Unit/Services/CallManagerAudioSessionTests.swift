@@ -2665,6 +2665,165 @@ final class CallManagerJoinRaceTests: XCTestCase {
     }
 }
 
+/// Guards Vague 162 — before this fix, `socket.didReconnect` awaited only the
+/// boolean-collapsed `emitCallJoinWithAck` and, on a rejected ACK, logged
+/// "proceeding anyway" without ever transitioning `callState`. If the call had
+/// actually ended server-side while the socket was down (and the `call:ended`
+/// broadcast that would normally say so was itself dropped by that same
+/// outage), the app was left frozen on the active-call screen forever — no
+/// retry offered, no indication anything ended. The fix reads the full ack
+/// (`emitCallJoinWithAckDetailed`) and, on `errorCode == "CALL_ENDED"`, routes
+/// through the canonical `handleRemoteEnd` path with the real `endReason`.
+@MainActor
+final class CallManagerReconnectCallEndedRetryTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func socketManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func reconnectSinkBody(_ source: String) throws -> String {
+        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
+            XCTFail("socket.didReconnect sink not found in CallManager.swift")
+            return ""
+        }
+        let afterReconnect = String(source[reconnectRange.upperBound...])
+        guard let storeRange = afterReconnect.range(of: ".store(in: &cancellables)") else {
+            XCTFail("Could not find .store(in:) after socket.didReconnect")
+            return ""
+        }
+        return String(afterReconnect[..<storeRange.lowerBound])
+    }
+
+    /// The reconnect rejoin must read the full ack (join success + error
+    /// detail), not the boolean-only convenience — otherwise a `CALL_ENDED`
+    /// rejection is indistinguishable from a plain ACK timeout.
+    func test_socketReconnect_usesDetailedAck() throws {
+        let sinkBody = try reconnectSinkBody(try callManagerSource())
+        XCTAssertTrue(
+            sinkBody.contains("emitCallJoinWithAckDetailed"),
+            "socket.didReconnect must call emitCallJoinWithAckDetailed rather than the " +
+            "boolean-only emitCallJoinWithAck — a CALL_ENDED rejection must be " +
+            "distinguishable from a plain ACK timeout so the app can offer retry " +
+            "instead of hanging on a zombie active-call screen")
+    }
+
+    /// A `CALL_ENDED` ack rejection must route through the canonical
+    /// remote-end path, carrying the real `endReason` so a transient cause
+    /// (connectionLost/heartbeatTimeout) still offers « Réessayer ».
+    func test_socketReconnect_callAlreadyEnded_routesThroughHandleRemoteEnd() throws {
+        let sinkBody = try reconnectSinkBody(try callManagerSource())
+        XCTAssertTrue(
+            sinkBody.contains("ackResult.errorCode == \"CALL_ENDED\""),
+            "socket.didReconnect must detect a CALL_ENDED ack rejection")
+        XCTAssertTrue(
+            sinkBody.contains("self.handleRemoteEnd(callId: callId, rawReason: ackResult.endReason)"),
+            "a CALL_ENDED ack rejection must forward the real endReason into " +
+            "handleRemoteEnd — hardcoding a reason (or omitting it) would silently " +
+            "defeat the retry offer for a transient cause, the exact defect this " +
+            "guards (parallel to Vague 161's web-side fix for the same rejoin path)")
+    }
+
+    /// The CALL_ENDED branch must `return` before falling through to
+    /// ICE-flush / media-resync / TURN-refresh — those all assume a live call
+    /// and must never fire for a call the reconnect handler just discovered
+    /// has already ended.
+    func test_socketReconnect_callAlreadyEnded_returnsBeforeIceFlush() throws {
+        let sinkBody = try reconnectSinkBody(try callManagerSource())
+        guard let callEndedRange = sinkBody.range(of: "ackResult.errorCode == \"CALL_ENDED\"") else {
+            XCTFail("CALL_ENDED branch not found"); return
+        }
+        let afterCallEnded = String(sinkBody[callEndedRange.upperBound...])
+        guard let returnRange = afterCallEnded.range(of: "return") else {
+            XCTFail("No return statement after the CALL_ENDED branch"); return
+        }
+        guard let iceFlushRange = afterCallEnded.range(of: "flushPendingIceCandidates()") else {
+            XCTFail("flushPendingIceCandidates() not found after the CALL_ENDED branch"); return
+        }
+        XCTAssertLessThan(
+            returnRange.lowerBound, iceFlushRange.lowerBound,
+            "the CALL_ENDED branch must return before flushPendingIceCandidates() — " +
+            "otherwise a call the gateway just confirmed as ended still gets its ICE " +
+            "candidates flushed and its media state re-synced to a dead peer")
+    }
+
+    /// The SDK ack result must expose the raw server error detail (code +
+    /// endReason) — collapsing to a bare Bool is exactly what hid this defect.
+    func test_messageSocketManager_declaresCallJoinAckResultWithErrorDetail() throws {
+        let source = try socketManagerSource()
+        guard let structRange = source.range(of: "struct CallJoinAckResult") else {
+            XCTFail("CallJoinAckResult struct not found in MessageSocketManager.swift"); return
+        }
+        guard let closeBraceRange = source.range(of: "}", range: structRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not find closing brace of CallJoinAckResult"); return
+        }
+        let structBody = String(source[structRange.upperBound..<closeBraceRange.lowerBound])
+        XCTAssertTrue(structBody.contains("let joined: Bool"))
+        XCTAssertTrue(
+            structBody.contains("let errorCode: String?"),
+            "CallJoinAckResult must expose the ack's error code so callers can " +
+            "distinguish CALL_ENDED from a plain timeout")
+        XCTAssertTrue(
+            structBody.contains("let endReason: String?"),
+            "CallJoinAckResult must expose the raw endReason so the app layer can map " +
+            "it to CallEndReason (via CallEndReasonMapper) and offer retry on a " +
+            "transient cause")
+    }
+
+    /// `emitCallJoinWithAckDetailed` must actually read `error.code`/
+    /// `error.endReason` from the ack payload — declaring the fields on
+    /// CallJoinAckResult without populating them would leave every caller
+    /// silently starved of the detail.
+    func test_messageSocketManager_detailedAck_readsErrorCodeAndEndReason() throws {
+        let source = try socketManagerSource()
+        guard let funcRange = source.range(of: "func emitCallJoinWithAckDetailed(callId: String)") else {
+            XCTFail("emitCallJoinWithAckDetailed not found in MessageSocketManager.swift"); return
+        }
+        guard let funcEndRange = source.range(of: "\n    public func emitCallJoinWithAck(callId: String)", range: funcRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not bound emitCallJoinWithAckDetailed body"); return
+        }
+        let funcBody = String(source[funcRange.upperBound..<funcEndRange.lowerBound])
+        XCTAssertTrue(funcBody.contains("error?[\"code\"] as? String"))
+        XCTAssertTrue(funcBody.contains("error?[\"endReason\"] as? String"))
+    }
+
+    /// `emitCallJoinWithAck` must delegate to the detailed variant instead of
+    /// duplicating the ack-parsing logic — two independent parses of the same
+    /// wire payload is exactly how this kind of gap (one call site reads a
+    /// field the sibling doesn't) recurs across this codebase (Vagues 158-161).
+    func test_messageSocketManager_boolJoin_delegatesToDetailedVariant() throws {
+        let source = try socketManagerSource()
+        guard let funcRange = source.range(of: "public func emitCallJoinWithAck(callId: String) async -> Bool {") else {
+            XCTFail("emitCallJoinWithAck not found in MessageSocketManager.swift"); return
+        }
+        guard let closeBraceRange = source.range(of: "}", range: funcRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not find closing brace of emitCallJoinWithAck"); return
+        }
+        let funcBody = String(source[funcRange.upperBound..<closeBraceRange.lowerBound])
+        XCTAssertTrue(
+            funcBody.contains("emitCallJoinWithAckDetailed(callId: callId).joined"),
+            "emitCallJoinWithAck must delegate to emitCallJoinWithAckDetailed rather than " +
+            "re-parsing the ack payload independently")
+    }
+}
+
 // MARK: - Remote screen capture alert tests
 
 /// Guards the end-to-end path for notifying the local user when the remote peer

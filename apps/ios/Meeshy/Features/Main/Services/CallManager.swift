@@ -4808,9 +4808,27 @@ final class CallManager: ObservableObject {
                 // those events are silently dropped.
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    let joined = await MessageSocketManager.shared.emitCallJoinWithAck(callId: callId)
+                    let ackResult = await MessageSocketManager.shared.emitCallJoinWithAckDetailed(callId: callId)
                     guard self.callState.isActive, self.currentCallId == callId else { return }
-                    if !joined {
+                    // Vague 162 — the call already ended server-side during the
+                    // disconnection (lost the race against the gateway's
+                    // DISCONNECT_GRACE_MS window, or ended for another reason
+                    // while we were offline) and the `call:ended` broadcast that
+                    // would normally tell us was itself dropped by the very
+                    // outage this handler exists to recover from. Previously we
+                    // only logged "proceeding anyway" and never transitioned
+                    // `callState` — the app stayed on the active-call screen
+                    // forever, no retry offered, no indication anything ended.
+                    // Route through the canonical remote-end path (same one
+                    // `call:ended`/`call:error CALL_ENDED` use) with the real
+                    // `endReason` so a transient cause (connectionLost/
+                    // heartbeatTimeout) still offers « Réessayer ».
+                    if ackResult.errorCode == "CALL_ENDED" {
+                        Logger.calls.warning("Socket reconnect — call:join rejected, call already ended server-side (callId=\(callId), endReason=\(ackResult.endReason ?? "nil"))")
+                        self.handleRemoteEnd(callId: callId, rawReason: ackResult.endReason)
+                        return
+                    }
+                    if !ackResult.joined {
                         Logger.calls.warning("Socket reconnect — call:join ACK timed out (callId=\(callId)), proceeding anyway")
                     }
                     self.flushPendingIceCandidates()
