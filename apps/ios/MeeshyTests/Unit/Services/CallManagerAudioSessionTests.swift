@@ -452,6 +452,44 @@ final class CallManagerAudioSessionTests: XCTestCase {
         )
     }
 
+    func test_callManager_audioRouteChange_newDeviceAvailable_revertsSpeakerFlagOnApplyFailure() throws {
+        // Audit finding — mirrors the fix already applied to toggleSpeaker() (§7.8):
+        // overrideOutputAudioPort can throw (e.g. `insufficientPriority` when the
+        // just-connected Bluetooth headset itself holds route priority), and
+        // applySpeakerRoute() surfaces that as a `false` return. The
+        // .newDeviceAvailable branch discarded this result: isSpeaker was left at
+        // `false` even when the override never actually applied, desyncing the
+        // speaker-toggle UI from the real audio route — the same failure class
+        // toggleSpeaker() already guards against, left unguarded on this sibling
+        // call site that performs the identical optimistic flip.
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
+            XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        guard let newDevRange = fnBody.range(of: "case .newDeviceAvailable:") else {
+            XCTFail(".newDeviceAvailable case not found"); return
+        }
+        // Bounded by the NEXT case label, not a character count — a fixed-width
+        // window is a ticking time bomb here (a doc-comment added above either
+        // case shifts this body past a magic offset and rots the guard on
+        // unrelated changes, without the code it actually protects regressing).
+        guard let oldDevRange = fnBody.range(of: "case .oldDeviceUnavailable:", range: newDevRange.upperBound..<fnBody.endIndex) else {
+            XCTFail(".oldDeviceUnavailable case not found after .newDeviceAvailable"); return
+        }
+        let newDevBody = String(fnBody[newDevRange.lowerBound ..< oldDevRange.lowerBound])
+
+        XCTAssertTrue(
+            newDevBody.contains("if !applySpeakerRoute()"),
+            ".newDeviceAvailable must check applySpeakerRoute()'s result and revert isSpeaker on " +
+            "failure — same discipline as toggleSpeaker(), otherwise a route-priority failure leaves " +
+            "isSpeaker desynced from the real audio route."
+        )
+    }
+
     func test_callManager_audioRouteChange_oldDeviceUnavailable_appliesRoute() throws {
         // P0-8: when a headset/BT device disconnects (.oldDeviceUnavailable), iOS routes
         // back to the built-in speaker or earpiece. We must re-apply the user's speaker
