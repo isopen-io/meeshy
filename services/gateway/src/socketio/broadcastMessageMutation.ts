@@ -6,6 +6,7 @@ import {
   type PreviewEmitIO,
   type PreviewPrisma,
 } from './emitConversationPreviewUpdate';
+import type { Anonymized, ServerEmitTarget } from './serverEmit';
 
 // Ce relais ne lit rien lui-même : il transmet le prisma de l'aperçu tel quel.
 // Le dériver plutôt que le redéclarer est ce qui empêche les deux listes de
@@ -31,19 +32,6 @@ export interface MessageMutationManager {
     senderId: string | null | undefined;
   }): Promise<void>;
 }
-
-/**
- * Un type anonyme DÉRIVÉ du contrat, jamais recopié.
- *
- * Le mappage homomorphe préserve les modificateurs (`readonly` compris) et ne
- * change rien à la forme ; ce qu'il change, c'est que le résultat est un type
- * OBJET anonyme et non une `interface`. Seuls les premiers reçoivent la
- * signature d'index implicite qui les rend assignables à
- * `Record<string, unknown>` — ce que la file hors ligne attend de sa charge.
- * Sans lui, gouverner ce champ obligerait à réintroduire au site d'appel le
- * cast que ce lot retire.
- */
-type Anonymized<T> = { [K in keyof T]: T[K] };
 
 /**
  * Ce que ce transport a le droit de mettre sur le fil, par événement.
@@ -95,10 +83,30 @@ export type MessageMutationParams =
       authorId: string | null | undefined;
     });
 
-const EVENT_NAME = {
-  edited: SERVER_EVENTS.MESSAGE_EDITED,
-  deleted: SERVER_EVENTS.MESSAGE_DELETED,
-} as const;
+/**
+ * L'émission de la room, discriminée sur `eventType`.
+ *
+ * Elle ne l'était pas : une table `EVENT_NAME[eventType]` d'un côté et
+ * `payload` de l'autre sont DEUX unions indépendantes, et rien ne disait qu'on
+ * prend le même membre dans les deux. Le cycle 103 a gouverné la CHARGE
+ * (`payload` discriminé par `eventType`) et laissé cette moitié-là ouverte,
+ * derrière un `emit(event: string, payload: unknown)` qui acceptait n'importe
+ * quel couple : un `SocketIOMessage` servi sous `message:deleted` compilait.
+ *
+ * Le `switch` n'est pas une préférence de style, c'est le seul moyen de
+ * CORRÉLER les deux unions — la porte typée refuse de compiler sans lui.
+ */
+function emitToConversationRoom(
+  target: ServerEmitTarget | undefined,
+  params: MessageMutationParams,
+): void {
+  if (!target) return;
+  if (params.eventType === 'edited') {
+    target.emit(SERVER_EVENTS.MESSAGE_EDITED, params.payload);
+    return;
+  }
+  target.emit(SERVER_EVENTS.MESSAGE_DELETED, params.payload);
+}
 
 /**
  * The single REST-side broadcaster for a message edit or delete.
@@ -136,7 +144,7 @@ export async function broadcastMessageMutation(params: MessageMutationParams): P
   if (!manager) return;
 
   try {
-    manager.getIO()?.to(ROOMS.conversation(conversationId)).emit(EVENT_NAME[eventType], payload);
+    emitToConversationRoom(manager.getIO()?.to(ROOMS.conversation(conversationId)), params);
   } catch (error) {
     onError?.(error);
   }

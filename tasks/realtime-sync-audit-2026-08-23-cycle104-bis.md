@@ -209,8 +209,12 @@ existe.
       d'index ci-dessus. Le diagnostic à garder est celui-là, et un mauvais
       diagnostic écrit dans le code coûte plus qu'aucun (règle du cycle 84 : une
       garde qui a l'air de couvrir).
-- [ ] Suivi hérité — `PreviewEmitIO.emit(event: string, payload: unknown)` reste
-      la porte non typée de toute diffusion d'aperçu.
+- [x] Suivi hérité **CLOS par le lot voisin, pas par celui-ci** :
+      `PreviewEmitIO.emit(event: string, payload: unknown)` a été dérivé de
+      `ServerToClientEvents` par le cycle 104 (PR #3366), qui a trouvé HUIT
+      copies de la même déclaration là où le suivi n'en nommait qu'une. Noté ici
+      parce que ce lot-ci le portait aussi en suivi : deux lots du même jour,
+      instruits en parallèle, et c'est l'autre qui l'a fermé.
 - [ ] Suivi hérité — la règle du `senderId` du fil a QUATRE exemplaires
       (`messageEditedPayload.ts:90`, `MeeshySocketIOManager.ts:2572`,
       `MessagingService.ts:544`, `conversations/messages.ts:1076`), dont un en

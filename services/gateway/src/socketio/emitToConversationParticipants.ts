@@ -1,4 +1,5 @@
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
+import { emitServerEvent, type ServerEmitArgs, type ServerEventName, type ServerEventPayload } from './serverEmit';
 
 /**
  * A conversation participant, reduced to the two identities a room name can be
@@ -19,7 +20,7 @@ export interface ParticipantRoomTarget {
 export interface ConversationRoomBroadcast {
   to(room: string): ConversationRoomBroadcast;
   except(room: string): ConversationRoomBroadcast;
-  emit(event: string, payload: unknown): void;
+  emit(...args: ServerEmitArgs): unknown;
 }
 
 export interface ConversationRoomEmitter {
@@ -153,12 +154,12 @@ export function participantUserRoomTargets<T extends ParticipantRoomTarget>(
  * fan-out le plus fréquent de la messagerie. Un second nom se réintroduit
  * maintenant par un second appel, qui se voit en revue.
  */
-export function emitToConversationParticipants(params: {
+export function emitToConversationParticipants<E extends ServerEventName>(params: {
   io: ConversationRoomEmitter | null | undefined;
   conversationId: string;
   participants: ReadonlyArray<ParticipantRoomTarget>;
-  event: string;
-  payload: unknown;
+  event: E;
+  payload: ServerEventPayload<E>;
   exceptRoom?: string | null;
 }): string[] {
   const { io, conversationId, participants, event, payload, exceptRoom } = params;
@@ -178,7 +179,7 @@ export function emitToConversationParticipants(params: {
   for (const room of rooms.slice(1)) emitter = emitter.to(room);
   if (exceptRoom) emitter = emitter.except(exceptRoom);
 
-  emitter.emit(event, payload);
+  emitServerEvent(emitter, event, payload);
 
   return rooms;
 }

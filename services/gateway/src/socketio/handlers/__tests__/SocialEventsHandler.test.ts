@@ -15,40 +15,23 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
-jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  SERVER_EVENTS: {
-    POST_CREATED: 'post:created',
-    POST_UPDATED: 'post:updated',
-    POST_DELETED: 'post:deleted',
-    POST_LIKED: 'post:liked',
-    POST_UNLIKED: 'post:unliked',
-    POST_REPOSTED: 'post:reposted',
-    POST_BOOKMARKED: 'post:bookmarked',
-    POST_REACTION_ADDED: 'post:reaction-added',
-    POST_REACTION_REMOVED: 'post:reaction-removed',
-    STORY_CREATED: 'story:created',
-    STORY_UPDATED: 'story:updated',
-    STORY_DELETED: 'story:deleted',
-    STORY_VIEWED: 'story:viewed',
-    STORY_REACTED: 'story:reacted',
-    STORY_UNREACTED: 'story:unreacted',
-    STATUS_CREATED: 'status:created',
-    STATUS_UPDATED: 'status:updated',
-    STATUS_DELETED: 'status:deleted',
-    STATUS_REACTED: 'status:reacted',
-    STATUS_UNREACTED: 'status:unreacted',
-    COMMENT_ADDED: 'comment:added',
-    COMMENT_DELETED: 'comment:deleted',
-    COMMENT_LIKED: 'comment:liked',
-    POST_TRANSLATION_UPDATED: 'post:translation-updated',
-    COMMENT_TRANSLATION_UPDATED: 'comment:translation-updated',
-    COMMENT_MEDIA_UPDATED: 'comment:media-updated',
-  },
-  ROOMS: {
-    feed: (id: string) => `feed:${id}`,
-    post: (id: string) => `post:${id}`,
-  },
-}));
+/**
+ * **Pas de double de `@meeshy/shared/types/socketio-events` — et c'est mesuré.**
+ *
+ * Ce fichier en portait un, qui énumérait vingt-sept constantes de
+ * `SERVER_EVENTS` à la main et n'en portait pas la vingt-huitième :
+ * `COMMENT_UNLIKED`. Sous ce harnais, `broadcastCommentUnliked` émettait donc un
+ * événement au nom `undefined` — et son témoin était VERT, parce qu'il
+ * n'assertait que les deux rooms (`io.to`), jamais le NOM de l'événement.
+ *
+ * Troisième exemplaire du même patron en une poignée de cycles (91 puis 93, tous
+ * deux sur `api-schemas`), et le premier où la perte est un nom d'événement
+ * plutôt qu'un schéma. La règle du répertoire est explicite : « `jest.requireActual`
+ * par défaut, surcharge ciblée seulement si nécessaire ». Ici il n'y a rien à
+ * surcharger — `SERVER_EVENTS` et `ROOMS` sont des constantes pures, et les
+ * vraies rendent déjà `feed:${id}` / `post:${id}` à l'identique — donc pas de
+ * double du tout.
+ */
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
@@ -122,6 +105,18 @@ function emittedRooms(io: ReturnType<typeof makeIo>): unknown[] {
   return (io.to as jest.Mock<any>).mock.calls.flatMap(([r]: [unknown]) =>
     Array.isArray(r) ? r : [r]
   );
+}
+
+/**
+ * Les couples `(événement, charge)` réellement mis sur le fil.
+ *
+ * Jumeau d'`emittedRooms` sur l'autre moitié de l'émission — celle qu'aucun
+ * témoin de ce fichier ne regardait, et par où un nom `undefined` est passé
+ * (cf. la note en tête de fichier). Une ADRESSE juste ne dit rien de ce qui y
+ * arrive.
+ */
+function emitCalls(io: ReturnType<typeof makeIo>): Array<[string, unknown]> {
+  return (io._emit as jest.Mock<any>).mock.calls as Array<[string, unknown]>;
 }
 
 function buildHandler(overrides: {
@@ -532,6 +527,22 @@ describe('SocialEventsHandler', () => {
 
       expect(io.to).toHaveBeenCalledWith(`feed:${commentAuthorId}`);
       expect(io.to).toHaveBeenCalledWith(`post:${POST_ID}`);
+    });
+
+    /**
+     * L'assertion dont l'absence a laissé vivre un nom d'événement `undefined`
+     * sur les DEUX adresses (cf. la note sur le double retiré, en tête de
+     * fichier). Une room juste ne prouve rien de ce qui y arrive : seul le NOM
+     * décide si un client branche quoi que ce soit dessus.
+     */
+    it('names the event `comment:unliked` on BOTH addresses', () => {
+      const { handler, io } = buildHandler();
+      const data = { commentId: COMMENT_ID, postId: POST_ID, userId: USER_ID, emoji: '👍', likeCount: 0 } as any;
+
+      handler.broadcastCommentUnliked(data, 'comment-author-1');
+
+      const names = emitCalls(io).map(([event]) => event);
+      expect(names).toEqual(['comment:unliked', 'comment:unliked']);
     });
   });
 
