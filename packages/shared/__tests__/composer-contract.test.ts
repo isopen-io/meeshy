@@ -45,8 +45,33 @@ describe('le format initial — ce que la porte décide', () => {
     }
   })
 
-  it('un média reçu d\'une conversation ouvre sur une STORY, jamais sur un post', () => {
+  /**
+   * ⚠️ Cette attente CONTREDIT volontairement trois sources antérieures, et il
+   * faut le savoir avant de « corriger » ce test :
+   *
+   *   1. le tableau des optionnels des planches disait « O13 — Média reçu → post » ;
+   *   2. l'inventaire des portes donnait la colonne format = P ;
+   *   3. le miroir iOS livré en C1 ouvre `.conversationMedia` sur `.post`.
+   *
+   * La **directive produit du 2026-08-23** les renverse, mot pour mot :
+   * « conversationMedia │ post → NON, par défaut proposer en story, ou mettre
+   * un sous-menu qui permet de poster en story ou poste ; si vidéo, audio,
+   * proposer en réel. »
+   *
+   * Raison produit : un média reçu qui ouvrirait un POST par défaut donnerait
+   * du permanent là où le geste courant est le partage bref — et l'inverse est
+   * réparable en un tap par l'éventail, alors qu'un post publié ne se
+   * « dé-publie » pas.
+   *
+   * La matrice maîtresse des planches contemplait DÉJÀ les trois formats pour
+   * e9 (« ◆ seed story ◆ 2 gestes ◆ si vidéo ») : la planche se contredisait
+   * elle-même, la directive a tranché, et O13 + l'inventaire + le flowchart
+   * ont été alignés (rév. 3).
+   */
+  it('un média reçu d\'une conversation ouvre sur une STORY, jamais sur un post (directive 2026-08-23, renverse O13)', () => {
     expect(composerOpening({ kind: 'conversationMedia' }, withoutReel).initialFormat).toBe('story')
+    expect(composerOpening({ kind: 'conversationMedia' }, withoutReel).offeredFormats).toEqual(['story', 'post'])
+    expect(composerOpening({ kind: 'conversationMedia' }, withReel).offeredFormats).toEqual(['story', 'post', 'reel'])
   })
 
   it('brouillon et partage entrant ouvrent sur un post TRANSITOIRE — le host rebascule au chargement', () => {
