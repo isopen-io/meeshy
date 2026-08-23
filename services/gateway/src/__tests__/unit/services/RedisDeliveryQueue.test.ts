@@ -1561,6 +1561,48 @@ describe('RedisDeliveryQueue (malformed JSON resilience)', () => {
     expect(peeked[0].messageId).toBe('peek-valid');
   });
 
+  /**
+   * L'isolation que ce bloc garde est énoncée sur `parseRawEntries` — « so one
+   * corrupt entry can never poison a whole drain/peek ». Elle ne couvrait que
+   * l'entrée qui NE PARSE PAS. Une entrée qui parse très bien et dont
+   * `enqueuedAt` est absent ou illisible passe le filtre, puis atteint le
+   * comparateur : `new Date(undefined).getTime()` rend `NaN`, et la spec
+   * (SortCompare) mappe un comparateur qui rend `NaN` sur `+0` — « égal à tout ».
+   *
+   * Un comparateur qui déclare une entrée égale à toutes les autres n'est plus
+   * TRANSITIF, et le tri cesse d'être défini pour les entrées SAINES elles-mêmes.
+   * Mesuré sur cinq entrées : `a, c, BAD, b, d` — `c` rejoué avant `b`, deux
+   * entrées parfaitement datées inversées par la présence d'une troisième.
+   *
+   * Ce que ça coûte est écrit sur `byEnqueuedAt` : l'ordre FIFO est ce qui
+   * garantit qu'une édition ne rejoue pas AVANT le `message:new` qu'elle vise —
+   * « the recipient's client drops an edit for a message it hasn't received
+   * yet ». Le drain étant destructif, l'édition ainsi jetée est perdue.
+   */
+  test('drain — une entrée sans `enqueuedAt` lisible ne déplace pas les entrées SAINES', async () => {
+    const at = (s: number) => new Date(Date.UTC(2026, 7, 23, 10, 0, s)).toISOString();
+    const redis = makeMockRedis({
+      eval: jest.fn().mockResolvedValue([
+        JSON.stringify(makePayload({ messageId: 'c', enqueuedAt: at(3) })),
+        JSON.stringify(makePayload({ messageId: 'a', enqueuedAt: at(1) })),
+        JSON.stringify({ ...makePayload({ messageId: 'BAD' }), enqueuedAt: undefined }),
+        JSON.stringify(makePayload({ messageId: 'd', enqueuedAt: at(4) })),
+        JSON.stringify(makePayload({ messageId: 'b', enqueuedAt: at(2) })),
+      ]),
+    });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    const drained = await queue.drain('user-undated');
+
+    // Le point du témoin : les entrées DATÉES sortent en FIFO strict, quoi que
+    // porte l'entrée non datée.
+    const dated = drained.map(e => e.messageId).filter(id => id !== 'BAD');
+    expect(dated).toEqual(['a', 'b', 'c', 'd']);
+    // Et l'entrée non datée n'est pas JETÉE : elle est toujours en base, et le
+    // drain est la seule occasion de la rejouer.
+    expect(drained.map(e => e.messageId)).toContain('BAD');
+  });
+
   test('cleanup — drops malformed entry by value (counts as stale removal)', async () => {
     const valid = makePayload({ messageId: 'cleanup-valid', enqueuedAt: new Date().toISOString() });
     const redis = makeMockRedis({
