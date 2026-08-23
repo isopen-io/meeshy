@@ -202,7 +202,34 @@ n'a jamais été gouvernée.
 | Suites `socketio/handlers` + `validation` | 12/12, **488/488** |
 | Tests passerelle (complet) | *cf. §11* |
 
-## 10. Ce que ce cycle apprend
+## 10. Le correctif a eu son propre défaut, et il était INVISIBLE au compilateur
+
+Premier jet : l'import de l'unité posé ligne **152** de
+`routes/conversations/messages.ts`, sous un `z.object` évalué au chargement du
+module ligne **129**. TypeScript émet ses `require` dans l'**ordre de la
+source** ; le `const` de l'enveloppe n'existait donc pas encore quand le schéma
+l'étalait.
+
+```
+ReferenceError: Cannot access 'encryption_envelope_js_1' before initialization
+    at src/routes/conversations/messages.ts:129:6
+```
+
+**`tsc --noEmit` : 0 erreur. Le type-check bloquant de la CI : vert. Seize suites
+refusaient de se charger.** La zone morte temporelle entre deux instructions de
+niveau module n'est vérifiée par aucun des deux.
+
+> **Vert au compilateur n'est pas vert au CHARGEMENT.** C'est la mesure qui
+> justifie de faire tourner la suite ENTIÈRE avant de conclure, et pas seulement
+> les suites du lot — les neuf témoins ajoutés étaient tous verts, et aucun ne
+> touchait la route REST.
+
+Le fichier portait déjà l'anti-patron (un import ligne 152, sûr par accident :
+sa valeur n'est lue que dans un handler, jamais à l'initialisation). Un
+`import/first` le fermerait par construction ; il est hors de ce lot — il
+toucherait tout le dépôt (§11).
+
+## 11. Ce que ce cycle apprend
 
 > **Un champ lu sur le BRUT quand tous ses voisins viennent du VALIDÉ ne se
 > défend pas — il se remarque.** C'est l'unique asymétrie de tout le chemin, et
@@ -226,7 +253,7 @@ n'a jamais été gouvernée.
 > opposés — strippé d'un côté, inexprimable de l'autre — et une garde
 > unidirectionnelle en laisse toujours une passer.
 
-## 11. Suivis
+## 12. Suivis
 
 - [ ] **Neuf** — la charge d'envoi du WEB est un `Record<string, unknown>`, avec
       deux `as unknown as` au moment d'émettre. C'est la porte de SORTIE jumelle
@@ -243,3 +270,8 @@ n'a jamais été gouvernée.
       localisée sur le fil.
 - [ ] Hérité (106) — la LECTURE depuis Redis reste non validée à l'exécution.
 - [ ] Hérité — `ConversationUpdatedEventData` et sa signature d'index.
+- [ ] **Neuf** — `import/first` n'est pas activé. Un import posé sous une
+      instruction de niveau module qui le lit compile, passe le type-check
+      bloquant de la CI, et refuse de se charger (§10). Le dépôt en porte au
+      moins un autre exemplaire, sûr par accident. Lot d'hygiène à part : la
+      règle touche tout le dépôt.
