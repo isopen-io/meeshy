@@ -7,6 +7,31 @@ private struct CacheTestItem: CacheIdentifiable, Codable, Equatable {
     var name: String
 }
 
+/// Chiffreur réversible qui compte ses appels — observable du skip P2-2a
+/// (« payload identique ⇒ pas de re-chiffrement »), sans horloge ni état DB.
+private final class CountingCipher: DatabaseEncryptionProviding, @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var encryptCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    func encrypt(_ plaintext: Data) -> Data? {
+        lock.lock()
+        count += 1
+        lock.unlock()
+        return Data("X".utf8) + plaintext
+    }
+
+    func decrypt(_ ciphertext: Data) -> Data? {
+        guard ciphertext.first == UInt8(ascii: "X") else { return nil }
+        return Data(ciphertext.dropFirst())
+    }
+}
+
 final class GRDBCacheStoreTests: XCTestCase {
 
     private func makeDB() throws -> DatabaseQueue {
@@ -224,34 +249,31 @@ final class GRDBCacheStoreTests: XCTestCase {
 
     /// P2-2a — un flush dont les payloads n'ont pas changé ne réécrit AUCUNE
     /// rangée : l'empreinte plaintext (`contentHash`) court-circuite le
-    /// re-chiffrement + l'UPDATE. Discriminant déterministe : une sentinelle
-    /// `updatedAt` posée en base AVANT le flush — une réécriture l'écraserait
-    /// avec `now`, un skip la laisse intacte.
+    /// re-chiffrement + l'UPDATE. Observable direct et sans horloge : un
+    /// chiffreur-stub qui COMPTE ses appels — le contrat est littéralement
+    /// « pas de re-chiffrement des rangées inchangées ».
     func test_flushDirtyKeys_unchangedItems_skipRewrite() async throws {
         let db = try makeDB()
-        let store = try makeStore(db: db)
+        let cipher = CountingCipher()
+        let policy = CachePolicy(ttl: .hours(1), staleTTL: .minutes(5),
+                                 maxItemCount: nil, storageLocation: .grdb)
+        let store = GRDBCacheStore<String, CacheTestItem>(
+            policy: policy, db: db, encrypted: true, encryption: cipher
+        )
         try await store.save([CacheTestItem(id: "1", name: "Alice"),
                               CacheTestItem(id: "2", name: "Bob")], for: "hashkey")
-
-        let sentinel = Date(timeIntervalSince1970: 1_000_000)
-        try await db.write { db in
-            try db.execute(sql: "UPDATE cache_entries SET updatedAt = ? WHERE key = ?",
-                           arguments: [sentinel, "hashkey"])
-        }
+        XCTAssertEqual(cipher.encryptCount, 2, "précondition : un chiffrement par rangée au save")
 
         // Mutation identité : le contenu publié est le même — la clé devient
         // dirty mais aucun payload ne change.
         await store.update(for: "hashkey") { existing in existing }
         await store.flushDirtyKeys()
 
+        XCTAssertEqual(cipher.encryptCount, 2,
+            "aucune rangée inchangée ne doit être re-chiffrée ni réécrite")
+
         let after = try await db.read { db in
-            try CacheEntry.filter(Column("key") == "hashkey").order(Column("itemId")).fetchAll(db)
-        }
-        XCTAssertEqual(after.count, 2)
-        for row in after {
-            XCTAssertEqual(row.updatedAt.timeIntervalSince1970,
-                           sentinel.timeIntervalSince1970, accuracy: 1,
-                           "aucune rangée inchangée ne doit être re-chiffrée ni réécrite")
+            try CacheEntry.filter(Column("key") == "hashkey").fetchAll(db)
         }
         XCTAssertEqual(after.compactMap(\.contentHash).count, 2,
             "les rangées portent leur empreinte plaintext")

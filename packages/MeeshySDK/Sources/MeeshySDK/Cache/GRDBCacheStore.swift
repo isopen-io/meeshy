@@ -585,6 +585,12 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
     private nonisolated func writeToL2(_ items: [Value], for keyStr: String) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
+        // .sortedKeys : l'empreinte contentHash exige des octets DÉTERMINISTES
+        // pour un même payload — sans ordre de clés garanti, deux encodes du
+        // même item peuvent différer et le skip ne fire jamais (réécriture
+        // intégrale silencieuse). Le décodage est insensible à l'ordre, les
+        // rangées historiques restent lisibles.
+        encoder.outputFormatting = [.sortedKeys]
         do {
             try db.write { db in
                 let now = Date()
@@ -620,6 +626,12 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
     private nonisolated func writeToL2PreservingFreshness(_ items: [Value], for keyStr: String) throws -> Date {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
+        // .sortedKeys : l'empreinte contentHash exige des octets DÉTERMINISTES
+        // pour un même payload — sans ordre de clés garanti, deux encodes du
+        // même item peuvent différer et le skip ne fire jamais (réécriture
+        // intégrale silencieuse). Le décodage est insensible à l'ordre, les
+        // rangées historiques restent lisibles.
+        encoder.outputFormatting = [.sortedKeys]
         do {
             return try db.write { db in
                 let now = Date()
@@ -834,6 +846,12 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
     private nonisolated func flushKeyToL2(keyStr: String, items: [Value]) -> Bool {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
+        // .sortedKeys : l'empreinte contentHash exige des octets DÉTERMINISTES
+        // pour un même payload — sans ordre de clés garanti, deux encodes du
+        // même item peuvent différer et le skip ne fire jamais (réécriture
+        // intégrale silencieuse). Le décodage est insensible à l'ordre, les
+        // rangées historiques restent lisibles.
+        encoder.outputFormatting = [.sortedKeys]
         do {
             try db.write { db in
                 // P2-2a — écriture-diff : un flush dirty de 600 items dont 1 a
