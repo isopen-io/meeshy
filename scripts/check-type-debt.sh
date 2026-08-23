@@ -48,6 +48,29 @@
 #   - `@meeshy/shared` is resolved by web's `paths` to the shared package's
 #     SOURCE, not to its `dist/`, so whether shared was built does not matter.
 #
+# That third bullet was TRUE OF THE ALIAS AND FALSE OF THE PACKAGE, and the gap
+# is the fourth source of drift — found at cycle 108, by walking into it.
+# `__tests__/lentille/shared-law-dist-parity.test.ts` reaches the built output
+# by RELATIVE path (`../../../../packages/shared/dist/utils/*.js`), which never
+# consults `paths` at all. A test whose whole purpose is to compare source to
+# `dist/` must of course import `dist/`; the defect was the header's, not the
+# test's. Without `packages/shared/dist` those imports raise TS2307 and the
+# count moves — measured on one unchanged tree: 1243 without the build, 1240
+# with it, a drift of exactly 3.
+#
+# The CI `quality` job builds shared BEFORE type-checking (`ci.yml`, "Build
+# shared package first (required for type-check)"), so the recorded baseline is
+# the dist-present number. A developer machine that has not built shared was
+# therefore measuring something else and reading a PHANTOM REGRESSION — and the
+# reverse is worse: a baseline ever recorded from such a machine would hand the
+# budget 3 silently spendable points, which is precisely what this ratchet
+# exists to prevent.
+#
+# So the state is PINNED rather than the errors excluded. Excluding them by path
+# (as `.next/` is excluded) would also stabilise the number, but at the price of
+# making that file free of all debt forever. Refusing to measure in an undefined
+# state costs nothing and keeps every file counted.
+#
 # What CAN legitimately move the number is a TypeScript version bump. That is a
 # feature: a bump that adds errors must be seen, and a bump that removes them
 # must be recorded. Both directions fail loudly and name the number to write.
@@ -55,9 +78,10 @@
 # --self-test: exercises `count_type_errors` — the actual counting mechanism
 # used below — against throwaway fixture packages: one that must report exactly
 # its errors, one clean that must report zero, and one whose only error lives
-# under `.next/` and must therefore NOT be counted. A ratchet that can go
-# silently blind is worse than no ratchet, so this fails loudly (non-zero) if
-# its own counting is broken.
+# under `.next/` and must therefore NOT be counted. It also exercises
+# `shared_dist_is_built`, the guard on the fourth drift source, in both of its
+# states. A ratchet that can go silently blind is worse than no ratchet, so this
+# fails loudly (non-zero) if its own counting is broken.
 
 set -euo pipefail
 
@@ -111,6 +135,17 @@ count_type_errors() {
     | { grep -vE '^\.next/' || true; } \
     | wc -l \
     | tr -d ' '
+}
+
+# Le `dist/` de `@meeshy/shared` est-il construit ?
+#
+# Le compte n'est comparable à la baseline que dans cet état (cf. en-tête, 4e
+# source de dérive). On teste le RÉPERTOIRE plutôt que les trois fichiers que le
+# test de parité importe aujourd'hui : cette liste bougera, la condition non.
+shared_dist_is_built() {
+  local repo_root="$1"
+  local dist="$repo_root/packages/shared/dist"
+  [ -d "$dist" ] && [ -n "$(ls -A "$dist" 2>/dev/null)" ]
 }
 
 # Les fichiers qui portent le plus d'erreurs — pour qu'un échec soit
@@ -168,6 +203,36 @@ EOF
   echo 'export const nope: number = "generated";' > "$tmp/generated/.next/types/gen.ts"
   assert_eq "une erreur sous .next/ est exclue" "0" "$(count_type_errors "$tmp/generated")"
 
+  # 4. Le garde de la 4e source de dérive, dans SES DEUX états — un garde qui
+  #    répondrait « construit » sur un arbre vide laisserait revenir en silence
+  #    l'écart de 3 que ce cycle vient de mesurer.
+  mkdir -p "$tmp/nodist/packages/shared"
+  if shared_dist_is_built "$tmp/nodist"; then
+    echo -e "  ${RED}✗${NC} un dist absent doit être vu comme absent"
+    failures=$((failures + 1))
+  else
+    echo -e "  ${GREEN}✓${NC} un dist absent est vu comme absent"
+  fi
+
+  mkdir -p "$tmp/withdist/packages/shared/dist/utils"
+  echo 'export const x = 1;' > "$tmp/withdist/packages/shared/dist/utils/focus-curve.js"
+  if shared_dist_is_built "$tmp/withdist"; then
+    echo -e "  ${GREEN}✓${NC} un dist construit est vu comme construit"
+  else
+    echo -e "  ${RED}✗${NC} un dist construit doit être vu comme construit"
+    failures=$((failures + 1))
+  fi
+
+  # Un répertoire `dist/` VIDE n'est pas un build — c'est l'état que laisse un
+  # `rm -rf dist/*` ou un build interrompu, et il produit les mêmes TS2307.
+  mkdir -p "$tmp/emptydist/packages/shared/dist"
+  if shared_dist_is_built "$tmp/emptydist"; then
+    echo -e "  ${RED}✗${NC} un dist VIDE ne doit pas passer pour un build"
+    failures=$((failures + 1))
+  else
+    echo -e "  ${GREEN}✓${NC} un dist vide n'est pas un build"
+  fi
+
   rm -rf "$tmp"
 
   if [ "$failures" -ne 0 ]; then
@@ -188,6 +253,23 @@ main() {
   fi
 
   local web_dir="$REPO_ROOT/apps/web"
+
+  # Le chiffre n'est comparable QUE dans l'état où la baseline a été prise.
+  # Mesurer sans `packages/shared/dist` rend une régression fantôme (+3), et
+  # enregistrer une baseline depuis cet état offrirait 3 points de budget.
+  if ! shared_dist_is_built "$REPO_ROOT"; then
+    echo -e "${RED}✗ packages/shared/dist est absent — refus de mesurer.${NC}"
+    echo ""
+    echo "Un test de parité de apps/web importe le dist de @meeshy/shared par"
+    echo "chemin RELATIF, hors de l'alias \`paths\`. Sans le build, ses imports"
+    echo "rendent des TS2307 et le compte monte de 3 sans qu'aucune dette"
+    echo "n'ait bougé. La CI construit shared avant de type-checker, donc la"
+    echo "baseline est le chiffre dist-présent."
+    echo ""
+    echo "    cd packages/shared && bun run build"
+    echo ""
+    return 1
+  fi
 
   echo "Type debt ratchet — apps/web (baseline $WEB_BASELINE)"
   local actual
