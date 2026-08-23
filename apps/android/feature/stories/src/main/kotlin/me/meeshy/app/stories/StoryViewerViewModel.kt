@@ -52,22 +52,30 @@ data class StoryForegroundMediaView(
     val opacity: Double = 1.0,
     val startTime: Double = 0.0,
     val duration: Double = 0.0,
+    val fadeIn: Double = 0.0,
+    val fadeOut: Double = 0.0,
     val keyframes: List<StoryKeyframe> = emptyList(),
     val clipTransitions: List<StoryClipTransition> = emptyList(),
 ) {
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
-     * unchanged when nothing animates — no keyframes that key a channel AND no
-     * clip transition this layer takes part in. Otherwise a copy whose
-     * [x]/[y]/[scale] follow the interpolated keyframe animation (un-keyed channels
-     * holding their static base) and whose [opacity] additionally folds in the
-     * crossfade/dissolve ramp of any transition naming this clip. Keyframe times are
-     * offsets from [startTime], per the timeline spec.
+     * unchanged when nothing animates — no keyframes that key a channel, no clip
+     * transition this layer takes part in, AND no fadeIn/fadeOut envelope active at
+     * this instant. Otherwise a copy whose [x]/[y]/[scale] follow the interpolated
+     * keyframe animation (un-keyed channels holding their static base) and whose
+     * [opacity] folds together, in iOS render order, the clip's own fade envelope,
+     * its keyframe opacity, and any clip-transition ramp.
+     *
+     * Opacity precedence mirrors iOS `StoryRenderer` (`fade ?? keyframeOpacity ??
+     * base`): a live [fadeIn]/[fadeOut] envelope value OVERRIDES the keyframe/static
+     * opacity, and the result is then multiplied by the crossfade/dissolve ramp of
+     * any transition naming this clip. Keyframe and fade times are offsets from
+     * [startTime], per the timeline spec.
      *
      * A layer that participates in a transition but carries no [duration] is left
-     * untouched: window-clipping on a zero-length window (`end == start`) would hide
-     * the clip at almost every instant. Pure — the Compose canvas ticks a clock in
-     * and renders the result.
+     * untouched for the transition ramp: window-clipping on a zero-length window
+     * (`end == start`) would hide the clip at almost every instant. Pure — the
+     * Compose canvas ticks a clock in and renders the result.
      */
     fun animated(atSeconds: Float): StoryForegroundMediaView {
         val resolved = StoryKeyframeResolver.resolve(
@@ -84,7 +92,14 @@ data class StoryForegroundMediaView(
         } else {
             emptyList()
         }
-        if (resolved == null && transitions.isEmpty()) return this
+        val fadeEnvelope = StoryMediaFadeResolver.fadeOpacity(
+            fadeIn = fadeIn.takeIf { it > 0.0 },
+            fadeOut = fadeOut.takeIf { it > 0.0 },
+            startTime = startTime,
+            duration = duration.takeIf { it > 0.0 },
+            currentTime = atSeconds.toDouble(),
+        )
+        if (resolved == null && transitions.isEmpty() && fadeEnvelope == null) return this
 
         val base = resolved ?: ResolvedKeyframeTransform(x = x, y = y, scale = scale, opacity = opacity)
         val transitionOpacity = if (transitions.isEmpty()) {
@@ -98,11 +113,12 @@ data class StoryForegroundMediaView(
                 currentTime = atSeconds.toDouble(),
             )
         }
+        val opacityBase = fadeEnvelope ?: base.opacity
         return copy(
             x = base.x,
             y = base.y,
             scale = base.scale,
-            opacity = base.opacity * transitionOpacity,
+            opacity = opacityBase * transitionOpacity,
         )
     }
 }
@@ -587,6 +603,8 @@ class StoryViewerViewModel @Inject constructor(
             aspectRatio = aspectRatio,
             startTime = startTime ?: 0.0,
             duration = duration ?: 0.0,
+            fadeIn = fadeIn ?: 0.0,
+            fadeOut = fadeOut ?: 0.0,
             keyframes = keyframes.orEmpty(),
             clipTransitions = clipTransitions,
         )

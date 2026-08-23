@@ -2,6 +2,65 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-23 **a timed foreground clip fades in/out on the viewer canvas** (slice
+> `story-media-fade-envelope`, feature-parity §E — the previous entry's `Next` pointer's clip-inspector
+> candidate, taken on its reader side first: the wire-backed fade envelope is a clean pure core, chosen
+> over the text-keyframe alternative which would need a whole new text-object projection + Compose
+> rendering it doesn't have yet). iOS ramps a clip's opacity over its own `fadeIn`/`fadeOut`
+> (`StoryRenderer.fadeOpacity(item:at:)`); the Android foreground projection **dropped** both fields, so a
+> clip authored with a fade snapped on/off instead of ramping.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3414 (ios cycle 114 bis), #3409
+> (shared/gateway it. 256), #3395 (iOS 239i), #3392 (gateway it. 254): none is a `claude/apps/android/*`
+> slice, none in this routine's scope, none touched. Prior iteration (`story-clip-transition-opacity`)
+> already merged into main. Branched off freshly-fetched `origin/main` (`9be98e15`).
+>
+> **One pure resolver, ported 1:1 from iOS's canonical path** (`StoryRenderer.fadeOpacity`): new
+> `StoryMediaFadeResolver.fadeOpacity(fadeIn, fadeOut, startTime, duration, currentTime)` — `null` when the
+> clip authors no fade (both ≤0) OR the playhead is outside `[start, end)`; inside, fade-in ramps
+> `(t−start)/fadeIn` clamped `[0,1]`, then a steady `1.0`, then fade-out `(end−t)/fadeOut`; a `null`
+> duration → `end = +∞` so the fade-out edge (which needs a finite end) never fires; fade-in is evaluated
+> before fade-out so a clip shorter than `fadeIn+fadeOut` reports the fade-in ramp at the overlap
+> (iOS parity).
+>
+> **Real wiring (not orphan logic)**: `StoryForegroundMediaView` now carries `fadeIn`/`fadeOut` (threaded
+> through `toForegroundMediaView`, previously discarded). `animated()` computes the envelope and folds it at
+> **iOS render precedence** `fade ?? keyframeOpacity ?? base`, then `× transitionOpacity` — so a live
+> envelope OVERRIDES an authored keyframe opacity (not multiplied) and still multiplies with a
+> crossfade/dissolve ramp. The early-return now also accounts for a lone fade envelope
+> (`resolved == null && transitions.isEmpty() && fadeEnvelope == null → this`). **Zero Compose glue
+> change**: the viewer already applied `.alpha(animated.opacity)`, so a fading clip now ramps with no
+> screen edit.
+>
+> **SDK bootstrap — pristine `android-37.0` worked this image** (cheapest recipe; NOTES' "try pristine
+> first" held). `sdkmanager --channel=3 "platforms;android-37.0"` alone; `./gradlew :feature:stories:help`
+> resolved the target on the first run — no copy→patch, no both-dirs mode needed.
+>
+> **Tests: +23** — 16 `StoryMediaFadeResolverTest` (no-fade→null, zero-fade→null, before-window→null,
+> at/after-end→null, fade-in start=0/mid=0.5/past=1.0/boundary=1.0, fade-out mid=0.5/near-end=0.25/
+> boundary=1.0, fade-in-only-no-duration fades then holds forever, fade-out-only-no-finite-end never fades,
+> fade-in-precedence on overlap, shifted-clip start-relative clock, absent-startTime≡0), 6
+> `StoryForegroundFadeTest` (fade-in folds, fade-out folds, envelope OVERRIDES keyframe opacity while
+> position keyframes still animate, envelope × transition multiply to 0.05, outside-window identity,
+> no-fade-no-kf-no-transition identity), +1 `StoryViewerViewModelTest` (projection carries
+> fadeIn/fadeOut and ramps in/out). **Mutation RED-proof (isolated, restored after)**: dropping the
+> override (`fadeEnvelope ?: base.opacity` → `base.opacity`) failed EXACTLY the 5 envelope-value tests
+> (2 foreground fade + 1 viewer projection + fade-in/fade-out folds), the identity/outside-window tests
+> stayed green — genuine discrimination; production verified clean after restore, no stray `.bak`.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, **BUILD SUCCESSFUL** (973 tasks, 4m11s, no
+> test failures). Reviewer PASS. Diff is `apps/android` only (1 new pure file, 1 view-model data-class +
+> projection threading + `animated()` opacity fold, +23 tests across 3 files, tracking docs). Verdict:
+> **PASS** — pure app-side resolver reading existing wire fields + `animated()` folding at iOS precedence,
+> behavioural tests through the public API, no production logic outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) — the clip-inspector **editor** side now that the reader honours fades: a pure
+> per-clip inspector reducer (volume/fadeIn/fadeOut/loop/background/delete derivation over a selected
+> `StoryMediaObject`, wire-backed), OR the **timeline transport** pure state (play/pause/scrub/zoom
+> 0.25×–4×/mute), OR the text-object viewer projection (prerequisite for text keyframes/fades). Prefer the
+> candidate with the cleanest pure core; scout read-only first to confirm the wire fields and avoid
+> glue-only work.
+
 > On 2026-08-23 **story clip transitions fade the foreground on the viewer canvas** (slice
 > `story-clip-transition-opacity`, feature-parity §E — the previous entry's `Next` pointer's preferred
 > candidate: the wire-backed clip-transition reader resolver, chosen over the text-keyframe alternative for
