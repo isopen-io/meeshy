@@ -1353,6 +1353,50 @@ au motif que personne n'a encore marché dessus), mais change tout au récit :
 annoncer une panne qu'on n'a pas mesurée coûte la confiance dans les cycles où
 il y en a une.
 
+## Une porte de TYPE garde le sortant ; seule l'exécution garde l'entrant
+
+Les cycles 104 à 106 ont bâti la porte d'émission, et trois journaux de suite se
+sont clos sur le même suivi : « le miroir client→serveur n'est pas gouverné,
+`ClientToServerEvents` n'a aucun équivalent de `serverEmit.ts` ». Le cycle 107
+l'a instruit et l'a **mesuré faux**.
+
+Le constat de départ était exact ; la conclusion ne l'était pas, et l'écart tient
+en une distinction :
+
+| sens | ce qu'une porte de TYPE garde |
+|---|---|
+| SORTANT | **tout** — une diffusion Socket.IO n'a aucun sérialiseur, donc ce que le compilateur laisse passer part sur le fil |
+| ENTRANT | **rien** — le client n'est pas compilé par nous. Un `socket.on` typé décrit ce que le serveur CROIT recevoir, jamais ce qu'il ACCEPTE |
+
+> **Pour de l'entrant, la seule garde possible est à l'EXÉCUTION** — et c'est
+> celle qui existait déjà : 37 validations zod (`validateSocketEvent`), des
+> gardes manuscrites dans deux familles (`_validateCoordinates`,
+> `OBJECT_ID.test`), et un limiteur de débit sur CHAQUE famille.
+
+La faute de méthode a un nom : la symétrie était **lexicale**. « Le miroir » a
+suffi à transposer la conclusion du sortant sur l'entrant, sans ré-instruire la
+question — trois cycles durant, par recopie du suivi précédent. **Un suivi
+hérité est une AFFIRMATION, exactement comme un compte ou un tri : il se mesure
+avant d'être recopié, et le recopier trois fois ne le rend pas vrai.**
+
+### Corollaire : un balayage qui cherche UN idiome mesure sa popularité, pas une propriété
+
+Le premier outil écrit pour ce cycle cherchait `validateSocketEvent` et a rendu
+**sept faux positifs** — `LocationHandler` et `AttachmentReactionHandler`
+valident, simplement autrement, et `REACTION_REQUEST_SYNC` valide par zod dans un
+fichier que le suivi de délégation n'atteignait pas.
+
+C'est la règle du cycle 84 rejouée par inadvertance (« un audit qui liste des
+`select:` ne liste pas des fuites »). **Le balayage a été JETÉ, pas gelé** :
+geler un inventaire faux aurait transformé une erreur de mesure en vérité de
+dépôt, et un cliquet ment plus longtemps qu'un journal.
+
+### Ce qui reste, à sa taille
+
+Deux familles sur douze valident à la main. Écart de CONSISTANCE, pas de
+couverture : les gardes sont réelles et lisibles. La question utile n'est pas
+« sont-elles gardées ? » mais « la douzième famille le sera-t-elle ? ».
+
 ## La porte d'ÉMISSION se DÉRIVE du contrat, elle ne se redéclare pas
 
 Gouverner la CHARGE d'un événement sans gouverner le CANAL ne garde que le site
