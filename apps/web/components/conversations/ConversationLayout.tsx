@@ -52,6 +52,7 @@ import { useFCMNotifications } from '@/hooks/use-fcm-notifications';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
 
 import type { Conversation, Message } from '@meeshy/shared/types';
+import { messageTypeForClientAttachments } from '@meeshy/shared/utils/attachment-message-type';
 import type { FailedMessage } from '@/stores/failed-messages-store';
 
 import { createOptimisticMessage } from '@/utils/optimistic-message';
@@ -590,13 +591,16 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     // Resolve replyTo message from cache for immediate display
     const replyToMessage = replyToId ? messages.find(m => m.id === replyToId) : undefined;
 
-    // Determine messageType from attachments
-    const resolvedMessageType = hasAttachments && currentAttachmentMimeTypes[0]
-      ? currentAttachmentMimeTypes[0].startsWith('image/') ? 'image' as const
-        : currentAttachmentMimeTypes[0].startsWith('audio/') ? 'audio' as const
-        : currentAttachmentMimeTypes[0].startsWith('video/') ? 'video' as const
-        : 'file' as const
-      : 'text' as const;
+    // Le type de la ligne OPTIMISTE, par la même règle que celle qui partira
+    // sur le fil (`messaging.service.ts`) et que le serveur écrira. Ce site
+    // portait un exemplaire manuscrit qui ne regardait que la PREMIÈRE pièce
+    // jointe : un lot photo + PDF s'affichait `'image'` puis se réconciliait en
+    // `'file'`, et un lot dont on ignore les MIME s'affichait `'text'` — un
+    // ballon de conversation sur un message qui porte un fichier.
+    const resolvedMessageType = messageTypeForClientAttachments({
+      hasAttachments,
+      mimeTypes: currentAttachmentMimeTypes,
+    });
 
     // 1. Create optimistic message and add to store IMMEDIATELY
     const optimistic = createOptimisticMessage({
