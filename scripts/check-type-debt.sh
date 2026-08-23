@@ -301,27 +301,6 @@ main() {
 
   echo "Type debt ratchet — apps/web (baseline $WEB_BASELINE)"
 
-  # Refuser de MESURER plutôt que rendre un verdict faux. Un garde qui annonce
-  # « RÉGRESSION » alors que rien n'a régressé envoie chercher une faute qui
-  # n'existe pas, et discrédite les fois où il a raison.
-  local unresolved
-  unresolved="$(unresolved_dist_imports "$web_dir" "$REPO_ROOT")"
-  if [ -n "$unresolved" ]; then
-    echo -e "${RED}✗ MESURE IMPOSSIBLE : \`packages/shared\` n'est pas bâti.${NC}"
-    echo ""
-    echo "apps/web importe ces modules par chemin RELATIF vers le build, et"
-    echo "leur déclaration est absente :"
-    printf '%s\n' "$unresolved" | while read -r spec; do echo "    $spec"; done
-    echo ""
-    echo "Chacun ajoute un TS2307 : le compte ne vaut PAS la baseline tant"
-    echo "qu'ils manquent. Bâtir shared d'abord :"
-    echo ""
-    echo "    (cd packages/shared && bun run build)"
-    echo ""
-    echo "La CI le fait avant ce garde ; ce cas ne s'y produit pas."
-    return 1
-  fi
-
   local actual
   actual="$(count_type_errors "$web_dir")"
 
