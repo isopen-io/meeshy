@@ -117,7 +117,17 @@ NC='\033[0m'
 # contrat existait déjà (`TypedSocket`, `getSocket()` le rend typé) : ces casts ne
 # désactivaient aucune vérification, ils en FABRIQUAIENT l'échec — `.emit` sur un
 # `unknown` est une erreur à chaque site. Aucun fichier n'a monté.
-readonly WEB_BASELINE=PLACEHOLDER
+# 1209 → 1205 au train beta du 2026-08-23 : `components/common/BubbleMessage.tsx`
+# 5 → 1, effet du routage des comparaisons de langue vers la SSOT (itération 251,
+# PR #3375). Mesuré par FICHIER, pas déduit d'un total — c'est le seul fichier
+# qui bouge entre `main` et ce train.
+#
+# La valeur est ancrée sur la mesure du RUNNER, jamais sur une mesure locale :
+# cet arbre compte 14 erreurs de plus que la CI (1223 ici pour 1209 là-bas), un
+# écart d'environnement stable, vérifié deux fois à des états différents du
+# dépôt. Seul le DELTA est transportable d'une machine à l'autre ; l'absolu ne
+# l'est pas. Qui remesure ici et pose ce qu'il lit fera rougir la CI de 14.
+readonly WEB_BASELINE=1205
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
