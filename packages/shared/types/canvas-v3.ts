@@ -99,6 +99,25 @@ const SceneV3Schema = z.object({
   // Empreinte du canvas composite — le placeholder que quatre surfaces
   // affichent avant l'arrivée du média. Même plafond que la clé v1 homonyme.
   thumbHash: z.string().min(1).max(100).optional(),
+  // Ratio du PORTEUR d'origine (largeur/hauteur), quand la scène provient d'une
+  // conversion v1 (révision de S8).
+  //
+  // S8 gravait la disparition de `canvasAspectRatio` — « le porteur garde son
+  // propre ratio ». L'argument vaut pour la LECTURE : un lecteur peint une
+  // scène 9:16 et le porteur letterboxe lui-même. Il ne vaut pas pour
+  // l'ÉDITION. `remapFreeAnchor` est AFFINE (`y' = top + y·h`, où
+  // `h = 9/16 ÷ carrierAspect` et `top = (1−h)/2`) : elle est donc inversible —
+  // mais seulement si l'on sait encore ce que valait le porteur. Jeté, il
+  // rendait la conversion à sens unique, et rouvrir un ancien post recadrait
+  // définitivement ses objets (sur du 16:9, `y = 0,90` devenait `0,6266`).
+  //
+  // `StoryDraftStore` avait déjà dû le repersister hors document, par
+  // diapositive, pour les seuls brouillons. Le loger ICI cesse d'industrialiser
+  // ce pansement et rend au document sa source de vérité unique.
+  //
+  // OPTIONNEL et ADDITIF : un document v3 natif n'en a pas — il n'a jamais eu
+  // d'autre porteur que sa scène. Aucun lecteur existant n'est cassé.
+  carrierAspect: z.number().positive().finite().optional(),
 });
 
 export const CanvasV3Schema = z.object({

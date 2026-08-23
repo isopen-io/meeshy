@@ -32,8 +32,25 @@ public actor DiskCacheStore: ReadableCacheStore {
         let task: Task<Data, Error>
     }
 
-    public init(policy: CachePolicy, baseDirectory: URL? = nil) {
+    /// Budget mémoire du L1 (Data brut par entrée). 80 MB par défaut — les
+    /// stores audio/vidéo reçoivent un budget réduit du CacheCoordinator :
+    /// leur consommation passe par des file URLs (players), pas par des Data
+    /// résidents, et 4 × 80 MB de plafonds théoriques dépassaient à eux seuls
+    /// la cible mémoire de l'app (150 MB).
+    private let memoryBudgetBytes: Int
+
+    /// Insertion L1 gardée : un payload unique dépassant la moitié du budget
+    /// (ex. une vidéo de 40 MB dans un store à 8 MB) éjecterait tout le reste
+    /// pour un blob que personne ne relit en Data — il reste servi par le
+    /// disque.
+    private func cacheInMemory(_ data: Data, fileKey: String) {
+        guard data.count <= memoryBudgetBytes / 2 else { return }
+        memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
+    }
+
+    public init(policy: CachePolicy, baseDirectory: URL? = nil, memoryBudgetBytes: Int = 80 * 1024 * 1024) {
         self.policy = policy
+        self.memoryBudgetBytes = memoryBudgetBytes
         let subdir: String
         if case .disk(let sub, _) = policy.storageLocation {
             subdir = sub
@@ -49,7 +66,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
         let cache = NSCache<NSString, CacheBox>()
         cache.countLimit = 100
-        cache.totalCostLimit = 80 * 1024 * 1024
+        cache.totalCostLimit = memoryBudgetBytes
         self.memoryCache = cache
         FileManager.default.createDirectoryLogging(at: self.baseDirectory, context: "disk cache root", logger: logger)
 
@@ -105,12 +122,12 @@ public actor DiskCacheStore: ReadableCacheStore {
         let freshness = policy.freshness(age: age)
         switch freshness {
         case .fresh:
-            memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
+            cacheInMemory(data, fileKey: fileKey)
             fileTimestamps[fileKey] = modDate
             noteAccess(fileKey: fileKey, atPath: filePath.path, lastKnown: modDate)
             return .fresh([data], age: age)
         case .stale:
-            memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
+            cacheInMemory(data, fileKey: fileKey)
             fileTimestamps[fileKey] = modDate
             noteAccess(fileKey: fileKey, atPath: filePath.path, lastKnown: modDate)
             return .stale([data], age: age)
@@ -155,7 +172,7 @@ public actor DiskCacheStore: ReadableCacheStore {
             logger.error("Failed to write file for key \(fileKey): \(error.localizedDescription)")
             return
         }
-        memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
+        cacheInMemory(data, fileKey: fileKey)
         fileTimestamps[fileKey] = Date()
 
         // E1 — auto-trigger eviction when the latest write may have
@@ -701,19 +718,72 @@ public actor DiskCacheStore: ReadableCacheStore {
     }
 
     public func image(for urlString: String) async -> UIImage? {
-        await image(for: urlString, maxPixelSize: 1200)
+        await image(for: urlString, maxPixelSize: Self.fullFormatPixelCap)
+    }
+
+    // MARK: - Sized decode buckets
+
+    /// The canonical full-format decode cap. Requests at or above this share
+    /// the bare (unsuffixed) NSCache slot — the one `cachedImage(for:)` and
+    /// `warmedImage(for:)` have always used.
+    public static let fullFormatPixelCap: CGFloat = 1200
+
+    /// Quantized decode ceilings for below-full-format requests. Decoding at
+    /// the bucket ceiling (never the exact requested size) bounds the number
+    /// of resident variants per URL while never serving an under-resolved
+    /// bitmap: the bucket is always >= the request.
+    private static let pixelSizeBuckets: [CGFloat] = [128, 256, 512, 768, 1024]
+
+    /// Bucket ceiling for a requested pixel size — `nil` when the request
+    /// belongs to the canonical full-format slot.
+    private static func pixelBucket(for maxPixelSize: CGFloat) -> CGFloat? {
+        pixelSizeBuckets.first { $0 >= maxPixelSize }
+    }
+
+    /// NSCache key of a decoded variant. Sized variants are suffixed so a
+    /// 128 px avatar decode can never occupy — nor be served from — the slot
+    /// a full-screen surface reads. The bare key remains reserved for the
+    /// full-format decode.
+    private static func imageCacheKey(fileKey: String, bucket: CGFloat?) -> NSString {
+        guard let bucket else { return fileKey as NSString }
+        return "\(fileKey)#px\(Int(bucket))" as NSString
+    }
+
+    /// Sized-slot probe mirroring `cachedImage(for:)` — same bucketing as
+    /// `image(for:maxPixelSize:)`, so a view that loads with a `targetSize`
+    /// can find its own variant synchronously at init.
+    nonisolated public static func cachedImage(for urlString: String, maxPixelSize: CGFloat) -> UIImage? {
+        let key = imageCacheKey(fileKey: fileKey(for: urlString), bucket: pixelBucket(for: maxPixelSize))
+        return _imageCache.object(forKey: key)
+    }
+
+    /// « Une variante décodée, n'importe laquelle, est-elle résidente ? » —
+    /// probe de résidence (badge de téléchargement, gates) qui ne doit pas
+    /// dépendre du bucket sous lequel la surface d'affichage a décodé.
+    nonisolated public static func hasAnyCachedImageVariant(for urlString: String) -> Bool {
+        let fileKey = fileKey(for: urlString)
+        if _imageCache.object(forKey: fileKey as NSString) != nil { return true }
+        return pixelSizeBuckets.contains { bucket in
+            _imageCache.object(forKey: imageCacheKey(fileKey: fileKey, bucket: bucket)) != nil
+        }
     }
 
     public func image(for urlString: String, maxPixelSize: CGFloat) async -> UIImage? {
         let fileKey = Self.fileKey(for: urlString)
+        let bucket = Self.pixelBucket(for: maxPixelSize)
+        let cacheKey = Self.imageCacheKey(fileKey: fileKey, bucket: bucket)
+        // Hors bucket (> 1024) : décoder à la taille DEMANDÉE, comme avant —
+        // une bannière iPad full-bleed peut requérir 2048 px ; la rabattre au
+        // cap 1200 la rendrait visiblement plus douce qu'avant ce changement.
+        let decodePixelSize = bucket ?? maxPixelSize
 
-        if let cached = Self._imageCache.object(forKey: fileKey as NSString) {
+        if let cached = Self._imageCache.object(forKey: cacheKey) {
             return cached
         }
 
         let result = await load(for: urlString)
-        if let data = result.snapshot()?.first, let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) {
-            Self.cacheIfWithinBudget(image, key: fileKey)
+        if let data = result.snapshot()?.first, let image = Self.downsampledImage(data: data, maxPixelSize: decodePixelSize) {
+            Self.cacheIfWithinBudget(image, key: cacheKey as String)
             return image
         }
 
@@ -723,8 +793,8 @@ public actor DiskCacheStore: ReadableCacheStore {
         if url.scheme == "file" {
             do {
                 let data = try Data(contentsOf: url)
-                if let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) {
-                    Self.cacheIfWithinBudget(image, key: fileKey)
+                if let image = Self.downsampledImage(data: data, maxPixelSize: decodePixelSize) {
+                    Self.cacheIfWithinBudget(image, key: cacheKey as String)
                     return image
                 }
             } catch {
@@ -739,8 +809,8 @@ public actor DiskCacheStore: ReadableCacheStore {
             // the same key (prefetcher, CachedAsyncImage, another cell) and
             // persists to disk inside the task.
             let data = try await networkData(for: urlString, url: url)
-            guard let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) else { return nil }
-            Self.cacheIfWithinBudget(image, key: fileKey)
+            guard let image = Self.downsampledImage(data: data, maxPixelSize: decodePixelSize) else { return nil }
+            Self.cacheIfWithinBudget(image, key: cacheKey as String)
             return image
         } catch {
             return nil

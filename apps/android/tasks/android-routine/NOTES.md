@@ -5,6 +5,120 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-23 — Background Bash runs from the SESSION cwd (repo root), not `apps/android` — use `gradlew -p`
+
+A **background** Bash command (`run_in_background: true`) executes from the session working directory
+(`/home/user/meeshy`), even though foreground calls in the same session may have `cd`'d into
+`apps/android` earlier — that `cd` does **not** carry into background invocations. `./apps/android/meeshy.sh`
+and a bare `./gradlew` both resolve against repo root and die with *"No such file or directory"* (there is no
+gradlew at repo root; it lives at `apps/android/gradlew`). I burned four backgrounded attempts on this.
+The robust form, cwd-independent, is:
+
+```bash
+/home/user/meeshy/apps/android/gradlew -p /home/user/meeshy/apps/android assembleDebug testDebugUnitTest
+```
+
+Absolute path to the wrapper + `-p <projectDir>`. Works identically foreground or background. (Foreground
+`cd /home/user/meeshy/apps/android && ./gradlew …` also works but only because the `cd` sticks for that one
+compound command.)
+
+## 2026-08-23 — Mutation RED-proof of a DELEGATING projection: mutate to the absent value, expect PARTIAL failure
+
+`feed-repost-embed-location`'s builder just delegates: `location = FeedPostLocationBuilder.build(repost.location)`.
+To prove the 3 new wiring tests aren't tautological, I forced `location = null` in the builder and re-ran the
+class. The right signal is **partial**: exactly the 2 positive-projection tests failed, and
+`absentLocationBecomesNull` stayed green (it asserts null for null input, so a null mutation can't break it).
+A blanket all-red would have meant my "absent" test was really just re-asserting the mutation. Partial,
+discriminating failure = the tests pin the behaviour, not the implementation. The label-resolution branches
+themselves stay covered where they live (`FeedPostLocationBuilderTest`), so the wiring tests don't re-test the
+delegate — they only prove the projection is wired.
+
+## 2026-08-23 — Before adding a model to `Post.kt`, grep for it: `SharedPlace` already existed
+
+Building `feed-post-location-sticker`, I nearly re-declared `SharedPlace` inside `Post.kt` (I had grepped
+`class ApiRepostOf`/`ApiRepostOf(` and it didn't surface it). It already lives in its **own** file
+`:core:model/SharedPlace.kt` — the composer's outgoing-location slice created it. A duplicate `data class`
+in the same package would have been a hard compile error, but the deeper trap is the shape drift: the
+existing `SharedPlace` is `{latitude, longitude, name, address, category}` (mirrors the **gateway**), with
+**no `id`** — iOS's has `id`, and I'd have copied iOS's. Lesson: before declaring any model type, `grep -rn
+"class <Name>"` across `apps/android`, and when a type exists, MIRROR THE ANDROID SSOT's shape, not iOS's.
+Corollary confirmed this slice: a field can be plumbed OUT (composer attaches `SharedPlace`) yet dropped on
+the way IN (`ApiPost` had no `location`) — "the model exists" ≠ "the field round-trips"; check the specific
+API struct.
+
+## 2026-08-22 — SDK bootstrap: the `android-37` symlink is NO LONGER enough — copy + rewrite ApiLevel
+
+The prior note's symlink fix (`ln -sf android-37.0 android-37`) **stopped working** this run. AGP does not
+derive the platform hash from the directory *name*: it reads `AndroidVersion.ApiLevel` from the platform's
+`source.properties`. The `platforms;android-37.0` package ships `AndroidVersion.ApiLevel=37.0`, so AGP computes
+the hash `android-37.0` regardless of a dir renamed/symlinked to `android-37`, and `compileSdk = 37` still dies:
+```
+> Failed to find target with hash string 'android-37' in: /root/android-sdk
+```
+(Confirmed: a baseline `assembleDebug` failed on exactly this **with the symlink in place**.) The fix that
+actually works — make a **real** `android-37` platform whose `source.properties` claims the integer API level:
+```bash
+cd "$HOME/android-sdk/platforms"
+rm -f android-37                       # drop the symlink if present
+cp -r android-37.0 android-37
+sed -i 's/^AndroidVersion\.ApiLevel=.*/AndroidVersion.ApiLevel=37/' android-37/source.properties
+```
+After that, full `assembleDebug testDebugUnitTest` = BUILD SUCCESSFUL (973 tasks). This is a **local-env only**
+fix (`$HOME/android-sdk`, never committed; `local.properties` stays gitignored). CI is unaffected — it runs
+`android-actions/setup-android` and lets AGP resolve/download the platform it wants, so this hand-patch is only
+for the reachable-`dl.google.com` local gate.
+
+## 2026-08-22 — SDK bootstrap: `android-37` is now MINOR-versioned; symlink after install
+
+The routine's recipe `sdkmanager --channel=3 "platforms;android-37.0"` now installs a **minor-versioned**
+platform: the dir is `$HOME/android-sdk/platforms/android-37.0` and its `source.properties` reads
+`AndroidVersion.ApiLevel=37.0`. But AGP 8.13 with `compileSdk = 37` looks up the hash string **`android-37`**
+(no minor), so Gradle dies before compiling with:
+```
+> Failed to find target with hash string 'android-37' in: /root/android-sdk
+```
+One-line fix, then everything builds:
+```bash
+ln -sf android-37.0 "$HOME/android-sdk/platforms/android-37"
+```
+(Alternative not tried: `sdkmanager "platforms;android-37"` on the stable channel — but only `android-37.0`,
+`37.1`, `37.2-betaN` are published, all minor-versioned, so the symlink is the reliable move.) After it, the
+full `assembleDebug testDebugUnitTest` ran locally, BUILD SUCCESSFUL (973 tasks). `local.properties` stays
+`sdk.dir=$HOME/android-sdk` and gitignored. Reusable habit: **when `dl.google.com` is reachable, the local
+gate is worth the ~5 min** — it's the fastest way to prove a Compose/UI wiring change compiles before pushing.
+
+## 2026-08-22 — Reuse the feed's building blocks in post-detail, don't reinvent
+
+The post-detail repost/quote slice added ZERO new value models or strings: it routes through the existing
+`RepostCommand` SSOT, reuses `QuoteComposerState` + `QuoteComposerSheet` (widened `private → internal`), and
+the existing `feed_action_repost`/`feed_action_quote` strings. Both surfaces (feed card + full-screen detail)
+now fold their "what to send" decision through one tested pure function — so the root-target fix and the
+blank-quote degradation are guaranteed identical on both, and a future gateway change touches one SSOT. When
+a second surface needs a behaviour the first already has, widen visibility and share the value model; a
+parallel re-implementation is where the two drift.
+
+## 2026-08-22 — One deep-link route, one entry ViewModel: unify what iOS split across views
+
+iOS routes an authenticated share-link tap (`RootView.resolveShareLinkEntry`, `isAuthenticated: true`)
+and an unauthenticated one through **two separate views**. Android's `GUEST_JOIN` nav destination is a
+single composable reached in both states, so the SOTA move is to unify the whole decision behind ONE
+`ShareLinkEntryViewModel` that reads the auth flag itself (a `fun interface` seam over
+`AuthRepository.isAuthenticated`) and branches internally — no duplicated presentation to drift.
+
+Two reusable habits confirmed this run:
+- **Gate the expensive fact behind the flag that needs it.** `knownConversationIds` only matters when
+  authenticated (the `isAlreadyMember` check), so read the conversation cache ONLY in that branch. A guest
+  never pays a needless cache read — and a test asserting the known-ids seam's call count is `0` for a
+  guest locks that in behaviourally (not an implementation-detail assertion: it's observable work avoided).
+- **A prompt state must be actionable or it is a dead end.** `ChooseIdentity` shipped with `chooseAccount()`
+  / `chooseAnonymous()` intents in the same slice; a "which identity?" screen with no way to answer would
+  have been orphan UI. Test the actions, not just the prompt.
+
+Testing shape that paid off: drive the VM with the **real** `ShareLinkEntryResolver` over faked LEAF seams
+(preview / store / join / auth / known-ids). The whole resolve→policy→navigation reduction is exercised end
+to end through the public `state`, and no test mocks the resolver's own output — so a policy regression would
+surface here too, not hide behind a canned mock.
+
 ## 2026-08-22 — A "resolver" that does I/O + consults device state is app-side, NOT `:sdk-core`
 - Last slice's PROGRESS "Next" proposed a `:sdk-core` `ShareLinkEntryResolver`. That was a hypothesis,
   and re-scouting iOS before committing proved it wrong — the routine's "parity notes are hypotheses"
@@ -1455,3 +1569,15 @@ across calls — a `cd /home/user/meeshy` earlier will make `./gradlew` (which l
   dashboard, avoids a double-fetch of the same endpoint, and keeps the chat header uncluttered. The
   existing Empty tests stayed green precisely because they carried no profiles — verify that before
   relying on it.
+
+## 2026-08-23 — Confirm a gateway payload field is on the wire via the iOS SDK decoder
+
+Several §F candidates were parked as "needs gateway payload confirmation first" (mood emoji / location in
+the repost embed). The cheap, reliable confirmation **without touching or running the gateway**: check whether
+the iOS SDK model *decodes* the field. If `packages/MeeshySDK/.../PostModels.swift` declares
+`public let moodEmoji: String?` on `APIRepostOf` and its `init(from:)` does
+`decodeIfPresent(String.self, forKey: .moodEmoji)`, then a shipping iOS client already receives it — i.e. the
+gateway serializes it — and Android is simply dropping it. That turns an "unverified-backend, model-plumbing"
+risk into a pure Android model+projection gap (add the `@Serializable` field, project it, render it), diff stays
+`apps/android`-only. Applied for `feed-repost-embed-mood-emoji` (iOS `PostModels.swift:87,281`). The mirror still
+open — `ApiRepostOf.location` — is confirmable the same way (`APIRepostOf.location: SharedPlace?` is on the wire).

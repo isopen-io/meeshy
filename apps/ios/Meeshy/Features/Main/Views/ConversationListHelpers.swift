@@ -274,7 +274,9 @@ struct ConversationPreviewView: View {
     private var headerBackground: some View {
         if let bannerURL {
             ZStack {
-                CachedAsyncImage(url: bannerURL.absoluteString) {
+                // Carte fixée à 340pt de large par le call site — inutile de
+                // décoder la bannière au plafond plein format 1200 px.
+                CachedAsyncImage(url: bannerURL.absoluteString, targetSize: CGSize(width: 340, height: 160)) {
                     LinearGradient(
                         colors: [
                             Color(hex: accentColor).opacity(0.6),

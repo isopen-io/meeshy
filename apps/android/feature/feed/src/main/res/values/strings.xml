@@ -23,6 +23,8 @@
     <string name="feed_repost_quoted">Quoted</string>
     <string name="feed_repost_story">Story</string>
     <string name="feed_repost_open">Open reposted post</string>
+    <string name="feed_location_shared">Shared location</string>
+    <string name="feed_location_open">Open location on the map</string>
     <string name="feed_repost_more_media">+%1$d</string>
     <string name="bookmarks_title">Saved</string>
     <string name="bookmarks_empty">No saved posts yet</string>
@@ -60,6 +62,10 @@
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d new post</item>
         <item quantity="other">%1$d new posts</item>
+    </plurals>
+    <plurals name="feed_repost_likes_count">
+        <item quantity="one">%1$d like</item>
+        <item quantity="other">%1$d likes</item>
     </plurals>
     <string name="status_bar_me">Me</string>
     <string name="status_bar_add">Status</string>
@@ -119,6 +125,11 @@
     <string name="feed_action_share">Share</string>
     <string name="feed_action_copy_link">Copy link</string>
     <string name="feed_action_repost">Repost</string>
+    <string name="feed_action_quote">Quote</string>
+    <string name="feed_quote_title">Quote post</string>
+    <string name="feed_quote_hint">Add a comment</string>
+    <string name="feed_quote_submit">Repost</string>
+    <string name="feed_quote_cancel">Cancel</string>
     <string name="feed_action_bookmark">Save</string>
     <string name="feed_action_unbookmark">Remove from saved</string>
     <string name="feed_action_pin">Pin</string>

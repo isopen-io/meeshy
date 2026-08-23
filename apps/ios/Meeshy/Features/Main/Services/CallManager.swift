@@ -2596,6 +2596,28 @@ final class CallManager: ObservableObject {
             await previousAnswer?.value
             await previousCameraSwitch?.value
             guard let self, !Task.isCancelled else { return }
+            // Audit finding (Vague 158): re-enabling video while CallKit holds the
+            // call (cellular pre-emption) or the OS has suspended capture must NOT
+            // actually acquire the camera / announce "camera active" to the peer —
+            // mirrors the guard `applySurvivalVideoSend` already applies for the
+            // automatic survival-recovery path. Without this, a hold→toggle-off→
+            // toggle-on sequence (a normal double-tap while the CallKit hold banner
+            // is up) called `upgradeToVideo()` unconditionally, starting capture and
+            // renegotiating with the peer while the call is still on hold — exactly
+            // the false "camera active" signal `applyCameraSuspension`'s doc-comment
+            // and `applySurvivalVideoSend`'s guard both exist to prevent.
+            // `isVideoEnabled` (already set to the new intent above) stays the
+            // source of truth: `handleHold`'s unhold branch resumes video
+            // automatically once the suspension lifts, so intent is never lost —
+            // only the actuation is deferred.
+            if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+                FeedbackToastManager.shared.showError(
+                    String(localized: "call.video.hold.blocked",
+                           defaultValue: "Vidéo indisponible pendant la mise en attente de l'appel",
+                           bundle: .main)
+                )
+                return
+            }
             // Caméra jamais demandée : sans ce pré-flight, le prompt système
             // surgissait au beau milieu de `upgradeToVideo()` — l'utilisateur
             // voyait la vidéo « s'activer » puis retomber. On tranche avant.
@@ -2709,6 +2731,22 @@ final class CallManager: ObservableObject {
             await previousICERestart?.value
             await previousAnswer?.value
             guard let self, !Task.isCancelled else { return }
+            // Audit finding (Vague 159, extended Vague 160): mirrors the
+            // toggleVideo() guard (Vague 158). A hold, capture-interruption,
+            // OR the network-survival downgrade (`isVideoSuspended` —
+            // VideoSurvivalController graceful-degradation-to-audio-only,
+            // same "camera stopped, isVideoEnabled left true" contract) has
+            // released the camera — flipping front/back here would call
+            // capturer.startCapture and silently reacquire it (camera
+            // hardware + OS indicator turn back on) even though the
+            // transceiver stays recvOnly and the peer never sees the switch.
+            // Revert the optimistic mirror flag instead of actuating;
+            // `handleHold`'s unhold branch / the survival controller's own
+            // resume restore the real camera state once suspension lifts.
+            if self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+                self.isUsingFrontCamera = previousFrontCamera
+                return
+            }
             let success = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
                 self.webRTCService.switchCamera { success in
                     continuation.resume(returning: success)
@@ -2763,6 +2801,15 @@ final class CallManager: ObservableObject {
             await previousICERestart?.value
             await previousAnswer?.value
             guard let self, !Task.isCancelled else { return }
+            // Audit finding (Vague 159, extended Vague 160): same guard as
+            // switchCamera() above — both drive the same capturer through
+            // the same suspension state, including the network-survival
+            // downgrade (`isVideoSuspended`), not just hold/interruption.
+            if self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+                self.selectedCameraId = previousSelectedCameraId
+                self.isUsingFrontCamera = previousFrontCamera
+                return
+            }
             let success = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
                 self.webRTCService.switchToCamera(uniqueID: id) { success in
                     continuation.resume(returning: success)
@@ -4761,9 +4808,27 @@ final class CallManager: ObservableObject {
                 // those events are silently dropped.
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    let joined = await MessageSocketManager.shared.emitCallJoinWithAck(callId: callId)
+                    let ackResult = await MessageSocketManager.shared.emitCallJoinWithAckDetailed(callId: callId)
                     guard self.callState.isActive, self.currentCallId == callId else { return }
-                    if !joined {
+                    // Vague 162 — the call already ended server-side during the
+                    // disconnection (lost the race against the gateway's
+                    // DISCONNECT_GRACE_MS window, or ended for another reason
+                    // while we were offline) and the `call:ended` broadcast that
+                    // would normally tell us was itself dropped by the very
+                    // outage this handler exists to recover from. Previously we
+                    // only logged "proceeding anyway" and never transitioned
+                    // `callState` — the app stayed on the active-call screen
+                    // forever, no retry offered, no indication anything ended.
+                    // Route through the canonical remote-end path (same one
+                    // `call:ended`/`call:error CALL_ENDED` use) with the real
+                    // `endReason` so a transient cause (connectionLost/
+                    // heartbeatTimeout) still offers « Réessayer ».
+                    if ackResult.errorCode == "CALL_ENDED" {
+                        Logger.calls.warning("Socket reconnect — call:join rejected, call already ended server-side (callId=\(callId), endReason=\(ackResult.endReason ?? "nil"))")
+                        self.handleRemoteEnd(callId: callId, rawReason: ackResult.endReason)
+                        return
+                    }
+                    if !ackResult.joined {
                         Logger.calls.warning("Socket reconnect — call:join ACK timed out (callId=\(callId)), proceeding anyway")
                     }
                     self.flushPendingIceCandidates()

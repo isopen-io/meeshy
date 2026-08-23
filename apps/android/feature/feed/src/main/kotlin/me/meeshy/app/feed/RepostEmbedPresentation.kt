@@ -25,9 +25,25 @@ data class RepostEmbedPresentation(
     val isTranslated: Boolean,
     val previewImageUrl: String?,
     val extraMediaCount: Int,
+    val likeCount: Int,
+    /**
+     * The reposted post's mood emoji, or `null` when absent/blank (mirror of iOS
+     * `FeedPostCard.swift`'s `repost.moodEmoji`). A reposted STATUS carries an empty
+     * body, so the cell prefixes this to the content — without it a republished mood
+     * would render an empty embed.
+     */
+    val moodEmoji: String?,
     val isQuote: Boolean,
     val isStory: Boolean,
     val isReel: Boolean,
+    /**
+     * The reposted post's shared place, or `null` when absent — mirror of iOS
+     * `FeedPostCard.swift:989`, where the source post's `SharedPlace` renders as a
+     * tappable sticker inside the quote block. Projected through the same
+     * [FeedPostLocationBuilder] the outer feed card uses, so the label resolution
+     * has one source of truth.
+     */
+    val location: FeedLocationPresentation? = null,
 )
 
 object RepostEmbedBuilder {
@@ -60,9 +76,12 @@ object RepostEmbedBuilder {
                 ?.takeIf { it.isNotBlank() }
                 ?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
             extraMediaCount = (mediaCount - 1).coerceAtLeast(0),
+            likeCount = (repost.likeCount ?: 0).coerceAtLeast(0),
+            moodEmoji = repost.moodEmoji?.takeIf { it.isNotBlank() },
             isQuote = repost.isQuote == true,
             isStory = repost.type.equals("story", ignoreCase = true),
             isReel = repost.type.equals("reel", ignoreCase = true),
+            location = FeedPostLocationBuilder.build(repost.location),
         )
     }
 }

@@ -3,7 +3,7 @@
  * Gère les réactions par-image (ajout / suppression). Miroir de ReactionHandler,
  * substituant la clé attachment + réutilisant `resolveParticipantFromMessage`.
  */
-import type { Socket, Server as SocketIOServer } from 'socket.io';
+import type { MeeshySocket as Socket, MeeshyIOServer as SocketIOServer } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
@@ -14,6 +14,8 @@ import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
+import { emitServerEvent } from '../serverEmit';
+import type { QueuedPayloadFor } from '../queuedEventContract';
 
 const logger = enhancedLogger.child({ module: 'AttachmentReactionHandler' });
 const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
@@ -164,7 +166,7 @@ export class AttachmentReactionHandler {
         reactionSummary,
         timestamp: new Date().toISOString(),
       };
-      this.deps.io.to(ROOMS.conversation(conversationId)).emit(event, payload);
+      emitServerEvent(this.deps.io.to(ROOMS.conversation(conversationId)), event, payload);
 
       void this._enqueueOfflineAttachmentReactionEvent(
         conversationId,
@@ -204,7 +206,7 @@ export class AttachmentReactionHandler {
     actorParticipantId: string | null | undefined,
     eventType: 'attachment-reaction-added' | 'attachment-reaction-removed',
     data: { attachmentId: string; messageId: string; emoji: string },
-    payload: Record<string, unknown>,
+    payload: QueuedPayloadFor<'attachment-reaction-added'>,
   ): Promise<void> {
     await enqueueForOfflineParticipants(
       { deliveryQueue: this.deliveryQueue, prisma: this.deps.prisma, connectedUsers: this.deps.connectedUsers },

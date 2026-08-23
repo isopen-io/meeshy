@@ -745,11 +745,16 @@ nonisolated public enum RiverLaneResolver {
         lane.spans.first { $0.startRank <= rank && rank <= $0.endRank }
     }
 
-    /// Les branches VIVANTES à ce rang, par colonne — l'ordre est celui de
-    /// `geometry.lanes` (ordre de naissance), IDENTIQUE au comportement de la
-    /// loi TS : ce n'est un ordre de colonne strictement croissant que tant
-    /// que la rivière n'a pas partagé de colonnes (`assignColumns` identité).
-    /// C'est ce que la navigation latérale traverse. Une branche morte n'est
+    /// Les branches VIVANTES à ce rang, PAR COLONNE CROISSANTE — c'est la
+    /// largeur réelle de l'axe horizontal à cette hauteur, et ce que la
+    /// navigation latérale traverse. L'ordre de `geometry.lanes` est l'ordre de
+    /// NAISSANCE, qui ne coïncide avec l'ordre de colonne que tant qu'aucune
+    /// colonne n'est partagée : dès que `packColumns` réutilise une colonne
+    /// libérée, une voix née plus tard peut occuper une colonne plus BASSE
+    /// qu'une voix née plus tôt et encore vivante. On trie donc par colonne,
+    /// sans quoi le pas latéral (`resolveRiverStep`, qui prend le plus proche
+    /// voisin par `first`) sauterait par-dessus des couloirs vivants. Miroir
+    /// exact de la loi TS `resolveRiverLivingLanes`. Une branche morte n'est
     /// pas navigable — on l'enjambe.
     ///
     /// Sérialisée, la rivière n'a qu'un couloir : le fil. Elle rend `[0]` sur
@@ -762,6 +767,7 @@ nonisolated public enum RiverLaneResolver {
         return geometry.lanes
             .filter { spanCovering($0, rank) != nil }
             .map(\.laneIndex)
+            .sorted()
     }
 
     /// QUI occupe cette colonne à cette hauteur — la question que le partage

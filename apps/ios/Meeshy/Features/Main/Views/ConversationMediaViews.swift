@@ -73,7 +73,10 @@ struct DownloadBadgeView: View {
     private var isImageAlreadyResident: Bool {
         guard attachment.type == .image else { return false }
         let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
-        return DiskCacheStore.cachedImage(for: resolved) != nil
+        // Toutes variantes confondues : la bulle décode sous une clé
+        // dimensionnée (targetSize → bucket), le slot nu peut donc être vide
+        // alors que l'image est bel et bien affichée.
+        return DiskCacheStore.hasAnyCachedImageVariant(for: resolved)
     }
 
     private var totalSizeText: String {

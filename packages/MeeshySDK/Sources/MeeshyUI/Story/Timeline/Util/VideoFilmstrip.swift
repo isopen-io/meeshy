@@ -7,7 +7,13 @@ import AVFoundation
 /// relancent jamais une extraction déjà faite.
 enum VideoFilmstrip {
 
-    private nonisolated(unsafe) static let cache = NSCache<NSString, NSArray>()
+    private nonisolated(unsafe) static let cache: NSCache<NSString, NSArray> = {
+        let cache = NSCache<NSString, NSArray>()
+        // Sans borne, chaque lane gardait TOUTES ses extractions (N frames
+        // décodées par clip × clips) résidentes pour la durée du process.
+        cache.countLimit = 32
+        return cache
+    }()
 
     static func frames(url: URL, count: Int, maxHeight: CGFloat) async -> [UIImage] {
         let key = "\(url.absoluteString)|\(count)|\(Int(maxHeight))" as NSString

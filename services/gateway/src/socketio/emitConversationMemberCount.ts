@@ -9,6 +9,7 @@ import {
   type ConversationRoomEmitter,
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
+import { emitServerEvent, type ServerEventName, type ServerEventPayload } from './serverEmit';
 
 /**
  * Un destinataire du fanout d'effectif, avec les DEUX titres qui ouvrent la
@@ -59,11 +60,18 @@ const seesExactCount = (participant: MemberCountAudienceTarget): boolean =>
  * ce lot. La borne est celle du plafond lui-même (`<=`), donc les deux formes
  * ne peuvent pas diverger sur une valeur.
  */
-export function emitConversationMemberCountEvent(params: {
+export function emitConversationMemberCountEvent<E extends ServerEventName>(params: {
   io: ConversationRoomEmitter | null | undefined;
   conversationId: string;
   participants: ReadonlyArray<MemberCountAudienceTarget>;
-  event: string;
+  /**
+   * L'événement, contraint au CONTRAT partagé depuis que
+   * `emitToConversationParticipants` est générique : une chaîne libre y
+   * passerait un événement que personne ne déclare, et le client ne l'écouterait
+   * jamais — sans que rien ne rougisse. Le générique propage simplement la
+   * contrainte au lieu de la casser ici.
+   */
+  event: E;
   payload: Record<string, unknown>;
   memberCount: number;
 }): void {
@@ -76,7 +84,7 @@ export function emitConversationMemberCountEvent(params: {
       conversationId,
       participants,
       event,
-      payload: { ...payload, ...presentMemberCount(memberCount) },
+      payload: { ...payload, ...presentMemberCount(memberCount) } as ServerEventPayload<E>,
     });
     return;
   }
@@ -88,7 +96,7 @@ export function emitConversationMemberCountEvent(params: {
     conversationId,
     participants: participants.filter((participant) => !seesExactCount(participant)),
     event,
-    payload: { ...payload, ...presentMemberCount(memberCount) },
+    payload: { ...payload, ...presentMemberCount(memberCount) } as ServerEventPayload<E>,
     exceptRooms: exactRooms,
   });
 
@@ -97,8 +105,11 @@ export function emitConversationMemberCountEvent(params: {
 
   let emitter = io.to(firstRoom);
   for (const room of otherRooms) emitter = emitter.to(room);
-  emitter.emit(event, {
+  // Même porte que `emitToConversationParticipants` : `emitServerEvent` plutôt
+  // qu'un `.emit()` nu, pour que l'événement et son payload restent liés par le
+  // contrat partagé jusqu'au fil.
+  emitServerEvent(emitter, event, {
     ...payload,
     ...presentMemberCount(memberCount, { viewerSeesExactCount: true }),
-  });
+  } as ServerEventPayload<E>);
 }

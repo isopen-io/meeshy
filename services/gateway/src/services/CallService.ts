@@ -45,6 +45,26 @@ const TERMINAL_STATUSES: CallStatus[] = [
   CallStatus.failed
 ];
 
+/**
+ * Thrown by `joinCallAttempt` when the call is already in a terminal state.
+ * Carries the call's REAL `endReason` (Prisma `CallSession.endReason`) on top
+ * of the usual `CODE: message` string `parseCallHandlerError` still parses
+ * from `.message` (unchanged, so every existing `CALL_ENDED` gate keeps
+ * working unmodified) — `CallEventsHandler`'s `call:join` catch block reads
+ * `.endReason` off the instance to enrich the ack. Without this, a client
+ * rejoining after a reconnect (`rejoinActiveCallAfterReconnect`, web) cannot
+ * tell a benign hangup (`completed`, `missed`, `rejected`) from a transient
+ * failure the reconnect grace window lost the race against
+ * (`connectionLost`, `heartbeatTimeout`) — the one case where offering the
+ * caller a "Retry" affordance is correct.
+ */
+export class CallAlreadyEndedError extends Error {
+  constructor(readonly endReason: CallEndReason) {
+    super(`${CALL_ERROR_CODES.CALL_ENDED}: This call has already ended`);
+    this.name = 'CallAlreadyEndedError';
+  }
+}
+
 const ACTIVE_STATUSES: CallStatus[] = [
   CallStatus.initiated,
   CallStatus.ringing,
@@ -1399,8 +1419,8 @@ export class CallService {
 
     // Validate call is not in a terminal state (ended/missed/rejected/failed)
     if (TERMINAL_STATUSES.includes(call.status)) {
-      logger.error('❌ Call is in terminal state', { callId, status: call.status });
-      throw new Error(`${CALL_ERROR_CODES.CALL_ENDED}: This call has already ended`);
+      logger.error('❌ Call is in terminal state', { callId, status: call.status, endReason: call.endReason });
+      throw new CallAlreadyEndedError(call.endReason ?? CallEndReason.completed);
     }
 
     // Check if user is participant of conversation. See the matching guard in

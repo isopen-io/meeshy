@@ -119,18 +119,28 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
     /// **Amendement du 2026-08-22 (rejet DoD C0c, constat 1).** Le swap E4 n'a
     /// pas REMPLACÉ l'hôte direct : il l'a mis derrière une porte. `MeeshyScenePlayer`
     /// ne prend la main que pour une story qui porte un document v3 NATIF ;
-    /// l'archive v1 garde son hôte direct. La raison est mécanique, pas
-    /// prudentielle : iOS ne pose AUCUN `X-Canvas-Caps` (tâche C4, ouverte), donc
-    /// `resolveWireForm` lui sert du v1 tel quel, `StoryEffects.canvasV3` vaut
-    /// `nil` pour CENT POUR CENT des stories, et un montage inconditionnel
-    /// peindrait toute l'archive à travers `CanvasV3(migrating:)` →
-    /// `StoryEffects(rendering:)`. Cet aller-retour est LOSSY : la migration
-    /// letterboxe les ancres libres dans l'espace de scène fixe 9:16
-    /// (`remapFreeAnchor`) et le retour ne rend NI le ratio du porteur NI le remap
-    /// inverse, pendant que le cadre du viewer (`readerCanvasRatio`) garde, lui,
-    /// le ratio RÉEL. Un texte écrit à y = 0,90 sur un fond 16:9 se peindrait à
-    /// y ≈ 0,63. La perte est gravée côté SDK par
-    /// `CanvasV3MigrationTests.v1RoundTripThroughV3_letterboxesFreeAnchors_andDropsTheCarrierAspect`.
+    /// l'archive v1 garde son hôte direct. À l'origine la raison était
+    /// mécanique, pas prudentielle : avant `cf05538d9` (2026-08-22), iOS ne
+    /// posait AUCUN `X-Canvas-Caps`, donc `resolveWireForm` servait du v1 tel
+    /// quel, `StoryEffects.canvasV3` valait `nil` pour CENT POUR CENT des
+    /// stories, et un montage inconditionnel aurait peint toute l'archive à
+    /// travers `CanvasV3(migrating:)` → `StoryEffects(rendering:)`. Cet
+    /// aller-retour était alors LOSSY : la migration letterboxait les ancres
+    /// libres dans l'espace de scène fixe 9:16 (`remapFreeAnchor`), pendant
+    /// que le cadre du viewer (`readerCanvasRatio`) gardait, lui, le ratio
+    /// RÉEL. Un texte écrit à y = 0,90 sur un fond 16:9 se peignait à y ≈ 0,63.
+    ///
+    /// Les DEUX raisons sont tombées depuis. L'en-tête `X-Canvas-Caps: 3` est
+    /// posé depuis `cf05538d9` (`ClientInfoProvider.swift:77`, appelé par
+    /// `APIClient.swift:603` et `:903`) — `StoryEffects.canvasV3` n'est donc
+    /// plus systématiquement `nil`. Et la perte de ratio est RÉPARÉE depuis
+    /// `b82ebbc17` — la scène loge son `carrierAspect` et le retour applique
+    /// le remap inverse (`CanvasV3MigrationTests`
+    /// `.v1RoundTripThroughV3_isFAITHFUL_nowThatTheSceneCarriesItsAspect`).
+    /// La porte reste en place aujourd'hui par PRUDENCE, pas par nécessité
+    /// mécanique : la retirer change ce que le lecteur PEINT pour toute
+    /// l'archive v1 restante — ce changement de rendu se mesure et se livre à
+    /// part (reste ouvert dans C4 : le 426 et la porte de mise à jour).
     ///
     /// Chaque canvas a donc DEUX montages, et les deux doivent porter TOUS les
     /// fils du viewer : une porte qui coupe un fil d'un seul côté est exactement
@@ -334,12 +344,11 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
             "Le viewer ne peint JAMAIS l'archive à travers une migration. La version d'origine " +
             "de cette garde exigeait ici « v3 ?? migration », au motif qu'un seul chemin de " +
             "sortie vaut mieux que deux branches. Le motif était juste, la prémisse fausse : " +
-            "iOS ne pose aucun X-Canvas-Caps (tâche C4, ouverte), donc resolveWireForm lui sert " +
-            "du v1 TEL QUEL et canvasV3 vaut nil pour CENT POUR CENT des stories — la branche " +
-            "?? était donc la SEULE jamais prise, et l'aller-retour v1→v3→v1 qu'elle impose " +
-            "letterboxe les ancres libres dans l'espace 9:16 sans jamais les rendre au cadre " +
-            "réel (perte gravée par CanvasV3MigrationTests." +
-            "v1RoundTripThroughV3_letterboxesFreeAnchors_andDropsTheCarrierAspect). L'unicité " +
+            "à l'époque iOS ne posait aucun X-Canvas-Caps, donc canvasV3 valait nil pour " +
+            "CENT POUR CENT des stories — la branche ?? était la SEULE jamais prise, et " +
+            "l'aller-retour v1→v3→v1 qu'elle impose letterboxait les ancres libres dans " +
+            "l'espace 9:16 (perte depuis RÉPARÉE : CanvasV3MigrationTests." +
+            "v1RoundTripThroughV3_isFAITHFUL_nowThatTheSceneCarriesItsAspect). L'unicité " +
             "du chemin de sortie est désormais tenue par la porte elle-même, écrite UNE fois " +
             "et partagée par les deux canvas (StoryViewerScenePlayerDocumentGuardTests." +
             "test_theDocumentIsDerivedInExactlyOnePlace)."

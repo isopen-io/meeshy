@@ -302,9 +302,14 @@ struct FeedPostCard: View {
 
     /// Document canvas v3 PROPRE au post (Task E3) — distinct du canvas d'un
     /// REPOST de story (`isStoryRepost`), qui reste rendu par
-    /// `StoryRepostEmbedCell` (hors périmètre E3). `nil` tant que le fil ne
-    /// sert que du legacy v1 : arrivée INERTE, `CANVAS_V3_WRITE_STRICT` est
-    /// OFF en prod à ce jour (spec rév. 8) — aucun écrivain n'émet encore v3.
+    /// `StoryRepostEmbedCell` (hors périmètre E3). Les DEUX écrivains émettent
+    /// désormais du v3 natif en production : `StoryEffects.encode(to:)` passe
+    /// TOUJOURS par `CanvasV3(migrating:)` (`StoryModels.swift:1889-1890`) côté
+    /// iOS, et le composer web construit `{ v: 3, scenes: [...] }` directement
+    /// (`StoryComposer.tsx:288`). `X-Canvas-Caps: 3` est posé depuis
+    /// `cf05538d9` (2026-08-22, `ClientInfoProvider.swift:77`), donc le
+    /// gateway sert ce v3 natif au lieu de la sentinelle. `nil` reste le cas
+    /// d'un post SANS storyEffects (post média simple, sans canvas).
     private var cardSceneDocument: CanvasV3? { post.storyEffects?.canvasV3 }
 
     /// Largeur plafonnée — même convention que `StoryRepostEmbedCell` (un
@@ -1266,8 +1271,9 @@ struct FeedPostCard: View {
                     .padding(.horizontal, 16)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(topComments.enumerated()), id: \.element.id) { index, comment in
-                        topCommentRow(comment: comment, isLast: index == topComments.count - 1)
+                    let comments = topComments
+                    ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
+                        topCommentRow(comment: comment, isLast: index == comments.count - 1)
                     }
 
                     // "See all comments" link

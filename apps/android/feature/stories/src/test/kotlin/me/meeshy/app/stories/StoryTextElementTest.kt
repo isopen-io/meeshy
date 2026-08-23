@@ -104,6 +104,39 @@ class StoryTextElementTest {
     }
 
     @Test
+    fun `a fresh element has no text backing`() {
+        assertThat(StoryTextElement(id = "e1").background).isEqualTo(StoryTextBackground.None)
+    }
+
+    @Test
+    fun `toTextObject omits the backgroundStyle when the element has no backing`() {
+        val wire = StoryTextElement(id = "e1", text = "hi").toTextObject(sourceLanguage = "fr")
+        assertThat(wire.backgroundStyle).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries a solid backing as the solid tagged union`() {
+        val wire = StoryTextElement(
+            id = "e1",
+            text = "hi",
+            background = StoryTextBackground.Solid(hex = "F472B6"),
+        ).toTextObject(sourceLanguage = "fr")
+        assertThat(wire.backgroundStyle?.type).isEqualTo("solid")
+        assertThat(wire.backgroundStyle?.hex).isEqualTo("F472B6")
+    }
+
+    @Test
+    fun `toTextObject carries a glass backing as the glass tagged union`() {
+        val wire = StoryTextElement(
+            id = "e1",
+            text = "hi",
+            background = StoryTextBackground.Glass(radius = 24.0),
+        ).toTextObject(sourceLanguage = "fr")
+        assertThat(wire.backgroundStyle?.type).isEqualTo("glass")
+        assertThat(wire.backgroundStyle?.radius).isEqualTo(24.0)
+    }
+
+    @Test
     fun `every style and align exposes a distinct lowercase wire token`() {
         assertThat(StoryTextStyle.entries.map { it.wire })
             .containsExactly("bold", "neon", "typewriter", "handwriting", "classic")

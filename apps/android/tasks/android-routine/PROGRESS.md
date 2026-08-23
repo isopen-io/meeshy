@@ -2,6 +2,461 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-23 **story text elements get a background (none / solid / glass)** (slice
+> `story-text-element-background`, feature-parity §E — "Text elements … background (none/solid/glass) …",
+> the `story-text-element-styling` slice's first named-pending item). iOS lets a text element carry a
+> `StoryTextBackgroundStyle` (`.none`/`.solid(hex:)`/`.glass(radius:)`) chosen from `StoryTextBackgroundPresets`;
+> Android's on-canvas text element carried style/colour/align but no backing, so a caption always floated bare.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the open
+> PRs repo-wide are gateway/web/ios work — #3376/#3375/#3368/#3364/#3352 — none android-routine). Prior android
+> iteration (`feed-repost-embed-location`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`06e85aa4`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe as recorded in NOTES: install
+> cmdline-tools + `platforms;android-37.0` via `--channel=3`, then **copy** `android-37.0` → a real `android-37`
+> dir and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37`. Full `assembleDebug testDebugUnitTest`
+> (= `meeshy.sh check`) ran locally, **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **Model reuse, not duplication**: the wire model `StoryTextBackgroundStyle` (`{type,hex?,radius?}`, in
+> `:core:model`) already existed — this slice adds only the **app-side** composer model that projects onto it.
+> New pure `StoryTextBackground` sealed interface in `:feature:stories` (`None`/`Solid(hex)`/`Glass(radius)`)
+> — exhaustive `when`, impossible states unrepresentable — with `toStyleWire()` deciding the tagged-union
+> encoding in one place: `None`→`null` (absent = "no background" per the gateway's `resolvedBackgroundStyle`,
+> minimal payload, mirrors iOS purging the legacy `textBg`), `Solid`→`{type:"solid",hex}`, `Glass`→
+> `{type:"glass",radius}`. `StoryTextBackgroundPresets.all` mirrors the iOS `StoryTextBackgroundPresets.all`
+> order/values (None, Glass(24), then 10 solids incl. the `…A6` alpha variants) as the single ordered SSOT the
+> picker chips and the pure `next()` tap-cycle both read (they can't diverge). `next()` wraps at the end and
+> restarts at the first for an off-palette backing.
+>
+> **`StoryTextElement`**: gained `background: StoryTextBackground = None` (defaulted last-ish field — all
+> construction sites use named args, verified — so no call breaks); `toTextObject` now sets
+> `backgroundStyle = background.toStyleWire()`. **VM** `onTextElementBackground(id, background)` mirrors the
+> style/colour/align wrappers exactly (one-line `updateTextElement`, inert on unknown id, selection/editing
+> untouched). **Compose glue (exempt)**: `TextElementLayer` paints the backing behind the glyphs via a
+> `Modifier.storyTextBacking` (rounded solid fill / translucent frosted scrim for glass / nothing for none;
+> `parseBackingColor` handles both `RRGGBB` and `RRGGBBAA`→Compose `AARRGGBB`), and a `BackgroundSwatch` chip
+> row (accent-ringed selection, a slash icon for None) joins the `TextStyleToolbar`. 4 locales get
+> `stories_composer_bg_none`/`_glass`.
+>
+> **Tests: +14** — 8 `StoryTextBackgroundTest` (none/solid/8-digit-solid/glass wire mapping, preset order,
+> `next` advance/wrap/off-palette), 4 `StoryTextElementTest` (fresh element has no backing; `toTextObject`
+> omits `backgroundStyle` when none, carries solid, carries glass), 2 `StoryComposerViewModelTest`
+> (`onTextElementBackground` re-backs only the edited element / inert on unknown id). **Mutation RED-proof ×1**:
+> nulling `toTextObject`'s `backgroundStyle = background.toStyleWire()` failed EXACTLY the two positive-wiring
+> tests (solid + glass, 2 of 29 in that suite) while "omits when none" stayed green — genuine discrimination.
+> Restored via backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (1 new pure model file, 1 model field + wire wiring, 1 VM method, Compose glue in
+> the composer screen, strings ×4 locales, +14 tests across 3 files, tracking docs). Verdict: **PASS** — pure
+> app-side model projecting onto the existing wire type + exempt Compose glue, behavioural tests through the
+> public API, no production logic outside apps/android.
+>
+> **Next**: still §E (Stories). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) continue the text-element styling backlog — **size** (discrete font-size control) or **outline/stroke**
+> (`borderColor`/`borderWidth` already on the wire `StoryTextObject`), each a clean thin model+wire+chip slice
+> like this one; (2) RTL / fade timing (`fadeIn`/`fadeOut` on the wire); (3) the story-canvas **Effets** tiles
+> (filters/drawing/timeline). Prefer (1) — the wire fields exist and it mirrors this slice's shape exactly.
+
+> On 2026-08-23 **repost embed shows the reposted post's shared location** (slice
+> `feed-repost-embed-location`, feature-parity §F — "Repost / quote embed cell in the feed"). iOS renders
+> the SOURCE post's `SharedPlace` as a tappable sticker inside the quote block (`FeedPostCard.swift:989`),
+> below the reposted media. Android's `ApiRepostOf` did not even carry the field, so a reposted location
+> never surfaced in the embed. This closes the last repost-embed data gap that reuses this cycle's models.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the
+> open PRs repo-wide are gateway/ios/shared work — #3370/#3368/#3364/#3352 — none android-routine). Prior
+> android iteration (`feed-post-location-sticker`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`09caa5a3`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe as recorded in NOTES:
+> install cmdline-tools + `platforms;android-37.0` via `--channel=3`, then **copy** `android-37.0` → a real
+> `android-37` dir and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37` (AGP reads the integer
+> ApiLevel, not the dir name). Full `assembleDebug testDebugUnitTest` ran locally, **BUILD SUCCESSFUL**
+> (973 tasks). Local gate available this run.
+>
+> **Model reuse, not duplication**: `ApiRepostOf` gained only `location: SharedPlace? = null` — the same
+> `:core:model` SSOT `ApiPost.location` already uses (mirrors the *gateway* shape, no iOS-extra `id`).
+> `RepostEmbedPresentation` gained `location: FeedLocationPresentation? = null`, projected through the
+> **same** `FeedPostLocationBuilder.build(repost.location)` the outer feed card uses — one label-resolution
+> source of truth (name → address → null), not a second copy. The Compose glue (exempt) renders the
+> existing dumb `FeedPostLocationSticker` atom inside `RepostEmbedCell` after the media preview (mirror of
+> iOS ordering), tap wired to the screen's `openPlaceOnMap` — promoted `private` → `internal` so the shared
+> cell reuses the one `geo:`-intent + Google-Maps-web-fallback path (no dead-end, no per-screen copy). All
+> 4 `RepostEmbedCell` call sites (feed, detail, bookmarks, user-posts) get the sticker with zero signature
+> change.
+>
+> **Tests: +3** `RepostEmbedBuilderTest` — projects label+coords / absent→null / coordinate-only→null-label.
+> **Mutation RED-proof ×1**: forcing `location = null` in the builder fails EXACTLY the two positive-projection
+> tests (2 of 3), while `absentLocationBecomesNull` correctly stays green (it asserts null for null input) —
+> genuine discrimination, not a blanket break. Restored via backup; production diff verified clean afterward.
+> The label-resolution branches themselves are already mutation-proven in `FeedPostLocationBuilderTest`
+> (prior slice), so these 3 cover the wiring, not a re-test of the delegate.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks); `RepostEmbedBuilderTest`
+> 23/23 green after restore. Reviewer PASS. Diff is `apps/android` only (1 model field, 1 presentation field
+> + builder wiring, 1 Compose sticker in the shared cell, `openPlaceOnMap` visibility bump, +3 tests, tracking
+> docs — no new strings, reuses `feed_location_shared`/`feed_location_open`). Verdict: **PASS** — pure app-side
+> projection through a tested builder + exempt Compose glue, behavioural tests through the public API, no
+> production logic outside apps/android.
+>
+> **Next**: still §F (Feed). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) begin decomposing the **Unified post composer** tabs (large, multi-slice) — the largest remaining Feed
+> gap; (2) the **story-/reel-canvas repost embed** (needs an Android story-canvas renderer — iOS
+> `StoryRepostEmbedCell`/`ReelRepostEmbedCell`, a bigger dependency); (3) advance to **§E Stories** (next in
+> build order). Prefer (1) or (3) — the cleanly-doable repost-embed data gaps are now closed (like count,
+> mood emoji, location all landed).
+
+> On 2026-08-23 **feed post shows its shared location** (slice `feed-post-location-sticker`,
+> feature-parity §F — new "Feed post location sticker (display side)" box). iOS renders a received post's
+> shared place as a pin + label capsule under the media (`FeedPostLocationSticker`); the Android composer
+> already ATTACHED an outgoing `SharedPlace`, but `ApiPost` dropped the field on the way IN, so a received
+> location never surfaced on the feed card. This lands the display side — the cleanest thin Feed slice with
+> data already on the wire (the composer's own `SharedPlace` model proves the type is used both ways).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the one
+> open PR repo-wide is #3352, a gateway share-link language fix, not android-routine). Prior android iteration
+> (`feed-repost-embed-mood-emoji`) already merged into main as PR #3361 (commit `97742b98`). Branched off
+> freshly-fetched `origin/main` (`2e24d7cc`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe as recorded in NOTES: install
+> cmdline-tools + `platforms;android-37.0` via `--channel=3`, then **copy** `android-37.0` → a real
+> `android-37` dir and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37` (AGP reads the integer
+> ApiLevel, not the dir name). After that the full `assembleDebug testDebugUnitTest` (= `meeshy.sh check`) ran
+> locally, **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **Model reuse, not duplication**: I first almost re-declared `SharedPlace` in `Post.kt`, then found the
+> existing SSOT `:core:model/SharedPlace.kt` (`{latitude, longitude, name, address, category}`, no `id` — it
+> mirrors the *gateway* shape, deliberately not iOS's extra `id`). Reused it; `ApiPost` gained only
+> `location: SharedPlace? = null` (data-class boilerplate, coverage-exempt; key-based kotlinx.serialization,
+> order-independent).
+>
+> **`:feature:feed` `FeedPostLocationBuilder`** (pure, app-side — same grain as `RepostEmbedBuilder`):
+> `build(place)` → `FeedLocationPresentation(label, latitude, longitude)` or null when absent. Label resolves
+> `name?.takeIf { isNotBlank } ?: address?.takeIf { isNotBlank }` → null (mirror of iOS `displayLabel`
+> name → address precedence). A null label is NOT an absent sticker — the cell supplies the localized
+> "Position partagée" fallback so a hand-dropped, coordinate-only pin still renders a tappable sticker.
+> Projected into `FeedPostPresentation.location` (defaulted last field — the one direct-construction test,
+> `FeedMediaGalleryTest`, uses named args so it stays green).
+>
+> **`:feature:feed` `FeedPostLocationSticker`** (Compose glue, exempt): a reusable dumb atom (pin +
+> ellipsized label in an Indigo500@12% capsule, accent-coherent, a11y `Role.Button` + open-hint), taking an
+> `onTap` so the map-intent orchestration stays in the screen. Wired into `PostCard` after the image grid
+> (mirror of iOS ordering). Tap → `openPlaceOnMap`: a `geo:lat,lng?q=…` intent, `Locale.ROOT`-formatted so a
+> comma-decimal JVM locale never emits an invalid URI, with a Google-Maps-web `ACTION_VIEW` fallback on
+> `ActivityNotFoundException` — no dead-end when no map app is installed.
+>
+> **Tests: +11** — 9 `FeedPostLocationBuilderTest` (null place / name / name-over-address /
+> blank-name→address / absent-name→address / blank-both→null / absent-both→null / coord passthrough /
+> coord-only→null-label) + 2 `FeedPostBuilderTest` wiring (projects label+coords / absent→null). **Mutation
+> RED-proof ×1**: dropping the name `isNotBlank` guard fails EXACTLY the two blank-name tests (2 of 9), the
+> other 7 green. Restored via `cp` backup; production diff verified clean afterward. Compile-RED was also
+> genuine — the tests referenced `SharedPlace`/`FeedPostLocationBuilder`/`FeedLocationPresentation` before
+> they were plumbed.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (1 model field, 1 new pure builder + presentation, 1 new Compose cell, screen
+> wiring + map helper, strings ×4 locales, +11 tests, tracking docs). Verdict: **PASS** — pure app-side
+> projection through a tested builder + exempt Compose glue, behavioural tests through the public API, no
+> production logic outside apps/android.
+>
+> **Next**: still §F (Feed). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) the reposted post's **location** in the repost embed — now unblocked on the display side, needs a new
+> `ApiRepostOf.location` field + gateway payload confirmation (iOS `APIRepostOf.location` is on the wire per
+> `PostModels.swift`), then a small mirror of this slice's projection into `RepostEmbedBuilder`; (2) begin
+> decomposing the **Unified post composer** tabs (large, multi-slice); (3) advance to **§E Stories** (next in
+> build order). Prefer (1) — it is the last cleanly-doable repost-embed gap and reuses this slice's model.
+
+> On 2026-08-23 **repost embed shows the reposted post's mood emoji** (slice `feed-repost-embed-mood-emoji`,
+> feature-parity §F — "Repost / quote embed cell in the feed"). iOS prefixes the reposted post's mood emoji
+> to the quoted content (`FeedPostCard.swift:966` — `if let mood = repost.moodEmoji, !mood.isEmpty`), with an
+> explicit comment that a reposted STATUS carries an empty body, so without the emoji "un mood republié
+> n'afficherait qu'un corps vide". Android's `ApiRepostOf` did not even carry the field, so a reposted mood
+> status rendered a completely empty embed. This lands it — the last cleanly-doable repost-embed gap whose
+> data was NOT already on the model.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the one
+> open PR repo-wide is #3352, a gateway share-link language fix, not android-routine). Prior android iteration
+> (`feed-repost-embed-like-count`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`e4d8c3f5`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe as recorded in NOTES: install
+> `platforms;android-37.0` via `--channel=3`, then **copy** `android-37.0` → a real `android-37` dir and `sed`
+> its `source.properties` to `AndroidVersion.ApiLevel=37` (the symlink alone is insufficient — AGP reads
+> `37.0` from `source.properties`). After that the full `assembleDebug testDebugUnitTest` ran locally, **BUILD
+> SUCCESSFUL** (152 actionable tasks for the feed subtree; full check below). Local gate available this run.
+>
+> **Backend risk resolved before committing**: the "mood emoji embed" candidate was flagged in prior NOTES as
+> needing "gateway payload confirmation first". Confirmed on the wire — iOS `APIRepostOf` declares
+> `moodEmoji: String?` and decodes `repostOf.moodEmoji` (`PostModels.swift:87,281`), so the gateway already
+> serves it; Android was simply dropping it. No gateway/shared change — the fix is a pure Android model +
+> projection + Compose gap.
+>
+> **`:core:model` `ApiRepostOf`**: gained `val moodEmoji: String? = null` (kotlinx.serialization, key-based —
+> order-independent; data-class boilerplate, coverage-exempt). Only construction site is `RepostEmbedBuilder`
+> (grep-verified), so no other call breaks on the new field.
+>
+> **`:feature:feed` `RepostEmbedBuilder`** (pure, app-side): `RepostEmbedPresentation` gained
+> `moodEmoji: String?`, projected as `repost.moodEmoji?.takeIf { it.isNotBlank() }` — identical guard to the
+> feed card's own `FeedPostPresentation` (`post.moodEmoji?.takeIf { it.isNotBlank() }`) and iOS's `!mood.isEmpty`.
+>
+> **`:feature:feed` `RepostEmbedCell`** (Compose glue, exempt): the content block now shows when
+> `moodEmoji != null || content.isNotBlank()` (was content-only), on a firstTextBaseline `Row` prefixing the
+> emoji (`bodyMedium`) before the content — mirror of iOS's `HStack(alignment: .firstTextBaseline, spacing: 6)`.
+> **Improvement over iOS**: the mood-only case (blank body + emoji) now renders on Android — iOS's own comment
+> flags that exact case as previously an empty body; Android gates content to non-blank so a mood-only repost
+> shows just the emoji, no empty text node. No new strings (emoji is verbatim text). No dead ends: read-only,
+> part of the same tap target that opens the original post.
+>
+> **Tests: +3** — all in `RepostEmbedBuilderTest`, through the public `RepostEmbedBuilder.build`: projects the
+> mood emoji ("🎉") / absent (null) → null / blank ("   ") → null. **Mutation RED-proof ×1**: dropping
+> `.takeIf { it.isNotBlank() }` fails EXACTLY `build_blankMoodEmojiBecomesNull` (1 of 20), the other 19 green.
+> Restored via `cp` backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL. Reviewer PASS. Diff is
+> `apps/android` only (1 model field + projection, cell wiring, +3 tests, tracking docs). Verdict: **PASS** —
+> pure app-side projection through a tested SSOT + exempt Compose glue, behavioural tests through the public
+> API, no production logic outside apps/android.
+>
+> **Next**: still §F (Feed) is nearly complete (the two remaining unchecked boxes — "Unified post composer
+> (Post/Status/Story tabs)" and the story-canvas repost embed — are large multi-slice features). Candidates:
+> (1) the reposted post's **location sticker** in the embed (needs a new `ApiRepostOf.location` field — confirm
+> iOS `APIRepostOf.location` is on the wire, which it is per `PostModels.swift`, then a model-plumbing slice
+> mirroring this one); (2) begin decomposing the **Unified post composer** tabs; (3) or advance to **§E Stories**
+> (22 todos, next in build order). Re-scout read-only before committing — parity notes are hypotheses.
+
+> On 2026-08-22 **repost embed shows the reposted post's like count** (slice `feed-repost-embed-like-count`,
+> feature-parity §F — "Repost / quote embed cell in the feed"). iOS renders the reposted post's like count
+> inside the embedded quote block (`FeedPostCard.repostView` heart + `repost.likes`; `PostDetailView`
+> `repostEmbed` gated `> 0`); Android's shared `RepostEmbedCell` omitted it. This lands it — the single
+> cleanest remaining Feed embed gap, since the data is **already deserialized** into `ApiRepostOf.likeCount`
+> (no new gateway endpoint, no new SDK model field, no new socket stream — which is exactly what disqualified
+> the mood-emoji / location-sticker embed variants that each need a net-new `ApiRepostOf` field).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the one
+> open PR repo-wide is #3352, a gateway share-link language fix, not android-routine). Prior android iteration
+> (`feed-postdetail-quote-repost`) already merged into main as PR #3350. Branched off freshly-fetched
+> `origin/main` (`ad904485`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe wrinkle DEEPENED: the symlink
+> `android-37 → android-37.0` is **no longer sufficient** — AGP reads `AndroidVersion.ApiLevel=37.0` from the
+> platform's `source.properties` and computes the hash `android-37.0`, so `compileSdk = 37` still fails with
+> *"Failed to find target with hash string 'android-37'"* even with the symlink present (confirmed this run:
+> baseline `assembleDebug` failed on exactly that). Fix that actually works: **copy** `android-37.0` → a real
+> `android-37` dir and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37`. After that the full
+> `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) ran locally, **BUILD SUCCESSFUL**
+> (973 tasks). Local gate available this run. (Recorded in NOTES.md.)
+>
+> **`:feature:feed` `RepostEmbedBuilder`** (pure, app-side): `RepostEmbedPresentation` gained `likeCount: Int`,
+> projected as `(repost.likeCount ?: 0).coerceAtLeast(0)` — null (absent payload) → 0, and a malformed
+> negative clamps to 0 (same precedent as `feed-realtime-comment-count`'s `coerceAtLeast(0)`). **Improvement
+> over iOS**: gated `> 0` in the shared cell, so a reposted post with no likes shows no "0 j'aime" clutter —
+> iOS's `FeedPostCard.repostView` renders the count unconditionally; its own `PostDetailView.repostEmbed`
+> already gates `> 0`, and the shared Android cell adopts that restraint for both surfaces.
+>
+> **`:feature:feed` `RepostEmbedCell`** (Compose glue, exempt): a heart (`Icons.Filled.Favorite`) + count row
+> after the media block, accent-coherent (`Indigo500` at 0.7 alpha, mirroring iOS `accentText(...).opacity(0.7)`),
+> merged into one accessibility element via the new `feed_repost_likes_count` plurals (EN/FR/ES/PT). No dead
+> ends: the row is read-only, part of the same tap target that opens the original post.
+>
+> **Tests: +3** — all in `RepostEmbedBuilderTest`, through the public `RepostEmbedBuilder.build`:
+> projects the reposted post's count (7) / absent (null) → 0 / negative (-3) clamps to 0. **Mutation RED-proof
+> ×1**: dropping `.coerceAtLeast(0)` fails EXACTLY `build_clampsNegativeLikeCountToZero` (1 of 17), the other 16
+> green. Restored via `cp` backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (1 field + projection, cell wiring, plurals ×4 locales, +3 tests, tracking docs).
+> Verdict: **PASS** — pure app-side projection through a tested SSOT + exempt Compose glue, behavioural tests
+> through the public API, no production logic outside apps/android.
+>
+> **Next**: still §F (Feed). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) the composer's **per-post language selector** (iOS lets you pick the post's original language; confirm
+> `POST /posts` accepts an explicit `originalLanguage` before committing — unverified-backend risk); (2) the
+> reposted post's **mood emoji** in the embed (needs a new `ApiRepostOf.moodEmoji` field + gateway payload
+> confirmation — model plumbing slice); (3) the composer's **location** attachment. Comment-repost is
+> DISQUALIFIED — iOS exposes no repost/quote on comment cells (net-new invention, skip).
+
+> On 2026-08-22 **post-detail gains repost + quote** (slice `feed-postdetail-quote-repost`, feature-parity
+> §F — "Post / comment pin-unpin; repost / quote-repost / share; report"). The feed card already offered
+> repost + quote (slice `feed-quote-repost`); the full-screen post-detail did not. iOS offers both there via
+> `PostDetailView.toggleDetailRepost(quote:)` behind a repost button + alert. This lands the same on Android,
+> routed through the already-tested `RepostCommand` SSOT.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the one
+> open PR repo-wide is #3348, a web/gateway/shared/iOS realtime fix, not android-routine). Prior android
+> iteration (`feed-quote-repost`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`ea1789df`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe wrinkle: `--channel=3
+> platforms;android-37.0` installs a MINOR-versioned platform dir (`platforms/android-37.0`, ApiLevel
+> `37.0`), but AGP 8.13 with `compileSdk = 37` looks up hash string `android-37` → *"Failed to find target
+> with hash string 'android-37'"*. Fix: `ln -sf android-37.0 android-37` in `$HOME/android-sdk/platforms`.
+> After the symlink the full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) ran
+> locally, **BUILD SUCCESSFUL** (973 tasks). Local gate available this run. (Recorded in NOTES.md.)
+>
+> **`:feature:feed` `PostDetailViewModel`**: new `repost()` / `beginQuote()` / `onQuoteTextChange()` /
+> `cancelQuote()` / `submitQuote()`, mirror of the feed VM's quote flow but scoped to the single open post
+> (`rawPost`). Both paths fold through `RepostCommand.of(post.id, post.repostOf, quote, commentary)` — the
+> pure SSOT already tested by `RepostCommandTest` (root-target resolution + blank-quote degradation). Two
+> **improvements over iOS's post-detail**, both free from routing through the SSOT: (1) reposting a SHARE
+> targets its ROOT, never the intermediate share — iOS's `toggleDetailRepost` reposts the raw `postId` and so
+> embeds an empty share card; (2) a blank/whitespace quote degrades to a simple repost (iOS sends
+> `content = ""`, and in fact iOS's post-detail "quote" is content-LESS entirely — `content: nil`). Ephemeral
+> repost/quote UI state (`quoteComposer`, optimistic `isReposted`, in-flight guard) lives in the existing
+> `PostDetailStatus` flow so it survives every re-projection; the optimistic `isReposted` reverts on failure
+> (iOS `isPostReposted`), failures surface via `errorMessage`, and a double-tap fires the network once
+> (in-flight guard). `sendRepost` rethrows `CancellationException`.
+>
+> **`:feature:feed` `PostDetailScreen`** (Compose glue, exempt): the read-only repost stat becomes an
+> interactive `DetailRepostStat` — a tap opens a Repost / Quote `DropdownMenu` (Android take on iOS's button
+> + alert), the icon fills accent `Indigo500` once reposted (optimistic). The quote path reuses the feed's
+> `QuoteComposerSheet` (made `internal`) for visual coherence — the source-preview card above a commentary
+> field, same as the feed. No new strings (reuses `feed_action_repost` / `feed_action_quote` / the quote
+> sheet strings). No dead ends: the menu dismisses cleanly, the sheet cancels back to the post.
+>
+> **Tests: +15** — all in `PostDetailViewModelTest`, driving the public `state`: repost-original→own-id /
+> repost-of-repost→root / repost-no-root→direct-parent / repost-before-load inert / repost-failure reverts +
+> error / double-repost fires once (in-flight guard) / beginQuote preview (author + trimmed content) /
+> beginQuote-before-load inert / draft change / cancel closes no repost / submitQuote commentary + flags +
+> closes / submitQuote-of-repost→root / submitQuote blank degrades / submitQuote no-composer inert /
+> submitQuote failure reverts + error. **Mutation RED-proof ×1**: `RepostCommand.of(post.id, post.repostOf…)`
+> → `…, null…` fails EXACTLY the 2 root-target tests, other 27 green. Restored via `cp` backup; production
+> diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (VM methods + state, screen wiring, 1 visibility widening in FeedScreen, +15
+> tests, tracking docs). Verdict: **PASS** — app-side orchestration + Compose glue, behavioural tests through
+> the public API, the "what to send" decision left in the already-tested pure SSOT, no production logic
+> outside apps/android.
+>
+> **Next**: still §F (Feed). Candidates: the `PostCommentsViewModel` could gain the same repost entry point if
+> iOS exposes one on comment cells (scout first); or advance to the reposted/quoted embed cell polish, or the
+> `comment pin-unpin` sibling once a gateway endpoint exists (still net-new, skip until then). Re-scout
+> read-only before committing — parity notes are hypotheses.
+
+> On 2026-08-22 **quote-repost composer shipped** (slice `feed-quote-repost`, feature-parity §F —
+> "Post / comment pin-unpin; repost / quote-repost / share; report"). The post options menu offered only a
+> SIMPLE repost; iOS also lets you **quote** — repost with your own commentary. This lands the quote flow
+> and, along the way, fixes a latent Android bug.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the two
+> open PRs repo-wide are #3342 web + #3337 shared/iOS, neither android-routine). Prior android iteration
+> (`guest-join-entry-navigation`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`cb7c8297`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). `--channel=3 platforms;android-37.0`
+> recipe worked; ran the full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally,
+> **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **Pure SSOT `RepostCommand`** (`:feature:feed`, app-side — ports what iOS keeps in `FeedViewModel`):
+> `of(postId, repostOf, quote, commentary) → RepostCommand(targetId, content, isQuote)` folds two decisions.
+> **(1) Target id** (port of iOS `resolveRepostTargetId`): reposting a repost targets its recorded ROOT
+> (`originalRepostOfId?.trim() ?: repostOf.id`), never the intermediate share — the gateway hydrates
+> `repostOf` one level deep, so reposting a share by its own id embeds an EMPTY share card. The pre-existing
+> simple `repost()` passed `postId` straight through — a **latent bug now fixed** since both the simple and
+> quote paths route through `RepostCommand`. **(2) content/isQuote** (port of iOS `repostPost`
+> `content: isQuote ? content : nil`, `isQuote: isQuote ? (content != nil) : false`): a simple repost carries
+> no content; a quote carries the trimmed commentary. **Surpasses iOS**: a blank/whitespace-only quote
+> degrades to a simple repost (blank→null then `isQuote = content != null`), where iOS's raw `content != nil`
+> would send `content = ""`, `isQuote = true` (an empty quote card).
+>
+> **`:feature:feed` `FeedViewModel`**: `repost(postId)` now routes through `RepostCommand` (target fix);
+> new `beginQuote(postId)` (inert if the post isn't loaded — nothing to quote; seeds a `QuoteComposerState`
+> with the source author + trimmed content preview), `onQuoteTextChange`, `cancelQuote`, `submitQuote`
+> (computes the command, closes the sheet — iOS dismisses immediately — reposts, `refresh()` on success /
+> `errorMessage` on failure). `PostAction.Quote` added to the pure `PostActionMenu` right after `Repost`
+> (every post). `FeedScreen` wires `onQuote → beginQuote` and renders a `QuoteComposerSheet` (Compose glue,
+> exempt: an `AlertDialog` coherent with `ReportPostDialog` — commentary field above a bordered source
+> preview). New strings in all 4 locales (en/fr/es/pt).
+>
+> **Tests: +23** — `RepostCommandTest` ×11 (pure: own-id / repost→root / no-root fallback / blank-root
+> fallback / padded-root trim / simple carries no content / quote trims content + flags / blank + null
+> commentary degrade / inner-whitespace preserved / quote-of-repost composes both); `FeedViewModelTest` ×11
+> (repost own-id + refresh / repost-of-repost→root / error surfaces + no refresh / beginQuote preview /
+> beginQuote inert on unknown / draft change / submitQuote commentary + close + refresh / submitQuote-of-
+> repost→root / submitQuote blank degrades / cancel closes no repost / submit inert with no composer);
+> `PostActionMenuTest` ×1 (quote follows repost). **Mutation RED-proof ×1**: `isQuote = content != null` →
+> `= quote` fails EXACTLY the 3 blank-degradation tests (2 pure + 1 VM), 730 others green. Restored via `cp`
+> backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (1 new pure SSOT + 1 new test in `:feature:feed`, VM + menu + screen wiring,
+> strings in 4 locales, tracking docs). Verdict: **PASS** — app-side orchestration + Compose glue,
+> behavioural tests through the public API, the pure "what to send" decision isolated in a tested SSOT, no
+> production logic outside apps/android.
+>
+> **Next**: still §F (Feed). The sibling gap `comment pin-unpin` remains, but neither iOS nor Android has a
+> comment-pin backend, so it is net-new invention without a port reference — skip until a gateway endpoint
+> exists. Better candidates: quote-repost from the **post-detail** menu (iOS `PostDetailView.toggleDetailRepost`
+> offers both repost and quote there too — `PostDetailViewModel` has its own `repost`; wiring the same
+> `RepostCommand` + composer there is a clean follow-up), or advance to another §F `[~]` (e.g. the reposted/
+> quoted embed cell, line ~4544). Re-scout read-only before committing — parity notes are hypotheses.
+
+> On 2026-08-22 **guest-join deep-link route rewired — the umbrella box is now `[x]`** (slice
+> `guest-join-entry-navigation`, feature-parity §Chat — "Anonymous-session conversation mode; guest
+> join-via-share-link flow"). This lands the last named follow-up: the `MeeshyApp.kt` deep-link route no
+> longer jumps straight to the anonymous guest form; it now consults the entry brain and branches the
+> navigation on the resolved intent.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the
+> single open PR repo-wide is #3337, a `packages/shared` + iOS Rivière fix, not android-routine). Prior
+> android iteration (`sharelink-entry-resolver`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`0cec829f`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). `--channel=3 platforms;android-37.0`
+> recipe worked; ran the full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`)
+> locally, **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **`:feature:auth` `ShareLinkEntryViewModel`** (new, app-side): the brain the guest-join route now
+> consults on entry. `@HiltViewModel`, exposes `state: StateFlow<ShareLinkEntryUiState>`. On init it reads
+> the auth flag (`ShareLinkAuthStateProviding` seam over `AuthRepository.isAuthenticated`), gathers known
+> conversation ids ONLY when authenticated (`KnownConversationIdsProviding` seam over
+> `ConversationRepository.cachedConversations` — a guest never pays a needless cache read, proven by a
+> test), runs the app-side `ShareLinkEntryResolver`, and reduces the six-way `ShareLinkEntryIntent` to one
+> `ShareLinkEntryUiState`: `OpenConversation` / `ChooseIdentity(conversationId, title, resumesGuestSession)`
+> / `RequiresAccount` / `GuestForm` / `Failed(message)` / `Resolving`. Two intents drive a network join the
+> VM performs itself (`JoinWithAccount`, and the null-resolution fallback while authenticated — iOS's
+> `joinViaShareLink`) via an `AuthenticatedShareLinkJoining` seam over
+> `ShareLinkJoinRepository.joinAuthenticated`: success → `OpenConversation(canonicalId)`, failure →
+> `Failed`. `ChooseIdentity` is actionable (no dead end): `chooseAccount()` joins + opens, `chooseAnonymous()`
+> resumes the stored guest session (or opens the form when there is none / a blank stored conversationId).
+> SOTA over iOS, which routes authenticated vs unauthenticated entry through TWO separate views: Android
+> unifies both behind one VM; a blank stored `conversationId` degrades to the form instead of navigating to
+> an empty id.
+>
+> **`:feature:auth` `ShareLinkEntryScreen`** (new, Compose glue): hosts the VM and renders each state —
+> `GuestForm` delegates to the existing `GuestJoinScreen`; `OpenConversation`/`RequiresAccount` fire the
+> nav callback under a spinner; `ChooseIdentity` shows an accent-coherent two-button choice (Continue with
+> my account / Join·Resume anonymously); `Failed` offers retry. `MeeshyApp.kt`'s `GUEST_JOIN` composable now
+> hosts `ShareLinkEntryScreen(onOpenConversation, onJoined, onBack, onSignIn)` instead of `GuestJoinScreen`.
+> `ShareLinkEntryModule` (Hilt) binds the resolver + three `fun interface` seams to their SDK sources
+> (boilerplate, coverage-exempt). New strings in all 4 locales (en/fr/es/pt).
+>
+> **Tests: +19** — `ShareLinkEntryViewModelTest` drives the public `state` with a REAL `ShareLinkEntryResolver`
+> over faked leaf seams (preview / `InMemoryAnonymousSessionStore` / join / auth / known-ids): guest open→form /
+> guest never-consults-account-list / guest requires-account→sign-in / guest stored-session→resume /
+> guest preview-failure→form / account member→open-straight-away (join not called) / account non-member-open→
+> choose-identity / choose-identity flags-resumable-guest / account require-account→join→open / account
+> join-failure→Failed / account unresolvable→authenticated-join fallback / unresolvable+join-failure→Failed /
+> resume blank-conversationId→form / retry-after-Failed→succeeds / initial-state Resolving / chooseAccount→open /
+> chooseAccount-failure→Failed / chooseAnonymous stored→resume / chooseAnonymous none→form. **Mutation (RED
+> proof) ×1**: neuter the resume blank-conversationId guard → **exactly** `resume ... degradesToTheAnonymousForm`
+> fails (1 of 15 at that point). Restored via the Edit tool; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (2 new code files + 1 Hilt module + 1 new test in `:feature:auth`, 1 route
+> rewire in `:app`, strings in 4 locales, tracking docs). Verdict: **PASS** — app-side orchestration + Compose
+> glue, behavioural tests through the public API, pure decision left in the SDK model, no production logic
+> outside apps/android.
+>
+> **Next**: the guest-join feature is complete end to end. Pick the next-highest-value unchecked box in
+> `feature-parity.md` for the current build-order area (Auth → Conversations → Chat → Feed → Stories → Calls
+> → the rest). Candidate seen while here: the `ChooseIdentity` "resume anonymously" path currently resumes
+> only when a stored session exists for the exact link; a future refinement could also re-preview + open the
+> guest form pre-filled from the dormant session. Re-scout read-only before committing — parity notes are
+> hypotheses.
+
 > On 2026-08-22 **share-link entry-fact resolver shipped** (slice `sharelink-entry-resolver`,
 > feature-parity §Chat — "Anonymous-session conversation mode; guest join-via-share-link flow"; the
 > umbrella box stays `[~]` — the `MeeshyApp.kt` deep-link rewire is now the single named follow-up).

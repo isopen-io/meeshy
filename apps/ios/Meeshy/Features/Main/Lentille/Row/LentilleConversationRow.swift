@@ -7,35 +7,13 @@ import MeeshyUI
 // Rang plat de la Lentille — MÊMES entrées que `ThemedConversationRow`
 // (`Meeshy/Features/Main/Views/ThemedConversationRow.swift`, INTERDIT
 // d'édition : c'est le modèle d'entrées et de `==` de ce fichier), rendu
-// radicalement différent : AUCUNE CARTE DE RANGÉE (ni `backgroundSecondary`,
-// ni gradient de chaleur, ni bordure autour du rang — la focus card de LWS-8
-// reste la seule carte de l'écran), rang plat `LentilleMetrics.Row.height`,
-// avatar `LentilleMetrics.Avatar` (44, contexte `.conversationHeaderCollapsed`)
-// + anneau accent propre, ligne 2 dont la précédence
+// radicalement différent : AUCUNE carte (ni `backgroundSecondary`, ni
+// gradient de chaleur, ni bordure — la focus card de LWS-8 est la seule
+// carte de l'écran), rang plat `LentilleMetrics.Row.height` (64), avatar
+// `LentilleMetrics.Avatar` (44, contexte `.conversationHeaderCollapsed`) +
+// anneau accent propre, `Nom · heure`, ligne 2 dont la précédence
 // (typing > brouillon > pont ✦ > préview) est **inchangée** par rapport au
 // rang historique.
-//
-// **Directives produit du 2026-08-23 — ce que la rangée empile, et pourquoi :**
-//
-// 1. « Les derniers messages de conversation ne doivent pas être dans des
-//    bulles ! » : la bulle d'aperçu du lot 2 (`LentillePreviewBubble`) est
-//    RETIRÉE. La ligne 2 revient NUE sous la ligne de titre — c'est aussi
-//    la disposition livrée sur `main` (266fcb765), viser la même forme rend
-//    la fusion possible plutôt que d'inventer une troisième.
-// 2. « La date reste en bas à droite dans une ligne SEULE, AVEC ou SANS
-//    magnificence » : l'heure ne partage plus sa bande (ni avec le nom, ni
-//    avec l'aperçu). Elle possède `dateLine`, poussée à droite par un
-//    `Spacer`. La carte de focus tient la même place.
-// 3. « L'information du nombre de membre disparaît sans magnificence » :
-//    l'effectif QUITTE la rangée — l'œil et l'oreille se taisent ensemble
-//    (voir `accessibilityLabel`). Cela RESTAURE behaviour-matrix L08, que
-//    le lot 2 avait violée sans l'amender : l'effectif est absorbé par la
-//    carte de focus, qui en fait une chip-bouton vers les participants.
-// 4. Le glyphe de synchronisation ⟳ est RETIRÉ (l'outbox continue de
-//    renvoyer ; seule l'affordance de liste part) et sa place revient à la
-//    **pastille rouge chiffrée** de non-lus, atome partagé avec la peau
-//    historique (`UnreadCountBadge`). Le point accent de 8 px qui la
-//    remplaçait disparaît avec son token : il portait la MÊME donnée.
 //
 // Le rang ne porte AUCUN `@State` de langue : la résolution du texte passe
 // exclusivement par `resolvedLastMessagePreview(preferredLanguages:)` (SDK,
@@ -136,9 +114,7 @@ struct LentilleConversationRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 headerLine
-
                 line2
-
                 dateLine
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -206,15 +182,10 @@ struct LentilleConversationRow: View {
     /// commentaire ci-dessus) — lue directement par
     /// `LentilleFlatRowBridgeAriaTests` via `@testable import`.
     var accessibilityLabel: String {
-        let historical = ThemedConversationRow(
+        let base = ThemedConversationRow(
             conversation: conversation,
             preferredContentLanguages: preferredContentLanguages
         ).conversationAccessibilityLabel
-
-        // 2026-08-23 — l'effectif a quitté la rangée : l'oreille se tait
-        // avec l'œil. Le libellé redevient exactement l'hérité, caractère
-        // pour caractère, comme avant le lot 2.
-        let base = historical
 
         guard showsBridge, let bridge = conversation.bridge else { return base }
         let bridgeText = LentilleBridgeLine.resolveAriaText(bridge: bridge, preferredLanguages: preferredContentLanguages)
@@ -304,63 +275,76 @@ struct LentilleConversationRow: View {
 
             tagPastilles
 
-            Spacer(minLength: 0)
-
             // behaviour-matrix:L13 — appel en cours (Scène) : « … remplace
             // toute autre info à droite » (contrat §3.3). `liveCall == nil`
-            // (défaut) ⇒ la queue de ligne porte la pastille de non-lus :
+            // (défaut) ⇒ la queue de ligne INCHANGÉE (heure + outbox) :
             // zéro donnée fabriquée quand l'appelant ne branche rien
             // (contrat LWS-2bis, « un appel inconnu n'est pas affiché »).
-            //
-            // Lot 2 : l'heure a quitté cette ligne pour la bulle d'aperçu, et
-            // le glyphe outbox ⟳ est retiré (behaviour-matrix:L09 amendé — le
-            // renvoi automatique par l'outbox est conservé, l'état reste
-            // annoncé à VoiceOver par `accessibility.pending_sync`, seule
-            // l'affordance visuelle de la liste part). Sa place revient à la
-            // pastille rouge CHIFFRÉE (behaviour-matrix:L06 amendé), qui ne
-            // rend RIEN à zéro non-lu — le portillon vit dans l'atome.
             if let liveCall {
+                Spacer(minLength: 0)
                 LentilleLiveCallBadge(liveCall: liveCall, accentColorHex: accentColorHex)
                 if !liveCall.joined {
                     joinLiveCallButton
                 }
             } else {
-                UnreadCountBadge(count: conversation.userState.unreadCount, isDark: isDark)
+                // La date a QUITTÉ cette ligne le 2026-08-22 : elle vit seule,
+                // en bas à droite (`dateLine`). Le nom possède donc toute la
+                // ligne, et l'aperçu commence à la même abscisse que lui.
+                Spacer(minLength: 0)
+
+                if conversation.userState.unreadCount > 0 {
+                    unreadBadge
+                        .fixedSize()
+                        .layoutPriority(1)
+                }
             }
         }
     }
 
-    // MARK: - Date — bande à elle, en bas à droite
+    /// Pile de non-lus — MÊME place et MÊME rouge qu'en magnification (retour
+    /// produit 2026-08-22, soir : « enlever l'effectif sur les rows non
+    /// magnifiées, mais mettre le chip rouge si messages non lus »). La loupe
+    /// n'ajoute donc que l'effectif et la précision de la date : elle
+    /// agrandit, elle ne recompose pas.
+    ///
+    /// **Supersession assumée du contrat §LWS-7** (« aucun badge chiffré
+    /// nulle part », vol.5 « badge rouge 99+ supprimé ») : cette règle datait
+    /// d'un rang où le non-lu se disait par le seul point accent du pont ✦.
+    /// Le pont n'apparaît QUE si la conversation en a un (`showsBridge` exige
+    /// `bridge != nil`) — une conversation non lue SANS pont ne disait donc
+    /// rien du tout. Le chip, lui, parle toujours.
+    private var unreadBadge: some View {
+        Text(conversation.userState.unreadCount > 99 ? "99+" : "\(conversation.userState.unreadCount)")
+            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .heavy))
+            .foregroundColor(.white)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(Capsule(style: .continuous).fill(MeeshyColors.unreadBadgeBackground(isDark: isDark)))
+            .accessibilityLabel(UnreadCountLabel.messages(conversation.userState.unreadCount))
+    }
 
-    /// Troisième bande : la date SEULE, poussée à droite (directive produit
-    /// 2026-08-23 — « la date de la bulle de magnificence reste en bas à
-    /// droite dans la bulle dans une ligne seule AVEC ou SANS magnificence »).
-    /// La carte de focus tient la même place, au même rang de la pile.
+    /// Troisième ligne — la date SEULE, poussée à droite (retour produit
+    /// 2026-08-22 : « en bas sur une nouvelle ligne à droite mettre la date ;
+    /// la date gardera cette place même en magnificence »). Le glyphe d'outbox
+    /// la précède : il parle du même envoi.
     ///
-    /// Le glyphe d'outbox ⟳ n'y figure PAS : il a été retiré de la rangée par
-    /// le lot 2 (behaviour-matrix L09 amendé, l'état reste annoncé à VoiceOver
-    /// par `accessibility.pending_sync`). La forme de `main` le garde ; ne pas
-    /// le réimporter ici serait le seul écart de ce bloc à la fusion.
-    ///
-    /// `LentilleRowTimestamp` garde son `TimelineView` : l'horodatage relatif
-    /// doit ticker HORS du portillon `.equatable()`, qui n'a délibérément
-    /// aucune composante temporelle (`LentilleRowBehaviourAnchorTests`, L14).
-    ///
-    /// Décoratif pour VoiceOver : la rangée combine ses enfants et annonce un
-    /// libellé unique, qui porte déjà l'heure.
+    /// `LentilleRowTimestamp` garde son `TimelineView` — l'horodatage relatif
+    /// doit ticker hors du portillon `.equatable()`, qui n'a délibérément
+    /// aucune composante temporelle.
     private var dateLine: some View {
         HStack(spacing: MeeshySpacing.xs) {
             Spacer(minLength: 0)
 
+            if conversation.userState.hasPendingSync {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+                    .foregroundColor(accent.opacity(0.7))
+                    .accessibilityHidden(true)
+            }
+
             LentilleRowTimestamp(date: conversation.lastMessageAt)
                 .font(LentilleMetrics.Time.font)
-                .foregroundColor(
-                    Self.timestampColor(
-                        unreadCount: conversation.userState.unreadCount,
-                        accent: accent,
-                        isDark: isDark
-                    )
-                )
+                .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent, isDark: isDark))
                 .lineLimit(1)
         }
         .accessibilityHidden(true)
@@ -384,11 +368,9 @@ struct LentilleConversationRow: View {
     /// supprimé […] l'heure reste TERTIAIRE au même format ». Diverge
     /// délibérément de `ThemedConversationRow.timestampColor` (rouge
     /// sémantique si non-lu, sinon accent) : le rang plat ne bascule plus
-    /// JAMAIS sur le rouge — le pont ✦ et la pastille CHIFFRÉE de la ligne
-    /// de titre portent déjà la nouvelle du non-lu (contrat §LWS-7, premier
-    /// volet amendé par le lot 2 : c'est le point accent de 8 px qui est
-    /// parti, pas le badge), le timestamp reste un troisième niveau de
-    /// texte, quel que soit l'état de lecture.
+    /// JAMAIS sur le rouge — le pont ✦ + le point accent 8 px portent déjà
+    /// la nouvelle du non-lu (contrat §LWS-7), le timestamp reste un
+    /// troisième niveau de texte, quel que soit l'état de lecture.
     /// `unreadCount`/`accent` restent dans la signature pour la stabilité
     /// d'appel (site d'appel + suite de tests inchangés) mais ne
     /// discriminent plus rien ; `isDark` a un défaut pour rester appelable
@@ -565,16 +547,20 @@ struct LentilleConversationRow: View {
         let totalCount = conversation.lastMessageAttachmentCount
 
         if hasText {
+            // « Auteur : message » en UN SEUL texte (retour produit
+            // 2026-08-22 : « juste mettre l'auteur : message »), même
+            // grammaire que la carte de magnification — deux `Text` côte à
+            // côte dans un `HStack` laissaient l'auteur occuper sa propre
+            // colonne et tronquaient le message avant le bord.
             HStack(spacing: 4) {
                 if showEphemeralIcon {
                     Image(systemName: "timer")
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(accent)
                 }
-                senderLabel
-                Text(resolvedPreviewText)
+                (senderPrefix + Text(resolvedPreviewText)
                     .font(LentilleMetrics.Line2.font)
-                    .foregroundColor(textSecondary)
+                    .foregroundColor(textSecondary))
                     .lineLimit(1)
             }
         } else if let first = attachments.first {
@@ -616,6 +602,26 @@ struct LentilleConversationRow: View {
         }
     }
 
+    /// « Auteur : » — la règle, pure et partagée avec la carte de
+    /// magnification (`LentilleFocusCard.senderPrefix`), pour que les deux
+    /// vues ne puissent pas dériver l'une de l'autre. `nil` quand il n'y a
+    /// personne à nommer : le message commence alors la ligne.
+    nonisolated static func authorPrefix(name: String?) -> String? {
+        guard let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return "\(trimmed) : "
+    }
+
+    /// Le préfixe, en `Text` concaténable — teinté accent, comme la carte.
+    private var senderPrefix: Text {
+        guard let prefix = Self.authorPrefix(name: conversation.lastMessageSenderName) else { return Text("") }
+        return Text(prefix)
+            .font(MeeshyFont.relative(LentilleMetrics.Line2.size, weight: .semibold))
+            .foregroundColor(accent)
+    }
+
+    /// Conservé pour les branches qui INTERCALENT un glyphe entre l'auteur et
+    /// le libellé (pièce jointe, localisation, masqué, vue unique) : là, la
+    /// concaténation en un seul `Text` est impossible.
     private var senderLabel: some View {
         Group {
             if let name = conversation.lastMessageSenderName, !name.isEmpty {

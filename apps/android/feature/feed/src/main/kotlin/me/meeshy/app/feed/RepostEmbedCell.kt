@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Translate
@@ -26,9 +27,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -148,15 +151,29 @@ fun RepostEmbedCell(
             }
         }
 
-        if (embed.content.isNotBlank()) {
+        if (embed.moodEmoji != null || embed.content.isNotBlank()) {
             Spacer(Modifier.height(MeeshySpacing.sm))
-            Text(
-                text = embed.content,
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textPrimary,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                embed.moodEmoji?.let { mood ->
+                    Text(
+                        text = mood,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                if (embed.content.isNotBlank()) {
+                    Text(
+                        text = embed.content,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textPrimary,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+            }
         }
 
         embed.previewImageUrl?.let { url ->
@@ -191,6 +208,44 @@ fun RepostEmbedCell(
                         )
                     }
                 }
+            }
+        }
+
+        embed.location?.let { loc ->
+            Spacer(Modifier.height(MeeshySpacing.sm))
+            val mapContext = LocalContext.current
+            FeedPostLocationSticker(
+                location = loc,
+                onTap = { openPlaceOnMap(mapContext, loc) },
+            )
+        }
+
+        if (embed.likeCount > 0) {
+            Spacer(Modifier.height(MeeshySpacing.sm))
+            val likesLabel = pluralStringResource(
+                R.plurals.feed_repost_likes_count,
+                embed.likeCount,
+                embed.likeCount,
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                modifier = Modifier.semantics(mergeDescendants = true) {
+                    contentDescription = likesLabel
+                },
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Favorite,
+                    contentDescription = null,
+                    tint = MeeshyPalette.Indigo500.copy(alpha = 0.7f),
+                    modifier = Modifier.size(12.dp),
+                )
+                Text(
+                    text = embed.likeCount.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MeeshyPalette.Indigo500.copy(alpha = 0.7f),
+                )
             }
         }
     }

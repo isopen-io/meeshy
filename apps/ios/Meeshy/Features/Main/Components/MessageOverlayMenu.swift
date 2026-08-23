@@ -59,6 +59,9 @@ struct MessageOverlayMenu: View {
     private var isDark: Bool { colorScheme == .dark }
     @State private var isVisible = false
     @State private var isEmojiPickerOpen = false
+    /// Classement des emojis rapides figé pour la durée de la présentation —
+    /// cf. `emojiQuickBar`.
+    @State private var cachedTopEmojis: [String]?
     /// Offset vertical du cluster native-lean pendant le drag (suivi du doigt,
     /// amorti au-delà des seuils par `MessageOverlayDragLaw.displayOffset`).
     /// `@GestureState` : reset automatique (spring) au release ET à
@@ -437,7 +440,13 @@ struct MessageOverlayMenu: View {
         // embarque deja son chrome (capsule glass + shadow), son padding
         // interne et la cascade d'entree gauche→droite (`WaveTileModifier`),
         // donc aucun wrapper supplementaire ici.
-        let topEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
+        //
+        // Le classement (lecture UserDefaults + tri) est calculé UNE fois par
+        // présentation via le cache @State — le body de l'overlay se
+        // ré-évalue à chaque frame du spring d'entrée, et la table d'usage ne
+        // change pas pendant que le menu est ouvert (recordUsage ⇒ dismiss).
+        let topEmojis = cachedTopEmojis
+            ?? EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
         return EmojiReactionPicker(
             quickEmojis: topEmojis,
             style: isDark ? .dark : .light,
@@ -454,6 +463,11 @@ struct MessageOverlayMenu: View {
             }
         )
         .frame(maxWidth: 280)
+        .onAppear {
+            if cachedTopEmojis == nil {
+                cachedTopEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
+            }
+        }
     }
 
     // MARK: - Dismiss Background (dim only, no full-screen blur → glass stays vibrant)

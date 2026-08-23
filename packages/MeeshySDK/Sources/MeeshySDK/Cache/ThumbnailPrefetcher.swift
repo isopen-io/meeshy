@@ -60,8 +60,15 @@ public actor ThumbnailPrefetcher {
         do {
             try data.write(to: path)
         } catch {
-            // La miniature sera re-décodée depuis l'original à chaque affichage.
-            Logger.cache.error("Thumbnail not cached to disk, it will be re-decoded every time: \(error.localizedDescription, privacy: .public)")
+            // Le dossier a pu être purgé par l'OS pendant la session : on le
+            // recrée et on retente une fois avant d'abandonner.
+            FileManager.default.createDirectoryLogging(at: Self.directory, context: "thumbnail cache dir")
+            do {
+                try data.write(to: path)
+            } catch {
+                // La miniature sera re-décodée depuis l'original à chaque affichage.
+                Logger.cache.error("Thumbnail not cached to disk, it will be re-decoded every time: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
@@ -85,11 +92,34 @@ public actor ThumbnailPrefetcher {
         }.value
     }
 
-    private func thumbnailPath(forKey key: String) -> URL {
+    /// Dossier créé UNE fois (au premier accès) — l'ancien chemin recréait le
+    /// répertoire (syscall) à chaque résolution de miniature, y compris pendant
+    /// le scroll. `saveToDisk` sait le recréer si l'OS purge Caches en cours de
+    /// session.
+    nonisolated private static let directory: URL = {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("meeshy_thumbnails")
         FileManager.default.createDirectoryLogging(at: dir, context: "thumbnail cache dir")
+        return dir
+    }()
+
+    /// Mémo `key → nom de fichier` (SHA-256 hex complet, format historique des
+    /// fichiers déjà présents sur les appareils — ne jamais le changer).
+    /// Pattern `DiskCacheStore.fileKeyCache`.
+    nonisolated(unsafe) private static let fileNameCache: NSCache<NSString, NSString> = {
+        let cache = NSCache<NSString, NSString>()
+        cache.countLimit = 4000
+        return cache
+    }()
+
+    private func thumbnailPath(forKey key: String) -> URL {
+        let cacheKey = key as NSString
+        if let cached = Self.fileNameCache.object(forKey: cacheKey) {
+            return Self.directory.appendingPathComponent(cached as String)
+        }
         let hash = SHA256.hash(data: Data(key.utf8)).compactMap { String(format: "%02x", $0) }.joined()
-        return dir.appendingPathComponent(hash + ".jpg")
+        let fileName = hash + ".jpg"
+        Self.fileNameCache.setObject(fileName as NSString, forKey: cacheKey)
+        return Self.directory.appendingPathComponent(fileName)
     }
 }

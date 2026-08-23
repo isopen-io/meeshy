@@ -35,6 +35,11 @@ final class EditHistoryStore: @unchecked Sendable {
     private var cache: [String: [EditRevision]]
 
     private let maxRevisionsPerMessage = 30
+    /// Borne le nombre de MESSAGES suivis — la borne par message ne suffisait
+    /// pas : une clé par message édité s'accumulait pour toujours, et le blob
+    /// UserDefaults entier était réécrit à chaque édition. Au-delà, les
+    /// historiques dont la dernière révision est la plus ancienne sortent.
+    private let maxTrackedMessages = 200
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.dateEncodingStrategy = .iso8601
@@ -68,6 +73,14 @@ final class EditHistoryStore: @unchecked Sendable {
             revisions = Array(revisions.suffix(maxRevisionsPerMessage))
         }
         cache[messageId] = revisions
+        if cache.count > maxTrackedMessages {
+            let evictable = cache.keys.sorted {
+                (cache[$0]?.last?.editedAt ?? .distantPast) < (cache[$1]?.last?.editedAt ?? .distantPast)
+            }
+            for key in evictable.prefix(cache.count - maxTrackedMessages) {
+                cache.removeValue(forKey: key)
+            }
+        }
         let snapshot = cache
         lock.unlock()
         persist(snapshot: snapshot)

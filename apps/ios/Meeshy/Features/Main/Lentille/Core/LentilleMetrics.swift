@@ -25,26 +25,15 @@ nonisolated public enum LentilleMetrics {
     /// `list.row` — padding `10/16`, marge latérale `8`, radius `16`,
     /// `transform-origin: 16% 50%`.
     nonisolated public enum Row {
-        /// **64 → 88 le 2026-08-22, INCHANGÉ le 2026-08-23.** La hauteur
-        /// n'est pas choisie : elle est IMPOSÉE par les trois bandes que la
-        /// rangée empile, mesurées à taille de police par défaut — ligne de
-        /// titre `24` (la pastille chiffrée de non-lus est le plus haut de
-        /// ses objets, cadre minimal carré), `2` d'écart, ligne 2 NUE ~`20`
-        /// (`Line2.size` = 13, sans plus aucune enveloppe : la bulle
-        /// d'aperçu et ses deux paddings verticaux sont partis avec la
-        /// directive « pas de bulles »), `2` d'écart, ligne de date ~`17`
-        /// (`Time.size` = 12 gras) = `65`, plus les deux `paddingVertical`
-        /// du rang = `85`. `88` laisse les trois points de marge qui
-        /// absorbent l'arrondi de métrique de police sans jamais rogner un
-        /// glyphe (le rang reste à hauteur FIXE : il ne peut pas grandir
-        /// sans chevaucher son voisin, cf. `LentilleRowDynamicTypeTests`).
-        ///
-        /// La cote NE BOUGE PAS : `list.row.height` est PARTAGÉE avec la peau
-        /// web (`--lentille-list-row-height`, consommée par `LentilleRow.tsx`
-        /// et `LentilleSkeletonRow.tsx`), et aucun témoin web n'en vérifie la
-        /// VALEUR — la déplacer déplacerait le web en silence.
-        public static let height: CGFloat = 88
-        public static let paddingVertical: CGFloat = 10
+        /// 64 → 84 le 2026-08-22 : la rangée porte TROIS lignes — nom (avec
+        /// la pile de non-lus en fin de ligne), « auteur : message », puis la
+        /// date seule à droite. Le contenu mesure ~78,6 pt à la taille de
+        /// texte par défaut : 64 n'en logeait que deux. Un essai à 92 a réservé
+        /// la place d'un badge d'effectif de bord, retiré depuis (l'effectif
+        /// est une information de MAGNIFICATION, pas de repos) — la rangée a
+        /// rendu cette hauteur.
+        public static let height: CGFloat = 84
+        public static let paddingVertical: CGFloat = 8
         public static let paddingHorizontal: CGFloat = 16
         public static let marginHorizontal: CGFloat = 8
         /// Marge VERTICALE entre deux rangées, et entre une rangée et le
@@ -137,7 +126,9 @@ nonisolated public enum LentilleMetrics {
         /// importante et un padding suffisant en haut et en bas ») : déborde
         /// de la rangée (64) de 20 pt de chaque côté — la loupe — sans
         /// toucher la hauteur des rangées ; aperçu sur DEUX lignes.
-        public static let height: CGFloat = 104
+        /// 104 → 124 le 2026-08-22 : la carte loge les mêmes trois lignes que
+        /// la rangée, avec un aperçu qui coule sur deux lignes.
+        public static let height: CGFloat = 124
         public static let paddingVertical: CGFloat = 14
         /// Avatar de la carte = le contexte « liste » historique (52), un cran
         /// au-dessus de la rangée plate (44) : c'est la magnification.
@@ -252,6 +243,10 @@ nonisolated public enum LentilleMetrics {
         /// Chips d'étiquettes de la carte de focus (2026-08-22 : « plus
         /// petites ») — un cran sous l'encoche de mode.
         public static let chipFontSize: CGFloat = 8
+        /// Fond d'une bulle de bord TEINTÉE (effectif) — la chip d'étiquette,
+        /// elle, est pleine de la couleur du tag. Assez pour détacher la bulle
+        /// du fond, assez peu pour qu'une information ne crie pas.
+        public static let bubbleFillOpacity: Double = 0.16
         public static let chipPaddingHorizontal: CGFloat = 6
         public static let chipPaddingVertical: CGFloat = 2
     }

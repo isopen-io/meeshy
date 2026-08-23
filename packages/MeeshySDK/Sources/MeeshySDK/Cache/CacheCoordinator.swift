@@ -293,8 +293,12 @@ public actor CacheCoordinator {
         self.conversationPreferences = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-conv", encrypted: true)
 
         self.images = DiskCacheStore(policy: .mediaImages)
-        self.audio = DiskCacheStore(policy: .mediaAudio)
-        self.video = DiskCacheStore(policy: .mediaVideo)
+        // Audio/vidéo : la lecture passe par des file URLs (AVPlayer), pas par
+        // des Data résidents — 8 MB suffisent aux petits payloads (vocaux)
+        // rejoués, et les 2 × 80 MB de plafonds théoriques disparaissent du
+        // budget mémoire (cible app : < 150 MB).
+        self.audio = DiskCacheStore(policy: .mediaAudio, memoryBudgetBytes: 8 * 1024 * 1024)
+        self.video = DiskCacheStore(policy: .mediaVideo, memoryBudgetBytes: 8 * 1024 * 1024)
         self.thumbnails = DiskCacheStore(policy: .thumbnails)
     }
 
@@ -302,10 +306,29 @@ public actor CacheCoordinator {
         guard !isStarted else { return }
         isStarted = true
         resolveCurrentUserId()
-        loadTranslationCaches()
+        // Hors du chemin critique du boot : la réhydratation (read all rows +
+        // GC + decode par row) bloquait `start()`, donc le
+        // `conversations.load("list")` du splash qui le suit dans la même
+        // task. Le corps est sans await : une fois planifié sur l'actor il
+        // s'exécute d'un bloc, et un lecteur arrivé avant retombe sur les
+        // traductions du payload REST puis la demande à la volée.
+        translationHydrationTask = Task { await self.hydrateTranslationCachesFromDisk() }
         subscribeToLifecycle()
         subscribeToPostEngagement()
         Task { await self.backfillSearchIndexIfNeeded() }
+    }
+
+    /// Réhydratation disque des caches de traduction lancée par `start()` —
+    /// attendable par les tests (le GC du boot reste un contrat, seul son
+    /// moment a changé).
+    private(set) var translationHydrationTask: Task<Void, Never>?
+
+    func awaitTranslationCacheHydration() async {
+        await translationHydrationTask?.value
+    }
+
+    private func hydrateTranslationCachesFromDisk() {
+        loadTranslationCaches()
     }
 
     // MARK: - Search Index Backfill

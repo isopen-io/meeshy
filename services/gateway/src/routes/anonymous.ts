@@ -306,11 +306,19 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Acces non autorise depuis votre region');
       }
 
-      // Verifier langues autorisees (case-insensitive : body.language est normalise
-      // lowercase, allowedLanguages peut avoir ete configure en casse mixte)
+      // Verifier langues autorisees. `body.language` est deja canonicalise au
+      // boundary Zod via `normalizeLanguageForDedup` (casse repliee, region
+      // strippee, 3-lettres/legacy reduits). Les `allowedLanguages` viennent de
+      // la BASE, configurees a la main par le createur du lien : elles peuvent
+      // porter un tag de region (`fr-FR`), un code 3-lettres (`fra`) ou une casse
+      // mixte. Un `.toLowerCase()` brut sur ce cote-la les fait diverger de la
+      // forme canonique du joignant et REFUSE un acces qui doit etre accorde —
+      // decision d'acces, severite superieure a un defaut d'affichage. On
+      // canonicalise donc les DEUX cotes via la meme SSOT (suivi #1 de l'iter.
+      // 247).
       if (
         shareLink.allowedLanguages.length > 0 &&
-        !shareLink.allowedLanguages.some((l) => l.toLowerCase() === body.language)
+        !shareLink.allowedLanguages.some((l) => normalizeLanguageForDedup(l) === body.language)
       ) {
         return sendForbidden(reply, 'Langue non autorisee pour ce lien');
       }

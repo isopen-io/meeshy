@@ -28,11 +28,11 @@ final class RiverFeatureFlagTests: XCTestCase {
     /// protégeait — « une installation qui n'a RIEN demandé n'ouvre pas la
     /// Rivière » — reste vérifié, par le premier test de cette suite
     /// (absence de tout choix ⇒ `false`, retrait I-075 du 2026-08-18).
-    func test_riviereMode_followsTheBetaSwitch_onlyWhenItHasBeenExpressed() {
+    func test_riviereMode_followsTheBetaSwitch() {
         let notExpressed = makeIsolatedDefaults()
-        XCTAssertTrue(
+        XCTAssertFalse(
             BetaFeaturesPreference.isEnabled(defaults: notExpressed, environment: [:]),
-            "Décor : le DÉFAUT de la préférence bêta est ON — c'est ce qui rend le cas discriminant."
+            "Décor : la préférence bêta naît OFF (décision produit 2026-08-22)."
         )
         XCTAssertFalse(
             LentilleFeatureFlag.riviereMode.isEnabled(defaults: notExpressed, environment: [:]),

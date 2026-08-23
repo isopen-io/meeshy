@@ -85,8 +85,8 @@
  * couper son GPS.
  */
 
-import type { Socket } from 'socket.io';
-import type { Server as SocketIOServer } from 'socket.io';
+import type { MeeshySocket as Socket } from '../typed-socket';
+import type { MeeshyIOServer as SocketIOServer } from '../typed-socket';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type {

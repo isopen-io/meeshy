@@ -2179,31 +2179,71 @@ public actor MessagePersistenceActor {
         deliveredToAllAt: Date?,
         readByAllAt: Date?
     ) throws {
-        var affectedConversationId: String?
-        var didMutate = false
-        try dbWriter.write { db in
-            guard var record = try MessageRecord.fetchOne(db, key: localId) else { return }
-            guard deliveredCount > record.deliveredCount
-                || readCount > record.readCount
-                || (deliveredToAllAt != nil && record.deliveredToAllAt == nil)
-                || (readByAllAt != nil && record.readByAllAt == nil)
-            else { return }
-            affectedConversationId = record.conversationId
-            record.deliveredCount = max(record.deliveredCount, deliveredCount)
-            record.readCount = max(record.readCount, readCount)
-            if let dAt = deliveredToAllAt, record.deliveredToAllAt == nil {
-                record.deliveredToAllAt = dAt
-            }
-            if let rAt = readByAllAt, record.readByAllAt == nil {
-                record.readByAllAt = rAt
-            }
-            record.updatedAt = Date()
-            record.changeVersion += 1
-            try record.update(db)
-            didMutate = true
+        try updateDeliveryCounters([DeliveryCounterUpdate(
+            localId: localId,
+            deliveredCount: deliveredCount,
+            readCount: readCount,
+            deliveredToAllAt: deliveredToAllAt,
+            readByAllAt: readByAllAt
+        )])
+    }
+
+    /// One delivery-counter mutation for the batched
+    /// `updateDeliveryCounters(_:)` — same better-only merge semantics as the
+    /// single-record overload.
+    public struct DeliveryCounterUpdate: Sendable {
+        public let localId: String
+        public let deliveredCount: Int
+        public let readCount: Int
+        public let deliveredToAllAt: Date?
+        public let readByAllAt: Date?
+
+        public init(
+            localId: String,
+            deliveredCount: Int,
+            readCount: Int,
+            deliveredToAllAt: Date?,
+            readByAllAt: Date?
+        ) {
+            self.localId = localId
+            self.deliveredCount = deliveredCount
+            self.readCount = readCount
+            self.deliveredToAllAt = deliveredToAllAt
+            self.readByAllAt = readByAllAt
         }
-        if didMutate, let convId = affectedConversationId {
-            postMessageStoreRefresh(conversationIds: [convId])
+    }
+
+    /// Batched variant : une réconciliation de sync peut améliorer les
+    /// compteurs de N messages d'un coup — N transactions + N notifications
+    /// de refresh devenaient 1 + 1. Merge « better-only » identique à
+    /// l'overload unitaire.
+    public func updateDeliveryCounters(_ updates: [DeliveryCounterUpdate]) throws {
+        guard !updates.isEmpty else { return }
+        var affectedConvIds: Set<String> = []
+        try dbWriter.write { db in
+            for update in updates {
+                guard var record = try MessageRecord.fetchOne(db, key: update.localId) else { continue }
+                guard update.deliveredCount > record.deliveredCount
+                    || update.readCount > record.readCount
+                    || (update.deliveredToAllAt != nil && record.deliveredToAllAt == nil)
+                    || (update.readByAllAt != nil && record.readByAllAt == nil)
+                else { continue }
+                record.deliveredCount = max(record.deliveredCount, update.deliveredCount)
+                record.readCount = max(record.readCount, update.readCount)
+                if let dAt = update.deliveredToAllAt, record.deliveredToAllAt == nil {
+                    record.deliveredToAllAt = dAt
+                }
+                if let rAt = update.readByAllAt, record.readByAllAt == nil {
+                    record.readByAllAt = rAt
+                }
+                record.updatedAt = Date()
+                record.changeVersion += 1
+                try record.update(db)
+                affectedConvIds.insert(record.conversationId)
+            }
+        }
+        if !affectedConvIds.isEmpty {
+            postMessageStoreRefresh(conversationIds: affectedConvIds)
         }
     }
 

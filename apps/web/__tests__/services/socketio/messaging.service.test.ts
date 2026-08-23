@@ -1669,10 +1669,26 @@ describe('MessagingService', () => {
     });
   });
 
-  // ─── determineMessageTypeFromMime ─────────────────────────────────────────
+  // ─── messageType des pièces jointes ───────────────────────────────────────
 
-  describe('determineMessageTypeFromMime (via sendMessage with attachments)', () => {
-    async function getMessageType(mimeType: string): Promise<string> {
+  /**
+   * Le web portait un exemplaire MANUSCRIT de la règle
+   * (`determineMessageTypeFromMime(mimeTypes[0])`), et il divergeait de la
+   * canonique sur deux points : il ne regardait que la PREMIÈRE pièce jointe,
+   * et il rendait `'text'` pour un `text/*`.
+   *
+   * Ce n'était pas une redondance inoffensive. La dérivation serveur
+   * (`deriveMessageTypeForAttachments`) est ADDITIVE : elle se tait dès que la
+   * colonne porte autre chose que `'text'`. Un `'image'` déclaré par le client
+   * sur un lot photo + PDF n'est donc corrigé par personne — il s'écrit tel
+   * quel, et `contentTypeIcon` sert 🖼️ là où l'utilisateur a envoyé un dossier
+   * mixte.
+   *
+   * Les deux sites d'appel passent maintenant par
+   * `messageTypeForClientAttachments` (`@meeshy/shared`), qui regarde le LOT.
+   */
+  describe('messageType des pièces jointes (via sendMessage)', () => {
+    async function getMessageType(mimeTypes: string[]): Promise<string> {
       const svc = new MessagingService();
       const socket = makeSocket();
       let capturedPayload: Record<string, unknown> = {};
@@ -1682,54 +1698,103 @@ describe('MessagingService', () => {
         cb({ success: true, data: { messageId: '1' } });
       });
 
+      const attachmentIds = mimeTypes.length > 0
+        ? mimeTypes.map((_, i) => `att-${i + 1}`)
+        : ['att-1'];
+
       await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions({
-        attachmentIds: ['att-1'],
-        attachmentMimeTypes: mimeType ? [mimeType] : [],
+        attachmentIds,
+        attachmentMimeTypes: mimeTypes,
       }));
 
       return capturedPayload.messageType as string;
     }
 
-    it('empty mimeType array → "file"', async () => {
-      const svc = new MessagingService();
-      const socket = makeSocket();
-      let messageType: string = '';
-
-      socket.emit.mockImplementation((_event: string, data: unknown, cb: (r: unknown) => void) => {
-        messageType = (data as any).messageType;
-        cb({ success: true, data: { messageId: '1' } });
-      });
-
-      await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions({
-        attachmentIds: ['att-1'],
-        attachmentMimeTypes: [],
-      }));
-
-      expect(messageType).toBe('file');
+    it('des pièces jointes sans MIME connu → "file"', async () => {
+      expect(await getMessageType([])).toBe('file');
     });
 
     it('image/jpeg → "image"', async () => {
-      expect(await getMessageType('image/jpeg')).toBe('image');
+      expect(await getMessageType(['image/jpeg'])).toBe('image');
     });
 
     it('audio/mp3 → "audio"', async () => {
-      expect(await getMessageType('audio/mp3')).toBe('audio');
+      expect(await getMessageType(['audio/mp3'])).toBe('audio');
     });
 
     it('video/mp4 → "video"', async () => {
-      expect(await getMessageType('video/mp4')).toBe('video');
+      expect(await getMessageType(['video/mp4'])).toBe('video');
     });
 
     it('application/pdf → "file"', async () => {
-      expect(await getMessageType('application/pdf')).toBe('file');
+      expect(await getMessageType(['application/pdf'])).toBe('file');
     });
 
-    it('text/plain → "text"', async () => {
-      expect(await getMessageType('text/plain')).toBe('text');
+    it('text/plain est une PIÈCE JOINTE, donc "file" — jamais "text"', async () => {
+      expect(await getMessageType(['text/plain'])).toBe('file');
     });
 
     it('unknown mime type → "file"', async () => {
-      expect(await getMessageType('application/octet-stream')).toBe('file');
+      expect(await getMessageType(['application/octet-stream'])).toBe('file');
+    });
+
+    it('plusieurs pièces jointes de la même catégorie → cette catégorie', async () => {
+      expect(await getMessageType(['image/jpeg', 'image/png'])).toBe('image');
+    });
+
+    it('lot HÉTÉROGÈNE → "file", même quand la première est une image', async () => {
+      expect(await getMessageType(['image/jpeg', 'application/pdf'])).toBe('file');
+    });
+
+    it('lot HÉTÉROGÈNE → "file", même quand la première est une vidéo', async () => {
+      expect(await getMessageType(['video/mp4', 'audio/mp3'])).toBe('file');
+    });
+  });
+
+  /**
+   * Le repli REST est le SEUL des deux chemins où la valeur est autoritative :
+   * le path socket `message:send-with-attachments` la strippe (son schéma Zod
+   * n'a pas ce champ) et le serveur y dérive lui-même. La route REST, elle,
+   * accepte l'enum et la persiste — puis se tait.
+   */
+  describe('repli REST — le messageType qui, lui, atteint la base', () => {
+    async function restMessageType(options: {
+      attachmentIds?: string[];
+      attachmentMimeTypes?: string[];
+    }): Promise<string> {
+      mockConversationsServiceSendMessage.mockResolvedValue({ data: { id: 'rest-1' } });
+
+      const socket = makeSocket();
+      socket.emit.mockImplementation((_e: string, _d: unknown, cb: (r: unknown) => void) => {
+        cb({ success: false });
+      });
+
+      const svc = new MessagingService();
+      await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions(options));
+
+      const body = mockConversationsServiceSendMessage.mock.calls.at(-1)?.[1] as
+        | { messageType?: string }
+        | undefined;
+      return body?.messageType as string;
+    }
+
+    it('sans pièce jointe → "text"', async () => {
+      expect(await restMessageType({})).toBe('text');
+    });
+
+    it('lot HÉTÉROGÈNE → "file", là où la première pièce jointe disait "image"', async () => {
+      expect(
+        await restMessageType({
+          attachmentIds: ['a', 'b'],
+          attachmentMimeTypes: ['image/jpeg', 'application/pdf'],
+        })
+      ).toBe('file');
+    });
+
+    it('des pièces jointes sans MIME connu → "file", jamais "text"', async () => {
+      expect(
+        await restMessageType({ attachmentIds: ['a'], attachmentMimeTypes: [] })
+      ).toBe('file');
     });
   });
 

@@ -790,10 +790,42 @@ public struct ConversationParticipationEvent: Decodable, Sendable {
 /// stale cache entries. `reason` is a stable machine-readable code:
 /// `not_a_member`, `banned`, `no_longer_member`, `invalid_payload`,
 /// `server_error`. `message` is a localized, human-readable description.
+/// Refus d'une jonction de conversation (`conversation:join-error`).
+///
+/// Contrat partagé : `ConversationJoinErrorEventData`
+/// (`packages/shared/types/socketio-events.ts`).
 public struct ConversationJoinErrorEvent: Decodable, Sendable {
     public let conversationId: String
+    /// Motif du refus. `nil` seulement d'une passerelle antérieure au contrat.
+    ///
+    /// **Il DÉCIDE.** Voir ``isMembershipDenied`` — un consommateur qui
+    /// l'ignore traite une limite de débit comme une exclusion.
     public let reason: String?
     public let message: String?
+
+    /// Les seuls motifs qui ÉTABLISSENT que le lecteur n'est pas membre, donc
+    /// les seuls où purger le cache de la conversation ou fermer la vue ouverte
+    /// est fondé.
+    ///
+    /// JUMEAU de `isMembershipDeniedJoinError()`
+    /// (`packages/shared/utils/conversation-join-error.ts`) — toute évolution
+    /// touche les deux.
+    ///
+    /// La passerelle émet sept motifs ; quatre sont transitoires (`rate_limited`,
+    /// `server_error`, `not_authenticated`, `invalid_payload`) et ne disent rien
+    /// de l'appartenance. Ce client les traitait tous comme une révocation
+    /// d'accès : une limite de débit franchie par une tempête de reconnexion
+    /// fermait le fil que l'utilisateur était en train de lire, sur un bandeau
+    /// « accès révoqué », après avoir purgé son cache.
+    ///
+    /// Liste d'AUTORISATION, jamais d'exclusion : un motif inconnu — d'une
+    /// passerelle plus récente que ce client — rend `false`. Ne pas savoir lire
+    /// n'autorise pas à détruire ; c'est la règle que `MeeshyConversation.bridge`
+    /// applique déjà, pour la même raison.
+    public var isMembershipDenied: Bool {
+        guard let reason else { return false }
+        return ["not_a_member", "banned", "no_longer_member"].contains(reason)
+    }
 }
 
 public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
@@ -2141,6 +2173,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             // SDP / ICE signaling (call stuck on "connecting"). The old "~35s the WS
             // dropped" was a ping timeout (gateway pingTimeout was 10s) — bumped to
             // 20s server-side, so the persistent WebSocket now holds.
+            //
+            // P4-1 évalué 2026-08-22 puis ÉCARTÉ : `.forceWebsockets(true)`
+            // économiserait 1-2 RTT par connect mais supprime le REPLI polling
+            // — contrairement au web (`transports: ['websocket','polling']`,
+            // WS d'abord AVEC repli), un réseau qui casse l'upgrade WebSocket
+            // (proxy TLS-inspectant, portail captif) perdrait tout temps réel.
+            // À reconsidérer seulement avec un repli après N échecs.
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .reconnects(true),
             .reconnectWait(1),
@@ -2859,14 +2898,36 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.emit("call:join", ["callId": callId])
     }
 
-    /// ACK-aware join: emits `call:join` and awaits gateway confirmation (3 s
-    /// timeout). Returns `true` when the gateway has put the socket in the call
-    /// room. Use this on socket reconnect before sending room-scoped events
-    /// (call:request-ice-servers, call:toggle-video) — the gateway guards those
-    /// with `socket.rooms.has(ROOMS.call(callId))` which is only true after the
-    /// async joinCall() DB work completes and socket.join() runs.
-    public func emitCallJoinWithAck(callId: String) async -> Bool {
-        guard let socket else { return false }
+    /// Detailed outcome of an ACK-aware `call:join` — mirrors the gateway's
+    /// `CallJoinAck` shape (`packages/shared/types/video-call.ts`) instead of
+    /// collapsing it to a bare `Bool`. `endReason` carries the RAW server
+    /// string (Prisma `CallSession.endReason`, populated only when
+    /// `errorCode == "CALL_ENDED"`) — the SDK stays pure and does not map it;
+    /// the app layer maps it via `CallEndReasonMapper`, same convention
+    /// already used for `call:ended`/`call:missed`.
+    public struct CallJoinAckResult: Sendable {
+        public let joined: Bool
+        public let errorCode: String?
+        public let endReason: String?
+
+        public init(joined: Bool, errorCode: String? = nil, endReason: String? = nil) {
+            self.joined = joined
+            self.errorCode = errorCode
+            self.endReason = endReason
+        }
+    }
+
+    /// ACK-aware join: emits `call:join` and awaits gateway confirmation (6 s
+    /// timeout), returning the full ack (success + error detail) rather than
+    /// just success. Use this on socket reconnect before sending room-scoped
+    /// events (call:request-ice-servers, call:toggle-video) — the gateway
+    /// guards those with `socket.rooms.has(ROOMS.call(callId))` which is only
+    /// true after the async joinCall() DB work completes and socket.join()
+    /// runs. Also lets a reconnect distinguish "the call already ended
+    /// server-side while we were disconnected" (`errorCode == "CALL_ENDED"`)
+    /// from a plain ACK timeout — see Vague 162.
+    public func emitCallJoinWithAckDetailed(callId: String) async -> CallJoinAckResult {
+        guard let socket else { return CallJoinAckResult(joined: false) }
         let payload: [String: Any] = ["callId": callId]
         return await withCheckedContinuation { continuation in
             var resumed = false
@@ -2881,10 +2942,23 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             socket.emitWithAck("call:join", payload).timingOut(after: 6) { items in
                 guard !resumed else { return }
                 resumed = true
-                let success = (items.first as? [String: Any])?["success"] as? Bool ?? false
-                continuation.resume(returning: success)
+                let response = items.first as? [String: Any]
+                let success = response?["success"] as? Bool ?? false
+                let error = response?["error"] as? [String: Any]
+                let errorCode = error?["code"] as? String
+                let endReason = error?["endReason"] as? String
+                continuation.resume(returning: CallJoinAckResult(
+                    joined: success, errorCode: errorCode, endReason: endReason
+                ))
             }
         }
+    }
+
+    /// Boolean-only convenience over `emitCallJoinWithAckDetailed` — kept for
+    /// callers (e.g. the incoming-call cold-start join) that only care whether
+    /// the room join succeeded, not why it didn't.
+    public func emitCallJoinWithAck(callId: String) async -> Bool {
+        await emitCallJoinWithAckDetailed(callId: callId).joined
     }
 
     public func emitCallLeave(callId: String) {

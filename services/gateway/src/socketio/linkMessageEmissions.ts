@@ -1,9 +1,14 @@
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { LinkMessageNewEventData, SocketIOMessage } from '@meeshy/shared/types/socketio-events';
+import type { ServerEmission } from './serverEmit';
 
-export interface SocketEmission {
-  readonly event: string;
-  readonly payload: unknown;
-}
+/**
+ * Un couple `(événement, charge)` corrélé, alias de `ServerEmission`
+ * (cycle 104). Le nom survit parce que le manager l'importe ; ce qui change,
+ * c'est qu'il ne vaut plus `{ event: string; payload: unknown }` — les deux
+ * moitiés viennent désormais du même membre de `ServerToClientEvents`.
+ */
+export type SocketEmission = ServerEmission;
 
 /**
  * Ce qu'un message envoyé par lien de partage met sur le fil — **deux** events,
@@ -39,14 +44,24 @@ export interface SocketEmission {
  * (`MeeshySocketIOManager._drainPendingMessages`) : c'est exactement là que la
  * divergence était née, l'un ne sachant rien de l'autre.
  */
+/**
+ * L'enveloppe arrive `unknown` de ses DEUX producteurs — la route d'envoi par
+ * lien, qui la compose, et la file hors ligne, qui la relit de Redis. C'est ici,
+ * et nulle part ailleurs, qu'elle se rattache au contrat : cette unité est déjà
+ * celle qui INSPECTE la forme à l'exécution (`typeof`, `Array.isArray`), donc
+ * celle qui a le droit de la nommer. Deux affirmations, à la frontière de
+ * désérialisation, plutôt qu'une porte d'émission ouverte en aval.
+ */
 export function linkMessageEmissions(payload: unknown): SocketEmission[] {
-  const emissions: SocketEmission[] = [{ event: SERVER_EVENTS.LINK_MESSAGE_NEW, payload }];
+  const emissions: SocketEmission[] = [
+    { event: SERVER_EVENTS.LINK_MESSAGE_NEW, payload: payload as LinkMessageNewEventData },
+  ];
 
   const message = (payload as { message?: unknown } | null | undefined)?.message;
   // Un tableau est un `object` : sans ce refus, une enveloppe dérivée
   // enverrait une liste là où le client attend un message.
   if (message && typeof message === 'object' && !Array.isArray(message)) {
-    emissions.push({ event: SERVER_EVENTS.MESSAGE_NEW, payload: message });
+    emissions.push({ event: SERVER_EVENTS.MESSAGE_NEW, payload: message as SocketIOMessage });
   }
 
   return emissions;

@@ -844,6 +844,44 @@ final class MessagePersistenceActorTests: XCTestCase {
         await fulfillment(of: [exp], timeout: 1.0)
     }
 
+    /// La variante batchée mutate N records en UNE transaction et poste UNE
+    /// notification par conversation affectée — pas une par record.
+    func test_updateDeliveryCounters_batch_mutatesAllAndPostsSingleRefresh() async throws {
+        let r1 = MessageRecordFactory.make(localId: "deliv_b1", conversationId: "conv_deliv_batch")
+        let r2 = MessageRecordFactory.make(localId: "deliv_b2", conversationId: "conv_deliv_batch")
+        try await actor.insertOptimistic(r1)
+        try await actor.insertOptimistic(r2)
+        await drainMainQueueNotifications()
+
+        let exp = expectation(description: "one refresh for the whole batch")
+        exp.expectedFulfillmentCount = 1
+        exp.assertForOverFulfill = true
+        let observer = NotificationCenter.default.addObserver(
+            forName: .messageStoreShouldRefresh, object: nil, queue: .main
+        ) { notif in
+            guard let cid = notif.userInfo?["conversationId"] as? String,
+                  cid == "conv_deliv_batch" else { return }
+            exp.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        try await actor.updateDeliveryCounters([
+            .init(localId: "deliv_b1", deliveredCount: 2, readCount: 1,
+                  deliveredToAllAt: nil, readByAllAt: nil),
+            .init(localId: "deliv_b2", deliveredCount: 3, readCount: 0,
+                  deliveredToAllAt: Date(), readByAllAt: nil),
+        ])
+        await fulfillment(of: [exp], timeout: 1.0)
+
+        let fetched = try actor.messages(for: "conv_deliv_batch", limit: 10)
+        let first = fetched.first { $0.localId == "deliv_b1" }
+        let second = fetched.first { $0.localId == "deliv_b2" }
+        XCTAssertEqual(first?.deliveredCount, 2)
+        XCTAssertEqual(first?.readCount, 1)
+        XCTAssertEqual(second?.deliveredCount, 3)
+        XCTAssertNotNil(second?.deliveredToAllAt)
+    }
+
     /// `deleteAll(conversationId:)` runs when the gateway revokes access to a
     /// conversation (HTTP 403 path). Without a refresh notification, every
     /// `MessageStore` observer scoped to that conversation keeps showing the

@@ -13,14 +13,14 @@
  * CommentReactionHandler delegates join/leave to the same shared room.
  */
 
-import type { Socket } from 'socket.io';
-import type { Server as SocketIOServer } from 'socket.io';
+import type { MeeshySocket as Socket, MeeshyIOServer as SocketIOServer } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
 import { PostReactionService } from '../../services/PostReactionService';
 import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
+import type { PostReactionUpdateEventData } from '@meeshy/shared/types/post';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import {
@@ -33,6 +33,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import { resolveInteractionTarget, resolveConsumptionTarget } from '../../services/posts/postVisibility.js';
 import { SocialEventsHandler } from './SocialEventsHandler';
+import { emitServerEvent } from '../serverEmit';
 
 /** Emoji canonique du "like" — aligné REST (`interactions.ts`) + web (`HEART_EMOJI`). */
 const HEART_EMOJI = '❤️';
@@ -96,7 +97,11 @@ export class PostReactionHandler {
     emoji: string,
     action: 'add' | 'remove',
     userId: string,
-    updateEvent: unknown
+    // Cycle 101 — `unknown` ici ANNULAIT le contrat pour les deux sites
+    // d'émission ci-dessous : la garde d'un `MeeshySocket` ne vaut que jusqu'au
+    // premier paramètre non typé (leçon du cycle 100, `SocialEventsHandler`).
+    // `createUpdateEvent` rend déjà exactement cette forme.
+    updateEvent: PostReactionUpdateEventData
   ): Promise<void> {
     if (emoji === HEART_EMOJI) {
       const post = await this.prisma.post.findUnique({
@@ -120,7 +125,7 @@ export class PostReactionHandler {
       }
     }
     const event = action === 'add' ? SERVER_EVENTS.POST_REACTION_ADDED : SERVER_EVENTS.POST_REACTION_REMOVED;
-    this.io.to(ROOMS.post(postId)).emit(event, updateEvent);
+    emitServerEvent(this.io.to(ROOMS.post(postId)), event, updateEvent);
   }
 
   /**

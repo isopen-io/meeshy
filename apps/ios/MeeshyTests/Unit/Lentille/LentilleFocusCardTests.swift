@@ -409,38 +409,21 @@ extension LentilleFocusCardTests {
         XCTAssertGreaterThan(LentilleMetrics.FocusCard.height, LentilleMetrics.Row.height)
     }
 
-    /// **RECALIBRÉ DEUX FOIS, jamais supprimé en silence.**
+    /// **SUPERSÉDÉ le 2026-08-22 (soir).** La directive du 2026-08-21 avait
+    /// GRAVÉ ici l'encoche de catégorie, la ligne basse à quatre objets, le
+    /// nom original en haut. Le retour produit du lendemain la renverse :
+    /// « la conversation magnifiée semble trop surchargée avec des espaces
+    /// compliqués ; les éléments autour doivent être plus discrets ou
+    /// enlevés ». La carte passe de CINQ ancrages de bord à DEUX, de six
+    /// capsules bordées d'accent à UNE. Ce témoin atteste donc l'état
+    /// NOUVEAU — recalibré, jamais supprimé en silence.
     ///
-    /// 2026-08-22 (matin) : la directive du 2026-08-21 avait GRAVÉ ici
-    /// l'encoche de catégorie, la ligne basse à quatre objets, le nom original
-    /// en haut ; le retour produit du lendemain la renverse (« trop surchargée
-    /// avec des espaces compliqués »), la carte passe de CINQ ancrages de bord
-    /// à DEUX.
-    ///
-    /// 2026-08-22 (soir) : l'utilisateur ARBITRE le retour de la seule
-    /// catégorie — le grief exact du retrait n'était pas la porte de plus,
-    /// c'était la capsule PERMANENTE disant « CATÉGORIE » sur les
-    /// conversations qui n'en ont pas. Elle revient CONDITIONNELLE (témoin
-    /// dédié `test_focusCard_theCategoryNotchIsBackAtTopLeading_…`, plus bas
-    /// dans ce fichier) : l'assertion NÉGATIVE sur `.topLeading` qui vivait
-    /// ici est donc retirée EXPLICITEMENT, remplacée par la sienne, positive.
-    ///
-    /// Le DANGER que ce témoin garde est inchangé : la carte reste MUETTE
-    /// (elle ne touche pas au store), la date reste la date COMPLÈTE de la loi
-    /// du fil, le dernier expéditeur s'affiche pour toutes les conversations,
-    /// et les DEUX autres retraits du matin (synchronisation, nom original)
-    /// ne peuvent pas revenir sans une décision.
-    ///
-    /// 2026-08-23 : le porteur produit ARBITRE le retour de l'effectif
-    /// CLIQUABLE (« le nombre de participant en bas sur les lignes de contour
-    /// de la magnificence doit être un bouton d'action pour mener vers la
-    /// liste des participants »), exactement comme il avait arbitré le retour
-    /// de l'encoche de catégorie le 22 au soir. L'assertion négative qui
-    /// l'interdisait est donc INVERSÉE ici — jamais supprimée : elle était
-    /// libellée sur une forme d'écriture précise (`Button(action: onShowParticipants)`)
-    /// et serait restée VERTE devant un `Button { … } label: { … }`, en
-    /// perdant sa protection sans bruit.
-    func test_focusCard_keepsTheTwoNotches_theTagsAndTheCount_andTheFullTimestamp() throws {
+    /// Le DANGER qu'il gardait est conservé et même resserré : la carte reste
+    /// MUETTE (elle ne touche pas au store), la date reste la date COMPLÈTE de
+    /// la loi du fil, et le dernier expéditeur s'affiche toujours pour toutes
+    /// les conversations. S'y ajoute le fait neuf : plus d'un seul contrôle
+    /// bordé sur la carte.
+    func test_focusCard_keepsOneControl_theTagsAndTheCount_andTheFullTimestamp() throws {
         let code = try modeSource("LentilleFocusCard.swift")
 
         // Ce qui RESTE, et pourquoi.
@@ -456,197 +439,36 @@ extension LentilleFocusCardTests {
         )
 
         // Ce qui est PARTI, et qui ne doit pas revenir sans une décision.
+        XCTAssertFalse(code.contains(".overlay(alignment: .topLeading) {"), "plus d'encoche de catégorie")
         XCTAssertFalse(code.contains(".overlay(alignment: .top) {"), "plus de nom original au centre du bord haut")
         XCTAssertFalse(code.contains("Button(action: onForceSync)"), "plus de bouton « synchroniser maintenant »")
-        XCTAssertTrue(
-            normalizedCode(code).contains("onShowParticipants()"),
-            "l'effectif EST un contrôle depuis l'arbitrage du 2026-08-23 : la carte doit appeler " +
-            "onShowParticipants() — le fil existait de bout en bout (hôte → liste → " +
-            "ConversationInfoSheet, onglet Membres) mais n'était appelé nulle part."
-        )
+        XCTAssertFalse(code.contains("Button(action: onShowParticipants)"), "l'effectif est une information, plus un contrôle")
     }
 
-    /// **RECALIBRÉ le 2026-08-23.** Le danger gardé reste le même — que
-    /// l'identité rétrécisse au profit d'une métadonnée — mais il ne se joue
-    /// plus par `layoutPriority` : la date a QUITTÉ la ligne du nom (directive
-    /// produit « la date reste en bas à droite dans une ligne seule AVEC ou
-    /// SANS magnificence »). Il n'y a donc plus de largeur à arbitrer entre
-    /// elles, et les deux artefacts de leur cohabitation — le `Text("·")` et
-    /// le duel de priorités — disparaissent avec elle.
-    ///
-    /// Le témoin n'est pas supprimé : il vérifie désormais que la
-    /// cohabitation ne peut pas se rouvrir.
-    func test_focusCard_theDateNoLongerSharesTheNameLine() throws {
+    /// L'identité possède la ligne d'en-tête (2026-08-22 soir) : la date n'y
+    /// est plus — elle vit seule, à droite, sous l'aperçu (même place qu'au
+    /// repos, directive « la date gardera cette place même en magnificence »).
+    /// Le nom garde sa priorité : seul le badge de non-lus la dépasse.
+    func test_focusCard_theNameOwnsTheHeaderLine_theDateLivesBelow() throws {
         let code = try modeSource("LentilleFocusCard.swift")
-        guard let headerStart = code.range(of: "private var headerLine: some View {"),
-              let headerEnd = code.range(of: "private var dateLine: some View {", range: headerStart.upperBound..<code.endIndex)
-        else {
-            XCTFail("les bornes de headerLine sont introuvables — la garde doit être re-pointée")
-            return
-        }
-        let header = String(code[headerStart.lowerBound..<headerEnd.lowerBound])
-
-        XCTAssertFalse(header.contains("Self.fullTimestamp("), "la date n'est plus sur la ligne du nom")
-        XCTAssertFalse(header.contains(#"Text("·")"#), "sans date à séparer, le point médian ne sépare plus rien")
-        XCTAssertFalse(header.contains(".layoutPriority(0)"), "plus de priorité à arbitrer contre le nom")
-        XCTAssertTrue(header.contains(".layoutPriority(2)"), "le NOM garde sa priorité explicite face à la pastille")
+        let name = try XCTUnwrap(code.range(of: "Text(conversation.displayName)"))
+        XCTAssertTrue(code[name.upperBound...].prefix(800).contains(".layoutPriority(2)"), "la priorité 2 appartient au NOM")
+        let header = try XCTUnwrap(code.range(of: "private var headerLine: some View {"))
+        let headerEnd = try XCTUnwrap(code.range(of: "private var unreadBadge: some View {"))
+        XCTAssertFalse(code[header.lowerBound..<headerEnd.lowerBound].contains("fullTimestamp("), "la date a quitté la ligne du nom")
+        XCTAssertTrue(code.contains("Text(Self.fullTimestamp("), "… mais elle reste, complète, sur la carte")
     }
 
-    /// **Directive produit 2026-08-23 : « la date de la bulle de magnificence
-    /// reste en bas à droite dans la bulle dans une ligne SEULE ».** Même
-    /// place que sur la rangée plate, au même rang de la pile — mais PAS le
-    /// même format : la carte affiche la date COMPLÈTE de la loi du fil
-    /// (`FocalFocusTimestamp.listLabel`, « Hier à 22:12 »), pas l'horodatage
-    /// relatif. Même place ne veut pas dire même format.
-    func test_focusCard_theDateOwnsItsOwnTrailingLine_belowThePreview() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-        let normalized = normalizedCode(code)
-        XCTAssertTrue(
-            normalized.contains("headerLine line2 dateLine"),
-            "le contenu magnifié empile TROIS bandes : titre, aperçu, date seule"
-        )
-        guard let dateStart = code.range(of: "private var dateLine: some View {") else {
-            XCTFail("`dateLine` n'existe pas : la date n'a pas de ligne à elle")
-            return
-        }
-        let block = String(code[dateStart.lowerBound...])
-        XCTAssertTrue(
-            block.contains(".frame(maxWidth: .infinity, alignment: .trailing)"),
-            "la ligne de date est poussée à DROITE"
-        )
-        XCTAssertTrue(block.contains("Self.fullTimestamp("), "la date complète reste celle de la loi du fil")
-        XCTAssertEqual(
-            occurrences(of: "Self.fullTimestamp(", in: normalized), 1,
-            "UN seul rendu de la date : deux sites l'afficheraient en double"
-        )
-    }
-
-    /// **Directive produit 2026-08-23 : « la pastille dans la liste de
-    /// conversation MÊME EN MODE MAGNIFICENCE doit rester ROUGE ».**
-    ///
-    /// La rangée plate consomme déjà l'atome partagé `UnreadCountBadge`
-    /// (fond `MeeshyColors.unreadBadgeBackground`, rouge sémantique) — RIEN à
-    /// y changer, c'est un résultat. La carte, elle, peignait sa pastille à
-    /// l'ACCENT de la conversation : sur un accent clair elle se lisait comme
-    /// une décoration, pas comme une alerte.
-    ///
-    /// **Pourquoi la couleur et non l'atome.** Substituer `UnreadCountBadge`
-    /// aurait supprimé du même geste la seconde écriture du plafond « 99+ » —
-    /// mais l'atome impose un plancher CARRÉ de 24 pt à la ligne de titre,
-    /// alors que la carte est à hauteur FIXE de 104 pt : la dérivation donne
-    /// 99,5 pt d'occupation avec la pastille locale contre 103,2 avec l'atome,
-    /// et la ligne de date de la directive 5 est déjà comptée dedans. Il
-    /// resterait 0,8 pt de marge sur une carte qui ne peut pas grandir, et
-    /// `focusCard.height` est une cote PARTAGÉE avec la peau web
-    /// (`--lentille-list-focus-card-height`) qu'on ne peut pas remonter pour
-    /// la circonstance. C'est aussi la forme retenue par `main` (266fcb765,
-    /// `test_focusCard_unreadBadge_isAlwaysRed_neverAccent`) : viser la même
-    /// rend la fusion possible.
-    func test_focusCard_theUnreadBadgeIsAlwaysRed_neverTheAccent() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-        guard let start = code.range(of: "private var unreadBadge: some View {"),
-              let end = code.range(of: "\n    }", range: start.upperBound..<code.endIndex) else {
-            XCTFail("le bloc `unreadBadge` est introuvable — la garde doit être re-pointée")
-            return
-        }
-        let badge = String(code[start.lowerBound..<end.upperBound])
-
-        XCTAssertTrue(
-            badge.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"),
-            "la pastille de non-lus est ROUGE en magnificence comme au repos — même source " +
-            "sémantique que l'atome de la rangée plate"
-        )
-        XCTAssertFalse(
-            badge.contains("fill(accent)"),
-            "peinte à l'accent de la conversation, la pastille se lit comme une décoration " +
-            "et non comme une alerte"
-        )
-    }
-
-    /// La garde jumelle de `test_noUnreadBadgeBackground_inAnyRowFile` manquait
-    /// pour `Lentille/Mode/` : rien n'empêchait d'y peindre une pastille de
-    /// non-lus AILLEURS que dans le seul bloc `unreadBadge`. Elle est posée ici
-    /// sur TOUS les fichiers du dossier, et compte les écrivains.
-    func test_theUnreadRedHasASingleWriter_inTheWholeModeFolder() throws {
-        var writers = 0
-        for source in try modeSources() {
-            writers += occurrences(of: "MeeshyColors.unreadBadgeBackground", in: normalizedCode(source.code))
-        }
-        XCTAssertEqual(
-            writers, 1,
-            "UN seul écrivain du rouge de non-lus dans Lentille/Mode/ : le bloc `unreadBadge` " +
-            "de la carte de focus. Un second serait une recopie du chrome."
-        )
-    }
-
-    /// **Directive produit 2026-08-23 : « le nombre de participant en bas sur
-    /// les lignes de contour de la magnificence doit être un bouton d'action
-    /// pour mener vers la liste des participants, et dans une bulle/chips
-    /// comme tout ce qui est sur les lignes du contour ».**
-    ///
-    /// Les DEUX moitiés, et une contrainte de forme : la chip doit passer par
-    /// `notchChip`, sinon la garde d'exclusivité du contour d'accent
-    /// (`test_focusCard_accentBorder_…`) rougit — elle valide la solution
-    /// élégante et rejette la copie.
-    ///
-    /// La cible est `ConversationInfoSheet` (onglet Membres), via le fil
-    /// `onShowParticipants` déjà câblé de bout en bout ; JAMAIS
-    /// `ParticipantsView`, qui est un écran ORPHELIN (aucun site de l'app ne
-    /// l'instancie) — le router dessus créerait un second point d'entrée.
-    func test_focusCard_theMemberCountIsAChipButtonToTheParticipants() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-        let normalized = normalizedCode(code)
-
-        XCTAssertTrue(normalized.contains("onShowParticipants()"), "l'effectif MÈNE quelque part")
-        XCTAssertTrue(normalized.contains("Button {"), "un Button, jamais un .onTapGesture (règle dure du dossier Mode)")
-        XCTAssertTrue(normalized.contains("notchChip {"), "l'effectif emprunte la chip commune des lignes de contour")
-        XCTAssertFalse(code.contains("ParticipantsView("), "écran orphelin : la liste vivante est l'onglet Membres de la feuille d'infos")
-
-        // Le droit SERVEUR sur l'effectif ne peut pas être contourné par la vue :
-        // `memberCountDisplay` est le miroir de la loi partagée `formatMemberCount`
-        // (plafond 199 + drapeau `memberCountCapped`), une lecture brute ne l'est pas.
-        XCTAssertTrue(normalized.contains("conversation.memberCountDisplay"), "le plafond serveur passe par memberCountDisplay")
-        XCTAssertFalse(
-            normalized.contains(#"Text("\(conversation.memberCount)")"#),
-            "lire memberCount brut contournerait le plafond serveur (199+)"
-        )
-    }
-
-    /// L'annonce VoiceOver de l'effectif était un compteur NU (« 199+ »), sans
-    /// nom, sans règle plurielle, sans localisation — alors que la rangée
-    /// plate composait la MÊME donnée par `MembersCountLabel` (« 199+ membres »,
-    /// accordé dans les 7 langues). Le passage en BOUTON aggravait le défaut
-    /// (« 199+, bouton »). Les deux clés existent déjà : aucune clé neuve.
-    func test_focusCard_announcesTheMemberCountAgreed_notABareCounter() throws {
+    /// Un seul contour d'ACCENT sur la carte : son anneau, et l'encoche de
+    /// mode. L'étiquette — l'élément le moins important — portait le trait le
+    /// plus fort ; son filtre actif se dit désormais par un liseré blanc.
+    func test_focusCard_accentBorder_isTheExclusivityOfTheCardAndItsModeNotch() throws {
         let code = try modeSource("LentilleFocusCard.swift")
         XCTAssertFalse(
-            code.contains("accessibilityValue(conversation.memberCountDisplay)"),
-            "compteur nu : VoiceOver annonçait « 199+ » sans nom ni pluriel"
+            code.contains("strokeBorder(\n                            accent,"),
+            "l'étiquette ne porte plus de contour d'accent"
         )
-        XCTAssertTrue(
-            code.contains("MembersCountLabel.text(conversation.memberCount, capped: conversation.memberCountCapped)"),
-            "l'oreille doit entendre la MÊME loi que la rangée plate — une seule composition"
-        )
-        XCTAssertEqual(
-            occurrences(of: "MembersCountLabel.text(", in: normalizedCode(code)), 1,
-            "UN seul site de composition dans la carte (la garde d'unicité de la rangée est " +
-            "scopée à Lentille/Row/ et ne verrait pas un second ici)"
-        )
-    }
-
-    /// **Risque INDUIT par la directive 4.** Au repos la carte reste MONTÉE
-    /// (`.opacity(scene.level)` = 0) : SwiftUI n'exclut pas de l'arbre
-    /// d'accessibilité une vue d'opacité nulle. Aujourd'hui elle y double déjà
-    /// le nom, l'aperçu et la pastille de la rangée qu'elle recouvre ; avec un
-    /// BOUTON elle y ajouterait un contrôle activable pointant sur une carte
-    /// invisible. Même source de vérité que les deux portillons existants.
-    func test_focusCardHost_hidesTheCardFromAccessibility_whenTheSceneIsAtRest() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-        XCTAssertTrue(
-            normalizedCode(code).contains("accessibilityHidden(scene.level == 0)"),
-            "au repos la carte doit sortir de l'arbre d'accessibilité — sinon son bouton est un " +
-            "contrôle FANTÔME, et son texte une annonce en double de la rangée"
-        )
+        XCTAssertTrue(code.contains("Color.white.opacity(isFiltering ? 0.95 : 0)"), "le filtre actif se dit en blanc")
     }
 
     /// 2026-08-22 : la carte porte la pastille de présence de la rangée plate.
@@ -724,145 +546,5 @@ extension LentilleFocusCardTests {
         XCTAssertTrue(LentilleFocusCard.showsBridge(unreadCount: 3, bridge: bridge))
         XCTAssertFalse(LentilleFocusCard.showsBridge(unreadCount: 0, bridge: bridge))
         XCTAssertFalse(LentilleFocusCard.showsBridge(unreadCount: 3, bridge: nil))
-    }
-}
-
-// MARK: - Encoche CATÉGORIE — REVIREMENT ASSUMÉ du 2026-08-22 (soir)
-//
-// Le matin du 2026-08-22, `categoryNotch` avait été RETIRÉE au motif écrit que
-// déplacer une conversation avait déjà trois domiciles (menu contextuel de la
-// rangée, panneau d'overlay < iOS 26, glisser-déposer sur les chips de
-// section). L'utilisateur a ARBITRÉ en faveur de sa réintroduction : sur la
-// carte de focus, la catégorie n'est pas d'abord une ACTION, c'est une
-// INFORMATION que rien d'autre dans la liste ne dit — à quel dossier
-// appartient la conversation qu'on est en train de regarder. Le grief réel du
-// retrait n'était pas la 4e porte : c'était la capsule PERMANENTE affichant le
-// mot générique « CATÉGORIE » bordé d'accent sur les conversations qui n'en
-// ont aucune. C'est ce grief-là que ces témoins verrouillent — pas de
-// catégorie ⇒ RIEN, jamais un mot de remplissage.
-extension LentilleFocusCardTests {
-
-    private func appSource(_ relativePath: String) throws -> String {
-        try String(contentsOf: Self.iosRoot.appendingPathComponent(relativePath), encoding: .utf8)
-    }
-
-    private func section(_ id: String, _ name: String) -> ConversationSection {
-        ConversationSection(id: id, name: name, icon: "folder.fill", color: "45B7D1")
-    }
-
-    /// La règle d'affichage, en fonction PURE : le nom de la catégorie
-    /// résolue, en capitales — et `nil` dans les QUATRE cas où il n'y a rien
-    /// d'honnête à dire. Le 4e (identifiant périmé, catégorie supprimée
-    /// ailleurs pendant que la liste vit encore sur son cache) est celui qui
-    /// aurait ramené « CATÉGORIE » par la petite porte.
-    func test_categoryName_isTheResolvedNameUppercased_andNilWhenThereIsNothingToSay() {
-        let work = section("cat-work", "Travail")
-        XCTAssertEqual(
-            LentilleFocusCard.categoryName(sectionId: "cat-work", categories: [work]), "TRAVAIL",
-            "la capsule dit le NOM de la catégorie, en capitales comme l'encoche de mode"
-        )
-        XCTAssertNil(
-            LentilleFocusCard.categoryName(sectionId: nil, categories: [work]),
-            "« Mes conversations » n'est pas une catégorie : aucune capsule"
-        )
-        XCTAssertNil(
-            LentilleFocusCard.categoryName(sectionId: "", categories: [work]),
-            "la convention `\"\"` du déplacement signifie « aucune catégorie » — aucune capsule"
-        )
-        XCTAssertNil(
-            LentilleFocusCard.categoryName(sectionId: "cat-ghost", categories: [work]),
-            "identifiant périmé (catégorie supprimée) ⇒ RIEN, jamais un mot générique de repli"
-        )
-        XCTAssertNil(
-            LentilleFocusCard.categoryName(sectionId: "cat-blank", categories: [section("cat-blank", "   ")]),
-            "un nom blanc peindrait une capsule vide bordée d'accent"
-        )
-    }
-
-    /// L'encoche revient au coin haut-gauche, en MIROIR de l'encoche de mode
-    /// (même chip, même décalage `ModeNotch`), et elle est CONDITIONNELLE.
-    func test_focusCard_theCategoryNotchIsBackAtTopLeading_conditionalAndWithoutAnyGenericWord() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-
-        XCTAssertTrue(
-            code.contains(".overlay(alignment: .topLeading) {"),
-            "l'encoche de catégorie reprend le coin haut-gauche (arbitrage du 2026-08-22 soir)"
-        )
-        XCTAssertTrue(
-            code.contains("if let name = Self.categoryName(sectionId: conversation.userState.sectionId, categories: categories)"),
-            "la capsule est CONDITIONNELLE : aucune catégorie ⇒ aucune vue montée"
-        )
-        XCTAssertTrue(
-            code.contains("notchChip(name)"),
-            "elle passe par le MÊME chip que l'encoche de mode — « exactement comme le mode »"
-        )
-        XCTAssertEqual(
-            occurrences(of: "conversation.prefs.category", in: code), 0,
-            "le mot générique « Catégorie » est précisément le grief qui a motivé le retrait " +
-            "du 2026-08-22 matin : il ne revient pas"
-        )
-        XCTAssertEqual(
-            occurrences(of: "context.my_conversations", in: code), 0,
-            "la carte ne réécrit PAS le catalogue « Déplacer vers… » : elle consomme celui " +
-            "du menu contextuel (ConversationMoveToSectionMenuItems)"
-        )
-    }
-
-    /// La carte reste MUETTE : elle ne connaît ni le view model, ni le store.
-    /// Le déplacement sort par la fermeture déjà injectée (`onMoveToSection`),
-    /// que `LentilleFocusCardHost` relaie vers l'UNIQUE appel de
-    /// `moveToSection` que la liste câble pour la carte.
-    func test_focusCard_movingIsRoutedThroughTheInjectedClosure_neverTheViewModel() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-        XCTAssertEqual(
-            occurrences(of: "conversationViewModel", in: code), 0,
-            "la carte est une vue PURE — aucune lecture du view model"
-        )
-        XCTAssertEqual(
-            occurrences(of: "moveToSection(conversationId:", in: code), 0,
-            "aucun appel direct au view model : le déplacement sort par onMoveToSection"
-        )
-        XCTAssertTrue(
-            code.contains("onMove: onMoveToSection"),
-            "le catalogue partagé reçoit la fermeture injectée, sans intermédiaire"
-        )
-
-        let listCode = normalizedCode(try listViewSource())
-        XCTAssertEqual(
-            occurrences(of: "conversationViewModel.moveToSection(conversationId: conversationId, sectionId: sectionId)", in: listCode), 1,
-            "UN seul appel de moveToSection pour la carte : la plomberie de l'hôte existait " +
-            "déjà (elle n'était plus lue par personne), elle est rebranchée, jamais doublée"
-        )
-    }
-
-    /// « Réutilise-le, n'en écris pas un second » : les items du sous-menu
-    /// « Déplacer vers… » sont écrits UNE fois, dans le fichier qui les
-    /// portait déjà, et les DEUX `Menu` natifs les consomment — le menu
-    /// contextuel de la rangée et l'encoche de la carte. Un second catalogue
-    /// divergerait sur la convention `""` (= « Mes conversations ») et sur la
-    /// coche de la catégorie courante.
-    ///
-    /// Le panneau custom < iOS 26 (`ConversationContextMenuView.movePanel`)
-    /// reste HORS périmètre et garde ses propres rangs : il ne dessine pas des
-    /// items de `Menu` mais des `actionRow` maison, une autre primitive de
-    /// rendu, pour la même action de view model.
-    func test_moveToSectionCatalogue_isWrittenOnce_andSharedByBothNativeMenus() throws {
-        let overlays = try appSource("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
-        XCTAssertEqual(
-            occurrences(of: "struct ConversationMoveToSectionMenuItems", in: overlays), 1,
-            "un seul catalogue déclaré, dans le fichier qui portait déjà le sous-menu"
-        )
-        XCTAssertEqual(
-            occurrences(of: "ConversationMoveToSectionMenuItems(", in: overlays), 1,
-            "le menu contextuel de la rangée le CONSOMME au lieu de le réécrire"
-        )
-        XCTAssertEqual(
-            occurrences(of: "context.my_conversations", in: overlays), 1,
-            "« Mes conversations » n'est écrit qu'à l'intérieur du catalogue partagé"
-        )
-        XCTAssertEqual(
-            occurrences(of: "ConversationMoveToSectionMenuItems(", in: try modeSource("LentilleFocusCard.swift")), 1,
-            "la carte consomme le MÊME catalogue"
-        )
     }
 }

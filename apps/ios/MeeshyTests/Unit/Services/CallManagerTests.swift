@@ -7442,3 +7442,288 @@ final class FailCallActiveGuardTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Vague 158: toggleVideo must not re-acquire the camera while CallKit
+// is holding the call or the OS has suspended capture.
+
+/// Audit finding: `applyCameraSuspension`, `handleHold`, and
+/// `applySurvivalVideoSend` all treat `isVideoSuspendedByHold` /
+/// `isVideoSuspendedByCaptureInterruption` as "no camera access right now" —
+/// `applySurvivalVideoSend` explicitly refuses to resume video while either
+/// flag is set. `toggleVideo()`, the user-facing manual video button, had no
+/// such guard: a hold→toggle-off→toggle-on sequence (an ordinary double-tap
+/// while the CallKit hold banner is up) called `upgradeToVideo()`
+/// unconditionally — acquiring the camera, notifying CallKit `hasVideo: true`,
+/// and telling the peer "camera active" while the call was still on hold.
+final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func toggleVideoBody(in source: String) throws -> String {
+        guard let funcRange = source.range(of: "func toggleVideo()") else {
+            XCTFail("toggleVideo() not found in CallManager.swift")
+            return ""
+        }
+        let bodyEnd = source.range(
+            of: "func switchCamera()",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    func test_toggleVideo_guardsHoldAndCaptureSuspensionBeforeUpgrading() throws {
+        let body = try toggleVideoBody(in: try callManagerSource())
+        XCTAssertTrue(
+            body.contains("self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            "toggleVideo must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
+            "before actuating — mirrors the guard applySurvivalVideoSend already applies for the " +
+            "automatic survival-recovery path."
+        )
+    }
+
+    func test_toggleVideo_holdGuardOnlyBlocksTurningVideoOn() throws {
+        let body = try toggleVideoBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+        ) else {
+            XCTFail("expected `if target, ...` guard — turning video OFF while on hold must " +
+                     "remain a normal downgrade, only re-enabling is unsafe mid-hold")
+            return
+        }
+        XCTAssertFalse(guardRange.isEmpty)
+    }
+
+    func test_toggleVideo_holdGuardPrecedesUpgradeToVideo() throws {
+        let body = try toggleVideoBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+        ) else {
+            XCTFail("hold/capture-interruption guard not found in toggleVideo"); return
+        }
+        guard let upgradeRange = body.range(of: "self.webRTCService.upgradeToVideo()") else {
+            XCTFail("upgradeToVideo() call not found in toggleVideo"); return
+        }
+        XCTAssertLessThan(
+            guardRange.lowerBound, upgradeRange.lowerBound,
+            "the hold/capture-interruption guard must run before upgradeToVideo() acquires the " +
+            "camera — otherwise a re-enable tap during a CallKit hold starts capture and " +
+            "renegotiates with the peer while the call is still on hold."
+        )
+    }
+
+    func test_toggleVideo_holdGuardReturnsWithoutFallingThroughToPermissionCheck() throws {
+        let body = try toggleVideoBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+        ) else {
+            XCTFail("hold/capture-interruption guard not found in toggleVideo"); return
+        }
+        let searchStart = guardRange.upperBound
+        guard let closeRange = body.range(of: "\n            }", range: searchStart..<body.endIndex) else {
+            XCTFail("guard block close brace not found"); return
+        }
+        let guardBlock = String(body[guardRange.lowerBound..<closeRange.upperBound])
+        XCTAssertTrue(
+            guardBlock.contains("return"),
+            "the hold/capture-interruption guard must return early, never falling through to " +
+            "MediaPermissionCoordinator.ensureCamera / upgradeToVideo."
+        )
+    }
+}
+
+//
+// Vague 159 — audit finding: `switchCamera()`/`selectCamera(id:)` are the two
+// sibling camera-actuation entry points that serialize on the exact same task
+// chain as `toggleVideo()`/`handleHold()` (doc-comments in the source say so
+// explicitly), but Vague 158 only added the hold/capture-interruption guard to
+// `toggleVideo()`. A camera-flip tap queued during a CallKit hold ran after the
+// hold's downgrade completed and unconditionally reacquired the physical
+// camera (`capturer.startCapture`) even though the transceiver stayed
+// recvOnly — the same false "camera active" signal Vague 158 closed for the
+// manual video toggle, on a sibling actuator it didn't cover. Not exercised
+// behaviorally (RTCCameraVideoCapturer needs real hardware): source-level
+// guard, same pattern as CallManagerToggleVideoHoldSuspensionGuardTests above.
+//
+@MainActor
+final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func switchCameraBody(in source: String) throws -> String {
+        guard let funcRange = source.range(of: "func switchCamera() {") else {
+            XCTFail("switchCamera() not found in CallManager.swift")
+            return ""
+        }
+        let bodyEnd = source.range(
+            of: "func refreshAvailableCameras()",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    private func selectCameraBody(in source: String) throws -> String {
+        guard let funcRange = source.range(of: "func selectCamera(id: String) {") else {
+            XCTFail("selectCamera(id:) not found in CallManager.swift")
+            return ""
+        }
+        let bodyEnd = source.range(
+            of: "private func publishListeningIntentIfChanged()",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    // MARK: - switchCamera()
+
+    func test_switchCamera_guardsHoldAndCaptureSuspensionBeforeActuating() throws {
+        let body = try switchCameraBody(in: try callManagerSource())
+        XCTAssertTrue(
+            body.contains("self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            "switchCamera must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
+            "before actuating — mirrors the guard toggleVideo() applies (Vague 158) for the same " +
+            "camera-actuation task chain."
+        )
+    }
+
+    func test_switchCamera_holdGuardPrecedesUnderlyingSwitch() throws {
+        let body = try switchCameraBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+        ) else {
+            XCTFail("hold/capture-interruption guard not found in switchCamera"); return
+        }
+        guard let actuationRange = body.range(of: "self.webRTCService.switchCamera {") else {
+            XCTFail("webRTCService.switchCamera call not found in switchCamera"); return
+        }
+        XCTAssertLessThan(
+            guardRange.lowerBound, actuationRange.lowerBound,
+            "the hold/capture-interruption guard must run before webRTCService.switchCamera " +
+            "reacquires the camera — otherwise a flip tap queued during a CallKit hold runs after " +
+            "the hold's downgrade completes and silently turns the camera back on."
+        )
+    }
+
+    func test_switchCamera_holdGuardRevertsOptimisticMirrorAndReturns() throws {
+        let body = try switchCameraBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "if self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
+        ) else {
+            XCTFail("hold/capture-interruption guard block not found in switchCamera"); return
+        }
+        guard let closeRange = body.range(of: "\n            }", range: guardRange.upperBound..<body.endIndex) else {
+            XCTFail("guard block close brace not found"); return
+        }
+        let guardBlock = String(body[guardRange.lowerBound..<closeRange.upperBound])
+        XCTAssertTrue(
+            guardBlock.contains("self.isUsingFrontCamera = previousFrontCamera"),
+            "the guard must revert the optimistic mirror flag — otherwise a blocked flip leaves " +
+            "isUsingFrontCamera desynced from the camera actually in use."
+        )
+        XCTAssertTrue(
+            guardBlock.contains("return"),
+            "the hold/capture-interruption guard must return early, never falling through to " +
+            "webRTCService.switchCamera."
+        )
+    }
+
+    // MARK: - Vague 160: switchCamera()/selectCamera(id:) checked only 2 of the
+    // 3 sibling suspension flags — `isVideoSuspended` (VideoSurvivalController's
+    // graceful network degradation to audio-only) was missing, even though
+    // `applyCameraSuspension` and `applySurvivalVideoSend` already treat it as
+    // equivalent to hold/capture-interruption ("camera stopped, isVideoEnabled
+    // left true"). A camera-flip queued while the link degraded enough to
+    // trigger the survival downgrade reacquired the physical camera exactly
+    // like the Vague 158/159 hold/interruption defect.
+
+    func test_switchCamera_guardsVideoSurvivalSuspensionBeforeActuating() throws {
+        let body = try switchCameraBody(in: try callManagerSource())
+        XCTAssertTrue(
+            body.contains("self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            "switchCamera must also check isVideoSuspended (network-survival downgrade), not just " +
+            "the hold/capture-interruption pair — it is the third sibling flag with the same " +
+            "'camera stopped, isVideoEnabled left true' contract."
+        )
+    }
+
+    // MARK: - selectCamera(id:)
+
+    func test_selectCamera_guardsHoldAndCaptureSuspensionBeforeActuating() throws {
+        let body = try selectCameraBody(in: try callManagerSource())
+        XCTAssertTrue(
+            body.contains("self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            "selectCamera(id:) must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
+            "before actuating — same capturer, same task chain as switchCamera()."
+        )
+    }
+
+    func test_selectCamera_holdGuardPrecedesUnderlyingSwitch() throws {
+        let body = try selectCameraBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+        ) else {
+            XCTFail("hold/capture-interruption guard not found in selectCamera"); return
+        }
+        guard let actuationRange = body.range(of: "self.webRTCService.switchToCamera(uniqueID: id)") else {
+            XCTFail("webRTCService.switchToCamera call not found in selectCamera"); return
+        }
+        XCTAssertLessThan(
+            guardRange.lowerBound, actuationRange.lowerBound,
+            "the hold/capture-interruption guard must run before webRTCService.switchToCamera " +
+            "reacquires the camera."
+        )
+    }
+
+    func test_selectCamera_holdGuardRevertsOptimisticStateAndReturns() throws {
+        let body = try selectCameraBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "if self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
+        ) else {
+            XCTFail("hold/capture-interruption guard block not found in selectCamera"); return
+        }
+        guard let closeRange = body.range(of: "\n            }", range: guardRange.upperBound..<body.endIndex) else {
+            XCTFail("guard block close brace not found"); return
+        }
+        let guardBlock = String(body[guardRange.lowerBound..<closeRange.upperBound])
+        XCTAssertTrue(
+            guardBlock.contains("self.selectedCameraId = previousSelectedCameraId"),
+            "the guard must revert the optimistic picker selection."
+        )
+        XCTAssertTrue(
+            guardBlock.contains("self.isUsingFrontCamera = previousFrontCamera"),
+            "the guard must revert the optimistic mirror flag."
+        )
+        XCTAssertTrue(
+            guardBlock.contains("return"),
+            "the hold/capture-interruption guard must return early, never falling through to " +
+            "webRTCService.switchToCamera."
+        )
+    }
+
+    // MARK: - Vague 160: same third-flag extension as switchCamera() above.
+
+    func test_selectCamera_guardsVideoSurvivalSuspensionBeforeActuating() throws {
+        let body = try selectCameraBody(in: try callManagerSource())
+        XCTAssertTrue(
+            body.contains("self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            "selectCamera(id:) must also check isVideoSuspended (network-survival downgrade), not " +
+            "just the hold/capture-interruption pair — same capturer, same task chain as " +
+            "switchCamera()."
+        )
+    }
+}

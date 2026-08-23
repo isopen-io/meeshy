@@ -7,7 +7,7 @@
 
 import { ISignalProtocolAdapter } from '../../adapters/LibraryAdapters';
 import { SignalKeyManager } from '../SignalKeyManager';
-import { X3DHKeyAgreement } from '../X3DHKeyAgreement';
+import { X3DHKeyAgreement, type PreKeyBundle } from '../X3DHKeyAgreement';
 import { DoubleRatchet } from '../DoubleRatchet';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SignalProtocolLimits } from '@meeshy/shared/utils/validation';
@@ -62,26 +62,50 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
     };
   }
 
-  async performX3DH(
-    ourIdentityPrivate: Buffer,
-    ourEphemeralPrivate: Buffer,
-    theirIdentityPublic: Buffer,
-    theirSignedPreKeyPublic: Buffer,
-    theirPreKeyPublic?: Buffer
-  ): Promise<Buffer> {
-    // Create mock recipient bundle for X3DH
-    const recipientBundle = {
-      identityKey: theirIdentityPublic,
+  async performX3DH(params: {
+    ourIdentityPrivate: Buffer;
+    theirIdentityPublic: Buffer;
+    theirSignedPreKeyPublic: Buffer;
+    theirSignedPreKeySignature: Buffer;
+    theirPreKeyPublic?: Buffer;
+  }): Promise<{ rootKey: Buffer; ourEphemeralPublic: Buffer; ourRegistrationId: number }> {
+    // Le paquet porte désormais la SIGNATURE de la pré-clé signée, donc il a la
+    // forme complète que `PreKeyBundle` déclare — le `as any` d'avant existait
+    // parce que ce contrat-ci n'en transportait pas, et il masquait exactement
+    // l'absence du seul champ qui authentifie l'accord. C'est
+    // `initiatorKeyAgreement` qui la vérifie : une seule implémentation de la
+    // règle, chez celui qui accorde les clés.
+    const recipientBundle: PreKeyBundle = {
+      identityKey: params.theirIdentityPublic,
       signedPreKey: {
         id: 0,
-        publicKey: theirSignedPreKeyPublic
+        publicKey: params.theirSignedPreKeyPublic,
+        signature: params.theirSignedPreKeySignature
       },
-      preKey: theirPreKeyPublic ? { id: 0, publicKey: theirPreKeyPublic } : undefined,
+      preKey: params.theirPreKeyPublic ? { id: 0, publicKey: params.theirPreKeyPublic } : undefined,
+      // Étiquette de session, PAS une entrée de dérivation : l'identifiant lié au
+      // HKDF est celui de l'initiateur, que `initiatorKeyAgreement` lit sur son
+      // propre gestionnaire de clés. Ce `0` était un mensonge de dérivation tant
+      // que le paquet décidait des clés ; il n'en est plus un. Ne pas le
+      // « réparer » en y injectant l'identifiant du pair : ce champ arrive par un
+      // canal hostile et la signature ne le couvre pas.
       registrationId: 0
     };
 
-    const result = await this.x3dh.initiatorKeyAgreement(recipientBundle as any, ourIdentityPrivate);
-    return result.rootKey;
+    const result = await this.x3dh.initiatorKeyAgreement(
+      recipientBundle,
+      params.ourIdentityPrivate
+    );
+
+    // La clé éphémère PUBLIQUE fait partie du résultat : le répondeur en a besoin
+    // pour calculer DH2/DH3/DH4. La rendre au seul `rootKey`, comme avant, donnait
+    // à l'appelant un secret que son pair ne pouvait par construction jamais
+    // retrouver.
+    return {
+      rootKey: result.rootKey,
+      ourEphemeralPublic: result.ephemeralKeyPair.publicKey,
+      ourRegistrationId: this.keyManager.getRegistrationId()
+    };
   }
 
   async encryptMessage(

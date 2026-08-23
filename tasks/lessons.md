@@ -12186,3 +12186,440 @@ Et sur la forme des rangées de témoin, deux fois dans le même lot :
 > `messageAttachmentSchema` déclare `type`/`transcription`/`createdAt`
 > **`required`**. Le schéma partagé faisait son travail ; c'est la fiction qui a
 > cédé — en 500, pas en assertion, donc bien plus tard qu'il n'aurait fallu.
+
+## Cycle 96 — une preuve TRANSPORTÉE n'est pas une preuve VÉRIFIÉE
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle96.md`.
+
+`signedPreKey.signature` est la seule chose qui rattache la pré-clé signée à la
+clé d'identité, donc la seule chose qui fasse de X3DH un accord authentifié. Le
+dépôt la PRODUISAIT (`SignalKeyManager`), la PERSISTAIT (`DMAEnrollment`), la
+RELISAIT pour la placer dans le paquet (`SignalProtocolEngine`), et la DÉCLARAIT
+obligatoire (`PreKeyBundle`). Quatre couches, chacune irréprochable. La cinquième
+— celle qui la lit — n'existait pas.
+
+> **Un champ présent à chaque étape se lit comme un champ traité.** C'est
+> exactement ce qui rend cette famille invisible : il n'y a rien à trouver. Pas
+> de `TODO`, pas de champ manquant, pas de type qui ment. La preuve voyage, bien
+> formée, jusqu'au bout — et personne ne l'ouvre. Chaque couche rassure la
+> suivante, et l'absence de vérificateur ne ressemble à rien.
+
+La question à poser n'est donc pas « ce champ est-il là ? » mais **« qui le
+LIT, et que fait-il quand il est faux ? »**. Un `grep` du nom du champ répond à
+la première ; seul le second membre de la phrase trouve le défaut. Ici, le nom
+apparaissait six fois dans le sous-arbre, et zéro fois à droite d'une
+comparaison.
+
+**La suite du sous-arbre le documentait sans le voir** : ses six constructions de
+paquet passaient `signature: crypto.randomBytes(64)`, et l'accord aboutissait.
+C'est la preuve la plus courte que rien ne vérifiait — et elle était écrite dans
+le dépôt, verte, depuis toujours. **Une valeur ABSURDE qu'un témoin fait passer
+sans broncher nomme la garde qui manque.** Chercher dans les fixtures ce qu'un
+attaquant n'aurait jamais pu produire est un balayage à part entière.
+
+### Corollaire — une garde conditionnée à la présence de ce qu'elle garde est un no-op
+
+Le second défaut du même lot, dans le même sous-arbre :
+
+```ts
+if (senderIdentityKey && encryptedMessage.signature.length > 0) { /* refuser si invalide */ }
+else if (encryptedMessage.signature.length > 0) { /* avertir */ }
+```
+
+Un message SANS signature ne franchit aucune des deux branches : ni vérification,
+ni avertissement, ni refus. Le bloc se déclare `SECURITY: Strict signature
+verification`. Il était strict contre une signature FAUSSE, jamais contre une
+signature RETIRÉE — et le retrait est strictement moins cher que la forgerie.
+
+> **Une authentification dont l'attaquant décide s'il la subit n'est pas une
+> authentification.** Dès qu'une garde se conditionne à la PRÉSENCE de la preuve,
+> l'omission devient la manœuvre gagnante. Le discriminant juste est l'INTENTION
+> de l'appelant (« m'a-t-on donné de quoi vérifier ? »), jamais l'obligeance de
+> l'émetteur (« m'a-t-on donné quelque chose à vérifier ? »).
+
+Même forme que le commentaire qui scellait la connexion 2FA en la décrivant
+(cycle 91 bis) et que la note de `storyAuthorSelect` qui ÉNUMÉRAIT trois
+audiences en omettant la quatrième (cycle 83) : **le texte affirme la garde, le
+code porte l'exception, et c'est le texte qu'on relit.**
+
+### Et le `as any` disait où était le trou
+
+`SignalProtocolAdapter.performX3DH` portait `recipientBundle as any` depuis
+toujours. Le cast n'était pas une facilité de frappe : le contrat
+`ISignalProtocolAdapter` ne transportait pas la signature que `PreKeyBundle`
+déclare obligatoire, et le cast **faisait taire exactement cette absence-là**.
+
+> **Un `as any` sur un objet de contrat nomme le champ qui manque.** Le retirer
+> n'est pas de l'hygiène de typage — c'est la question « pourquoi ce champ n'y
+> est-il pas ? », et la réponse est parfois un défaut de sécurité. Le cycle 95
+> l'avait consigné comme dette cosmétique de dernier rang ; c'était l'indice.
+
+Corollaire de manœuvre, vérifié ici : **rouvrir une signature de méthode révèle
+ce qu'elle déclarait faux.** En y portant la signature cryptographique, deux
+autres mensonges du même contrat sont tombés — un paramètre
+(`ourEphemeralPrivate`) DÉCLARÉ et silencieusement ignoré, et un résultat qui
+jetait la clé éphémère publique sans laquelle le pair ne peut rien dériver. Ni
+l'un ni l'autre n'aurait été trouvé en cherchant des défauts de sécurité ; les
+deux sont tombés en écrivant honnêtement une liste de paramètres.
+
+## Leçon 244 — Une branche qui n'est pas poussée n'existe pas (2026-08-22)
+
+Rappel user en cours de lot : « merge régulièrement avec le worktree et le main
+local pour ne pas perdre le travail ; si tu es dans une branche, push
+régulièrement ! ». Une heure de commits dormaient sur une branche locale d'un
+worktree, pendant qu'un voisin faisait un `reset --hard` quelques heures plus
+tôt et qu'il restait 990 Mio de disque.
+
+> **Un commit local n'est qu'une promesse ; le push est la sauvegarde.** Dès le
+> premier lot vert : `git push -u origin <branche>`, puis à chaque commit. Dès
+> que les gates d'un lot sont vertes : ff `main` local sur `origin/main`, merge
+> `--no-ff`, push — sans attendre les autres lots. Le gate long (suite
+> complète) ne retient pas le push de la BRANCHE, seulement le merge dans main.
+
+Corollaire : l'arbre de travail n'est pas une sauvegarde non plus — le
+`reset --hard` d'une session voisine ne demande pas la permission.
+
+## Leçon 245 — Un seam `(string, unknown)` annule le contrat de tout ce qui le traverse (2026-08-22, cycle 100)
+
+Le cycle 99 avait typé le `Socket` d'un handler contre `ServerToClientEvents` et
+laissé « basculer les autres un par un ». `SocialEventsHandler` compilait pourtant
+sans erreur une fois basculé — non parce qu'il respectait le contrat, mais parce
+que ses 21 diffusions ne touchent JAMAIS `io.emit` directement : elles passent
+par quatre helpers privés déclarés `(event: string, data: unknown)`.
+
+> **Typer le `Socket` ne garde rien tant qu'un seam intermédiaire reblanchit le
+> couple.** À l'intérieur d'un helper `(event: string, data: unknown)`, `event`
+> est un `string` quelconque et `data` un `unknown` ; le contrat ne peut rien
+> exiger, et au site d'appel il n'y a plus rien à vérifier. La garde ne vaut que
+> jusqu'au PREMIER paramètre non typé.
+
+Le correctif est de rendre le seam générique
+(`<E extends keyof ServerToClientEvents>(event: E, data: Parameters<…>[0])`), pas
+de typer l'objet en amont. Et quand l'inférence d'une lib force un cast (ici
+`DecorateAcknowledgementsWithMultipleResponses` de socket.io sur un `E`
+générique), le placer À L'UNIQUE point qu'elle ne résout pas — jamais dans le
+seam, ce qui le rouvrirait. Un cast qui porte sur un couple déjà vérifié en
+frontière ne blanchit rien ; un cast dans le seam blanchit tout.
+
+Corollaire de méthode : **chercher les seams avant de déclarer un handler
+"couvert".** `grep -c "\.emit("` sur le fichier ne trouvait rien dans
+`SocialEventsHandler` — les émissions étaient toutes derrière `emitToFriends`,
+`emitToFeedsAndPostRoom`, `emitToUser`, `emitToUserFeedAndPostRoom`. Un handler
+sans `io.emit` littéral n'est pas un handler sans émission ; c'est souvent un
+handler dont les émissions sont blanchies.
+
+Et corollaire de routine, payé ce cycle : **repuller `main` AVANT de pousser un
+défaut de production.** Le flip a révélé que le chemin REST/ZMQ de `message:new`
+perdait l'enveloppe E2EE ; je l'ai corrigé et outillé. Une routine sœur (cycle
+99 bis) avait corrigé le MÊME défaut pendant ce cycle, mieux (producteur partagé
+`messageNewPayload.ts`). Constaté au repull, j'ai abandonné ma correction
+redondante au profit de la leur. La leçon des cycles 85/97 — « cette entité
+a-t-elle une jumelle ? » — vaut aussi pour les routines : ta correction a
+peut-être une jumelle déjà mergée.
+
+## Leçon 246 — Un cliquet de TYPES se prouve sous mutation, comme un témoin (2026-08-22, cycle 101)
+
+Le cycle 101 a fermé un défaut de contrat (`message:edited` omettait trois des
+sept champs requis par `SocketIOMessage`, et le décodeur iOS les lit en
+`try c.decode`) et a voulu le retenir par une garde à la COMPILATION plutôt que
+par un seul témoin runtime. La première formulation était celle qui vient
+d'abord à l'esprit :
+
+```ts
+type RequiredKeys = {
+  [K in keyof SocketIOMessage]-?: undefined extends SocketIOMessage[K] ? never : K;
+}[keyof SocketIOMessage];
+```
+
+Elle compilait, elle se lisait juste, et **elle ne gardait rien** : la passerelle
+compile sous `strictNullChecks: false`, où `undefined extends T` est VRAI pour
+tout `T`. Le jeu de clés valait donc `never`, et la garde passait au vert sous
+n'importe quelle mutation. Mesuré : retirer `createdAt` du noyau ne la faisait
+pas tomber d'un cran.
+
+> **Une garde de types est une AFFIRMATION, exactement comme un tri (cycle 86
+> bis), un compte (cycle 93) ou un commentaire de contrainte (cycle 94) : elle
+> se vérifie en la faisant TOMBER.** Écrire la mutation qu'elle nomme et
+> constater l'erreur de compilation est le seul geste qui distingue un cliquet
+> d'une décoration — et il coûte trois minutes.
+
+La forme juste teste le MODIFICATEUR `?`, que le drapeau n'efface pas :
+
+```ts
+[K in keyof T]-?: Record<string, never> extends Pick<T, K> ? never : K
+```
+
+Corollaire, et c'est ce qui rend l'erreur facile à commettre : **les idiomes de
+types publiés supposent presque tous `strict: true`.** Recopier un idiome de
+type dans un projet non strict, c'est recopier une garde dont la moitié des
+prémisses est fausse. Avant d'employer `undefined extends …`, `NonNullable`,
+`Exclude<…, undefined>` comme DISCRIMINANT, lire `tsconfig.json` — puis prouver
+le rouge.
+
+Et corollaire de portée : un témoin runtime et un cliquet de types ne se
+remplacent pas. Ici le témoin prouve ce que le producteur MET SUR LE FIL, le
+cliquet prouve que le noyau ne peut plus rétrécir sans qu'on le voie ; le lot
+livre les deux, chacun prouvé rouge séparément.
+
+## Leçon 247 — Un événement DIFFUSÉ n'est cassé que chez le client qui le consomme comme une DONNÉE (2026-08-22, cycle 101)
+
+`message:edited` a trois producteurs ; celui du transport WebSocket servait un
+littéral écrit à la main dont manquaient `senderId`, `messageType` et
+`createdAt` — trois des sept champs que `SocketIOMessage` rend obligatoires.
+Toute édition faite depuis le web était silencieusement jetée par chaque client
+iOS de la conversation, depuis toujours.
+
+> **Le même défaut de forme produit trois issues selon ce que le client FAIT de
+> la charge utile.** iOS la décode et l'applique (`try c.decode` sans repli) :
+> le message entier est rejeté. Android la décode puis la JETTE, ne lisant que
+> `conversationId` pour relire la conversation : intact. Le web la FUSIONNE dans
+> sa ligne en cache, qui fournit les clés manquantes : intact.
+
+Trois corollaires, et le troisième est le plus cher :
+
+1. **Le client qui ÉMET sur un transport est rarement celui qui casse dessus.**
+   Le web émet `message:edit` et sa fusion le protège ; iOS édite par REST et
+   n'est que destinataire de ce transport-ci. Le côté d'où vient le geste ne
+   voit jamais rien.
+2. **Un client qui traite l'événement en SIGNAL est insensible aux défauts de
+   forme — donc incapable de les révéler.** Sa verdeur n'atteste rien sur le
+   contrat. Ne jamais lire « deux clients sur trois vont bien » comme « la
+   charge utile est bonne » : compter les clients qui la LISENT.
+3. **Relever les trois décodeurs fait partie du diagnostic, pas du rapport.**
+   La question n'est pas « ce champ manque-t-il ? » mais « qui le lit, et que
+   fait-il quand il est absent ? » — la même que la leçon du cycle 96 sur une
+   preuve transportée mais jamais vérifiée.
+
+Et la cause de l'invisibilité était structurelle, pas humaine : ce handler était
+le DERNIER rendu au `Socket` nu de socket.io, parce que son payload `message:new`
+était mué à travers un cast `Record<string, unknown>`. Un tel sac de clés ne
+satisfait aucun champ requis, donc typer le socket aurait fait échouer les cinq
+émissions voisines — et, l'objet restant non typé, l'émission `message:edited`
+deux cents lignes plus haut n'était pas vérifiée non plus.
+
+> **Un seam de blanchiment ne protège pas seulement l'expression qui le porte :
+> il désarme le contrat de TOUT le fichier**, y compris des émissions qui n'ont
+> rien à voir avec lui. Le coût d'un `Record<string, unknown>` ne se mesure pas
+> à son site, mais au périmètre qu'il empêche de typer.
+
+Corollaire de correctif, et il vaut à chaque fois : **réparer un décodage ne
+doit pas installer une divergence de SENS.** `Message.senderId` est un
+`Participant.id`, quand les clients comparent ce champ à leur `User.id`. Servir
+la colonne brute aurait fait passer le décodage tout en cassant la
+reconnaissance « c'est mon message » — une panne muette, strictement pire que
+celle qu'on répare. La règle de résolution existait déjà chez le producteur
+voisin ; elle est extraite (`wireSenderId.ts`) plutôt que retapée.
+
+## Leçon 248 — Deux témoins verts qui exigent des réponses OPPOSÉES à la même question (2026-08-22, cycle 102)
+
+Une règle métier écrite deux fois n'a pas deux gardes : elle en a une par
+exemplaire, et **chaque garde atteste son exemplaire**, y compris quand il est
+faux. Rien ne les confronte, donc rien ne rougit.
+
+Cas mesuré. La question : *quel `messageType` porte un message dont la pièce
+jointe est un `text/plain` ?*
+
+| fichier | témoin | réponse |
+|---|---|---|
+| `attachment-message-type.test.ts` | « treats an unknown or empty MIME as a generic file, **never text** » | `'file'` |
+| `MessageProcessor.test.ts` | « **does not update** message type for text/plain forward » | `'text'` |
+
+Les deux verts, dans le même service, depuis des mois. Le second ne décrivait
+aucune règle : il **gelait le trou** de l'exemplaire manuscrit qu'il gardait —
+lequel ne connaissait que le préfixe `application/` et ne lisait que
+`attachments[0]`.
+
+> **Un témoin atteste la règle de son exemplaire, jamais LA règle.** Quand une
+> règle a plusieurs sites, la couverture croît avec le nombre d'exemplaires
+> pendant que la justesse décroît. Le vert n'est pas une mesure de la règle,
+> c'est une mesure de l'accord d'un site avec lui-même.
+
+Le geste qui le trouve n'est pas un balayage de duplication — les deux corps ne
+se ressemblaient pas — mais une question posée à la COLONNE : **qui l'écrit ?**
+Ici quatre chemins, dont un seul appelait la règle canonique.
+
+Corollaires :
+
+- **Compter les ÉCRIVAINS d'une colonne avant d'en corriger un.** `grep` sur le
+  nom de colonne à gauche d'un `:` ou d'un `=`, pas sur le nom de la fonction
+  qu'on soupçonne — la fonction canonique est justement celle que les sites
+  fautifs n'appellent PAS.
+- **Le point unique est celui où la donnée est COMPLÈTE**, pas celui où on la
+  reçoit. Ici : après la relecture des pièces jointes, la seule étape que les
+  trois chemins traversent — donc le seul endroit où la règle puisse être
+  écrite une fois pour tous.
+- **Un correctif de règle unique est ADDITIF ou il n'est pas sûr.** Ne parler
+  que si la colonne porte encore son défaut laisse intactes les valeurs qu'un
+  producteur légitime a posées (`'location'`, `'system'`), et rend le lot
+  mesurable : les témoins d'additivité passent AVANT comme APRÈS, et ce sont eux
+  qui prouvent qu'on n'a rien détruit.
+- **Un double qui ment sur son collaborateur cache le trou.** Quatre témoins de
+  transfert mockaient la relecture à `[]`, ce que la production ne fait jamais.
+  Tant que le double affirmait « il n'y a pas de pièce jointe à relire », aucun
+  d'eux ne pouvait voir que personne ne dérivait le type.
+
+Et la cause RACINE était plus haut que les quatre sites : la colonne était
+renseignée **depuis un champ de requête**, et `SendMessageRequest` du SDK iOS
+n'a pas ce champ. **Quand un serveur délègue à ses clients un fait qu'il est
+seul à connaître entièrement, il faut compter les clients qui peuvent le dire —
+il y en a toujours un qui ne peut pas.**
+
+
+## Leçon 249 — Une amnistie de CI ne pardonne pas un package, elle pardonne le RÉPERTOIRE (2026-08-23, cycle 105 bis)
+
+Six cycles (99–104) ont bâti pour la passerelle un contrat d'émission
+Socket.IO : une charge typée par événement, une porte d'émission dérivée du
+contrat, un cliquet au TYPE sur la forme de la porte. Le cycle 105 bis a posé la
+question qu'aucun des six n'avait posée : **qu'est-ce qui, en CI, devient rouge
+quand ce contrat est violé ?**
+
+Réponse mesurée : rien.
+
+| garde | ce qu'elle fait d'un couple (événement, charge) faux |
+|---|---|
+| étape `Type-check` de `ci.yml` | `continue-on-error: true` — rouge sans conséquence |
+| job de test (`ts-jest`) | `ignoreCodes: [2307, **2322**, 2339, **2345**, 2740]` |
+| `next build` (web) | `typescript.ignoreBuildErrors: true` |
+
+Or `2322` et `2345` sont EXACTEMENT les codes qu'une charge dépareillée produit.
+Mesuré en retirant un champ requis d'une émission de `preferences-broadcast.ts` :
+`error TS2345`, avalé par le premier, pardonné par le second.
+
+> **Un cliquet de types n'est pas une garde tant qu'on n'a pas nommé l'outil qui
+> le rend rouge ET vérifié que cet outil ne l'a pas mis sur sa liste d'exclusion.**
+> Le cycle 104 avait fait la moitié du chemin — il a corrigé sa propre
+> documentation en découvrant que c'était `ts-jest` et non `tsc` qui gardait son
+> cliquet (via `TS2344`). Il n'a pas posé la question suivante : ce cliquet garde
+> la FORME DE LA PORTE ; qu'est-ce qui garde ce qui PASSE dedans ? Deux codes
+> ignorés plus loin, la réponse était « personne ».
+
+### Le mécanisme : une amnistie se dimensionne sur le package le PIRE
+
+Le drapeau `continue-on-error: true` n'était l'avis de personne sur le typage.
+C'était la seule façon pour une étape UNIQUE couvrant quatre packages d'être
+verte, `apps/web` portant 1241 erreurs quand les trois autres sont à zéro.
+
+> **Une garde à granularité de dépôt s'aligne sur son membre le plus endetté, et
+> ce qu'elle coûte n'est pas visible chez lui : c'est chez les membres SAINS
+> qu'elle annule quelque chose.** Web ne perdait rien à l'amnistie — il n'avait
+> rien à perdre. La passerelle, elle, y perdait six cycles de contrat.
+
+Le geste n'est donc pas de lever l'amnistie (1241 erreurs à corriger d'abord)
+mais de la SCINDER : bloquant pour les packages à zéro, cliquet chiffré pour
+l'endetté. Une dette qui ne peut que descendre n'est plus une amnistie.
+
+Corollaire sur le cliquet chiffré : il doit échouer dans les DEUX sens. Un
+cliquet qui n'exige pas d'être resserré quand il peut l'être ne cliquette pas —
+la marge regagnée redevient silencieusement dépensable. Et il n'est honnête que
+si son chiffre ne dérive pas avec l'environnement : les trois sources de dérive
+(`.next/types/**` présent seulement après un `next build`, client Prisma généré
+seulement dans le job de test, `@meeshy/shared` résolu vers la source et non
+`dist/`) ont été vérifiées une par une, et la première est exclue par chemin.
+
+### Le corollaire de portée, et il a rendu deux défauts
+
+Le cycle 104 avait écrit la phrase juste sans l'instruire : « un fichier de
+production qu'AUCUN test n'atteint n'a, en CI, aucune vérification de type du
+tout ». Instruite, elle rend six fichiers dans `services/gateway/src/` — parce
+que l'`include` de `tsconfig.json` était une ÉNUMÉRATION de dix-huit répertoires
+tenue à la main, qui ne nommait ni `adapters`, ni `migrations`, ni `validation`,
+et n'atteignait `socketio/` que par le graphe d'imports de `server.ts`.
+
+Deux des six étaient cassés, et le second l'était de façon opérationnelle :
+
+- `adapters/node-signal-stores.ts` importait deux types que `@meeshy/shared`
+  n'exporte plus, et déclarait `saveIdentity(): Promise<boolean>` là où
+  `IdentityKeyStore` de libsignal exige `Promise<IdentityChange>`.
+- `migrations/migrate-from-legacy.ts` — que
+  `infrastructure/scripts/migrate-to-staging.sh` EXÉCUTE — adressait
+  `prisma.conversationMember` et `prisma.messageTranslation`, deux modèles qui
+  n'existent pas.
+
+> **Une énumération de répertoires dans un `include` est une liste tenue à la
+> main : elle est en retard par construction, et son retard ne ressemble pas à
+> une erreur — il ressemble à des fichiers qui compilent.** `src/**/*` n'a pas
+> ce mode de défaillance. Vérifier la couverture, ne pas la supposer :
+> `tsc --listFiles` contre `find src -name '*.ts'` rend l'écart en une commande.
+
+### Et le défaut le plus cher du lot n'était pas un type : c'était une BRANCHE
+
+`migrateCollection` écrit sous `if (!DRY_RUN)`. Une cible Prisma `undefined` ne
+casse donc que la course RÉELLE ; le `--dry-run` — le mode que le script de
+déploiement lance en PREMIER pour décider s'il continue — n'atteint jamais la
+ligne fautive et compte `stat.migrated += batch.length`.
+
+> **Un galop d'essai qui saute l'écriture ne teste pas l'écriture : il teste
+> tout SAUF elle, et il est interrogé précisément sur elle.** Devant un mode
+> « simulation » gardé par un drapeau, lire ce que le drapeau saute et se
+> demander si c'est justement l'objet de la question. Ici, deux collections
+> étaient annoncées intégralement migrées par le seul mode que l'opérateur
+> consulte avant de se lancer.
+
+## Leçon 250 — un `as` vers le type NU d'une dépendance efface un contrat entier
+
+Cycle 107. La moitié RÉCEPTION du contrat Socket.IO (`ClientToServerEvents`) est
+restée ingouvernée trois cycles, non par un oubli de déclaration, mais par un
+CAST : `this.io as SocketIOServer`, six fois, vers un `Server` **sans
+générique**. Le manager déclarait pourtant son `io` avec les deux cartes.
+
+`DefaultEventsMap` vaut `[event: string]: (...args: any[]) => void`. Sous lui,
+`socket.on(n'importe quoi, (data: n'importe quoi) => …)` compile.
+
+> **Un cast vers un type nu ne relâche pas un appel, il relâche tout ce que la
+> valeur castée porte** — ici les 22 sites d'écoute d'un sous-système ET tout ce
+> que le même module émet. Et il est plus discret qu'une redéclaration : il ne
+> crée aucun type nommé qu'on puisse chercher (Leçon du cycle 105, généralisée).
+
+Ce que ça a laissé vivre : `call:analytics`, écouté, validé par Zod et agrégé en
+production, ses dix-neuf champs transcrits dans la signature du listener, **absent
+du contrat**, avec trois clients l'émettant chacun contre sa propre
+transcription.
+
+### Corollaire — annoncer la portée MESURÉE d'une garde, pas celle qu'on espère
+
+La porte typée refuse un nom d'événement absent du contrat. Elle NE refuse PAS
+une charge divergente mais assignable dans un sens : `strictFunctionTypes: false`
+rend les paramètres BIVARIANTS. Mesuré au compilateur AVANT d'écrire la prose.
+
+> **Une porte annoncée plus stricte qu'elle n'est vaut moins que pas de porte** :
+> personne n'ira vérifier derrière. Dire ce qu'elle ne garde pas est ce qui rend
+> crédible ce qu'elle garde.
+
+## Leçon 251 — un gate dont on silence la sortie ne mesure plus ce qu'on croit
+
+Même cycle. Une preuve de ROUGE a d'abord été annoncée « la garde ne tombe pas »
+sur la foi d'un `total = 0`. Faux : la mutation avait rendu le paquet partagé non
+compilable, et le `bun run build` intermédiaire — redirigé vers `/dev/null` —
+avait échoué. La passerelle compilait contre un `dist` PÉRIMÉ.
+
+> **Un build intermédiaire raté ne ressemble pas à une panne : il ressemble à un
+> test qui passe.** Dans une chaîne de mesure (build → compile → assert), vérifier
+> le CODE DE SORTIE de chaque étape, surtout quand on mute volontairement le code
+> pour prouver un rouge — c'est exactement le moment où l'on s'attend à des
+> erreurs, donc celui où l'on cesse de les lire.
+
+Même famille que « un témoin qui ne peut pas tomber n'est pas un témoin », un
+étage plus bas : ici ce n'est pas le témoin qui était muet, c'est l'OUTILLAGE de
+la mesure.
+
+### Et c'est arrivé DEUX FOIS dans le même cycle, par deux mécanismes différents
+
+Le second : `bash check-type-debt.sh 2>&1 | tail -20` a rendu `exit code 0` sur
+un gate qui ÉCHOUAIT. **Le code de retour d'un pipeline shell est celui de sa
+DERNIÈRE commande** — ici `tail`, qui réussit toujours. Le verdict réel
+(`✗ AMÉLIORATION NON ENREGISTRÉE : 1239 erreurs, baseline 1241`) était dans le
+texte, à l'écran, pendant que le code de sortie disait « vert ».
+
+Les deux fois, le défaut n'est pas d'avoir mal lu : c'est d'avoir lu **UN SEUL**
+des deux canaux, et pas le même selon la fois — la sortie sans le code, puis le
+code sans la sortie.
+
+> **Un gate rend DEUX verdicts, le texte et le code de retour, et ils peuvent se
+> contredire.** Les lire tous les deux, systématiquement. Et ne jamais passer un
+> gate par un pipe quand c'est son code de sortie qu'on interroge :
+> `set -o pipefail`, ou rediriger vers un fichier et lire `$?` avant tout autre
+> commande.
+
+C'est d'autant plus piégeux qu'un gate qui échoue en disant « améliore-toi »
+(dette regagnée, cliquet à resserrer) n'a pas la forme d'un échec : le texte est
+une bonne nouvelle, et seul le code de retour dit que la CI sera rouge.

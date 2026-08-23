@@ -1,6 +1,9 @@
 package me.meeshy.app.feed
 
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -55,6 +58,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -86,6 +90,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.pluralStringResource
@@ -255,6 +260,7 @@ fun FeedScreen(
                             },
                             onCopyLink = { clipboard.setText(AnnotatedString(postShareUrl(post.id))) },
                             onRepost = { viewModel.repost(post.id) },
+                            onQuote = { viewModel.beginQuote(post.id) },
                             onPin = { viewModel.pinPost(post.id) },
                             onReport = { reportPostId = post.id },
                             onDelete = { deletePostId = post.id },
@@ -347,6 +353,83 @@ fun FeedScreen(
             onMediaError = { message -> scope.launch { snackbar.showSnackbar(message) } },
         )
     }
+
+    state.quoteComposer?.let { composer ->
+        QuoteComposerSheet(
+            composer = composer,
+            onTextChange = viewModel::onQuoteTextChange,
+            onSubmit = viewModel::submitQuote,
+            onDismiss = viewModel::cancelQuote,
+        )
+    }
+}
+
+/**
+ * Le compositeur de citation : reposter un post accompagne d'un commentaire. Rendu
+ * bete de [QuoteComposerState] — la card source (auteur + apercu) au-dessus d'un champ
+ * de commentaire libre. Parite iOS (feuille de composition avec `quotePost`), en dialog
+ * pour rester coherent avec [ReportPostDialog].
+ */
+@Composable
+internal fun QuoteComposerSheet(
+    composer: QuoteComposerState,
+    onTextChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val unknownAuthor = stringResource(R.string.feed_unknown_author)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.feed_quote_title)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = composer.text,
+                    onValueChange = onTextChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text(stringResource(R.string.feed_quote_hint)) },
+                )
+                Spacer(Modifier.height(MeeshySpacing.md))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(MeeshyRadius.md))
+                        .border(
+                            1.dp,
+                            MeeshyTheme.tokens.inputBorder,
+                            RoundedCornerShape(MeeshyRadius.md),
+                        )
+                        .padding(MeeshySpacing.md),
+                ) {
+                    Text(
+                        text = composer.sourceAuthorName ?: unknownAuthor,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MeeshyTheme.tokens.textPrimary,
+                    )
+                    if (composer.sourceContentPreview.isNotBlank()) {
+                        Text(
+                            text = composer.sourceContentPreview,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MeeshyTheme.tokens.textSecondary,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onSubmit) {
+                Text(stringResource(R.string.feed_quote_submit))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.feed_quote_cancel))
+            }
+        },
+    )
 }
 
 /**
@@ -446,6 +529,27 @@ private fun postRelativeTime(iso: String): String {
     )
 }
 
+/**
+ * Open a shared place on the device map. Prefers a `geo:` intent (any installed map
+ * app), falling back to a Google Maps web URL when no map app is installed — so the
+ * sticker never dead-ends. Coordinates are formatted with [Locale.ROOT] so a
+ * comma-decimal JVM locale never emits an invalid `geo:` value.
+ *
+ * `internal` so the shared [RepostEmbedCell] can reuse the same intent orchestration
+ * for a reposted post's location sticker — one map-open path, not a copy per screen.
+ */
+internal fun openPlaceOnMap(context: Context, location: FeedLocationPresentation) {
+    val coords = String.format(Locale.ROOT, "%f,%f", location.latitude, location.longitude)
+    val query = location.label?.let { Uri.encode(it) }
+    val geoUri = if (query != null) "geo:$coords?q=$coords($query)" else "geo:$coords?q=$coords"
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(geoUri)))
+    } catch (_: ActivityNotFoundException) {
+        val webUri = Uri.parse("https://www.google.com/maps/search/?api=1&query=$coords")
+        context.startActivity(Intent(Intent.ACTION_VIEW, webUri))
+    }
+}
+
 @Composable
 private fun PostCard(
     post: FeedPostPresentation,
@@ -459,6 +563,7 @@ private fun PostCard(
     onShare: () -> Unit = {},
     onCopyLink: () -> Unit = {},
     onRepost: () -> Unit = {},
+    onQuote: () -> Unit = {},
     onPin: () -> Unit = {},
     onReport: () -> Unit = {},
     onDelete: () -> Unit = {},
@@ -517,6 +622,7 @@ private fun PostCard(
                     onShare = onShare,
                     onCopyLink = onCopyLink,
                     onRepost = onRepost,
+                    onQuote = onQuote,
                     onBookmarkToggle = onBookmark,
                     onPin = onPin,
                     onReport = onReport,
@@ -543,6 +649,15 @@ private fun PostCard(
             if (post.images.isNotEmpty()) {
                 Spacer(Modifier.height(MeeshySpacing.md))
                 PostImageGrid(images = post.images, onImageTap = onImageTap)
+            }
+
+            post.location?.let { loc ->
+                Spacer(Modifier.height(MeeshySpacing.md))
+                val mapContext = LocalContext.current
+                FeedPostLocationSticker(
+                    location = loc,
+                    onTap = { openPlaceOnMap(mapContext, loc) },
+                )
             }
 
             post.repostEmbed?.let { embed ->
@@ -850,6 +965,7 @@ private fun PostOptionsButton(
     onShare: () -> Unit,
     onCopyLink: () -> Unit,
     onRepost: () -> Unit,
+    onQuote: () -> Unit,
     onBookmarkToggle: () -> Unit,
     onPin: () -> Unit,
     onReport: () -> Unit,
@@ -870,6 +986,7 @@ private fun PostOptionsButton(
                     PostAction.Share -> stringResource(R.string.feed_action_share) to onShare
                     PostAction.CopyLink -> stringResource(R.string.feed_action_copy_link) to onCopyLink
                     PostAction.Repost -> stringResource(R.string.feed_action_repost) to onRepost
+                    PostAction.Quote -> stringResource(R.string.feed_action_quote) to onQuote
                     PostAction.Bookmark -> stringResource(R.string.feed_action_bookmark) to onBookmarkToggle
                     PostAction.Unbookmark -> stringResource(R.string.feed_action_unbookmark) to onBookmarkToggle
                     PostAction.Pin -> stringResource(R.string.feed_action_pin) to onPin

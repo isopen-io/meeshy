@@ -1208,26 +1208,33 @@ struct StoryCardView: View {
     /// snapshot de LECTURE du document reçu, et rend le runtime v1 depuis lui —
     /// servir ce snapshot au player est l'identité, pas une conversion.
     ///
-    /// **Pourquoi une porte, et non un montage inconditionnel.** iOS ne pose
-    /// AUCUN en-tête `X-Canvas-Caps` (c'est la tâche C4, ouverte) : le gateway
-    /// lui sert donc l'archive v1 TELLE QUELLE et une story v3-native en
-    /// sentinelle v1 — `canvasV3` vaut `nil` pour CENT POUR CENT des stories
-    /// affichées aujourd'hui. Monter le lecteur sans porte ferait passer TOUTE
-    /// l'archive par `CanvasV3(migrating:)` → `StoryEffects(rendering:)`, un
-    /// aller-retour qui letterboxe les ancres libres dans l'espace de scène FIXE
-    /// 9:16 et ne rend au retour ni le ratio du porteur ni le remap inverse
-    /// (`CanvasV3MigrationTests`
-    /// `.v1RoundTripThroughV3_letterboxesFreeAnchors_andDropsTheCarrierAspect` :
-    /// une ancre à `y = 0,90` sous un fond 16:9 revient à `0,6266`). Pendant ce
-    /// temps `readerCanvasRatio` encadre, lui, au ratio RÉEL de la story : le
-    /// contenu remonterait d'un quart de cadre dans une carte restée large.
+    /// **Pourquoi une porte, et non un montage inconditionnel.** La raison
+    /// d'origine — iOS ne posait AUCUN `X-Canvas-Caps`, donc `canvasV3` valait
+    /// `nil` pour cent pour cent des stories — N'EST PLUS VRAIE : l'en-tête est
+    /// posé depuis le 2026-08-22 (`ClientInfoProvider.swift`) et le gateway sert
+    /// du v3 natif. La seconde raison est tombée le même jour : l'aller-retour
+    /// n'est plus lossy, la scène logeant son `carrierAspect` et le retour
+    /// appliquant le remap inverse (`CanvasV3MigrationTests`
+    /// `.v1RoundTripThroughV3_isFAITHFUL_nowThatTheSceneCarriesItsAspect`).
+    ///
+    /// Ce qui MAINTIENT la porte aujourd'hui n'est donc plus une perte, mais la
+    /// prudence : la retirer change ce que le lecteur peint pour toute
+    /// l'archive v1 restante, et `readerCanvasRatio` encadre au ratio RÉEL de la
+    /// story. Ce changement de rendu se mesure et se livre pour lui-même.
     ///
     /// La porte rend les deux branches SELF-COHÉRENTES. L'archive v1 se peint
     /// dans son propre cadre, exactement comme avant le swap E4. Une story
-    /// v3-native se peint dans un cadre 9:16 — son `StoryEffects` décodé sort
-    /// lui aussi de `StoryEffects(rendering:)`, donc sans ratio, donc portrait.
-    /// Le lecteur prendra la main de lui-même le jour où C4 posera
-    /// `X-Canvas-Caps: 3`.
+    /// v3-native se peint elle aussi dans son cadre RÉEL, pas systématiquement
+    /// en 9:16 : `StoryEffects(rendering:)` restaure `canvasAspectRatio` depuis
+    /// `scene.carrierAspect` quand la scène l'a logé
+    /// (`CanvasV3Migration.swift:543`) — un fond paysage composé nativement en
+    /// v3 (le composer pose `carrierAspect` à l'écriture, cf.
+    /// `CanvasV3Migration.swift:338`) garde donc son 16:9 ; seule une scène qui
+    /// n'a jamais porté de `carrierAspect` (fond déjà portrait) retombe sur le
+    /// défaut portrait — et c'est alors le bon rendu. L'en-tête
+    /// `X-Canvas-Caps: 3` est posé depuis `cf05538d9` (2026-08-22,
+    /// `ClientInfoProvider.swift:77`) : la porte ci-dessus reste fermée
+    /// aujourd'hui par PRUDENCE (paragraphe précédent), plus faute de l'en-tête.
     private func nativeSceneDocument(of story: StoryItem) -> CanvasV3? {
         story.storyEffects?.canvasV3
     }

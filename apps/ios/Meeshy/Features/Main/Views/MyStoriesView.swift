@@ -970,8 +970,10 @@ private struct FailedStoryRow: View {
     let onResume: () -> Void
     let onRetry: () -> Void
 
+    private static let relativeFormatter = RelativeDateTimeFormatter()
+
     private var relativeTime: String {
-        RelativeDateTimeFormatter().localizedString(for: item.createdAt, relativeTo: Date())
+        Self.relativeFormatter.localizedString(for: item.createdAt, relativeTo: Date())
     }
 
     var body: some View {

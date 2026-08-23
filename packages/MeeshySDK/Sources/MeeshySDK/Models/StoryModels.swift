@@ -2698,6 +2698,45 @@ extension StoryItem {
     ///   ou si le fond est un `StoryMediaObject isBackground:true` (traité en amont
     ///   par `renderBackground`), de sorte qu'on ne fournit jamais un post id au
     ///   resolver keyé sur `FeedMedia.id`.
+    /// TRANSITOIRE — lecture de la forme legacy « média seul » (2026-08-22).
+    ///
+    /// Un client qui n'annonce pas `X-Canvas-Caps` reçoit d'une story canvas
+    /// v3 une forme dégradée : `storyEffects` OMIS, le média porteur seul dans
+    /// `media[0]` (gateway, `negotiateWireStoryEffects`, « règle 5 »). Les
+    /// stories publiées avant le canvas ont la même forme. Historiquement ce
+    /// média partait dans `slide.mediaURL`, que `StoryRenderer.renderBackground`
+    /// peint comme une IMAGE — un `.mov` finissait dans ImageIO et l'écran
+    /// restait vide (constat du 2026-08-22, story `6a894bd8…`).
+    ///
+    /// Plutôt que d'enseigner la vidéo à la route legacy, on MIGRE la forme
+    /// legacy vers le modèle unique : un `StoryMediaObject` de fond, que le
+    /// lecteur sait déjà jouer (AVPlayer, piste son, durée, placeholder
+    /// ThumbHash). L'image legacy garde sa route historique, qui fonctionne.
+    ///
+    /// **Code à retirer** avec la route `slide.mediaURL` de `renderBackground`
+    /// le jour où plus aucun client legacy ne lit de story — le modèle unique
+    /// est le canvas v3, et cette fonction n'a pas vocation à grandir.
+    static func legacyVideoCarrier(in media: [FeedMedia]) -> StoryMediaObject? {
+        guard let carrier = media.first, let url = carrier.url, !url.isEmpty else { return nil }
+        // `mimeType` est DÉCLARÉ par le client qui téléverse, jamais vérifié :
+        // l'extension de l'URL corrige un type absent ou contradictoire.
+        guard StoryMediaStoreRouter.effectiveKind(declaredType: carrier.type, urlString: url) == .video else {
+            return nil
+        }
+        return StoryMediaObject(
+            id: "legacy-bg-\(carrier.id)",
+            postMediaId: carrier.id,
+            mediaURL: url,
+            mediaType: FeedMediaType.video.rawValue,
+            aspectRatio: carrier.aspectRatio ?? 1.0,
+            isBackground: true,
+            loop: true,
+            intrinsicDuration: carrier.duration.map(Double.init),
+            duration: carrier.duration.map(Double.init),
+            thumbHash: carrier.thumbHash
+        )
+    }
+
     public func toRenderableSlide(preferredLanguages: [String]) -> StorySlide {
         // R10 — chaîne complète (et plus seulement `.first`) : un viewer
         // fr→es voit la traduction es si la fr manque, au lieu de l'original.
@@ -2783,6 +2822,11 @@ extension StoryItem {
                 }
             }
             legacyMediaURL = self.media.first(where: { !referencedIds.contains($0.id) })?.url
+        } else if let carrier = Self.legacyVideoCarrier(in: self.media) {
+            // TRANSITOIRE — forme legacy « média seul ». À SUPPRIMER quand le
+            // parc ne sert plus que le canvas v3 (voir `legacyVideoCarrier`).
+            effects.mediaObjects = [carrier]
+            legacyMediaURL = nil
         } else {
             legacyMediaURL = self.media.first?.url
         }

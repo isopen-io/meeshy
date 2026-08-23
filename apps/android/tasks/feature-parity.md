@@ -3037,7 +3037,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       path — `conversation:participant-left`/`conversation:deleted`). delete-for-all still
       unwired — the gateway's admin/creator-only "delete for everyone" semantics differ
       meaningfully (not assumed to be a quick follow-up). Box stays unchecked until it lands.
-- [~] Anonymous-session conversation mode; guest join-via-share-link flow — the
+- [x] Anonymous-session conversation mode; guest join-via-share-link flow — the
       **entry-decision brain landed** (slice `sharelink-entry-policy`, 2026-08-22): pure
       `ShareLinkEntryPolicy.intent(ShareLinkEntryFacts) → ShareLinkEntryIntent` (`:core:model`,
       faithful port of iOS `ShareLinkEntryPolicy.swift`) — five facts in (conversationId,
@@ -3069,9 +3069,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       single-value guest store means "stored session for THIS link" = `store.load()?.linkId == identifier`
       — a session opened on a different link never resumes here. +15 behavioural tests, 2 mutation RED
       proofs (linkId-equality guard, identifier-trim-before-preview).
-      **Remaining before `[x]`:** rewire `MeeshyApp.kt`'s deep-link route to call the resolver and branch
-      the navigation on the intent (open conversation / silent account-join / resume guest / choose-identity
-      sheet / requires-account) instead of always presenting the anonymous guest form.
+      **Deep-link route rewired — box now `[x]`** (slice `guest-join-entry-navigation`, 2026-08-22):
+      `ShareLinkEntryViewModel` (`:feature:auth`) is the app-side brain the route now consults before
+      presenting anything. On entry it reads the auth flag (seam over `AuthRepository`), gathers known
+      conversation ids only when authenticated (seam over `ConversationRepository.cachedConversations`),
+      runs the `ShareLinkEntryResolver`, and reduces the resulting `ShareLinkEntryIntent` to one
+      `ShareLinkEntryUiState`: `OpenConversation` (already a member / joined-with-account / resumed guest)
+      / `ChooseIdentity` (account vs anonymous, flagging a resumable guest session) / `RequiresAccount`
+      (steer to sign-in) / `GuestForm` (the existing anonymous form) / `Failed` (a join failure, with
+      retry) / `Resolving`. Two intents drive a network join the VM performs itself (`JoinWithAccount`,
+      and the fallback when an authenticated link cannot be resolved at all) via an
+      `AuthenticatedShareLinkJoining` seam over `ShareLinkJoinRepository.joinAuthenticated`. The
+      `ChooseIdentity` prompt is actionable (no dead end): `chooseAccount()` joins + opens,
+      `chooseAnonymous()` resumes the stored guest session or opens the form. `MeeshyApp.kt`'s
+      `GUEST_JOIN` route now hosts `ShareLinkEntryScreen` (Compose glue) instead of jumping straight to
+      the guest form. SOTA over iOS, which routes authenticated vs unauthenticated entry through two
+      separate views: Android unifies both behind one VM, and a blank stored `conversationId` degrades to
+      the form instead of navigating to an empty id. +19 behavioural tests (real resolver over faked leaf
+      seams), 1 mutation RED proof (resume blank-conversationId guard). Local gate
+      `assembleDebug testDebugUnitTest` green (973 tasks).
 - [x] AI conversation analysis (health score, summary, topics, tone, emotions) —
       **AI-summary card shipped 2026-08-22** (slice `conversation-analysis-summary`). The
       `ConversationAnalysis` model shipped orphaned (no repository, no consumer); this slice turns
@@ -3509,7 +3525,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       wrappers, inert on unknown id, selection untouched). `TextElementLayer` renders
       weight/slant/family/tracking + a neon glow `Shadow`; a `TextStyleToolbar` (style chips +
       L/C/R `AlignToggle` + `ColorSwatch` palette) appears while editing an element. Pending:
-      size/background/outline/RTL/fade.
+      size/outline/RTL/fade.
+      **Background (none/solid/glass) done** (`story-text-element-background`): a pure sealed
+      `StoryTextBackground` (`None` / `Solid(hex)` / `Glass(radius)`) with the tagged-union wire mapping in
+      one unit-tested place — `toStyleWire()` → gateway `StoryTextBackgroundStyle` `{type,hex?,radius?}`, with
+      `None`→absent (minimal payload, gateway reads null as none) mirroring iOS's `textBg` purge.
+      `StoryTextBackgroundPresets.all` mirrors the iOS preset order/values (None, Glass(24), then the 10
+      solids) as the single ordered source both the picker chips and the pure `next()` tap-cycle read.
+      `StoryTextElement.background` (defaulted `None`) rides through `toTextObject.backgroundStyle`; the VM's
+      `onTextElementBackground` (inert on unknown id, selection untouched) mirrors the style/color/align
+      wrappers. `TextElementLayer` paints the backing behind the glyphs (solid fill / frosted glass scrim /
+      none), and a `BackgroundSwatch` chip row joins the `TextStyleToolbar`. +14 tests (8 model+presets+wire,
+      4 element defaults+wire, 2 VM). Pending: size/outline/RTL/fade.
 - [~] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
       **Floating style toolbar + keyboard-aware shift done** (`story-floating-toolbar`): while a text
       element is edited the `TextStyleToolbar` no longer sits in a fixed bottom band — it floats
@@ -4266,10 +4293,42 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       either platform to port. +5 tests (`PostActionMenuTest` ×3: own-post ordering now includes
       `Pin`, someone-else's post never offers it; `FeedViewModelTest` ×2: delegates + refreshes
       on success, surfaces error without refreshing on failure). EN/FR/ES/PT strings.
-      **Still open**: comment pin-unpin (separate surface, not investigated this slice);
-      quote-repost's own composer UI (the `isQuote`/`content` params already exist on
-      `PostRepository.repost`, but `FeedScreen`'s current `onRepost` always calls the SIMPLE
-      repost path — a quote-with-commentary UI, if one exists at all, wasn't confirmed).
+      **Quote-repost composer shipped 2026-08-22** (slice `feed-quote-repost`): the post menu now
+      offers **Quote** right after **Repost** (`PostAction.Quote`, every post, iOS parity with
+      `PostDetailView.toggleDetailRepost`). Tapping it opens a commentary composer (`QuoteComposerState`
+      + `QuoteComposerSheet`, a dialog coherent with `ReportPostDialog`: an `OutlinedTextField` above a
+      bordered source-post preview) → `FeedViewModel.beginQuote`/`onQuoteTextChange`/`cancelQuote`/
+      `submitQuote`. New pure `RepostCommand.of(postId, repostOf, quote, commentary)` SSOT ports the two
+      decisions iOS scatters across `FeedViewModel.repostPost`/`resolveRepostTargetId`: **(1) target id** —
+      reposting a repost targets its recorded ROOT (`originalRepostOfId ?? repostOf.id`), never the
+      intermediate share (the gateway hydrates `repostOf` one level deep, so reposting a share by its own
+      id embeds an EMPTY share card — a latent bug in the pre-existing simple `repost()`, now fixed since
+      **both** paths route through `RepostCommand`); **(2) content/isQuote gating** — a simple repost
+      carries no content, a quote carries the trimmed commentary and flags `isQuote`. **Surpasses iOS**:
+      a blank/whitespace-only quote degrades to a simple repost (`isQuote = content != null` after
+      blank→null), where iOS's raw `content != nil` would send `content = ""`, `isQuote = true` (an empty
+      quote card). +23 tests (`RepostCommandTest` ×11 pure incl. root fallback/blank-root-trim/inner-
+      whitespace-preserved; `FeedViewModelTest` ×11 — repost own-id, repost-of-repost→root, error path,
+      beginQuote preview + inert-on-unknown, draft change, submit-with/without-commentary, submit-of-repost
+      →root, cancel, no-composer inert; `PostActionMenuTest` ×1 quote-follows-repost). Mutation RED-proof:
+      `isQuote = content != null` → `= quote` fails EXACTLY the 3 degradation tests (2 pure + 1 VM), 730
+      others green. EN/FR/ES/PT strings.
+      **Post-detail repost + quote shipped 2026-08-22** (slice `feed-postdetail-quote-repost`): the
+      full-screen `PostDetailScreen` now matches the feed. iOS offers both there via
+      `PostDetailView.toggleDetailRepost(quote:)` (a repost button + Repartager/Citer alert). Android:
+      the read-only repost stat becomes an interactive `DetailRepostStat` — tap opens a Repost / Quote
+      `DropdownMenu`; the quote path reuses the feed's `QuoteComposerSheet` (widened to `internal`). VM
+      gains `repost`/`beginQuote`/`onQuoteTextChange`/`cancelQuote`/`submitQuote`, both folding through the
+      SAME tested `RepostCommand` SSOT scoped to the single open post. **Two improvements over iOS's
+      post-detail**: (1) reposting a share targets its ROOT (iOS reposts the raw `postId` → empty share
+      card); (2) a blank quote degrades to a simple repost (iOS's post-detail quote is content-LESS
+      entirely — `content: nil`). Optimistic `isReposted` (fills the icon `Indigo500`) reverts on failure
+      (iOS `isPostReposted`); in-flight guard fires the network once; failures surface via `errorMessage`.
+      +15 `PostDetailViewModelTest` (root-target ×2, no-root fallback, before-load inert ×2, failure reverts
+      ×2, double-fire guard, preview, draft, cancel, submit-with/blank-commentary, submit-of-repost→root,
+      no-composer inert). Mutation RED-proof: drop `post.repostOf` → EXACTLY the 2 root tests fail. No new
+      strings (reuses `feed_action_repost`/`feed_action_quote` + quote-sheet strings).
+      **Still open**: comment pin-unpin (separate surface, not investigated this slice).
 - [~] Post view + dwell-time tracking; batched impression tracking — **batched impression
       tracking shipped 2026-08-17** (slice `feed-impression-batching`). Re-proved before coding:
       `PostApi.recordImpressions`/`PostRepository.recordImpressions(postIds, source)`
@@ -4529,8 +4588,55 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       accent-coherent quote block (author, Prisme content, first-media preview + "+N", quote/repost
       + story/reel kind badge) inside the feed card, post detail, saved and user-posts surfaces; tap
       opens the ORIGINAL post's detail. Pure `RepostEmbedBuilder` + shared `ApiRepostOf` Prisme law
-      (slice `feed-repost-embed-cell`, 2026-07-17). **Still open:** the full story-/reel-canvas embed
-      (needs an Android story-canvas renderer — iOS `StoryRepostEmbedCell`/`ReelRepostEmbedCell`).
+      (slice `feed-repost-embed-cell`, 2026-07-17). **Reposted post's like count now shown** (slice
+      `feed-repost-embed-like-count`, 2026-08-22): `RepostEmbedBuilder` projects `ApiRepostOf.likeCount`
+      → `RepostEmbedPresentation.likeCount` (null → 0, negative payload clamped to 0, matching the
+      established feed-realtime clamp precedent); the shared cell renders an accent-coherent heart +
+      count row (parity iOS `FeedPostCard.repostView` / `PostDetailView.repostEmbed`), gated `> 0` to
+      mirror the detail embed's restraint and avoid a "0 likes" clutter the feed card does not. +3
+      `RepostEmbedBuilderTest` (projects / null→0 / clamps negative; mutation-proven: dropping the
+      `coerceAtLeast(0)` fails exactly the negative-clamp test). New `feed_repost_likes_count` plurals
+      EN/FR/ES/PT. **Reposted post's mood emoji now shown** (slice `feed-repost-embed-mood-emoji`,
+      2026-08-23): gateway payload confirmed on the wire (iOS `APIRepostOf.moodEmoji` decodes it), so
+      Android's `ApiRepostOf` gained `moodEmoji: String?` and `RepostEmbedBuilder` projects it →
+      `RepostEmbedPresentation.moodEmoji` (blank → null, matching the feed card's own
+      `post.moodEmoji?.takeIf { it.isNotBlank() }`); the shared cell prefixes it to the content on a
+      firstTextBaseline `Row` (parity iOS `FeedPostCard.swift:966`). **Improvement over iOS:** the cell
+      now renders the mood-only case (blank body + emoji) that iOS's own comment flags as previously
+      "un corps vide" — a republished mood status is no longer an empty embed on Android. +3
+      `RepostEmbedBuilderTest` (projects / absent→null / blank→null; mutation-proven: dropping the
+      `takeIf { isNotBlank() }` fails exactly the blank test). No new strings (emoji is verbatim text).
+      **Reposted post's location now shown** (slice `feed-repost-embed-location`, 2026-08-23):
+      gateway payload confirmed on the wire (iOS `APIRepostOf.location` decodes it), so Android's
+      `ApiRepostOf` gained `location: SharedPlace?` (reusing the `:core:model` SSOT — not duplicated)
+      and `RepostEmbedBuilder` projects it through the **same** `FeedPostLocationBuilder` the outer
+      feed card uses → `RepostEmbedPresentation.location`, so the label resolution has one source of
+      truth. The shared cell renders a tappable `FeedPostLocationSticker` inside the quote block after
+      the media preview (parity iOS `FeedPostCard.swift:989`); tap reuses the screen's `openPlaceOnMap`
+      (`internal`, one map-open path, `geo:` intent + Google-Maps-web fallback — no dead-end). +3
+      `RepostEmbedBuilderTest` (projects label+coords / absent→null / coordinate-only→null-label; the
+      builder delegates to the already-mutation-proven `FeedPostLocationBuilder`). No new strings
+      (reuses `feed_location_shared`/`feed_location_open`). **Still open:** the full story-/reel-canvas
+      embed (needs an Android story-canvas renderer — iOS
+      `StoryRepostEmbedCell`/`ReelRepostEmbedCell`).
+- [x] Feed post location sticker (display side) — a received post's shared place rendered as an
+      accent-coherent pin + label capsule under the post's media (slice `feed-post-location-sticker`,
+      2026-08-23, parity iOS `FeedPostLocationSticker`). The composer already ATTACHED an outgoing
+      location (`SharedPlace` in `:core:model`, `feed-composer-location`), but `ApiPost` dropped the
+      field on the way IN, so a received location never surfaced. This lands the display side:
+      `ApiPost` gained `location: SharedPlace?` (reusing the existing SSOT model — not duplicated),
+      a pure app-side `FeedPostLocationBuilder` projects it → `FeedLocationPresentation(label, lat, lng)`
+      with the label resolved name → address → null (iOS `displayLabel` precedence; the cell supplies
+      the localized "Position partagée" fallback so a coordinate-only pin still shows a sticker), and
+      the shared `FeedPostLocationSticker` cell renders it. Tap opens the place via a `geo:` intent
+      with a Google-Maps-web fallback (no dead-end when no map app is installed). +11 tests
+      (9 `FeedPostLocationBuilderTest` — null place, name, name-over-address, blank-name→address,
+      absent-name→address, blank-both→null, absent-both→null, coord passthrough, coord-only; +2
+      `FeedPostBuilderTest` wiring). Mutation-proven: dropping the name `isNotBlank` guard fails exactly
+      the two blank-name tests. New strings `feed_location_shared`/`feed_location_open` EN/FR/ES/PT.
+      **Repost-embed location now closed** (slice `feed-repost-embed-location`, 2026-08-23 — see the
+      Repost / quote embed entry above): `ApiRepostOf.location` plumbed and projected through this same
+      `FeedPostLocationBuilder`.
 
 ## G. Statuses / Moods
 > **TTL correction (slice `status-mood-core`, 2026-07-19):** a mood **status expires 1h** after creation

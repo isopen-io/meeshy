@@ -6,7 +6,7 @@ import MeeshySDK
 public enum AvatarContext: Sendable {
     // Stories
     case storyTray              // 88pt (doubled 2026-05-27 — story trail = primary CTA)
-    case storyTrayCompact       // 44pt (pinned mini-trail revealed in the collapsed header)
+    case storyTrayCompact       // 36pt (pinned mini-trail revealed in the collapsed header)
     case storyViewer            // 44pt
     case storyViewerRow         // 44pt — a user row in the "who viewed" list (mood + presence, no redundant story ring)
 
@@ -44,7 +44,14 @@ public enum AvatarContext: Sendable {
     public var size: CGFloat {
         switch self {
         case .storyTray: return 88  // doubled 2026-05-27 (user request — trail = primary CTA)
-        case .storyTrayCompact, .storyViewer, .storyViewerRow, .conversationHeaderCollapsed,
+        // 44 → 36 le 2026-08-22 : dans la barre repliée (60 pt), un anneau de
+        // 44 plus son halo faisait 50 pt de contenu — le sticker de section,
+        // opaque et épinglé juste sous la barre, en rognait le bas. Retour
+        // produit : « le trail a des cercles coupés, il faut réduire la taille
+        // des cercles ». 36 + anneau = 42, la barre respire.
+        case .storyTrayCompact:
+            return 36
+        case .storyViewer, .storyViewerRow, .conversationHeaderCollapsed,
              .conversationHeaderExpanded, .postAuthor, .userListItem, .notification:
             return 44
         case .conversationList: return 52

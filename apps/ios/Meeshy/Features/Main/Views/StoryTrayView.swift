@@ -235,7 +235,10 @@ struct StoryTrayView: View {
             },
             onAddStatus: onAddStatus,
             onManageStories: { showMyStories = true },
-            onShowProfile: { selectedProfileUser = myProfileUser() }
+            onShowProfile: { selectedProfileUser = myProfileUser() },
+            myMoodEmoji: statusViewModel.statusForUser(
+                userId: AuthManager.shared.currentUser?.id ?? ""
+            )?.moodEmoji
         )
         // U1 inc.2 — « ma story » zoome aussi (id vide jamais matché → fallback).
         .zoomTransitionSource(id: AuthManager.shared.currentUser?.id ?? "", in: zoomNamespace)
@@ -264,7 +267,9 @@ struct StoryTrayView: View {
         StoryRingCell(
             group: group,
             onViewStory: { presentStory(userId: group.id) },
-            onShowProfile: { selectedProfileUser = .from(storyGroup: group) }
+            onShowProfile: { selectedProfileUser = .from(storyGroup: group) },
+            moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
+            onMoodTap: statusViewModel.moodTapHandler(for: group.id)
         )
         // U1 — source de la transition zoom : la bulle « devient » le viewer
         // (id = userId du groupe, apparié au sourceID du cover RootView).
@@ -292,7 +297,7 @@ struct StoryTrayView: View {
 /// One story group rendered as avatar ring + (optional) username, sharing the
 /// exact same `MeeshyAvatar` atom across the full-size trail and the compact
 /// pinned mini-trail. `context` drives the size (`.storyTray` 88pt vs
-/// `.storyTrayCompact` 44pt); all proportional metrics derive from it.
+/// `.storyTrayCompact` 36pt); all proportional metrics derive from it.
 struct StoryRingCell: View {
     let group: StoryGroup
     var context: AvatarContext = .storyTray
@@ -308,7 +313,11 @@ struct StoryRingCell: View {
 
     private var theme: ThemeManager { ThemeManager.shared }
     private var presenceManager: PresenceManager { PresenceManager.shared }
-    @EnvironmentObject private var statusViewModel: StatusViewModel
+    /// Humeur + tap humeur passés en `let` par le parent (qui observe déjà
+    /// StatusViewModel) — l'`@EnvironmentObject` abonnait CHAQUE cellule du
+    /// tray à chaque mise à jour de statut globale (P1-3a).
+    var moodEmoji: String? = nil
+    var onMoodTap: ((CGPoint) -> Void)? = nil
 
     private var isCompact: Bool { context.size <= 44 }
 
@@ -321,9 +330,9 @@ struct StoryRingCell: View {
                     accentColor: group.avatarColor,
                     avatarURL: latestStoryThumbnailURL(group),
                     storyState: group.hasUnviewed ? .unread : .read,
-                    moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
+                    moodEmoji: moodEmoji,
                     presenceState: presenceManager.presenceState(for: group.id),
-                    onMoodTap: statusViewModel.moodTapHandler(for: group.id),
+                    onMoodTap: onMoodTap,
                     contextMenuItems: [
                         AvatarContextMenuItem(label: StoryTrayCopy.viewStories, icon: "play.circle.fill") {
                             onViewStory()
@@ -400,7 +409,9 @@ func latestStoryThumbnailURL(_ group: StoryGroup) -> String? {
     guard let lastStory = group.stories.last else { return group.avatarURL }
     // Local-first: a composite cover rendered at publish (text + drawing + all
     // layers) wins over the server thumbnail (raw bg, no overlays). Synchronous
-    // existence check — no actor hop, safe in the View body.
+    // existence check — no actor hop, safe in the View body. Pas de memo : la
+    // purge de logout peut détruire le fichier, et servir une URL morte au
+    // relogin coûterait plus cher qu'un stat() par render événementiel.
     let localCover = CacheCoordinator.thumbnailLocalFileURL(
         for: StoryCoverThumbnail.cacheKey(storyId: lastStory.id)
     )
@@ -425,7 +436,9 @@ private struct MyStoryButton: View {
     // Lecture directe sans @ObservedObject — leaf view rendue dans le tray,
     // évite que chaque changement de thème force un re-render du bouton.
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var statusViewModel: StatusViewModel
+    /// Humeur du compte courant, passée par le parent (P1-3a — même règle que
+    /// `StoryRingCell` : pas d'abonnement StatusViewModel par cellule).
+    var myMoodEmoji: String? = nil
 
     var body: some View {
         let currentUser = AuthManager.shared.currentUser
@@ -442,7 +455,6 @@ private struct MyStoryButton: View {
         let userName = currentUser?.displayName ?? currentUser?.username ?? "Moi"
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
         let storyState: StoryRingState = myGroup.map { $0.hasUnviewed ? .unread : .read } ?? .none
-        let myMoodEmoji = statusViewModel.statusForUser(userId: userId)?.moodEmoji
 
         VStack(spacing: 5) {
             ZStack {
@@ -727,7 +739,7 @@ private struct StoryUploadOverlay: View {
 /// (directive user 2026-08-13). It used to render as a second row BELOW a title
 /// that stayed on screen for nothing.
 ///
-/// Rings render at half size (`.storyTrayCompact`, 44pt) with the same design
+/// Rings render smaller (`.storyTrayCompact`, 36pt) with the same design
 /// and horizontal scroll as the full trail, without the username caption — the
 /// bar has room for one row of rings, not for a caption under each.
 ///
@@ -895,7 +907,9 @@ struct PinnedStoryTrailBand: View {
                                 label: StoryTrayCopy.manageStories,
                                 icon: "rectangle.stack.fill"
                             ) { showMyStories = true }
-                        ]
+                        ],
+                        moodEmoji: statusViewModel.statusForUser(userId: ownGroup.id)?.moodEmoji,
+                        onMoodTap: statusViewModel.moodTapHandler(for: ownGroup.id)
                     )
                     .zoomTransitionSource(id: ownGroup.id, in: zoomNamespace)
                 } else {
@@ -907,7 +921,9 @@ struct PinnedStoryTrailBand: View {
                         context: .storyTrayCompact,
                         showsUsername: false,
                         onViewStory: { presentStory(userId: group.id) },
-                        onShowProfile: { selectedProfileUser = .from(storyGroup: group) }
+                        onShowProfile: { selectedProfileUser = .from(storyGroup: group) },
+                        moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
+                        onMoodTap: statusViewModel.moodTapHandler(for: group.id)
                     )
                     // U1 inc.2 — la mini-trail épinglée zoome aussi.
                     .zoomTransitionSource(id: group.id, in: zoomNamespace)

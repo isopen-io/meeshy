@@ -10637,3 +10637,607 @@ inchangés).
 single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts`
 (hors périmètre calling). L'audit n'a pas trouvé de défaut supplémentaire dans
 `use-webrtc-p2p.ts` (1285 lignes, lu en entier) au-delà de ce qui est déjà documenté.
+
+## Vague 158 — `toggleVideo()` pouvait ré-acquérir la caméra pendant qu'un hold CallKit la suspendait (iOS) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(agent en tâche de fond) sur `CallManager.swift` (lu en entier, ~6270 lignes), `PiPCallController.swift`,
+`CallPiPPolicy.swift`, `CallEventsHandler.ts`, `CallService.ts`, `CallCleanupService.ts`,
+`use-webrtc-p2p.ts` — après vérification que les Vagues 155-157 sont bien closes.
+
+**Root cause** : trois sites distincts (`applyCameraSuspension`, `handleHold`, `applySurvivalVideoSend`)
+traitent `isVideoSuspendedByHold`/`isVideoSuspendedByCaptureInterruption` comme « accès caméra
+indisponible maintenant » — `applySurvivalVideoSend` refuse explicitement de reprendre l'envoi
+vidéo tant que l'un des deux drapeaux est actif. `toggleVideo()`, le bouton vidéo manuel côté
+utilisateur, ne vérifiait ni l'un ni l'autre. Scénario : appel vidéo actif, `CXSetHeldCallAction`
+met l'appel en attente (préemption cellulaire) → `isVideoSuspendedByHold = true`, vidéo sortante
+suspendue, mais `isVideoEnabled` reste `true` (intention préservée, comportement voulu). Toujours
+en attente, l'utilisateur tape le bouton vidéo (toggle off, légitime) puis retape (toggle on) —
+un double-tap ordinaire pendant que la bannière de mise en attente CallKit est affichée.
+`toggleVideo()` appelait alors `upgradeToVideo()` sans condition : acquisition caméra réelle,
+notification CallKit `hasVideo: true`, émission `call:toggle-video(enabled:true)` au pair,
+renégociation — alors que l'appel est toujours en attente. Exactement le faux signal « caméra
+active » que le commentaire de `applyCameraSuspension` et la garde de `applySurvivalVideoSend`
+existent pour empêcher.
+
+**Fix** — garde ajoutée dans `toggleVideo()`, juste après le guard d'annulation de tâche et avant
+le pré-flight permission caméra, copiant le pattern de `applySurvivalVideoSend` :
+```swift
+if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+    FeedbackToastManager.shared.showError(...)  // "call.video.hold.blocked", 7 locales
+    return
+}
+```
+`isVideoEnabled` (déjà mis à jour de manière optimiste avant le `Task`) reste la source de
+vérité : la branche unhold de `handleHold` reprend automatiquement la vidéo une fois la
+suspension levée — l'intention utilisateur n'est jamais perdue, seule l'actuation est différée.
+Toast ajouté (au lieu d'un no-op silencieux) pour que l'utilisateur comprenne pourquoi le tap n'a
+rien fait — nouvelle clé `call.video.hold.blocked` dans `Localizable.xcstrings` (ar/de/en/es/fr/it/pt-BR).
+
+**Tests** : 4 nouveaux tests structurels dans `CallManagerToggleVideoHoldSuspensionGuardTests`
+(`CallManagerTests.swift`, même convention source-based que le reste du fichier — pas de host
+XCTest disponible dans ce container pour un run comportemental) : présence de la garde, portée
+limitée à `target == true` (turn OFF pendant un hold reste un downgrade normal), ordre garde
+< `upgradeToVideo()`, et `return` effectif sans fallthrough vers le check permission caméra.
+CI iOS (macOS runner) valide la compile + le run réel.
+
+**Risk assessment** : minimal — nouvelle garde additive dans une branche déjà conditionnée sur
+`target` (ré-activation uniquement), aucun changement pour le flux nominal (hors hold/interruption).
+Diff `Localizable.xcstrings` purement additif (clé neuve insérée entre deux entrées existantes,
+sans toucher au reste du fichier).
+
+**Non fait volontairement / reste ouvert** (reconduits, inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS
+single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts`
+(hors périmètre calling). L'audit n'a pas trouvé de second défaut de confiance équivalente dans
+les autres surfaces lues (gateway, web) au-delà de ce qui est déjà documenté.
+
+## Vague 159 — deux fuites d'oubli sœurs : `call:force-leave` (web, unmount) et `switchCamera`/`selectCamera` (iOS, hold) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Deux audits
+dédiés en tâche de fond, l'un sur `services/gateway`/`apps/web` (signalisation, listeners), l'autre
+sur `CallManager.swift`/`PiPCallController.swift`/WebRTC iOS — après vérification que les Vagues
+157-158 sont bien closes (aucun commit en avance sur `main` sur les branches `claude/upbeat-dirac-*`
+antérieures, log `main` confirmant le merge de la Vague 158). Les deux défauts trouvés sont de la
+même FAMILLE : un site sœur d'un correctif déjà posé ailleurs dans le même fichier n'avait pas reçu
+le même traitement.
+
+### Défaut 1 (web) — le nettoyage au DÉMONTAGE de `CallManager` omettait `call:force-leave`
+
+**Root cause** : l'effet `useEffect` de `CallManager.tsx` gère 8 écouteurs Socket.IO nommés dans
+`attachedListeners`. Le nettoyage de RÉ-ATTACHE (ligne ~1056-1064, tourne à chaque reconnect) retire
+bien les 8 — `CALL_FORCE_LEAVE` inclus (ligne 1064). Le nettoyage de DÉMONTAGE de l'effet
+(le `return () => {...}`, ligne ~1194-1211) n'en retirait que 7 : `CALL_FORCE_LEAVE` manquait, seul
+des 8 dans ce bloc précis. Une pure asymétrie entre deux blocs de nettoyage frères du même fichier —
+le commentaire voisin (« `socket.off(EVENT)` sans handler retire TOUS les écouteurs de cet event, pas
+seulement les nôtres ») explique pourquoi les cleanups sont scopés par fonction, pas pourquoi celui-ci
+en oublie un.
+
+Conséquence : tout démontage de `CallManager` (changement de route, remount React, teardown de test)
+laisse l'écouteur `call:force-leave` accroché à une closure PÉRIMÉE sur le socket. Un remount ultérieur
+en attache un second à côté du fantôme — le `call:force-leave` suivant déclenche alors
+`handleCallEndedRef.current(...)` DEUX FOIS pour un seul événement (double `reset()`, double
+toast/log potentiels). Trou de couverture confirmé : le test existant
+(`CallManager.forceLeave.test.tsx`) vérifiait `listenerCount === 1` après montage, jamais après
+démontage/remontage — exactement l'angle mort qui a laissé passer l'asymétrie.
+
+**Fix** — une ligne, copiée du nettoyage de ré-attache juste au-dessus dans le même fichier :
+```ts
+s.off(SERVER_EVENTS.CALL_FORCE_LEAVE, attachedListeners[SERVER_EVENTS.CALL_FORCE_LEAVE]);
+```
+ajoutée en fin du bloc de nettoyage au démontage (`apps/web/components/video-call/CallManager.tsx`).
+
+**Tests (TDD, RED confirmé)** : 2 nouveaux tests dans `CallManager.forceLeave.test.tsx` — (a) monte,
+démonte, vérifie `listenerCount(CALL_FORCE_LEAVE) === 0` ; (b) monte, démonte, remonte, vérifie que le
+compte reste à `1` (pas `2`). RED confirmé avant fix (`0` reçu comme `1`, `1` reçu comme `2`) ; GREEN
+après. Sweep `--testPathPatterns="CallManager|video-call"` : **40 suites / 273 tests** verts, 0
+régression.
+
+**`tsc --noEmit` (diff `git stash`/`stash pop`)** : 1836 erreurs après vs 1835 avant — **+1**, sur la
+ligne ajoutée elle-même (`s` est typé `unknown` dans toute la fonction, jamais régularisé — les 7
+lignes sœurs du même bloc de nettoyage portent déjà exactement la même erreur `Property 'off' does not
+exist on type '{}'`). Pas un nouveau défaut de typage distinct : la 8ᵉ occurrence d'un motif déjà
+présent 7 fois dans le même bloc, pas introduit par ce diff. Régularisation du typage de `s`/`socket`
+dans cet effet non faite ici (hors périmètre du fix, chantier séparé).
+
+**Risk assessment** : minimal — ajoute exactement l'appel `off()` déjà fait pour ce même event ailleurs
+dans le même fichier (ligne 1064), zéro changement de comportement nominal.
+
+### Défaut 2 (iOS) — `switchCamera()`/`selectCamera(id:)` pouvaient ré-acquérir la caméra pendant un hold, comme `toggleVideo()` avant la Vague 158
+
+**Root cause** : la Vague 158 a fermé exactement ce défaut sur `toggleVideo()`. `switchCamera()` et
+`selectCamera(id:)` sont les deux actionneurs caméra SŒURS — mêmes commentaires du fichier
+(« Serialize with every other in-flight video-transition path »), même chaîne de `Task` sérialisée
+(`previousHold`, `previousSurvival`, `previousICERestart`, …) — mais n'avaient reçu aucune garde
+équivalente. `handleHold(true)` suspend l'envoi vidéo via `downgradeFromVideo()` (`capturer.stopCapture()`)
+sans libérer `videoCapturer` (le capteur reste vivant, juste en pause). Un tap sur le bouton de flip
+caméra pendant le hold est mis en file sur `cameraSwitchTask`, qui attend `previousHold?.value` avant
+de s'exécuter — donc GARANTI de tourner APRÈS que la suspension du hold soit pleinement effective.
+`switchCamera()`/`selectCamera(id:)` appelaient alors sans condition `capturer.stopCapture()` puis
+`capturer.startCapture(...)` — rallumant le matériel caméra (et l'indicateur OS) alors que le
+transceiver reste `recvOnly`/`sender.track = nil` : exactement le faux signal « caméra active » que la
+garde de la Vague 158 existe pour empêcher, sur un site sœur qu'elle ne couvrait pas.
+
+**Fix** — garde identique à celle de `toggleVideo()`, ajoutée dans les deux fonctions juste après le
+`guard let self, !Task.isCancelled else { return }`, avant l'appel qui ré-acquiert la caméra :
+```swift
+if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+    self.isUsingFrontCamera = previousFrontCamera   // + self.selectedCameraId pour selectCamera
+    return
+}
+```
+Revert de l'état optimiste (mirroring / sélection picker) au lieu d'un no-op silencieux, même
+convention que le revert-sur-échec déjà présent dans les deux fonctions.
+
+**Tests** : 6 nouveaux tests structurels dans `CallManagerCameraActuationHoldSuspensionGuardTests`
+(`CallManagerTests.swift`, même convention source-based que `CallManagerToggleVideoHoldSuspensionGuardTests`
+— pas de host XCTest dans ce container) : présence de la garde dans chaque fonction, ordre garde
+< appel `webRTCService.switchCamera`/`switchToCamera`, et revert + `return` effectif sans fallthrough.
+CI iOS (macOS runner) valide la compile + le run réel.
+
+**Risk assessment** : minimal — garde additive supplémentaire dans une chaîne déjà sérialisée, aucun
+changement pour le flux nominal (hors hold/interruption). Pas de changement de signature, pas de
+nouvel état.
+
+**Non fait volontairement / reste ouvert** (reconduits, inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS single-peer
+côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors périmètre
+calling) ; typage `unknown` de `s`/`socket` dans l'effet de `CallManager.tsx` (web, révélé par le
+défaut 1 ci-dessus, pas régularisé). Aucun autre défaut de confiance équivalente trouvé dans les
+autres surfaces auditées (gateway signal relay, TURN credentials, rate-limiter, `use-webrtc-p2p.ts`
+et hooks call-quality/captions côté web ; `PiPCallController.swift`/`CallEventsHandler.ts`/
+`CallService.ts` côté hold/lifecycle).
+
+## Vague 160 — stale-callId roster mutation (web) et 3ᵉ drapeau de suspension oublié sur switchCamera/selectCamera (iOS) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Deux audits
+dédiés en tâche de fond, l'un sur `services/gateway`/`apps/web` (signalisation, listeners), l'autre
+sur `CallManager.swift`/`PiPCallController.swift`/WebRTC iOS — après vérification que les Vagues
+158-159 sont bien closes (merge confirmé sur `main`, aucune branche `claude/upbeat-dirac-*`
+antérieure en avance). Les deux défauts trouvés reconduisent la même FAMILLE que les vagues
+précédentes : un événement/site sœur d'un garde-fou déjà posé ailleurs n'en avait pas reçu
+l'équivalent.
+
+### Défaut 1 (web) — `handleParticipantJoined`/`handleParticipantLeft`/`handleMediaToggle` n'avaient aucune garde `callId`, contrairement à `handleCallEnded` et à tout le reste du fichier
+
+**Root cause** : `CallParticipantJoinedEvent`/`CallParticipantLeftEvent`/`CallMediaToggleEvent`
+(`packages/shared/types/video-call.ts`) portent chacun un `callId` précisément pour ça, et
+`handleCallEnded` (même fichier) applique déjà `if (trackedCall && trackedCall.id !== event.callId)
+return;`. Les trois autres handlers n'avaient pas cette garde et mutaient
+`useCallStore.getState().currentCall` sans jamais vérifier que `event.callId` correspond. Le swap
+« End & Answer » du call-waiting (`handleEndAndAnswerWaiting`) émet `call:leave` pour l'appel sortant
+SANS attendre l'ack, puis bascule `currentCall` de manière synchrone vers l'appel en attente — l'appel
+quitté continue de tourner pour ses autres participants (appel de groupe) jusqu'à ce que le serveur
+traite le leave. Une course ordinaire entre deux messages socket indépendants laisse alors un
+`call:participant-joined`/`-left`/`-toggled` pour l'ANCIEN appel atteindre ce socket après que
+`currentCall` pointe déjà vers le NOUVEL appel — l'effectif ou l'état média de l'ancien appel se
+retrouve silencieusement appliqué au nouveau.
+
+**Fix** — même garde que `handleCallEnded`, ajoutée en tête des trois handlers :
+```ts
+const { currentCall } = useCallStore.getState();
+if (currentCall && currentCall.id !== event.callId) return;
+```
+`currentCall` null (avant que l'ack du propre join de ce client arrive) ne déclenche PAS la garde —
+`addParticipant`'s `pendingParticipantsByCallId` buffer (`call-store.ts`) existe justement pour tenir
+ces événements pré-ack, il ne fallait pas le casser.
+
+**Tests (TDD, RED confirmé)** : nouveau fichier
+`CallManager.staleCallIdParticipantEvents.test.tsx` — 4 tests : (a) un `participant-joined` d'un
+callId étranger n'ajoute pas son participant au roster courant ; (b) un `participant-left` d'un
+callId étranger avec un `participantId` qui COLLISIONNE avec une entrée du roster courant ne la
+retire pas (prouve que la garde teste le callId, pas seulement l'identité) ; (c) même collision
+d'identité pour `media-toggled` — n'applique pas le toggle ; (d) témoin négatif — les trois
+s'appliquent toujours normalement quand le callId correspond. RED confirmé (3/4 échouaient) avant
+fix, GREEN après. Sweep `--testPathPatterns="CallManager|video-call"` : **41 suites / 277 tests**
+verts, 0 régression (inclut les tests existants qui posent déjà `currentCall` avec le bon callId
+avant de tirer l'événement — `CallManager.answeredAt.test.tsx`,
+`CallManager.noAnswerEarlyJoin.test.tsx`, `CallManager.mediaToggleIdentity.test.tsx`,
+`CallManager.participantLeftOwnership.test.tsx`).
+
+**`tsc --noEmit`** : 1834 erreurs avant et après (diff `git stash`/`stash pop`) — **aucune nouvelle
+erreur**.
+
+**Risk assessment** : minimal — garde additive, copiée à l'identique de `handleCallEnded` dans le
+même fichier ; aucun changement de comportement pour le flux nominal (callId correspondant, le cas
+immense majorité).
+
+### Défaut 2 (iOS) — `switchCamera()`/`selectCamera(id:)` ne vérifiaient que 2 des 3 drapeaux de suspension sœurs, `isVideoSuspended` manquait
+
+**Root cause** : trois drapeaux indépendants signifient tous « le capteur caméra local est arrêté et
+le transceiver forcé en `recvOnly`/`sender.track = nil`, alors que `isVideoEnabled` reste
+délibérément `true` pour préserver l'intention utilisateur » : `isVideoSuspendedByHold` (hold
+CallKit), `isVideoSuspendedByCaptureInterruption` (interruption AVCaptureSession), et
+`isVideoSuspended` (`VideoSurvivalController`, dégradation réseau gracieuse vers audio-seul — même
+contrat, même fichier, ligne 317). `applyCameraSuspension` (ligne 3591) et `applySurvivalVideoSend`
+vérifient déjà les trois selon le site ; les gardes ajoutées aux Vagues 158/159 sur `toggleVideo()`,
+`switchCamera()`, `selectCamera(id:)` ne testaient que les deux premiers — `isVideoSuspended` n'était
+vérifié par aucun des trois actionneurs caméra manuels.
+
+Conséquence : quand le lien se dégrade assez pour que `VideoSurvivalController` suspende la vidéo
+sortante (`isVideoSuspended = true`, caméra réellement arrêtée via
+`P2PWebRTCClient.disableLocalVideo()` → `videoCapturer?.stopCapture()`), un tap sur le bouton de flip
+caméra (ou une sélection de caméra externe) pendant cette fenêtre ne déclenchait aucune garde :
+l'exécution tombait jusqu'à `webRTCService.switchCamera`/`switchToCamera`, qui rallume
+inconditionnellement le matériel (`stopCapture` puis `startCapture`) alors que le transceiver reste
+`recvOnly` — exactement le même faux signal « caméra active » que les Vagues 158/159 ont fermé pour
+le hold/l'interruption, cette fois via le 3ᵉ drapeau resté non couvert.
+
+**Fix** — étendu la condition des deux fonctions au 3ᵉ drapeau, même convention (revert de l'état
+optimiste + `return`) :
+```swift
+if self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+    self.isUsingFrontCamera = previousFrontCamera   // + self.selectedCameraId pour selectCamera
+    return
+}
+```
+`toggleVideo()` n'est pas concerné par cette vague — son propre guard couvrait déjà les trois flux via
+`applySurvivalVideoSend`, seuls les deux actionneurs caméra manuels avaient l'omission.
+
+**Tests** : 2 nouveaux tests structurels ajoutés à `CallManagerCameraActuationHoldSuspensionGuardTests`
+(`CallManagerTests.swift`, même convention source-based que le reste du fichier — pas de host XCTest
+disponible dans ce container) : présence de `isVideoSuspended` dans la garde de chaque fonction. Les
+2 tests existants qui cherchaient la sous-chaîne exacte `"if self.isVideoSuspendedByHold || ..."`
+(revert-and-return) ont été mis à jour pour la nouvelle forme du texte de garde — les autres tests
+existants (recherche par `contains`/sous-chaîne partielle) continuaient de matcher sans modification.
+CI iOS (macOS runner) valide la compile + le run réel.
+
+**Risk assessment** : minimal — extension d'une condition déjà additive dans une chaîne de tâches
+déjà sérialisée, aucun changement pour le flux nominal (hors les trois suspensions). Pas de
+changement de signature, pas de nouvel état.
+
+**Non fait volontairement / reste ouvert** (reconduits, inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS single-peer
+côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors périmètre
+calling) ; typage `unknown` de `s`/`socket` dans l'effet de `CallManager.tsx` (web, révélé Vague 159,
+toujours pas régularisé). Candidats identifiés par les audits mais non retenus pour cette vague (bas
+risque/impact ou confiance moindre, à réévaluer à une prochaine vague) : `rejoinActiveCallAfterReconnect`
+hardcode `reason: 'completed'` sur son `CallEndedEvent` synthétique au lieu de forwarder le vrai
+`endReason` serveur (web, défaite la fonctionnalité de retry sur `connectionLost` — confiance haute
+mais fix nécessite un changement de contrat serveur, hors scope d'une vague à un seul commit) ;
+`call:check-active` réarme le timer 45s du callee à chaque reconnexion même pour le même call déjà
+sonnant (web, confiance modérée — fréquence réelle en prod non confirmée) ; `handleHold`'s branche
+`catch` générique omet `videoSurvivalController.reset()` que sa branche sœur `cameraPermissionDenied`
+a (iOS, actuellement inerte derrière une garde extérieure) ; `handleAudioRouteChange`'s branche
+`.newDeviceAvailable` ignore le résultat fallible d'`applySpeakerRoute()` que `toggleSpeaker()`
+exploite (iOS, fenêtre étroite et auto-corrigée par `CXProviderDelegate.didActivate`).
+
+## Vague 161 — `rejoinActiveCallAfterReconnect` hardcodait `reason: 'completed'`, défaisant l'offre de retry sur une reconnexion réellement transitoire (gateway + web) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise du
+suivi explicitement laissé ouvert par la Vague 160 (« confiance haute mais fix nécessite un
+changement de contrat serveur, hors scope d'une vague à un seul commit ») — après vérification que
+la Vague 160 est bien mergée sur `main` (PR #3351) et qu'aucune branche `claude/upbeat-dirac-*`
+antérieure n'est en avance.
+
+**Root cause** : `rejoinActiveCallAfterReconnect` (`CallManager.tsx`) ré-émet `call:join` quand le
+socket de signalisation se reconnecte, pour que la passerelle sache que ce client est toujours dans
+l'appel avant que sa fenêtre de grâce de déconnexion (`CallEventsHandler` `DISCONNECT_GRACE_MS`)
+n'expire. Si l'appel a déjà été terminé côté serveur (perdu la course contre la fenêtre de grâce,
+ou terminé pour une autre raison pendant la coupure), l'ack porte `error.code === 'CALL_ENDED'` —
+et ce client construisait alors un `CallEndedEvent` synthétique avec **`reason: 'completed'` codé
+en dur**, quelle que soit la VRAIE cause. `isRetryableCallFailure` (`lib/calls/call-retry-policy.ts`)
+traite `completed` comme définitivement NON réessayable — l'offre « Réessayer » que ce chemin même
+existe pour couvrir (un raccroché pour cause de `connectionLost`/`heartbeatTimeout`, la reconnexion
+ayant perdu la course) ne s'affichait jamais, silencieusement remplacée par un hangup muet identique
+à un raccroché volontaire.
+
+Le serveur, lui, connaît la vraie raison : `CallSession.endReason` (Prisma) est déjà écrit par tous
+les writers terminaux (`endCall`, `leaveCall`, `forceEndOrphanedCallSession`, …) — mais
+`joinCallAttempt` (`CallService.ts`), quand il refuse un join parce que l'appel est dans un état
+terminal, jetait un `Error` générique portant seulement `CODE: message`
+(`CALL_ENDED: This call has already ended`) sans jamais lire `call.endReason`, déjà chargé en
+mémoire deux lignes plus haut. Le renseignement existait à CHAQUE couche (DB, service, ack) et
+n'était simplement jamais lu par celle du dessus — même famille que la Vague 96 (« un champ présent
+à chaque étape se lit comme un champ traité »), une couche plus bas dans la pile calling.
+
+**Fix, en deux parts additives** :
+
+1. **`CallService.ts`** — nouvelle classe `CallAlreadyEndedError extends Error`, exportée, portant
+   `.endReason: CallEndReason` en plus du même message `CODE: message` que l'ancien `Error` générique
+   (`parseCallHandlerError` continue de le parser identiquement — aucun gate `CALL_ENDED` existant
+   ne change de comportement). `joinCallAttempt` la jette avec `call.endReason ?? CallEndReason.completed`
+   au lieu de l'`Error` nue.
+2. **`CallEventsHandler.ts`** — le catch de `call:join` détecte `error instanceof CallAlreadyEndedError`
+   et étale conditionnellement `endReason` dans l'objet d'erreur de l'ack
+   (`{ code, message, ...(endReason ? { endReason } : {}) }`) — jamais de clé `endReason: undefined`
+   fabriquée pour un `CALL_ENDED` générique (parité avec la règle du tri-état `bridge` déjà en place
+   ailleurs dans ce fichier : la PRÉSENCE de la clé porte le sens, pas sa valeur).
+3. **`CallJoinAck.error`** (`packages/shared/types/video-call.ts`) — `endReason?: CallEndReason` ajouté,
+   purement additif.
+4. **`CallManager.tsx`** — `rejoinActiveCallAfterReconnect` lit `ack.error?.endReason ?? 'completed'`
+   au lieu du littéral. Le fallback préserve le comportement historique pour tout ack qui ne porte pas
+   le champ (gateway non redéployée, ou tout autre chemin `CALL_ENDED` qui ne passe pas par
+   `CallAlreadyEndedError`).
+
+**Décision de portée** : `call:force-leave` (même fichier, même littéral `reason: 'completed'`) n'est
+**volontairement pas touché** — son propre commentaire (Vague 159/160) explique que `completed` y est
+correct PAR CONSTRUCTION : rien n'a échoué, ce client est éjecté d'un appel qu'il n'a plus le droit de
+rejoindre, et aucune offre « Réessayer » ne doit s'y poser. Les deux littéraux se ressemblent, un seul
+porte le défaut.
+
+**Tests (TDD, RED confirmé)** :
+- `CallService.test.ts` — 2 nouveaux témoins : `joinCall` sur un appel terminal avec
+  `endReason: connectionLost` rejette une `CallAlreadyEndedError` portant `.endReason === 'connectionLost'`
+  (pas seulement le code générique) ; un `endReason` `null` (ligne DB antérieure à la colonne) retombe
+  sur `CallEndReason.completed`. `MockCallSession`/`createMockCallSession` étendus avec `endReason`.
+- `CallEventsHandler-join-ack.test.ts` — 1 nouveau témoin : l'ack de `call:join` sur un rejet
+  `CallAlreadyEndedError('connectionLost')` porte `error.endReason === 'connectionLost'` ; le témoin
+  existant (`Error` générique, sans `endReason`) reste inchangé et vert, prouvant que le champ ne
+  s'invente pas quand la source ne le fournit pas.
+- `CallManager.reconnect.test.tsx` (web) — 2 nouveaux témoins : un ack `CALL_ENDED` avec
+  `endReason: 'connectionLost'` peuple `pendingRetry['conv-1']` (offre de retry) ; un ack avec
+  `endReason: 'missed'` n'en peuple aucun.
+- **RED confirmé par `git stash` des 4 fichiers de production** (`video-call.ts`, `CallService.ts`,
+  `CallEventsHandler.ts`, `CallManager.tsx`) : les 2 suites gateway retouchées échouent à la
+  COMPILATION (`CallAlreadyEndedError` non exporté) ; restauré, GREEN.
+- **Collatéral découvert au premier balayage large** (`--testPathPatterns="[Cc]all"`, gateway) :
+  4 suites tierces qui mockent tout le module `CallService` (`CallEventsHandler.test.ts`,
+  `CallEventsHandler-join-buffered-offer.test.ts`, `CallEventsHandler-restart-resilience.test.ts`,
+  `CallEventsHandler-error-fallbacks.test.ts`) ne réexportaient pas `CallAlreadyEndedError` — leur
+  fabrique de mock laissait l'import `undefined`, et `error instanceof undefined` lève un
+  `TypeError` au runtime dès qu'un de leurs témoins fait échouer `joinCall`. Corrigé en ajoutant la
+  même classe-jouet minimale (miroir du vrai `CallAlreadyEndedError`) aux 4 fabriques.
+
+**Gates** : gateway `--testPathPatterns="[Cc]all"` **58/58 suites, 1268/1268 tests** ; `tsc --noEmit`
+gateway 0 erreur. Web `--testPathPatterns="CallManager|video-call"` **41/41 suites, 279/279 tests**
+(277 + 2 neufs) ; `tsc --noEmit` web **1834/1834 identique à la baseline** (mesuré par `git stash`).
+`packages/shared` reconstruit (`bun run build`) après l'ajout additif à `CallJoinAck`.
+
+**Risk assessment** : minimal — extension additive d'un type partagé (`endReason?` optionnel),
+nouvelle classe d'erreur qui préserve le message `CODE: message` exact que tout gate `CALL_ENDED`
+existant continue de lire, et un `??` de repli côté client qui reproduit le comportement historique
+quand le champ est absent. Aucun changement de signature publique, aucun champ retiré.
+
+**Non fait volontairement / reste ouvert** (reconduits, inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS
+single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors
+périmètre calling) ; `call:check-active` réarme le timer 45s du callee à chaque reconnexion même
+pour le même call déjà sonnant (web, confiance modérée) ; `handleHold`'s branche `catch` générique
+omet `videoSurvivalController.reset()` (iOS, actuellement inerte) ; `handleAudioRouteChange`'s
+`.newDeviceAvailable` ignore le résultat fallible d'`applySpeakerRoute()` (iOS, fenêtre étroite
+auto-corrigée). **iOS vérifié, PAS le même défaut** : son pendant du rejoin-après-reconnexion
+(`socket.didReconnect` → `emitCallJoinWithAck`, `CallManager.swift` ~4798-4847) ne construit AUCUN
+`CallEndedEvent` synthétique sur un ack en échec — il logge un warning (« proceeding anyway ») et
+laisse le futur `call:ended` broadcast (qui porte déjà la vraie raison) faire la descente. Gap
+DIFFÉRENT, non instruit ici : si ce broadcast a été manqué pendant la coupure (le scénario même que
+ce rejoin existe pour couvrir), iOS ne semble offrir aucun retry du tout sur ce chemin — à vérifier
+lors d'une prochaine vague dédiée iOS plutôt que supposé par analogie avec le web.
+
+## Vague 162 — iOS : `call:join` rejeté en `CALL_ENDED` au reconnect ne transitionnait jamais `callState`, zombie UI sans retry (2026-08-23)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise directe
+du suivi laissé ouvert par la Vague 161 (« iOS ne semble offrir aucun retry du tout sur ce chemin — à
+vérifier lors d'une prochaine vague dédiée iOS plutôt que supposé par analogie avec le web ») — après
+vérification que la Vague 161 est bien mergée sur `main` et qu'aucune branche `claude/upbeat-dirac-*`
+antérieure n'est en avance (branche redémarrée depuis `origin/main`, aucun commit non mergé perdu).
+
+### Défaut — `emitCallJoinWithAck` collabsait l'ack complet en `Bool`, cachant `CALL_ENDED`/`endReason` au rejoin de reconnexion
+
+**Root cause** : `socket.didReconnect` (`CallManager.swift`) ré-émet `call:join` pour que la
+passerelle remette ce socket dans la room de l'appel. Vérifié : contrairement au web (Vague 161,
+`CallManager.tsx` lit `ack.error?.endReason`), le SDK iOS `emitCallJoinWithAck` ne renvoyait qu'un
+`Bool` — la gateway envoie pourtant déjà (Vague 161, `CallEventsHandler.ts` ligne 3028)
+`{ success: false, error: { code: 'CALL_ENDED', endReason } }` quand le join est rejeté parce que
+l'appel a déjà pris fin côté serveur, mais `emitCallJoinWithAck` ne lisait que `items.first?["success"]`
+et jetait tout le reste du payload. Le handler de reconnexion, sur `!joined`, se contentait de logger
+« proceeding anyway » sans jamais transitionner `callState` — s'appuyant sur le futur broadcast
+`call:ended` pour faire la descente. Exactement le scénario que la Vague 161 avait identifié comme
+non couvert : si ce broadcast a lui-même été perdu pendant LA MÊME coupure que ce chemin de reconnexion
+existe pour couvrir, l'app restait figée sur l'écran d'appel actif indéfiniment — aucune transition
+d'état, aucune offre « Réessayer », aucune indication que l'appel avait pris fin.
+
+**Fix, additif, iOS uniquement (aucun changement gateway — le contrat `endReason` existe déjà depuis
+la Vague 161)** :
+
+1. **`MessageSocketManager.swift`** — nouveau `public struct CallJoinAckResult { joined: Bool,
+   errorCode: String?, endReason: String? }` (SDK pur : `endReason` voyage en `String` brut, pas de
+   type `CallEndReason` — ce type vit dans l'app). Nouvelle méthode
+   `emitCallJoinWithAckDetailed(callId:) async -> CallJoinAckResult` qui lit `error.code`/
+   `error.endReason` du payload d'ack. `emitCallJoinWithAck` (signature Bool inchangée, aucun appelant
+   cassé) délègue désormais à la variante détaillée au lieu de reparser le payload indépendamment —
+   même famille de défaut que les Vagues 158-161 (deux sites sœurs qui parsent le même flux différemment)
+   évitée à la source plutôt que refermée après coup.
+2. **`CallManager.swift`** — le `Task` du handler `socket.didReconnect` appelle
+   `emitCallJoinWithAckDetailed` ; sur `errorCode == "CALL_ENDED"`, route vers `handleRemoteEnd(callId:
+   rawReason: ackResult.endReason)` (le chemin canonique déjà utilisé par `call:ended` et
+   `call:error CALL_ENDED`, `return` avant tout flush ICE / resync média). `CallEndReasonMapper` fait
+   le reste : `endReason == "connectionLost"` ⇒ `CallEndReason.connectionLost`, retryable via
+   `CallRetryPolicy.isRetryable` — l'offre « Réessayer » réapparaît pour la cause transitoire exacte
+   que ce chemin de reconnexion existe pour récupérer.
+
+**Tests** : 7 nouveaux tests structurels (`CallManagerReconnectCallEndedRetryTests`,
+`CallManagerAudioSessionTests.swift`, même convention source-based que le reste du fichier — pas de
+host XCTest disponible dans ce container) : usage de `emitCallJoinWithAckDetailed` dans le sink
+reconnect ; détection `ackResult.errorCode == "CALL_ENDED"` + forward exact de `ackResult.endReason`
+vers `handleRemoteEnd` ; `return` de la branche CALL_ENDED avant `flushPendingIceCandidates()` ;
+`CallJoinAckResult` expose `joined`/`errorCode`/`endReason` ; `emitCallJoinWithAckDetailed` lit bien
+`error["code"]`/`error["endReason"]` du payload ; `emitCallJoinWithAck` délègue à la variante détaillée
+sans reparser. Les tests existants (`CallManagerJoinRaceTests`) restent verts sans modification —
+`emitCallJoinWithAckDetailed` est un sur-ensemble textuel de `emitCallJoinWithAck`, et la signature
+Bool de ce dernier est inchangée. CI iOS (macOS runner) valide la compile + le run réel.
+
+**Risk assessment** : minimal — additif des deux côtés (nouveau struct, nouvelle méthode SDK, nouvelle
+branche app avant le chemin existant inchangé), aucune signature publique retirée, aucun appelant
+existant de `emitCallJoinWithAck`/`emitCallJoin` modifié (le join initial cold-start et le join
+incoming-call restent sur la variante Bool). Le chemin `CALL_ENDED` réutilise `handleRemoteEnd`, déjà
+exercé par trois autres sites de ce même fichier.
+
+**Non fait volontairement / reste ouvert** (reconduits, inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS single-peer
+côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors périmètre
+calling) ; `call:check-active` réarme le timer 45s du callee à chaque reconnexion même pour le même
+call déjà sonnant (web, confiance modérée) ; `handleHold`'s branche `catch` générique omet
+`videoSurvivalController.reset()` (iOS, actuellement inerte) ; `handleAudioRouteChange`'s
+`.newDeviceAvailable` ignore le résultat fallible d'`applySpeakerRoute()` (iOS, fenêtre étroite
+auto-corrigée).
+
+## Vague 163 — `call:check-active` réarmait le timer 45s du callee à CHAQUE reconnexion, même pour le même call déjà sonnant (web) (2026-08-23)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise directe
+du suivi laissé ouvert par la Vague 162 (« confiance modérée — fréquence réelle en prod non
+confirmée ») — après vérification que la Vague 162 est bien mergée sur `main` (PR #3362, dans le lot
+cycle 103) et qu'aucune branche `claude/upbeat-dirac-*` antérieure n'est en avance (branche
+redémarrée depuis `origin/main`, aucun commit non mergé perdu).
+
+**Root cause, confirmée par lecture directe (la confiance passe de « modérée » à mesurée) :**
+`call:check-active` (`CallEventsHandler.ts`) replaie le `call:initiated` d'un appel EN COURS DE
+SONNERIE à chaque `connect`/reconnexion du socket — mécanisme délibéré : un callee dont le socket
+tombe puis revient pendant que l'appel sonne encore doit revoir la bannière d'appel entrant, pas la
+manquer. Le commentaire du handler affirme « the client dedups by callId » — mais `handleIncomingCall`
+(`CallManager.tsx`, branche callee) ne dédupliquait en réalité JAMAIS un replay pour le `callId` déjà
+affiché comme `incomingCall` : sa seule garde de bump (`incomingCall.callId !== event.callId`) ne
+couvre que le cas d'un `callId` DIFFÉRENT. Un replay pour le MÊME call tombait donc directement dans
+`setIncomingCall(event)` + `startCallTimeout(event.callId)` — et `startCallTimeout` commence par
+`clearCallTimeout()`, donc chaque replay repart pour 45s pleins depuis l'instant du reconnect, au lieu
+de laisser courir le délai déjà entamé.
+
+**Impact mesuré, pas supposé** : sur une connexion instable (le cas même que ce mécanisme de replay
+existe pour couvrir), chaque reconnexion pendant que l'appel sonne repousse l'échéance locale de 45s
+côté callee — la bannière peut ainsi survivre indéfiniment à la propre échéance de 45s de l'appelant
+(qui, lui, n'a pas cette resynchronisation et raccroche à l'heure), une reconnexion à la fois. Le
+callee voit sonner un appel que l'appelant a déjà abandonné, jusqu'à ce que le `call:missed`/
+`call:ended` serveur (backstop 60s) finisse par arriver — ou pas, si les reconnexions se succèdent
+plus vite que ce backstop.
+
+**Fix, additif, un seul site** : garde ajoutée en tête de la branche callee de `handleIncomingCall` —
+si `incomingCall.callId === event.callId` (replay pour l'appel déjà affiché), `return` immédiat, sans
+toucher `setIncomingCall` ni `startCallTimeout`. Un VRAI second appelant (callId différent) continue
+de traverser les branches existantes (busy-path, bump) inchangées ; seul le doublon exact devient un
+no-op, ce que le commentaire du handler prétendait déjà être le comportement.
+
+**Tests (TDD, RED confirmé)** : `CallManager.duplicateIncomingReplay.test.tsx`, 2 nouveaux témoins —
+(1) un `call:initiated` répété pour le même `callId` à t=40s n'empêche pas la bannière de disparaître
+à t=46s (délai original respecté, pas de ré-armement) ; un timer ré-armé aurait laissé ~39s de plus,
+donc la bannière serait restée visible — c'est exactement ce que le RED a montré, `git stash` du seul
+fichier de production. (2) le replay ne modifie aucun état du store (`isInCall`/`currentCall`
+inchangés — no-op pur pour un call déjà affiché). Suite complète calling web
+(`--testPathPatterns="CallManager|video-call"`) **42/42 suites, 281/281 tests** (279 + 2 neufs, tous
+les témoins existants — `doubleIncomingCall`, `callWaitingBump`, `reconnect` — restent verts sans
+modification, aucun n'exerçait ce chemin précis). `tsc --noEmit` web **1834/1834 identique à la
+baseline** (mesuré par `git stash` du fichier de production).
+
+**Risk assessment** : minimal — un seul `return` anticipé ajouté à un branchement existant, aucune
+signature modifiée, aucun état nouveau. Le seul comportement qui change est celui explicitement décrit
+comme un bug par le suivi de la Vague 162 et par le commentaire du handler lui-même (qui prétendait
+dédupliquer sans le faire).
+
+**Non fait volontairement / reste ouvert** (reconduits, inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS
+single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors
+périmètre calling) ; `handleHold`'s branche `catch` générique omet `videoSurvivalController.reset()`
+(iOS, actuellement inerte) ; `handleAudioRouteChange`'s `.newDeviceAvailable` ignore le résultat
+fallible d'`applySpeakerRoute()` (iOS, fenêtre étroite auto-corrigée). **Jumelle iOS vérifiée, PAS le
+même défaut** : iOS émet bien `call:check-active` au reconnect
+(`MessageSocketManager.swift:3247`, même mécanisme), et son `callOfferReceived` reçoit donc le même
+replay — mais le sink app-side (`CallManager.swift`, souscription à `socket.callOfferReceived`) garde
+`guard self.currentCallId != event.callId else { return }`, et `currentCallId` est écrit tout en tête
+de `handleIncomingCallNotification`, AVANT même le début de la sonnerie. Un replay pour le callId déjà
+en cours d'appel trouve donc `currentCallId` déjà égal et sort par ce guard sans jamais rappeler
+`handleIncomingCallNotification` — donc sans jamais réarmer quoi que ce soit. La différence de forme
+avec le web (qui gardait sur `incomingCall.callId !== event.callId`, actif seulement pour un callId
+DIFFÉRENT) explique pourquoi le même mécanisme serveur produisait un défaut sur un client et pas
+l'autre.
+
+## Vague 165 — `endCallParticipationForDepartedMember` était le 4ᵉ site à clear `ringingTimeouts` sans conditionner sur l'appel de groupe qui continue (gateway) (2026-08-23)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Vérifié avant
+de commencer : la Vague 164 (`call:end`/`call:leave`/`call:force-leave` cleared le timer même
+quand le groupe continuait) est bien mergée sur `main` (PR #3374, commit `9056634db`), et aucune
+branche `claude/upbeat-dirac-*` antérieure n'est en avance — branche redémarrée depuis
+`origin/main`. Note de suivi : le commit de la Vague 164 n'avait touché que le code et ses tests,
+pas ce journal (aucune section « Vague 164 » n'y existait avant celle-ci) — rien à retranscrire
+rétroactivement, cette entrée porte directement la Vague 165.
+
+### Root cause
+
+`ringingTimeouts` (`CallService.ts:225`) est une Map keyée par `callId`, pas par participant —
+c'est la SEULE chose qui distingue « un invité n'a jamais répondu » de sa notification d'appel
+manqué (`buildRingingTimeoutHandler`'s branche `count === 0`, `CallEventsHandler.ts:579`). La
+Vague 164 a fermé trois sites (`call:end`, `call:leave`, `call:force-leave`) qui le clearaient
+INCONDITIONNELLEMENT, y compris sur la branche atteinte uniquement quand l'appel de groupe est
+CONNU pour continuer pour d'autres participants. Un 4ᵉ site portait le même défaut, non touché par
+cette recherche parce qu'il ne s'appelle ni `call:end` ni `call:leave` ni `call:force-leave` :
+`endCallParticipationForDepartedMember` (`CallEventsHandler.ts:956`), le verbe déclenché quand un
+membre perd son appartenance au fil (banni, quitté, retiré par un modérateur, fil supprimé pour
+soi — voir `endConversationMembership.ts`).
+
+Cette méthode boucle sur les appels non-terminaux du partant et, pour chacun, appelle
+`leaveParticipationAndBroadcast` (qui délègue à `CallService.leaveCall`) PUIS, juste après,
+appelait inconditionnellement `this.callService.clearRingingTimeout(callId)`
+(`CallEventsHandler.ts:996`, avant ce correctif). Or `leaveCall()` lui-même clear déjà
+`ringingTimeouts` en interne, mais SEULEMENT dans sa branche `isLastParticipant`
+(`CallService.ts:1874-1888`, posée par la Vague 157) — un leave « mid-call » sur un appel de
+groupe qui continue prend l'autre branche et laisse le timer délibérément armé, exactement comme
+`call:signal` (answer) le fait pour la même raison (`CallEventsHandler.ts:3689-3703`). L'appel
+externe et inconditionnel de `endCallParticipationForDepartedMember` court-circuitait cette
+décision — même défaut, même famille, un site que la recherche par nom de handler ne pouvait pas
+trouver.
+
+**Preuve que ce n'était pas un oubli mais une assertion écrite en dur** : le test
+`CallEventsHandler-departed-member.test.ts` (« libère la minuterie de sonnerie du fil que le
+partant laisse derrière lui ») assertait explicitement
+`expect(mockClearRingingTimeoutDep).toHaveBeenCalledWith(CALL_ID)` — un témoin vert qui enchâssait
+le défaut, dans le même esprit que la Leçon 248 (« deux témoins verts qui exigent des réponses
+opposées à la même question »).
+
+Le jumeau correct existe dans le MÊME fichier : `onDisconnectGraceExpired`
+(`CallEventsHandler.ts:710`), l'autre appelant de `leaveParticipationAndBroadcast`, ne porte AUCUN
+appel de nettoyage redondant après lui — il fait déjà confiance à `leaveCall()` pour scoper
+correctement. `endCallParticipationForDepartedMember` est le seul des deux à ne pas s'y aligner.
+
+### Impact
+
+Scénario atteignable en production : un appel de groupe sonne pour plusieurs invités ; l'un d'eux
+est banni de la conversation (ou la quitte, ou est retiré par un modérateur, ou supprime le fil
+pour lui-même) PENDANT que l'appel sonne encore pour les autres invités qui n'ont pas encore
+répondu. `endCallParticipationForDepartedMember` sort le banni de l'appel (comportement correct et
+voulu) mais, en clearant le timer call-wide au passage, prive silencieusement TOUS LES AUTRES
+invités non-répondus de leur notification d'appel manqué — le
+`createMissedCallNotifications(callId)` que `buildRingingTimeoutHandler`'s branche `count === 0`
+existe pour appeler ne se déclenche plus jamais pour ce call, sans aucun recours (pas de second
+timer, pas de sweep de rattrapage sur cette voie précise). L'appel continue normalement pour qui a
+déjà répondu ; c'est uniquement le SIGNAL « appel manqué » pour les autres qui disparaît.
+
+### Fix
+
+Une ligne retirée, `CallEventsHandler.ts` — le `this.callService.clearRingingTimeout(callId)`
+inconditionnel après `leaveParticipationAndBroadcast`. `clearBufferedOfferFor` (scopé au partant,
+donc toujours sûr) reste inchangé juste en dessous. Aucun changement de signature, aucune nouvelle
+branche : la méthode fait désormais exactement ce que `onDisconnectGraceExpired` fait déjà pour le
+même appel partagé — rien — et laisse `leaveCall()` décider seul.
+
+### Tests (TDD, RED confirmé)
+
+Le témoin qui enchâssait le défaut a été réécrit pour affirmer l'inverse : « ne clear PAS
+elle-même la minuterie de sonnerie — `leaveCall()` la scope déjà selon que l'appel continue ou se
+termine », `expect(mockClearRingingTimeoutDep).not.toHaveBeenCalled()`. RED confirmé sur le code de
+production INCHANGÉ (avant le fix) : `1 failed, 10 passed` — la seule assertion visée échoue,
+`Received number of calls: 1` sur un mock attendu à `0`. GREEN après le retrait de la ligne :
+`11/11`. Sweep calling gateway complet (`--testPathPatterns="[Cc]all"`) : **58/58 suites, 1271/1271
+tests** verts, 0 régression. `tsc --noEmit` gateway : **0 erreur**, avant comme après (rien à
+diffuser par `git stash`, le fichier était déjà propre). Suite gateway COMPLÈTE
+(`bun run test:coverage`) : **836/836 suites, 19261/19261 tests** verts — compte IDENTIQUE au
+dernier full-run connu sur `main` (merge Vague 164/cycle 106), cohérent avec un correctif qui
+réécrit un témoin existant plutôt que d'en ajouter un.
+
+### Risk assessment
+
+Minimal — retrait d'un appel redondant et incorrect, aucun changement de signature, aucun nouvel
+état. Le comportement qui change est exactement celui que la Vague 164 avait déjà qualifié de bug
+sur ses trois sites frères ; celui-ci est le quatrième, dans le même fichier, avec le même
+mécanisme de réparation (déléguer entièrement à `leaveCall()`, ne rien faire de plus).
+
+### Non fait volontairement / reste ouvert
+
+Recherché et vérifié CLOS pour cette famille précise : `grep -n "this.callService.clearRingingTimeout"
+CallEventsHandler.ts` ne rend plus que 4 sites d'appel réels, tous déjà scopés à une branche
+terminale/directe (`call:leave`, `call:force-leave`, `call:signal` answer scopé à
+`conversation.type !== 'group'`, `call:end`) — plus les deux clears internes à `CallService.leaveCall`
+elle-même (branche `isLastParticipant`), correctement conditionnels depuis la Vague 157. Aucun site
+inconditionnel restant. Reconduits (inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS
+single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors
+périmètre calling) ; `handleHold`'s branche `catch` générique omet `videoSurvivalController.reset()`
+(iOS, actuellement inerte) ; `handleAudioRouteChange`'s `.newDeviceAvailable` ignore le résultat
+fallible d'`applySpeakerRoute()` (iOS, fenêtre étroite auto-corrigée).

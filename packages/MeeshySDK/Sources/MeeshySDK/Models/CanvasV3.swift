@@ -54,6 +54,18 @@ public struct SceneV3: Equatable, Codable, Sendable {
     /// Empreinte du canvas composite — le placeholder que quatre surfaces
     /// affichent avant l'arrivée du média.
     public let thumbHash: String?
+    /// Ratio du PORTEUR d'origine, quand la scène provient d'une conversion v1
+    /// (révision de S8 — miroir de `carrierAspect` dans `canvas-v3.ts`).
+    ///
+    /// `remapFreeAnchor` est AFFINE, donc inversible — mais seulement si l'on
+    /// sait encore ce que valait le porteur. Sans ce champ, rouvrir un ancien
+    /// contenu recadrait ses objets SANS RETOUR : sur du 16:9, `y = 0,90`
+    /// devenait `0,6266` définitivement. `StoryDraftStore` avait déjà dû le
+    /// repersister hors document, par diapositive, pour les brouillons.
+    ///
+    /// Optionnel : un document v3 natif n'en a pas — il n'a jamais eu d'autre
+    /// porteur que sa scène.
+    public let carrierAspect: Double?
 
     public init(id: String,
                 objects: [ObjectV3],
@@ -61,7 +73,8 @@ public struct SceneV3: Equatable, Codable, Sendable {
                 closing: [String: CanvasJSONValue]? = nil,
                 clipTransitions: [[String: CanvasJSONValue]]? = nil,
                 timelineDuration: Double? = nil,
-                thumbHash: String? = nil) {
+                thumbHash: String? = nil,
+                carrierAspect: Double? = nil) {
         self.id = id
         self.objects = objects
         self.opening = opening
@@ -69,10 +82,11 @@ public struct SceneV3: Equatable, Codable, Sendable {
         self.clipTransitions = clipTransitions
         self.timelineDuration = timelineDuration
         self.thumbHash = thumbHash
+        self.carrierAspect = carrierAspect
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, objects, opening, closing, clipTransitions, timelineDuration, thumbHash
+        case id, objects, opening, closing, clipTransitions, timelineDuration, thumbHash, carrierAspect
     }
 
     /// Décodage lossy PAR OBJET (miroir de `decodeLossyArrayIfPresent`,
@@ -88,6 +102,7 @@ public struct SceneV3: Equatable, Codable, Sendable {
         clipTransitions = try container.decodeIfPresent([[String: CanvasJSONValue]].self, forKey: .clipTransitions)
         timelineDuration = try container.decodeIfPresent(Double.self, forKey: .timelineDuration)
         thumbHash = try container.decodeIfPresent(String.self, forKey: .thumbHash)
+        carrierAspect = try container.decodeIfPresent(Double.self, forKey: .carrierAspect)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -99,6 +114,7 @@ public struct SceneV3: Equatable, Codable, Sendable {
         try container.encodeIfPresent(clipTransitions, forKey: .clipTransitions)
         try container.encodeIfPresent(timelineDuration, forKey: .timelineDuration)
         try container.encodeIfPresent(thumbHash, forKey: .thumbHash)
+        try container.encodeIfPresent(carrierAspect, forKey: .carrierAspect)
     }
 }
 

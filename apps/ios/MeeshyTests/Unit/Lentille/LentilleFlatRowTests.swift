@@ -155,34 +155,32 @@ final class LentilleFlatRowTests: XCTestCase {
         XCTAssertEqual(LentilleConversationRow.rowOpacity(isMuted: false, isDragging: false), 1.0)
     }
 
-    // MARK: - Le chrome du badge n'est pas RECOPIÉ dans le rang (garde source)
-    // behaviour-matrix:L06 — AMENDÉ par le lot 2 (2026-08-22). La formule
-    // d'origine (« le badge rouge 99+ (unreadBadgeBackground) … supprimé,
-    // remplacé par un point accent 8 px ») est renversée par décision
-    // produit : la pastille CHIFFRÉE revient, le point de 8 px part (il
-    // portait la même donnée à quelques points de distance). Ce témoin
-    // survit avec un sens NOUVEAU — le rang ne recopie pas le chrome du
-    // badge, il consomme l'atome partagé `UnreadCountBadge`
-    // (`MeeshyUI/Primitives/`), seul domicile de `unreadBadgeBackground`
-    // pour les rangs de liste. Le pendant POSITIF (le rang consomme bien
-    // l'atome) vit dans
-    // LentilleRowSourceGuardTests.test_unreadBadge_isTheSharedAtom_gatedByTheUnreadCount ;
-    // l'amendement de la matrice, dans
-    // LentilleRowBehaviourAnchorTests.test_L06_amended_countedUnreadBadgeIsBackAndTheEightPointDotIsGone.
+    // MARK: - Aucun badge chiffré (garde source, contrat §LWS-7)
+    // behaviour-matrix:L06 — « le badge rouge 99+ (unreadBadgeBackground) …
+    // sont supprimés » : ce témoin verrouille le RETRAIT du badge. Le point
+    // accent 8 px et le pont ✦ qui le remplacent sont verrouillés par
+    // LentilleMetricsTests.test_unreadDot_size et
+    // LentilleRowSourceGuardTests.test_bridgeLine_unreadDot_usesMetric_notALiteral.
     // Le second volet de L06 (« le timestamp rouge sur non-lu … supprimé,
-    // l'heure reste tertiaire ») est INTACT et toujours verrouillé par
+    // l'heure reste tertiaire ») est, lui aussi, fermé (REV-3/V3ter) et
+    // verrouillé VERT par
     // LentilleRowBehaviourAnchorTests.test_L06_timestampColor_isTertiary_neverErrorOnUnread.
 
-    func test_sourceGuard_rowFiles_neverInlineTheUnreadBadgeChrome() throws {
+    /// **SUPERSÉDÉ le 2026-08-22** (décision produit : « mettre le chip rouge
+    /// si messages non lus » sur les rangées non magnifiées) — voir la note
+    /// détaillée de `LentilleRowSourceGuardTests
+    /// .test_unreadBadge_livesOnlyInTheRow_andIsAlwaysSemanticRed`. Ce qui
+    /// reste vrai, et que ce témoin continue de garder : ni le pont ✦ ni le
+    /// squelette ne portent de badge.
+    func test_sourceGuard_neitherBridgeNorSkeleton_carriesAnUnreadBadge() throws {
         for relativePath in [
-            "Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",
             "Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift",
             "Meeshy/Features/Main/Lentille/Row/LentilleSkeletonRow.swift",
         ] {
             let source = try readSource(relativePath)
             XCTAssertFalse(
                 source.contains("unreadBadgeBackground"),
-                "\(relativePath) ne doit JAMAIS contenir `unreadBadgeBackground` — le chrome de la pastille vit dans l'atome partagé UnreadCountBadge, jamais recopié dans une peau (lot 2)"
+                "\(relativePath) ne compte rien : le pont porte son point accent, le squelette est un placeholder"
             )
         }
     }

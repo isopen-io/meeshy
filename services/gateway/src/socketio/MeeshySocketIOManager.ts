@@ -3,7 +3,13 @@
  * Gestion des connexions, conversations et traductions en temps réel
  */
 
-import { Server as SocketIOServer, type Socket } from 'socket.io';
+import { Server as SocketIOServer } from 'socket.io';
+// Cycle 107 — le `Socket` vient du contrat, pas de `socket.io`. Ce module
+// CONSTRUIT le serveur (d'où l'import de `Server` ci-dessus, immédiatement
+// paramétré par les deux cartes du contrat), mais il ÉCOUTE comme les autres :
+// ses paramètres de socket n'ont aucune raison d'être plus permissifs que ceux
+// des six handlers qui dérivent déjà les leurs.
+import type { MeeshySocket as Socket } from './typed-socket';
 import { Server as HTTPServer } from 'http';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
@@ -48,6 +54,7 @@ import {
 import {
   PREVIEW_PRISM_PARTICIPANT_SELECT,
   resolveLastMessagePreviewPrism,
+  toIsoOrNull,
 } from './utils/lastMessagePreviewPrism';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
@@ -78,6 +85,8 @@ import type {
 import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
 import type { Message } from '@meeshy/shared/types/index';
+import { buildMessageNewPayload } from './messageNewPayload';
+import { buildMessageEditedCore, resolveWireSenderId } from './messageEditedPayload';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
@@ -85,8 +94,11 @@ import { MentionService, resolveUsernamesToIds } from '../services/MentionServic
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
+import { emitServerEvent, type ServerEventName } from './serverEmit';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
+import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
+import { drainedEventName } from './queuedEventContract';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -103,30 +115,32 @@ const logger = enhancedLogger.child({ module: 'SocketIOManager' });
  */
 const BRIDGE_SNAPSHOT_LIMIT = 30;
 
-// Maps a queued entry's `eventType` (absent = legacy 'new') to the Socket.IO
-// event replayed on reconnect for that offline-queue entry.
-function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string {
-  if (eventType === 'edited') return SERVER_EVENTS.MESSAGE_EDITED;
-  if (eventType === 'deleted') return SERVER_EVENTS.MESSAGE_DELETED;
-  if (eventType === 'reaction-added') return SERVER_EVENTS.REACTION_ADDED;
-  if (eventType === 'reaction-removed') return SERVER_EVENTS.REACTION_REMOVED;
-  if (eventType === 'attachment-reaction-added') return SERVER_EVENTS.ATTACHMENT_REACTION_ADDED;
-  if (eventType === 'attachment-reaction-removed') return SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
-  if (eventType === 'attachment-updated') return SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED;
-  if (eventType === 'translation') return SERVER_EVENTS.MESSAGE_TRANSLATION;
-  if (eventType === 'pinned') return SERVER_EVENTS.MESSAGE_PINNED;
-  if (eventType === 'unpinned') return SERVER_EVENTS.MESSAGE_UNPINNED;
-  return SERVER_EVENTS.MESSAGE_NEW;
-}
 
 // What one queued entry actually puts on the wire. Every eventType replays as a
 // single event EXCEPT 'link-message', which owes the same two events the live
 // room emit owes — see `linkMessageEmissions`. A recipient who was offline when
 // a share-link guest wrote is precisely the one this had to reach: the live
 // emit had already gone out without them.
+//
+// La charge sort de Redis en `Record<string, unknown>` : c'est une frontière de
+// DÉSÉRIALISATION, et le rattachement au contrat s'y affirme, comme dans
+// `linkMessageEmissions`.
+//
+// Ce que le cycle 106 a changé, c'est l'autre bout. L'ENFILAGE est désormais
+// vérifié : `queuedEventContract.ts` dérive de `DRAINED_EVENT` la charge que
+// chaque `eventType` doit porter, et les huit écrivains y sont tenus. Un
+// transport ne peut donc plus diffuser une forme et en enfiler une autre — la
+// divergence n'aurait eu pour témoin qu'un destinataire hors ligne au mauvais
+// moment, c'est-à-dire personne.
+//
+// Ce qui reste une AFFIRMATION, et le restera sans validation à l'exécution :
+// que l'octet relu de Redis soit bien ce qu'on y a écrit. Le typage borne ce
+// qu'on ÉCRIT, pas ce qu'on RELIT.
 function _drainedEmissions(entry: QueuedMessagePayload): SocketEmission[] {
   if (entry.eventType === 'link-message') return linkMessageEmissions(entry.payload);
-  return [{ event: _drainedEventName(entry.eventType), payload: entry.payload }];
+  return [
+    { event: drainedEventName(entry.eventType), payload: entry.payload } as SocketEmission,
+  ];
 }
 
 export interface SocketUser {
@@ -342,13 +356,13 @@ export class MeeshySocketIOManager {
 
     // Initialiser le SocialEventsHandler pour les broadcasts feed
     this.socialEventsHandler = new SocialEventsHandler({
-      io: this.io as SocketIOServer,
+      io: this.io,
       prisma: this.prisma,
     });
 
     // Initialiser le LocationHandler pour les événements de partage de localisation
     this.locationHandler = new LocationHandler({
-      io: this.io as SocketIOServer,
+      io: this.io,
       prisma: this.prisma,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
@@ -359,7 +373,7 @@ export class MeeshySocketIOManager {
     PostAudioService.init(this.prisma, this.socialEventsHandler);
 
     // Initialiser le StoryTextObjectTranslationService singleton
-    StoryTextObjectTranslationService.init(this.prisma, this.io as SocketIOServer);
+    StoryTextObjectTranslationService.init(this.prisma, this.io);
 
     this.authHandler = new AuthHandler({
       prisma: this.prisma,
@@ -375,9 +389,9 @@ export class MeeshySocketIOManager {
       // disconnect leave reuse CallEventsHandler's PARTICIPANT_LEFT/
       // call:ended fanout instead of leaving the other party's UI "in call".
       broadcastCallParticipantLeft: (opts) =>
-        this.callEventsHandler.broadcastParticipantLeftResult({ io: this.io as SocketIOServer, ...opts }),
+        this.callEventsHandler.broadcastParticipantLeftResult({ io: this.io, ...opts }),
       forceCleanupCallParticipant: (opts) =>
-        this.callEventsHandler.forceCleanupParticipationAfterLeaveFailure({ io: this.io as SocketIOServer, ...opts }),
+        this.callEventsHandler.forceCleanupParticipationAfterLeaveFailure({ io: this.io, ...opts }),
     });
 
     this.adminAgentHandler = new AdminAgentHandler({
@@ -587,13 +601,26 @@ export class MeeshySocketIOManager {
       // AuthHandler joins ROOMS.user(...) BEFORE registering the socket and
       // before the presence-snapshot/drain call, for both JWT and anonymous
       // paths (anonymous personal rooms use the participant id).
-      // Replayed payloads are stored as opaque JSON in the queue — they were
-      // shaped at enqueue time, so re-checking them against ServerToClientEvents
-      // here is impossible (loose emit, same as the previous raw-Socket path).
-      const userRoom = this.io.to(ROOMS.user(userId)) as unknown as { emit: (event: string, payload: unknown) => void };
+      // Ce site portait un cast — `as unknown as { emit(event: string, payload:
+      // unknown): void }` — sous ce commentaire : « les charges rejouées sont du
+      // JSON opaque, mises en forme à l'enfilage, donc les revérifier contre
+      // `ServerToClientEvents` ici est IMPOSSIBLE ».
+      //
+      // C'était vrai, et ça ne l'est plus depuis le cycle 104 : `_drainedEmissions`
+      // rend des `SocketEmission`, c'est-à-dire des `ServerEmission` — un couple
+      // `(événement, charge)` CORRÉLÉ — et l'affirmation de ce couple est posée
+      // là où la forme est réellement connue, à la frontière de désérialisation.
+      // Le rejeu n'a donc plus besoin d'une porte à lui : il passe par la même
+      // que la diffusion directe.
+      //
+      // Le cast était une PORTE, pas une commodité, et c'est ce qui l'a rendu
+      // invisible : le balayage du cycle 104 cherche des DÉCLARATIONS
+      // (`emit(event: string, …)`), et une porte peut aussi s'ouvrir par
+      // assertion de type.
+      const userRoom = this.io.to(ROOMS.user(userId));
       for (const entry of pending) {
         for (const emission of _drainedEmissions(entry)) {
-          userRoom.emit(emission.event, emission.payload);
+          emitServerEvent(userRoom, emission);
         }
       }
       const affectedConversationIds = [...new Set(pending.map(e => e.conversationId))];
@@ -649,7 +676,7 @@ export class MeeshySocketIOManager {
   ): Promise<void> {
     // Delivery receipts only make sense for entries that announce a message
     // ARRIVING — a mutation entry (edit, delete, reaction, pin, attachment
-    // enrichment, translation) replays its own event (see `_drainedEventName`)
+    // enrichment, translation) replays its own event (see `drainedEventName`)
     // but was never awaiting a "delivered" checkmark in the first place.
     //
     // Le prédicat est NOMMÉ et vit avec le vocabulaire (`queuedMessageArrival`)
@@ -793,10 +820,8 @@ export class MeeshySocketIOManager {
   async enqueueOfflineMessageMutation(params: {
     conversationId: string;
     actorUserId: string | null | undefined;
-    eventType: 'pinned' | 'unpinned' | 'edited' | 'deleted';
     messageId: string;
-    payload: Record<string, unknown>;
-  }): Promise<void> {
+  } & QueuedVariantFor<'pinned' | 'unpinned' | 'edited' | 'deleted'>): Promise<void> {
     await this._enqueueForOfflineParticipants(params);
   }
 
@@ -825,7 +850,7 @@ export class MeeshySocketIOManager {
     conversationId: string;
     actorParticipantId: string | null | undefined;
     messageId: string;
-    payload: Record<string, unknown>;
+    payload: QueuedPayloadFor<'link-message'>;
   }): Promise<void> {
     await this._enqueueForOfflineParticipants({ ...params, eventType: 'link-message' });
   }
@@ -999,7 +1024,7 @@ export class MeeshySocketIOManager {
   ): Promise<void> {
     if (!this.io) return;
     await this.callEventsHandler.endCallParticipationForDepartedMember({
-      io: this.io as SocketIOServer,
+      io: this.io,
       conversationId,
       userId
     });
@@ -1160,7 +1185,7 @@ export class MeeshySocketIOManager {
   /**
    * Remet les pastilles d'aplomb à la reconnexion — le SEUL signal qui le
    * fasse. La file hors-ligne rejoue l'aperçu, le rang et la promotion en tête
-   * de chaque ligne (`_drainedEventName` ne mappe que des événements de
+   * de chaque ligne (`drainedEventName` ne mappe que des événements de
    * message) ; le COMPTEUR, lui, ne se calcule que côté serveur, depuis les
    * curseurs de lecture.
    *
@@ -1938,7 +1963,7 @@ export class MeeshySocketIOManager {
           conversationId: normalizedId,
           eventType: 'translation',
           messageId: result.messageId,
-          payload: translationData as unknown as Record<string, unknown>,
+          payload: translationData,
           dedupKey: `${result.messageId}:${targetLanguage}`,
           restrictToReadersOfLanguage: targetLanguage,
         });
@@ -2197,7 +2222,12 @@ export class MeeshySocketIOManager {
       }
 
       // Diffuser dans la room de conversation
-      this.io.to(roomName).emit(eventConstant, translationData);
+      // Nom d'événement CALCULÉ : socket.io ne le vérifie PAS (mesure du
+      // cycle 104 — sur un `Ev` union, `EventParams` s'effondre en union de
+      // tuples et n'importe quelle charge de la famille passe sous n'importe
+      // quel membre). Ce site AVAIT l'air gardé — il émet sur un `Server`
+      // paramétré par `ServerToClientEvents` — et ne l'était pas.
+      emitServerEvent(this.io.to(roomName), eventConstant, translationData);
       logger.info('audio-translation:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.language });
 
       // Generic attachment-updated delta : same rationale as the
@@ -2257,22 +2287,6 @@ export class MeeshySocketIOManager {
       SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED,
       '✅'
     );
-  }
-
-  private _findUsersForLanguage(targetLanguage: string): SocketUser[] {
-    const lang = targetLanguage.toLowerCase();
-    const targetUsers: SocketUser[] = [];
-
-    for (const [, user] of this.connectedUsers) {
-      const matches =
-        user.resolvedLanguages.includes(lang) ||
-        user.language.toLowerCase() === lang;
-      if (matches) {
-        targetUsers.push(user);
-      }
-    }
-
-    return targetUsers;
   }
 
   /**
@@ -2568,84 +2582,62 @@ export class MeeshySocketIOManager {
       // CORRECTION senderId: message.senderId = participant ID, mais les clients comparent
       // senderId avec leur userId. On expose sender.userId (= User.id) en priorité.
       const resolvedSenderId = senderParticipant?.userId || senderParticipant?.user?.id || message.senderId || undefined;
+      // Charge utile `message:new` : les champs DÉRIVÉS DE LA LIGNE MESSAGE
+      // viennent de `buildMessageNewPayload`, la source unique partagée avec le
+      // transport socket (`MessageHandler._buildMessagePayload`). Ce chemin-ci
+      // en portait une copie manuscrite qui avait perdu quatre familles de
+      // champs — l'enveloppe E2EE, le plafond de vue-unique, la provenance d'un
+      // transfert et la réponse à un post — soit exactement celles des messages
+      // qu'il est SEUL à porter côté iOS (`socketFirstEligible` envoie par REST
+      // toute pièce jointe, tout DM chiffré, toute vue-unique, tout éphémère,
+      // tout message à effets). Cf. l'en-tête de `messageNewPayload.ts`.
+      //
+      // `originalContent` et `metadata` restent propres à ce transport :
+      //   - `originalContent` n'est PAS une colonne — il duplique `content` sur
+      //     le fil, et le web le lit en second (`content || originalContent`).
+      //     L'ajouter au chemin socket doublerait le poids texte du chemin le
+      //     plus chaud du service pour un alias hérité ; le retirer d'ici est un
+      //     RETRAIT, qui demande d'abord de relever ses consommateurs web.
+      //   - `metadata` est l'enveloppe brute d'où le chemin socket HISSE ce dont
+      //     les clients ont besoin (`location`, `trackingLinks`, `postReplyTo`).
+      //     iOS y lit encore `callSummary` et `joinNotice`, deux familles de
+      //     messages système que seul ce transport-ci produit.
       const messagePayload = {
-        id: message.id,
-        conversationId: normalizedId,  // ← FIX: Toujours utiliser l'ObjectId normalisé
-        senderId: resolvedSenderId,
-        content: message.content,
-        originalLanguage: message.originalLanguage || 'fr',
-        originalContent: (message as unknown as Record<string, unknown>)['originalContent'] as string | undefined || message.content,
-        messageType: (message.messageType || 'text') as MessageType,
-        messageSource: message.messageSource || undefined,
-        metadata: message.metadata || undefined,
-        isEdited: Boolean(message.isEdited),
-        deletedAt: message.deletedAt || undefined,
-        isBlurred: Boolean(message.isBlurred),
-        isViewOnce: Boolean(message.isViewOnce),
-        effectFlags: (message as unknown as Record<string, unknown>)['effectFlags'] ?? 0,
-        expiresAt: message.expiresAt || undefined,
-        createdAt: message.createdAt || new Date(),
-        updatedAt: message.updatedAt || new Date(),
-        validatedMentions: message.validatedMentions ?? [],
-        // Phase 4 §6.2 — le `clientMessageId` doit voyager jusqu'aux appareils
-        // de l'EXPÉDITEUR, et à eux seuls. Il est retiré du payload des pairs
-        // par `stripClientMessageId` juste avant l'émission (même helper, même
-        // règle que le chemin socket et que les routes de lien). Sans lui, la
-        // ligne optimiste ne peut être promue que par la réponse HTTP — voir le
-        // commentaire du split d'émission plus bas.
-        clientMessageId: (message as unknown as Record<string, unknown>)['clientMessageId'] || undefined,
-        translations: messageTranslations,
-        sender: senderParticipant ? {
-          id: senderParticipant.id,
-          displayName: senderParticipant.nickname || senderParticipant.displayName,
-          avatar: senderParticipant.avatar || senderParticipant.user?.avatar,
-          type: senderParticipant.type,
-          userId: senderParticipant.userId,
-          // Auteur sans compte : le pseudo `ano_…` sert de handle — sans lui,
-          // la bulle temps réel affichait un « @ » vide. Le REST sert en plus
-          // le nom donné au formulaire (le profil de session n'est pas chargé
-          // sur ce chemin).
-          username: senderParticipant.user?.username
-            ?? (senderParticipant.type === 'anonymous' ? senderParticipant.displayName : undefined),
-          firstName: senderParticipant.user?.firstName || '',
-          lastName: senderParticipant.user?.lastName || '',
-        } : undefined,
-        attachments: message.attachments ?? [],
-        replyToId: message.replyToId || undefined,
-        // DUPLICATION CONNUE — pas unifiée avec MessageHandler._buildMessagePayload
-        // (services/gateway/src/socketio/handlers/MessageHandler.ts, champ
-        // `replyTo`) : ce bloc RECONSTRUIT et APLATIT le sender (username/
-        // firstName/lastName remontés depuis `sender.user`), alors que
-        // `_buildMessagePayload` fait un passthrough BRUT de `message.replyTo`
-        // (sender imbriqué, non aplati). Les deux formes de fil sont donc
-        // DÉLIBÉRÉMENT différentes aujourd'hui (chemin socket `message:send`
-        // vs chemin REST/agent de ce fichier) — les fusionner changerait la
-        // forme du payload consommée par un client sans certitude sur lequel
-        // des deux client iOS/web dépend. D'où le commentaire plutôt que la
-        // fusion demandée : **tout champ ajouté ici sur `replyTo` (dont
-        // `location`) doit être répliqué à la main dans `_buildMessagePayload`**,
-        // et inversement — c'est la 3e fois que cette duplication cause un
-        // bug de parité (cf. `location` ci-dessous).
-        replyTo: message.replyTo ? hoistLocationOnto({
-          id: message.replyTo.id,
+        ...buildMessageNewPayload(message, {
           conversationId: normalizedId,
-          senderId: message.replyTo.senderId || undefined,
-          content: message.replyTo.content,
-          originalLanguage: message.replyTo.originalLanguage || 'fr',
-          messageType: (message.replyTo.messageType || 'text') as MessageType,
-          createdAt: message.replyTo.createdAt || new Date(),
-          metadata: (message.replyTo as unknown as { metadata?: unknown }).metadata,
-          sender: message.replyTo.sender ? {
-            id: message.replyTo.sender.id,
-            displayName: message.replyTo.sender.nickname || message.replyTo.sender.displayName,
-            avatar: message.replyTo.sender.avatar,
-            type: message.replyTo.sender.type,
-            userId: message.replyTo.sender.userId,
-            username: message.replyTo.sender.user?.username,
-            firstName: message.replyTo.sender.user?.firstName || '',
-            lastName: message.replyTo.sender.user?.lastName || '',
-          } : undefined
-        } as unknown as Record<string, unknown>) : undefined,
+          translations: messageTranslations,
+          // Le `select` du chemin REST livre déjà les pièces jointes à la forme
+          // rendue ; le chemin socket, lui, les normalise (cf. la note jumelle).
+          attachments: message.attachments ?? [],
+          // DUPLICATION ASSUMÉE avec MessageHandler._buildMessagePayload : ce
+          // bloc RECONSTRUIT et APLATIT le sender (username/firstName/lastName
+          // remontés depuis `sender.user`), alors que le chemin socket fait un
+          // passthrough BRUT. Les deux formes de fil sont DÉLIBÉRÉMENT
+          // différentes — les fusionner changerait la forme consommée par un
+          // client sans certitude sur lequel des deux en dépend.
+          replyTo: message.replyTo ? hoistLocationOnto({
+            id: message.replyTo.id,
+            conversationId: normalizedId,
+            senderId: message.replyTo.senderId || undefined,
+            content: message.replyTo.content,
+            originalLanguage: message.replyTo.originalLanguage || 'fr',
+            messageType: (message.replyTo.messageType || 'text') as MessageType,
+            createdAt: message.replyTo.createdAt || new Date(),
+            metadata: (message.replyTo as unknown as { metadata?: unknown }).metadata,
+            sender: message.replyTo.sender ? {
+              id: message.replyTo.sender.id,
+              displayName: message.replyTo.sender.nickname || message.replyTo.sender.displayName,
+              avatar: message.replyTo.sender.avatar,
+              type: message.replyTo.sender.type,
+              userId: message.replyTo.sender.userId,
+              username: message.replyTo.sender.user?.username,
+              firstName: message.replyTo.sender.user?.firstName || '',
+              lastName: message.replyTo.sender.user?.lastName || '',
+            } : undefined
+          } as unknown as Record<string, unknown>) : undefined,
+        }),
+        originalContent: (message as unknown as Record<string, unknown>)['originalContent'] as string | undefined || message.content,
+        metadata: message.metadata || undefined,
       };
 
       // Lieu partagé : hisser `metadata.location` en top-level `location`.
@@ -2792,7 +2784,11 @@ export class MeeshySocketIOManager {
           const updatePayload = {
             conversationId: normalizedId,
             updatedBy: { id: resolvedSenderId ?? message.senderId ?? '' },
-            lastMessageAt: message.createdAt || new Date(),
+            // Chaîne ISO — voir `toIsoOrNull`. `|| new Date()` conservé : ce
+            // chemin sert aussi des messages fabriqués (agent, traducteur) dont
+            // le `createdAt` peut manquer, et la ligne de liste a besoin d'un
+            // rang pour se trier.
+            lastMessageAt: toIsoOrNull(message.createdAt || new Date()),
             lastMessageId: message.id,
             // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism`
             // avec le reste de la paire, sous le même plafond qu'elle.
@@ -2985,21 +2981,23 @@ export class MeeshySocketIOManager {
       }
 
       const senderParticipant = message.sender;
-      const resolvedSenderId = senderParticipant?.userId || senderParticipant?.user?.id || message.senderId || undefined;
+      const resolvedSenderId = resolveWireSenderId(message);
       const updatedAt = message.updatedAt || new Date();
+      // Le NOYAU du contrat vient de `buildMessageEditedCore`, source unique
+      // partagée avec le transport socket (`MessageHandler.handleMessageEdit`),
+      // qui en omettait trois champs requis — cf.
+      // `socketio/messageEditedPayload.ts`. Ce producteur-ci les servait déjà
+      // tous : le passage à l'unité ne change RIEN de ce qu'il émet, il
+      // supprime la possibilité qu'un quatrième transport diverge.
       const editedPayload = {
-        id: message.id,
-        conversationId: normalizedId,
-        senderId: resolvedSenderId,
-        content: message.content,
-        originalLanguage: message.originalLanguage || 'fr',
-        messageType: (message.messageType || 'text') as MessageType,
+        ...buildMessageEditedCore(message, {
+          conversationId: normalizedId,
+          content: message.content,
+          isEdited: Boolean(message.isEdited),
+          editedAt: updatedAt,
+        }),
         messageSource: message.messageSource || undefined,
         metadata: message.metadata ?? {},
-        isEdited: Boolean(message.isEdited),
-        editedAt: updatedAt,
-        createdAt: message.createdAt || new Date(),
-        updatedAt,
         translations: messageTranslations,
         sender: senderParticipant ? {
           id: senderParticipant.id,
@@ -3026,7 +3024,7 @@ export class MeeshySocketIOManager {
         actorUserId: null,
         eventType: 'edited',
         messageId: message.id,
-        payload: editedPayload as unknown as Record<string, unknown>,
+        payload: editedPayload,
       });
     } catch (error) {
       logger.error('broadcast message:edited (call) failed', error);
@@ -3374,7 +3372,7 @@ export class MeeshySocketIOManager {
           eventType: 'reaction-added',
           messageId: reaction.targetMessageId,
           emoji: reaction.emoji,
-          payload: updateEvent as unknown as Record<string, unknown>,
+          payload: updateEvent,
         });
 
         const authorParticipant = message.senderId

@@ -30,14 +30,30 @@ export interface ISignalProtocolAdapter {
 
   /**
    * Perform X3DH key agreement
+   *
+   * Le paquet de pré-clés arrive d'un canal hostile : `theirSignedPreKeySignature`
+   * est ce qui rattache la pré-clé signée à `theirIdentityPublic`, et donc la
+   * seule chose qui fasse de cet accord un accord AUTHENTIFIÉ. Elle est REQUISE —
+   * une implémentation qui ne peut pas la fournir ne peut pas authentifier son
+   * pair, et doit échouer plutôt que d'accorder des clés à l'aveugle.
+   *
+   * La clé éphémère est générée par l'implémentation, jamais fournie par
+   * l'appelant : la réemployer d'une session à l'autre détruirait la confidentialité
+   * persistante que cette clé existe pour porter. Elle est en revanche RENDUE —
+   * l'initiateur doit la transmettre au répondeur, sans quoi le pair ne peut
+   * dériver aucun secret et la session est morte-née.
+   *
+   * `ourRegistrationId` est rendu pour la MÊME raison que la clé éphémère : il
+   * entre dans l'`info` du HKDF, donc le pair ne peut rien dériver sans lui. Un
+   * résultat qui le tait rend un secret que personne d'autre ne retrouvera.
    */
-  performX3DH(
-    ourIdentityPrivate: Buffer,
-    ourEphemeralPrivate: Buffer,
-    theirIdentityPublic: Buffer,
-    theirSignedPreKeyPublic: Buffer,
-    theirPreKeyPublic?: Buffer
-  ): Promise<Buffer>;
+  performX3DH(params: {
+    ourIdentityPrivate: Buffer;
+    theirIdentityPublic: Buffer;
+    theirSignedPreKeyPublic: Buffer;
+    theirSignedPreKeySignature: Buffer;
+    theirPreKeyPublic?: Buffer;
+  }): Promise<{ rootKey: Buffer; ourEphemeralPublic: Buffer; ourRegistrationId: number }>;
 
   /**
    * Encrypt a message using AES-256-GCM

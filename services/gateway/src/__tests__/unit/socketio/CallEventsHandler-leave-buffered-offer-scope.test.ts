@@ -254,4 +254,23 @@ describe('CallEventsHandler — call:leave scopes its buffered-offer cleanup to 
 
     expect((handler as any).bufferedOffers.has(`${CALL_ID}:${BYSTANDER_ID}`)).toBe(true);
   });
+
+  // Same defect class as the buffered-offer scoping above, on the call-wide
+  // ring timer: `ringingTimeouts` is keyed by callId, not by participant
+  // (CallService.ts), so clearing it here — while the group call
+  // demonstrably continues for the bystander (`makeContinuingCallSession`,
+  // status 'active') — silently drops the missed-call notification for any
+  // OTHER invitee who never joined, with no recovery path once the call is
+  // active (rehydrateActiveCalls only re-arms `initiated|ringing` calls).
+  it('does NOT clear the call-wide ring timer when the group call continues', async () => {
+    const prisma = makePrisma();
+    const { socket, handlers } = makeSocket();
+    const { io } = makeIo();
+
+    const handler = new CallEventsHandler(prisma);
+    handler.setupCallEvents(socket as any, io, () => LEAVER_ID);
+    await handlers[CALL_EVENTS.LEAVE](LEAVE_DATA);
+
+    expect(mockClearRingingTimeout).not.toHaveBeenCalled();
+  });
 });

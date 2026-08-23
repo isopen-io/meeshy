@@ -6,7 +6,7 @@
  * for anonymous users, from User for registered users.
  */
 
-import type { Socket } from 'socket.io';
+import type { MeeshySocket as Socket } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
