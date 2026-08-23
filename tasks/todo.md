@@ -1631,3 +1631,74 @@ Suite directe des DEUX suivis du cycle 107 bis, tous deux instruits et réels.
       du client Prisma « ne change rien » pour web. Mesuré : **1242 sans, 1239
       avec**. Fausse de trois points, sans conséquence (la CI génère toujours),
       mais jamais confrontée — famille du cycle 94.
+
+## Train d'intégration beta du 2026-08-23 — 9 PR alignées, `main` déverrouillé
+
+Contexte : un merge forcé avait laissé `main` rouge et désynchronisé les 7 PR
+ouvertes (6 sur 7 en conflit). Deux PR se sont ajoutées en cours de route.
+
+### Ce que le rouge était vraiment
+
+- [x] **`main` rouge — cause unique bloquante** : `PostsFeedScreen.tsx` lisait
+      `repostingPost.type` sur un état qui ne portait pas ce champ. `targetType`
+      partait donc à `undefined` à CHAQUE repost, le gateway retombait sur son
+      défaut `?? POST`, et un REEL republié depuis le fil quittait le fil des
+      reels — **le défaut même que le lot annonçait corriger**. Le compilateur
+      était seul à le voir, noyé dans une dette de 1239 erreurs où le cliquet ne
+      montre qu'un total : le `+1` faisait rougir sans nommer la cause.
+- [x] **Le step `Lint` est `continue-on-error: true`** — le « eslint: not found »
+      de `@meeshy/shared` était donc du BRUIT, jamais la cause. Diagnostiquer
+      dessus aurait coûté une demi-journée pour rien.
+
+### Trois gardes qui ne gardaient rien
+
+- [x] `CommentDraftStoreTests.swift` et `CompactCountConsolidationSourceGuardTests.swift`
+      vivaient hors du `pbxproj` : **vertes en ne s'exécutant jamais**.
+- [x] Le cliquet de dette appelait `unresolved_dist_imports`, fonction que la
+      fusion de deux lots concurrents avait emportée en gardant la DÉFINITION de
+      l'autre. Il mourait AVANT de compter, donc rendait non-zéro **en nommant
+      une régression de dette qui n'existait pas** — le faux verdict exact que
+      le cycle 108 avait fermé.
+- [x] Les scripts `lint` de `shared`, `gateway` et `agent` déclaraient
+      `eslint src/` sans eslint, sans config, et pour `shared` **sans `src/`**.
+
+### Une fuite de confidentialité laissée ouverte par contrat
+
+- [x] Le témoin adversaire `messages-list-forward-source-attachment-url-leak`
+      était ROUGE en permanence sur `main`, le commit qui le pose annonçant
+      lui-même « FUITE ENCORE OUVERTE ». Un transfert réutilise le chemin de
+      stockage de l'original, qui porte le `User.id` de son auteur : la réponse
+      qui refusait de NOMMER la source livrait son identifiant par `fileUrl`.
+      Fermée par ADRESSAGE (`/attachments/:id`) sur les **quatre** émissions —
+      un canal fermé et l'autre ouvert ne ferme rien.
+      **Un RED intentionnel qui survit au lot qui le pose cesse d'être un
+      marqueur : on apprend à lire le rouge comme normal.**
+
+### Lots produit livrés dans le même train
+
+- [x] **Le corps d'un post s'affichait en DOUBLE** : `PostDetail` montait
+      `TranslationToggle` en variante `block` avec `showContent={false}`, drapeau
+      que cette variante IGNORAIT. Rangée de drapeaux (une par langue servie,
+      sans plafond) sous le corps, rendu une seule fois.
+- [x] **Un transfert peut porter un mot** — envoyé APRÈS le transfert, et
+      seulement s'il a abouti.
+- [x] **Publier une pièce jointe reçue** (`POST /posts/from-attachment`) sans la
+      retélécharger. Le fichier est **dupliqué, jamais partagé** :
+      `reclaimMediaRowBytes` n'interroge que la table `Sound` avant d'effacer des
+      octets, donc un `PostMedia` pointant sur le fichier d'un
+      `MessageAttachment` aurait fait de la suppression d'un post une
+      suppression DANS la conversation.
+- [x] **Publier une capture se confirme** — la provenance ne peut pas être
+      décidée par le serveur : rien dans un fichier ne distingue une photo prise
+      à l'instant d'une photo importée.
+
+### Reste ouvert
+
+- [ ] **iOS n'a pas la publication depuis le partage** : la règle est dans
+      `packages/shared/utils/forward-to-publication.ts`, prête pour les trois
+      clients, mais seule la feuille web l'appelle.
+- [ ] **8 rouges iOS ANTÉRIEURS** (gardes du chantier Lentille) : pilule de
+      section non montée, `LentilleBridgeLine` dimensionnant son point par un
+      littéral, L06/L09 du rang plat, littéral « 900 » dans
+      `ConversationListView`, `call:join` non ré-émis à la reconnexion. Vérifiés
+      présents sur `main` avant ce train, qui en portait 13.
