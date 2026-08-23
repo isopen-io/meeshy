@@ -59,6 +59,21 @@
 > app-side model projecting onto the existing wire fields + exempt Compose glue, behavioural tests through the
 > public API, no production logic outside apps/android.
 >
+> **PR #3384 — ⚠ BLOCKED ON BASE, NOT MERGED (2026-08-23).** The merge gate — the **Android** CI check —
+> is **GREEN** (`assembleDebug` + `testDebugUnitTest`, run 32633748096 conclusion success). The monorepo
+> `ci.yml` is RED, but **the only red job is `Test gateway`** (2 failed / 19214 passed): both failures are in
+> `services/gateway/src/socketio/handlers/__tests__/MessageHandlerEditDelete.test.ts` — the `message:edited`
+> payload/`senderId` cases whose fixture pins `createdAt = 2026-08-22T10:00:00Z`. `admitMessageEdit` refuses any
+> edit past a 24 h window, so those two turned RED for EVERY branch at 10:00 UTC today. This is red on `main`
+> itself (PR #3381's commit proved it on a clean `origin/main`) and touches ZERO lines of this apps/android-only
+> diff — `ci.yml` doesn't even compile the Kotlin this slice adds. It is the CI-red rule's "red on the base too,
+> not mine" case, and it is **unfixable within apps/android scope** (the fix lives in `services/gateway`; touching
+> it would violate the hard rule "diff is apps/android only"). Per the hard rule **never merge past red CI**, the
+> PR is left OPEN and WATCHED (subscribed to PR activity). **Next iteration's Step 0**: if `main`/base has
+> recovered (the gateway time-bomb fixed — e.g. PR #3381's gateway fix, or another, merged), merge base into this
+> branch, re-run CI, and squash-merge #3384 once `ci.yml` is green; then proceed to the next slice. Until then
+> this slice stays ⚠ blocked and no new slice starts on top of an unmerged one.
+>
 > **Next**: still §E (Stories). Candidates, re-scout read-only before committing (parity notes are hypotheses):
 > (1) continue the text-element styling backlog — **size** (discrete font-size control; the wire
 > `StoryTextObject.fontSize` already exists, default 64) is the cleanest remaining thin slice, same shape as
