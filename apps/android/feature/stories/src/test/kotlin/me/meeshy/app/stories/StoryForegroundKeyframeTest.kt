@@ -19,6 +19,7 @@ class StoryForegroundKeyframeTest {
         keyframes: List<StoryKeyframe> = emptyList(),
         startTime: Double = 0.0,
     ) = StoryForegroundMediaView(
+        id = "fg",
         url = "http://cdn/fg.mp4",
         isVideo = true,
         x = 0.5,

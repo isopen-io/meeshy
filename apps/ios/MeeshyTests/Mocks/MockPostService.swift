@@ -61,6 +61,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var createCallCount = 0
     var lastCreateContent: String?
     var lastCreateType: String?
+    var lastCreateVisibility: String?
+    var lastCreateVisibilityUserIds: [String]?
     var lastCreateRepostOfId: String?
     /// Références DÉCLARÉES du dernier post créé. `nil` = aucune déclaration,
     /// ce qui n'est PAS `[]` : le serveur relit alors le texte lui-même.
@@ -241,6 +243,23 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastCreateType = type
         lastCreateRepostOfId = repostOfId
         return try createResult.get()
+    }
+
+    /// Surcharge de l'audience NOMMÉE : même raison que ci-dessous — sans
+    /// elle, le défaut du protocole rabat l'appel sur la signature sans liste
+    /// et `visibilityUserIds` deviendrait inobservable.
+    func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?,
+                moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?,
+                originalLanguage: String?,
+                mobileTranscription: MobileTranscriptionPayload?,
+                repostOfId: String?, location: SharedPlace?,
+                mentions: [PostMentionInput]?) async throws -> APIPost {
+        lastCreateVisibility = visibility
+        lastCreateVisibilityUserIds = visibilityUserIds
+        return try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji,
+                                mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration,
+                                originalLanguage: originalLanguage, mobileTranscription: mobileTranscription,
+                                repostOfId: repostOfId, location: location, mentions: mentions)
     }
 
     /// Surcharge COMPLÈTE : sans elle, le défaut du protocole rabat l'appel sur

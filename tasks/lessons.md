@@ -13128,3 +13128,172 @@ charge socket.
 - Même famille que le compte (93) et le tri (86 bis) : **une justification de
   maintien s'ouvre avant d'être crue**, et celle-ci tenait en vie le seul champ
   que le typage refuserait.
+
+## Leçon 255 — un gate qui s'exprime par un PROXY peut être incapable de dire NON à l'un de ses membres
+
+Le drain de la file hors ligne ne demande pas à une entrée « quelle est ta
+forme ? ». Il lui demande **« sais-tu te diffuser ? »**, et lit la réponse dans
+la longueur d'une liste :
+
+```ts
+const emissions = _drainedEmissions(entry);
+if (emissions.length === 0) { dropEntry(entry, 'unresolvable-event-type'); continue; }
+```
+
+Le contrat est écrit dans la fonction elle-même : « une liste VIDE dit *je ne
+sais pas diffuser ceci*. C'est la seule réponse honnête. » Onze `eventType` sur
+douze passent par une table qui peut rendre `undefined`, donc `[]`. Le douzième —
+`'link-message'`, le seul dont la charge se **DÉPLIE** — passait par
+`linkMessageEmissions`, qui poussait l'enveloppe INCONDITIONNELLEMENT avant de
+regarder ce qu'elle contenait. **Il ne pouvait pas rendre `[]`.**
+
+Le refus du message dérivé était pourtant là, ancien et juste. Il ne servait à
+rien : il retirait la seule émission qui compte et laissait la liste à 1.
+
+Ce que l'enveloppe seule livre : rien (son unique auditeur, le web, lit
+`data.message` ; iOS et Android n'écoutent que le `message:new` refusé). Ce que
+la liste non vide AFFIRMAIT, en revanche, coûtait trois signaux — `count`
+comptait la remise, `conversationIds` ne nommait pas la conversation (donc rien
+n'envoyait le client rechercher un message toujours en base), et l'accusé de
+remise partait, avançant un curseur **MONOTONE** : la coche de l'auteur passait
+à « remis » pour un message qu'aucun destinataire n'a reçu. Sur le seul
+transport d'envoi dont dispose un participant anonyme.
+
+> La question à poser à tout gate qui s'exprime par un proxy (une longueur, un
+> `null`, un booléen dérivé) n'est pas « est-il correct ? » mais **« chaque
+> membre de ce qu'il arbitre peut-il le faire répondre NON ? »**. Le proxy avait
+> l'air uniforme parce qu'il est écrit UNE FOIS, au-dessus de la boucle — c'est
+> exactement ce qui cache l'exception.
+
+- Corollaire de journal : quand un refus a plusieurs causes, la `reason` les
+  SÉPARE. `'unresolvable-event-type'` accuse la file,
+  `'link-envelope-without-message'` accuse le producteur de l'enveloppe.
+
+## Leçon 256 — un témoin qui nomme correctement la moitié qu'il garde GÈLE l'autre
+
+Quatre des six témoins du cycle 114 ne sont pas des ajouts : ce sont des
+**retournements**. Ils existaient, ils étaient verts, et ils assertaient le
+défaut mot pour mot :
+
+```ts
+it("n'ajoute PAS `message:new` quand l'enveloppe ne porte aucun message", () => {
+  expect(linkMessageEmissions({}).map((e) => e.event)).toEqual([SERVER_EVENTS.LINK_MESSAGE_NEW]);
+});
+```
+
+L'intitulé dit VRAI, et c'est précisément cette vérité qui a rendu la seconde
+moitié de l'assertion invisible : `⇒ [LINK_MESSAGE_NEW]` se relit comme le RESTE
+de la phrase, pas comme une affirmation à instruire. Deux cycles de gardes
+posées à cette même frontière de désérialisation sont passés à côté.
+
+> **Un `toEqual` sur une liste entière affirme autant sur ce qu'il GARDE que sur
+> ce qu'il ADMET.** Les deux moitiés se relisent séparément — et l'intitulé du
+> témoin ne couvre en général que la première.
+
+- Même famille que le compte (93), le tri (86 bis) et le commentaire qui énonce
+  une contrainte (94) : **une affirmation portée par un témoin vert reste une
+  affirmation.**
+
+## Cycle 114 bis — un champ que PERSONNE n'écrit se lit comme un champ qui vaut faux
+
+### 1. Une garde de confidentialité peut être livrée, testée, verte, et n'avoir jamais eu lieu
+
+`publicationNeedsCaptureConfirmation` était juste. Ses témoins passaient. Le
+schéma de la passerelle acceptait le champ et documentait sa raison d'être. Et
+la confirmation ne s'est **jamais** affichée, parce que `capturedInApp`
+n'existait nulle part ailleurs que dans la règle qui le lit : pas de colonne,
+pas de champ de contrat, **aucun chemin d'écriture**.
+
+Le trait à retenir : **rien ne ressemble à un bug.** Il n'y a pas de `TODO`, pas
+de type qui ment, pas d'exception. Une valeur absente se lit `undefined`, un
+`!!undefined` vaut `false`, et une garde qui ne se déclenche jamais est
+silencieuse par nature — c'est exactement ce qu'on attend d'elle quand tout va
+bien. **Une garde qui ne se déclenche pas n'est pas observable ; il faut donc
+aller vérifier qu'elle PEUT.**
+
+La question à poser à tout drapeau qui commande une garde : **qui l'ÉCRIT ?**
+Pas « qui le déclare », pas « qui le transporte » — qui pose la valeur `true`.
+Le nom apparaissait cinq fois dans le dépôt et zéro fois à gauche d'une
+affectation issue du monde réel. Même balayage que le cycle 96 sur
+`signedPreKey.signature` (six occurrences, zéro à droite d'une comparaison) :
+compter les sites ne dit rien, c'est leur RÔLE grammatical qui parle.
+
+### 2. Un cast NOMMAIT la déclaration manquante — troisième fois
+
+```ts
+const primaryAttachment = (message as { attachments?: Array<{ …; capturedInApp?: boolean }> })
+  .attachments?.[0];
+```
+
+Règle déjà écrite (cycles 96, 103, 104) et vérifiée une fois de plus : **un cast
+sur un objet de contrat nomme le champ qui manque au contrat.** Ici il faisait
+mieux que le nommer — il fabriquait, le temps d'une expression, le champ que la
+production ne produit pas. Le retirer a fait tomber le compilateur sur les six
+sites qui laissaient la valeur passer à la trappe, dont le transformateur web,
+seul chemin entre la réponse et l'objet que la feuille lit.
+
+### 3. Un témoin qui FABRIQUE la valeur en litige atteste une fiction
+
+Les témoins web posaient `capturedInApp: true` à la main dans leurs fixtures. Ils
+prouvaient que « si le champ vaut vrai, la modale s'ouvre » — une propriété du
+composant, vraie, et sans rapport avec la question qui comptait : *ce champ
+peut-il valoir vrai ?*
+
+Même famille que le `MagicMock` nu (cycle 90), que le double Prisma qui rend `[]`
+(cycle 87) et que les fixtures `'conv-1'` du cycle 112 : **un double ment aussi
+par ce qu'il ACCEPTE de représenter.** Le correctif de méthode est le même —
+partir de ce que l'ÉMETTEUR émet réellement, jamais de la forme qu'on aimerait
+qu'il ait.
+
+### 4. Le commentaire disait la panne, à voix haute, et personne ne l'avait crue
+
+```ts
+// `capturedInApp` est DÉCLARÉ par le client, et il est le seul à pouvoir le faire
+```
+
+Vrai sur le principe. Faux en fait : **aucun client n'avait de quoi le
+déclarer.** C'est la famille « un commentaire qui ÉNONCE une contrainte est une
+AFFIRMATION » (cycle 94), avec une variante : celui-ci n'énonçait pas une
+contrainte de schéma mais une **répartition des responsabilités**, et personne
+n'avait vérifié que l'autre partie tenait la sienne. Devant une phrase de la
+forme « c'est X qui fournit ce champ », la question est : *et il le fait ?*
+
+### 5. On peut poser un tuyau parfait et n'y verser personne
+
+C'est la leçon la plus coûteuse du cycle, et elle a failli sortir en production
+sous les traits d'un correctif.
+
+Après deux commits — colonne, persistance, `select`, schéma, type requis,
+transformateur, trois étages iOS — la garde était **toujours inerte** : rien ne
+déclarait la provenance à la capture, donc la colonne valait `false` partout.
+J'avais reproduit le défaut d'origine un étage plus haut, avec plus de code et
+autant d'effet, et j'aurais pu le clore ainsi : les gates étaient verts, les
+témoins prouvaient chaque maillon, et le seul maillon absent était celui dont
+personne n'écrit de témoin — **le premier**.
+
+Ce qui l'a rattrapé : la phrase que je venais d'écrire moi-même dans « reste
+ouvert » disait la panne en toutes lettres. **Relire son propre journal comme on
+relirait le commentaire d'un autre** — les deux se périment de la même façon, et
+un aveu écrit sans être entendu ne vaut pas mieux que le commentaire du §4.
+
+Formulation générale : **une chaîne de données se vérifie par son PREMIER
+maillon, pas par la longueur du reste.** Les maillons intermédiaires ont chacun
+un témoin naturel (« ce mapping recopie-t-il le champ ? ») ; la SOURCE n'en a
+pas, parce qu'il n'y a rien en amont à comparer. C'est donc là que la vérification
+doit être délibérée, et elle ne se formule qu'en une question : *qui, dans le
+monde réel, pose cette valeur, et à quel moment le sait-il ?*
+
+### 6. Corollaire : la provenance est une donnée PÉRISSABLE
+
+Ce champ a une propriété qui explique tout le défaut : **il n'est connaissable
+qu'à un seul instant**, et par un seul acteur. Le serveur ne peut pas le
+déduire (rien dans un fichier ne distingue une photo prise d'une photo
+importée) ; le client ne peut plus le retrouver une seconde après. Le web
+essayait de le relire sur un attachement redescendu du serveur — c'est-à-dire à
+l'endroit et au moment où l'information n'existe plus.
+
+Devant une donnée de cette famille — provenance, intention, contexte de geste —
+**la seule question d'architecture est « où est-elle encore vraie ? »**, et la
+réponse commande le reste : elle s'écrit là, ou elle est perdue. Un lot qui la
+transporte sans l'écrire à la source déplace le problème en le rendant plus
+difficile à voir.

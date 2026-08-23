@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { isMsRangeOrdered, MS_RANGE_REFINEMENT } from '../../utils/time-range';
+import {
+  isMsRangeOrdered,
+  isMsRangeStrictlyOrdered,
+  MS_RANGE_REFINEMENT,
+} from '../../utils/time-range';
 
 describe('isMsRangeOrdered', () => {
   it('accepts an ordered range (endMs > startMs)', () => {
@@ -12,6 +16,26 @@ describe('isMsRangeOrdered', () => {
 
   it('rejects an inverted range (endMs < startMs)', () => {
     expect(isMsRangeOrdered({ startMs: 500, endMs: 100 })).toBe(false);
+  });
+});
+
+describe('isMsRangeStrictlyOrdered', () => {
+  it('accepts a strictly ordered range (endMs > startMs)', () => {
+    expect(isMsRangeStrictlyOrdered({ startMs: 100, endMs: 500 })).toBe(true);
+  });
+
+  it('rejects a zero-duration range (endMs === startMs) — a non-listen', () => {
+    expect(isMsRangeStrictlyOrdered({ startMs: 250, endMs: 250 })).toBe(false);
+  });
+
+  it('rejects an inverted range (endMs < startMs)', () => {
+    expect(isMsRangeStrictlyOrdered({ startMs: 500, endMs: 100 })).toBe(false);
+  });
+
+  it('is stricter than isMsRangeOrdered on the zero-duration boundary', () => {
+    const point = { startMs: 42, endMs: 42 };
+    expect(isMsRangeOrdered(point)).toBe(true);
+    expect(isMsRangeStrictlyOrdered(point)).toBe(false);
   });
 });
 

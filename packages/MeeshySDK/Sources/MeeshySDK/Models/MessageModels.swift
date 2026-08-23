@@ -159,6 +159,14 @@ public struct APIMessageAttachment: Decodable, Sendable {
     public let forwardedFromAttachmentId: String?
     public let isForwarded: Bool?
 
+    // ── Provenance ──
+    /// Le fichier sort de la caméra ou du micro DE L'APPLICATION. Déclaré par
+    /// le client qui a capturé, à l'envoi — lui seul le sait, et seulement à cet
+    /// instant — puis rendu ici par la passerelle. La feuille de partage le lit
+    /// pour décider si PUBLIER ce média demande confirmation.
+    /// @see `PublicationTargetRule.needsCaptureConfirmation`
+    public let capturedInApp: Bool?
+
     // ── View-once / Effects / Blur ──
     public let isViewOnce: Bool?
     public let maxViewOnceCount: Int?
@@ -203,7 +211,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
         case pageCount, lineCount
         case latitude, longitude
         case uploadedBy, isAnonymous, createdAt
-        case forwardedFromAttachmentId, isForwarded
+        case forwardedFromAttachmentId, isForwarded, capturedInApp
         case isViewOnce, maxViewOnceCount, viewOnceCount, isBlurred, effectFlags
         case deliveredToAllAt, viewedByAllAt, downloadedByAllAt
         case listenedByAllAt, watchedByAllAt
@@ -255,6 +263,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
         self.createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
         self.forwardedFromAttachmentId = try c.decodeIfPresent(String.self, forKey: .forwardedFromAttachmentId)
         self.isForwarded = try c.decodeIfPresent(Bool.self, forKey: .isForwarded)
+        self.capturedInApp = try c.decodeIfPresent(Bool.self, forKey: .capturedInApp)
         self.isViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce)
         self.maxViewOnceCount = try c.decodeIfPresent(Int.self, forKey: .maxViewOnceCount)
         self.viewOnceCount = try c.decodeIfPresent(Int.self, forKey: .viewOnceCount)
@@ -736,7 +745,8 @@ extension APIMessage {
             return MeeshyMessageAttachment(
                 id: apiAtt.id, fileName: apiAtt.fileName ?? "", originalName: apiAtt.originalName ?? "",
                 mimeType: apiAtt.mimeType ?? "application/octet-stream", fileSize: apiAtt.fileSize ?? 0,
-                fileUrl: apiAtt.fileUrl ?? "", width: apiAtt.width, height: apiAtt.height,
+                fileUrl: apiAtt.fileUrl ?? "", capturedInApp: apiAtt.capturedInApp == true,
+                width: apiAtt.width, height: apiAtt.height,
                 thumbnailUrl: apiAtt.thumbnailUrl, thumbHash: apiAtt.thumbHash, duration: apiAtt.duration, uploadedBy: senderId,
                 latitude: apiAtt.latitude, longitude: apiAtt.longitude,
                 thumbnailColor: thumbnailColor,

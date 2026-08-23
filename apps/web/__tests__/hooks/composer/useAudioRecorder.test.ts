@@ -174,7 +174,60 @@ describe('useAudioRecorder', () => {
 
       expect(mockOnAudioReady).toHaveBeenCalledWith(
         expect.any(Array),
-        [mockMetadata]
+        [{ ...mockMetadata, capturedInApp: true }]
+      );
+    });
+
+    it('DÉCLARE la note vocale comme une capture — le serveur ne peut pas le déduire', async () => {
+      // Une note vocale qu'on vient d'enregistrer n'a encore été entendue par
+      // personne : la publier au-delà de la conversation se confirme. Rien dans
+      // le fichier ne distingue un enregistrement d'un son importé — seul CE
+      // chemin le sait, et seulement à cet instant. S'il ne le déclare pas, la
+      // provenance est perdue pour toujours et la garde ne se déclenche jamais.
+      const { result } = renderHook(() =>
+        useAudioRecorder({ onAudioReady: mockOnAudioReady })
+      );
+
+      const mockBlob = createMockBlob(1024, 'audio/webm');
+
+      act(() => {
+        result.current.handleBeforeStop();
+      });
+
+      await act(async () => {
+        await result.current.handleAudioRecordingComplete(mockBlob, 5.5);
+      });
+
+      expect(mockOnAudioReady).toHaveBeenCalledWith(
+        expect.any(Array),
+        [expect.objectContaining({ capturedInApp: true })]
+      );
+    });
+
+    it('déclare la capture SANS écraser les métadonnées de l enregistrement', async () => {
+      const { result } = renderHook(() =>
+        useAudioRecorder({ onAudioReady: mockOnAudioReady })
+      );
+
+      const mockBlob = createMockBlob(1024, 'audio/webm');
+      const mockMetadata = {
+        audioEffectsTimeline: { events: [{ type: 'effect', timestamp: 1000 }] },
+      };
+
+      act(() => {
+        result.current.handleBeforeStop();
+      });
+
+      await act(async () => {
+        await result.current.handleAudioRecordingComplete(mockBlob, 5.5, mockMetadata);
+      });
+
+      expect(mockOnAudioReady).toHaveBeenCalledWith(
+        expect.any(Array),
+        [expect.objectContaining({
+          capturedInApp: true,
+          audioEffectsTimeline: mockMetadata.audioEffectsTimeline,
+        })]
       );
     });
 
