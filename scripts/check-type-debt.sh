@@ -69,7 +69,13 @@ NC='\033[0m'
 # Le nombre d'erreurs de types que `apps/web` porte AUJOURD'HUI, mesuré avec le
 # TypeScript du dépôt. Il ne peut que descendre. Pour le baisser : lancer ce
 # script, il nomme la valeur à écrire ici.
-readonly WEB_BASELINE=1241
+# 1241 → 1239 au cycle 107 : déclarer `CallInitiatedEvent.iceServers` et rendre
+# `CallEndedEvent.endedBy` optionnel a réconcilié deux sites d'`apps/web` avec le
+# contrat partagé. La dette n'a pas été « travaillée » ici — elle a baissé comme
+# EFFET d'un lot passerelle, ce qui est le cas que ce cliquet existe pour
+# capturer : sans lui, les deux points regagnés redeviendraient dépensables en
+# silence.
+readonly WEB_BASELINE=1239
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #

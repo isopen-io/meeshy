@@ -1397,6 +1397,84 @@ Deux familles sur douze valident à la main. Écart de CONSISTANCE, pas de
 couverture : les gardes sont réelles et lisibles. La question utile n'est pas
 « sont-elles gardées ? » mais « la douzième famille le sera-t-elle ? ».
 
+### Et pourtant le CAST, lui, effaçait les DEUX sens
+
+La section ci-dessus est juste, et ce qui suit ne la contredit pas : **une porte
+d'écoute typée n'est pas une garde de sécurité, c'est un instrument de
+COMPLÉTUDE DE CONTRAT.** Mesuré au compilateur sous le `tsconfig` réel, voici
+exactement ce qu'elle refuse — ni plus, et il faut le dire :
+
+| ce qu'on écoute | verdict |
+|---|---|
+| un nom d'événement ABSENT du contrat | **refusé** (TS2345) |
+| une charge SANS RECOUVREMENT avec la déclarée | **refusé** |
+| une charge divergente mais assignable dans UN sens | **ACCEPTÉ** |
+
+La troisième ligne est structurelle (`strictFunctionTypes: false` ⇒ paramètres
+bivariants). **Une porte annoncée plus stricte qu'elle n'est vaut moins que pas
+de porte** : personne n'ira vérifier derrière.
+
+Ce qu'elle garde vraiment, et qui suffit à la justifier : **aucun événement ne
+peut plus être ÉCOUTÉ sans être DÉCLARÉ.** `call:analytics` a vécu écouté,
+validé par zod (donc GARDÉ, au sens de la section précédente) et agrégé en
+production, ses dix-neuf champs transcrits dans la signature du listener, **sans
+figurer dans `ClientToServerEvents`** — pendant que les trois clients
+l'émettaient chacun contre sa propre transcription. Une validation d'exécution
+irréprochable ne dit rien de la dérive de contrat : ce sont deux propriétés
+disjointes, et il en faut une garde chacune.
+
+**Le point qui a fait la différence de production** : le socket et le serveur
+d'un handler viennent de `socketio/typed-socket.ts` (`MeeshySocket`,
+`MeeshyIOServer`), **jamais** de `socket.io`. Quand `MeeshySocketIOManager`
+passait son `io` par `this.io as SocketIOServer` — six sites — il ne relâchait
+pas seulement l'écoute : il relâchait **tout ce que `CallEventsHandler` ÉMET**,
+c'est-à-dire précisément la moitié dont le tableau ci-dessus dit qu'aucune autre
+garde ne la couvre.
+
+> **Un `as` vers le type NU d'une dépendance ne relâche pas un appel, il relâche
+> tout ce que la valeur castée porte** — ici les deux sens d'un sous-système
+> entier. Et il est plus discret qu'une redéclaration : il ne crée aucun type
+> nommé qu'on puisse chercher.
+
+Quatre divergences SORTANTES sont tombées à la première compilation sous la
+porte, dont `iceServers` sur `call:initiated` — les identifiants TURN, calculés
+par destinataire, que le SDK iOS décode pour traverser un NAT dès la SONNERIE,
+émis par les deux producteurs et déclarés par aucun contrat (famille `_seq` /
+`location`, cycle 105) — et `CallEndedEvent.endedBy`, que le contrat promettait
+alors que l'émetteur l'élargit délibérément en optionnel.
+
+> **Une piste peut être fausse sur son MOTIF et juste sur son ADRESSE.** Mesurer
+> la prémisse d'un suivi hérité fait abandonner la piste ; mesurer le SITE la
+> résout. La conclusion complète n'est pas « le suivi est faux, on passe », mais
+> « le suivi est faux, ET voilà ce qu'il y a effectivement à cette adresse ».
+
+### Un `.refine` Zod ne restreint pas `z.infer`
+
+Un objet PLAT gardé par un `.refine` transversal et une union DISCRIMINÉE
+expriment les mêmes contraintes à l'EXÉCUTION, et des types INFÉRÉS différents.
+Quand le contrat partagé déclare l'union (`WebRTCSignal`), c'est le SCHÉMA qu'on
+répare — jamais le site d'émission par un cast, ce qui rouvrirait la porte qu'on
+vient de fermer. Bénéfice réel de l'union : zod RETIRE les champs de l'autre
+membre, ce dont un relais qui émet `validation.data` plutôt que `data` dépend
+déjà pour sa sécurité.
+
+### Un gate rend DEUX verdicts, et ils peuvent se contredire
+
+Le texte ET le code de retour. Deux fois dans le même cycle, un seul des deux a
+été lu, et pas le même :
+
+- un `bun run build` échoué redirigé vers `/dev/null` a laissé la passerelle
+  compiler contre un `dist` PÉRIMÉ — une preuve de ROUGE semblait ne pas tomber ;
+- `bash check-type-debt.sh 2>&1 | tail -20` a rendu `exit 0` sur un gate qui
+  ÉCHOUAIT : **le code de retour d'un pipeline est celui de sa DERNIÈRE
+  commande**, ici `tail`.
+
+**Ne jamais passer un gate par un pipe quand c'est son code de sortie qu'on
+interroge** (`set -o pipefail`, ou rediriger et lire `$?` avant toute autre
+commande). Et se méfier particulièrement d'un gate qui échoue en annonçant une
+bonne nouvelle — le cliquet de dette de types échoue sur une AMÉLIORATION non
+enregistrée, ce qui n'a pas la forme d'un échec.
+
 ## La porte d'ÉMISSION se DÉRIVE du contrat, elle ne se redéclare pas
 
 Gouverner la CHARGE d'un événement sans gouverner le CANAL ne garde que le site

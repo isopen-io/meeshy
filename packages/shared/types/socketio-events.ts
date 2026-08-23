@@ -58,6 +58,8 @@ import type {
   CallForceLeaveClientEvent,
   CallForceLeaveServerEvent,
   CallRequestIceServersEvent,
+  CallMediaToggleClientEvent,
+  CallAnalyticsEvent,
   CallIceServersRefreshedEvent,
 } from './video-call.js';
 
@@ -657,6 +659,12 @@ export const CLIENT_EVENTS = {
   CALL_CHECK_ACTIVE: 'call:check-active',
   /** Request fresh TURN credentials before the current TTL expires. */
   CALL_REQUEST_ICE_SERVERS: 'call:request-ice-servers',
+  /**
+   * Rapport de télémétrie terminal, émis UNE fois au raccrochage par les trois
+   * clients. Écouté, validé (`socketCallAnalyticsSchema`) et agrégé par la
+   * passerelle depuis toujours — déclaré ici seulement au cycle 107.
+   */
+  CALL_ANALYTICS: 'call:analytics',
 
   // --- Location sharing ---
   LOCATION_LIVE_START: 'location:live-start',
@@ -2416,8 +2424,8 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent, ack: (response: CallJoinAck) => void) => void;
   [CLIENT_EVENTS.CALL_LEAVE]: (data: { callId: string }) => void;
   [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack: (response: { success: boolean }) => void) => void;
-  [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: { callId: string; enabled: boolean }, ack: (response: { success: boolean }) => void) => void;
-  [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: { callId: string; enabled: boolean }, ack: (response: { success: boolean }) => void) => void;
+  [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: CallMediaToggleClientEvent) => void;
+  [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: CallMediaToggleClientEvent) => void;
   [CLIENT_EVENTS.CALL_END]: (data: { callId: string; reason?: string }, ack: (response: { success: boolean }) => void) => void;
   [CLIENT_EVENTS.CALL_HEARTBEAT]: (data: CallHeartbeatEvent) => void;
   [CLIENT_EVENTS.CALL_QUALITY_REPORT]: (data: CallQualityReportEvent) => void;
@@ -2437,6 +2445,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_FORCE_LEAVE]: (data: CallForceLeaveClientEvent) => void;
   [CLIENT_EVENTS.CALL_CHECK_ACTIVE]: () => void;
   [CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS]: (data: CallRequestIceServersEvent) => void;
+  [CLIENT_EVENTS.CALL_ANALYTICS]: (data: CallAnalyticsEvent) => void;
   [CLIENT_EVENTS.PRESENCE_APP_STATE]: (data: { foreground?: boolean }) => void;
 
   // Location sharing
