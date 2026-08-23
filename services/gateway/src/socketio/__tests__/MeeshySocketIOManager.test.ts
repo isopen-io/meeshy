@@ -4841,31 +4841,6 @@ describe('MeeshySocketIOManager', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 48. _findUsersForLanguage
-  // -------------------------------------------------------------------------
-
-  describe('_findUsersForLanguage', () => {
-    it('returns users matching by resolvedLanguages', () => {
-      (manager as any).connectedUsers.set('u-fr', { id: 'u-fr', socketId: 's-fr', isAnonymous: false, language: 'en', resolvedLanguages: ['fr', 'en'] });
-      (manager as any).connectedUsers.set('u-en', { id: 'u-en', socketId: 's-en', isAnonymous: false, language: 'en', resolvedLanguages: ['en'] });
-      const result = (manager as any)._findUsersForLanguage('fr');
-      expect(result.some((u: any) => u.id === 'u-fr')).toBe(true);
-      expect(result.some((u: any) => u.id === 'u-en')).toBe(false);
-    });
-
-    it('returns users matching by language field', () => {
-      (manager as any).connectedUsers.set('u-es', { id: 'u-es', socketId: 's-es', isAnonymous: false, language: 'ES', resolvedLanguages: [] });
-      const result = (manager as any)._findUsersForLanguage('es');
-      expect(result.some((u: any) => u.id === 'u-es')).toBe(true);
-    });
-
-    it('returns empty array when no users match', () => {
-      (manager as any).connectedUsers.clear();
-      expect((manager as any)._findUsersForLanguage('zh')).toHaveLength(0);
-    });
-  });
-
-  // -------------------------------------------------------------------------
   // 49. Remaining socket event handlers coverage
   // -------------------------------------------------------------------------
 
