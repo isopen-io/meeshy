@@ -9,6 +9,8 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitToConversationParticipants } from '../socketio/emitToConversationParticipants';
 import { broadcastReadStatus } from '../socketio/broadcastReadStatus';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
+import { buildMessageEditedCore } from '../socketio/messageEditedPayload';
+import type { Message } from '@meeshy/shared/types/index';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
 import { getPresenceVisibilityService } from '../services/PresenceVisibilityService';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
@@ -723,7 +725,21 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         actorUserId: userId,
         eventType: 'edited',
         messageId,
-        payload: { ...transformedMessage, conversationId: message.conversationId },
+        // Le NOYAU du contrat vient de `buildMessageEditedCore`, source unique
+        // partagée avec les deux producteurs socket. Étalé APRÈS la ligne
+        // relue, il n'ajoute rien qui ne soit déjà servi — il corrige la seule
+        // valeur que l'étalement brut servait fausse : `senderId`, qui portait
+        // le `Participant.id` de la colonne là où les clients comparent un
+        // `User.id` pour reconnaître leurs propres bulles.
+        payload: {
+          ...transformedMessage,
+          ...buildMessageEditedCore(updatedMessage as unknown as Message, {
+            conversationId: message.conversationId,
+            content: editedContent,
+            isEdited: updatedMessage.isEdited,
+            editedAt,
+          }),
+        },
         onError: (err) => logger.error('Erreur lors de la diffusion Socket.IO', err as Error),
       });
 

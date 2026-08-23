@@ -1287,6 +1287,55 @@ la règle, et **rend exactement ce que la prochaine écriture poserait** — ici
 triplet `matchedUserId` / `matchedBy` / `matchedAt` à `null`, soit « à inviter »,
 ce que `sync()` écrirait pour ce contact.
 
+## Un `default` dans un schéma de REQUÊTE est une ÉCRITURE, pas une documentation
+
+Tout ce qui précède porte sur les schémas de RÉPONSE. Le miroir existe côté
+REQUÊTE, et il est plus discret : Fastify active `useDefaults` d'AJV, et
+`server.ts` ne le désactive pas. Un `default` dans un bloc `body:` /
+`querystring:` / `params:` **écrit dans `request.body` avant que le
+gestionnaire ne s'exécute**. Mesuré sous les options AJV exactes de la
+production :
+
+```
+schéma : originalLanguage: { type: 'string', default: 'fr' }
+requête: { content: 'x' }
+handler: { content: 'x', originalLanguage: 'fr' }
+```
+
+Conséquence : **un gestionnaire ne peut PAS distinguer l'absence sur un champ
+qui porte un `default`.** Toute garde de la forme `x === undefined ? … : …`,
+`if (!x)`, `x ?? …` y est un no-op — c'est la famille « une garde conditionnée
+à ce qu'elle garde est un no-op » (cycle 96), avec la variante qui la rend
+invisible : **ce n'est pas le gestionnaire qui est faux, c'est la couche
+au-dessus qui rend sa précondition inatteignable.** Le code se lit juste, le
+commentaire dit vrai, et la règle ne s'applique jamais.
+
+Cas mesuré (cycle 103) : `PUT /conversations/:id/messages/:messageId` est la
+SEULE des quatre entrées d'édition à réécrire `originalLanguage`, et sa garde
+énonçait exactement la bonne intention — « l'omettre veut dire *je n'affirme
+rien sur la langue*, pas *c'est du français* ». Son schéma portait
+`default: 'fr'`. Une omission réétiquetait donc le message en français **en
+base ET comme langue SOURCE de la retraduction** : un texte anglais ressortait
+traduit comme du français dans toutes les langues du Prisme.
+
+La question à poser à chaque `default` de requête est binaire :
+
+| le gestionnaire distingue-t-il l'absence ? | verdict |
+|---|---|
+| non — la valeur est un simple repli (`limit`, `offset`, `page`) | `default` légitime |
+| oui — une branche lit `undefined` / `!x` | **le `default` la supprime** : le retirer, et laisser le repli au gestionnaire |
+
+Le repli appartient au gestionnaire, qui est le seul à savoir ce que
+l'absence VEUT DIRE. Le schéma ne peut que la faire disparaître.
+
+**Piège armé ≠ panne, et la distinction se MESURE, elle ne se suppose pas.**
+Sur ce cas, aucun client ne déclenchait le défaut — le web passe la clé en
+paramètre requis, iOS et Android éditent par deux autres routes. Ce qui ne
+change rien à la conclusion (règle du cycle 84 : on ne laisse pas un piège armé
+au motif que personne n'a encore marché dessus), mais change tout au récit :
+annoncer une panne qu'on n'a pas mesurée coûte la confiance dans les cycles où
+il y en a une.
+
 ## Une preuve TRANSPORTÉE n'est pas une preuve VÉRIFIÉE
 
 `signedPreKey.signature` est la seule chose qui rattache la pré-clé signée à la

@@ -942,3 +942,90 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle102.md`.
 - [ ] Suivi — le flip du `MessageHandler` reste ouvert : ce cycle a réparé ce que
       la colonne CONTIENT, pas ce qu'elle DÉCLARE. Les deux se suivent dans cet
       ordre.
+
+## Cycle 103 (2026-08-23) — `message:edited` : le transport que le contrat ne gouvernait pas
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle103.md`.
+
+- [x] Instruit les suivis nommés du cycle 101/102. Le suivi « flip du
+      `MessageHandler` » était PÉRIMÉ — il a atterri au cycle 101 bis (PR #3359),
+      et l'en-tête du fichier le dit. Ce qui restait ouvert, c'est son voisin :
+      `broadcastMessageMutation` prend `Record<string, unknown>`, et le chemin
+      REST sert un `Participant.id` là où les deux autres servent un `User.id`.
+      Les deux lignes décrivent UNE seule chose : un transport hors contrat, et
+      la valeur fausse qui y vivait parce que rien ne le gouvernait.
+- [x] **D1 — les TROIS entrées REST de `message:edited` servaient le
+      `Participant.id` comme `senderId`.** `PUT /messages/:messageId` (iOS),
+      `PUT /conversations/:id/messages/:messageId` (web) et
+      `PATCH /messages/:messageId` (Android) étalaient la ligne Prisma BRUTE.
+      Le contrat déclare `SocketIOMessage`, dont `senderId` est ce que les
+      clients comparent à leur propre identité.
+- [x] **La cause est structurelle, pas un oubli.** `payload:
+      Record<string, unknown>` + un `PreviewEmitIO` dont l'`emit` prend
+      `unknown` : le cliquet de `messageEditedPayload.ts` n'avait AUCUNE prise
+      sur ce transport. Il servait le contrat par ACCIDENT — l'`include` large
+      apportait les sept clés requises, avec la mauvaise VALEUR dans l'une.
+- [x] Coût relevé sur les TROIS clients, pas supposé : **web mode Focal** est le
+      seul chemin vivant (`FocalRow` calcule `isMe = message.senderId ===
+      currentUser.id`, et `handleMessageEdited` fusionne la charge dans le
+      cache) ; la bulle CLASSIQUE y échappe (`getSenderUserId`) ; iOS indemne
+      (`markEdited` n'écrit jamais `senderId`) ; Android indemne (il relit par
+      REST). Un chemin vivant, et un contrat que 4 producteurs sur 5 honoraient.
+- [x] **D2 — une garde que la couche AU-DESSUS rendait inatteignable.**
+      Découvert par un témoin d'additivité qui attendait `'en'` et recevait
+      `'fr'`. `PUT /conversations/:id/messages/:messageId` est la seule des
+      quatre entrées à réécrire `originalLanguage`, et sa garde
+      (`claimedLanguage === undefined ? …`) ne pouvait pas se déclencher : son
+      schéma de requête portait `default: 'fr'`, et Fastify active `useDefaults`
+      d'AJV. **Un `default` de schéma de REQUÊTE est une ÉCRITURE dans
+      `request.body`, pas une documentation** — mesuré sous les options AJV
+      exactes de `server.ts`.
+- [x] D2 est un **piège armé, pas une panne**, et la distinction est MESURÉE :
+      le web passe `originalLanguage` en paramètre requis, iOS et Android
+      éditent par deux routes qui ne portent pas ce champ. Personne ne le
+      déclenche — jusqu'au premier appelant qui omettra la clé en lisant une
+      garde qui a l'air de le couvrir (règle du cycle 84).
+- [x] Jumelle CHERCHÉE : balayage des 95 `default:` de schémas de requête du
+      dépôt. Que des défauts de pagination, plus un candidat
+      (`conversations/messages.ts:1640`) qui n'est PAS le même défaut —
+      `MessageProcessor` déclare `originalLanguage` REQUIS, il n'y a aucune
+      branche d'absence à défaire.
+- [x] Correctif 1 : `broadcastMessageMutation.payload` discriminé par
+      `eventType` — le NOYAU du contrat pour `edited`, `MessageDeletedEventData`
+      pour `deleted`. Exiger le noyau et non le contrat entier est délibéré :
+      l'étalement échappe au contrôle des propriétés excédentaires, donc les
+      extras de chaque transport restent libres et **le lot reste ADDITIF**.
+- [x] Correctif 2 : les trois entrées passent par `buildMessageEditedCore`. Les
+      deux `as unknown as Record<string, unknown>` disparaissent — ils n'étaient
+      pas une commodité de typage, ils étaient la MARQUE du transport hors
+      contrat.
+- [x] Correctif 3 : `default: 'fr'` retiré du schéma de requête. La garde
+      devient atteignable ; un appelant qui envoie la clé est traité comme avant.
+- [x] RED prouvé, dans les deux sens. D1 : les trois transports rendent
+      `Participant.id` là où le témoin attend `User.id` ; les témoins de repli
+      ANONYME passent AVANT comme APRÈS. D2 : 2 tombent, le témoin
+      d'additivité passe dans les deux états.
+- [x] **Le cliquet a des dents, et ce qu'il nomme est le 3e suivi du cycle 102**
+      — en rétablissant l'ancienne forme : `Type 'string' is not assignable to
+      type 'MessageType'`. Le cycle 102 a réparé ce que la colonne CONTIENT ;
+      ce lot contraint ce qu'elle DÉCLARE, dans l'ordre qu'il avait fixé.
+- [x] Gates : `tsc --noEmit` **0 erreur** · nouveaux témoins **12/12** ·
+      7 suites adjacentes **234/234** · suite complète passerelle.
+- [ ] Suivi — **la RÉPONSE HTTP des trois routes d'édition sert toujours le
+      `Participant.id`** là où la LISTE REST sert le `User.id`
+      (`messages.ts:1076`). Écarté de ce lot sur MESURE, pas par préférence :
+      aucun des trois clients ne lit ce corps (iOS `_ = try await …`, Android
+      ne lit que le succès, les deux appelants web `await` sans utiliser la
+      valeur). Changement de contrat REST sans consommateur à servir.
+- [ ] Suivi — la règle du `senderId` du fil a maintenant DEUX exemplaires :
+      `resolveWireSenderId` et la résolution manuscrite de
+      `conversations/messages.ts:1076`, qui sert en plus `senderParticipantId`.
+- [ ] Suivi — `PreviewEmitIO.emit(event: string, payload: unknown)` reste la
+      porte non typée de toute diffusion d'aperçu. Ce lot a gouverné la CHARGE ;
+      l'ÉMISSION n'est toujours pas vérifiée contre `ServerToClientEvents`.
+- [ ] Suivi hérité — le web porte le 5e exemplaire de la règle `messageType`.
+- [ ] Suivi hérité — un message de LIEU sans pièce jointe reste `'text'`.
+- [ ] Suivi — un cliquet sur les `default:` de schémas de REQUÊTE. Le
+      discriminant n'est pas syntaxique (il faut savoir si le gestionnaire
+      distingue l'absence), donc l'outil ne peut pas trancher seul — mais il
+      pourrait geler la liste et forcer à instruire tout site NEUF.
