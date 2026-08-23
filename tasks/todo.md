@@ -1377,3 +1377,57 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle107.md`
       file vérifie donc les champs REQUIS et leur TYPE (l'assignabilité traverse
       le spread), mais PAS les clés en trop d'une charge composée en variable.
       Le journal du cycle 106 surestimait d'un cran ; corrigé dans celui du 107.
+
+## Cycle 107 bis — ce que le CAST ouvrait dans les DEUX sens
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle107-bis.md`
+Écrit en parallèle du cycle 107 ci-dessus, sur le MÊME suivi, par une autre session.
+
+- [x] **Le cycle 107 a raison sur la prémisse, et je souscris** : une porte
+      d'écoute typée ne garde RIEN à l'exécution, la surface entrante est déjà
+      gouvernée par zod, et « le miroir » était une symétrie LEXICALE. Ce lot-ci
+      l'avait mesuré de son côté sans en tirer la formulation — son tableau de
+      portée montre une porte qui refuse un nom d'événement non déclaré et laisse
+      passer une charge divergente (bivariance, `strictFunctionTypes: false`).
+- [x] **Mais le cast n'effaçait pas la moitié entrante : il effaçait les DEUX.**
+      `this.io as SocketIOServer` (SIX sites) prive `CallEventsHandler` du contrat
+      pour ce qu'il écoute ET pour ce qu'il émet — donc précisément la moitié dont
+      le cycle 107 établit lui-même qu'aucune autre garde ne la couvre. D'où le
+      seul point de divergence entre les deux lots : « aucun changement de
+      production » d'un côté, six défauts réels de l'autre.
+- [x] **Une piste peut être fausse sur son MOTIF et juste sur son ADRESSE.**
+      Mesurer la prémisse fait abandonner la piste ; mesurer le SITE la résout. La
+      conclusion complète n'est pas « le suivi est faux, on passe » mais « le
+      suivi est faux, ET voilà ce qu'il y a effectivement là ».
+- [x] **4 divergences SORTANTES tombées à la première compilation** sous la porte.
+      Dont `iceServers` sur `call:initiated` : les identifiants TURN calculés par
+      destinataire, que le SDK iOS décode pour traverser un NAT dès la SONNERIE,
+      émis par les deux producteurs et déclarés par aucun contrat (famille `_seq` /
+      `location`). Et `CallEndedEvent.endedBy`, promis par le contrat alors que
+      l'émetteur l'élargit délibérément.
+- [x] **`call:analytics` : validé par zod (donc GARDÉ) et pourtant absent du
+      contrat**, 19 champs transcrits dans la signature du listener, trois clients
+      émetteurs avec chacun sa transcription. Garde d'exécution et dérive de
+      contrat sont deux propriétés DISJOINTES — il en faut une garde chacune.
+- [x] `socketSignalSchema` en union DISCRIMINÉE : un `.refine` ne restreint pas
+      `z.infer`. Mêmes contraintes d'exécution (78 témoins inchangés), et zod
+      retire désormais les champs de l'autre membre — ce dont le relais dépend
+      déjà pour sa sécurité.
+- [x] Balayage-cliquet au périmètre VOLONTAIREMENT étroit (écouter **et** importer
+      le type nu), en réponse directe aux sept faux positifs du cycle 107 :
+      inventaire vide, aucune liste d'exemptions.
+- [x] RED prouvé sur 5 mutations ; les 6 casts retirés. `tsc` 0 ; suite passerelle
+      837/837 (2 workers SIGKILL par OOM concurrent, repassés isolément 39/39) ;
+      cliquet de dette web resserré 1241 → 1239.
+- [x] **Un gate rend DEUX verdicts et ils peuvent se contredire** : deux fois dans
+      ce cycle un seul des deux a été lu (un build échoué vers `/dev/null` ; un
+      `| tail` qui rend le code de sortie de `tail`). Ne jamais interroger le code
+      de sortie d'un gate à travers un pipe.
+- [ ] Suivi — **la bivariance est la limite du lot, et elle est générale.** Aucune
+      porte typée n'attrapera une charge divergente tant que `strictFunctionTypes`
+      vaut `false`. Décision à instruire, elle dépasse Socket.IO.
+- [ ] Suivi — **le même cast, côté WEB** : `apps/web` déclare un `TypedSocket` et
+      l'ouvre trois fois par `(socket as unknown).emit(…)` dans
+      `VideoCallInterface.tsx`. Le défaut de ce lot, reproduit côté client.
+- [ ] Suivi — trois services prennent encore un `Server` NU pour ÉMETTRE ; ni le
+      balayage de réception (par construction) ni celui d'émission ne les couvre.

@@ -154,6 +154,51 @@ describe('Call Validation Schemas', () => {
       expect(result.success).toBe(false);
     });
 
+    // Cycle 107 — le schéma est passé d'un objet PLAT gardé par un `.refine` à
+    // une union DISCRIMINÉE. Les contraintes d'exécution sont les mêmes (les
+    // témoins ci-dessus, écrits contre la forme plate, passent inchangés) ; ce
+    // qui change est que chaque membre ne déclare plus que SES champs, donc que
+    // Zod RETIRE ceux de l'autre.
+    //
+    // Ce n'est pas cosmétique : le relais émet `validation.data` et jamais
+    // `data`, précisément pour qu'un client ne puisse pas glisser de champs
+    // arbitraires dans la charge de signalisation du pair. Un `sdp` accroché à
+    // un `ice-candidate` traversait ; il ne traverse plus.
+    it('retire le sdp accroché à un ice-candidate (il ne se relaie plus au pair)', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'ice-candidate',
+          from: 'user-1',
+          to: 'user-2',
+          candidate: 'candidate:1 1 udp 2130706431 192.168.1.1 5000 typ host',
+          sdp: 'v=0\r\nm=audio 9 RTP/AVP 0\r\n',
+        },
+      });
+      expect(result.success).toBe(true);
+      expect(result.success && result.data.signal).not.toHaveProperty('sdp');
+    });
+
+    it('retire les champs ICE accrochés à une offre', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'offer',
+          from: 'user-1',
+          to: 'user-2',
+          sdp: 'v=0\r\no=- 1234 1 IN IP4 0.0.0.0\r\nm=audio 9 RTP/AVP 0\r\n',
+          candidate: 'candidate:1 1 udp 2130706431 192.168.1.1 5000 typ host',
+          sdpMLineIndex: 0,
+          sdpMid: 'audio',
+        },
+      });
+      expect(result.success).toBe(true);
+      const signal = result.success ? result.data.signal : undefined;
+      expect(signal).not.toHaveProperty('candidate');
+      expect(signal).not.toHaveProperty('sdpMLineIndex');
+      expect(signal).not.toHaveProperty('sdpMid');
+    });
+
     it('rejects invalid MongoDB callId', () => {
       const result = socketSignalSchema.safeParse({
         callId: 'not-a-mongo-id',
