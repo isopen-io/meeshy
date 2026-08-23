@@ -49,12 +49,24 @@ public protocol PostServiceProviding: Sendable {
     func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost
     /// Création porteuse d'une AUDIENCE NOMMÉE (`EXCEPT`/`ONLY`).
     func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost
+    /// Même création, plus l'opt-in d'extraction de bande-son vidéo
+    /// (`Post.allowSoundExtraction`) et le texte alternatif par média
+    /// (`PostMedia.alt`, accessibilité — clé = un id de `mediaIds`).
+    /// Requirement SÉPARÉE, même patron que `create(… mentions:)` ci-dessus :
+    /// les conformeurs existants (mocks) restent valides via le défaut
+    /// ci-dessous, qui ignore simplement les deux champs s'il n'est pas
+    /// surchargé.
+    func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost
     func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?) async throws -> APIPost
     /// Même édition, plus le tri-état des références déclarées. Requirement
     /// SÉPARÉE et non un paramètre ajouté à la précédente : les protocoles
     /// Swift ne portent pas de valeur par défaut, et tout double de test aurait
     /// cessé de conformer d'un coup — même patron que `create(… mentions:)`.
     func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?, mentions: [PostMentionInput]?) async throws -> APIPost
+    /// Même édition, plus l'opt-in d'extraction de bande-son vidéo et le texte
+    /// alternatif par média — même patron que `create(… allowSoundExtraction:
+    /// mediaAlt:)` ci-dessus.
+    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost
     func delete(postId: String) async throws
     func like(postId: String) async throws
     func unlike(postId: String) async throws
@@ -134,6 +146,17 @@ public extension PostServiceProviding {
                          location: location)
     }
 
+    /// Défaut : un conformeur qui n'implémente que la signature SANS
+    /// `allowSoundExtraction`/`mediaAlt` (mocks existants) reste valide — les
+    /// deux champs sont simplement ignorés tant que le type ne surcharge pas
+    /// cette méthode. `PostService` la surcharge réellement plus bas.
+    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost {
+        try await update(postId: postId, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+                         moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type,
+                         removeMediaIds: removeMediaIds, storyEffects: storyEffects, mediaIds: mediaIds,
+                         location: location, mentions: mentions)
+    }
+
     /// Compat : la signature historique 8-params reste disponible pour les
     /// call sites existants — les protocoles Swift ne portent pas de valeurs
     /// par défaut. `storyEffects` / `mediaIds` (édition de story) partent à nil.
@@ -163,6 +186,14 @@ public extension PostServiceProviding {
     /// (mocks) retombe sur la signature sans liste — la visibilité part,
     /// la liste est ignorée. `PostService` la surcharge réellement.
     func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost {
+        try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions)
+    }
+
+    /// Défaut : un conformeur qui n'implémente que la signature SANS
+    /// `allowSoundExtraction`/`mediaAlt` (mocks existants) reste valide — les
+    /// deux champs sont simplement ignorés tant que le type ne surcharge pas
+    /// cette méthode. `PostService` la surcharge réellement plus bas.
+    func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost {
         try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions)
     }
 
@@ -259,7 +290,15 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     /// déclarées au gateway — même convention que l'`addComment` porteur de
     /// lieu plus bas.
     public func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost {
-        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions)
+        try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions, allowSoundExtraction: nil, mediaAlt: nil)
+    }
+
+    /// Seule surcharge qui envoie réellement `allowSoundExtraction` ET
+    /// `mediaAlt` au gateway — le composer vidéo (opt-in extraction de son) et
+    /// l'inspecteur d'accessibilité (texte alternatif par média) passent par
+    /// ici.
+    public func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost {
+        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, allowSoundExtraction: allowSoundExtraction, mentions: mentions, mediaAlt: mediaAlt)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }
@@ -540,10 +579,20 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     /// `create(… mentions:)` : deux surcharges toutes deux « à défauts »
     /// rendraient tout appel court ambigu.
     public func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?, mentions: [PostMentionInput]?) async throws -> APIPost {
+        try await update(postId: postId, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+                         moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type,
+                         removeMediaIds: removeMediaIds, storyEffects: storyEffects, mediaIds: mediaIds,
+                         location: location, mentions: mentions, allowSoundExtraction: nil, mediaAlt: nil)
+    }
+
+    /// Seule surcharge qui envoie réellement `allowSoundExtraction` ET
+    /// `mediaAlt` — même patron que `create(… allowSoundExtraction: mediaAlt:)`
+    /// ci-dessus.
+    public func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost {
         // `visibilityUserIds` était déclaré dans `UpdatePostRequest` mais JAMAIS
         // renseigné ici : il partait toujours à `nil`, et le `refine` Zod du
         // gateway rejetait donc systématiquement EXCEPT/ONLY.
-        let body = UpdatePostRequest(content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects, mediaIds: mediaIds, location: location, mentions: mentions)
+        let body = UpdatePostRequest(content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects, mediaIds: mediaIds, location: location, mentions: mentions, allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt)
         let response: APIResponse<APIPost> = try await api.put(endpoint: "/posts/\(postId)", body: body)
         return response.data
     }

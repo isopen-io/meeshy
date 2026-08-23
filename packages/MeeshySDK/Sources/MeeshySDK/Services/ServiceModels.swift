@@ -98,8 +98,12 @@ public struct CreatePostRequest: Encodable {
     /// relit du `content` lui-même, et les déclarer ouvrirait un second chemin
     /// vers le même fait.
     public let mentions: [PostMentionInput]?
+    /// Texte alternatif par média (accessibilité, `PostMedia.alt`) — clé = un
+    /// id de `mediaIds` ci-dessus, ignoré côté gateway pour tout id qui n'y
+    /// figure pas (miroir de `CreatePostSchema.mediaAlt`).
+    public let mediaAlt: [String: String]?
 
-    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil, mediaAlt: [String: String]? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
@@ -110,6 +114,7 @@ public struct CreatePostRequest: Encodable {
         self.storyEffects = storyEffects
         self.allowSoundExtraction = allowSoundExtraction
         self.mentions = mentions
+        self.mediaAlt = mediaAlt
     }
 }
 
@@ -215,12 +220,21 @@ public struct UpdatePostRequest: Encodable, Sendable {
     /// INLINE n'y figure jamais — le serveur le dérive du texte à chaque
     /// écriture, et le déclarer ouvrirait un second chemin vers le même fait.
     public let mentions: [PostMentionInput]?
+    /// Opt-in extraction bande-son vidéo — `nil` = inchangé (miroir de
+    /// `UpdatePostSchema.allowSoundExtraction`).
+    public let allowSoundExtraction: Bool?
+    /// Texte alternatif par média — même contrat que
+    /// `CreatePostRequest.mediaAlt` : clé = un id de `mediaIds` ci-dessus,
+    /// ignoré côté gateway pour tout id qui n'y figure pas (un média déjà
+    /// attaché au post ne se réécrit pas par ce canal).
+    public let mediaAlt: [String: String]?
 
     public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil,
                 moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil,
                 removeMediaIds: [String]? = nil, storyEffects: StoryEffects? = nil,
                 mediaIds: [String]? = nil, location: PostLocationUpdate? = nil,
-                mentions: [PostMentionInput]? = nil) {
+                mentions: [PostMentionInput]? = nil, allowSoundExtraction: Bool? = nil,
+                mediaAlt: [String: String]? = nil) {
         self.content = content; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.moodEmoji = moodEmoji
@@ -231,11 +245,14 @@ public struct UpdatePostRequest: Encodable, Sendable {
         self.mediaIds = mediaIds
         self.location = location
         self.mentions = mentions
+        self.allowSoundExtraction = allowSoundExtraction
+        self.mediaAlt = mediaAlt
     }
 
     enum CodingKeys: String, CodingKey {
         case content, visibility, visibilityUserIds, moodEmoji, originalLanguage
         case type, removeMediaIds, storyEffects, mediaIds, location, mentions
+        case allowSoundExtraction, mediaAlt
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -253,6 +270,8 @@ public struct UpdatePostRequest: Encodable, Sendable {
         // l'émet vide. Pas besoin du `encodeNil` que le lieu réclame — là,
         // l'effacement s'écrit `null`, ici il s'écrit `[]`.
         try c.encodeIfPresent(mentions, forKey: .mentions)
+        try c.encodeIfPresent(allowSoundExtraction, forKey: .allowSoundExtraction)
+        try c.encodeIfPresent(mediaAlt, forKey: .mediaAlt)
         switch location {
         case .set(let place): try c.encode(place, forKey: .location)
         case .remove: try c.encodeNil(forKey: .location)

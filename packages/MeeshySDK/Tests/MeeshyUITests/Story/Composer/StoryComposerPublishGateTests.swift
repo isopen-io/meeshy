@@ -274,23 +274,36 @@ final class StoryComposerPublishGateTests: XCTestCase {
         )
     }
 
-    /// Une règle de sortie ne vaut que si les DEUX surfaces qu'elle arbitre la
-    /// lisent : la garde de `handleDismiss` et le bouton « Sauvegarder » de la
-    /// feuille. Deux lectures indépendantes, c'était précisément l'écart d'avant
-    /// — le bouton Publier acceptait une story que la croix jetait sans demander.
-    func test_theExitPathAndItsDialogReadTheSameRule() throws {
+    /// **Ce test a été RETOURNÉ le 2026-08-23 (C6b), pas assoupli.**
+    ///
+    /// Il arbitrait DEUX lectures de la règle de sortie : la garde de
+    /// `handleDismiss` et le bouton « Sauvegarder » du dialogue. Depuis que la
+    /// règle produit M10 s'applique — *zéro question à la sortie* — le dialogue
+    /// n'existe plus : fermer sauvegarde, silencieusement. La seconde moitié de
+    /// l'ancien invariant n'a plus de surface à arbitrer.
+    ///
+    /// L'invariant devient donc plus STRICT, pas plus lâche : la règle n'a
+    /// qu'UN lecteur, et aucune feuille ne la relit pour poser une question.
+    /// La garde rougit à la RÉINTRODUCTION d'un dialogue de sortie — le geste
+    /// exact que M10 interdit — et non à la disparition d'un fichier, dont
+    /// `ComposerSourceGuard.source` répond en jetant.
+    func test_theExitRuleHasASingleReader_andNoDialogReadsIt() throws {
         let publication = try ComposerSourceGuard.source("StoryComposerView+Publication.swift")
         let dismiss = try XCTUnwrap(
             ComposerSourceGuard.functionBody(named: "func handleDismiss()", in: publication))
         XCTAssertEqual(
             ComposerSourceGuard.occurrences(of: "exitPrompt", in: dismiss), 1,
-            "La sortie lit la règle une fois, et c'est sa seule condition d'alerte."
+            "La sortie lit la règle une fois, et c'est le SEUL lecteur qui reste."
         )
 
         let view = try ComposerSourceGuard.source("StoryComposerView.swift")
         XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: "exitPrompt.offersSave", in: view), 1,
-            "« Sauvegarder » n'apparaît que si la MÊME règle dit qu'il y a de quoi sauvegarder."
+            ComposerSourceGuard.occurrences(of: "exitPrompt", in: view), 0,
+            "Aucune feuille ne relit la règle de sortie : la question a disparu (M10)."
+        )
+        XCTAssertEqual(
+            ComposerSourceGuard.occurrences(of: "confirmationDialog", in: view), 0,
+            "…et aucun dialogue de confirmation ne revient sur le chemin de sortie."
         )
     }
 }
