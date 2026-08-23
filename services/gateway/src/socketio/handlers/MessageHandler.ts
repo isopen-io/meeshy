@@ -127,6 +127,7 @@ import {
   SocketMessageEditSchema,
   SocketMessageDeleteSchema,
 } from '../../validation/socket-event-schemas.js';
+import { toEncryptedPayload } from '../../validation/encryption-envelope.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import type { QueuedVariantFor } from '../queuedEventContract';
@@ -275,7 +276,6 @@ export class MessageHandler {
       replyToId?: string;
       forwardedFromId?: string;
       forwardedFromConversationId?: string;
-      encryptedPayload?: unknown;
       location?: unknown;
     },
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
@@ -328,6 +328,13 @@ export class MessageHandler {
         return;
       }
 
+      // L'enveloppe de chiffrement est recomposée depuis le VALIDÉ, par la même
+      // unité que la route REST (`validation/encryption-envelope.ts`). Elle
+      // était lue sur le `data` BRUT, sous un nom — `encryptedPayload` —
+      // qu'aucun client n'émet et qu'aucun schéma ne produit : seul champ de
+      // tout ce chemin à échapper au schéma, donc toujours `undefined`.
+      const encryptedPayload = toEncryptedPayload(validated);
+
       // RÈGLE JUMELLE de `MessageValidator.validateRequest` : un transfert rend
       // le corps non-vide autrement — ses pièces jointes sont copiées CÔTÉ
       // SERVEUR (`MessageProcessor.copyForwardedAttachments`), le client
@@ -342,10 +349,14 @@ export class MessageHandler {
       // copiées côté serveur par `copyAttachments.ts`, le client n'envoie ni
       // texte ni `attachmentIds`). Cette troisième porte est restée fermée
       // pendant que les deux autres s'ouvraient.
+      //
+      // QUATRIÈME porteur de la même exemption : un corps chiffré. Le
+      // déclencheur est désormais l'enveloppe VALIDÉE ci-dessus, non plus un
+      // champ brut que le fil ne portait jamais.
       const validation = validateMessageLength(validated.content);
       if (
         !validation.isValid &&
-        !data.encryptedPayload &&
+        !encryptedPayload &&
         !validated.forwardedFromId &&
         !validated.copyAttachmentsFromMessageId
       ) {
@@ -407,7 +418,7 @@ export class MessageHandler {
         // serveur (`MessageProcessor.saveMessage` → `copyAttachments`). Franchir
         // la garde sans transmettre le champ laisserait la copie muette.
         copyAttachmentsFromMessageId: validated.copyAttachmentsFromMessageId,
-        encryptedPayload: data.encryptedPayload as MessageRequest['encryptedPayload'],
+        encryptedPayload,
         // Effets de message — parité avec POST /messages. Le bitfield final
         // `effectFlags` est recomposé par `MessageProcessor.saveMessage`
         // depuis `isBlurred` / `expiresAt` / `isViewOnce`, donc on transmet
@@ -650,6 +661,11 @@ export class MessageHandler {
         attachmentIds: validated.attachmentIds,
         // Lieu partagé — même contrat que handleMessageSend ci-dessus.
         location: validated.location,
+        // Enveloppe de chiffrement — même unité que handleMessageSend. Ce
+        // chemin-ci ne la portait pas du tout : une pièce jointe envoyée dans
+        // une conversation chiffrée perdait son chiffré sans qu'aucun type ni
+        // schéma ne puisse le dire.
+        encryptedPayload: toEncryptedPayload(validated),
         metadata: {
           source: 'websocket',
           socketId: socket.id,
