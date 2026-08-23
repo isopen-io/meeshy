@@ -1777,12 +1777,35 @@ partage »). Instruire le second a fait tomber le premier.
       `additionalProperties: true`, le champ traverse. **Un cast n'est pas une
       preuve de fuite** ; il faut traverser le sérialiseur (règle du cycle 84).
 
+### Le tuyau posé sans personne pour y verser — rattrapé dans le même train
+
+- [x] Après les deux premiers lots, la garde était TOUJOURS inerte : la
+      provenance survivait à l'envoi, mais **aucun chemin de capture ne la
+      déclarait**, donc la colonne valait `false` partout. C'était reproduire le
+      défaut du cycle précédent un étage plus haut — une règle juste que rien ne
+      peut déclencher. Repéré en RELISANT ce que je venais d'écrire dans
+      « reste ouvert » : la phrase disait la panne à voix haute.
+- [x] `useAudioRecorder` — **unique** capture in-app du web (les autres
+      `getUserMedia` servent les appels ; rien n'attache de photo prise sur
+      place). Une note vocale qu'on vient d'enregistrer est l'exemple que la
+      règle partagée nomme elle-même.
+- [x] La déclaration s'AJOUTE aux métadonnées au lieu de les remplacer :
+      `audioEffectsTimeline` voyage par le même canal, et l'écraser retirerait
+      la timeline d'effets de toute note vocale qui en porte une. Deux témoins,
+      un par moitié.
+- [x] Le drapeau traverse les DEUX services d'upload du web sans travail
+      supplémentaire — les deux sérialisent en `metadata_<index>`, que la route
+      parse déjà.
+- [x] **Chaîne complète et vérifiable de bout en bout côté web** : enregistrer →
+      déclarer → persister → charger → déclarer au schéma → recopier au
+      transformateur → lire dans la feuille → confirmer.
+
 ### Reste ouvert
 
-- [ ] **iOS ne DÉCLARE pas encore `capturedInApp` à l'envoi.** Le champ voyage du
-      serveur vers le client ; le sens client → serveur demande de toucher le
-      chemin de capture (caméra/micro) et le pipeline TUS, ce qu'un lot séparé
-      instruira. En attendant la garde reste inerte en pratique — mais le tuyau
-      est posé, mesuré, et gardé, ce qui n'était pas le cas avant ce cycle.
+- [ ] **iOS ne DÉCLARE pas encore `capturedInApp` à l'envoi** (caméra / micro).
+      Le sens serveur → client est fait et gardé ; le sens client → serveur
+      demande de toucher le chemin de capture et l'en-tête `Upload-Metadata` du
+      pipeline TUS — donc du Swift, qu'aucune chaîne d'outils ne peut compiler
+      ici. Lot séparé, à instruire là où il peut être MESURÉ.
 - [ ] **8 rouges iOS ANTÉRIEURS** (gardes du chantier Lentille) — hérités,
       non touchés par ce train.
