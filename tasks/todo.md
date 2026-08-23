@@ -1561,3 +1561,73 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108.md`
       le chemin E2EE.
 - [ ] Suivi — **79 autres `(x as unknown).membre` dans `apps/web`**, hors socket.
       ~1/3 de la dette web, mais chacun demande une décision de domaine.
+
+## Cycle 108 ter — le `Server` NU, la porte qu'aucun balayage ne pouvait voir
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108-ter.md`
+Écrit en PARALLÈLE des cycles 108 et 108 bis, sur le MÊME suivi, par une TROISIÈME session.
+Suite directe des DEUX suivis du cycle 107 bis, tous deux instruits et réels.
+
+- [x] **Les deux suivis étaient bas sur le COMPTE.** Cinq casts côté web (pas
+      trois), et cinq porteurs du `Server` nu côté passerelle (pas trois) — les
+      trois services nommés, plus `AgentAdminRelay`, plus le helper PARTAGÉ
+      `emitWithSeq` qui prenait le `Server` nu pour tous ses appelants. Un suivi
+      hérité est une affirmation (cycle 107) ; son compte en est une aussi
+      (cycle 93). Les deux se remesurent.
+- [x] **`Server` nu = absence TOTALE de contrat, mesuré.** Sans paramètres de
+      type il retombe sur `DefaultEventsMap` — `emit(ev: string, ...args: any[])`.
+      Un nom d'événement INVENTÉ (`"totally:invented-event"`) et une charge de
+      forme FAUSSE compilent tous deux à **zéro erreur**. ~16 émissions temps
+      réel traversaient ces portes : les 4 familles de demande d'ami,
+      `user:updated`, les compteurs/suppressions de notification, `call:ended`
+      vers l'audience de terminaison complète, les 2 traductions de story.
+- [x] **Ni l'un ni l'autre des deux cliquets existants ne pouvait le voir** : le
+      cliquet de TYPE garde `serverEmit.ts`, que ces services n'importaient pas ;
+      le balayage cherche une signature `emit` RÉÉCRITE, et ici **rien n'est
+      réécrit**. Troisième instance de « chercher une forme fautive par sa
+      DÉCLARATION, c'est manquer tous les sites qui l'obtiennent autrement »
+      (cycle 105) — et la plus discrète des trois : ni déclaration ni assertion,
+      seulement un import qui a l'air normal.
+- [x] Porte élargie à la MESURE des porteurs : `to(string | string[])` (audience
+      de terminaison complète en une émission, élargissement CONTRAVARIANT donc
+      sans effet sur les sites existants) et `ServerEmitIOWithRooms` avec
+      `in().fetchSockets()`. `ServerRoomSocket` réduit à `leave` — tout ce qu'on
+      en lit ; `NotificationService` n'en lit que la LONGUEUR.
+- [x] **`tsc` 0 erreur à la fermeture — les ~16 charges étaient déjà justes.**
+      C'est le résultat honnête, et il ne rend pas le lot vide : ce qui était vrai
+      par ACCIDENT est désormais vrai par CONSTRUCTION. Le 107 bis a trouvé 4
+      divergences en fermant sa porte, celui-ci aucune — même geste, deux issues,
+      et annoncer une divergence non mesurée coûte la confiance (cycle 103).
+- [x] **RED prouvé deux fois** : la même mutation rend 0 erreur avant / 2 après ;
+      et `AgentAdminRelay` rendu à son `Server` nu fait tomber le balayage en le
+      NOMMANT. Gardes disjointes — porte RELÂCHÉE vs porte CONTOURNÉE.
+- [x] `sweepRawServerEmitters` — inventaire VIDE, **aucune liste d'exemptions**.
+      Discriminant étroit par DÉCISION (`import type` + `.emit(`), en réponse
+      directe aux 7 faux positifs du cycle 107 : `MeeshySocketIOManager` importe
+      `Server` en VALEUR parce qu'il le CONSTRUIT, et un détenteur qui n'émet pas
+      sort par construction, pas par exemption.
+- [x] **La fixture a pris le cliquet en défaut** : `rawServerAliases` écrit avec
+      un `exec` simple ne rendait que le PREMIER import du fichier. Une erreur
+      commise en écrivant un cliquet est le meilleur cas de test qu'il aura
+      jamais (cycle 104) — la fixture porte les deux formes pour cette raison.
+- [x] **Miroir web : le cycle 107 bis avait déjà rendu les 5 casts INUTILES sans
+      le savoir.** Ils existaient pour taire une divergence réelle
+      (`CallMediaToggleClientEvent` exigeait `mediaType`/`participantId`/ack, le
+      web n'envoie que `{callId, enabled}`) ; le 107 bis a corrigé le contrat
+      contre les émetteurs réels le jour même. Variante douce de la règle du
+      cycle 105 : **un lot peut rendre un contournement inutile sans le faire
+      disparaître** — il reste alors, soustrayant son site à toute vérification
+      pour une raison qui n'existe plus.
+- [x] Dette web **1239 → 1234**, cinq points, **un par cast** — la mesure exacte
+      de ce qu'un `as unknown` coûtait.
+- [ ] Suivi — **la bivariance** (hérité 107 bis) : `strictFunctionTypes: false`
+      ⇒ aucune porte typée n'attrape une charge divergente assignable dans un
+      seul sens. Décision à instruire, elle dépasse Socket.IO.
+- [ ] Suivi — **neuf** : les 6 `as unknown` restants de `VideoCallInterface.tsx`
+      (`window.__preauthorizedMediaStream`, `constraints.facingMode`, `event`).
+      Hors contrat Socket.IO ; le premier nomme un canal window-global entre deux
+      composants, qui mérite un type.
+- [ ] Suivi — **neuf** : l'en-tête de `check-type-debt.sh` affirme que l'absence
+      du client Prisma « ne change rien » pour web. Mesuré : **1242 sans, 1239
+      avec**. Fausse de trois points, sans conséquence (la CI génère toujours),
+      mais jamais confrontée — famille du cycle 94.

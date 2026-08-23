@@ -70,9 +70,53 @@ export interface ServerEmitTarget {
   emit(...args: ServerEmitArgs): unknown;
 }
 
-/** La surface Socket.IO minimale d'une diffusion vers une room nommée. */
+/**
+ * La surface Socket.IO minimale d'une diffusion vers une room nommée.
+ *
+ * `to` accepte AUSSI un tableau depuis le cycle 108 — socket.io déclare
+ * `to(room: Room | Room[])`, et `CallCleanupService` diffuse `call:ended` vers
+ * l'audience de terminaison COMPLÈTE (room d'appel, room de conversation, et la
+ * room personnelle de chaque membre) en une seule émission. Élargir un PARAMÈTRE
+ * n'affaiblit aucun appelant existant : c'est la position contravariante, et les
+ * dizaines de sites qui passent une chaîne restent vérifiés à l'identique.
+ */
 export interface ServerEmitIO {
-  to(room: string): ServerEmitTarget;
+  to(room: string | string[]): ServerEmitTarget;
+}
+
+/**
+ * Un socket DISTANT rendu par `fetchSockets()` — la surface qu'en LIT le dépôt.
+ *
+ * Volontairement réduite à `leave` : c'est tout ce que `CallCleanupService` en
+ * fait (évincer les sockets d'une room d'appel morte), et `NotificationService`
+ * n'en lit même pas les éléments, seulement la LONGUEUR (présence, pour décider
+ * d'un e-mail immédiat). Déclarer plus serait recopier socket.io au lieu de
+ * nommer ce dont on dépend.
+ */
+export interface ServerRoomSocket {
+  leave(room: string): unknown;
+}
+
+/** Ce que rend `io.in(room)` — une room LUE plutôt qu'écrite. */
+export interface ServerRoomHandle {
+  fetchSockets(): Promise<readonly ServerRoomSocket[]>;
+}
+
+/**
+ * La porte d'émission ÉLARGIE à la lecture de room.
+ *
+ * Deux services diffusent ET inspectent la room qu'ils viennent de servir —
+ * présence avant repli e-mail, éviction après terminaison d'appel. Ils prenaient
+ * pour cela le `Server` NU de socket.io, dont la carte d'événements par défaut
+ * (`DefaultEventsMap`) type `emit` en `(ev: string, ...args: any[])` : leurs
+ * émissions n'étaient gouvernées par RIEN.
+ *
+ * Séparer les deux surfaces plutôt que d'ajouter `in` à `ServerEmitIO` garde la
+ * porte de base à sa taille — la vaste majorité des émetteurs ne lit aucune
+ * room, et n'a pas à déclarer qu'elle le pourrait.
+ */
+export interface ServerEmitIOWithRooms extends ServerEmitIO {
+  in(room: string): ServerRoomHandle;
 }
 
 /**
