@@ -120,33 +120,34 @@ final class LentilleRowSourceGuardTests: XCTestCase {
 
     func test_unreadBadge_livesOnlyInTheRow_andIsAlwaysSemanticRed() throws {
         for source in try rowSources() {
-            let count = occurrences(of: "unreadBadgeBackground", in: normalizedCode(source.code))
+            let atom = occurrences(of: "UnreadCountBadge(", in: normalizedCode(source.code))
+            let localChrome = occurrences(of: "unreadBadgeBackground", in: normalizedCode(source.code))
             if source.name == "LentilleConversationRow.swift" {
                 XCTAssertEqual(
-                    count, 1,
-                    "La rangée doit porter UN badge de non-lus, peint par unreadBadgeBackground " +
-                    "(décision produit 2026-08-22). Observé : \(count)."
+                    atom, 1,
+                    "La rangée doit porter UN badge de non-lus, monté depuis l'ATOME PARTAGÉ " +
+                    "`UnreadCountBadge` — la matrice L06 l'exige nommément (« via l'atome " +
+                    "partagé UnreadCountBadge », amendement 2026-08-22). Observé : \(atom)."
                 )
-                // Viser le BLOC du badge, jamais le fichier : la rangée porte
-                // légitimement une capsule d'accent — le bouton « Rejoindre »
-                // d'un appel en cours. Une garde de fichier l'aurait condamné.
-                let badge = try XCTUnwrap(
-                    blockOfDeclaration("private var unreadBadge: some View {", in: source.code),
-                    "unreadBadge introuvable dans \(source.name)"
-                )
-                XCTAssertTrue(
-                    badge.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"),
-                    "Le badge est ROUGE sémantique."
-                )
-                XCTAssertFalse(
-                    badge.contains("fill(accent)"),
-                    "… jamais l'accent de la conversation : ce serait une décoration, pas un compte à rattraper."
+                // Le chrome ne se recopie PAS ici. C'est l'invariant que
+                // l'accident de fusion avait effacé : l'atome existait, testé,
+                // sans un seul consommateur, pendant que la rangée repeignait à
+                // la main une capsule qui divergeait déjà de lui.
+                XCTAssertEqual(
+                    localChrome, 0,
+                    "La rangée ne peint plus le chrome elle-même (\(localChrome) occurrence(s) de " +
+                    "`unreadBadgeBackground`) : il vit dans l'atome, et une copie locale " +
+                    "recommencerait à diverger sans que rien ne le dise."
                 )
             } else {
                 XCTAssertEqual(
-                    count, 0,
+                    localChrome, 0,
                     "\(source.name) n'a rien à compter : un squelette est un placeholder, et le " +
-                    "pont ✦ porte déjà son point accent 8 px."
+                    "pont ✦ ne porte plus de point — le badge chiffré l'a superseded (L06 amendé)."
+                )
+                XCTAssertEqual(
+                    atom, 0,
+                    "\(source.name) ne monte aucun badge : un seul site compte les non-lus."
                 )
             }
         }
@@ -310,25 +311,63 @@ final class LentilleRowSourceGuardTests: XCTestCase {
         )
     }
 
-    /// Contrat §LWS-7 : « pont : […] ligne 2 = pont ✦ + point accent 8 ».
-    /// `LentilleMetricsTests` verrouille déjà `LentilleMetrics.UnreadDot.size == 8`
-    /// contre `lentille-tokens.json` (LWS-5, hors périmètre) ; ce témoin
-    /// verrouille le CÔTÉ CONSOMMATEUR — que `LentilleBridgeLine` dimensionne
-    /// bien son point avec CE token, jamais un `8` recopié (garde R15 en
-    /// prime : `8` n'est pas dans la liste des littéraux interdits, mais
-    /// l'identité de source reste la propriété recherchée, comme pour
-    /// `LentilleSkeletonRowTests`).
-    func test_bridgeLine_unreadDot_usesMetric_notALiteral() throws {
-        guard let source = try rowSources().first(where: { $0.name == "LentilleBridgeLine.swift" }) else {
-            XCTFail("LentilleBridgeLine.swift introuvable parmi les fichiers découverts de Lentille/Row/")
+    /// **Cette garde a été RETOURNÉE le 2026-08-23, pas supprimée.**
+    ///
+    /// Elle exigeait l'inverse : que `LentilleBridgeLine` dimensionne son point
+    /// de non-lus avec `LentilleMetrics.UnreadDot.size` plutôt qu'un `8`
+    /// recopié — vrai tant que le contrat §LWS-7 disait « ligne 2 = pont ✦ +
+    /// point accent 8 ». L'amendement L06 du lot 2 (2026-08-22) a supprimé ce
+    /// point, comme DOUBLON STRICT de la pastille chiffrée : les deux disaient
+    /// la même donnée, `unreadCount > 0`. La garde réclamait donc le retour de
+    /// ce que le produit venait de retirer, et elle vivait rouge sur `main`.
+    ///
+    /// Le corps ci-dessous n'est pas une réécriture de circonstance : c'est la
+    /// garde que l'auteur du lot 2 avait DÉJÀ écrite (`35f28209d`), et qu'une
+    /// fusion a laissée sur le carreau — elle est ici restaurée telle quelle.
+    /// Elle est strictement plus forte que celle qu'elle remplace : elle balaie
+    /// TOUS les fichiers de `Lentille/Row/` au lieu du seul pont.
+    ///
+    /// Le token `LentilleMetrics.UnreadDot` SURVIT et ne doit pas être retiré :
+    /// la peau web le consomme encore (`--lentille-list-unread-dot-size`).
+    /// Ce qui est interdit, c'est qu'une peau iOS le lise.
+    /// **Le glyphe outbox ⟳ est retiré du rang** (décision produit lot 2,
+    /// CONFIRMÉE par le porteur produit le 2026-08-23 : « NON »). Le renvoi
+    /// automatique par l'outbox est conservé — seule l'affordance visuelle de
+    /// la liste disparaît. Voir `LentilleRowBehaviourAnchorTests.test_L09_…`
+    /// pour l'amendement de la matrice comportementale.
+    ///
+    /// Cette garde avait été écrite par l'auteur du lot 2 (`35f28209d`) puis
+    /// PERDUE dans la fusion `c5f11826f` — l'une des sept que ce fichier a
+    /// laissées sur le carreau, de 17 témoins à 10. Elle est restaurée telle
+    /// quelle : une garde qui disparaît ne rougit jamais, et c'est ce silence
+    /// qui a laissé le glyphe revenir sans que rien ne le signale.
+    func test_pendingSyncGlyph_isRemovedFromTheFlatRow() throws {
+        guard let source = try rowSources().first(where: { $0.name == "LentilleConversationRow.swift" }) else {
+            XCTFail("LentilleConversationRow.swift introuvable parmi les fichiers découverts de Lentille/Row/")
             return
         }
         let code = normalizedCode(source.code)
-        XCTAssertTrue(
-            code.contains("frame(width: LentilleMetrics.UnreadDot.size, height: LentilleMetrics.UnreadDot.size)"),
-            "LentilleBridgeLine.swift doit dimensionner le point du pont avec " +
-            "LentilleMetrics.UnreadDot.size (8, contrat §LWS-7 : « point accent 8 »), jamais un " +
-            "littéral recopié."
+        XCTAssertFalse(
+            code.contains("arrow.triangle.2.circlepath"),
+            "LentilleConversationRow.swift rend encore le glyphe de synchronisation — le lot 2 " +
+            "le retire de la liste (l'outbox continue de renvoyer, sans affordance de rang)."
         )
+        XCTAssertFalse(
+            code.contains("hasPendingSync"),
+            "LentilleConversationRow.swift lit encore userState.hasPendingSync — plus rien ne " +
+            "doit en dépendre côté rendu du rang plat."
+        )
+    }
+
+    func test_unreadDotToken_isGoneFromEveryRowFile_supersededByTheCountedBadge() throws {
+        for source in try rowSources() {
+            XCTAssertEqual(
+                occurrences(of: "UnreadDot", in: normalizedCode(source.code)), 0,
+                "\(source.name) consomme encore LentilleMetrics.UnreadDot — le point accent de " +
+                "8 px est supprimé par le lot 2 (doublon strict de la pastille chiffrée, " +
+                "même donnée unreadCount > 0). Le token survit pour la seule peau WEB : " +
+                "aucune peau iOS ne doit le lire."
+            )
+        }
     }
 }

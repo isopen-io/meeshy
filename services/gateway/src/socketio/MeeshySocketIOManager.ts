@@ -98,7 +98,7 @@ import { emitServerEvent, type ServerEventName } from './serverEmit';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
-import { drainedEventName } from './queuedEventContract';
+import { drainedEventName, isDeliverableQueuedPayload } from './queuedEventContract';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -133,14 +133,24 @@ const BRIDGE_SNAPSHOT_LIMIT = 30;
 // divergence n'aurait eu pour témoin qu'un destinataire hors ligne au mauvais
 // moment, c'est-à-dire personne.
 //
-// Ce qui reste une AFFIRMATION, et le restera sans validation à l'exécution :
-// que l'octet relu de Redis soit bien ce qu'on y a écrit. Le typage borne ce
-// qu'on ÉCRIT, pas ce qu'on RELIT.
+// Ce qui restait une AFFIRMATION sans validation à l'exécution — que l'octet
+// relu de Redis soit bien ce qu'on y a écrit — est désormais VÉRIFIÉ pour la
+// seule chose dont dépend l'adressage : le NOM de l'événement. Le typage borne
+// toujours ce qu'on ÉCRIT et non ce qu'on RELIT ; la différence est qu'une
+// entrée qu'on ne sait pas nommer se déclare maintenant indélivrable au lieu de
+// partir sous un nom absent.
+//
+// Une liste VIDE dit « je ne sais pas diffuser ceci ». C'est la seule réponse
+// honnête : `emit(undefined, payload)` ne lève pas (mesuré, socket.io 4.8), il
+// diffuse un événement anonyme que nul n'écoute — et le drain étant DESTRUCTIF,
+// le message est alors perdu sans recours et sans trace. L'appelant décide de
+// la suite (journal, exclusion des accusés) ; ce n'est pas à la frontière de
+// désérialisation de le faire.
 function _drainedEmissions(entry: QueuedMessagePayload): SocketEmission[] {
   if (entry.eventType === 'link-message') return linkMessageEmissions(entry.payload);
-  return [
-    { event: drainedEventName(entry.eventType), payload: entry.payload } as SocketEmission,
-  ];
+  const event = drainedEventName(entry.eventType);
+  if (event === undefined) return [];
+  return [{ event, payload: entry.payload } as SocketEmission];
 }
 
 export interface SocketUser {
@@ -618,13 +628,104 @@ export class MeeshySocketIOManager {
       // (`emit(event: string, …)`), et une porte peut aussi s'ouvrir par
       // assertion de type.
       const userRoom = this.io.to(ROOMS.user(userId));
+
+      // Le rejeu est isolé PAR ENTRÉE, et ce n'est pas une précaution de style :
+      // `drain()` a DÉJÀ retiré ces entrées de Redis et de la file mémoire. Tout
+      // ce qui n'est pas émis dans cette boucle est perdu sans recours — il n'y
+      // a pas de seconde lecture.
+      //
+      // La couche du dessous porte déjà cette garantie et l'écrit :
+      // `parseRawEntries` laisse tomber une entrée illisible « so one corrupt
+      // entry can never poison a whole drain/peek ». Nue, cette boucle-ci la
+      // reprenait d'une main et la rendait de l'autre — un seul `emit` qui lève
+      // (adaptateur en défaut, encodeur sur une charge non sérialisable de la
+      // tranche MÉMOIRE, qui n'a jamais traversé JSON) emportait toutes les
+      // entrées SUIVANTES, plus `pending-messages:delivered`, plus TOUS les
+      // accusés de réception. C'est la leçon du cycle 98 — « un correctif prouvé
+      // à une couche peut être défait par la couche qui le consomme » — en
+      // amont, et sur le chemin le plus destructif du système.
+      //
+      // `delivered` ne retient que ce qui est RÉELLEMENT parti. Les trois
+      // signaux qui suivent en descendent, parce qu'ils AFFIRMENT tous les trois
+      // la même chose : que le message est arrivé. La règle est celle que la
+      // garde d'appartenance énonce vingt lignes plus haut — « l'affirmer d'un
+      // message qu'on vient de refuser de livrer mentirait à son auteur ». Elle
+      // ne couvrait que le refus ; elle couvre maintenant l'échec.
+      //
+      // Le journal est PAR ENTRÉE, et il NOMME son message. C'est la seule
+      // trace qu'une perte de rejeu laissera jamais : ni exception qui remonte,
+      // ni événement côté client, ni compteur qui bouge — le destinataire n'a
+      // simplement pas reçu son message. Un résumé chiffré ne suffirait pas,
+      // parce que ce qu'il faut pour rattraper la perte est l'IDENTITÉ de ce
+      // qui est tombé, pas son nombre.
+      const delivered: QueuedMessagePayload[] = [];
+      const undelivered: QueuedMessagePayload[] = [];
+      const dropEntry = (entry: QueuedMessagePayload, reason: string, error?: unknown): void => {
+        undelivered.push(entry);
+        logger.error('Queued entry dropped without delivery — it is already out of the queue', {
+          userId,
+          reason,
+          conversationId: entry.conversationId,
+          messageId: entry.messageId,
+          eventType: entry.eventType ?? 'new',
+          error,
+        });
+      };
+
       for (const entry of pending) {
-        for (const emission of _drainedEmissions(entry)) {
-          emitServerEvent(userRoom, emission);
+        // Les deux moitiés du couple, refusées séparément parce que le journal
+        // doit NOMMER laquelle a manqué : c'est la seule trace qu'une perte de
+        // rejeu laissera jamais, et « le nom » et « la charge » n'envoient pas
+        // chercher au même endroit.
+        if (!isDeliverableQueuedPayload(entry.payload)) {
+          dropEntry(entry, 'payload-not-an-object');
+          continue;
+        }
+        const emissions = _drainedEmissions(entry);
+        if (emissions.length === 0) {
+          dropEntry(entry, 'unresolvable-event-type');
+          continue;
+        }
+        try {
+          for (const emission of emissions) {
+            emitServerEvent(userRoom, emission);
+          }
+          delivered.push(entry);
+        } catch (error) {
+          dropEntry(entry, 'emit-failed', error);
         }
       }
-      const affectedConversationIds = [...new Set(pending.map(e => e.conversationId))];
-      userRoom.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length, conversationIds: affectedConversationIds });
+
+      // `count` ne compte QUE ce qui est parti — c'est une affirmation de
+      // livraison, elle doit rester vraie. `conversationIds`, lui, porte les
+      // conversations TOUCHÉES par le drain, rejeu réussi ou entrée perdue.
+      //
+      // La distinction est ce qui rend une perte RÉCUPÉRABLE au lieu de
+      // définitive : l'unique consommateur de cet événement s'en sert pour
+      // invalider les messages des conversations nommées
+      // (`use-socket-cache-sync`, `handlePendingMessagesDelivered`), et les
+      // messages qu'une entrée indélivrable transportait sont, eux, toujours en
+      // base — seul leur rejeu temps réel a échoué. Nommer la conversation
+      // envoie donc le client les rechercher. L'omettre transformerait un
+      // incident de transport en trou permanent dans le fil.
+      //
+      // Ces deux champs ne disent pas la même chose et c'est délibéré : un
+      // `count: 0` accompagné d'une conversation nommée se lit exactement comme
+      // ce qui s'est passé — « rien n'a pu être rejoué, va relire celle-ci ».
+      //
+      // Isolé, pour la même raison que la boucle au-dessus et que les canaux de
+      // `NotificationService.emitBestEffort` : ce signal DÉCLENCHE une relecture
+      // là où les accusés qui suivent font avancer la coche de l'expéditeur.
+      // Nu, il faisait porter aux seconds le sort du premier — et la panne qui
+      // fait lever un `emit` les fait lever tous les deux.
+      try {
+        const affectedConversationIds = [
+          ...new Set([...delivered, ...undelivered].map(e => e.conversationId)),
+        ];
+        userRoom.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: delivered.length, conversationIds: affectedConversationIds });
+      } catch (error) {
+        logger.error('Failed to announce the end of the offline replay', { userId, error });
+      }
 
       // Emit delivery receipts to senders so their checkmarks advance from
       // "sent" (single tick) to "delivered" (double tick) as soon as the
@@ -642,7 +743,7 @@ export class MeeshySocketIOManager {
       // restait sur un tic unique jusqu'à ce que quelqu'un OUVRE la
       // conversation, c'est-à-dire exactement l'attente que cette unité existe
       // pour supprimer.
-      this._emitDeliveryForDrainedMessages(userId, pending, isAnonymous).catch(err => {
+      this._emitDeliveryForDrainedMessages(userId, delivered, isAnonymous).catch(err => {
         logger.warn('Failed to emit delivery receipts for drained messages', { userId, error: err });
       });
     } catch (error) {

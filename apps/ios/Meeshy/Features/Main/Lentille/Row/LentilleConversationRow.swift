@@ -292,8 +292,25 @@ struct LentilleConversationRow: View {
                 // ligne, et l'aperçu commence à la même abscisse que lui.
                 Spacer(minLength: 0)
 
+                // Pile de non-lus — MÊME place et MÊME rouge qu'en magnification
+                // (retour produit 2026-08-22, soir : « enlever l'effectif sur les
+                // rows non magnifiées, mais mettre le chip rouge si messages non
+                // lus »). La loupe n'ajoute que l'effectif et la précision de la
+                // date : elle agrandit, elle ne recompose pas.
+                //
+                // **Supersession assumée du contrat §LWS-7** (« aucun badge
+                // chiffré nulle part », vol.5 « badge rouge 99+ supprimé ») :
+                // cette règle datait d'un rang où le non-lu se disait par le seul
+                // point accent du pont ✦. Or le pont n'apparaît QUE si la
+                // conversation en a un — une conversation non lue SANS pont ne
+                // disait donc rien du tout. Le chip, lui, parle toujours.
+                //
+                // Le chrome vient de l'ATOME PARTAGÉ, jamais d'une copie locale :
+                // la matrice L06 l'exige nommément (« via l'atome partagé
+                // UnreadCountBadge »), et c'est ce câblage qu'une fusion avait
+                // perdu — l'atome existait, testé, sans un seul consommateur.
                 if conversation.userState.unreadCount > 0 {
-                    unreadBadge
+                    UnreadCountBadge(count: conversation.userState.unreadCount, isDark: isDark)
                         .fixedSize()
                         .layoutPriority(1)
                 }
@@ -301,32 +318,16 @@ struct LentilleConversationRow: View {
         }
     }
 
-    /// Pile de non-lus — MÊME place et MÊME rouge qu'en magnification (retour
-    /// produit 2026-08-22, soir : « enlever l'effectif sur les rows non
-    /// magnifiées, mais mettre le chip rouge si messages non lus »). La loupe
-    /// n'ajoute donc que l'effectif et la précision de la date : elle
-    /// agrandit, elle ne recompose pas.
-    ///
-    /// **Supersession assumée du contrat §LWS-7** (« aucun badge chiffré
-    /// nulle part », vol.5 « badge rouge 99+ supprimé ») : cette règle datait
-    /// d'un rang où le non-lu se disait par le seul point accent du pont ✦.
-    /// Le pont n'apparaît QUE si la conversation en a un (`showsBridge` exige
-    /// `bridge != nil`) — une conversation non lue SANS pont ne disait donc
-    /// rien du tout. Le chip, lui, parle toujours.
-    private var unreadBadge: some View {
-        Text(conversation.userState.unreadCount > 99 ? "99+" : "\(conversation.userState.unreadCount)")
-            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .heavy))
-            .foregroundColor(.white)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(Capsule(style: .continuous).fill(MeeshyColors.unreadBadgeBackground(isDark: isDark)))
-            .accessibilityLabel(UnreadCountLabel.messages(conversation.userState.unreadCount))
-    }
-
     /// Troisième ligne — la date SEULE, poussée à droite (retour produit
     /// 2026-08-22 : « en bas sur une nouvelle ligne à droite mettre la date ;
-    /// la date gardera cette place même en magnificence »). Le glyphe d'outbox
-    /// la précède : il parle du même envoi.
+    /// la date gardera cette place même en magnificence »).
+    ///
+    /// **Le glyphe d'outbox ⟳ ne la précède plus** (behaviour-matrix L09,
+    /// amendement du lot 2, CONFIRMÉ par le porteur produit le 2026-08-23).
+    /// L'outbox continue de renvoyer toute seule — le retrait ne touche que
+    /// l'AFFORDANCE de liste, jamais le mécanisme. Une rangée n'est pas le bon
+    /// endroit pour dire l'état d'un envoi : elle le disait pour toutes les
+    /// conversations à la fois, sans rien offrir à faire de cette information.
     ///
     /// `LentilleRowTimestamp` garde son `TimelineView` — l'horodatage relatif
     /// doit ticker hors du portillon `.equatable()`, qui n'a délibérément
@@ -334,13 +335,6 @@ struct LentilleConversationRow: View {
     private var dateLine: some View {
         HStack(spacing: MeeshySpacing.xs) {
             Spacer(minLength: 0)
-
-            if conversation.userState.hasPendingSync {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                    .foregroundColor(accent.opacity(0.7))
-                    .accessibilityHidden(true)
-            }
 
             LentilleRowTimestamp(date: conversation.lastMessageAt)
                 .font(LentilleMetrics.Time.font)

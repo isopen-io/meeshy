@@ -5,6 +5,80 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-23 — SDK recipe flipped AGAIN: on THIS container the copy→patch `android-37` FAILS, pristine `android-37.0` WORKS (opposite of the previous entry)
+
+Slice `story-keyframe-interpolation`. The full four-edit copy→patch (`source.properties` ApiLevel,
+`package.xml` `<api-level>` + `path=`, `build.prop` `sdk_full` — even the extra
+`ro.system.build.version.sdk_full`) produced a folder whose `package.xml` was demonstrably correct
+(`path="platforms;android-37"`, `<api-level>37</api-level>`, `AndroidVersion.ApiLevel=37`), yet EVERY
+`./gradlew` still died with **`Failed to find target with hash string 'android-37'`** — with a fresh
+daemon, with `-Pandroid.builder.sdkDownload=false`, with android-37.0 removed. AGP 8.13.0 on this
+image simply would not load the hand-patched `android-37` as a target.
+
+What worked instead: install the **pristine** platform and leave it as-is —
+```bash
+sdkmanager --channel=3 "platforms;android-37.0"   # let AGP map compileSdk 37 → android-37.0
+# do NOT create android-37; do NOT patch anything
+```
+`assembleDebug testDebugUnitTest` was then BUILD SUCCESSFUL (973 tasks). NB the very first build with
+this present will print `Installing Android SDK Platform 37.0` (AGP re-materialises it) and then
+succeed — that install line is NOT the failure, unlike the copy→patch runs where it preceded the hash
+error. **Net rule: the recipe is image-dependent and flips between runs. Try pristine `android-37.0`
+FIRST (cheapest, no patching); only fall back to the copy→patch if pristine yields the hash error.**
+Read the first `./gradlew` outcome and pick the branch — do not assume the last run's recipe holds.
+
+## 2026-08-23 — Float easing → widen interpolation-value test tolerances to ~1e-4, not 1e-9
+
+Same slice. `KeyframeChannelSample.easing.eased(u)` returns a **Float**; a fraction like `0.2f`
+carries ~3e-7 absolute error, and scaled by a delta of 100–200 the interpolated Double lands
+~1e-5 off. A `Truth.isWithin(1e-9)` assertion on such a value fails on a CORRECT implementation
+(caught here: `interpolate([(0,0),(10,100)], at=2f)` gave 20.0000003). Use `isWithin(1e-4)` for any
+value that passes through Float easing — still tight enough to catch a wrong curve (whole-unit
+differences). Endpoint/`eased()` assertions on exact fractions (0, 0.5, 0.25, 0.75) stay at `1e-6f`.
+
+## 2026-08-23 — `android-37` copy→patch needs `build.prop`'s `ro.build.version.sdk_full` too (4th edit); and NEVER run two file-mutating gradle jobs at once
+
+Slice `story-text-element-rtl-direction`. Ran the documented three-edit copy→patch (`source.properties`
+ApiLevel + `package.xml` `<api-level>` + `path=`) and it STILL died with **`Failed to find target with hash
+string 'android-37'`** — this time with NO "inconsistent location" line, so the `path=` was already right.
+Cause: AGP 8.13.0 also reads `build.prop`, whose `ro.build.version.sdk_full=37.0` still declared the
+minor-versioned id. The 4th edit that fixed it:
+```bash
+sed -i 's/^ro.build.version.sdk_full=.*/ro.build.version.sdk_full=37/' android-37/build.prop
+rm -rf $ANDROID_SDK/platforms/android-37.0   # keep only android-37 to avoid any ambiguity
+```
+Full recipe THIS image needed (four edits): `source.properties` ApiLevel, `package.xml` `<api-level>`,
+`package.xml` `path=`, AND `build.prop` `ro.build.version.sdk_full`. Read the first `./gradlew` error:
+if it says `'android-37'` with no "inconsistent location", the `sdk_full` in `build.prop` is the one still
+lying. After the fix: `:feature:stories:testDebugUnitTest` BUILD SUCCESSFUL, full `assembleDebug
+testDebugUnitTest` green.
+
+**Process lesson (cost me ~4 wasted gradle runs): a mutation RED-proof that `cp`→`sed`→gradle→restore MUST run
+as a single isolated job, and you MUST wait for its REAL completion notification before starting another.** I
+mis-read a between-gradle-runs `pgrep` gap as "job done", restored the file, and launched a second mutation
+job while the first was still alive — two scripts editing the SAME `.kt` + `.bak` concurrently produced
+garbage `failures=0` results and a half-restored file. Also `--rerun-tasks` leaves a STALE result XML until it
+actually finishes, so reading the XML while gradle is mid-run reports the PREVIOUS run's counts. Rule: one
+mutation job at a time; confirm the task-completion notification (not `pgrep`); confirm the restore line in the
+job's own captured output; then `find apps/android -name '*.bak' -o -name '*.origbak'` before trusting the tree.
+
+## 2026-08-23 — copy+patch needs the `package.xml` `path=` attribute too, not only `<api-level>` (else "inconsistent location")
+
+Slice `story-text-element-fade-timing`. Ran the full copy+patch below (patched `source.properties` **and**
+`package.xml`'s `<api-level>37.0</api-level>`→`37`) — and the first `./gradlew` STILL died with
+**`Failed to find target with hash string 'android-37'`**, this time with the telltale line
+*"Observed package id 'platforms;android-37.0' in inconsistent location '.../android-37' (Expected
+'.../android-37.0')"*. Cause: the copied dir's `package.xml` still carried `path="platforms;android-37.0"`,
+so AGP treated the `android-37` folder as a misplaced `android-37.0` and refused it. The missing patch:
+```bash
+sed -i 's|path="platforms;android-37.0"|path="platforms;android-37"|' android-37/package.xml
+```
+With `<api-level>` **and** `path=` **and** `source.properties` all patched, `assembleDebug testDebugUnitTest`
+was BUILD SUCCESSFUL (973 tasks). Net: on THIS image the copy+patch needs THREE edits (source.properties
+ApiLevel, package.xml `<api-level>`, package.xml `path=`). The earlier 08-23 notes patched only the first two
+and worked — the images differ; patch all three to be safe, and read the first `./gradlew` error: an
+"inconsistent location" line means the `path=` attribute is the one still lying.
+
 ## 2026-08-23 — copy+patch needs `package.xml` too, not only `source.properties` (else the hash-string failure persists)
 
 Slice `story-text-element-font-size`. Ran the documented copy+patch (below) but patched **only**

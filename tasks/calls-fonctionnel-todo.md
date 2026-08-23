@@ -11241,3 +11241,167 @@ single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations
 périmètre calling) ; `handleHold`'s branche `catch` générique omet `videoSurvivalController.reset()`
 (iOS, actuellement inerte) ; `handleAudioRouteChange`'s `.newDeviceAvailable` ignore le résultat
 fallible d'`applySpeakerRoute()` (iOS, fenêtre étroite auto-corrigée).
+
+Note de suivi : PR #3393 (« web call-signaling emits stop hiding their contract behind casts »,
+merge `343bb2ad8`) porte la Vague 166 dans son sujet de commit mais n'a pas touché ce journal —
+même situation que la Vague 164, rien à retranscrire rétroactivement. Cette entrée porte
+directement la Vague 167, vérifiée mergée sur `main` avant de commencer (`git log` confirme
+`343bb2ad8` intégré, aucune branche `claude/upbeat-dirac-*` antérieure en avance).
+
+## Vague 167 — `handleAudioRouteChange`'s `.newDeviceAvailable` optimistic `isSpeaker` flip had no revert-on-failure, unlike its sibling `toggleSpeaker()` (iOS) (2026-08-23)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Repris
+directement du suivi « reste ouvert » porté par les Vagues 163/165 : `handleAudioRouteChange`'s
+`.newDeviceAvailable` ignore le résultat fallible d'`applySpeakerRoute()` (iOS, fenêtre étroite
+auto-corrigée).
+
+### Root cause
+
+`applySpeakerRoute()` (`CallManager.swift`) est `@discardableResult` et documente explicitement
+son contrat : « `toggleSpeaker()` uses this to revert its optimistic `isSpeaker` flip on failure ».
+`toggleSpeaker()` suit ce contrat à la lettre (§7.8, commentaire en place : « `overrideOutputAudioPort`
+can throw (e.g. `insufficientPriority` when a higher-priority route — a connected Bluetooth headset
+— is active), and without a revert `isSpeaker` stays desynced from the real audio route »).
+
+`handleAudioRouteChange`'s branche `.newDeviceAvailable` fait exactement le même geste optimiste
+(`isSpeaker = false` puis `applySpeakerRoute()`) mais jetait la valeur de retour au sol —
+`applySpeakerRoute()` sans condition, sans `if`, sans capture. Le jumeau correct existe dans le
+MÊME fichier (`toggleSpeaker()`, ~250 lignes plus haut) : même méthode appelée, même échec possible,
+un seul des deux sites vérifiait le résultat.
+
+### Impact
+
+Fenêtre étroite mais réelle : un accessoire Bluetooth/casque vient de se connecter pendant un appel
+actif (`.newDeviceAvailable`). `overrideOutputAudioPort(.none)` peut échouer avec
+`insufficientPriority` — précisément quand l'accessoire qui vient de se connecter détient lui-même
+la priorité de route, le cas que le commentaire de `toggleSpeaker()` nomme explicitement. Avant ce
+correctif : `isSpeaker` retombait à `false` (bouton haut-parleur affiché éteint) même si le
+`RTCAudioSession` gardait un override `.speaker` non résilié — l'audio pouvait continuer à sortir du
+haut-parleur intégré malgré l'accessoire fraîchement connecté et malgré l'UI qui affirme le
+contraire, jusqu'à ce qu'un changement de route non lié ou un tap manuel sur le bouton haut-parleur
+resynchronise l'état par accident (d'où « auto-corrigée » dans le suivi — ce n'était jamais garanti).
+
+### Fix
+
+Même geste que `toggleSpeaker()`, un seul site : capture de `isSpeaker` avant le flip optimiste,
+revert si `applySpeakerRoute()` rend `false`. Le message de log passe de la valeur littérale figée
+`"isSpeaker = false"` à l'état réel post-revert (`self.isSpeaker`), pour ne pas mentir dans les logs
+sur le cas d'échec qu'il vient de corriger. Aucun changement de signature, aucune nouvelle branche —
+les cas `.oldDeviceUnavailable`/`.override`/`default` sont inchangés : ils ré-appliquent la
+préférence `isSpeaker` déjà en vigueur (rien à revert, cette valeur n'a pas été flip optimistiquement
+dans ces branches).
+
+### Tests (TDD, RED confirmé)
+
+Nouveau test source-based dans `CallManagerAudioSessionTests.swift` (même convention que le reste
+du fichier — pas de host XCTest disponible dans ce container), borné SÉMANTIQUEMENT jusqu'au libellé
+du `case` suivant plutôt que par un nombre de caractères — leçon directe de la « fenêtre en nombre de
+caractères » du cycle 238i, qui a rendu un garde faux-rouge sur du code correct ailleurs dans ce
+dépôt le même jour. RED confirmé par `git stash` du seul fichier de production : la recherche de
+`"if !applySpeakerRoute()"` dans le corps du `case .newDeviceAvailable:` rend `False` avant le
+correctif (le code ne contenait qu'un appel nu), `True` après. Les trois tests existants sur ce même
+`case` (`setsSpeakerFalse`, et les deux tests jumeaux dans `CallManagerTests.swift`) restent verts
+sans modification — le nouveau `if !applySpeakerRoute()` conserve `isSpeaker = false` comme
+sous-chaîne et `applySpeakerRoute()` comme appel, les deux propriétés qu'ils vérifient déjà.
+
+### Risk assessment
+
+Minimal — additif pur (une variable locale, un `if`), aucun changement de signature, aucune nouvelle
+branche de code atteignable qui n'existait pas déjà. Le comportement qui change est exactement celui
+que `toggleSpeaker()` corrige déjà pour le même appel sous-jacent ; ce correctif aligne le seul autre
+site qui fait le même flip optimiste sur la même discipline.
+
+### Triage CI (PR #3398, hors périmètre de ce lot)
+
+Le premier run complet (`run test` forcé) a rendu 7 échecs. Un seul portait sur ce lot — la fenêtre
+fixe déjà décrite ci-dessus, corrigée dans un second commit. Les 6 autres étaient déjà connus :
+`LentilleBridgeLine`/L06/L09/`ScrollPillStateTests`/littéral 900/`call:join`-reconnect, tous
+recensés « rouges antérieurs, présents sur main » dans le train d'intégration du 2026-08-23 (cf.
+plus haut dans ce fichier). Un `git merge origin/main` a apporté les correctifs mergés entre-temps
+(`f67a26b28`, `5161af3b8`, `940cd973a`) — 5 des 6 ont disparu au run suivant. Restent, sur le run
+post-merge : `LentilleRowBehaviourAnchorTests/test_L09_amended_pendingSyncGlyphIsRemovedFromTheRow`
+(même texte d'échec exact avant et après le merge — la recalibration l'a manqué) et
+`FeedViewModelTests/test_loadMoreIfNeeded_afterFreshCacheOnlySession_stillFetchesDespiteNilCursor`
+(nouveau dans ce run, jamais vu avant). Aucun des deux ne touche à du code que ce lot modifie
+(rendu de ligne Lentille / pagination du feed, sans rapport avec `CallManager.handleAudioRouteChange`).
+`rerun_failed_jobs` a été tenté pour confirmer par un rejeu — refusé par GitHub
+(403, permission de l'intégration) — donc non confirmé par ré-exécution. Consigné ici plutôt que
+retenu en silence, PR laissée sous surveillance jusqu'à éclaircissement plutôt que mergée sur un
+diagnostic incomplet.
+
+### Non fait volontairement / reste ouvert
+
+Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~6300 lignes, iOS) ; ADR
+`actor CallEventQueue` non implémenté ; iOS single-peer côté groupe ; même gap de hiérarchie de rôle
+sur `conversations/participants.ts` (hors périmètre calling) ; `handleHold`'s branche `catch`
+générique omet `videoSurvivalController.reset()` (iOS, actuellement inerte — toujours pas exercée en
+pratique, non traitée dans ce lot pour rester scopé à un seul défaut par Vague).
+
+## Vague 168 — `handleHold`'s unhold generic `catch` also skipped `videoSurvivalController.reset()` (iOS) (2026-08-23)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise directe
+du suivi laissé ouvert par la Vague 167 (« `handleHold`'s branche `catch` générique omet
+`videoSurvivalController.reset()` (iOS, actuellement inerte — toujours pas exercée en pratique, non
+traitée dans ce lot pour rester scopé à un seul défaut par Vague) ») — après vérification que la
+Vague 167 est bien mergée sur `main` (PR #3398, merge `0b340c063`) et qu'aucune branche
+`claude/upbeat-dirac-*` antérieure n'est en avance (branche redémarrée depuis `origin/main` pour
+cette Vague après qu'un premier essai en double de ce même correctif a été détecté au `git merge` —
+Vague 167 avait déjà été mergée par une session parallèle entre-temps ; aucun commit perdu, l'essai
+en double a été abandonné sans être poussé).
+
+### Root cause
+
+`handleHold(_:)`'s branche `!isOnHold` (reprise vidéo après un hold CallKit) retente
+`webRTCService.upgradeToVideo()` et, en cas d'échec, désactive la vidéo pour le reste de l'appel
+(`isVideoEnabled = false`). Deux branches `catch` gèrent cet échec : `catch
+WebRTCError.cameraPermissionDenied` (permission refusée) et un `catch {}` générique (toute autre
+erreur — négociation SDP, caméra occupée, etc.). La première appelle
+`self.videoSurvivalController.reset()` juste après avoir posé `isVideoEnabled = false` — geste
+documenté par son propre commentaire (« Audit finding ») comme nécessaire car `isVideoEnabled = false`
+seul ne fait retomber l'état de survie à `.initial` qu'au PROCHAIN tick de qualité
+(`VideoSurvivalController.handle` garde sur `userWantsVideo`), et ce `handle()` est lui-même un no-op
+complet tant qu'une transition suspend/resume est déjà en vol (`guard !isTransitioning else {
+return }`). La branche `catch {}` générique, juste en dessous, faisait le même `isVideoEnabled = false`
+mais **sans** ce `reset()` — même geste, même contrat, une seule des deux branches le respectait.
+
+### Impact
+
+Fenêtre étroite (déjà qualifiée « actuellement inerte » par la Vague 167, confirmé toujours réel et
+non un faux suivi) : un hold CallKit était en cours quand le contrôleur de survie avait lui-même une
+transition suspend/resume en vol (dégradation réseau détectée pendant le hold) au moment précis où
+l'unhold tentait de relancer la vidéo et échouait pour une raison AUTRE que la permission caméra. Sans
+le `reset()`, `isTransitioning` restait vrai après cet échec — le prochain tick de qualité ne
+retombait pas immédiatement sur `.initial` malgré `isVideoEnabled == false`, et la complétion de la
+transition en vol pouvait poser `isVideoSuspended = true` après coup, affichant l'indicateur « vidéo
+suspendue pour cause réseau » alors que la vidéo est en réalité totalement désactivée par un échec
+distinct — un état d'affichage trompeur, pas un crash, jusqu'au prochain hold/unhold ou fin d'appel.
+
+### Fix
+
+Un seul ajout, additif, miroir exact de la branche `cameraPermissionDenied` juste au-dessus :
+`self.videoSurvivalController.reset()` après `self.hasLocalVideoTrack = …` dans le `catch {}`
+générique. Aucun changement de signature, aucune nouvelle branche.
+
+### Tests (TDD, RED confirmé)
+
+Nouveau `CallManagerHandleHoldSurvivalResetSourceTests.swift` (même patron source-level que les
+Vagues 166/167 — pas de host XCTest disponible dans ce conteneur), borné SÉMANTIQUEMENT par le message
+de log unique de cette branche jusqu'au `emitCallToggleVideo(..., enabled: true)` qui suit la fin du
+`Task` — pas par un nombre de caractères (leçon Vague 167 / cycle 238i). **RED confirmé par `git
+stash` du seul fichier de production** : `self.videoSurvivalController.reset()` absent du bloc avant
+le correctif, présent après.
+
+### Risk assessment
+
+Minimal — additif pur (une ligne), aucun changement de signature. Le comportement qui change est
+exactement celui que la branche sœur `cameraPermissionDenied` applique déjà pour le même échec
+sous-jacent (`upgradeToVideo()` qui jette) ; ce correctif aligne la seule autre branche qui désactive
+la vidéo sur la même discipline.
+
+### Non fait volontairement / reste ouvert
+
+Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~6300 lignes, iOS) ; ADR
+`actor CallEventQueue` non implémenté ; iOS single-peer côté groupe ; même gap de hiérarchie de rôle
+sur `conversations/participants.ts` (hors périmètre calling). Aucun suivi ponctuel restant identifié
+pour cette famille précise à ce stade — les prochaines Vagues devront soit rouvrir un audit large du
+fichier, soit s'attaquer à l'un des trois chantiers architecturaux ci-dessus.
