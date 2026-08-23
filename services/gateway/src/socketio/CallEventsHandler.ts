@@ -990,10 +990,18 @@ export class CallEventsHandler {
           endReasonHint: CallEndReason.completed
         });
 
-        // Même hygiène par-partant que `call:leave`/`call:force-leave` : la
-        // minuterie de sonnerie et l'offre bufferisée du partant n'ont plus
-        // de destinataire (voir clearBufferedOfferFor).
-        this.callService.clearRingingTimeout(callId);
+        // `leaveParticipationAndBroadcast` délègue à `CallService.leaveCall`,
+        // qui clear déjà `ringingTimeouts` lui-même — mais SEULEMENT quand ce
+        // partant était le DERNIER participant actif (branche
+        // `isLastParticipant`). Pour un appel de groupe qui continue pour
+        // d'autres invités encore non répondus, `leaveCall` laisse
+        // délibérément le timer armé, exactement comme `call:signal` (answer)
+        // le fait pour la même raison. Un `clearRingingTimeout(callId)`
+        // INCONDITIONNEL ici — comme `call:end`/`call:leave`/`call:force-leave`
+        // avant la Vague 164 — leur ferait perdre leur notification d'appel
+        // manqué. Seule l'offre bufferisée du partant n'a plus de
+        // destinataire (voir clearBufferedOfferFor) : elle est scopée au
+        // partant, donc toujours sûre à nettoyer ici.
         this.clearBufferedOfferFor(callId, userId, participation.participantId);
 
         // Et l'écran du sorti, que rien d'autre ne referme. `call:participant
