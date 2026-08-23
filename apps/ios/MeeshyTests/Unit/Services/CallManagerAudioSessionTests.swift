@@ -414,6 +414,22 @@ final class CallManagerAudioSessionTests: XCTestCase {
         )
     }
 
+    /// Isolates the `.newDeviceAvailable` case body, bounded by the NEXT case
+    /// label rather than a character count — a fixed-width window here is
+    /// exactly the "ticking time bomb" this repo has already been bitten by
+    /// once (cycle 238i): a doc-comment added above this case, or the one it
+    /// precedes, shifts the body past a magic offset and rots the guard on an
+    /// unrelated change, without the code it protects ever regressing.
+    private func newDeviceAvailableCaseBody(in fnBody: String) throws -> String {
+        guard let newDevRange = fnBody.range(of: "case .newDeviceAvailable:") else {
+            XCTFail(".newDeviceAvailable case not found"); return ""
+        }
+        guard let oldDevRange = fnBody.range(of: "case .oldDeviceUnavailable:", range: newDevRange.upperBound..<fnBody.endIndex) else {
+            XCTFail(".oldDeviceUnavailable case not found after .newDeviceAvailable"); return ""
+        }
+        return String(fnBody[newDevRange.lowerBound ..< oldDevRange.lowerBound])
+    }
+
     func test_callManager_audioRouteChange_newDeviceAvailable_setsSpeakerFalse() throws {
         // P0-8, revised: when a Bluetooth/headset device connects (.newDeviceAvailable),
         // iOS routes audio to it automatically. We sync isSpeaker = false so the
@@ -435,11 +451,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
             fnBody.contains("case .newDeviceAvailable:"),
             "handleAudioRouteChange must handle .newDeviceAvailable"
         )
-        guard let newDevRange = fnBody.range(of: "case .newDeviceAvailable:") else {
-            XCTFail(".newDeviceAvailable case not found"); return
-        }
-        let newDevEnd = fnBody.index(newDevRange.upperBound, offsetBy: 300, limitedBy: fnBody.endIndex) ?? fnBody.endIndex
-        let newDevBody = String(fnBody[newDevRange.lowerBound ..< newDevEnd])
+        let newDevBody = try newDeviceAvailableCaseBody(in: fnBody)
 
         XCTAssertTrue(
             newDevBody.contains("isSpeaker = false"),
@@ -449,6 +461,34 @@ final class CallManagerAudioSessionTests: XCTestCase {
             newDevBody.contains("applySpeakerRoute()"),
             ".newDeviceAvailable must call applySpeakerRoute() after clearing isSpeaker, to clear any " +
             "standing `.speaker` RTCAudioSession override left over from before the accessory connected."
+        )
+    }
+
+    func test_callManager_audioRouteChange_newDeviceAvailable_revertsSpeakerFlagOnApplyFailure() throws {
+        // Audit finding — mirrors the fix already applied to toggleSpeaker() (§7.8):
+        // overrideOutputAudioPort can throw (e.g. `insufficientPriority` when the
+        // just-connected Bluetooth headset itself holds route priority), and
+        // applySpeakerRoute() surfaces that as a `false` return. The
+        // .newDeviceAvailable branch discarded this result: isSpeaker was left at
+        // `false` even when the override never actually applied, desyncing the
+        // speaker-toggle UI from the real audio route — the same failure class
+        // toggleSpeaker() already guards against, left unguarded on this sibling
+        // call site that performs the identical optimistic flip.
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
+            XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        let newDevBody = try newDeviceAvailableCaseBody(in: fnBody)
+
+        XCTAssertTrue(
+            newDevBody.contains("if !applySpeakerRoute()"),
+            ".newDeviceAvailable must check applySpeakerRoute()'s result and revert isSpeaker on " +
+            "failure — same discipline as toggleSpeaker(), otherwise a route-priority failure leaves " +
+            "isSpeaker desynced from the real audio route."
         )
     }
 

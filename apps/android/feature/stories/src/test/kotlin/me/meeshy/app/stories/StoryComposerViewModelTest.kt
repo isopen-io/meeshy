@@ -1540,6 +1540,67 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onTextElementCycleFadeIn advances only the fade-in of the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementCycleFadeIn(id)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.fade.inSeconds).isEqualTo(0.5f)
+        assertThat(element.fade.outSeconds).isEqualTo(StoryTextFade.NONE_SECONDS)
+        assertThat(element.style).isEqualTo(StoryTextStyle.BOLD)
+    }
+
+    @Test
+    fun `onTextElementCycleFadeOut advances only the fade-out of the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementCycleFadeOut(id)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.fade.outSeconds).isEqualTo(0.5f)
+        assertThat(element.fade.inSeconds).isEqualTo(StoryTextFade.NONE_SECONDS)
+    }
+
+    @Test
+    fun `onTextElementCycleFadeIn wraps past the longest step back to no-fade`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        repeat(6) { vm.onTextElementCycleFadeIn(id) }
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().fade.inSeconds)
+            .isEqualTo(StoryTextFade.NONE_SECONDS)
+    }
+
+    @Test
+    fun `onTextElementCycleFadeIn on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementCycleFadeIn("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().fade.inSeconds)
+            .isEqualTo(StoryTextFade.NONE_SECONDS)
+    }
+
+    @Test
+    fun `onTextElementCycleFadeOut on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementCycleFadeOut("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().fade.outSeconds)
+            .isEqualTo(StoryTextFade.NONE_SECONDS)
+    }
+
+    @Test
     fun `onTextElementTransform pinch-scales and rotates the edited element`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()

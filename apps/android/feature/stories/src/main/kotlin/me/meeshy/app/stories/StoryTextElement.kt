@@ -119,6 +119,7 @@ data class StoryTextElement(
     val size: StoryTextSize = StoryTextSize.DEFAULT,
     val background: StoryTextBackground = StoryTextBackground.None,
     val outline: StoryTextOutline = StoryTextOutline(),
+    val fade: StoryTextFade = StoryTextFade(),
     val x: Float = CENTER,
     val y: Float = CENTER,
     val scale: Float = DEFAULT_SCALE,
@@ -126,6 +127,16 @@ data class StoryTextElement(
 ) {
     /** True once the element carries content worth publishing (non-blank text). */
     val isPublishable: Boolean get() = text.isNotBlank()
+
+    /**
+     * The base writing direction this element lays out in, derived from its [text] the way
+     * iOS derives it at render time — no direction field rides the wire, so every client
+     * re-derives it identically via [StoryTextBidi]. An Arabic/Hebrew caption resolves
+     * right-to-left; Latin, neutral, or empty text left-to-right. Consumed by the canvas
+     * Composable to set the paragraph layout direction; no stored field, so [toTextObject]
+     * is unaffected.
+     */
+    val baseDirection: StoryTextDirection get() = StoryTextBidi.resolveBaseDirection(text)
 
     /**
      * A copy with every continuous field pulled back into its legal range: [x]/[y]
@@ -184,6 +195,8 @@ data class StoryTextElement(
         backgroundStyle = background.toStyleWire(),
         borderColor = outline.color?.takeIf { outline.width > StoryTextOutline.NONE_WIDTH },
         borderWidth = outline.width.takeIf { it > StoryTextOutline.NONE_WIDTH }?.toDouble(),
+        fadeIn = fade.inSeconds.takeIf { it > StoryTextFade.NONE_SECONDS }?.toDouble(),
+        fadeOut = fade.outSeconds.takeIf { it > StoryTextFade.NONE_SECONDS }?.toDouble(),
         sourceLanguage = sourceLanguage,
     )
 

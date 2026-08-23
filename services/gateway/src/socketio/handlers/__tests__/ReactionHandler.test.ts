@@ -357,9 +357,11 @@ describe('ReactionHandler', () => {
 
       await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
 
-      expect(callback).toHaveBeenCalledWith(
-        expect.objectContaining({ success: true, data: { message: 'Reaction already absent' } })
-      );
+      // L'accusé est un REÇU : `success` seul, sans `data`. Il portait
+      // `{ message: 'Reaction already absent' }`, une phrase anglaise non
+      // localisée qu'aucun des trois clients ne lit — et que le décodeur iOS
+      // des accusés de réaction rejette là où il en décode un.
+      expect(callback).toHaveBeenCalledWith({ success: true });
       // Nothing changed — no broadcast to the conversation room.
       expect(io.to).not.toHaveBeenCalled();
     });

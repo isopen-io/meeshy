@@ -191,6 +191,47 @@ class StoryTextElementTest {
     }
 
     @Test
+    fun `a fresh element has no fade timing`() {
+        val fade = StoryTextElement(id = "e1").fade
+        assertThat(fade.hasFadeIn).isFalse()
+        assertThat(fade.hasFadeOut).isFalse()
+    }
+
+    @Test
+    fun `toTextObject omits both fade fields when the element has no fade`() {
+        val wire = StoryTextElement(id = "e1", text = "hi").toTextObject(sourceLanguage = "fr")
+        assertThat(wire.fadeIn).isNull()
+        assertThat(wire.fadeOut).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries a chosen fade-in onto the wire fadeIn only`() {
+        val wire = StoryTextElement(id = "e1", text = "hi", fade = StoryTextFade(inSeconds = 2f))
+            .toTextObject(sourceLanguage = "fr")
+        assertThat(wire.fadeIn).isWithin(1e-9).of(2.0)
+        assertThat(wire.fadeOut).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries a chosen fade-out onto the wire fadeOut only`() {
+        val wire = StoryTextElement(id = "e1", text = "hi", fade = StoryTextFade(outSeconds = 3f))
+            .toTextObject(sourceLanguage = "fr")
+        assertThat(wire.fadeOut).isWithin(1e-9).of(3.0)
+        assertThat(wire.fadeIn).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries both fade ends when both are set`() {
+        val wire = StoryTextElement(
+            id = "e1",
+            text = "hi",
+            fade = StoryTextFade(inSeconds = 0.5f, outSeconds = 5f),
+        ).toTextObject(sourceLanguage = "fr")
+        assertThat(wire.fadeIn).isWithin(1e-9).of(0.5)
+        assertThat(wire.fadeOut).isWithin(1e-9).of(5.0)
+    }
+
+    @Test
     fun `every style and align exposes a distinct lowercase wire token`() {
         assertThat(StoryTextStyle.entries.map { it.wire })
             .containsExactly("bold", "neon", "typewriter", "handwriting", "classic")
@@ -317,5 +358,24 @@ class StoryTextElementTest {
             .toTextObject(sourceLanguage = "fr")
         assertThat(wire.scale).isWithin(1e-6).of(2.5)
         assertThat(wire.rotation).isWithin(1e-4).of(42.0)
+    }
+
+    // --- baseDirection: derived from the caption, iOS-parity render-time direction ---
+
+    @Test
+    fun `a fresh empty element lays out left-to-right`() {
+        assertThat(StoryTextElement(id = "e1").baseDirection).isEqualTo(StoryTextDirection.LTR)
+    }
+
+    @Test
+    fun `a latin caption lays out left-to-right`() {
+        assertThat(StoryTextElement(id = "e1", text = "Bonjour").baseDirection)
+            .isEqualTo(StoryTextDirection.LTR)
+    }
+
+    @Test
+    fun `an arabic caption lays out right-to-left`() {
+        assertThat(StoryTextElement(id = "e1", text = "مرحبا").baseDirection)
+            .isEqualTo(StoryTextDirection.RTL)
     }
 }

@@ -129,14 +129,29 @@ final class LentilleRowChromeTests: XCTestCase {
 
     // MARK: - Non-lus : rouge, toujours
 
-    /// UN seul badge de non-lus dans tout le chantier, et il est rouge :
-    /// « la pile du nombre de messages non lus sera toujours sur fond rouge
-    /// même en magnificence ». La garantie ne vient plus d'un accord entre
-    /// deux vues — il n'y en a qu'une.
-    func test_unreadBadge_existsOnce_andIsAlwaysSemanticRed_magnifiedOrNot() throws {
-        let badge = try viewBlock("unreadBadge", in: try rowSource())
-        XCTAssertTrue(badge.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"), "fond ROUGE sémantique")
-        XCTAssertFalse(badge.contains("fill(accent)"), "jamais l'accent de la conversation")
+    /// UN seul badge de non-lus dans tout le chantier — et deux lots l'ont
+    /// obtenu par les deux bouts, en se croisant :
+    ///
+    /// - en amont, le rang a cessé de peindre son chrome et monte l'ATOME
+    ///   PARTAGÉ `UnreadCountBadge` (matrice L06) ; le rouge sémantique et
+    ///   l'interdit `fill(accent)` sont vérifiés chez l'atome
+    ///   (`UnreadCountBadgeTests`), où l'assertion a MIGRÉ ;
+    /// - ici, la carte de magnification a été dissoute (2026-08-23), donc la
+    ///   seconde copie que l'amont laissait vivre « migration non décidée »
+    ///   n'existe plus du tout.
+    ///
+    /// Ce qui reste à garder, et que ni l'atome ni l'amont ne disent : que
+    /// `Lentille/Mode/` ne se remette pas à en peindre un.
+    func test_unreadBadge_existsOnce_theRowMountsTheSharedAtom_andModeRepaintsNothing() throws {
+        let row = try rowSource()
+        XCTAssertEqual(
+            row.components(separatedBy: "UnreadCountBadge(").count - 1, 1,
+            "UN seul montage de l'atome dans le rang — magnifié ou au repos, c'est la même vue."
+        )
+        XCTAssertFalse(
+            row.contains("private var unreadBadge: some View {"),
+            "… et plus aucune copie locale du chrome : elle a migré dans l'atome."
+        )
         XCTAssertFalse(
             try magnificationSource().contains("unreadBadgeBackground"),
             "Lentille/Mode/ ne repeint aucun badge de non-lus : la rangée le porte, magnifiée ou non."
@@ -175,14 +190,25 @@ final class LentilleRowChromeTests: XCTestCase {
         let code = try rowSource()
         let header = try viewBlock("headerLine", in: code)
         let spacer = try XCTUnwrap(header.range(of: "Spacer(minLength: 0)"))
-        let badge = try XCTUnwrap(header.range(of: "unreadBadge"))
+        let badge = try XCTUnwrap(header.range(of: "UnreadCountBadge("))
         XCTAssertLessThan(spacer.lowerBound, badge.lowerBound, "poussé en fin de ligne du nom")
         XCTAssertTrue(header.contains("conversation.userState.unreadCount > 0"), "… et seulement s'il y a des non-lus")
 
-        let chip = try viewBlock("unreadBadge", in: code)
-        XCTAssertTrue(chip.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"), "fond ROUGE sémantique")
-        XCTAssertFalse(chip.contains("fill(accent)"), "jamais l'accent de la conversation")
+        // Le rang ne peint plus son chrome : il monte l'ATOME PARTAGÉ (matrice
+        // L06, « via l'atome partagé UnreadCountBadge »). Le rouge sémantique et
+        // l'interdit `fill(accent)` sont donc vérifiés là où le chrome vit
+        // désormais — `UnreadCountBadgeTests.test_theBadgeIsSemanticRed_neverTheConversationAccent`,
+        // où l'assertion a MIGRÉ plutôt que d'être supprimée avec son ancien site.
+        // Ce qui se teste ICI est ce que l'atome ne peut pas savoir : sa PLACE
+        // dans la ligne du nom, et sa condition d'apparition.
 
+        // La prémisse du bloc amont — « la carte de magnification garde encore
+        // sa copie locale, migration non décidée » — est devenue fausse le
+        // 2026-08-23 : il n'y a plus de carte. La magnification EST la rangée,
+        // donc elle monte le MÊME atome, et il n'existe plus de seconde copie
+        // à tenir en accord avec la première. Ce que le bloc protégeait — « les
+        // deux surfaces peignent le même rouge » — est désormais vrai par
+        // construction.
     }
 
     /// Les quatre pastilles de la magnification ont le MÊME gabarit — mode,

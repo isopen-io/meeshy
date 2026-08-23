@@ -49,6 +49,8 @@
     <string name="stories_composer_bg_none">No background</string>
     <string name="stories_composer_outline">Text outline</string>
     <string name="stories_composer_size">Text size</string>
+    <string name="stories_composer_fade_in">Text fade in</string>
+    <string name="stories_composer_fade_out">Text fade out</string>
     <string name="stories_composer_bg_glass">Glass</string>
     <string name="stories_composer_add_sticker">Sticker</string>
     <string name="stories_composer_remove_sticker">Remove sticker</string>
