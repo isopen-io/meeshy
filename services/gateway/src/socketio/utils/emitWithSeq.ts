@@ -29,9 +29,13 @@ import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '
  * LOCKSTEP avec les clients : le `_seq` est per-user GLOBAL, pas per-event. Un
  * client qui n'observe qu'un SOUS-ENSEMBLE des events estampillés voit un trou
  * à chaque event non observé. Étendre la liste des appelants ci-dessous oblige
- * donc à étendre l'observation dans le MÊME train de release, sur les DEUX
- * clients qui la portent : iOS (`SyncSeqTracker.observe`, MessageSocketManager)
- * et web (`observeSyncSeq`, `notification-socketio.singleton`).
+ * donc à étendre l'observation dans le MÊME train de release, sur les TROIS
+ * clients qui la portent : iOS (`SyncSeqTracker.observe`, MessageSocketManager),
+ * web (`observeSyncSeq`, `notification-socketio.singleton`) et Android
+ * (`SyncSeqTracker.observe`, `sdk-core/.../socket/MessageSocketManager.kt` —
+ * câblé au cycle 108 ; avant ça Android jetait le champ et n'avait AUCUNE
+ * détection de trou exacte, pendant que le contrat partagé affirmait le
+ * contraire).
  *
  * Ordering (SyncEngine A2, fix ordering) : `nextSeq` renvoie des valeurs
  * distinctes et strictement croissantes DANS L'ORDRE D'APPEL, mais deux appels

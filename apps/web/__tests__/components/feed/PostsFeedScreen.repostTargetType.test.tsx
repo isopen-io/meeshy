@@ -1,0 +1,173 @@
+/**
+ * Loi du miroir, moitié « fil » : reposter depuis PostsFeedScreen doit porter
+ * le type de la SOURCE, pour les DEUX gestes (republication nue et citation).
+ *
+ * Sans cette garde, `targetType` partait à `undefined` — l'état local
+ * `repostingPost` ne retenait que { id, author, content }, donc le gateway
+ * retombait sur son défaut `?? POST` et un REEL reposté quittait le fil des
+ * reels en silence. Le type ne rougissait pas non plus : la lecture
+ * `repostingPost.type` était la SEULE erreur TS du lot, noyée dans la dette de
+ * `apps/web`. Le comportement se verrouille donc ici, pas au compilateur.
+ */
+import { render, screen, fireEvent } from '@testing-library/react';
+import React from 'react';
+
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+
+jest.mock('@/components/layout/DashboardLayout', () => ({
+  DashboardLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, paramsOrFallback?: Record<string, unknown> | string) =>
+      typeof paramsOrFallback === 'string' ? paramsOrFallback : key,
+  }),
+}));
+
+type PostCardStubProps = { onRepost?: () => void };
+jest.mock('@/components/v2', () => ({
+  Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
+    <button onClick={onClick}>{children}</button>
+  ),
+  useToast: () => ({ addToast: jest.fn() }),
+  PostCard: ({ onRepost }: PostCardStubProps) => (
+    <button data-testid="post-card-open-repost" onClick={onRepost}>Repost</button>
+  ),
+  StoryTray: () => null,
+  StatusBar: () => null,
+  StoryViewer: () => null,
+  StoryComposer: () => null,
+  StatusComposer: () => null,
+}));
+
+jest.mock('@/components/v2/PostComposer', () => ({ PostComposer: () => null }));
+jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
+jest.mock('@/components/v2/AudioPostComposer', () => ({ AudioPostComposer: () => null }));
+jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
+
+type RepostModalStubProps = { open: boolean; onRepost: () => void; onQuote: (c: string) => void };
+jest.mock('@/components/v2/RepostModal', () => ({
+  RepostModal: ({ open, onRepost, onQuote }: RepostModalStubProps) =>
+    open ? (
+      <div>
+        <button data-testid="modal-repost" onClick={onRepost}>Confirm repost</button>
+        <button data-testid="modal-quote" onClick={() => onQuote('mon commentaire')}>Confirm quote</button>
+      </div>
+    ) : null,
+}));
+
+jest.mock('@/services/posts.service', () => ({
+  postsService: { recordMediaDownloads: jest.fn(), sharePost: jest.fn() },
+}));
+jest.mock('@/services/report.service', () => ({
+  reportService: { reportPost: jest.fn(), reportStory: jest.fn() },
+}));
+
+jest.mock('@/hooks/social/use-stories', () => ({
+  useStoriesFeedQuery: () => ({ data: [], isLoading: false }),
+  useCreateStoryMutation: () => ({ mutate: jest.fn() }),
+  useDeleteStoryMutation: () => ({ mutate: jest.fn() }),
+  useRecordStoryViewMutation: () => ({ recordView: jest.fn() }),
+}));
+jest.mock('@/hooks/social/use-stories-realtime', () => ({ useStoriesRealtime: jest.fn() }));
+jest.mock('@/stores/user-preferences-store', () => ({
+  useStoryPreferences: () => ({ preferences: { defaultVisibility: 'FRIENDS' } }),
+}));
+jest.mock('@/hooks/social/use-statuses', () => ({
+  useStatusesFeedQuery: () => ({ isLoading: false }),
+  useStatusesList: () => [],
+  useCreateStatusMutation: () => ({ mutate: jest.fn() }),
+}));
+
+const reelPost = {
+  id: 'reel-7',
+  authorId: 'author-2',
+  type: 'REEL',
+  visibility: 'PUBLIC',
+  content: 'clip',
+  author: { id: 'author-2', username: 'bob', displayName: 'Bob' },
+  likeCount: 0,
+  commentCount: 0,
+  repostCount: 0,
+  viewCount: 0,
+  bookmarkCount: 0,
+  shareCount: 0,
+  isPinned: false,
+  isEdited: false,
+  createdAt: '2026-08-01T00:00:00.000Z',
+  updatedAt: '2026-08-01T00:00:00.000Z',
+};
+
+jest.mock('@/hooks/queries/use-feed-query', () => ({
+  useFeedQuery: () => ({
+    data: { pages: [{ data: [] }] },
+    isLoading: false,
+    isSuccess: true,
+    isError: false,
+    isFetching: false,
+    dataUpdatedAt: 0,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: jest.fn(),
+    refetch: jest.fn(),
+  }),
+  useFeedPosts: () => [reelPost],
+  usePrefetchPost: () => jest.fn(),
+}));
+
+const mockRepostMutate = jest.fn();
+jest.mock('@/hooks/queries/use-post-mutations', () => ({
+  useCreatePostMutation: () => ({ mutate: jest.fn(), isPending: false }),
+  useLikePostMutation: () => ({ mutate: jest.fn() }),
+  useUnlikePostMutation: () => ({ mutate: jest.fn() }),
+  useBookmarkPostMutation: () => ({ mutate: jest.fn() }),
+  useUnbookmarkPostMutation: () => ({ mutate: jest.fn() }),
+  useTranslatePostMutation: () => ({ mutate: jest.fn() }),
+  useDeletePostMutation: () => ({ mutate: jest.fn() }),
+  usePinPostMutation: () => ({ mutate: jest.fn() }),
+  useRepostMutation: () => ({ mutate: (...args: unknown[]) => mockRepostMutate(...args) }),
+  useUpdatePostMutation: () => ({ mutate: jest.fn(), isPending: false }),
+}));
+
+jest.mock('@/hooks/queries/use-comment-mutations', () => ({
+  useCreateCommentMutation: () => ({ mutate: jest.fn() }),
+}));
+jest.mock('@/hooks/queries/use-post-socket-cache-sync', () => ({ usePostSocketCacheSync: jest.fn() }));
+jest.mock('@/hooks/use-post-translation', () => ({ usePreferredLanguage: () => 'fr' }));
+jest.mock('@/hooks/use-impression-tracking', () => ({
+  useImpressionTracking: () => ({ observe: jest.fn() }),
+}));
+jest.mock('@/stores/auth-store', () => ({
+  useAuthStore: (selector: (s: unknown) => unknown) =>
+    selector({ user: { id: 'viewer-1', username: 'alice', avatar: null } }),
+}));
+jest.mock('@/services/tusUploadService', () => ({ TusUploadService: jest.fn() }));
+
+import { PostsFeedScreen } from '@/components/feed/PostsFeedScreen';
+
+describe('PostsFeedScreen — le repost miroite le type de sa source', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("republier un REEL envoie targetType 'REEL', jamais le defaut POST", () => {
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('post-card-open-repost'));
+    fireEvent.click(screen.getByTestId('modal-repost'));
+
+    expect(mockRepostMutate).toHaveBeenCalledWith(
+      { postId: 'reel-7', data: { isQuote: false, targetType: 'REEL' } },
+      expect.anything(),
+    );
+  });
+
+  it("citer un REEL porte le meme type que la republication nue", () => {
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('post-card-open-repost'));
+    fireEvent.click(screen.getByTestId('modal-quote'));
+
+    expect(mockRepostMutate).toHaveBeenCalledWith(
+      { postId: 'reel-7', data: { content: 'mon commentaire', isQuote: true, targetType: 'REEL' } },
+      expect.anything(),
+    );
+  });
+});

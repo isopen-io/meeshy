@@ -2,6 +2,7 @@
 
 import { Component, useEffect, useRef, type ReactNode } from 'react';
 import type { CanvasV3, ObjectV3, SceneV3 } from '@meeshy/shared/types/canvas-v3';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import {
   resolveKeyframeState,
   resolveClipTransitionOpacity,
@@ -314,11 +315,20 @@ function bandClass(anchor: ObjectV3['anchor']): string | undefined {
   return anchor.edge === 'top' ? 'band-top' : 'band-bottom';
 }
 
+/// Égalité de langue conforme au Prisme : les codes comparés ici sont verbatim
+/// (clés de `translations`, `o.locale`, préférences du lecteur) et peuvent être
+/// région-tagués (`en-US`, `fr_FR`), sous-tagués script (`zh-Hant`), 3-lettres
+/// (`fra`, `swe`) ou legacy (`iw`). Un `split('-')[0]` ne réduit ni le séparateur
+/// `_`, ni les codes 639-2/3, ni les alias dépréciés : `fr_FR` et `fr`, `fra` et
+/// `fr`, `iw` et `he` y compteraient pour des langues distinctes, et un objet
+/// déjà écrit dans la langue primaire du lecteur (ou une traduction keyée sous
+/// une forme divergente) serait manqué.
+/// SSOT de la canonicalisation : normalizeLanguageForDedup (language-normalize.ts).
 function sameLanguage(a: string, b: string): boolean {
-  return a.split('-')[0]?.toLowerCase() === b.split('-')[0]?.toLowerCase();
+  return normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
 }
 
-function translationFor(translations: Record<string, unknown>, language: string): string | undefined {
+export function translationFor(translations: Record<string, unknown>, language: string): string | undefined {
   const exact = str(translations[language]);
   if (exact) return exact;
   const match = Object.entries(translations).find(([lang]) => sameLanguage(lang, language));
@@ -329,7 +339,7 @@ function translationFor(translations: Record<string, unknown>, language: string)
 /// d'origine concourt à son propre rang — la première servie gagne, par une
 /// traduction ou parce que l'objet est déjà écrit dans cette langue. Jamais
 /// `translations.first`, jamais de court-circuit par la langue d'origine.
-function resolveText(o: ObjectV3, preferredLanguages: readonly string[]): string {
+export function resolveText(o: ObjectV3, preferredLanguages: readonly string[]): string {
   const original = str(o.payload.text) ?? str(o.payload.content) ?? '';
   const translations = o.payload.translations;
   if (typeof translations !== 'object' || translations === null) return original;

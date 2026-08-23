@@ -74,7 +74,22 @@ public actor ClientInfoProvider {
             // Un NIVEAU, pas un booléen : le gateway compare `caps >= 3`. C'est
             // une constante du binaire, d'où sa place ici plutôt que dans
             // `buildHeaders()` — rien dans l'environnement ne la fait varier.
-            "X-Canvas-Caps": "3"
+            "X-Canvas-Caps": "3",
+            // Porte de version cliente (C4a/C4b, spec §C3). Le gateway lit
+            // `x-app-version` pour juger le binaire face à `MIN_APP_VERSION`
+            // (`services/gateway/src/utils/appVersion.ts`) et `x-app-platform`
+            // pour résoudre le `storeUrl` du 426 (`android` ⇒ Play Store, tout
+            // le reste ⇒ App Store). Leur place est ICI et pas dans le funnel
+            // d'`APIClient` : c'est le point unique par lequel passent les DEUX
+            // funnels (requête et siège de test), donc le seul endroit d'où un
+            // en-tête ne peut pas manquer sur un chemin oublié.
+            //
+            // Redondants en apparence avec `X-Meeshy-Version`/`-Platform`, ils
+            // ne le sont pas : ce sont deux CONTRATS distincts. La paire
+            // `X-Meeshy-*` est de la télémétrie, la paire `X-App-*` est une
+            // porte — renommer l'une ne doit pas déplacer l'autre.
+            AppVersionHeader.versionHeaderName: AppVersionHeader.value(),
+            AppVersionHeader.platformHeaderName: AppVersionHeader.platformValue
         ]
         cachedStaticHeaders = headers
         return headers
@@ -82,8 +97,11 @@ public actor ClientInfoProvider {
 
     // MARK: - Private helpers
 
+    /// Un SEUL lecteur de `CFBundleShortVersionString` dans le SDK : la porte
+    /// de version et la télémétrie doivent parler de la même version, sans quoi
+    /// un jour l'une dirait « 1.2.0 » quand l'autre dit « 1.2 ».
     private func appVersion() -> String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+        AppVersionHeader.value()
     }
 
     private func appBuild() -> String {

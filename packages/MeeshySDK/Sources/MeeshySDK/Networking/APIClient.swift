@@ -676,6 +676,15 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                     let errBody = try? decoder.decode(ErrorBody.self, from: data)
                     let errorMsg = errBody?.message ?? errBody?.error
 
+                    // Rupture cliente (C4b) : le gateway refuse ce BINAIRE, pas
+                    // cette requête. Le signal part AVANT que l'erreur ne soit
+                    // jetée — l'appelant a le droit d'avaler son erreur (la
+                    // plupart le font), et la porte doit se montrer quand même.
+                    if statusCode == 426 {
+                        UpgradeGateSignal.signal(statusCode: statusCode, body: data)
+                        throw MeeshyError.server(statusCode: 426, message: errorMsg ?? "Mise a jour requise")
+                    }
+
                     if statusCode == 401 {
                         if case .invalidCredentials(let message) = Self.mapUnauthorized(endpoint: endpoint, serverMessage: errorMsg) {
                             // P1 — wrong password / 2FA code / stale magic
@@ -706,6 +715,9 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                                     }
                                     let retryErrBody = try? decoder.decode(ErrorBody.self, from: retryData)
                                     let retryErrorMsg = retryErrBody?.message ?? retryErrBody?.error
+                                    // Même porte, sur le second passage : un
+                                    // jeton rafraîchi ne rajeunit pas le binaire.
+                                    UpgradeGateSignal.signal(statusCode: retryStatusCode, body: retryData)
                                     throw MeeshyError.server(statusCode: retryStatusCode, message: retryErrorMsg ?? "Erreur après rafraichissement")
                                 }
                             } catch {

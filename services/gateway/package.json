@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/gateway",
-  "version": "1.30.0",
+  "version": "1.31.0",
   "description": "Fastify Gateway service for Meeshy real-time messaging",
   "private": true,
   "main": "dist/src/server.js",
@@ -19,7 +19,6 @@
     "test:all": "jest --config=jest.config.temp.json --testTimeout=30000",
     "test:watch": "jest --config=jest.config.json --watch",
     "test:coverage": "jest --config=jest.config.json --coverage",
-    "lint": "eslint src/",
     "type-check": "pnpm --filter @meeshy/shared build && tsc --noEmit",
     "clean": "rm -rf dist node_modules coverage"
   },
