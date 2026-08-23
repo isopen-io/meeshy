@@ -151,6 +151,19 @@ Directive produit du 2026-08-23 : **le web reposte un post en post, une story
 en story, un mood en mood — et le viewer de story offre en plus « reposter en
 post »**, qui est l'ancrage nommé par cette même loi.
 
+État mesuré des quatre cas côté web, avant correctif :
+
+| Source | Aujourd'hui | Verdict |
+|---|---|---|
+| post | POST | ✅ juste — **par défaut, pas par intention** |
+| **réel** | **POST** | ❌ **rétrogradation silencieuse** : le repost quitte le fil des réels |
+| **story** | **POST permanent** | ❌ le cas coûteux — on ancre sans l'avoir demandé |
+| mood | *(aucune surface web)* | loi sans site : le fil web ne sert que `[POST, REEL]` |
+
+Le cas du réel n'était pas nommé dans la directive, mais la loi le couvre et le
+défaut est réel : `app/reel/[postId]/page.tsx:199` envoie lui aussi
+`{ isQuote: false }`.
+
 Le type de la source est **déjà en main à chaque site d'appel** (`stories`,
 `current`, `post.type`) : le miroir ne coûte aucune requête.
 
@@ -229,9 +242,9 @@ Défaut vivant, indépendant de tout le reste du chantier, et de coût minime.
 **Ne dépend ni du lot 0 ni d'aucun autre.** Peut partir avant que la première
 ligne du composer unifié soit écrite, et referme immédiatement la violation la
 plus coûteuse de la loi 5.
-**DoD** : un test RED qui prouve qu'aujourd'hui reposter une story produit un
-`POST`, puis vert ; les moods reposent en `STATUS` (1 h) et non en post
-permanent.
+**DoD** : un test RED par cas cassé — story → `POST` et réel → `POST` sont
+constatés avant d'être corrigés —, puis vert. Le cas `mood` est écrit dans le
+contrat même s'il n'a pas encore de surface web : la loi précède son site.
 
 ### Lot 1 — L'éventail
 `ComposerProfile` gagne `offeredFormats` ; le sélecteur de format monte dans le
