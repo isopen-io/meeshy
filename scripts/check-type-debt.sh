@@ -69,7 +69,7 @@ NC='\033[0m'
 # Le nombre d'erreurs de types que `apps/web` porte AUJOURD'HUI, mesuré avec le
 # TypeScript du dépôt. Il ne peut que descendre. Pour le baisser : lancer ce
 # script, il nomme la valeur à écrire ici.
-readonly WEB_BASELINE=1241
+readonly WEB_BASELINE=1237
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
