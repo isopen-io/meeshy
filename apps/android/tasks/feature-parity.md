@@ -4585,10 +4585,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       mirror the detail embed's restraint and avoid a "0 likes" clutter the feed card does not. +3
       `RepostEmbedBuilderTest` (projects / null→0 / clamps negative; mutation-proven: dropping the
       `coerceAtLeast(0)` fails exactly the negative-clamp test). New `feed_repost_likes_count` plurals
-      EN/FR/ES/PT. **Still open:** the full story-/reel-canvas embed (needs an Android story-canvas
-      renderer — iOS `StoryRepostEmbedCell`/`ReelRepostEmbedCell`); the reposted post's author mood
-      emoji + location sticker (each needs a new `ApiRepostOf` field — model plumbing + gateway
-      payload confirmation first).
+      EN/FR/ES/PT. **Reposted post's mood emoji now shown** (slice `feed-repost-embed-mood-emoji`,
+      2026-08-23): gateway payload confirmed on the wire (iOS `APIRepostOf.moodEmoji` decodes it), so
+      Android's `ApiRepostOf` gained `moodEmoji: String?` and `RepostEmbedBuilder` projects it →
+      `RepostEmbedPresentation.moodEmoji` (blank → null, matching the feed card's own
+      `post.moodEmoji?.takeIf { it.isNotBlank() }`); the shared cell prefixes it to the content on a
+      firstTextBaseline `Row` (parity iOS `FeedPostCard.swift:966`). **Improvement over iOS:** the cell
+      now renders the mood-only case (blank body + emoji) that iOS's own comment flags as previously
+      "un corps vide" — a republished mood status is no longer an empty embed on Android. +3
+      `RepostEmbedBuilderTest` (projects / absent→null / blank→null; mutation-proven: dropping the
+      `takeIf { isNotBlank() }` fails exactly the blank test). No new strings (emoji is verbatim text).
+      **Still open:** the full story-/reel-canvas embed (needs an Android story-canvas
+      renderer — iOS `StoryRepostEmbedCell`/`ReelRepostEmbedCell`); the reposted post's location
+      sticker (needs a new `ApiRepostOf.location` field — model plumbing + gateway payload
+      confirmation first).
 
 ## G. Statuses / Moods
 > **TTL correction (slice `status-mood-core`, 2026-07-19):** a mood **status expires 1h** after creation

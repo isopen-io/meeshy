@@ -2,6 +2,64 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-23 **repost embed shows the reposted post's mood emoji** (slice `feed-repost-embed-mood-emoji`,
+> feature-parity §F — "Repost / quote embed cell in the feed"). iOS prefixes the reposted post's mood emoji
+> to the quoted content (`FeedPostCard.swift:966` — `if let mood = repost.moodEmoji, !mood.isEmpty`), with an
+> explicit comment that a reposted STATUS carries an empty body, so without the emoji "un mood republié
+> n'afficherait qu'un corps vide". Android's `ApiRepostOf` did not even carry the field, so a reposted mood
+> status rendered a completely empty embed. This lands it — the last cleanly-doable repost-embed gap whose
+> data was NOT already on the model.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the one
+> open PR repo-wide is #3352, a gateway share-link language fix, not android-routine). Prior android iteration
+> (`feed-repost-embed-like-count`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`e4d8c3f5`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe as recorded in NOTES: install
+> `platforms;android-37.0` via `--channel=3`, then **copy** `android-37.0` → a real `android-37` dir and `sed`
+> its `source.properties` to `AndroidVersion.ApiLevel=37` (the symlink alone is insufficient — AGP reads
+> `37.0` from `source.properties`). After that the full `assembleDebug testDebugUnitTest` ran locally, **BUILD
+> SUCCESSFUL** (152 actionable tasks for the feed subtree; full check below). Local gate available this run.
+>
+> **Backend risk resolved before committing**: the "mood emoji embed" candidate was flagged in prior NOTES as
+> needing "gateway payload confirmation first". Confirmed on the wire — iOS `APIRepostOf` declares
+> `moodEmoji: String?` and decodes `repostOf.moodEmoji` (`PostModels.swift:87,281`), so the gateway already
+> serves it; Android was simply dropping it. No gateway/shared change — the fix is a pure Android model +
+> projection + Compose gap.
+>
+> **`:core:model` `ApiRepostOf`**: gained `val moodEmoji: String? = null` (kotlinx.serialization, key-based —
+> order-independent; data-class boilerplate, coverage-exempt). Only construction site is `RepostEmbedBuilder`
+> (grep-verified), so no other call breaks on the new field.
+>
+> **`:feature:feed` `RepostEmbedBuilder`** (pure, app-side): `RepostEmbedPresentation` gained
+> `moodEmoji: String?`, projected as `repost.moodEmoji?.takeIf { it.isNotBlank() }` — identical guard to the
+> feed card's own `FeedPostPresentation` (`post.moodEmoji?.takeIf { it.isNotBlank() }`) and iOS's `!mood.isEmpty`.
+>
+> **`:feature:feed` `RepostEmbedCell`** (Compose glue, exempt): the content block now shows when
+> `moodEmoji != null || content.isNotBlank()` (was content-only), on a firstTextBaseline `Row` prefixing the
+> emoji (`bodyMedium`) before the content — mirror of iOS's `HStack(alignment: .firstTextBaseline, spacing: 6)`.
+> **Improvement over iOS**: the mood-only case (blank body + emoji) now renders on Android — iOS's own comment
+> flags that exact case as previously an empty body; Android gates content to non-blank so a mood-only repost
+> shows just the emoji, no empty text node. No new strings (emoji is verbatim text). No dead ends: read-only,
+> part of the same tap target that opens the original post.
+>
+> **Tests: +3** — all in `RepostEmbedBuilderTest`, through the public `RepostEmbedBuilder.build`: projects the
+> mood emoji ("🎉") / absent (null) → null / blank ("   ") → null. **Mutation RED-proof ×1**: dropping
+> `.takeIf { it.isNotBlank() }` fails EXACTLY `build_blankMoodEmojiBecomesNull` (1 of 20), the other 19 green.
+> Restored via `cp` backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL. Reviewer PASS. Diff is
+> `apps/android` only (1 model field + projection, cell wiring, +3 tests, tracking docs). Verdict: **PASS** —
+> pure app-side projection through a tested SSOT + exempt Compose glue, behavioural tests through the public
+> API, no production logic outside apps/android.
+>
+> **Next**: still §F (Feed) is nearly complete (the two remaining unchecked boxes — "Unified post composer
+> (Post/Status/Story tabs)" and the story-canvas repost embed — are large multi-slice features). Candidates:
+> (1) the reposted post's **location sticker** in the embed (needs a new `ApiRepostOf.location` field — confirm
+> iOS `APIRepostOf.location` is on the wire, which it is per `PostModels.swift`, then a model-plumbing slice
+> mirroring this one); (2) begin decomposing the **Unified post composer** tabs; (3) or advance to **§E Stories**
+> (22 todos, next in build order). Re-scout read-only before committing — parity notes are hypotheses.
+
 > On 2026-08-22 **repost embed shows the reposted post's like count** (slice `feed-repost-embed-like-count`,
 > feature-parity §F — "Repost / quote embed cell in the feed"). iOS renders the reposted post's like count
 > inside the embedded quote block (`FeedPostCard.repostView` heart + `repost.likes`; `PostDetailView`

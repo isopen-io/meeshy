@@ -150,15 +150,29 @@ fun RepostEmbedCell(
             }
         }
 
-        if (embed.content.isNotBlank()) {
+        if (embed.moodEmoji != null || embed.content.isNotBlank()) {
             Spacer(Modifier.height(MeeshySpacing.sm))
-            Text(
-                text = embed.content,
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textPrimary,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                embed.moodEmoji?.let { mood ->
+                    Text(
+                        text = mood,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                if (embed.content.isNotBlank()) {
+                    Text(
+                        text = embed.content,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textPrimary,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+            }
         }
 
         embed.previewImageUrl?.let { url ->

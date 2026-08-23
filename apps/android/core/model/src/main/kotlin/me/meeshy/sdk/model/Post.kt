@@ -52,6 +52,7 @@ data class ApiRepostOf(
     val translations: Map<String, ApiPostTranslationEntry>? = null,
     val storyEffects: StoryEffects? = null,
     val audioUrl: String? = null,
+    val moodEmoji: String? = null,
     val originalRepostOfId: String? = null,
     val author: ApiAuthor? = null,
     val media: List<ApiPostMedia>? = null,
