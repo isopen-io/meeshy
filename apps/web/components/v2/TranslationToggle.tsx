@@ -27,7 +27,7 @@ export interface TranslationToggleProps {
   originalLanguageName?: string;
   translations?: TranslationItem[];
   userLanguage?: string;
-  variant?: 'inline' | 'block';
+  variant?: 'inline' | 'block' | 'flags';
   /**
    * Inline variant only. When true (default) the resolved content is rendered
    * above the language chip — comments and statuses rely on the toggle to
@@ -35,6 +35,13 @@ export interface TranslationToggleProps {
    * themselves and want the toggle as a bare language indicator (StoryViewer).
    */
   showContent?: boolean;
+  /**
+   * Notifie l'hôte de la version affichée, à la résolution puis à chaque
+   * exploration. Les hôtes qui rendent le texte eux-mêmes (`showContent=false`)
+   * en ont besoin : sans lui, la rangée dit « Français » pendant que l'hôte
+   * rend l'original, et le Prisme ment.
+   */
+  onDisplayedChange?: (version: { languageCode: string; content: string; isOriginal: boolean }) => void;
   className?: string;
 }
 
@@ -59,6 +66,7 @@ function TranslationToggle({
   userLanguage,
   variant = 'inline',
   showContent = true,
+  onDisplayedChange,
   className,
 }: TranslationToggleProps) {
   const { t: tComponents } = useI18n('components');
@@ -97,6 +105,17 @@ function TranslationToggle({
     return picked ? { ...picked, isOriginal: false as const } : autoResolved;
   }, [manualSelection, autoResolved, originalVersion, translations]);
 
+  // Le signal part APRÈS le rendu et ne dépend que de la version affichée : un
+  // hôte qui rend le texte lui-même doit servir EXACTEMENT celle que la rangée
+  // annonce, sans quoi le drapeau et le paragraphe se contredisent.
+  useEffect(() => {
+    onDisplayedChange?.({
+      languageCode: displayedVersion.languageCode,
+      content: displayedVersion.content,
+      isOriginal: displayedVersion.isOriginal,
+    });
+  }, [displayedVersion, onDisplayedChange]);
+
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -130,11 +149,82 @@ function TranslationToggle({
     setShowMenu(false);
   }, []);
 
+  if (variant === 'flags') {
+    // Original + traductions, dans l'ordre où le lecteur les rencontre. Le
+    // parchemin qu'elle remplace recopiait un extrait par langue et plafonnait à
+    // trois : il coûtait la moitié de l'écran et rendait la quatrième langue
+    // inatteignable. Un drapeau dit la même chose en une ligne, sans plafond.
+    const allVersions = [
+      originalVersion,
+      ...translations.filter((t) => !sameLanguage(t.languageCode, originalLanguage)),
+    ];
+    const hasChoice = allVersions.length > 1;
+
+    return (
+      <div className={cn('flex flex-col gap-1.5', className)}>
+        {showContent && (
+          <p
+            data-testid="translation-flags-content"
+            className="text-[var(--gp-text-primary)] whitespace-pre-wrap break-words"
+          >
+            {displayedVersion.content}
+          </p>
+        )}
+
+        {hasChoice && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {allVersions.map((version) => {
+              const isSelected = sameLanguage(version.languageCode, displayedVersion.languageCode);
+              const isOriginal = 'isOriginal' in version ? version.isOriginal : false;
+              return (
+                <button
+                  key={version.languageCode}
+                  type="button"
+                  data-testid={`translation-flag-${version.languageCode}`}
+                  aria-pressed={isSelected}
+                  aria-label={version.languageName}
+                  title={version.languageName}
+                  onClick={() =>
+                    handleSelect({
+                      languageCode: version.languageCode,
+                      languageName: version.languageName,
+                      content: version.content,
+                      isOriginal,
+                    })
+                  }
+                  className={cn(
+                    'text-base leading-none rounded-full transition-all duration-300 px-1 py-0.5',
+                    // Le choix courant se voit sans couleur de marque : un anneau
+                    // discret suffit, et il survit au thème sombre.
+                    isSelected
+                      ? 'ring-2 ring-[var(--gp-text-secondary)] opacity-100'
+                      : 'opacity-50 hover:opacity-90',
+                  )}
+                >
+                  {getFlag(version.languageCode)}
+                </button>
+              );
+            })}
+
+            <span
+              data-testid="translation-flags-current"
+              className="text-[11px] text-[var(--gp-text-muted)] ml-0.5"
+            >
+              {displayedVersion.languageName}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (variant === 'block') {
     return (
       <div className={cn('space-y-2', className)}>
-        {/* Main displayed content */}
-        <p className="text-[var(--gp-text-primary)]">{displayedVersion.content}</p>
+        {/* Le texte n'est rendu QUE si l'hôte ne le rend pas lui-même : `PostDetail`
+            montait cette variante puis son propre `PostContentText`, et le lecteur
+            voyait le contenu deux fois — traduit, puis en version originale. */}
+        {showContent && <p className="text-[var(--gp-text-primary)]">{displayedVersion.content}</p>}
 
         {/* Other translations in parchment zone */}
         {otherVersions.length > 0 && (
