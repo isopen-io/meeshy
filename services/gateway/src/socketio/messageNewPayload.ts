@@ -122,6 +122,12 @@ export function buildMessageNewPayload(
   message: Message,
   inputs: MessageNewPayloadInputs
 ) {
+  // `Message` ne déclare ni `clientMessageId` ni `effectFlags` ; ils sont lus à
+  // travers ce sac de clés. La lecture est GARDÉE plutôt que crue : sans garde,
+  // les deux champs partaient sur le fil en `unknown`, c'est-à-dire qu'aucun
+  // producteur ne promettait le type que les décodeurs clients attendent — ce
+  // que le contrat honnête de `SocketIOMessage` (cycle 101) fait constater au
+  // compilateur.
   const raw = message as unknown as Record<string, unknown>;
 
   return {
@@ -140,11 +146,11 @@ export function buildMessageNewPayload(
     // seuls : `stripClientMessageId` le retire du payload des pairs juste avant
     // l'émission. Sans lui, une ligne optimiste ne peut être promue que par la
     // réponse HTTP, et reste bloquée en « envoi » quand celle-ci se perd.
-    clientMessageId: raw['clientMessageId'] || undefined,
+    clientMessageId: typeof raw['clientMessageId'] === 'string' ? raw['clientMessageId'] : undefined,
     isBlurred: Boolean(message.isBlurred),
     isViewOnce: Boolean(message.isViewOnce),
     maxViewOnceCount: message.maxViewOnceCount ?? undefined,
-    effectFlags: raw['effectFlags'] ?? 0,
+    effectFlags: typeof raw['effectFlags'] === 'number' ? raw['effectFlags'] : 0,
     expiresAt: message.expiresAt || undefined,
     isEdited: Boolean(message.isEdited),
     deletedAt: message.deletedAt || undefined,

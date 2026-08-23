@@ -2348,20 +2348,99 @@ export interface SocketIOMessageSender {
   readonly lastName?: string;
 }
 
+/**
+ * La charge utile de `message:new` et de `message:edited`, TELLE QUE LES
+ * PRODUCTEURS L'ÉMETTENT.
+ *
+ * Elle a longtemps déclaré quatorze champs quand les producteurs en servaient
+ * une trentaine. Ce n'est pas une imprécision sans suite : les décodeurs iOS,
+ * Android et web sont écrits CONTRE ce contrat, et un champ qui n'y figure pas
+ * doit être transcrit indépendamment par chacun des trois — c'est exactement
+ * ainsi que `conversation:join-error` a vécu huit sites d'émission et deux
+ * transcriptions client divergentes sans jamais être déclaré (cycle 99).
+ *
+ * Ce qui est déclaré `unknown` l'est PAR DÉCISION, pas par paresse : `replyTo`,
+ * `attachments`, `translations` et `metadata` ont une forme DÉLIBÉRÉMENT
+ * différente d'un transport à l'autre (cf. l'en-tête de
+ * `services/gateway/src/socketio/messageNewPayload.ts`, qui énumère les écarts
+ * et leur raison). Entre deux producteurs qui se contredisent, ne rien affirmer
+ * est plus honnête que d'en couronner un.
+ *
+ * Portée de la garde, pour ne pas la surestimer : la passerelle compile en
+ * `strict: false` / `strictNullChecks: false`. Déclarer un champ ici fait donc
+ * tomber une émission dont la clé MANQUE ou dont le TYPE est incompatible —
+ * jamais une qui sert `undefined` là où le contrat promet une valeur.
+ */
 export interface SocketIOMessage {
   readonly id: string;
   readonly conversationId: string;
-  readonly senderId: string; // Participant.id (unified)
+  /**
+   * `User.id` de l'expéditeur — et non son `Participant.id`, contrairement à ce
+   * que cette ligne a déclaré pendant toute la vie du contrat. Les clients
+   * comparent ce champ à leur propre `User.id` pour reconnaître leurs messages
+   * et réconcilier la bulle optimiste entre appareils ; les producteurs le
+   * résolvent par `resolveWireSenderId`, qui ne replie sur le `Participant.id`
+   * que pour un expéditeur ANONYME, lequel n'en a pas d'autre.
+   */
+  readonly senderId: string;
   readonly content: string;
   readonly originalLanguage: string;
   readonly messageType: MessageType;
+  readonly messageSource?: string;
+  /**
+   * Ne voyage QUE vers les appareils de l'expéditeur — `stripClientMessageId`
+   * le retire de la charge utile des pairs juste avant l'émission.
+   */
+  readonly clientMessageId?: string;
   readonly isEdited?: boolean;
   readonly editedAt?: Date;
   readonly deletedAt?: Date;
-  readonly replyToId?: string;
+  readonly expiresAt?: Date;
   readonly createdAt: Date;
   readonly updatedAt?: Date;
   readonly sender?: SocketIOMessageSender;
+
+  /** Vue unique, flou, effets de bulle. */
+  readonly isBlurred?: boolean;
+  readonly isViewOnce?: boolean;
+  readonly maxViewOnceCount?: number;
+  readonly effectFlags?: number;
+
+  /** Réponses, citations de post, transferts. */
+  readonly replyToId?: string;
+  readonly replyTo?: unknown;
+  readonly storyReplyToId?: string;
+  readonly postReplyTo?: unknown;
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
+  readonly forwardedFrom?: unknown;
+  readonly forwardedFromConversation?: unknown;
+
+  /** Prisme Linguistique et pièces jointes — formes propres au transport. */
+  readonly translations?: unknown;
+  readonly attachments?: unknown;
+
+  /** Mentions : les pseudos validés en base, et leur résolution enrichie. */
+  readonly validatedMentions?: readonly string[];
+  readonly mentionedUsers?: readonly unknown[];
+
+  /** Hissés depuis `metadata` par les producteurs, pour être lisibles en direct. */
+  readonly location?: unknown;
+  readonly trackingLinks?: readonly unknown[];
+
+  /**
+   * Enveloppe E2EE. Le FAIT du chiffrement, c'est la présence du chiffré ; le
+   * chiffré sans le MODE ne dit pas sous quel régime déchiffrer.
+   */
+  readonly isEncrypted?: boolean;
+  readonly encryptionMode?: string;
+  readonly encryptedContent?: string;
+  readonly encryptionMetadata?: unknown;
+  readonly encryptedPayload?: unknown;
+
+  /** Servis par le seul transport REST/ZMQ (cf. `messageNewPayload.ts`). */
+  readonly originalContent?: string;
+  readonly metadata?: unknown;
 }
 
 export interface UserPermissions {

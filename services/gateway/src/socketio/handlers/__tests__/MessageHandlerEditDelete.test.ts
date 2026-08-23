@@ -573,6 +573,62 @@ describe('MessageHandler — handleMessageEdit', () => {
     ]);
   });
 
+  // `message:edited` est déclaré `(message: SocketIOMessage) => void` — le MÊME
+  // contrat que `message:new` — et `SocketIOMessage` rend sept champs
+  // OBLIGATOIRES. Ce producteur-ci en servait quatre : il avait perdu
+  // `senderId`, `messageType` et `createdAt`.
+  //
+  // Le coût n'était pas cosmétique. `APIMessage`, le décodeur iOS de
+  // `message:edited`, lit `senderId` et `createdAt` par `try c.decode(...)`
+  // SANS repli : une clé absente fait échouer le décodage du message ENTIER, et
+  // `MessageSocketManager.decode(_:from:)` journalise `decode DROP` puis rend la
+  // main. Une édition faite depuis le web n'atteignait donc AUCUN client iOS de
+  // la conversation. Le web, qui fusionne `{ ...cached, ...payload }`, ne
+  // montrait rien — le défaut était invisible du côté d'où venait l'édition.
+  //
+  // Les affirmations sont SÉPARÉES parce que la séparation est le diagnostic :
+  // « le noyau requis manque » et « le noyau est là mais `senderId` porte la
+  // mauvaise identité » sont deux pannes différentes, et la seconde serait le
+  // résultat exact d'un correctif naïf (`senderId: message.senderId`).
+  it('sert le noyau que `SocketIOMessage` EXIGE — sans quoi le décodeur iOS jette la charge utile entière', async () => {
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord({
+      createdAt: new Date('2026-08-22T10:00:00Z'),
+      messageType: 'text',
+    }));
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    const edited = emitsTo(deps.io, `conversation:${VALID_CONV_ID}`)
+      .find(([event]) => event === 'message:edited')?.[1] as Record<string, unknown>;
+
+    expect(edited).toBeDefined();
+    for (const required of ['id', 'conversationId', 'senderId', 'content', 'originalLanguage', 'messageType', 'createdAt']) {
+      expect(Object.keys(edited)).toContain(required);
+      expect(edited[required]).toBeDefined();
+    }
+  });
+
+  // `Message.senderId` est un `Participant.id` ; les clients comparent le
+  // `senderId` du fil à leur propre `User.id`. Servir la colonne brute
+  // réparerait le décodage en installant une divergence de SENS, celle-là
+  // muette — et les deux autres producteurs de `message:edited` servent bien
+  // l'identité utilisateur.
+  it('sert le `User.id` de l\'expéditeur, jamais le `Participant.id` de la colonne', async () => {
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord({
+      createdAt: new Date('2026-08-22T10:00:00Z'),
+    }));
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    expect(emitsTo(deps.io, `conversation:${VALID_CONV_ID}`)).toContainEqual([
+      'message:edited',
+      expect.objectContaining({ senderId: USER_ID }),
+    ]);
+    expect(PARTICIPANT_ID).not.toBe(USER_ID);
+  });
+
   it('fans conversation:updated to participant user rooms so list-screen viewers refresh the preview on edit', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
