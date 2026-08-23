@@ -1387,14 +1387,23 @@ export class MessageHandler {
       // reste requis par `enqueueForOfflineParticipants` / `_updateUnreadCounts`.
       // Parité avec le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`),
       // qui charge le même superset pour la même raison.
-      let sharedParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> = [];
+      //
+      // `undefined` — jamais `[]` — quand la requête tombe. Les deux formes se
+      // lisent pareil au site d'appel et ne disent pas la même chose : `[]`
+      // AFFIRME que la conversation n'a aucun participant, `undefined` avoue
+      // qu'on ne sait pas. `enqueueForOfflineParticipants` distingue les deux
+      // (`params.participants ?? sa propre requête`), et c'est la seule des
+      // trois consommatrices dont l'abandon soit DESTRUCTIF : un `[]` lui
+      // faisait enfiler pour PERSONNE, donc perdre le message pour tous les
+      // absents, pendant que ce journal n'annonçait que deux pertes cosmétiques.
+      let sharedParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> | undefined;
       try {
         sharedParticipants = await this.prisma.participant.findMany({
           where: { conversationId: normalizedId, isActive: true },
           select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
         });
       } catch (err) {
-        handlerLogger.warn('participant fetch failed — skipping CONVERSATION_UPDATED + unread', { error: err });
+        handlerLogger.warn('participant fetch failed — CONVERSATION_UPDATED + unread sautés, la file hors ligne refait sa propre requête', { error: err });
       }
 
       const room = ROOMS.conversation(normalizedId);
@@ -1455,7 +1464,7 @@ export class MessageHandler {
         const verdict = await resolveForwardSourceForBroadcast(
           this.prisma,
           senderUserId,
-          sharedParticipants.map((participant) => participant.userId)
+          (sharedParticipants ?? []).map((participant) => participant.userId)
         );
         if (!verdict.forwarderAllows) {
           // L'auteur s'est retiré : plus personne n'apprend la provenance —
@@ -1528,6 +1537,61 @@ export class MessageHandler {
       }
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
+      // Offline delivery queue — parity with the REST send path
+      // (`MeeshySocketIOManager.broadcastMessage` / `_broadcastNewMessage`).
+      // Without this, a message sent via the primary WS `message:send` path
+      // to a currently-offline recipient is never replayed on their next
+      // reconnect (`_drainPendingMessages`) and never triggers the
+      // sent→delivered receipt upgrade for the sender. Uses the cid-stripped
+      // `broadcastPayload` (same one peers receive live) so a replayed
+      // message never leaks the sender's local optimistic id to another user.
+      // Sender exclusion goes through BOTH identities, reproducing `_isSender`:
+      // this path's `senderId` is a Participant.id on the REST/ZMQ transport and
+      // a User.id on the WS transport, and the two id spaces never collide.
+      //
+      // ── Sa PLACE fait partie de la garantie ────────────────────────────────
+      // Elle est ici, juste après l'émission live, et AVANT les deux synchros
+      // cosmétiques (`conversation:updated` par destinataire, badges non-lus).
+      // Elle en était l'aval, dans le même `try` que tout le broadcast : un
+      // `emit` qui lève — ce qui arrive quand l'adaptateur ou l'encodeur est en
+      // défaut, cf. `emitWithSeq` — sautait à un `catch` de fin de méthode et
+      // annulait le rejeu durable pour TOUS les absents, pour une ligne de liste
+      // qui n'aurait pas été retriée. Même règle qu'à l'instantané de
+      // reconnexion, où le drain est placé hors du `try` pour qu'un accroc Mongo
+      // cosmétique n'échoue jamais le rejeu (cf. `services/gateway/CLAUDE.md`).
+      //
+      // `participants` peut valoir `undefined` : l'unité partagée refait alors
+      // SA requête, qui ne demande que `{id, userId}`. C'est précisément ce que
+      // la requête SUPERSET tombée ci-dessus lui aurait interdit en lui passant
+      // une liste VIDE.
+      await enqueueForOfflineParticipants(
+        { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
+        {
+          conversationId: normalizedId,
+          actorParticipantId: message.senderId,
+          actorUserId: message.senderId,
+          eventType: 'new',
+          messageId: message.id,
+          payload: peerPayload,
+          // La file est la TROISIÈME porte de sortie de ce message. Sans cette
+          // ligne, un destinataire hors ligne qui a refusé les sources de
+          // transfert se les verrait rejouer intactes à sa reconnexion : la
+          // règle ne serait qu'un rideau différé. `peerPayload` porte déjà le
+          // retrait quand c'est l'AUTEUR qui s'est retiré ; ceci ajoute le
+          // retrait par LECTEUR, que seule la boucle par participant peut
+          // faire.
+          ...(forwardSourceHiddenUserIds.size > 0
+            ? {
+                resolvePayloadForReader: (queueKey: string) =>
+                  forwardSourceHiddenUserIds.has(queueKey)
+                    ? withoutForwardSourceOrItsPath(peerPayload)
+                    : peerPayload,
+              }
+            : {}),
+          participants: sharedParticipants,
+        }
+      );
+
       // Emit `mention:created` to each mentioned user's PERSONAL room so an
       // @mention reaches a recipient who is online but not currently inside
       // ROOMS.conversation(id) — `message:new` only fans to the conversation
@@ -1565,7 +1629,7 @@ export class MessageHandler {
       // conversation list open elsewhere never receives a signal —
       // the row stays at its old position until a manual refresh,
       // and brand-new DMs never appear in the list at all.
-      if (sharedParticipants.length > 0) {
+      if (sharedParticipants && sharedParticipants.length > 0) {
         const updatePayload = {
           conversationId: normalizedId,
           // `updatedBy` is REQUIRED by ConversationUpdatedEventData — the sender's
@@ -1630,44 +1694,6 @@ export class MessageHandler {
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: targets.length });
       }
 
-      // Offline delivery queue — parity with the REST send path
-      // (`MeeshySocketIOManager.broadcastMessage` / `_broadcastNewMessage`).
-      // Without this, a message sent via the primary WS `message:send` path
-      // to a currently-offline recipient is never replayed on their next
-      // reconnect (`_drainPendingMessages`) and never triggers the
-      // sent→delivered receipt upgrade for the sender. Uses the cid-stripped
-      // `broadcastPayload` (same one peers receive live) so a replayed
-      // message never leaks the sender's local optimistic id to another user.
-      // Sender exclusion goes through BOTH identities, reproducing `_isSender`:
-      // this path's `senderId` is a Participant.id on the REST/ZMQ transport and
-      // a User.id on the WS transport, and the two id spaces never collide.
-      await enqueueForOfflineParticipants(
-        { deliveryQueue: this.deliveryQueue, prisma: this.prisma, connectedUsers: this.connectedUsers },
-        {
-          conversationId: normalizedId,
-          actorParticipantId: message.senderId,
-          actorUserId: message.senderId,
-          eventType: 'new',
-          messageId: message.id,
-          payload: peerPayload,
-          // La file est la TROISIÈME porte de sortie de ce message. Sans cette
-          // ligne, un destinataire hors ligne qui a refusé les sources de
-          // transfert se les verrait rejouer intactes à sa reconnexion : la
-          // règle ne serait qu'un rideau différé. `peerPayload` porte déjà le
-          // retrait quand c'est l'AUTEUR qui s'est retiré ; ceci ajoute le
-          // retrait par LECTEUR, que seule la boucle par participant peut
-          // faire.
-          ...(forwardSourceHiddenUserIds.size > 0
-            ? {
-                resolvePayloadForReader: (queueKey: string) =>
-                  forwardSourceHiddenUserIds.has(queueKey)
-                    ? withoutForwardSourceOrItsPath(peerPayload)
-                    : peerPayload,
-              }
-            : {}),
-          participants: sharedParticipants,
-        }
-      );
 
       // Mettre à jour unread counts (re-uses the participant list already fetched above)
       await this._updateUnreadCounts(message.senderId, normalizedId, sharedParticipants);
