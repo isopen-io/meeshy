@@ -11311,6 +11311,24 @@ branche de code atteignable qui n'existait pas déjà. Le comportement qui chang
 que `toggleSpeaker()` corrige déjà pour le même appel sous-jacent ; ce correctif aligne le seul autre
 site qui fait le même flip optimiste sur la même discipline.
 
+### Triage CI (PR #3398, hors périmètre de ce lot)
+
+Le premier run complet (`run test` forcé) a rendu 7 échecs. Un seul portait sur ce lot — la fenêtre
+fixe déjà décrite ci-dessus, corrigée dans un second commit. Les 6 autres étaient déjà connus :
+`LentilleBridgeLine`/L06/L09/`ScrollPillStateTests`/littéral 900/`call:join`-reconnect, tous
+recensés « rouges antérieurs, présents sur main » dans le train d'intégration du 2026-08-23 (cf.
+plus haut dans ce fichier). Un `git merge origin/main` a apporté les correctifs mergés entre-temps
+(`f67a26b28`, `5161af3b8`, `940cd973a`) — 5 des 6 ont disparu au run suivant. Restent, sur le run
+post-merge : `LentilleRowBehaviourAnchorTests/test_L09_amended_pendingSyncGlyphIsRemovedFromTheRow`
+(même texte d'échec exact avant et après le merge — la recalibration l'a manqué) et
+`FeedViewModelTests/test_loadMoreIfNeeded_afterFreshCacheOnlySession_stillFetchesDespiteNilCursor`
+(nouveau dans ce run, jamais vu avant). Aucun des deux ne touche à du code que ce lot modifie
+(rendu de ligne Lentille / pagination du feed, sans rapport avec `CallManager.handleAudioRouteChange`).
+`rerun_failed_jobs` a été tenté pour confirmer par un rejeu — refusé par GitHub
+(403, permission de l'intégration) — donc non confirmé par ré-exécution. Consigné ici plutôt que
+retenu en silence, PR laissée sous surveillance jusqu'à éclaircissement plutôt que mergée sur un
+diagnostic incomplet.
+
 ### Non fait volontairement / reste ouvert
 
 Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~6300 lignes, iOS) ; ADR
