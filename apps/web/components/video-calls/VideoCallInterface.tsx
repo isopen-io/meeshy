@@ -39,6 +39,7 @@ import { DraggableParticipantOverlay } from './DraggableParticipantOverlay';
 import { computeParticipantOverlayPosition } from '@/lib/calls/overlay-grid-layout';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { CallParticipantLeftEvent } from '@meeshy/shared/types/video-call';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
@@ -226,7 +227,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   const emitVideoToggle = useCallback((enabled: boolean) => {
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled });
+      socket.emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled });
     }
   }, [callId]);
 
@@ -485,7 +486,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         logger.info('[VideoCallInterface]', 'Cleaning up call on unmount/unload - callId: ' + currentCall.id);
         const socket = meeshySocketIOService.getSocket();
         if (socket && socket.connected) {
-          (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, { callId: currentCall.id });
+          socket.emit(CLIENT_EVENTS.CALL_LEAVE, { callId: currentCall.id });
         }
       }
     };
@@ -519,7 +520,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled: newEnabled });
+      socket.emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled: newEnabled });
     }
   };
 
@@ -546,7 +547,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
       const socket = meeshySocketIOService.getSocket();
       if (socket) {
-        (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled: newEnabled });
+        socket.emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled: newEnabled });
       }
     } finally {
       videoToggleInFlightRef.current = false;
@@ -635,7 +636,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
+      socket.emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
     }
 
     // Reset immediately for instant UI feedback
@@ -658,7 +659,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     const socket = meeshySocketIOService.getSocket();
     if (!socket) return;
 
-    const handleParticipantLeft = (event: unknown) => {
+    const handleParticipantLeft = (event: CallParticipantLeftEvent) => {
       if (event.callId !== callId) return;
 
       // Vague 133 — `CallParticipantLeftEvent` has no `anonymousId` field

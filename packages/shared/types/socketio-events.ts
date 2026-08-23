@@ -2426,7 +2426,14 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack: (response: { success: boolean }) => void) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: CallMediaToggleClientEvent) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: CallMediaToggleClientEvent) => void;
-  [CLIENT_EVENTS.CALL_END]: (data: { callId: string; reason?: string }, ack: (response: { success: boolean }) => void) => void;
+  // `ack` is OPTIONAL, matching the gateway handler (CallEventsHandler.ts —
+  // `socket.on(CALL_EVENTS.END, async (data, ack?: ...) => ...)`) and every
+  // real emitter: CallManager.tsx (x2) and use-video-call.ts fire call:end
+  // fire-and-forget on the reject/end-and-supersede paths and never read a
+  // response. A required ack here was a contract declared stricter than any
+  // implementation honored — each site independently hid the mismatch behind
+  // its own `as unknown` cast instead of a shared, honest signature.
+  [CLIENT_EVENTS.CALL_END]: (data: { callId: string; reason?: string }, ack?: (response: { success: boolean }) => void) => void;
   [CLIENT_EVENTS.CALL_HEARTBEAT]: (data: CallHeartbeatEvent) => void;
   [CLIENT_EVENTS.CALL_QUALITY_REPORT]: (data: CallQualityReportEvent) => void;
   [CLIENT_EVENTS.CALL_RECONNECTING]: (data: CallReconnectingEvent) => void;

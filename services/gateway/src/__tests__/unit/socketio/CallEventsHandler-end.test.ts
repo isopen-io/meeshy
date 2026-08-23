@@ -1059,4 +1059,57 @@ describe('CallEventsHandler — call:end handler', () => {
       expect(mockClearRingingTimeout).not.toHaveBeenCalled();
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Fire-and-forget: no ack callback at all
+  //
+  // Every real web emitter of call:end (CallManager.tsx's rejectWaitingCall/
+  // decline-incoming paths, use-video-call.ts's superseded-call cleanup) fires
+  // it with NO third argument — none of them read a response. The shared
+  // `ClientToServerEvents[CALL_END]` contract used to declare `ack` as
+  // REQUIRED regardless, a mismatch every real call site hid behind its own
+  // `as unknown` cast on the socket instead of a shared, honest signature.
+  // This handler already guards every `ack?.(...)` call with optional
+  // chaining — this test proves that guard actually matters: invoked exactly
+  // as socket.io calls it when the client passed no callback (a single
+  // positional argument, no second one at all), the handler must run to
+  // completion without throwing.
+  // -------------------------------------------------------------------------
+  describe('fire-and-forget: emitted with no ack callback (real client shape)', () => {
+    it('completes the happy path without throwing when invoked with only the data argument', async () => {
+      const session = makeCallSession();
+      mockEndCall.mockResolvedValue(session);
+
+      const prisma = makePrisma();
+      const { socket, handlers, directEmit } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+
+      await expect(handlers[CALL_EVENTS.END](END_DATA)).resolves.not.toThrow();
+      expect(mockEndCall).toHaveBeenCalled();
+      // If `ack({...})` were ever called unconditionally on the happy path
+      // (instead of `ack?.({...})`), invoking the handler exactly as a
+      // no-callback client does would throw "ack is not a function" INSIDE
+      // the try block — caught by the handler's own catch, which then
+      // force-ends the session and emits CALL_EVENTS.ERROR back to the
+      // socket. Neither must happen here: this asserts the happy path
+      // actually completed rather than silently falling into recovery.
+      expect(mockForceEndOrphanedCallSession).not.toHaveBeenCalled();
+      expect(directEmit).not.toHaveBeenCalledWith(CALL_EVENTS.ERROR, expect.anything());
+    });
+
+    it('completes without throwing on the unauthenticated-guard early return', async () => {
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => undefined);
+
+      await expect(handlers[CALL_EVENTS.END](END_DATA)).resolves.not.toThrow();
+      expect(mockEndCall).not.toHaveBeenCalled();
+    });
+  });
 });
