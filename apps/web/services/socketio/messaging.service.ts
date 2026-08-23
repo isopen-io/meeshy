@@ -28,6 +28,7 @@ import type {
   SocketIOMessage
 } from '@/types';
 import type { EncryptedPayload } from '@meeshy/shared/types/encryption';
+import { messageTypeForClientAttachments } from '@meeshy/shared/utils/attachment-message-type';
 import type { AnonymousChatService } from '../anonymous-chat.service';
 import type {
   TypedSocket,
@@ -363,12 +364,19 @@ export class MessagingService {
         }
       }
 
-      // Add attachments if present
+      // Add attachments if present.
+      //
+      // `messageType` est STRIPPÉ par `SocketMessageSendWithAttachmentsSchema`
+      // (aucun champ de ce nom), et le handler socket dérive la même règle
+      // côté serveur : sur CE path la valeur n'atteint jamais la base. Elle
+      // reste posée — et posée JUSTE — parce que l'objet sert aussi de charge
+      // au repli REST, où elle est, elle, autoritative (cf. `sendMessageViaRest`).
       if (hasAttachments) {
         messageData.attachmentIds = attachmentIds;
-        messageData.messageType = attachmentMimeTypes && attachmentMimeTypes.length > 0
-          ? this.determineMessageTypeFromMime(attachmentMimeTypes[0])
-          : 'file';
+        messageData.messageType = messageTypeForClientAttachments({
+          hasAttachments: true,
+          mimeTypes: attachmentMimeTypes ?? [],
+        });
       }
 
       // Choose event based on attachments
@@ -481,9 +489,15 @@ export class MessagingService {
         clientMessageId: options.clientMessageId,
         content: options.content,
         originalLanguage: options.originalLanguage,
-        messageType: options.attachmentIds?.length
-          ? this.determineMessageTypeFromMime(options.attachmentMimeTypes?.[0] ?? '')
-          : 'text',
+        // Le SEUL des deux chemins où cette valeur est AUTORITATIVE : la route
+        // REST accepte l'enum `messageType`, la persiste, et la dérivation
+        // serveur (`deriveMessageTypeForAttachments`) est additive — elle ne
+        // repasse jamais derrière une déclaration explicite. Ce que le client
+        // dit ici, personne ne le corrige.
+        messageType: messageTypeForClientAttachments({
+          hasAttachments: !!options.attachmentIds?.length,
+          mimeTypes: options.attachmentMimeTypes ?? [],
+        }),
         replyToId: options.replyToId,
         forwardedFromId: options.forwardedFromId,
         forwardedFromConversationId: options.forwardedFromConversationId,
@@ -568,19 +582,6 @@ export class MessagingService {
 
       (socket as unknown as { emit: (event: string, data: unknown, cb: typeof callback) => void }).emit(event, data, callback);
     });
-  }
-
-  /**
-   * Determine message type from MIME type
-   */
-  private determineMessageTypeFromMime(mimeType: string): string {
-    if (!mimeType) return 'text';
-    if (mimeType.startsWith('image/')) return 'image';
-    if (mimeType.startsWith('audio/')) return 'audio';
-    if (mimeType.startsWith('video/')) return 'video';
-    if (mimeType === 'application/pdf') return 'file';
-    if (mimeType.startsWith('text/')) return 'text';
-    return 'file';
   }
 
   /**
