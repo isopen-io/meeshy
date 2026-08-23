@@ -276,7 +276,9 @@ data class StoryEffects(
     val backgroundAudioEnd: Double? = null,
     val voiceAttachmentId: String? = null,
     val voiceTranscriptions: List<StoryVoiceTranscription>? = null,
+    @Serializable(with = StoryTransitionTolerantSerializer::class)
     val opening: StoryTransitionEffect? = null,
+    @Serializable(with = StoryTransitionTolerantSerializer::class)
     val closing: StoryTransitionEffect? = null,
     val textObjects: List<StoryTextObject> = emptyList(),
     val mediaObjects: List<StoryMediaObject>? = null,
