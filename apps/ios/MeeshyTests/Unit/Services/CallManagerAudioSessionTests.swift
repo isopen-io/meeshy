@@ -414,6 +414,22 @@ final class CallManagerAudioSessionTests: XCTestCase {
         )
     }
 
+    /// Isolates the `.newDeviceAvailable` case body, bounded by the NEXT case
+    /// label rather than a character count — a fixed-width window here is
+    /// exactly the "ticking time bomb" this repo has already been bitten by
+    /// once (cycle 238i): a doc-comment added above this case, or the one it
+    /// precedes, shifts the body past a magic offset and rots the guard on an
+    /// unrelated change, without the code it protects ever regressing.
+    private func newDeviceAvailableCaseBody(in fnBody: String) throws -> String {
+        guard let newDevRange = fnBody.range(of: "case .newDeviceAvailable:") else {
+            XCTFail(".newDeviceAvailable case not found"); return ""
+        }
+        guard let oldDevRange = fnBody.range(of: "case .oldDeviceUnavailable:", range: newDevRange.upperBound..<fnBody.endIndex) else {
+            XCTFail(".oldDeviceUnavailable case not found after .newDeviceAvailable"); return ""
+        }
+        return String(fnBody[newDevRange.lowerBound ..< oldDevRange.lowerBound])
+    }
+
     func test_callManager_audioRouteChange_newDeviceAvailable_setsSpeakerFalse() throws {
         // P0-8, revised: when a Bluetooth/headset device connects (.newDeviceAvailable),
         // iOS routes audio to it automatically. We sync isSpeaker = false so the
@@ -435,11 +451,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
             fnBody.contains("case .newDeviceAvailable:"),
             "handleAudioRouteChange must handle .newDeviceAvailable"
         )
-        guard let newDevRange = fnBody.range(of: "case .newDeviceAvailable:") else {
-            XCTFail(".newDeviceAvailable case not found"); return
-        }
-        let newDevEnd = fnBody.index(newDevRange.upperBound, offsetBy: 300, limitedBy: fnBody.endIndex) ?? fnBody.endIndex
-        let newDevBody = String(fnBody[newDevRange.lowerBound ..< newDevEnd])
+        let newDevBody = try newDeviceAvailableCaseBody(in: fnBody)
 
         XCTAssertTrue(
             newDevBody.contains("isSpeaker = false"),
@@ -470,17 +482,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
-        guard let newDevRange = fnBody.range(of: "case .newDeviceAvailable:") else {
-            XCTFail(".newDeviceAvailable case not found"); return
-        }
-        // Bounded by the NEXT case label, not a character count — a fixed-width
-        // window is a ticking time bomb here (a doc-comment added above either
-        // case shifts this body past a magic offset and rots the guard on
-        // unrelated changes, without the code it actually protects regressing).
-        guard let oldDevRange = fnBody.range(of: "case .oldDeviceUnavailable:", range: newDevRange.upperBound..<fnBody.endIndex) else {
-            XCTFail(".oldDeviceUnavailable case not found after .newDeviceAvailable"); return
-        }
-        let newDevBody = String(fnBody[newDevRange.lowerBound ..< oldDevRange.lowerBound])
+        let newDevBody = try newDeviceAvailableCaseBody(in: fnBody)
 
         XCTAssertTrue(
             newDevBody.contains("if !applySpeakerRoute()"),
