@@ -4599,6 +4599,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       renderer — iOS `StoryRepostEmbedCell`/`ReelRepostEmbedCell`); the reposted post's location
       sticker (needs a new `ApiRepostOf.location` field — model plumbing + gateway payload
       confirmation first).
+- [x] Feed post location sticker (display side) — a received post's shared place rendered as an
+      accent-coherent pin + label capsule under the post's media (slice `feed-post-location-sticker`,
+      2026-08-23, parity iOS `FeedPostLocationSticker`). The composer already ATTACHED an outgoing
+      location (`SharedPlace` in `:core:model`, `feed-composer-location`), but `ApiPost` dropped the
+      field on the way IN, so a received location never surfaced. This lands the display side:
+      `ApiPost` gained `location: SharedPlace?` (reusing the existing SSOT model — not duplicated),
+      a pure app-side `FeedPostLocationBuilder` projects it → `FeedLocationPresentation(label, lat, lng)`
+      with the label resolved name → address → null (iOS `displayLabel` precedence; the cell supplies
+      the localized "Position partagée" fallback so a coordinate-only pin still shows a sticker), and
+      the shared `FeedPostLocationSticker` cell renders it. Tap opens the place via a `geo:` intent
+      with a Google-Maps-web fallback (no dead-end when no map app is installed). +11 tests
+      (9 `FeedPostLocationBuilderTest` — null place, name, name-over-address, blank-name→address,
+      absent-name→address, blank-both→null, absent-both→null, coord passthrough, coord-only; +2
+      `FeedPostBuilderTest` wiring). Mutation-proven: dropping the name `isNotBlank` guard fails exactly
+      the two blank-name tests. New strings `feed_location_shared`/`feed_location_open` EN/FR/ES/PT.
+      **Still open:** the reposted post's location in the repost embed (needs `ApiRepostOf.location`).
 
 ## G. Statuses / Moods
 > **TTL correction (slice `status-mood-core`, 2026-07-19):** a mood **status expires 1h** after creation

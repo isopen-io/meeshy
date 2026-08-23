@@ -1,6 +1,9 @@
 package me.meeshy.app.feed
 
+import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -526,6 +529,24 @@ private fun postRelativeTime(iso: String): String {
     )
 }
 
+/**
+ * Open a shared place on the device map. Prefers a `geo:` intent (any installed map
+ * app), falling back to a Google Maps web URL when no map app is installed — so the
+ * sticker never dead-ends. Coordinates are formatted with [Locale.ROOT] so a
+ * comma-decimal JVM locale never emits an invalid `geo:` value.
+ */
+private fun openPlaceOnMap(context: Context, location: FeedLocationPresentation) {
+    val coords = String.format(Locale.ROOT, "%f,%f", location.latitude, location.longitude)
+    val query = location.label?.let { Uri.encode(it) }
+    val geoUri = if (query != null) "geo:$coords?q=$coords($query)" else "geo:$coords?q=$coords"
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(geoUri)))
+    } catch (_: ActivityNotFoundException) {
+        val webUri = Uri.parse("https://www.google.com/maps/search/?api=1&query=$coords")
+        context.startActivity(Intent(Intent.ACTION_VIEW, webUri))
+    }
+}
+
 @Composable
 private fun PostCard(
     post: FeedPostPresentation,
@@ -625,6 +646,15 @@ private fun PostCard(
             if (post.images.isNotEmpty()) {
                 Spacer(Modifier.height(MeeshySpacing.md))
                 PostImageGrid(images = post.images, onImageTap = onImageTap)
+            }
+
+            post.location?.let { loc ->
+                Spacer(Modifier.height(MeeshySpacing.md))
+                val mapContext = LocalContext.current
+                FeedPostLocationSticker(
+                    location = loc,
+                    onTap = { openPlaceOnMap(mapContext, loc) },
+                )
             }
 
             post.repostEmbed?.let { embed ->
