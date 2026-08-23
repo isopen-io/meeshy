@@ -170,7 +170,7 @@ export function PostsFeedScreen() {
 
   // Edit + Repost + Audio modals
   const [editingPost, setEditingPost] = useState<{ id: string; content: string; visibility: string } | null>(null);
-  const [repostingPost, setRepostingPost] = useState<{ id: string; author?: string; content?: string } | null>(null);
+  const [repostingPost, setRepostingPost] = useState<{ id: string; type: PostType; author?: string; content?: string } | null>(null);
   const [audioComposerOpen, setAudioComposerOpen] = useState(false);
 
   // Constat 2 (F7c) — état muet du lecteur LOCAL du badge B3.3-6, par post
@@ -583,7 +583,7 @@ export function PostsFeedScreen() {
   const handleRepostOpen = useCallback(
     (postId: string) => {
       const post = posts.find((p) => p.id === postId);
-      if (post) setRepostingPost({ id: post.id, author: post.author?.displayName ?? post.author?.username, content: post.content ?? undefined });
+      if (post) setRepostingPost({ id: post.id, type: post.type, author: post.author?.displayName ?? post.author?.username, content: post.content ?? undefined });
     },
     [posts],
   );
@@ -608,7 +608,7 @@ export function PostsFeedScreen() {
     (content: string) => {
       if (!repostingPost) return;
       repostMutation.mutate(
-        { postId: repostingPost.id, data: { content, isQuote: true } },
+        { postId: repostingPost.id, data: { content, isQuote: true, targetType: repostingPost.type } },
         {
           onSuccess: () => {
             setRepostingPost(null);
