@@ -9,6 +9,7 @@
         "horizontal": 16
       },
       "marginHorizontal": 8,
+      "marginVertical": 8,
       "radius": 16,
       "transformOriginX": "16%",
       "transformOriginY": "50%"
@@ -69,12 +70,14 @@
       "radius": 16,
       "colorAccent": true,
       "height": 104,
+      "breathing": 8,
       "padding": {
         "vertical": 14
       },
       "avatarSize": 52,
       "nameSize": 17,
-      "magnified": true
+      "magnified": true,
+      "$noteBreathing": "breathing = amplitude de la respiration : de combien les rangees voisines s ecartent de l elue pendant la scene. Elle vaut EXACTEMENT row.marginVertical, et ce n est pas un hasard : a 18 pt pour une marge de 8, une rangee poussee mangeait la marge et mordait le header suivant de 18-8-(88-h)/2, soit 9,6 pt mesures. La respiration ne peut depasser ce que la marge lui offre — sinon elle ne deplace pas les rangees, elle les fait se chevaucher."
     },
     "modeNotch": {
       "size": 9.5,

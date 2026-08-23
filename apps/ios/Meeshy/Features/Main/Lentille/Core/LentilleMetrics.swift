@@ -42,6 +42,12 @@ nonisolated public enum LentilleMetrics {
         public static let paddingVertical: CGFloat = 10
         public static let paddingHorizontal: CGFloat = 16
         public static let marginHorizontal: CGFloat = 8
+        /// Marge VERTICALE entre deux rangées, et entre une rangée et le
+        /// sticker suivant. Elle existait déjà comme littéral (`LazyVStack(spacing: 8)`)
+        /// mais n'avait jamais été NOMMÉE — c'est ce qui a permis à la
+        /// respiration de la carte de focus de valoir 18 pt sans que personne
+        /// ne rapproche les deux chiffres.
+        public static let marginVertical: CGFloat = 8
         public static let radius: CGFloat = 16
         /// Fraction `[0, 1]` de la largeur du rang — pivot du zoom/scale au
         /// défilement (perspective LWS-8). CSS `16%`.
@@ -191,7 +197,25 @@ nonisolated public enum LentilleMetrics {
         /// il est ANIMÉ, donc les trous s'ouvraient et se refermaient pendant
         /// le défilement. C'est la moitié « espaces compliqués » du retour
         /// produit. La cause retirée (bord bas désencombré), la valeur revient.
-        public static let breathing: CGFloat = 18
+        /// Amplitude de la respiration : de combien les rangées voisines
+        /// s'écartent de l'élue pendant la scène.
+        ///
+        /// **ÉCRÊTÉE À LA MARGE** (arbitrage produit 2026-08-23). Elle valait
+        /// 18 pt pour une marge de 8 : une rangée poussée mangeait donc la
+        /// marge et mordait le header suivant. Chevauchement mesuré à
+        /// géométrie stabilisée, deux frontières, deux relevés indépendants —
+        /// 9,6 / 8,9 puis 9,2 / 9,1 pt — et l'arithmétique bouclait exactement,
+        /// `18 − 8 − (88 − h)/2 = 9,6` pour `h = 87,3`.
+        ///
+        /// L'ancrer sur `Row.marginVertical` plutôt que d'ajouter un `min()`
+        /// rend le défaut structurellement impossible : la respiration ne peut
+        /// pas dépasser ce que la marge lui offre. Au-delà, elle ne déplace
+        /// plus les rangées, elle les fait se chevaucher.
+        ///
+        /// Ce n'était PAS l'échelle : `listScaleDecay = 0.04` donne un
+        /// `scale ≤ 1` ancré, donc une rangée qui rétrécit ÉLOIGNE ses bords de
+        /// ses voisins — elle ne peut mécaniquement pas mordre un header.
+        public static let breathing: CGFloat = Row.marginVertical
         /// Rampe : nulle jusqu'à une demi-rangée (la rangée élue ne bouge
         /// pas), pleine une rangée plus loin — jamais de saut au passage.
         public static let breathingRampStart: CGFloat = 36
