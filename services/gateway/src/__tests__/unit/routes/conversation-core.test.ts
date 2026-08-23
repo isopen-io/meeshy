@@ -486,13 +486,55 @@ describe('registerCoreRoutes', () => {
       expect('_count' in reply._body.data[0]).toBe(false);
     });
 
-    // ── Cap 199+ : l'effectif exact est réservé aux admins plateforme ────────
+    // ── Cap 199+ : l'effectif ENTIER est réservé aux lecteurs autorisés ──────
     // Au-delà de 199 membres, la liste sert `memberCount: 199` +
-    // `memberCountCapped: true` ; seuls ADMIN/BIGBOSS reçoivent la valeur
-    // exacte. Le drapeau absent signifie « non plafonné » pour les clients.
-    it('plafonne memberCount à 199 avec drapeau pour un lecteur non admin plateforme', async () => {
-      const conv = makeConversation({ _count: { participants: MEMBER_COUNT_DISPLAY_CAP + 51 } });
-      prisma.conversation.findMany.mockResolvedValue([conv]);
+    // `memberCountCapped: true` ; un lecteur autorisé
+    // (`canViewExactMemberCount` : ADMIN/BIGBOSS/MODERATOR plateforme, OU
+    // creator/admin de la conversation) reçoit la valeur ENTIÈRE, sans plafond.
+    // Le drapeau absent signifie « non plafonné » pour les clients.
+    //
+    // Le fixture par défaut fait du lecteur le CREATOR de la conversation —
+    // exactement le cas que ce lot élargit —, donc le plafond se démontre sur
+    // un simple `member`.
+    const makeMemberOnlyConversation = (count: number) =>
+      makeConversation({
+        _count: { participants: count },
+        participants: [
+          {
+            id: PARTICIPANT_ID,
+            userId: USER_ID,
+            conversationId: CONV_ID,
+            type: 'user',
+            displayName: 'Alice',
+            avatar: null,
+            role: 'member',
+            language: 'fr',
+            nickname: null,
+            joinedAt: new Date(),
+            isActive: true,
+            isOnline: true,
+            lastActiveAt: null,
+            user: { id: USER_ID, username: 'alice', displayName: 'Alice', firstName: 'Alice', lastName: 'Smith', isOnline: true, lastActiveAt: null },
+          },
+        ],
+      });
+
+    const makeRequestAs = (role: string) =>
+      makeRequest({
+        authContext: {
+          isAuthenticated: true,
+          userId: USER_ID,
+          registeredUser: { id: USER_ID, role },
+          isAnonymous: false,
+          sessionToken: null,
+        },
+        query: {},
+      });
+
+    it('plafonne memberCount à 199 avec drapeau pour un simple membre sans rôle plateforme', async () => {
+      prisma.conversation.findMany.mockResolvedValue([
+        makeMemberOnlyConversation(MEMBER_COUNT_DISPLAY_CAP + 51),
+      ]);
 
       const req = makeRequest({ query: {} });
       const reply = makeReply();
@@ -503,24 +545,173 @@ describe('registerCoreRoutes', () => {
       expect(reply._body.data[0].memberCountCapped).toBe(true);
     });
 
-    it('sert l\'effectif exact sans drapeau à un admin plateforme', async () => {
-      const conv = makeConversation({ _count: { participants: MEMBER_COUNT_DISPLAY_CAP + 51 } });
-      prisma.conversation.findMany.mockResolvedValue([conv]);
+    // Lot 1 — l'élargissement : administrer un groupe de 250 personnes sans
+    // jamais pouvoir en lire l'effectif était le défaut. Le rôle de
+    // CONVERSATION n'était consulté sur AUCUN site d'effectif.
+    it('sert l\'effectif ENTIER, sans plafond, à l\'admin du GROUPE', async () => {
+      for (const role of ['creator', 'admin']) {
+        prisma.conversation.findMany.mockResolvedValue([
+          makeConversation({
+            _count: { participants: 250 },
+            participants: [
+              {
+                id: PARTICIPANT_ID,
+                userId: USER_ID,
+                conversationId: CONV_ID,
+                type: 'user',
+                displayName: 'Alice',
+                avatar: null,
+                role,
+                language: 'fr',
+                nickname: null,
+                joinedAt: new Date(),
+                isActive: true,
+                isOnline: true,
+                lastActiveAt: null,
+                user: { id: USER_ID, username: 'alice', displayName: 'Alice', firstName: 'Alice', lastName: 'Smith', isOnline: true, lastActiveAt: null },
+              },
+            ],
+          }),
+        ]);
 
-      for (const role of ['ADMIN', 'BIGBOSS']) {
-        const req = makeRequest({
-          authContext: {
-            isAuthenticated: true,
-            userId: USER_ID,
-            registeredUser: { id: USER_ID, role },
-            isAnonymous: false,
-            sessionToken: null,
-          },
-          query: {},
-        });
         const reply = makeReply();
+        await getListHandler(fastify)(makeRequest({ query: {} }), reply);
 
-        await getListHandler(fastify)(req, reply);
+        expect(reply._body.data[0].memberCount).toBe(250);
+        expect(reply._body.data[0].memberCountCapped).toBeUndefined();
+      }
+    });
+
+    it('sert l\'effectif ENTIER à un MODERATOR plateforme simple membre', async () => {
+      prisma.conversation.findMany.mockResolvedValue([makeMemberOnlyConversation(250)]);
+
+      const reply = makeReply();
+      await getListHandler(fastify)(makeRequestAs('MODERATOR'), reply);
+
+      expect(reply._body.data[0].memberCount).toBe(250);
+      expect(reply._body.data[0].memberCountCapped).toBeUndefined();
+    });
+
+    it('plafonne encore pour AUDIT et ANALYST — lire des journaux n\'est pas lire un annuaire', async () => {
+      for (const role of ['AUDIT', 'ANALYST']) {
+        prisma.conversation.findMany.mockResolvedValue([makeMemberOnlyConversation(250)]);
+
+        const reply = makeReply();
+        await getListHandler(fastify)(makeRequestAs(role), reply);
+
+        expect(reply._body.data[0].memberCount).toBe(MEMBER_COUNT_DISPLAY_CAP);
+        expect(reply._body.data[0].memberCountCapped).toBe(true);
+      }
+    });
+
+    // Le rôle du lecteur vient de `currentUserRoleMap`, qui retombe sur une
+    // requête batchée quand il n'est pas dans les 5 participants chargés —
+    // c'est-à-dire dans EXACTEMENT le cas qui plafonne (grand groupe).
+    it('lit le rôle du lecteur via le repli batché quand il n\'est pas dans le top-5', async () => {
+      prisma.conversation.findMany.mockResolvedValue([
+        makeConversation({ _count: { participants: 250 }, participants: [] }),
+      ]);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: PARTICIPANT_ID, conversationId: CONV_ID, role: 'admin', joinedAt: new Date() },
+      ]);
+
+      const reply = makeReply();
+      await getListHandler(fastify)(makeRequest({ query: {} }), reply);
+
+      expect(reply._body.data[0].memberCount).toBe(250);
+      expect(reply._body.data[0].memberCountCapped).toBeUndefined();
+    });
+
+    // Le fixture DOIT être `makeMemberOnlyConversation` : `makeConversation`
+    // fait du lecteur le `creator` de la conversation, donc
+    // `canViewExactMemberCount` court-circuite sur la branche CONVERSATION et
+    // la boucle sur ADMIN/BIGBOSS ne prouve plus rien. Preuve : commenter la
+    // branche plateforme de `canViewExactMemberCount` faisait tomber 7 tests,
+    // et celui-ci n'en faisait PAS partie — le seul des six sites d'effectif
+    // resté sans garde.
+    // A4 — même lecteur, même conversation, deux réponses selon la route.
+    // `authContext.userId` porte un `Participant.id` pour un invité de lien
+    // partagé (branche anonyme d'`UnifiedAuthService`, documentée dans
+    // `utils/access-control.ts`), jamais un `User.id`. La recherche branche
+    // déjà la COLONNE sur la nature de la clé (`search.ts` : `id` pour un
+    // anonyme, `userId` sinon) ; la liste comparait un id de participant à la
+    // colonne `userId` — aucune correspondance, `currentUserRoleMap` vide,
+    // donc PLAFONNÉ pour l'admin de groupe anonyme que
+    // `canViewExactMemberCount` autorise explicitement (test jumeau dans
+    // packages/shared/__tests__/member-visibility.test.ts).
+    const makeAnonymousRequest = () =>
+      makeRequest({
+        authContext: {
+          isAuthenticated: true,
+          type: 'anonymous',
+          isAnonymous: true,
+          userId: PARTICIPANT_ID,
+          participantId: PARTICIPANT_ID,
+          sessionToken: 'sess_tok',
+        },
+        query: {},
+      });
+
+    const anonymousAdminParticipant = {
+      id: PARTICIPANT_ID,
+      userId: null,
+      conversationId: CONV_ID,
+      type: 'anonymous',
+      displayName: 'Invitée',
+      avatar: null,
+      role: 'admin',
+      language: 'fr',
+      nickname: null,
+      joinedAt: new Date(),
+      isActive: true,
+      isOnline: true,
+      lastActiveAt: null,
+      user: null,
+    };
+
+    it('sert l\'effectif ENTIER à un admin de groupe ANONYME présent dans le top-5', async () => {
+      prisma.conversation.findMany.mockResolvedValue([
+        makeConversation({ _count: { participants: 250 }, participants: [anonymousAdminParticipant] }),
+      ]);
+
+      const reply = makeReply();
+      await getListHandler(fastify)(makeAnonymousRequest(), reply);
+
+      expect(reply._body.data[0].memberCount).toBe(250);
+      expect(reply._body.data[0].memberCountCapped).toBeUndefined();
+    });
+
+    it('interroge la COLONNE `id` au repli batché pour un lecteur anonyme', async () => {
+      prisma.conversation.findMany.mockResolvedValue([
+        makeConversation({ _count: { participants: 250 }, participants: [] }),
+      ]);
+      // Le double ne rend le rôle QUE si la lecture porte sur `id` : en base,
+      // une requête `userId: <Participant.id>` ne matche rien, et un double
+      // complaisant rendrait ce test tautologique.
+      prisma.participant.findMany.mockImplementation(async (args: any) =>
+        args?.where?.id === PARTICIPANT_ID
+          ? [{ id: PARTICIPANT_ID, conversationId: CONV_ID, role: 'admin', joinedAt: new Date() }]
+          : []
+      );
+
+      const reply = makeReply();
+      await getListHandler(fastify)(makeAnonymousRequest(), reply);
+
+      expect(prisma.participant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: PARTICIPANT_ID }) })
+      );
+      expect(reply._body.data[0].memberCount).toBe(250);
+      expect(reply._body.data[0].memberCountCapped).toBeUndefined();
+    });
+
+    it('sert l\'effectif exact sans drapeau à un admin plateforme', async () => {
+      for (const role of ['ADMIN', 'BIGBOSS']) {
+        prisma.conversation.findMany.mockResolvedValue([
+          makeMemberOnlyConversation(MEMBER_COUNT_DISPLAY_CAP + 51),
+        ]);
+
+        const reply = makeReply();
+        await getListHandler(fastify)(makeRequestAs(role), reply);
 
         expect(reply._body.data[0].memberCount).toBe(MEMBER_COUNT_DISPLAY_CAP + 51);
         expect(reply._body.data[0].memberCountCapped).toBeUndefined();
@@ -1436,6 +1627,61 @@ describe('registerCoreRoutes', () => {
       const sent = mockSendSuccess.mock.calls[0][1];
       expect(sent.memberCount).toBe(MEMBER_COUNT_DISPLAY_CAP);
       expect(sent.memberCountCapped).toBe(true);
+    });
+
+    it('sert l\'effectif ENTIER à l\'admin du GROUPE sur le détail', async () => {
+      for (const role of ['creator', 'admin']) {
+        prisma.conversation.findFirst.mockResolvedValue(
+          makeFullConversation({ _count: { participants: 250 } })
+        );
+        prisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID, role });
+
+        const reply = makeReply();
+        await getDetailHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), reply);
+
+        const sent = mockSendSuccess.mock.calls[mockSendSuccess.mock.calls.length - 1][1];
+        expect(sent.memberCount).toBe(250);
+        expect(sent.memberCountCapped).toBeUndefined();
+      }
+    });
+
+    it('sert l\'effectif ENTIER à un MODERATOR plateforme sur le détail', async () => {
+      prisma.conversation.findFirst.mockResolvedValue(
+        makeFullConversation({ _count: { participants: 250 } })
+      );
+      prisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID, role: 'member' });
+
+      const req = makeRequest({
+        params: { id: CONV_ID },
+        authContext: {
+          isAuthenticated: true,
+          userId: USER_ID,
+          registeredUser: { id: USER_ID, role: 'MODERATOR' },
+          isAnonymous: false,
+          sessionToken: null,
+        },
+      });
+      const reply = makeReply();
+
+      await getDetailHandler(fastify)(req, reply);
+
+      const sent = mockSendSuccess.mock.calls[0][1];
+      expect(sent.memberCount).toBe(250);
+      expect(sent.memberCountCapped).toBeUndefined();
+    });
+
+    // Le rôle ne peut pas être lu dans `conversation.participants` : cette
+    // liste est bornée à 100 (`CONVERSATION_DETAIL_PARTICIPANTS_CAP`), donc
+    // aveugle dans le seul cas où le plafond joue. Il vient du participant
+    // appelant, résolu une fois — et c'est ce `select` qui doit le porter.
+    it('demande le rôle du participant appelant dans le select', async () => {
+      prisma.conversation.findFirst.mockResolvedValue(makeFullConversation());
+      prisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID, role: 'member' });
+
+      await getDetailHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), makeReply());
+
+      const selects = prisma.participant.findFirst.mock.calls.map((call: any[]) => call[0]?.select);
+      expect(selects.some((select: any) => select?.role === true)).toBe(true);
     });
 
     it('sert l\'effectif exact sans drapeau à un admin plateforme sur le détail', async () => {

@@ -5,8 +5,7 @@ import {
   resolveUserLanguagesOrdered
 } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
-import { presentMemberCount } from '@meeshy/shared/utils/member-visibility';
-import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { resolveVisibleLastMessages } from '../../services/resolveVisibleLastMessage';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -217,10 +216,15 @@ export function registerSearchRoutes(
               isActive: true,
               ...(isAnonymousViewer ? { id: userId } : { userId })
             },
-            select: { conversationId: true }
+            // `role` en plus, pour rien de plus : c'est le titre qui ouvre
+            // l'effectif ENTIER (creator/admin de la conversation) sur la
+            // ligne servie plus bas, et cette lecture est la seule du chemin
+            // qui connaisse le lecteur conversation par conversation.
+            select: { conversationId: true, role: true }
           })
         : [];
       const memberConversationIds = new Set(memberships.map(p => p.conversationId));
+      const memberRoleByConversation = new Map(memberships.map(p => [p.conversationId, p.role]));
 
       const unreadCountMap = conversationIds.length > 0
         ? await readStatusService.getUnreadCountsForUser(userId, conversationIds)
@@ -322,9 +326,14 @@ export function registerSearchRoutes(
           banner: conversation.banner,
           isActive: conversation.isActive,
           communityId: conversation.communityId,
-          // Cap 199+ : même présentation que la liste et le détail.
+          // Cap 199+ : même présentation ET même droit que la liste et le
+          // détail — ADMIN/BIGBOSS/MODERATOR plateforme, OU creator/admin de
+          // CETTE conversation (`memberRoleByConversation`, déjà lu ci-dessus).
           ...presentMemberCount((conversation as any)._count?.participants ?? 0, {
-            viewerSeesExactCount: isGlobalAdmin(authRequest.authContext.registeredUser?.role ?? '')
+            viewerSeesExactCount: canViewExactMemberCount({
+              platformRole: authRequest.authContext.registeredUser?.role ?? null,
+              conversationRole: memberRoleByConversation.get(conversation.id) ?? null
+            })
           }),
           // Signal d'appartenance officiel du filtre client (sélecteur de
           // transfert iOS/web) : il remplace une heuristique qui lisait le

@@ -13,6 +13,7 @@ import {
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
+import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { historyFloorFor } from '../../services/shareLinkHistoryFloor';
@@ -1221,6 +1222,25 @@ export function registerMessagesRoutes(
       if (forwardedIds.length > 0) {
         const uniqueForwardedIds = [...new Set(forwardedIds)] as string[];
 
+        // Réciprocité de la SOURCE : elle n'est enrichie que si l'auteur du
+        // transfert ET le lecteur l'autorisent. Résolue AVANT la construction,
+        // pas après : ce qui n'est pas construit ne peut pas fuiter, alors
+        // qu'un objet construit puis « filtré » n'attend qu'un chemin de
+        // sortie oublié. L'auteur du transfert est l'expéditeur du message
+        // PORTEUR — ses préférences sont déjà chaudes dans le cache module,
+        // la liste ayant lu celles de tous les expéditeurs de la page.
+        const forwardSourceGate = await resolveForwardSourceGateForReader(
+          prisma,
+          userId,
+          // Les DEUX porteurs, pas seulement `forwardedFromId` : un message
+          // qui ne nomme que sa conversation source a lui aussi un auteur dont
+          // la volonté compte, et c'est justement le NOM DE GROUPE que la
+          // directive ajoute à la portée de la règle.
+          mappedMessages
+            .filter((m: any) => m.forwardedFromId || m.forwardedFromConversationId)
+            .map((m: any) => m.sender?.userId ?? null)
+        );
+
         const forwardedMessages = await prisma.message.findMany({
           where: { id: { in: uniqueForwardedIds } },
           select: {
@@ -1260,6 +1280,11 @@ export function registerMessagesRoutes(
 
         // Enrichir chaque message forwardé
         for (const msg of mappedMessages) {
+          // Les DEUX objets nommants tombent ensemble ou pas du tout : les
+          // trois politiques clientes nomment le groupe à partir du seul
+          // `forwardedFromConversation` et l'auteur d'origine à partir du seul
+          // `forwardedFrom.sender`. N'en taire qu'un laisse l'autre nommer.
+          if (!forwardSourceGate(msg.sender?.userId ?? null)) continue;
           if (msg.forwardedFromId) {
             const original = forwardedMap.get(msg.forwardedFromId);
             if (original) {

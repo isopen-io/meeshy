@@ -584,16 +584,45 @@ struct ConversationListView: View {
         for group: (section: ConversationSection, conversations: [Conversation])
     ) -> some View {
         if LentilleFeatureFlag.isLentilleListEnabled {
-            // Pleine largeur, sans marge latérale : épinglé, ce sticker passe
-            // AU-DESSUS des rangs qui défilent dessous — son fond doit couvrir
-            // toute la largeur, sinon les rangs réapparaissent dans les
-            // gouttières. Les cotes (10.5/800/.1em, padding 4/13) vivent dans
+            // Pleine largeur, sans marge latérale — et la RAISON n'est pas
+            // celle qui était écrite ici. L'ancien motif (« sinon les rangs
+            // réapparaissent dans les gouttières ») ne peut pas se produire :
+            // la perspective ne fait que RÉTRÉCIR (`listScaleDecay = 0.04`,
+            // `scale = 1 − 0.04f ≤ 1`, ancrée), et la carte de focus est bornée
+            // à la même laisse (`geo.size.width - 2 * Row.marginHorizontal`) ;
+            // rien n'occupe jamais ces 8 pt. Le vrai motif est la PARITÉ avec la
+            // peau web, qui fait le même choix indépendamment —
+            // `LentilleSticker.tsx` est `sticky top-0` pleine largeur du
+            // conteneur pendant que `LentilleRow.tsx` porte
+            // `marginLeft/Right: var(--lentille-list-row-margin-horizontal)`.
+            // Deux implémentations concordantes = délibération, pas oubli.
+            // Les cotes (10.5/800/.1em, padding 4/13) vivent dans
             // `LentilleMetrics.Sticker`, jamais ici (garde R15).
             LentilleSticker(
                 title: group.section.name,
                 isExpanded: isSectionContentVisible(group.section.id),
                 onToggle: sectionToggle(for: group.section.id)
             )
+            // D7 — DIAGNOSTIQUÉ, NON CORRIGÉ ICI : le correctif demande un
+            // arbitrage produit. La respiration (`LentilleFocusBreathing`)
+            // écarte les voisines de la rangée élue de ±18 pt, mais elle est
+            // posée sur les RANGS SEULS (`sectionConversations`) et jamais sur
+            // ce sticker : la marge de 8 pt est donc mangée et le header mord
+            // la rangée précédente. Mesuré à deux frontières, deux relevés
+            // indépendants : 9,6 / 8,9 puis 9,2 / 9,1 pt, et l'arithmétique
+            // boucle — 18 − 8 − (88 − h)/2 = 9,6 pour h = 87,3. Ce n'est PAS
+            // l'échelle : elle rétrécit autour du midY, donc elle éloigne les
+            // bords de leurs voisins et ne peut mécaniquement pas mordre un
+            // header.
+            //
+            // Poser la même loi ICI a été essayé et REJETÉ par la mesure : sur
+            // un sticker ÉPINGLÉ, l'`.offset` étend le cadre d'accessibilité de
+            // façon durable (h 21,3 → 39,3 pendant toute la scène, encore à
+            // 3 s), ce qui rend la géométrie de l'épinglage inintelligible.
+            // Les deux issues restantes amoindrissent ou déplacent un réglage
+            // produit — écrêter la respiration à la marge (18 → 8, effet
+            // réduit) ou porter le gap de section à 18 (densité réduite) —
+            // d'où l'arbitrage.
             // Position vivante du sticker → registre inerte de la pilule (la
             // section épinglée = le sticker le plus haut). `onGeometryChange`
             // ne monte aucune vue de plus, contrairement à un `GeometryReader`.
@@ -1222,16 +1251,46 @@ struct ConversationListView: View {
         // même règle que le tray, sinon l'anneau promet un viewer qui se
         // refermerait aussitôt.
         let myGroup = storyViewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
-        return LentilleRailSelfEntry(
+        return Self.railSelfEntry(
             displayName: currentUser.displayName ?? currentUser.username,
             avatarURL: currentUser.avatar,
-            moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
+            accentColor: DynamicColorGenerator.colorForName(currentUser.username),
+            // MÊME résolveur que le tray (`MyStoryButton`) : la couverture de
+            // ma dernière story, jamais une seconde écriture de la cascade
+            // cover locale > thumbnail serveur > image > avatar.
+            coverURL: myGroup.flatMap { latestStoryThumbnailURL($0) },
             hasActiveStory: myGroup != nil,
+            moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
             // Le libellé sort de la MÊME règle que le routage ci-dessous : les
             // deux ne peuvent pas diverger (régression déjà vécue côté tray).
             // Le tap ouvre TOUJOURS le listing « Mes stories » (voir
             // `openMyStoriesFromRail`) : l'annonce dit cette destination-là.
             actionLabel: StoryTrayCopy.manageStories
+        )
+    }
+
+    /// Mappage PUR de la pastille « moi » — `nonisolated`, donc attaquable
+    /// directement par les tests (même convention que `sectionPillTitle`).
+    /// La seule décision qu'il porte : la couverture de ma story active PRIME
+    /// sur mon avatar, et à défaut c'est l'avatar — parité avec le bouton
+    /// « moi » du tray.
+    nonisolated static func railSelfEntry(
+        displayName: String,
+        avatarURL: String?,
+        accentColor: String,
+        coverURL: String?,
+        hasActiveStory: Bool,
+        moodEmoji: String?,
+        actionLabel: String?
+    ) -> LentilleRailSelfEntry {
+        LentilleRailSelfEntry(
+            displayName: displayName,
+            avatarURL: avatarURL,
+            previewURL: coverURL ?? avatarURL,
+            accentColor: accentColor,
+            moodEmoji: moodEmoji,
+            hasActiveStory: hasActiveStory,
+            actionLabel: actionLabel
         )
     }
 
@@ -1262,16 +1321,48 @@ struct ConversationListView: View {
     /// où la donnée existera.
     private var lentilleRailEntries: [LentilleRailEntry] {
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-        return storyViewModel.storyGroups
-            .filter { $0.id != currentUserId && !$0.isFullyExpired() }
+        return Self.railStoryGroups(storyViewModel.storyGroups, excludingUserId: currentUserId)
             .map { group in
-                LentilleRailEntry(
-                    id: group.id,
-                    displayName: group.username,
-                    avatarURL: group.avatarURL,
-                    isLive: false
+                Self.railEntry(
+                    group: group,
+                    // MÊME résolveur que le tray — une seule écriture de la
+                    // cascade de couverture dans toute l'app (garde de source
+                    // `LentilleChromeSourceGuardTests`).
+                    coverURL: latestStoryThumbnailURL(group),
+                    moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji
                 )
             }
+    }
+
+    /// Le FILTRE du rail, isolé et PUR (`now` explicite) : ni moi-même, ni un
+    /// groupe entièrement expiré — un groupe expiré ouvrirait puis refermerait
+    /// le viewer (tap-puis-flash déjà documenté côté tray).
+    nonisolated static func railStoryGroups(
+        _ groups: [StoryGroup],
+        excludingUserId currentUserId: String,
+        now: Date = Date()
+    ) -> [StoryGroup] {
+        groups.filter { $0.id != currentUserId && !$0.isFullyExpired(at: now) }
+    }
+
+    /// Mappage PUR d'un groupe vers son entrée de rail. Les deux valeurs que
+    /// la vue Chrome ne peut pas aller chercher elle-même (couverture, humeur)
+    /// arrivent RÉSOLUES ; tout le reste est lu sur le groupe.
+    nonisolated static func railEntry(
+        group: StoryGroup,
+        coverURL: String?,
+        moodEmoji: String?
+    ) -> LentilleRailEntry {
+        LentilleRailEntry(
+            id: group.id,
+            displayName: group.username,
+            avatarURL: group.avatarURL,
+            previewURL: coverURL ?? group.avatarURL,
+            moodEmoji: moodEmoji,
+            hasUnviewed: group.hasUnviewed,
+            accentColor: group.avatarColor,
+            isLive: false
+        )
     }
 
     // MARK: - Ligne d'épinglage des stickers (LWS-6/I-063bis)
@@ -1443,20 +1534,25 @@ struct ConversationListView: View {
     /// pilule est montée dès qu'il existe une section à nommer et reste dans
     /// l'arbre : c'est son opacité qui bascule, sinon le fondu de 250 ms n'a
     /// rien à animer (une vue démontée n'a pas d'état d'où partir).
+    /// **RETIRÉE** (directive produit 2026-08-23) : « on n'a pas besoin de
+    /// sticker de section central, car les sections stick sur place quand on
+    /// les dépasse ».
+    ///
+    /// Le doublon était systématique, pas accidentel. La pilule n'avait aucune
+    /// règle de coexistence avec le sticker : sa visibilité tient à la seule
+    /// loi de défilement — visible au premier événement d'offset, invisible
+    /// 900 ms après le dernier. Or « on défile » est EXACTEMENT l'état où un
+    /// sticker est épinglé. Mesuré : sticker « MEESHY TEAM » à (0, 122.0,
+    /// 402×21.3) et capsule portant le MÊME mot à (160.0, 130.0, 82×13.3),
+    /// soit 81 % de recouvrement de la bande, pour zéro information de plus.
+    ///
+    /// `SectionScrollPill` et `SectionScrollPillHost` restent dans l'arbre
+    /// Xcode : les supprimer touche `project.pbxproj`, geste à faire à froid.
+    /// Ils sont donc du code NON MONTÉ, et `SectionScrollPillTests`
+    /// `test_sectionPill_isNoLongerMounted_…` garde ce retrait.
     @ViewBuilder
     private var sectionScrollPillOverlay: some View {
-        if LentilleFeatureFlag.isLentilleListEnabled,
-           let title = Self.sectionPillTitle(
-                visibleSectionId: visibleSectionId,
-                sections: conversationViewModel.groupedConversations.map(\.section)
-           ) {
-            SectionScrollPillHost(
-                relay: scrollOffsetRelay,
-                title: title,
-                sections: conversationViewModel.groupedConversations.map(\.section),
-                positions: sectionPositionRegistry
-            )
-        }
+        EmptyView()
     }
 
     private var mainContentZStack: AnyView {
@@ -1545,7 +1641,16 @@ struct ConversationListView: View {
                                     }
                                 }
                             }
-                            .padding(.horizontal, 16)
+                            // D1 — la marge du squelette doit être celle des
+                            // rangées RÉELLES, sinon la liste saute
+                            // latéralement quand les placeholders sont
+                            // remplacés. Le padding est posé sur le CONTENEUR,
+                            // donc il porte sur les DEUX branches du mux : la
+                            // valeur doit être muxée, pas seulement le type de
+                            // rang. Peau historique : `16` inchangé.
+                            .padding(.horizontal, LentilleFeatureFlag.isLentilleListEnabled
+                                     ? LentilleMetrics.Row.marginHorizontal
+                                     : 16)
                             .transition(.opacity)
                         // behaviour-matrix:L17 — « … avec des états vides
                         // restylés plats ». Seule `.skeleton` (ci-dessus)

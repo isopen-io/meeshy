@@ -193,6 +193,11 @@ export interface PrivacyPreferencesDefaults {
   showReadReceipts: boolean;
   showTypingIndicator: boolean;
 
+  // Réciprocité de la source des transferts (opt-out, défaut `true`).
+  // N'a JAMAIS eu de ligne kebab-case : elle est postérieure à la fenêtre de
+  // janvier 2026, d'où son absence de `PRIVACY_KEY_MAPPING` ci-dessous.
+  showForwardSource: boolean;
+
   // Contact settings
   allowContactRequests: boolean;
   allowGroupInvites: boolean;
@@ -209,6 +214,11 @@ export const PRIVACY_PREFERENCES_DEFAULTS: PrivacyPreferencesDefaults = {
   showReadReceipts: true,
   showTypingIndicator: true,
 
+  // Réciprocité de la source des transferts : on AUTORISE par défaut — c'est
+  // un opt-out. Un défaut `false` masquerait d'un coup la provenance de tous
+  // les transferts du parc, la production ne jouant aucune migration.
+  showForwardSource: true,
+
   // Contact settings - all enabled by default
   allowContactRequests: true,
   allowGroupInvites: true,
@@ -219,9 +229,34 @@ export const PRIVACY_PREFERENCES_DEFAULTS: PrivacyPreferencesDefaults = {
 };
 
 /**
+ * Les huit clés que l'endpoint `/user-preferences/privacy` a écrites en
+ * kebab-case du 12 au 18 janvier 2026, avant son retrait sans reprise de
+ * données. Cet ensemble est FIGÉ par l'histoire : aucune préférence créée
+ * après cette fenêtre n'a de ligne héritée à retrouver.
+ *
+ * Il ne dit donc PAS quelles clés le serveur obéit — c'est
+ * `PRIVACY_PREFERENCES_DEFAULTS` qui le dit. Les avoir confondus a coûté :
+ * `privacy-storage` dérivait d'ici les clés qu'il retenait du document JSON,
+ * si bien qu'une préférence neuve était écrite, ré-affichée par son écran, et
+ * jetée par toutes les portes de diffusion. Voir
+ * `__tests__/unit/services/preferences/forward-source-preference-storage.test.ts`.
+ */
+export type LegacyPrivacyKey = Extract<
+  keyof PrivacyPreferencesDefaults,
+  | 'showOnlineStatus'
+  | 'showLastSeen'
+  | 'showReadReceipts'
+  | 'showTypingIndicator'
+  | 'allowContactRequests'
+  | 'allowGroupInvites'
+  | 'saveMediaToGallery'
+  | 'allowAnalytics'
+>;
+
+/**
  * Mapping between camelCase frontend keys and kebab-case database keys
  */
-export const PRIVACY_KEY_MAPPING: Record<keyof PrivacyPreferencesDefaults, string> = {
+export const PRIVACY_KEY_MAPPING: Record<LegacyPrivacyKey, string> = {
   showOnlineStatus: 'show-online-status',
   showLastSeen: 'show-last-seen',
   showReadReceipts: 'show-read-receipts',
@@ -235,9 +270,9 @@ export const PRIVACY_KEY_MAPPING: Record<keyof PrivacyPreferencesDefaults, strin
 /**
  * Reverse mapping for database to frontend
  */
-export const PRIVACY_KEY_REVERSE_MAPPING: Record<string, keyof PrivacyPreferencesDefaults> = Object.fromEntries(
-  Object.entries(PRIVACY_KEY_MAPPING).map(([k, v]) => [v, k as keyof PrivacyPreferencesDefaults])
-) as Record<string, keyof PrivacyPreferencesDefaults>;
+export const PRIVACY_KEY_REVERSE_MAPPING: Record<string, LegacyPrivacyKey> = Object.fromEntries(
+  Object.entries(PRIVACY_KEY_MAPPING).map(([k, v]) => [v, k as LegacyPrivacyKey])
+) as Record<string, LegacyPrivacyKey>;
 
 // ========== HELPER FUNCTIONS ==========
 

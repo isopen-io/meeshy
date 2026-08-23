@@ -546,6 +546,21 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(lastMessageLocation != nil)
         h.combine(lastMessageLocation?.name)
         h.combine(name)
+        // Effectif — AFFICHÉ des deux côtés du drapeau Lentille : badge de
+        // type du rang historique (`ThemedConversationRow.typeBadge`,
+        // « 12 »/« 199+ ») ET ligne d'effectif du rang plat
+        // (`LentilleConversationRow.memberCountLine`, « 12 membres »). Il
+        // n'était replié nulle part : le portillon gelait donc l'effectif sur
+        // sa première valeur, sans qu'aucun test ne rougisse — défaut de la
+        // même famille que B1 (traduction) et que la position hissée.
+        //
+        // Les TROIS champs comptent, et séparément : `memberCountCapped`
+        // distingue « 199 » de « 199+ » à nombre EXACTEMENT égal, et `type`
+        // décide si l'effectif est rendu du tout (aucun sur `.direct`) autant
+        // que du glyphe du badge historique.
+        h.combine(type)
+        h.combine(memberCount)
+        h.combine(memberCountCapped)
         h.combine(userState.isMuted)
         h.combine(userState.isPinned)
         h.combine(userState.isArchived)
@@ -557,6 +572,15 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(participantBanner)
         h.combine(tags)
         h.combine(userState.reaction)
+        // Catégorie — AFFICHÉE par l'encoche haut-gauche de la carte de focus
+        // magnifiée (réintroduite le 2026-08-22), qui en peint le NOM résolu
+        // depuis `userCategories`. Non repliée, elle se figeait sur sa
+        // première valeur : `LentilleFocusCard.==` ne compare la conversation
+        // QUE par ce hash, donc déplacer la conversation depuis l'encoche
+        // elle-même laissait l'ancien nom à l'écran. Repli INCONDITIONNEL,
+        // comme les autres drapeaux de `userState` juste au-dessus : c'est
+        // aussi la sortie de catégorie (`nil`) qui doit rouvrir le portillon.
+        h.combine(userState.sectionId)
         // New userState fields surfaced to the row (locked, draft, pending sync).
         h.combine(userState.isLocked)
         h.combine(userState.hasDraft)

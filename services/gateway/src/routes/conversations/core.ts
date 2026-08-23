@@ -5,8 +5,7 @@ import { MessageTranslationService } from '../../services/message-translation/Me
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
-import { presentMemberCount } from '@meeshy/shared/utils/member-visibility';
-import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import {
   generateDefaultConversationTitle,
@@ -665,9 +664,23 @@ export function registerCoreRoutes(
       const currentUserParticipantIdMap = new Map<string, string>();
       const convsMissingCurrentUser: string[] = [];
 
+      // `authContext.userId` porte un `User.id` pour un compte mais un
+      // `Participant.id` pour un invité de lien partagé (branche anonyme
+      // d'`UnifiedAuthService`, documentée dans `utils/access-control.ts`) : la
+      // COLONNE se branche sur la NATURE de la clé, exactement comme
+      // `GET /conversations/search`. Comparer un `Participant.id` à la colonne
+      // `userId` ne matche RIEN — pas une erreur, une map vide : le rôle du
+      // lecteur disparaissait, et avec lui son droit à l'effectif ENTIER. Un
+      // admin de groupe anonyme (que `canViewExactMemberCount` autorise
+      // explicitement) était donc plafonné à « 199+ » ici et servi entier par
+      // la recherche : deux réponses pour un même lecteur.
+      const isAnonymousViewer = authRequest.authContext.type === 'anonymous';
+
       if (userId) {
         for (const conv of conversations) {
-          const found = (conv as any).participants.find((p: any) => p.userId === userId);
+          const found = (conv as any).participants.find((p: any) =>
+            isAnonymousViewer ? p.id === userId : p.userId === userId
+          );
           if (found) {
             currentUserRoleMap.set(conv.id, found.role);
             currentUserJoinedAtMap.set(conv.id, found.joinedAt);
@@ -678,7 +691,11 @@ export function registerCoreRoutes(
         }
         if (convsMissingCurrentUser.length > 0) {
           const remaining = await prisma.participant.findMany({
-            where: { conversationId: { in: convsMissingCurrentUser }, userId, isActive: true },
+            where: {
+              conversationId: { in: convsMissingCurrentUser },
+              isActive: true,
+              ...(isAnonymousViewer ? { id: userId } : { userId })
+            },
             select: { id: true, conversationId: true, role: true, joinedAt: true }
           });
           for (const p of remaining) {
@@ -841,7 +858,6 @@ export function registerCoreRoutes(
           }
 
           const now = new Date();
-          const isAnonymousViewer = authRequest.authContext.type === 'anonymous';
           const orchestratorInputs = new Map<string, BridgeOrchestratorInput>();
 
           for (const conversation of conversations) {
@@ -970,9 +986,17 @@ export function registerCoreRoutes(
 
         return {
           ...conversationData,
-          // Cap 199+ : l'effectif exact est réservé aux admins plateforme.
+          // Cap 199+ : l'effectif ENTIER est réservé aux lecteurs autorisés —
+          // ADMIN/BIGBOSS/MODERATOR plateforme, OU creator/admin de CETTE
+          // conversation. Le second titre est ce que ce site ignorait : un
+          // admin de groupe administrait 250 personnes sans jamais pouvoir en
+          // lire l'effectif. `currentUserRoleMap` porte déjà son rôle, résolu
+          // plus haut par le top-5 et son repli batché — aucune requête de plus.
           ...presentMemberCount(activeMembers.participants, {
-            viewerSeesExactCount: isGlobalAdmin(authRequest.authContext.registeredUser?.role ?? '')
+            viewerSeesExactCount: canViewExactMemberCount({
+              platformRole: authRequest.authContext.registeredUser?.role ?? null,
+              conversationRole: currentUserRoleMap.get(conversation.id) ?? null
+            })
           }),
           participants: membersWithUser,
           title: displayTitle,
@@ -1186,9 +1210,16 @@ export function registerCoreRoutes(
       // matchait rien. Le compteur retombait silencieusement a 0 — et ce 0
       // ecrasait ensuite le badge que le socket venait de pousser juste.
       let unreadCount = 0;
+      // Le rôle du lecteur DANS cette conversation, pour l'effectif servi plus
+      // bas. Il ne peut pas se lire dans `conversation.participants` : cette
+      // liste est bornée à `CONVERSATION_DETAIL_PARTICIPANTS_CAP` (100), donc
+      // aveugle dans le seul cas où le plafond joue. Le participant appelant est
+      // déjà résolu ici pour le compteur de non-lus — il porte le rôle avec lui.
+      let callerConversationRole: string | null = null;
       try {
         const participant = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
         if (participant) {
+          callerConversationRole = participant.role;
           const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(prisma);
           unreadCount = await readStatusService.getUnreadCount(participant.id, conversationId);
@@ -1236,9 +1267,13 @@ export function registerCoreRoutes(
         ...conversationData,
         participants: gatedParticipants,
         title: displayTitle,
-        // Même cap 199+ que la liste : deux surfaces, une seule présentation.
+        // Même cap 199+ que la liste : deux surfaces, une seule présentation,
+        // et le même droit de voir l'effectif ENTIER (`canViewExactMemberCount`).
         ...presentMemberCount(_count.participants, {
-          viewerSeesExactCount: isGlobalAdmin(authRequest.authContext.registeredUser?.role ?? '')
+          viewerSeesExactCount: canViewExactMemberCount({
+            platformRole: authRequest.authContext.registeredUser?.role ?? null,
+            conversationRole: callerConversationRole
+          })
         }),
         unreadCount
       });

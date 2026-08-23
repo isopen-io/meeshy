@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 /// Entrée du rail « vivants » de la Lentille — fusion `StoryTrayView` +
@@ -22,11 +23,43 @@ nonisolated public struct LentilleRailEntry: Identifiable, Equatable, Sendable {
     /// montage (LWS-6/I-063) : cette vue pure ne fait que teindre l'anneau
     /// différemment, sans introduire d'état d'animation ici.
     public let isLive: Bool
+    /// Couverture de la DERNIÈRE story du groupe — résolue par le MÊME
+    /// helper que le tray (`latestStoryThumbnailURL`, StoryTrayView.swift),
+    /// jamais recalculée ici : la vue n'a pas à connaître le cache de
+    /// couvertures locales ni l'ordre de préférence
+    /// (cover composite locale > `thumbnailUrl` serveur > `url` image >
+    /// avatar). `nil` ⇒ repli sur `avatarURL`.
+    public let previewURL: String?
+    /// Humeur courante de l'auteur, DÉJÀ résolue par l'appelant
+    /// (`StatusViewModel.statusForUser`). Cette vue Chrome est PURE : lui
+    /// injecter le view model violerait son contrat.
+    public let moodEmoji: String?
+    /// Au moins une story non vue ⇒ anneau ACCENTUÉ. Le rail peignait tout
+    /// en gris depuis sa création (I-063) : l'état vu/non-vu, que le tray
+    /// rend depuis toujours, était simplement perdu en route.
+    public let hasUnviewed: Bool
+    /// Teinte de l'auteur (`StoryGroup.avatarColor`) pour le repli
+    /// INITIALES. Sans elle un auteur sans avatar ni couverture rendait un
+    /// cercle VIDE — le défaut le plus visible du rail avant ce lot.
+    public let accentColor: String
 
-    public init(id: String, displayName: String, avatarURL: String? = nil, isLive: Bool = false) {
+    public init(
+        id: String,
+        displayName: String,
+        avatarURL: String? = nil,
+        previewURL: String? = nil,
+        moodEmoji: String? = nil,
+        hasUnviewed: Bool = false,
+        accentColor: String = "",
+        isLive: Bool = false
+    ) {
         self.id = id
         self.displayName = displayName
         self.avatarURL = avatarURL
+        self.previewURL = previewURL
+        self.moodEmoji = moodEmoji
+        self.hasUnviewed = hasUnviewed
+        self.accentColor = accentColor
         self.isLive = isLive
     }
 }
@@ -56,16 +89,27 @@ nonisolated public struct LentilleRailSelfEntry: Equatable, Sendable {
     /// tray : « Changer mon mood » annoncé pour un tap qui ouvrait le
     /// composeur). `nil` ⇒ repli sur le nom affiché.
     public let actionLabel: String?
+    /// Couverture de MA story active — même helper, même repli que les
+    /// autres pastilles (parité avec `MyStoryButton` du tray, qui affiche
+    /// déjà la miniature de ma dernière story).
+    public let previewURL: String?
+    /// Ma teinte, pour le repli INITIALES (même raison que
+    /// `LentilleRailEntry.accentColor`).
+    public let accentColor: String
 
     public init(
         displayName: String,
         avatarURL: String? = nil,
+        previewURL: String? = nil,
+        accentColor: String = "",
         moodEmoji: String? = nil,
         hasActiveStory: Bool = false,
         actionLabel: String? = nil
     ) {
         self.displayName = displayName
         self.avatarURL = avatarURL
+        self.previewURL = previewURL
+        self.accentColor = accentColor
         self.moodEmoji = moodEmoji
         self.hasActiveStory = hasActiveStory
         self.actionLabel = actionLabel
@@ -95,6 +139,15 @@ nonisolated public enum LentilleRailPolicy {
     /// une régression, pas une épure.
     public static func shouldRender(selfEntry: LentilleRailSelfEntry?, entries: [LentilleRailEntry]) -> Bool {
         selfEntry != nil || shouldRender(entries)
+    }
+
+    /// Anneau ACCENTUÉ = « il y a quelque chose à voir ». Deux causes, une
+    /// seule règle : un direct en cours, ou au moins une story non vue —
+    /// exactement la sémantique du tray (`StoryRingCell` :
+    /// `storyState: group.hasUnviewed ? .unread : .read`). Tout vu ⇒ anneau
+    /// SOURD, jamais absent : la pastille reste une porte ouverte.
+    public static func ringIsAccented(_ entry: LentilleRailEntry) -> Bool {
+        entry.isLive || entry.hasUnviewed
     }
 }
 
@@ -171,6 +224,7 @@ public struct StoriesVivantsRail: View {
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, LentilleMetrics.Rail.paddingVertical)
             }
         }
     }
@@ -232,20 +286,25 @@ private struct LentilleRailSelfEntryView: View {
                 .frame(width: LentilleMetrics.Rail.size, height: LentilleMetrics.Rail.size)
 
             avatarContent
-                .frame(width: avatarDiameter, height: avatarDiameter)
-                .clipShape(Circle())
         }
     }
 
+    /// `animates: false` — DÉLIBÉRÉ. La borne d'animation du rail est
+    /// `LentilleMetrics.Rail.maxEntries`, et la pastille « moi » vit HORS de
+    /// cette borne (contrat du rail) : la faire respirer porterait le cumul de
+    /// ressorts `repeatForever` au-delà du budget. Elle est par ailleurs un
+    /// BOUTON — un contrôle qui respire est du bruit, pas une information.
+    /// Le glyphe passe quand même par l'atome partagé : une seule écriture de
+    /// la pastille d'humeur dans toute l'app.
     private var moodBadge: some View {
         ZStack {
             Circle()
                 .fill(MeeshyColors.backgroundSecondary(isDark: isDark))
                 .frame(width: badgeDiameter, height: badgeDiameter)
 
-            if let moodEmoji = entry.moodEmoji {
-                Text(moodEmoji)
-                    .font(MeeshyFont.relative(LentilleMetrics.Tags.emojiSize))
+            if let moodEmoji = entry.moodEmoji, !moodEmoji.isEmpty {
+                MeeshyMoodBadge(emoji: moodEmoji, diameter: badgeDiameter, animates: false)
+                    .allowsHitTesting(false)
             } else {
                 // Pas de mood ⇒ la bulle de pensée 💭 (« penser une idée »),
                 // même glyphe que le tray historique — le « + » disait
@@ -282,17 +341,23 @@ private struct LentilleRailSelfEntryView: View {
         entry.hasActiveStory ? MeeshyColors.brandPrimary : MeeshyColors.textMuted(isDark: isDark)
     }
 
-    @ViewBuilder
+    /// Ma couverture de story d'abord, mon avatar ensuite — la cascade est
+    /// résolue par l'appelant (même helper que le tray). `CachedAvatarImage`
+    /// sert le cache chaud ET le repli INITIALES : le rail ne peut plus
+    /// rendre un cercle vide.
     private var avatarContent: some View {
-        if let raw = entry.avatarURL, let url = URL(string: raw) {
-            AsyncImage(url: url) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Circle().fill(MeeshyColors.backgroundSecondary(isDark: isDark))
-            }
-        } else {
-            Circle().fill(MeeshyColors.backgroundSecondary(isDark: isDark))
-        }
+        CachedAvatarImage(
+            urlString: entry.previewURL ?? entry.avatarURL,
+            name: entry.displayName,
+            size: avatarDiameter,
+            accentColor: resolvedAccent
+        )
+    }
+
+    private var resolvedAccent: String {
+        entry.accentColor.isEmpty
+            ? DynamicColorGenerator.colorForName(entry.displayName)
+            : entry.accentColor
     }
 }
 
@@ -324,9 +389,8 @@ private struct LentilleRailEntryView: View {
                     .frame(width: LentilleMetrics.Rail.size, height: LentilleMetrics.Rail.size)
 
                 avatarContent
-                    .frame(width: avatarDiameter, height: avatarDiameter)
-                    .clipShape(Circle())
             }
+            .overlay(alignment: .bottomTrailing) { moodBadge }
 
             Text(entry.displayName)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
@@ -336,28 +400,61 @@ private struct LentilleRailEntryView: View {
         }
     }
 
+    /// L'humeur de l'auteur, telle que le tray la rend déjà
+    /// (`StoryRingCell` → `MeeshyAvatar(moodEmoji:)`). DÉCORATIVE ici : le
+    /// geste de la pastille appartient au bouton qui l'englobe, et le libellé
+    /// VoiceOver reste celui de la personne — un emoji lu à voix haute
+    /// n'ajoute rien à « ouvrir les stories d'Ana ».
+    ///
+    /// `animates: true` dans la borne des `≤ maxEntries` entrées visibles
+    /// (`LentilleRailPolicy.visibleEntries`) : c'est ce qui plafonne le cumul
+    /// de ressorts `repeatForever`. Le ressort lui-même, et son portillon
+    /// Reduce Motion, vivent dans l'atome — jamais ici.
+    @ViewBuilder
+    private var moodBadge: some View {
+        if let moodEmoji = entry.moodEmoji, !moodEmoji.isEmpty {
+            MeeshyMoodBadge(emoji: moodEmoji, diameter: badgeDiameter, animates: true)
+                .background(
+                    Circle().fill(MeeshyColors.backgroundSecondary(isDark: isDark))
+                )
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+
     private var avatarDiameter: CGFloat {
         LentilleMetrics.Rail.size - LentilleMetrics.Rail.ringWidth * 2
     }
 
+    /// Dérivé de l'anneau du rail, jamais une cote nouvelle (garde R15) —
+    /// même dérivation que la pastille « moi », pour que les deux badges
+    /// aient exactement le même diamètre.
+    private var badgeDiameter: CGFloat {
+        LentilleMetrics.Rail.ringWidth * 2 + LentilleMetrics.Tags.emojiSize
+    }
+
     private var ringColor: Color {
-        entry.isLive ? MeeshyColors.brandPrimary : MeeshyColors.textMuted(isDark: isDark)
+        LentilleRailPolicy.ringIsAccented(entry)
+            ? MeeshyColors.brandPrimary
+            : MeeshyColors.textMuted(isDark: isDark)
     }
 
-    @ViewBuilder
+    /// La couverture de la dernière story d'abord, l'avatar ensuite — la
+    /// cascade est résolue en amont par le MÊME helper que le tray.
+    /// `CachedAvatarImage` sert le cache chaud ET le repli INITIALES : plus
+    /// aucun cercle vide, quel que soit l'auteur.
     private var avatarContent: some View {
-        if let raw = entry.avatarURL, let url = URL(string: raw) {
-            AsyncImage(url: url) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                placeholderFill
-            }
-        } else {
-            placeholderFill
-        }
+        CachedAvatarImage(
+            urlString: entry.previewURL ?? entry.avatarURL,
+            name: entry.displayName,
+            size: avatarDiameter,
+            accentColor: resolvedAccent
+        )
     }
 
-    private var placeholderFill: some View {
-        Circle().fill(MeeshyColors.backgroundSecondary(isDark: isDark))
+    private var resolvedAccent: String {
+        entry.accentColor.isEmpty
+            ? DynamicColorGenerator.colorForName(entry.displayName)
+            : entry.accentColor
     }
 }

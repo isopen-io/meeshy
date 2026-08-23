@@ -18,6 +18,47 @@ public struct ButtonPosition: Equatable, Sendable {
     public var isTop: Bool { y < 0.5 }
 }
 
+// MARK: - Zone sûre du haut, pour les boutons flottants
+
+/// Hauteur que les boutons flottants ne doivent JAMAIS mordre, en haut.
+///
+/// **Pourquoi elle ne vaut pas simplement la marge sous l'encoche.**
+/// `FreeFloatingButtonsContainer` calcule ses bornes avec
+/// `minY = safeArea.top + topSafeZone + halfButton`, où `safeArea` vient du
+/// `GeometryReader` de son `body`. Mais ce `GeometryReader` porte un
+/// `.ignoresSafeArea()` : il s'étend alors à l'écran ENTIER et ses
+/// `safeAreaInsets` retombent à ZÉRO. La formule est juste ; son entrée est
+/// nulle en production. `topSafeZone` doit donc dégager l'en-tête ENTIER
+/// mesuré depuis le bord PHYSIQUE de l'écran — encoche comprise — et non la
+/// seule hauteur de barre.
+///
+/// **Le défaut qu'elle corrige** (mesuré à `idb ui describe-all`, iPhone 16 Pro
+/// 402x874 pt, position par défaut `"0.0,0.0"`, AUCUNE position persistée donc
+/// bien la valeur du code) : à 50 pt, le centre tombait à `y = 76`, le disque
+/// commençait à `y = 50` — dans la Dynamic Island — et recouvrait « Créer une
+/// story » sur 40.8 x 28.7 pt, soit 60 % de sa surface. À droite, le bouton
+/// Menu recouvrait « Nouvelle conversation » sur 40.0 x 22.7 pt. Deux cibles
+/// tactiles superposées, livrées par défaut à tout nouvel utilisateur.
+///
+/// Elle vit ICI, en une seule copie, parce que le `50` qu'elle remplace était
+/// écrit à TROIS endroits (`FloatingButtons`, `RootView.menuLadder`,
+/// `RootView.FeedButtonAnchor`) qui doivent rester d'accord au point près :
+/// `FeedButtonAnchor` se documente lui-même comme miroir EXACT du calcul du
+/// conteneur, et l'échelle de menu se positionne relativement au bouton.
+public enum FloatingButtonSafeZone {
+    /// La plus haute encoche du parc pris en charge (Dynamic Island). Le
+    /// conteneur ne peut pas la lire — voir ci-dessus — donc on la majore :
+    /// sur un appareil à encoche plus courte le disque descend de quelques
+    /// points de plus, ce qui ne gêne rien et reste déplaçable au doigt.
+    nonisolated public static var maxTopInset: CGFloat { 62 }
+
+    /// Encoche + barre de titre étendue. La trail de stories vit dans cette
+    /// hauteur : la dégager dégage aussi ses boutons.
+    nonisolated public static var top: CGFloat {
+        maxTopInset + CollapsibleHeaderMetrics.expandedHeight
+    }
+}
+
 // MARK: - Legacy ButtonCorner (for compatibility)
 public enum ButtonCorner: String, CaseIterable {
     case topLeft = "topLeft"
@@ -66,7 +107,7 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
 
     private let buttonSize: CGFloat = 52
     private let minEdgePadding: CGFloat = 20
-    private let topSafeZone: CGFloat = 50
+    private let topSafeZone: CGFloat = FloatingButtonSafeZone.top
     private let bottomSafeZoneWithSearch: CGFloat = 110
     private let bottomSafeZoneNoSearch: CGFloat = 50
 
