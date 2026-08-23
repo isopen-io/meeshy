@@ -12625,3 +12625,104 @@ code sans la sortie.
 C'est d'autant plus piégeux qu'un gate qui échoue en disant « améliore-toi »
 (dette regagnée, cliquet à resserrer) n'a pas la forme d'un échec : le texte est
 une bonne nouvelle, et seul le code de retour dit que la CI sera rouge.
+
+## Leçon 252 — une date ABSOLUE en entrée d'une fenêtre glissante est une bombe à retardement
+
+Cycle 108. `main` était ROUGE, sur deux témoins qui passaient la veille et que
+personne n'avait touchés depuis le cycle 101.
+
+`MessageHandlerEditDelete.test.ts` fabriquait son message avec
+`createdAt: new Date('2026-08-22T10:00:00Z')`. `admitMessageEdit` refuse toute
+édition d'auteur au-delà de `MESSAGE_EDIT_WINDOW_MS` (24 h) comptées depuis
+`Date.now()`. La CI du 2026-08-23 a tourné à 10:15Z — **24 h 15 min** après le
+littéral. La porte a refusé l'édition, plus rien n'a été diffusé, et les deux
+`expect` sont tombés.
+
+> **Un littéral de date comparé à `Date.now()` n'est pas une donnée de test :
+> c'est un compte à rebours.** Il passe le jour où on l'écrit, et il tombe une
+> fenêtre plus tard — sans commit, sans revue, sans coupable. Une entrée destinée
+> à une règle temporelle s'écrit TOUJOURS relativement à l'horloge :
+> `new Date(Date.now() - 10 * 60 * 1000)`.
+
+Le fichier connaissait déjà l'idiome : cinq témoins de fenêtre y utilisent
+`twentyFiveHoursAgo` / `tenMinutesAgo`. Les deux fautifs étaient les seuls à
+écrire une date absolue — et ce n'était pas un oubli, c'était une CONSÉQUENCE.
+
+### Le vrai défaut était dans la fabrique, pas dans le littéral
+
+`makeMessageRecord` ne portait NI `createdAt` NI `messageType`. Or la règle est
+écrite pour ne bloquer personne sur une date illisible : `NaN > w` est faux, donc
+un `createdAt` absent **ADMET**. Presque tous les témoins du fichier franchissaient
+donc la fenêtre par ABSENCE de date — la porte était traversée sans être exercée.
+Le seul témoin qui vérifie les sept champs requis par `SocketIOMessage` avait
+besoin d'un vrai `createdAt` : n'en trouvant pas au socle, il s'en est écrit un,
+en absolu. La bombe a été armée par le TROU de la fabrique.
+
+> **Quand un seul témoin doit se fabriquer une donnée que la fabrique aurait dû
+> fournir, ce n'est pas ce témoin qui est bizarre : c'est la fabrique qui est
+> incomplète.** Corriger le littéral (le repousser d'un jour) aurait réarmé la
+> bombe pour le lendemain. Compléter le socle la désarme structurellement.
+
+### Un refus muet ressemble à une régression de contrat
+
+Le témoin tombé est le GARDIEN du défaut du cycle 101 (`message:edited` servi
+sans `senderId`/`messageType`/`createdAt`, décodage iOS du message entier rejeté).
+Sa chute affichait `Received array: []` : aucune émission. Le message d'échec
+accuse donc la DIFFUSION, alors que la panne est dans l'ADMISSION, deux étages
+plus haut. Vérifié par mutation dans les deux sens avant de conclure — et la
+charge utile, elle, était intacte (`buildMessageEditedCore` replie
+`message.createdAt || new Date()`).
+
+> **Un témoin qui tombe pour un motif étranger à ce qu'il garde est pire qu'un
+> témoin absent** : il fait croire que la propriété gardée a régressé, et il
+> pousse au correctif qui la rendrait vraiment fausse.
+
+## Leçon 253 — « la CI était verte à ce commit » ne prouve rien contre une panne DATÉE
+
+Même cycle, et c'est une leçon sur la façon dont deux sessions parallèles se
+sont trompées en sens inverse sur le MÊME symptôme.
+
+Une session sœur (PR #3385) a rencontré les deux mêmes témoins rouges de
+`MessageHandlerEditDelete` en local. Elle a conclu — et écrit dans sa PR :
+
+> Ce n'est pas une régression de `main` : ils échouent à l'identique au commit
+> `f69cbd26`, dont le job « Test gateway » est vert. La recette locale ne
+> reproduit donc pas la CI aussi complètement qu'elle l'affirme.
+
+Le raisonnement est bon et la conclusion fausse, parce que la prémisse tacite
+est fausse : **« la CI de ce commit est verte » se lit comme une propriété du
+COMMIT, alors que c'est une propriété du commit ET de l'INSTANT où le job a
+tourné.** Pour une panne pilotée par l'horloge, les deux se séparent. La CI de
+`f69cbd26` avait tourné AVANT l'expiration des 24 h ; la session, elle, mesurait
+après. Même arbre, même commande, deux verdicts — et aucun défaut de recette.
+
+Quelques heures plus tard la CI de `main` (`HEAD` e87b7b0d) a viré au rouge sur
+exactement ces deux témoins, ce que le log du job nomme explicitement.
+
+> **Un vert de CI est horodaté.** Devant un rouge local qu'un vert distant
+> contredit, la question n'est pas seulement « quel arbre ? » mais « QUAND ? ».
+> Si l'écart entre les deux mesures franchit une frontière temporelle du code
+> testé (une fenêtre, un TTL, une expiration, un changement de jour), le vert
+> distant est PÉRIMÉ, pas contradictoire.
+
+Le prix concret de l'inversion : la session sœur a rangé un `main` en train de
+casser dans ses « Future Considerations », comme un défaut d'outillage local.
+Un défaut attribué à l'outil de mesure cesse d'être cherché dans le produit.
+
+> **L'hypothèse « mon outil de mesure est en cause » est la plus coûteuse des
+> hypothèses confortables** : elle explique n'importe quel écart, elle n'accuse
+> personne, et elle clôt l'enquête. Elle mérite donc la charge de preuve la plus
+> lourde, pas la plus légère — ici, un `git log` de l'horaire du job aurait suffi
+> à la renverser.
+
+### Le corollaire de méthode
+
+Les deux sessions ont vu le même symptôme. Celle qui a cherché POURQUOI la
+fenêtre refusait (`admitMessageEdit`, `MESSAGE_EDIT_WINDOW_MS`, l'horaire du run)
+a trouvé une bombe à retardement ; celle qui a cherché ce qui DIFFÉRAIT entre
+local et CI a trouvé une explication plausible et s'est arrêtée.
+
+> Quand deux environnements divergent, l'explication « les environnements
+> diffèrent » est toujours disponible et presque toujours insuffisante. Elle ne
+> devient une conclusion qu'une fois nommée la variable EXACTE — et ici la
+> variable n'était dans aucun environnement : elle était dans l'horloge.
