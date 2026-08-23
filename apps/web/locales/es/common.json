@@ -324,7 +324,9 @@
         "SILENT": "Silencioso",
         "PINNED": "Fijado"
       }
-    }
+    },
+    "repostAsPost": "Guardar en mi feed",
+    "storyLocationHere": "Aquí"
   },
   "copied": "Copiado",
   "never": "Nunca",

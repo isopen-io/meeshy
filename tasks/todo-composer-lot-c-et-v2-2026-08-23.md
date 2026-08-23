@@ -29,8 +29,17 @@ le dernier qui merge.
 Extrait de la matrice. Colonne « exécution » = `tout` pour chacune : le plan est
 revu, **rien n'est écrit**.
 
-- [ ] **C2-C3** — Portes de présentation consommant `ComposerIntent`
-      (tray iPhone/iPad ; *le feed reste la sheet v1*)
+- [x] **C2** ✅ *(livrée 2026-08-23)* — `MeeshyComposerHost` : plateau
+      (`PlateauTint`, 3 teintes-jetons, `@AppStorage`), scène (l'atelier SDK
+      ENVELOPPÉ, jamais réécrit), socle permanent (audience → œil → publier).
+      L'œil est `MeeshyScenePlayer(.preview)` — loi 6. **65/65 verts.**
+      Deux frontières SDK bougées : `currentEffects` en `public internal(set)`
+      (lecture seule hors module) et deux jetons `MeeshyColors` ajoutés.
+      Constat consigné : `textMuted` mesure **4,41:1** sur le violet profond,
+      sous AA — témoin négatif posé.
+- [ ] **C3** — le CÂBLAGE des portes vers le host (tray iPhone/iPad ; *le feed
+      reste la sheet v1*). Une part est déjà sur main (`eafead645`, les portes
+      portent leur format).
 - [ ] **C4b** — Rupture cliente restante : `UpgradeGateView` (426) + porte iPad
       + porte de mise à jour
 - [ ] **C5** — Collage O12 (la surface décide) + « Mes stickers » LRU
@@ -80,8 +89,8 @@ aucune tâche C.
       `ComposerIntent.swift` devient le miroir du contrat, et cesse d'en être la
       source. **Bloquant pour C2-C3** : la session composer construit le
       sélecteur derrière une frontière étroite en l'attendant.
-- [ ] **V0 bis — Le repost miroite** *(aucune dépendance, livrable seul)*
-      - [ ] **iOS d'abord** — les six sites qui passent `targetType: nil`
+- [x] **V0 bis — Le repost miroite** ✅ *(les deux moitiés livrées, 2026-08-23)*
+      - [x] **iOS d'abord** — les six sites qui passent `targetType: nil`
             (`ReelsViewModel:430`, `FeedViewModel:881`, `PostDetailView:301`,
             `ProfileUserPostsList:969`, `RootViewComponents:329`,
             `FeedView:449`) passent le format de leur source. Les deux sites
@@ -89,9 +98,16 @@ aucune tâche C.
             l'option d'ancrage. Retirer au passage le commentaire périmé
             `nil = le serveur cree un POST (2026-08-19)`, qui énonce
             l'arbitrage renversé.
-      - [ ] **Web ensuite** — `RepostRequest` gagne `targetType` (le champ n'y
-            existe pas), chaque site passe le type de sa source, et le viewer
-            de story ajoute « reposter en post ».
+      - [x] **Web ensuite** ✅ — `RepostRequest` gagne `targetType`, les quatre
+            sites passent le type de leur source, et le viewer de story ajoute
+            l'ancrage « garder sur mon fil ». Gate : **749/749 suites,
+            13 969 tests verts**.
+            *Deux trous du WIP d'origine, trouvés au gate et refermés* :
+            `PostsFeedScreen.storyRepost.test.tsx` GRAVAIT le défaut (il
+            assertait `{ isQuote: false }` sans `targetType`), et le repost
+            **CITÉ** du fil ne miroitait pas — `repostingPost` ne transportait
+            même pas le type, ce que `tsc` a attrapé et qu'aucun test ne
+            couvrait (`PostsFeedScreen.repostMirror.test.tsx`, neuf).
 - [ ] **V1 — L'éventail** — `offeredFormats` gaté par `qualifiesAsReel`.
       *N'est pas une loi neuve* : c'est le raffinement de la **loi 9**. Contrainte
       de la **loi 4** : un format non offert est **ABSENT, jamais grisé**.
@@ -121,7 +137,14 @@ Directive du 2026-08-23 : **iOS et le web doivent fonctionner ISO.** Deux dettes
 du lot F, classées « lot futur » tant que la parité n'était pas l'objectif,
 deviennent des tâches. Audit croisé matrice ⇄ code, vérifié des deux côtés.
 
-- [ ] **W1 — les deux kinds muets du web** *(écart LIVE, priorité haute)*
+- [x] **W1 — les deux kinds muets du web** ✅ *(livrée 2026-08-23)*
+      `place` et `drawing` sont peints, en miroir des constantes du SDK
+      (`StoryLocationLayer` pour la pastille, `StoryStrokeRasterizer` +
+      `StrokeWidthMapping` pour les traits). 10 tests, oracle = le golden
+      PARTAGÉ. **Renseignement** : le plafond de `effectiveWidth` passe APRÈS
+      son plancher — un trait de base < 1 reste sous l'unité. Miroiter le CODE,
+      pas l'intention de son commentaire.
+      <details><summary>énoncé d'origine</summary>
       `CanvasV3Scene.tsx:591-599` ne dispatche que `text · media · audio ·
       sticker` ; `place` et `drawing` tombent sur un `return null` documenté
       « ignoré EN SILENCE ». Or iOS **émet les deux**
@@ -130,12 +153,53 @@ deviennent des tâches. Audit croisé matrice ⇄ code, vérifié des deux côt�
       **Symptôme** : une story composée sur iOS avec une épingle de lieu
       s'affiche sur le web **sans son lieu, sans rien signaler**.
       **Oracle** : `packages/shared/fixtures/canvas-v3/v1-legacy-full.v3.json`.
-- [ ] **W2 — enchaînement multi-scènes au web** *(écart LATENT, à caler AVANT
-      le multi-diapositives du lot C)*
+      </details>
+- [x] **W2 — enchaînement multi-scènes au web** ✅ *(livrée 2026-08-23, AVANT
+      le lot C comme sa contrainte l'exigeait)* — `StoryViewer` avance le rang
+      au fil des durées cumulées ; `computeStoryDurationMs` devient la SOMME
+      des scènes et la tête de lecture servie à la scène devient RELATIVE.
+      **750/750 suites, 13 980 tests verts.**
+      *Dette laissée, dite une fois* : les transitions inter-scènes
+      (`scene.opening`/`closing`) ne sont pas peintes — le web ne les a JAMAIS
+      peintes, pas même en legacy ; leur donner un rendu serait du neuf, pas de
+      la parité.
+      <details><summary>énoncé d'origine</summary>
       Le web ne rend que `scenes[sceneIndex]` — le contrat en autorise 10.
       Inoffensif tant qu'iOS n'émet qu'une scène ; **devient live le jour du
       multi-slides**, qui appartient au lot C. Livrer W2 après C serait
       fabriquer soi-même la régression.
+      </details>
+- [x] **W2 — enchaînement multi-scènes au web** ✅ *(livrée 2026-08-23, avant le
+      lot C comme exigé)*
+      Le partage est celui d'iOS, pas un partage neuf : `CanvasV3Scene` peint le
+      SEUL rang demandé — miroir de `MeeshyScenePlayer`, qui reçoit lui aussi
+      `sceneIndex` en Binding et n'en change jamais de lui-même — et c'est
+      `StoryViewer` qui l'avance au fil de sa tête de lecture. La durée d'une
+      scène n'est pas inventée non plus : une scène projetée en familles v1 EST
+      une slide (`StoryEffects(rendering:sceneIndex:)` iOS ⇄ `v1ViewOfScene`
+      web), donc sa durée est `computedTotalDuration()` — pin `timelineDuration`
+      d'abord, sinon les trois termes du contenu. W2 l'applique à CHAQUE scène
+      (`canvasV3SceneDurationsMs`) au lieu de la seule première. Gate :
+      **750/750 suites, 13 980 tests verts**, `tsc --noEmit` sans erreur neuve.
+      **Deux conséquences câblées, l'une et l'autre correctrices** :
+      `computeStoryDurationMs` devient la SOMME des scènes (sans quoi le timer
+      coupait la story à la fin de la scène 1 et les suivantes n'étaient jamais
+      peintes), et la tête de lecture servie à la scène devient RELATIVE à celle
+      qui joue — repère dans lequel les `timing`/`keyframes` des objets sont
+      écrits, une scène démarrant toujours à 0.
+      **Décidé seul, faute de source** : (1) le tap gauche/droite garde sa
+      sémantique story ↔ story, il ne parcourt pas les scènes — rien dans le
+      code ni les tâches ne le fixe, et le changer serait un arbitrage produit ;
+      (2) la barre de progression garde UN segment par story, la scène restant
+      l'intérieur d'une story ; (3) les transitions inter-scènes
+      (`scene.opening`/`closing`) restent hors périmètre — le web ne les a
+      jamais peintes, pas même en legacy.
+      **Trouvé au passage, non corrigé** : le golden PARTAGÉ
+      `story-3-slides.json` écrit son objet `place` en `payload: {name,
+      precision}`, alors qu'iOS émet `payload: {place: {...}}`
+      (`CanvasV3Migration.swift:269`, forme confirmée par `v1-legacy-full.v3.json`).
+      Sa scène 2 ne peint donc RIEN au web. Fixture partagée avec les tests
+      Swift — à trancher hors W2.
 
 > **Nuance relevée en vérifiant l'audit** : le contrat déclare **sept** kinds
 > actifs (`text, media, sticker, audio, place, drawing, mention`) mais **aucun
@@ -171,3 +235,40 @@ carte rendue). Figer la signature sans lui obligerait à la rouvrir aussitôt.
 ## Revue
 
 *(à remplir au fil des gates — un P0 périmé est un défaut bloquant)*
+
+---
+
+## Trouvé en chemin, à trancher hors des tâches ci-dessus
+
+- **Le golden PARTAGÉ `packages/shared/fixtures/canvas-v3/story-3-slides.json`
+  écrit son objet `place` sous une forme qu'aucun client ne lit** : `payload:
+  {name, precision}`, là où iOS émet `payload: {place: {...}}`
+  (`CanvasV3Migration.swift:269`, forme confirmée par `v1-legacy-full.v3.json`).
+  **Sa scène 2 ne peint donc rien au web.** La fixture est consommée par des
+  suites Swift (`CanvasV3DecodingTests`, `ScenePlayerIdentityRootTests`) :
+  corriger la fixture demande de rejouer ces suites, ce qui dépasse W1/W2.
+- **`Localizable.xcstrings` contient une clé EN DOUBLE**
+  (`reading_mode.bubbles.subtitle`, deux entrées). Tout script qui relit puis
+  réécrit ce JSON en détruit une **sans rien signaler** — c'est pourquoi les
+  clés de C2 y ont été insérées par ancrage TEXTUEL, avec preuve que le reste du
+  fichier est intact octet pour octet. Laquelle des deux entrées fait foi reste
+  à trancher.
+- **`CommentDraftStoreTests.swift` était sur `main` sans être enregistré au
+  projet** — sa suite ne s'exécutait pas. `xcodegen` l'a ramassée au lot C2 ;
+  elle tourne désormais.
+
+- **Le chemin d'upload tus échappe au funnel d'en-têtes.**
+  `packages/MeeshySDK/Sources/MeeshySDK/Networking/TusUploadManager.swift`
+  construit ses requêtes À LA MAIN (lignes 316-319, 447-449, 480-481) et
+  n'appelle JAMAIS `ClientInfoProvider.buildHeaders()` — vérifié : zéro
+  occurrence. Il ne pose donc que l'auth et les en-têtes `Tus-*`, et **aucun**
+  des en-têtes de plateforme : ni `X-App-Version`, ni `X-App-Platform`, ni
+  `X-Canvas-Caps`.
+  **Inoffensif aujourd'hui** — la porte serveur de rupture ne juge que
+  `POST /posts`, et `isBelowFloor` rend `false` sur l'absence, donc un upload
+  n'est jamais bloqué à tort. **Le jour où une porte serait posée sur la route
+  d'upload, les binaires périmés passeraient au travers sans être vus.**
+  Non corrigé par C4b : hors des fichiers nommés par son plan, et le correctif
+  demande ses propres tests plus un gate. À arbitrer — la question est de savoir
+  si le funnel d'en-têtes doit être une garantie du CLIENT (un seul chemin
+  sortant, garde de source à l'appui) ou une simple convention.

@@ -3548,7 +3548,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       untouched) advances one tap; a `BorderColor` toolbar button (tinted when a stroke is visible) drives it,
       and the canvas paints a stroked underlay of the same glyphs beneath the fill. +17 tests (10
       model+cycle, 4 element defaults+wire, 3 VM); mutation-RED-proven (nulling the wire / dropping the
-      white-post fails exactly the 3 positive tests). Pending: size/RTL/fade.
+      white-post fails exactly the 3 positive tests). Pending: RTL/fade.
+      **Size done** (`story-text-element-font-size`): a pure `StoryTextSize` enum ladder
+      (`SMALL 64` / `MEDIUM 96` / `LARGE 140` / `XLARGE 200` design units, 1080-referential) with the
+      default at the **iOS-parity birth size 96** — Android text previously leaked the wire default
+      `64.0` because `toTextObject` never set `fontSize`, so a caption rendered ~⅓ smaller than iOS
+      (fresh iOS text is 96). `StoryTextSizeCycle.next` wraps largest→smallest (no "off" step — text
+      always has a size), the single ordered SSOT the tap and any future picker share.
+      `StoryTextElement.size` (defaulted `MEDIUM`) rides through `toTextObject.fontSize`; the effective
+      on-screen size is `designSize × scale`, mirroring iOS's `fontSize × scale` (Android keeps the pinch
+      on the separate `scale` multiplier). The VM's `onTextElementCycleSize` (inert on unknown id,
+      selection untouched) advances one tap; a `FormatSize` toolbar button (tinted when non-default)
+      drives it, and the canvas previews the size in sp. +11 tests (5 size model+ladder+cycle, 3 element
+      defaults+wire, 3 VM); mutation-RED-proven (dropping the wire `fontSize` fails exactly the 2 fontSize
+      tests; a no-advance cycle fails exactly the 4 cycle tests). Pending: RTL/fade.
 - [~] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
       **Floating style toolbar + keyboard-aware shift done** (`story-floating-toolbar`): while a text
       element is edited the `TextStyleToolbar` no longer sits in a fixed bottom band — it floats

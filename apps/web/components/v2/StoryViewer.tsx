@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { ReferenceAccess } from '@meeshy/shared/types/post-reference';
 import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import { resolveKeyframeState, resolveClipTransitionOpacity, safeBackgroundImageUrl, backgroundSoundCredit, type StoryKeyframeData, type StoryClipTransitionData } from '@/lib/story-transforms';
+import { resolveKeyframeState, resolveClipTransitionOpacity, safeBackgroundImageUrl, backgroundSoundCredit, canvasV3SceneDurationsMs, type StoryKeyframeData, type StoryClipTransitionData } from '@/lib/story-transforms';
 import { config } from '@/lib/config';
 import { Avatar } from './Avatar';
 import { TranslationToggle } from './TranslationToggle';
@@ -566,6 +566,42 @@ function StoryViewer({
   // videos / TTS narrations) instead of a global 5s constant.
   const storyDurationMs = stories[currentIndex]?.storyEffects?.slideDurationMs ?? DEFAULT_STORY_DURATION_MS;
 
+  // ---- W2 (parité iOS ⇄ Web, 2026-08-23) — l'enchaînement multi-scènes ----
+  // Homonyme SANS rapport avec le « W2 — unified-timeline gate » ci-dessous,
+  // qui vient d'un autre lot : celui-ci enchaîne les SCÈNES d'un document v3.
+  // Le contrat autorise 10 scènes par document ; l'hôte n'en jouait qu'une, et
+  // la story passait à la suivante à la fin de la scène 1. Le découpage est
+  // celui d'iOS : une scène projetée en familles v1 EST une slide, sa durée est
+  // celle d'une slide (`canvasV3SceneDurationsMs`), et l'HÔTE décide quand
+  // l'index change — exactement le partage de `MeeshyScenePlayer`, qui reçoit
+  // `sceneIndex` en Binding et ne l'avance jamais lui-même.
+  const [sceneIndex, setSceneIndex] = useState(0);
+  const sceneDurationsMs = useMemo(
+    () => canvasV3SceneDurationsMs(stories[currentIndex]?.storyEffects),
+    [stories, currentIndex],
+  );
+  // Le rang SERVI, borné au document courant : un changement de story pose son
+  // `setSceneIndex(0)` au rendu SUIVANT, si bien qu'un document plus court
+  // serait sinon peint à un rang qu'il n'a pas (écran noir d'une image).
+  const activeSceneIndex = Math.min(sceneIndex, Math.max(0, sceneDurationsMs.length - 1));
+  // Le SEGMENT que le timer court : la scène courante, ou la story entière pour
+  // un blob legacy (aucune scène à enchaîner).
+  const segmentDurationMs = sceneDurationsMs[activeSceneIndex] ?? storyDurationMs;
+
+  useEffect(() => {
+    setSceneIndex(0);
+  }, [currentIndex]);
+
+  // Fin de segment : la scène suivante s'il en reste une, sinon la story cède
+  // la place. `goNext` reste le SEUL point de sortie d'une story.
+  const advance = useCallback(() => {
+    if (activeSceneIndex + 1 < sceneDurationsMs.length) {
+      setSceneIndex(activeSceneIndex + 1);
+      return;
+    }
+    goNext();
+  }, [activeSceneIndex, sceneDurationsMs.length, goNext]);
+
   // W2 — unified-timeline gate (portage du pattern iOS R1/R2) : le timer NE
   // court plus sur une vidéo de fond qui bufferise. `isBuffering` est piloté
   // par les événements natifs du <video> principal (waiting/stalled → gel,
@@ -573,14 +609,14 @@ function StoryViewer({
   // flux mort ne gèle jamais la story pour toujours (parité iOS
   // playbackStallWatchdogSeconds).
   const [isBuffering, setIsBuffering] = useState(false);
-  const remainingMsRef = useRef<number>(storyDurationMs);
+  const remainingMsRef = useRef<number>(segmentDurationMs);
   const startedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
-    remainingMsRef.current = storyDurationMs;
+    remainingMsRef.current = segmentDurationMs;
     startedAtRef.current = null;
     setIsBuffering(false);
-  }, [currentIndex, storyDurationMs]);
+  }, [currentIndex, activeSceneIndex, segmentDurationMs]);
 
   const isTimerFrozen = isPaused || isBuffering;
   useEffect(() => {
@@ -591,7 +627,7 @@ function StoryViewer({
     // elle, conservait déjà sa position (défaut préexistant corrigé).
     startedAtRef.current = Date.now();
     timerRef.current = setTimeout(() => {
-      goNext();
+      advance();
     }, remainingMsRef.current);
 
     return () => {
@@ -607,7 +643,7 @@ function StoryViewer({
         startedAtRef.current = null;
       }
     };
-  }, [currentIndex, isTimerFrozen, goNext, storyDurationMs]);
+  }, [currentIndex, activeSceneIndex, isTimerFrozen, advance, segmentDurationMs]);
 
   // Watchdog anti-deadlock : un buffering qui dure > 5 s retombe sur
   // l'horloge murale (le timer reprend) plutôt que de geler la story.
@@ -626,7 +662,9 @@ function StoryViewer({
   // second regard, le rAF ci-dessous ne s'armait JAMAIS pour une story v3 et
   // `playheadSec` restait figé à 0 — l'animation câblée en F7a mourait quand
   // même à l'exécution.
-  const v3Scene = stories[currentIndex]?.storyEffects?.scenes?.[0];
+  // W2 (multi-scènes) — la scène REGARDÉE est celle qui joue, plus la seule première : sans
+  // quoi une scène 2 animée ne verrait jamais son rAF s'armer.
+  const v3Scene = stories[currentIndex]?.storyEffects?.scenes?.[activeSceneIndex];
   const slideHasKeyframes = Boolean(
     stories[currentIndex]?.storyEffects?.textObjects?.some((t) => t.keyframes?.length)
     || stories[currentIndex]?.storyEffects?.mediaObjects?.some(
@@ -645,14 +683,20 @@ function StoryViewer({
     if (!slideNeedsPlayhead) return;
     let raf = 0;
     const tick = () => {
-      const consumedMs = storyDurationMs - remainingMsRef.current;
+      // W2 (multi-scènes) — tête de lecture RELATIVE à la scène qui joue : `timing.start` et
+      // les `keyframes` d'un objet sont écrits dans le repère de SA scène (une
+      // scène projetée par `StoryEffects(rendering:sceneIndex:)` démarre à 0).
+      // Servir le temps cumulé de la story ferait jouer toute scène suivante
+      // hors de sa fenêtre d'animation. Le segment étant déjà celui de la scène,
+      // la relativité tombe de la soustraction existante.
+      const consumedMs = segmentDurationMs - remainingMsRef.current;
       const liveMs = startedAtRef.current != null ? Date.now() - startedAtRef.current : 0;
       setPlayheadSec(Math.max(0, (consumedMs + liveMs) / 1000));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [slideNeedsPlayhead, currentIndex, storyDurationMs]);
+  }, [slideNeedsPlayhead, currentIndex, activeSceneIndex, segmentDurationMs]);
 
   const primaryVideoGateHandlers = {
     onWaiting: () => setIsBuffering(true),
@@ -946,12 +990,20 @@ function StoryViewer({
         {isCanvasV3 ? (
           <CanvasV3Scene
             doc={effects as CanvasV3}
+            /* W2 (multi-scènes) — le rang que l'hôte fait avancer au fil de sa tête de lecture.
+               La scène reste PURE : elle peint le rang demandé, elle ne décide
+               jamais d'en changer (miroir du Binding `sceneIndex` d'iOS). */
+            sceneIndex={activeSceneIndex}
             mediaById={story.mediaById}
             preferredLanguages={preferredLanguages}
             className="absolute inset-0"
             muted={isBackgroundSoundMuted}
             playheadSec={playheadSec}
             videoGateHandlers={primaryVideoGateHandlers}
+            /* W1 — le repli du libellé d'un lieu sans nom ni adresse. La scène
+               est PURE et ne traduit pas ; l'hôte lui passe le mot de la locale
+               active, miroir du `story.location.here` d'iOS. */
+            hereLabel={t('storyLocationHere', 'Ici')}
             /* Constat 19 (corrigé rattrapage) — le voile doit peindre SOUS
                les objets posés/le texte, comme sur le chemin legacy
                ci-dessous (le média de fond principal SEUL est sous le voile,

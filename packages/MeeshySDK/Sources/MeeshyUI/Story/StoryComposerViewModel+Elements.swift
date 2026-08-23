@@ -43,7 +43,15 @@ extension StoryComposerViewModel {
         return base
     }
 
-    var currentEffects: StoryEffects {
+    /// L'état de composition COURANT, en lecture publique : le host du composer
+    /// (`MeeshyComposerHost`, app-side) le migre en `CanvasV3` pour l'aperçu, et
+    /// depuis la règle d'encodage B7 c'est PAR CONSTRUCTION ce que la
+    /// publication enverra — même fonction, même instant, donc un aperçu qui ne
+    /// peut pas mentir.
+    ///
+    /// Seule la LECTURE franchit la frontière du module : l'écriture reste
+    /// interne. L'app orchestre l'atelier, elle ne mute pas son état.
+    public internal(set) var currentEffects: StoryEffects {
         get { currentSlide.effects }
         set {
             var slide = currentSlide

@@ -225,8 +225,20 @@ describe('CanvasV3Scene — résilience par objet (F7a)', () => {
   });
 });
 
-describe('CanvasV3Scene — multi-scènes, dette assumée (F7a)', () => {
-  it('renders exactly the requested scene — multi-scene playback stays out of the lot F scope', () => {
+/**
+ * W2 (2026-08-23) — ce bloc PROUVAIT l'absence d'enchaînement ; il grave
+ * désormais le partage qui l'a rendue possible.
+ *
+ * La scène peint EXACTEMENT le rang demandé et n'en change jamais d'elle-même :
+ * c'est le miroir de `MeeshyScenePlayer`, qui reçoit lui aussi son `sceneIndex`
+ * (Binding) et laisse l'hôte l'avancer. Ce qui manquait n'était donc pas ici
+ * mais chez l'hôte — `StoryViewer` ne faisait jamais varier ce rang. La preuve
+ * de l'enchaînement vit là où il se décide
+ * (`story-viewer-v3-wiring.test.tsx`) ; ici on tient l'autre moitié du contrat,
+ * sans laquelle l'hôte n'aurait rien à piloter.
+ */
+describe('CanvasV3Scene — le rang demandé, et lui seul (W2)', () => {
+  it('renders exactly the requested scene, never a neighbour — the host owns the advance', () => {
     const doc = fixture('story-3-slides');
 
     const first = render(<CanvasV3Scene doc={doc} />);
@@ -238,5 +250,22 @@ describe('CanvasV3Scene — multi-scènes, dette assumée (F7a)', () => {
     expect(screen.getByTestId('canvas-v3-object-t3')).toHaveTextContent('Troisieme slide');
     expect(screen.queryByTestId('canvas-v3-object-t1')).toBeNull();
     third.unmount();
+  });
+
+  it('repaints the whole scene when the host advances the rank — no leftover of the scene left behind', () => {
+    const doc = fixture('story-3-slides');
+    const { rerender } = render(<CanvasV3Scene doc={doc} sceneIndex={0} />);
+    expect(screen.getByTestId('canvas-v3-object-t1')).toHaveTextContent('Premiere slide');
+
+    // L'AVANCE elle-même, sur le composant monté — un remontage complet (ce que
+    // faisait le test d'origine, `unmount()` puis `render()`) ne dit rien de ce
+    // que voit l'hôte, qui lui ne remonte jamais la scène.
+    rerender(<CanvasV3Scene doc={doc} sceneIndex={1} />);
+    expect(screen.queryByTestId('canvas-v3-object-t1')).toBeNull();
+    expect(screen.queryByTestId('canvas-v3-object-st1')).toBeNull();
+
+    rerender(<CanvasV3Scene doc={doc} sceneIndex={2} />);
+    expect(screen.getByTestId('canvas-v3-object-t3')).toHaveTextContent('Troisieme slide');
+    expect(screen.queryByTestId('canvas-v3-object-t1')).toBeNull();
   });
 });
