@@ -164,6 +164,34 @@ Le cas du réel n'était pas nommé dans la directive, mais la loi le couvre et 
 défaut est réel : `app/reel/[postId]/page.tsx:199` envoie lui aussi
 `{ isQuote: false }`.
 
+#### Recensement exhaustif des émetteurs (2026-08-23) — RIEN n'est implémenté
+
+« Aucun client n'envoie `targetType` » est une quantification universelle : elle
+se prouve en énumérant les écrivains, pas en en sondant deux. Le dépôt compte
+**exactement trois** appelants de `POST /posts/:id/repost` — aucun script,
+aucune extension, aucun bot :
+
+| Écrivain | Le champ existe-t-il ? | Est-il envoyé ? |
+|---|---|---|
+| **web** (`posts.service.ts:326`) | **non** — absent de `RepostRequest` | jamais |
+| **iOS** (SDK `PostService.swift:383`) | oui | **`nil` à 6 sites**, `.post` à 2 |
+| **Android** (`PostApi.kt:213`, `StoryApi.kt:58`) | oui — plomberie complète jusqu'à `RepostPostRequest` | **jamais** — aucun site d'appel ne le renseigne |
+
+Les six sites iOS qui passent `nil` : `ReelsViewModel:430`, `FeedViewModel:881`,
+`PostDetailView:301`, `ProfileUserPostsList:969`, `RootViewComponents:329`,
+`FeedView:449`. Les deux qui passent `.post` — `StoryViewerView:874` et `:1275`
+— sont les seuls **déjà conformes** à la loi 5 : ils deviennent l'option
+explicite « reposter en post », ils ne changent pas.
+
+`FeedViewModel:881` porte même le commentaire `nil = le serveur cree un POST
+(2026-08-19)` : le défaut est délibéré et documenté, c'est l'arbitrage que la
+loi 5 renverse. Il faudra retirer ce commentaire en même temps que la ligne —
+[[un commentaire qui survit à son correctif devient la loi lue par la suivante]].
+
+Recherche historique sur 1 680 refs : `git log --all -S targetType -- apps/web`
+ne rend qu'un commit, celui du routage `/l/[token]` (le `targetType` d'un
+TrackingLink, sans rapport). **Le miroir n'a jamais existé nulle part.**
+
 Le type de la source est **déjà en main à chaque site d'appel** (`stories`,
 `current`, `post.type`) : le miroir ne coûte aucune requête.
 
@@ -242,6 +270,10 @@ Défaut vivant, indépendant de tout le reste du chantier, et de coût minime.
 **Ne dépend ni du lot 0 ni d'aucun autre.** Peut partir avant que la première
 ligne du composer unifié soit écrite, et referme immédiatement la violation la
 plus coûteuse de la loi 5.
+
+**Le même geste vaut pour iOS**, où six sites passent `nil` (recensement
+ci-dessus) — le lot 4 le prévoit, mais rien n'oblige à attendre : le correctif
+est le même, et les deux sites `.post` du viewer de story n'y touchent pas.
 **DoD** : un test RED par cas cassé — story → `POST` et réel → `POST` sont
 constatés avant d'être corrigés —, puis vert. Le cas `mood` est écrit dans le
 contrat même s'il n'a pas encore de surface web : la loi précède son site.
