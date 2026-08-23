@@ -889,3 +889,56 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle101.md`.
 - [ ] Suivi — `senderId` : le chemin REST sert le `Participant.id` brut là où les
       deux autres servent le `User.id`. Non destructeur côté iOS (vérifié :
       `markEdited` n'écrit jamais `senderId`) ; à instruire côté web.
+
+## Cycle 102 (2026-08-22) — `messageType` : une règle écrite QUATRE fois, et un client qui ne peut pas la dire
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle102.md`.
+
+- [x] Instruit le suivi nommé du cycle 101 — `messageType` servi en `string`
+      quand le contrat déclare l'union `MessageType`. En ouvrant la colonne, une
+      panne de produit est apparue AVANT la question de typage.
+- [x] **`Message.messageType` était renseigné depuis un champ de requête que le
+      client fournit — et `SendMessageRequest` du SDK iOS n'a pas ce champ.**
+      Ni lui, ni `ShareSendBody` de l'extension de partage. Or le chemin REST est
+      celui de TOUT envoi iOS non éligible au socket-first (pièce jointe, DM
+      chiffré, vue unique, éphémère) : **toute photo, vidéo et note vocale partie
+      d'iOS se persistait `'text'`**.
+- [x] **La règle canonique existait, câblée à UN chemin sur quatre.**
+      `messageTypeFromMimeTypes` servait le handler socket ; la liaison REST par
+      `attachmentIds` ne dérivait rien, la copie de DIFFUSION non plus, et la
+      copie de TRANSFERT réécrivait la règle À LA MAIN — en ne lisant que
+      `createdAttachments[0]` et en ne connaissant que le préfixe `application/`.
+- [x] **Les deux exemplaires avaient chacun leur témoin, et les deux exigeaient
+      des réponses OPPOSÉES pour `text/plain`** (`'file'` d'un côté, « ne met pas
+      à jour » de l'autre), verts tous les deux. Le second n'attestait pas une
+      règle : il gelait le trou de l'exemplaire qu'il gardait.
+- [x] Coût aval mesuré : `protectedPreview` → `contentTypeIcon` sert `💬` au lieu
+      de `🖼️` sur la notification d'une photo vue-unique iOS ; et la diffusion
+      donnait DEUX types différents aux deux copies du même partage.
+- [x] RED prouvé : 7 témoins, **5 tombent**. Les 2 qui passent sont exactement
+      les témoins d'ADDITIVITÉ. « lot hétérogène » recevait `"image"` — preuve
+      directe que la règle manuscrite ne lisait que la première pièce jointe.
+- [x] Correctif : UNE dérivation, au seul point où les pièces jointes FINALES
+      sont connues (`saveMessage`, après l'ÉTAPE 4 bis qui relit déjà pour les
+      trois chemins). `deriveMessageTypeForAttachments` ne parle que si la
+      colonne porte encore son défaut — **le lot entier est ADDITIF**.
+- [x] La règle DÉMÉNAGE de `socketio/utils/` vers `services/messaging/` : elle
+      appartient au domaine du message, pas à un transport. C'est ce qui rend
+      « source unique » structurellement vrai plutôt que simplement écrit.
+      L'exemplaire manuscrit est supprimé.
+- [x] Quatre témoins de transfert préexistants rendus FIDÈLES : ils mockaient la
+      relecture de l'ÉTAPE 4 bis à `[]`, ce que la production ne fait jamais.
+- [x] Gates : `tsc --noEmit` **0 erreur** · nouveaux + `MessageProcessor`
+      **112/112** · socketio + messagerie **74 suites / 2369 tests verts** ·
+      suite complète passerelle.
+- [ ] Suivi — **le web porte le CINQUIÈME exemplaire de la règle**
+      (`determineMessageTypeFromMime(mimeTypes[0])`, deux sites) : un lot
+      hétérogène y part en `'image'` là où la canonique dit `'file'`. La
+      dérivation serveur ne le corrige pas — la valeur est explicite, donc
+      respectée par construction. Retrait = changement de contrat client.
+- [ ] Suivi — un message de LIEU sans pièce jointe reste `'text'` quand le client
+      se tait, et iOS se tait toujours : les lieux sont sous-comptés par
+      `ConversationMessageStatsService` pour toute la population iOS.
+- [ ] Suivi — le flip du `MessageHandler` reste ouvert : ce cycle a réparé ce que
+      la colonne CONTIENT, pas ce qu'elle DÉCLARE. Les deux se suivent dans cet
+      ordre.

@@ -21,6 +21,7 @@ import { resolveMessageMentions } from './messageMentions';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
 import { copyAttachmentsFromMessage } from './copyAttachments';
+import { deriveMessageTypeForAttachments } from './attachmentMessageType';
 import { attachmentFullSelect } from '../attachments/attachmentIncludes';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { shouldProcessAudioAttachment } from '../../utils/transcription';
@@ -612,6 +613,35 @@ export class MessageProcessor {
         corrWithMsg
       );
       (message as Message & { attachments: unknown[] }).attachments = refreshedAttachments;
+
+      // ÉTAPE 4 ter: Dire ce QU'EST ce message, maintenant qu'on sait ce qu'il
+      // porte. C'est le seul point du service où les pièces jointes FINALES
+      // sont connues, quel que soit le chemin qui les a produites (liaison par
+      // `attachmentIds`, copie de transfert, copie de diffusion) — donc le seul
+      // endroit où la règle puisse être écrite UNE fois pour les trois.
+      //
+      // Elle ne l'était pour aucun des trois. Le client était censé fournir
+      // `messageType`, et `SendMessageRequest` du SDK iOS n'a pas ce champ :
+      // toute photo, vidéo ou note vocale partie d'iOS se persistait `'text'`,
+      // et sa notification s'affichait au ballon texte (`contentTypeIcon`).
+      //
+      // La reprise EN MÉMOIRE compte autant que l'écriture : c'est cet
+      // objet-là que lisent la notification (ÉTAPE 6) et `buildMessageNewPayload`.
+      // Sans elle la colonne serait juste et le fil resterait faux. Mutation
+      // assumée, comme celle d'`attachments` juste au-dessus et pour la même
+      // raison — la ligne rendue par `create` a été prise avant que le message
+      // ne soit complet.
+      const derivedMessageType = deriveMessageTypeForAttachments({
+        persistedMessageType: message.messageType,
+        mimeTypes: refreshedAttachments.map((att) => att.mimeType),
+      });
+      if (derivedMessageType) {
+        await this.prisma.message.update({
+          where: { id: message.id },
+          data: { messageType: derivedMessageType },
+        });
+        (message as Message & { messageType: string }).messageType = derivedMessageType;
+      }
     }
 
     // ÉTAPE 5: Mettre à jour les liens de tracking avec le messageId (fire-and-forget)
@@ -790,21 +820,18 @@ export class MessageProcessor {
         )
       );
 
-      // Mettre à jour le messageType si le premier attachment est un média
-      const firstMime = createdAttachments[0].mimeType;
-      let detectedType = 'text';
-      if (firstMime.startsWith('image/')) detectedType = 'image';
-      else if (firstMime.startsWith('audio/')) detectedType = 'audio';
-      else if (firstMime.startsWith('video/')) detectedType = 'video';
-      else if (firstMime.startsWith('application/')) detectedType = 'file';
-
-      if (detectedType !== 'text') {
-        await this.prisma.message.update({
-          where: { id: newMessageId },
-          data: { messageType: detectedType }
-        });
-      }
-
+      // Le `messageType` n'est PLUS dérivé ici. Ce site en portait un second
+      // exemplaire, manuscrit, et il divergeait de la règle canonique sur deux
+      // points mesurés : il ne lisait que `createdAttachments[0]` (un lot
+      // hétérogène s'annonçait donc du type de sa première pièce, quand la
+      // règle dit `'file'`), et il ne connaissait que le préfixe `application/`
+      // (une carte de visite `text/vcard`, un `.txt`, un MIME vide y
+      // retombaient sur `'text'`, quand la règle dit « jamais 'text' »). Les
+      // deux exemplaires avaient chacun leur témoin, et les deux témoins
+      // exigeaient des réponses OPPOSÉES pour `text/plain`.
+      //
+      // `saveMessage` applique désormais `deriveMessageTypeForAttachments` sur
+      // les pièces jointes RELUES, ce qui couvre ce chemin et les deux autres.
       logger.info(`[MessageProcessor] Copied ${createdAttachments.length} attachments for forward`);
     } catch (error) {
       logger.error('[MessageProcessor] Error copying forwarded attachments', error);
