@@ -100,13 +100,6 @@ struct FeedPostCard: View {
         return me == post.authorId
     }
 
-    /// Compact count (1.2k / 3.4M).
-    static func compactCount(_ value: Int) -> String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
-    }
-
     /// Compact preview descriptor for the media carried by a reposted POST/STATUS
     /// (RF1). Holds the first media (rendered as a thumbnail) and the total count
     /// (drives a "+N" badge).
@@ -836,10 +829,10 @@ struct FeedPostCard: View {
                         Text("·").font(.caption).foregroundColor(theme.textMuted)
                         HStack(spacing: 3) {
                             Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
-                            Text(Self.compactCount(post.impressionCount)).font(.caption2.weight(.medium))
+                            Text(CompactCountLabel.text(post.impressionCount)).font(.caption2.weight(.medium))
                             Text("·").font(.caption2)
                             Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                            Text(Self.compactCount(post.viewCount)).font(.caption2.weight(.medium))
+                            Text(CompactCountLabel.text(post.viewCount)).font(.caption2.weight(.medium))
                         }
                         .foregroundColor(theme.textMuted)
                         .accessibilityElement(children: .ignore)
