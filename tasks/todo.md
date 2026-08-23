@@ -1467,3 +1467,26 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108.md` · PR #3381
       à étendre l'observation sur les TROIS clients dans le même train.
 - [ ] Suivi — Android consomme le trou à la portée de l'écran (là où iOS le câble
       au boot). Limitation DÉJÀ existante de son temps réel, pas une nouvelle.
+
+### Cycle 108 bis — `main` était rouge pour tout le monde, et ce n'était pas ce lot
+
+- [x] Le merge de `main` a rendu « Test gateway » rouge sur 2 cas de
+      `MessageHandlerEditDelete.test.ts`. **Mesuré sur une copie VIERGE
+      d'`origin/main` : les deux mêmes cas y tombent**, sans une ligne de la
+      branche (dont l'écart avec `main` hors `apps/android` est exclusivement
+      fait de commentaires — vérifié mécaniquement).
+- [x] Cause : `createdAt` épinglé à `2026-08-22T10:00:00Z` sous une garde
+      `admitMessageEdit` de **24 h**. Vert vingt-quatre heures, rouge le
+      2026-08-23 à 10:00 UTC, pour toutes les branches et définitivement.
+- [x] Le symptôme désignait le mauvais coupable : `emitsTo(...)` rendait `[]`,
+      qui se lit « le producteur n'émet plus ». Le producteur va bien — le
+      `callback` portait la vraie cause, jamais assertée
+      (`24-hour limit exceeded`).
+- [x] Le cas VOISIN restait vert parce que sa fixture n'a pas de `createdAt` :
+      les cas qui tombaient étaient ceux qui en AJOUTAIENT un. C'est ce
+      contraste qui a désigné la fenêtre.
+- [x] Corrigé en rendant l'instant RELATIF — ces cas portent sur la FORME de la
+      charge et l'identité de `senderId`, jamais sur l'âge du message.
+- [x] Gates : `MessageHandlerEditDelete` **66/66** · passerelle complète
+      **836/836 suites, 19216/19216**, en local sous bun.
+- [x] Leçon consignée dans `tasks/lessons.md`.
