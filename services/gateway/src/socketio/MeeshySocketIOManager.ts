@@ -716,9 +716,10 @@ export class MeeshySocketIOManager {
       // amont, et sur le chemin le plus destructif du système.
       //
       // Le journal par entrée (`dropEntry`, monté avant le gate d'appartenance)
-      // porte les trois refus de ce chemin — l'id de conversation illisible, le
-      // nom d'événement non résolu, la charge informe — chacun sous sa propre
-      // `reason`, parce que les trois n'envoient pas chercher au même endroit.
+      // porte les QUATRE refus de ce chemin — l'id de conversation illisible, la
+      // charge informe, le nom d'événement non résolu, l'enveloppe de lien
+      // privée de son message — chacun sous sa propre `reason`, parce qu'aucun
+      // des quatre n'envoie chercher au même endroit.
       for (const entry of pending) {
         // Les deux moitiés du couple, refusées séparément parce que le journal
         // doit NOMMER laquelle a manqué : c'est la seule trace qu'une perte de
@@ -730,7 +731,19 @@ export class MeeshySocketIOManager {
         }
         const emissions = _drainedEmissions(entry);
         if (emissions.length === 0) {
-          dropEntry(entry, 'unresolvable-event-type');
+          // Deux façons de ne rien savoir diffuser, et le journal doit les
+          // SÉPARER : elles n'envoient pas chercher au même endroit. Un nom
+          // d'événement non résolu accuse la file (un `eventType` d'une version
+          // plus récente de la passerelle) ; une enveloppe de lien sans message
+          // accuse son producteur. `'link-message'` est le seul `eventType` dont
+          // la charge se DÉPLIE, donc le seul qui puisse échouer par autre chose
+          // que son nom.
+          dropEntry(
+            entry,
+            entry.eventType === 'link-message'
+              ? 'link-envelope-without-message'
+              : 'unresolvable-event-type'
+          );
           continue;
         }
         try {

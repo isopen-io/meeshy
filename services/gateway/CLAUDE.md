@@ -1816,6 +1816,53 @@ Seule exception à la règle du cycle 111 (« `conversationIds` ne se resserre
 pas ») : une entrée refusée POUR son `conversationId` n'a rien à nommer, et
 publier son id enverrait le client invalider une conversation qui n'existe pas.
 
+#### Un gate qui s'exprime par un PROXY ne couvre pas forcément tous ses membres
+
+Le drain ne demande pas à une entrée « quelle est ta forme ? ». Il lui demande
+« sais-tu te diffuser ? », et lit la réponse dans `emissions.length === 0` —
+`_drainedEmissions` écrivant lui-même le contrat : « une liste VIDE dit *je ne
+sais pas diffuser ceci* ».
+
+Onze `eventType` sur douze passent par la table `DRAINED_EVENT`, qui peut rendre
+`undefined` donc `[]`. Le douzième, `'link-message'`, est le seul dont la charge
+se **DÉPLIE** — et `linkMessageEmissions` poussait l'enveloppe
+INCONDITIONNELLEMENT avant de regarder ce qu'elle contient. **Il ne pouvait pas
+rendre `[]`.** Le refus du message dérivé, ancien et gardé par ses propres
+témoins, retirait donc la seule émission qui compte et laissait la liste à 1.
+
+Ce que l'enveloppe seule livre : rien — son unique auditeur (le web) lit
+`data.message` ; iOS et Android n'écoutent que le `message:new` dérivé, celui
+qu'on vient de refuser. Ce que la liste non vide AFFIRME, en revanche, coûte
+trois signaux (cycle 114) : `count` comptait la remise, `conversationIds` ne
+nommait PAS la conversation (donc rien n'envoyait le client rechercher un
+message qui est pourtant toujours en base), et — `announcesMessageArrival('link-message')`
+étant vrai — l'accusé partait : le curseur `lastDeliveredAt` de l'auteur
+avançait, et il est **MONOTONE** (`_advanceCursor` ne recule jamais). Sur le
+SEUL transport d'envoi dont dispose un participant anonyme.
+
+> La question à poser à tout gate qui s'exprime par un proxy (une longueur, un
+> `null`, un booléen dérivé) n'est pas « est-il correct ? » mais **« chaque
+> membre de ce qu'il arbitre peut-il le faire répondre NON ? »**. S'il en est un
+> qui ne le peut pas, le gate ne le couvre pas — quelle que soit la place qu'il
+> occupe dans le code.
+
+Corollaire de journal : quand un refus a plusieurs causes possibles, la `reason`
+les SÉPARE. `'unresolvable-event-type'` accuse la file (un `eventType` d'une
+version voisine) ; `'link-envelope-without-message'` accuse le producteur de
+l'enveloppe. Les deux n'envoient pas chercher au même endroit.
+
+#### Un témoin qui nomme correctement la moitié qu'il garde GÈLE l'autre
+
+Trois témoins de `linkMessageEmissions` assertaient
+`n'ajoute PAS 'message:new' ⇒ [LINK_MESSAGE_NEW]`. Leur intitulé disait VRAI, et
+c'est cette vérité qui a rendu la seconde moitié de l'assertion invisible : elle
+se relisait comme le reste de la phrase, pas comme une affirmation à instruire.
+Deux cycles de gardes posées à cette frontière sont passés à côté.
+
+> **Un `toEqual` sur une liste entière affirme autant sur ce qu'il GARDE que sur
+> ce qu'il ADMET.** Les deux moitiés se relisent séparément — et l'intitulé du
+> témoin ne couvre en général que la première.
+
 #### Un double de test ment aussi par ce qu'il ACCEPTE
 
 La leçon connue — « un double Prisma qui rend `[]` rend tout témoin de contenu
