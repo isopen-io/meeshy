@@ -47,6 +47,7 @@
     <string name="stories_composer_text_placeholder">Type something…</string>
     <string name="stories_composer_remove_text">Remove text</string>
     <string name="stories_composer_bg_none">No background</string>
+    <string name="stories_composer_outline">Text outline</string>
     <string name="stories_composer_bg_glass">Glass</string>
     <string name="stories_composer_add_sticker">Sticker</string>
     <string name="stories_composer_remove_sticker">Remove sticker</string>
