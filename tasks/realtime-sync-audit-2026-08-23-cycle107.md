@@ -105,6 +105,40 @@ taille, est exactement ce que le suivi précédent ne faisait pas.
 
 ---
 
+## Une limite de MON cycle 106, trouvée par un lot parallèle
+
+Le cycle 106 bis (PR #3377), instruit en parallèle depuis la même liste de
+suivis, a mesuré ceci : **une clé venue d'un SPREAD échappe au contrôle des
+propriétés excédentaires**, signature d'index ou pas.
+
+```ts
+take({ a: 'x', zzz: 1 });   // TS2353 — attrapé
+const built = { a: 'x', zzz: 1 };
+take({ ...built });          // SILENCE
+```
+
+Cela borne ce que mon cycle 106 a réellement obtenu, et je le note ici plutôt
+que de laisser le journal surestimer son lot :
+
+| ce que la file vérifie désormais | statut |
+|---|---|
+| champs REQUIS présents | **vérifié** — l'assignabilité traverse le spread |
+| TYPE de chaque champ | **vérifié** — idem |
+| clés EN TROP sur une charge composée par spread | **non vérifié** |
+
+Le journal du cycle 106 écrit « la charge qu'on ENFILE est tenue à la forme que
+le contrat associe à l'événement qu'on REJOUERA ». C'est vrai des deux premières
+lignes, pas de la troisième. La correction ne retire rien au lot — un champ
+requis manquant ou mal typé était le défaut visé — mais elle en dit la portée
+exacte.
+
+> Deux cycles instruits en parallèle depuis la même liste, et c'est l'autre qui
+> a trouvé la limite du mien. **Un suivi partagé entre deux agents vaut mieux
+> qu'un suivi gardé** — c'est le seul dispositif de ce dépôt qui ait attrapé une
+> de mes surestimations sans que je la cherche.
+
+---
+
 ## Gates
 
 Aucun changement de production. `tsc --noEmit` 0 erreur, suite complète

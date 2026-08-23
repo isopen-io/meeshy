@@ -2,6 +2,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { LAST_MESSAGE_PREVIEW_MAX_LENGTH } from '../../routes/conversations/utils/last-message-preview';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
+import { declaredConversationUpdatedFields } from './conversation-updated-declared-fields';
 
 type Emitted = { room: string; event: string; payload: any };
 
@@ -233,6 +234,36 @@ describe('emitConversationPreviewUpdate', () => {
   // bornes, le chemin `message:translation` re-diffuserait la ligne entière à
   // tout le monde, une fois par langue de la conversation, sur le chemin le plus
   // chaud du service.
+  it("n'émet aucun champ que le contrat ne DÉCLARE pas", async () => {
+    // Le TROISIÈME émetteur de `conversation:updated`. Ses deux jumeaux
+    // message-driven portent le même cliquet dans
+    // `message-new-producer-parity.test.ts` — l'écart entre les trois est
+    // exactement ce qui avait laissé `location` manquer sur un seul d'entre eux
+    // (#3122), et le typage ne peut pas le voir : les trois composent leur
+    // charge par spread, et une clé venue d'un spread est invisible au contrôle
+    // des propriétés excédentaires. Voir `conversation-updated-declared-fields.ts`.
+    const emitted: Emitted[] = [];
+    const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], latest);
+    const declared = declaredConversationUpdatedFields();
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect(emitted).not.toHaveLength(0);
+    for (const e of emitted) {
+      const undeclared = Object.keys(e.payload).filter((k) => !declared.has(k)).sort();
+      expect(undeclared).toEqual([]);
+    }
+  });
+
+  it('émet `lastMessageAt` comme une CHAÎNE ISO, comme son jumeau `updatedAt`', async () => {
+    const emitted: Emitted[] = [];
+    const prisma = makePrisma([{ id: 'p-A', userId: 'user-A' }], latest);
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect(emitted[0].payload.lastMessageAt).toBe('2026-07-09T10:00:00.000Z');
+  });
+
   describe('scope', () => {
     it('skips the whole fan-out when the recomputed latest is not the message the caller scoped to', async () => {
       const emitted: Emitted[] = [];
@@ -399,7 +430,13 @@ describe('emitConversationPreviewUpdate', () => {
     expect(toA.payload.lastMessageId).toBe('msg-previous');
     expect(toA.payload.lastMessagePreview).toBe('the one before');
     expect(toA.payload.senderId).toBe('participant-B');
-    expect(toA.payload.lastMessageAt).toEqual(new Date('2026-07-09T09:00:00Z'));
+    // CHAÎNE ISO, pas `Date` : ce témoin assertait la valeur d'AVANT
+    // sérialisation, que le fil n'a jamais portée — l'encodeur de socket.io
+    // rend `toISOString()`. C'est exactement l'écart que déclarer le champ a
+    // rendu visible : tant que `lastMessageAt` n'était pas au contrat, son type
+    // était décidé par l'encodeur, et un témoin en cours de route pouvait
+    // attester une forme que personne ne reçoit.
+    expect(toA.payload.lastMessageAt).toBe('2026-07-09T09:00:00.000Z');
   });
 
   it('serves a blank preview to a reader who cleared the whole history', async () => {
@@ -596,4 +633,5 @@ describe('emitConversationPreviewUpdate — scope.onlyForReaderUserId', () => {
 
     expect(emitted.map((e) => e.room).sort()).toEqual(['user:user-A', 'user:user-B']);
   });
+
 });
