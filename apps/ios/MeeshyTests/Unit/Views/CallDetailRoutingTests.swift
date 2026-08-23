@@ -60,6 +60,15 @@ final class CallDetailRoutingTests: XCTestCase {
     /// désignait donc plus rien : le témoin échouait sur son `guard`, sans
     /// même avoir regardé le routage qu'il protège.
     ///
+    /// **Et ça vient de se reproduire, à l'envers, le 2026-08-23** : la
+    /// capture Focal a été RETIRÉE (elle tranchait en deux l'identité et la
+    /// barre de méta de la cellule, à cheval sur son cadre), la signature est
+    /// revenue à un seul paramètre, et le marqueur a de nouveau cessé de
+    /// désigner quoi que ce soit. La leçon vaut donc dans les deux sens : un
+    /// témoin qui épingle une SIGNATURE se périme à chaque paramètre ajouté
+    /// ET à chaque paramètre retiré, alors que le routage qu'il protège n'a
+    /// pas bougé d'un signe.
+    ///
     /// Le marqueur suit la signature ; le corps recherché, lui, est inchangé
     /// mot pour mot. Même leçon que le passage de la fenêtre de 700 caractères
     /// à l'équilibrage d'accolades, documenté juste au-dessus : une garde qui
@@ -67,7 +76,7 @@ final class CallDetailRoutingTests: XCTestCase {
     /// ajouté, alors que ce qu'elle protège n'a pas bougé d'un signe.
     func test_conversationView_onLongPress_branchesOnCallSummary_notMessageSourceSystem() throws {
         let view = try source("Features/Main/Views/ConversationView.swift")
-        guard let body = closureBody(after: "onLongPress: { messageId, focalPreview in", in: view) else {
+        guard let body = closureBody(after: "onLongPress: { messageId in", in: view) else {
             XCTFail("ConversationView must define the onLongPress closure"); return
         }
         XCTAssertTrue(

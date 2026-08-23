@@ -28,24 +28,52 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
             .joined(separator: " ")
     }
 
-    func test_focalRow_handsTheFocusSignal_toTheIdentityHeaderTime() throws {
+    /// **Directive 2026-08-23 — la date et les coches vivent EN BAS, toujours.**
+    ///
+    /// Elles paraissaient aux deux bouts de la même carte : dans la chip de
+    /// focus en haut à droite ET dans la méta du bas. Deux fois la même
+    /// information, à deux endroits, sur un seul message — magnifié ou non,
+    /// c'est la ligne BASSE qui date le message.
+    func test_focalRow_keepsTheDateAndChecks_atTheBottom_focusedOrNot() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
-        XCTAssertTrue(
-            row.contains("revealsTimeAlways: input.isFocused"),
-            "La rangée en focus doit demander à son en-tête d'identité une heure PERMANENTE " +
-            "(`revealsTimeAlways: input.isFocused`) — sinon l'heure suit le révélé et disparaît au repos."
-        )
-        // 2026-08-22 : l'identité d'un message en focus qui n'est pas tête de
-        // groupe est une SUPERPOSITION sur la ligne du haut (hauteur stable,
-        // affichage instantané) — plus un en-tête inséré dans la rangée.
-        XCTAssertFalse(row.contains("if input.isFirstInGroup || input.isFocused {"), "plus d'en-tête inséré au focus")
-        // 2026-08-22 : pour TOUTES les bulles en focus — haut-gauche avatar +
-        // auteur, haut-droite date + coche, sur la ligne du haut ; l'en-tête
-        // de tête de groupe garde sa place et s'efface.
-        XCTAssertTrue(row.contains("if input.isFocused { HStack(alignment: .center, spacing: 4) { focusIdentityChip Spacer(minLength: 4) focusStampChip }"), "identité à gauche, date+coche à droite")
+        // Le haut ne porte plus que l'identité — plus de Spacer ni de chip de date.
+        XCTAssertTrue(row.contains("if input.isFocused { focusIdentityChip"), "haut : l'identité seule")
+        XCTAssertFalse(row.contains("focusIdentityChip Spacer(minLength: 4) focusStampChip"), "la chip de date a quitté la ligne du haut")
         XCTAssertTrue(row.contains(".offset(y: -FocalMetrics.FocusStrip.identityOverhang)"))
-        XCTAssertEqual(row.components(separatedBy: ".opacity(input.isFocused ? 0 : 1)").count - 1, 2, "en-tête ET ligne drapeau+réactions s'effacent en focus, sans bouger")
+        // Le bas porte la bande ET la chip de date, sur la même ligne.
+        XCTAssertTrue(
+            row.contains("if input.isFocused { HStack(alignment: .center, spacing: 4) { focusStrip Spacer(minLength: 4) focusStampChip }"),
+            "bas : bande à gauche, date+coche à droite"
+        )
+        XCTAssertEqual(
+            row.components(separatedBy: ".opacity(input.isFocused ? 0 : 1)").count - 1, 3,
+            "en-tête, ligne drapeau+réactions ET méta-rangée s'effacent en focus — la chip du bas les remplace"
+        )
         XCTAssertTrue(row.contains("BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint)"), "la coche d'état de réception dans la chip de date")
+    }
+
+    /// Hors focus, une TÊTE DE GROUPE doit dater son message par le bas comme
+    /// n'importe quelle rangée de suite : sinon la règle « toujours en bas »
+    /// ne tiendrait que pour la moitié des messages.
+    func test_everyRow_carriesTheMetaRow_headOfGroupIncluded() throws {
+        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        XCTAssertFalse(row.contains("if !input.isFirstInGroup { FocalMetaRow("), "la méta n'est plus réservée aux rangées de suite")
+        XCTAssertTrue(row.contains("FocalMetaRow("), "toute rangée porte sa méta")
+        XCTAssertTrue(row.contains("onShowReadStatus: actions.onShowReadStatus.map"), "les coches du bas ouvrent les détails de lecture")
+    }
+
+    /// Garde NÉGATIVE — l'en-tête d'identité ne redevient jamais porteur de
+    /// l'heure ni des coches. Contre-épreuve dans le test suivant.
+    func test_identityHeader_carriesNoTimeAndNoChecks() throws {
+        let header = try normalized("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
+        XCTAssertFalse(header.contains("BubbleDeliveryCheck"), "aucune coche dans l'en-tête")
+        XCTAssertFalse(header.contains("FocalRevealedTime"), "aucun horodatage dans l'en-tête")
+        XCTAssertFalse(header.contains("timeString"), "l'en-tête ne reçoit même plus l'heure")
+    }
+
+    func test_theGuardAbove_wouldCatchATimeComingBack_intoTheHeader() {
+        let reintroduced = "HStack { Text(displayName) stamp BubbleDeliveryCheck(status: status) }"
+        XCTAssertTrue(reintroduced.contains("BubbleDeliveryCheck"))
     }
 
     /// 2026-08-22 : tout ce que porte la bulle en focus apparaît AVEC la carte
@@ -59,7 +87,7 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         // vue UIKit bornée à la cellule qui dérivait avant la pose.
         XCTAssertTrue(row.contains(".background { if input.isFocused { focusCardBackground } }"), "carte = fond SwiftUI du contenu")
         XCTAssertTrue(row.contains(".padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)"), "mêmes cotes que focusCardInsets")
-        XCTAssertTrue(row.contains("if !input.isFirstInGroup { FocalMetaRow("), "la méta-rangée reste, focus ou pas")
+        XCTAssertTrue(row.contains("FocalMetaRow("), "la méta-rangée reste, focus ou pas")
         XCTAssertTrue(row.contains("if let precomputed = input.focusTimestamp { return precomputed }"), "date pré-calculée")
         let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
         XCTAssertTrue(controller.contains("if electionChanged { syncFocalFocusDetails() }"), "détails synchronisés au tick d'élection")
@@ -78,11 +106,13 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// réactions ; ses coches (haut-droite) ouvrent les détails de lecture.
     func test_focusedRow_hasTheBottomStrip_andTappableChecks() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
-        XCTAssertTrue(row.contains("if input.isFocused { focusStrip .offset(y: FocalMetrics.FocusStrip.overhang) }"), "la bande est une superposition SUR la ligne basse")
+        XCTAssertTrue(row.contains("focusStrip Spacer(minLength: 4) focusStampChip"), "la bande est une superposition SUR la ligne basse, la date à sa droite")
+        XCTAssertTrue(row.contains(".offset(y: FocalMetrics.FocusStrip.overhang)"))
         XCTAssertTrue(row.contains("actions.onSetActiveDisplayLanguage?(content.messageId, code)"), "un drapeau = afficher cette langue")
         XCTAssertTrue(row.contains("actions.onShowTranslationDetail?(content.messageId)"), "l'icône de traduction du mode bulle")
         XCTAssertTrue(row.contains("actions.onOpenReactPicker?(content.messageId)"), "le (+) emoji, toujours")
         XCTAssertTrue(row.contains("onShowReadStatus: actions.onShowReadStatus.map"), "les coches ouvrent les détails de lecture")
+        _ = try normalized("Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift")
         // Ordre (directive 2026-08-22) : traduction → drapeaux → (+) → réactions.
         let strip = try XCTUnwrap(row.range(of: "private var focusStrip: some View {"))
         let tail = row[strip.lowerBound...]
@@ -96,8 +126,8 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
         XCTAssertTrue(controller.contains("cell.clipsToBounds = false"))
         XCTAssertTrue(controller.contains("cell.layer.zPosition = isFocusedCell ? 1 : 0"))
-        let header = try normalized("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
-        XCTAssertTrue(header.contains("Button(action: onShowReadStatus)"), "les coches sont un bouton quand la rangée sait ouvrir les détails")
+        let meta = try normalized("Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift")
+        XCTAssertTrue(meta.contains("Button(action: onShowReadStatus)"), "les coches du bas sont un bouton quand la rangée sait ouvrir les détails")
     }
 
     func test_focusFlagCodes_putTheOriginalFirst_thenAvailable_thenTheDisplayedOne_neverRepeated() {
@@ -108,15 +138,14 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         XCTAssertEqual(FocalRow.focusFlagCodes(originalLangCode: "fr", availableFlags: [], activeLangCode: "en"), ["fr", "en"])
     }
 
-    func test_identityHeader_rendersAPermanentTime_whenAskedTo_andTheRevealedOneOtherwise() throws {
-        let header = try normalized("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
+    /// L'heure permanente a suivi la date : elle vit dans la méta du bas, et
+    /// c'est ELLE qui distingue le message en focus (heure toujours lisible)
+    /// des autres (révélée au défilement).
+    func test_metaRow_rendersAPermanentTime_whenAskedTo_andTheRevealedOneOtherwise() throws {
+        let meta = try normalized("Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift")
         XCTAssertTrue(
-            header.contains("if revealsTimeAlways { Text(timeString)"),
-            "Heure permanente : un `Text` nu, hors de toute observation du révélé."
-        )
-        XCTAssertTrue(
-            header.contains("} else { FocalRevealedTime(timeString: timeString, tint: metaTint) }"),
-            "Hors focus, la règle commune des têtes de groupe reste le révélé de défilement."
+            meta.contains("FocalRevealedTime(timeString: timeString, tint: metaTint)"),
+            "Hors focus, la règle commune reste le révélé de défilement."
         )
     }
 }

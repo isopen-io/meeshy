@@ -33,14 +33,6 @@ extension ConversationReadingMode {
     var usesFlatRow: Bool { self == .focal || self == .script }
 }
 
-/// Aperçu d'appui long capturé sur la cellule VIVANTE (mode Focal) — les
-/// pixels du rendu réel, pas une reconstruction. Voir
-/// `MessageListViewController.focalOverlayPreview(messageId:)`.
-struct FocalLongPressPreview {
-    let image: UIImage
-    let frameInWindow: CGRect
-}
-
 final class MessageListViewController: UIViewController {
 
     private var collectionView: UICollectionView!
@@ -166,10 +158,11 @@ final class MessageListViewController: UIViewController {
     /// Invoked when the user swipes a bubble in the opposite direction
     /// (forward gesture). Receives the message id of the swiped bubble.
     var onSwipeForward: ((String) -> Void)?
-    /// Long press on a bubble — opens the contextual options menu. Le second
-    /// paramètre porte l'aperçu Focal (`focalOverlayPreview`) : les pixels de
-    /// la cellule vivante, `nil` en mode bulles.
-    var onLongPress: ((String, FocalLongPressPreview?) -> Void)?
+    /// Long press on a bubble — opens the contextual options menu. L'aperçu
+    /// élevé est le message NORMAL, dans tous les modes de lecture
+    /// (directive 2026-08-23) : voir la note à l'emplacement de l'ancien
+    /// `focalOverlayPreview`.
+    var onLongPress: ((String) -> Void)?
     /// iOS 26+ : builder du contenu `.contextMenu` NATIF (Liquid Glass) d'une
     /// bulle, fourni par `ConversationView`. Quand présent (donc iOS 26+), la
     /// cellule attache le menu natif et DÉSACTIVE le long-press custom.
@@ -1470,7 +1463,7 @@ final class MessageListViewController: UIViewController {
                 // de l'appui long — même gestionnaire, donc même liste
                 // d'actions (édition, suppression, signalement, traduction),
                 // sans qu'aucune seconde liste n'existe à maintenir.
-                focalActions.onMore = { [weak self] _ in longPressHandler?(messageId, self?.focalOverlayPreview(messageId: messageId)) }
+                focalActions.onMore = { _ in longPressHandler?(messageId) }
                 focalActions.onViewStory = (senderRingState != .none) ? { _ in viewSenderStoryHandler?(senderId) } : nil
                 focalActions.onCallBack = { _ in
                     guard let summary = message.callSummary else { return }
@@ -1504,7 +1497,7 @@ final class MessageListViewController: UIViewController {
                     uniformFlatDirection: self.readingMode.usesFlatRow,
                     onSwipeReply: { swipeReplyHandler?(messageId) },
                     onSwipeForward: { swipeForwardHandler?(messageId) },
-                    onLongPress: { [weak self] in longPressHandler?(messageId, self?.focalOverlayPreview(messageId: messageId)) },
+                    onLongPress: { longPressHandler?(messageId) },
                     // iOS 26+ (menu natif présent) : couper le long-press
                     // custom — le `.contextMenu` natif possède la pression.
                     enableLongPress: nativeMenu == nil
@@ -2325,45 +2318,19 @@ final class MessageListViewController: UIViewController {
 
     // MARK: - Cell Frame Lookup
 
+    // `focalOverlayPreview(messageId:)` a vécu ici jusqu'au 2026-08-23 :
+    // il capturait les PIXELS de la cellule Focal pour que l'aperçu élevé de
+    // l'appui long soit le rendu RÉEL, sans second chemin. L'intention tenait ;
+    // le cadrage non. La cellule Focal fait tenir son identité et sa barre de
+    // méta À CHEVAL sur son cadre — bornée aux `bounds` de la cellule, la
+    // capture les tranchait en deux. Retiré : l'overlay rend le message NORMAL
+    // dans tous les modes de lecture (directive produit 2026-08-23).
+
     /// On-screen frame (window coordinates) of the realized cell hosting
     /// `messageId`, or `nil` when that cell is not currently visible.
     /// `convert(_:to: nil)` resolves the collection view's inverted-axis
     /// transform, so the returned rect is the upright frame the user sees.
     /// Used to anchor the floating quick-reaction bar to the tapped bubble.
-    /// Aperçu d'appui long en mode Focal : les PIXELS de la cellule vivante.
-    ///
-    /// « Réutiliser le rendu existant plutôt que deux rendus différents » —
-    /// au sens le plus fort : aucun second chemin de rendu n'existe. L'overlay
-    /// reçoit une image de la cellule telle qu'elle est à l'écran ; toute
-    /// évolution future de `FocalRow` se propage à l'aperçu par construction.
-    /// L'aperçu élevé de `MessageOverlayMenu` est déjà purement visuel
-    /// (`allowsHitTesting(false)`) : une image y est équivalente à une vue.
-    ///
-    /// Capturé AVANT que `overlaidMessageId` ne masque la cellule source
-    /// (`afterScreenUpdates: false` lit l'état affiché). `nil` en mode
-    /// bulles : l'overlay garde son `ThemedMessageBubble` historique.
-    func focalOverlayPreview(messageId: String) -> FocalLongPressPreview? {
-        guard readingMode != .bubbles else { return nil }
-        let resolvedId = resolveLocalId(messageId)
-        guard let dataSource,
-              let indexPath = dataSource.indexPath(for: .message(localId: resolvedId)),
-              let cell = collectionView.cellForItem(at: indexPath)
-        else { return nil }
-        let frame = cell.convert(cell.bounds, to: nil)
-        let renderer = UIGraphicsImageRenderer(bounds: cell.bounds)
-        let image = renderer.image { context in
-            // Le sous-arbre de la cellule contient le CONTRE-flip SwiftUI
-            // (`.scaleEffect(x: 1, y: -1)`) qui pré-compense l'inversion de
-            // la collection ; dessiné hors d'elle, il rendrait le contenu
-            // tête en bas. On renverse le contexte pour retrouver
-            // l'orientation écran.
-            context.cgContext.translateBy(x: 0, y: cell.bounds.height)
-            context.cgContext.scaleBy(x: 1, y: -1)
-            cell.drawHierarchy(in: cell.bounds, afterScreenUpdates: false)
-        }
-        return FocalLongPressPreview(image: image, frameInWindow: frame)
-    }
-
     func cellFrameInWindow(messageId: String) -> CGRect? {
         // Quick-reaction bar anchors on a tap by id — same server/local
         // id-flavour bridge as the scroll routines.

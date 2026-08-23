@@ -13,8 +13,7 @@ import {
 import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import {
-  generateInitialLinkId,
-  generateFinalLinkId,
+  generateUniqueShareLinkId,
   ensureUniqueShareLinkIdentifier
 } from './utils/identifier-generator';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendConflict, sendInternalError, sendError } from '../../utils/response';
@@ -214,28 +213,25 @@ export function registerSharingRoutes(
       // n'importe qui ayant accès à la conversation peut créer des liens
       // L'utilisateur doit juste être membre de la conversation (déjà vérifié plus haut)
 
-      // Générer le linkId initial
-      const initialLinkId = generateInitialLinkId();
+      // Identifiant PUBLIC du lien — compact, opaque, vérifié libre sur les
+      // deux colonnes publiques AVANT l'écriture (cf. `generateShareLinkId`).
+      const linkId = await generateUniqueShareLinkId(prisma);
 
-      // Générer un identifiant unique (basé sur le nom du lien, ou le titre, ou généré)
-      let baseIdentifier: string;
+      // Identifiant LISIBLE — dérivé du nom, sinon de la description. Sans ni
+      // l'un ni l'autre, le repli est compact et opaque, plus horodaté.
+      let baseIdentifier = '';
       if (body.name) {
         baseIdentifier = `mshy_${body.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}`;
       } else if (body.description) {
         // Utiliser la description comme base si pas de nom
         baseIdentifier = `mshy_${body.description.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 30)}`;
-      } else {
-        // Générer un identifiant unique si ni nom ni description
-        const timestamp = Date.now().toString();
-        const randomPart = Math.random().toString(36).substring(2, 8);
-        baseIdentifier = `mshy_link-${timestamp}-${randomPart}`;
       }
       const uniqueIdentifier = await ensureUniqueShareLinkIdentifier(prisma, baseIdentifier);
 
       // Créer le lien avec toutes les options configurables
       const shareLink = await prisma.conversationShareLink.create({
         data: {
-          linkId: initialLinkId, // Temporaire
+          linkId,
           conversationId: conversationId,
           createdBy: currentUserId,
           name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
@@ -257,24 +253,17 @@ export function registerSharingRoutes(
         }
       });
 
-      // Mettre à jour avec le linkId final
-      const finalLinkId = generateFinalLinkId(shareLink.id, initialLinkId);
-      await prisma.conversationShareLink.update({
-        where: { id: shareLink.id },
-        data: { linkId: finalLinkId }
-      });
-
       // Retour compatible avec le frontend de service conversations (string du lien complet).
       // `/chat/:linkId` est l'URL canonique (la page qui ouvre la conversation
       // dans la vue courante) ; `/join/:linkId` ne survit qu'en 308 pour les
       // liens déjà en circulation — un lien neuf ne prend pas le détour.
-      const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3100'}/chat/${finalLinkId}`;
+      const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3100'}/chat/${linkId}`;
       return sendSuccess(reply, {
         link: inviteLink,
-        code: finalLinkId,
+        code: linkId,
         shareLink: {
           id: shareLink.id,
-          linkId: finalLinkId,
+          linkId,
           name: shareLink.name,
           description: shareLink.description,
           maxUses: shareLink.maxUses,

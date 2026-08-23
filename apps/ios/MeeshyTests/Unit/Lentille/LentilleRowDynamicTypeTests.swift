@@ -246,13 +246,27 @@ final class LentilleRowDynamicTypeTests: XCTestCase {
     /// issues à contenu variable tronquent à une ligne (texte du message,
     /// libellé court de pièce jointe, nom de lieu) — l'issue vide (fallback
     /// `Text("")`) ne porte aucun `.lineLimit`, rien à tronquer.
+    ///
+    /// **2026-08-23** — la première des trois (le texte du message) est
+    /// devenue CONDITIONNELLE : `.lineLimit(isMagnified ? 2 : 1)`. La
+    /// politique est inchangée au repos — c'est le même rang à hauteur fixe,
+    /// tronqué à une ligne — et la magnification lui en accorde une seconde,
+    /// dans une enveloppe elle aussi fixe (`FocusInline.height`). Le témoin
+    /// compte donc deux `.lineLimit(1)` littéraux plus cette forme ternaire,
+    /// et vérifie explicitement qu'aucune des trois issues à contenu variable
+    /// n'a perdu sa borne.
     func test_standardPreviewBody_appliesExactlyThreeDocumentedLineLimits() throws {
         let code = try source("LentilleConversationRow.swift")
         let text = try body(of: "private func standardPreview(showEphemeralIcon: Bool) -> some View {", in: code)
+        XCTAssertTrue(
+            text.contains(".lineLimit(isMagnified ? 2 : 1)"),
+            "Le texte du message tronque à UNE ligne au repos, DEUX sous la loupe — jamais libre."
+        )
         XCTAssertEqual(
-            lineLimitOneCount(text), 3,
-            "standardPreview doit tronquer EXACTEMENT trois Text à une ligne (texte de message, " +
-            "libellé de pièce jointe, nom de lieu — politique documentée, rang à hauteur fixe) — " +
+            lineLimitOneCount(text), 2,
+            "standardPreview doit tronquer EXACTEMENT deux Text à une ligne EN DUR (libellé de " +
+            "pièce jointe, nom de lieu) — le texte du message, lui, porte la forme ternaire " +
+            "vérifiée juste au-dessus, politique documentée, rang à hauteur fixe — " +
             "ni moins (croissance libre dans un conteneur figé à .accessibility5), ni plus " +
             "(troncature accidentelle supplémentaire, par ex. sur senderLabel qui a SA PROPRE " +
             "politique testée séparément ci-dessous)."

@@ -63,7 +63,6 @@ struct ConversationOverlayState {
     /// Aperçu d'appui long en Focal : pixels de la cellule vivante + frame
     /// écran, capturés par le contrôleur au moment du geste. `nil` en mode
     /// bulles — l'overlay garde alors son `ThemedMessageBubble` historique.
-    var overlayFocalPreview: FocalLongPressPreview? = nil
     var showOverlayMenu = false
     var longPressEnabled = false
     var detailSheetMessage: Message? = nil
@@ -1612,7 +1611,7 @@ struct ConversationView: View {
                           msg.isForwardable else { return }
                     composerState.forwardMessage = msg
                 },
-                onLongPress: { messageId, focalPreview in
+                onLongPress: { messageId in
                     // Preserve l'overlay menu existant (MessageOverlayMenu panel).
                     // L'infrastructure frame-tracking + LayoutEngine reste en place
                     // et sera utilisée ensuite pour lifter la bulle dans le flow
@@ -1626,10 +1625,6 @@ struct ConversationView: View {
                     if msg.callSummary != nil {
                         overlayState.callDetailMessage = msg
                     } else if msg.messageSource != .system {
-                        // Focal : l'aperçu élevé = pixels de la cellule vivante
-                        // (aucun second chemin de rendu). Bulles : nil → le
-                        // ThemedMessageBubble historique de l'overlay.
-                        overlayState.overlayFocalPreview = focalPreview
                         overlayState.overlayMessage = msg
                         overlayState.showOverlayMenu = true
                     }
@@ -2422,12 +2417,14 @@ struct ConversationView: View {
             MessageOverlayMenu(
                 message: msg,
                 contactColor: accentColor,
-                // Focal : la frame vient de la capture du contrôleur (le
-                // frame-tracker ne suit que les bulles) ; l'aperçu élevé est
-                // alors l'image de la cellule vivante.
-                messageBubbleFrame: overlayState.overlayFocalPreview?.frameInWindow
-                    ?? frameTracker.frame(for: msg.id) ?? .zero,
-                focalPreviewImage: overlayState.overlayFocalPreview?.image,
+                // Le frame-tracker ne suit que les BULLES : en Focal/Script il
+                // rend `nil`, donc `.zero`, et l'overlay présente son aperçu
+                // centré, à sa taille naturelle. C'est exactement ce que
+                // demande la directive du 2026-08-23 — « le mode focal, en
+                // long-press, doit afficher le message normal » — là où la
+                // capture de la cellule Focal en tranchait l'identité et la
+                // barre de méta, toutes deux à cheval sur son cadre.
+                messageBubbleFrame: frameTracker.frame(for: msg.id) ?? .zero,
                 isPresented: $overlayState.showOverlayMenu,
                 canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 canEdit: msg.isMe || isCurrentUserAdminOrMod,
