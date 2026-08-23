@@ -42,7 +42,31 @@ revu, **rien n'est écrit**.
       portent leur format).
 - [ ] **C4b** — Rupture cliente restante : `UpgradeGateView` (426) + porte iPad
       + porte de mise à jour
-- [ ] **C5** — Collage O12 (la surface décide) + « Mes stickers » LRU
+- [ ] **C5** — Collage O12 (la surface décide) + « Mes stickers » LRU.
+      **PÉRIMÈTRE ÉLARGI par la directive produit du 2026-08-23** : *« on doit
+      pouvoir coller des images, des documents dont les stickers, et ça doit
+      être pris en compte et propagé — sous iOS ET iPadOS. »* Le plan d'origine
+      ne nommait que des IMAGES ; or le composer sert quatre formats, dont le
+      post, qui porte des documents. Un collage limité aux images les aurait
+      avalés EN SILENCE — le pire comportement, le presse-papier ne disant
+      jamais pourquoi rien ne s'est passé.
+      **Le pipeline n'est pas à écrire, il est à RÉUTILISER** : constat vérifié
+      le 2026-08-23 — `ComposerDropResolver` + `ComposerIngestRouter`
+      (`apps/ios/Meeshy/Features/Main/Components/`) résolvent DÉJÀ image avec ou
+      sans fichier sous-jacent, document, vidéo, audio, refus des dossiers,
+      autorisation sandbox et toast nommant le fichier en échec. Ils sont
+      branchés sur la barre de conversation (`UniversalComposerBar`) et
+      `PostDetailView`. **Le composer de story/post/réel, lui, n'a AUCUN chemin
+      de collage** — zéro occurrence de `Paste`/`pasteboard` dans tout
+      `packages/MeeshySDK/Sources/MeeshyUI/Story/`. En écrire un second serait
+      se condamner à corriger deux fois chaque cas limite du presse-papier iOS.
+      **La règle a donc DEUX axes indépendants**, et non une table croisée : la
+      SURFACE décide du budget et de la mémorisation (`.scene` ⇒ 2048 px, pas
+      d'écriture bibliothèque ; `.stickers` ⇒ 512 px, écriture), le TYPE COLLÉ
+      décide du produit (image ⇒ objet média ou sticker ; vidéo/audio ⇒ objet
+      média ; **document ⇒ pièce jointe**, jamais un rejet muet). Une surface ne
+      peut pas transformer la NATURE de ce qui est collé.
+      **iPadOS fait partie de la définition de terminé**, pas d'un lot ultérieur.
 - [ ] **C6-C6b** — Capture appui long + AUTO-BROUILLON (fermeture & 426)
 - [ ] **C7-C7b** — Étagère 4 onglets + alt text + `allowSoundExtraction`
 
