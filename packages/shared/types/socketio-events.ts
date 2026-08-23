@@ -2426,7 +2426,24 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack: (response: { success: boolean }) => void) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: CallMediaToggleClientEvent) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: CallMediaToggleClientEvent) => void;
-  [CLIENT_EVENTS.CALL_END]: (data: { callId: string; reason?: string }, ack: (response: { success: boolean }) => void) => void;
+  /**
+   * L'ack est OPTIONNEL, et il l'est dans l'autre sens que celui de
+   * `CallMediaToggleClientEvent` (cycle 107 bis) — même symptôme, résolution
+   * inverse, parce que la mesure diffère.
+   *
+   * Là-bas l'ack a été RETIRÉ : aucun client ne l'envoyait, la passerelle ne
+   * l'appelait jamais, le déclarer était une promesse creuse. Ici il est REL :
+   * la passerelle l'invoque à chacune de ses sorties (`ack?.({ success })`,
+   * `CallEventsHandler` `CALL_EVENTS.END`) et iOS s'en sert par ses variantes
+   * `emitWithAck` (`MessageSocketManager.swift`). Mais elle le déclare `ack?:`
+   * et fonctionne sans, ce dont dépendent les émetteurs SANS ack : iOS
+   * (`emit("call:end", …)`), Android (`CallSignalManager.kt`) et les trois
+   * sites web.
+   *
+   * Le déclarer REQUIS interdisait donc le motif majoritaire que la passerelle
+   * soutient explicitement. Un contrat suit ce qui est, pas ce qu'on préfère.
+   */
+  [CLIENT_EVENTS.CALL_END]: (data: { callId: string; reason?: string }, ack?: (response: { success: boolean }) => void) => void;
   [CLIENT_EVENTS.CALL_HEARTBEAT]: (data: CallHeartbeatEvent) => void;
   [CLIENT_EVENTS.CALL_QUALITY_REPORT]: (data: CallQualityReportEvent) => void;
   [CLIENT_EVENTS.CALL_RECONNECTING]: (data: CallReconnectingEvent) => void;

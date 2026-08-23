@@ -1300,9 +1300,54 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle107-bis.md`
 - [ ] Suivi — trois services prennent encore un `Server` NU pour ÉMETTRE ; ni le
       balayage de réception (par construction) ni celui d'émission ne les couvre.
 
-## Cycle 108 — le `Server` NU, la porte qu'aucun balayage ne pouvait voir
+## Cycle 108 — le garde avait raison, et il gardait plus qu'un chiffre
 
 Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108.md`
+
+- [x] **`main` était ROUGE**, et pas d'un lint : le job `Quality (bun)` garde
+      tous les autres, donc Build et TOUTES les suites étaient `skipped`. Un
+      job-portier qui tombe ne dit pas « une vérification a échoué » mais « les
+      vérifications n'ont pas eu lieu » — bien plus grave que la couleur.
+- [x] **Le +1 du cliquet était le défaut PRODUIT**, pas une coquille. Le commit
+      précédent câblait `targetType` sur quatre sites et laissait le fil derrière
+      en écrivant « rien d'observable ne change ici » : l'inverse exact, puisque
+      le fil sert REEL et qu'un réel repartagé y devenait un POST. Relever la
+      baseline d'un cran l'aurait enterré.
+- [x] **Un garde qui attrape une occurrence n'a pas attrapé la famille.** Le
+      geste SEC était signalé (il LISAIT `.type` absent) ; la CITATION, elle,
+      OMETTAIT le champ — licite, donc silencieuse. Seule la relecture des deux
+      gestes côte à côte l'a montrée.
+- [x] **Le cliquet dérivait de 3 avec l'état du BUILD.** Son en-tête déclarait la
+      dérive absente parce que `paths` résout vers la source — vrai de l'ALIAS,
+      faux du PAQUET : un test de parité importe `packages/shared/dist` par
+      chemin RELATIF. 1243 sans build, 1240 avec. État ÉPINGLÉ (refus de mesurer)
+      plutôt qu'erreurs exclues, pour ne pas rendre ce fichier libre de dette.
+- [x] **Seize casts de socket côté web, DEUX formes.** Forme A
+      (`(socket as unknown).emit`) : pas une échappatoire mais une ERREUR de
+      compilation, 30 points de dette. Forme B
+      (`as unknown as { emit: (e: string, d: unknown) }`) : elle COMPILE et
+      fabrique un faux contrat permissif — aucun compteur ne la voit.
+- [x] **`call:end` : même symptôme qu'au 107 bis, résolution INVERSE.** L'ack y
+      avait été RETIRÉ (personne ne l'envoyait) ; ici la passerelle l'invoque et
+      iOS s'en sert par `emitWithAck`, donc il devient OPTIONNEL. Le réflexe
+      « retirer, comme la dernière fois » aurait cassé iOS.
+- [x] **Six casts de `messaging.service.ts` recopiaient le contrat à côté du
+      contrat** — partis sans une seule erreur, le contrat déclarait déjà tout.
+- [x] Gates : `tsc` passerelle/shared/agent 0 ; cliquet 1240 → **1209** sans
+      aucun fichier en hausse ; web 39/39+11/11+54/54+1/1 ; passerelle 2/2 (302).
+- [ ] Suivi — **la forme B est hors de portée du cliquet** : elle peut revenir
+      sans que rien ne rougisse. Un balayage textuel est la réponse, non écrit
+      ici pour ne pas ajouter un garde non éprouvé en fin de cycle.
+- [ ] Suivi — **`messageData` naît `Record<string, unknown>` et mute** : racine
+      du dernier cast, et mise en conformité avec la règle d'immuabilité. Touche
+      le chemin E2EE.
+- [ ] Suivi — **79 autres `(x as unknown).membre` dans `apps/web`**, hors socket.
+      ~1/3 de la dette web, mais chacun demande une décision de domaine.
+
+## Cycle 108 bis — le `Server` NU, la porte qu'aucun balayage ne pouvait voir
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108-bis.md`
+Écrit en PARALLÈLE du cycle 108 ci-dessus, sur le MÊME suivi, par une autre session.
 Suite directe des DEUX suivis du cycle 107 bis, tous deux instruits et réels.
 
 - [x] **Les deux suivis étaient bas sur le COMPTE.** Cinq casts côté web (pas

@@ -33,7 +33,11 @@ jest.mock('@/components/v2', () => ({
     <button onClick={onClick}>{children}</button>
   ),
   useToast: () => ({ addToast: mockAddToast }),
-  PostCard: () => <div />,
+  PostCard: ({ onRepost }: { onRepost?: () => void }) => (
+    <button data-testid="post-card-repost" onClick={() => onRepost?.()}>
+      Repost post
+    </button>
+  ),
   StoryTray: ({ onStoryPress }: { onStoryPress: (groupId: string) => void }) => (
     <button data-testid="story-tray-open" onClick={() => onStoryPress('author-2')}>Open story</button>
   ),
@@ -61,7 +65,26 @@ jest.mock('@/components/v2', () => ({
 
 jest.mock('@/components/v2/PostComposer', () => ({ PostComposer: () => null }));
 jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
-jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
+
+// Le modal de repost d'une CARTE du fil porte les DEUX gestes — repost sec et
+// citation. Les deux doivent miroiter le format de la source, donc le stub
+// expose les deux rappels plutôt que de rendre `null`.
+type RepostModalStubProps = {
+  onRepost?: () => void;
+  onQuote?: (content: string) => void;
+};
+jest.mock('@/components/v2/RepostModal', () => ({
+  RepostModal: ({ onRepost, onQuote }: RepostModalStubProps) => (
+    <div>
+      <button data-testid="repost-modal-repost" onClick={() => onRepost?.()}>
+        Repost
+      </button>
+      <button data-testid="repost-modal-quote" onClick={() => onQuote?.('mon commentaire')}>
+        Quote
+      </button>
+    </div>
+  ),
+}));
 jest.mock('@/components/v2/AudioPostComposer', () => ({ AudioPostComposer: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
@@ -115,6 +138,32 @@ jest.mock('@/hooks/social/use-statuses', () => ({
   useCreateStatusMutation: () => ({ mutate: jest.fn() }),
 }));
 
+// Le fil sert POST **et** REEL (`useFeedPosts` ne filtre pas le type) — c'est
+// exactement pourquoi la loi du miroir doit s'y appliquer : sans `targetType`,
+// le gateway retombe sur `?? POST` et le réel repartagé quitte le fil des réels.
+const mockFeedPosts = {
+  current: [] as Array<Record<string, unknown>>,
+};
+
+const reelPost = () => ({
+  id: 'reel-9',
+  authorId: 'author-3',
+  type: 'REEL',
+  visibility: 'PUBLIC',
+  content: 'Un réel',
+  likeCount: 0,
+  commentCount: 0,
+  repostCount: 0,
+  viewCount: 0,
+  bookmarkCount: 0,
+  shareCount: 0,
+  isPinned: false,
+  isEdited: false,
+  createdAt: '2026-08-01T00:00:00.000Z',
+  updatedAt: '2026-08-01T00:00:00.000Z',
+  author: { id: 'author-3', username: 'carol', displayName: 'Carol' },
+});
+
 jest.mock('@/hooks/queries/use-feed-query', () => ({
   useFeedQuery: () => ({
     data: { pages: [{ data: [] }] },
@@ -128,7 +177,7 @@ jest.mock('@/hooks/queries/use-feed-query', () => ({
     fetchNextPage: jest.fn(),
     refetch: jest.fn(),
   }),
-  useFeedPosts: () => [],
+  useFeedPosts: () => mockFeedPosts.current,
   usePrefetchPost: () => jest.fn(),
 }));
 
@@ -168,6 +217,7 @@ describe('PostsFeedScreen — minimal story repost', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockStoryVisibility.current = 'PUBLIC';
+    mockFeedPosts.current = [];
     mockRepostMutate.mockImplementation((_vars, opts) => opts?.onSuccess?.());
   });
 
@@ -232,5 +282,56 @@ describe('PostsFeedScreen — minimal story repost', () => {
     });
 
     await waitFor(() => expect(mockAddToast).toHaveBeenCalledWith('Error', 'error'));
+  });
+});
+
+/**
+ * Loi du miroir, moitié CARTE DU FIL (cycle 108).
+ *
+ * Le lot précédent a câblé `targetType` sur les quatre sites de story/réel mais
+ * a laissé le fil derrière, en le justifiant ainsi : « Le fil ne sert que POST
+ * et REEL, donc rien d'observable ne change ici ». C'est l'inverse — si le fil
+ * sert REEL, alors reposter un réel depuis le fil produit un POST, et c'est
+ * précisément la perte de nature que la loi existe pour empêcher.
+ *
+ * L'état `repostingPost` ne portait pas le champ `type` : le geste sec lisait
+ * `repostingPost.type` (donc `undefined`, et une erreur TS2339 qui a mis le
+ * cliquet de dette au rouge sur `main`), et la citation ne l'envoyait pas du
+ * tout. Les deux retombaient sur le `?? POST` du gateway.
+ */
+describe('PostsFeedScreen — la loi du miroir depuis une carte du fil', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockStoryVisibility.current = 'PUBLIC';
+    mockFeedPosts.current = [reelPost()];
+    mockRepostMutate.mockImplementation((_vars, opts) => opts?.onSuccess?.());
+  });
+
+  it('reposts a REEL from the feed as a REEL, not as a POST', async () => {
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('post-card-repost'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('repost-modal-repost'));
+    });
+
+    expect(mockRepostMutate).toHaveBeenCalledWith(
+      { postId: 'reel-9', data: { isQuote: false, targetType: 'REEL' } },
+      expect.anything(),
+    );
+  });
+
+  it('carries the source format through the QUOTE gesture too', async () => {
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('post-card-repost'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('repost-modal-quote'));
+    });
+
+    expect(mockRepostMutate).toHaveBeenCalledWith(
+      { postId: 'reel-9', data: { content: 'mon commentaire', isQuote: true, targetType: 'REEL' } },
+      expect.anything(),
+    );
   });
 });

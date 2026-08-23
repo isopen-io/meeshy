@@ -1,226 +1,187 @@
-# Cycle 108 — le `Server` NU : la porte qu'aucun des deux balayages ne pouvait voir
+# Cycle 108 — le garde avait raison, et il gardait plus qu'un chiffre
 
-Suite directe des deux suivis laissés par le cycle 107 bis, tous deux instruits
-et tous deux réels. Le lot ferme la TROISIÈME forme de la famille « porte
-d'émission » sur la passerelle, et la forme MIROIR sur le client web.
+Suivi direct du cycle 107 bis, dont le premier suivi neuf était : « le même
+cast, côté WEB ». Il en comptait trois. Il y en avait seize, sous deux formes.
 
-## 1. Le point de départ : deux suivis, et ce qu'ils cachaient
+Mais le cycle n'a pas commencé là. Il a commencé sur `main` en rouge.
 
-Le cycle 107 bis se clôt sur :
+---
 
-> - **Neuf — le même cast, côté WEB.** `apps/web` déclare pourtant un
->   `TypedSocket` et `VideoCallInterface.tsx` l'ouvre trois fois par
->   `(socket as unknown).emit(…)`.
-> - **Neuf** — trois services (`CallCleanupService`,
->   `StoryTextObjectTranslationService`, `NotificationService`) prennent encore
->   un `Server` NU pour ÉMETTRE.
+## 1. `main` était rouge, et rien ne tournait
 
-Les deux comptes étaient bas. Il y a **cinq** casts côté web, et **cinq**
-porteurs du `Server` nu côté passerelle — les trois services nommés, plus
-`AgentAdminRelay`, plus le helper PARTAGÉ `emitWithSeq`, qui prenait le `Server`
-nu pour le compte de tous ses appelants.
+La CI de `main` échouait depuis le matin, sur les quatre dernières exécutions.
+Un seul job en cause — `Quality (bun)` — mais il garde tous les autres : Build
+et **toutes** les suites de tests (passerelle, translator, audio, voix) étaient
+`skipped`. `main` n'avait donc plus aucun signal de test, pas seulement un lint
+rouge. C'est la propriété désagréable d'un job-portier : son échec ne se lit pas
+comme « une vérification a échoué » mais comme « les vérifications n'ont pas eu
+lieu », et la seconde est bien plus grave que ce que la couleur suggère.
 
-> **Un suivi hérité est une AFFIRMATION** (règle du cycle 107), et son COMPTE en
-> est une aussi (règle du cycle 93). Les deux se remesurent. Ici la piste était
-> juste sur l'adresse et basse sur le chiffre — l'inverse du cycle 107, où elle
-> était fausse sur le motif et juste sur l'adresse.
+L'étape fautive : `Type-check (apps/web — debt ratchet)`, 1240 erreurs pour une
+baseline de 1239. **+1.**
 
-## 2. Ce que le `Server` nu ne garde pas : mesuré, pas supposé
-
-`Server` sans paramètres de type retombe sur `DefaultEventsMap`, dont la
-signature est `emit(ev: string, ...args: any[])`. Injecté dans
-`StoryTextObjectTranslationService`, sous le `tsconfig` de production, prisma
-généré et `shared` construit :
-
-```ts
-this.io.to(ROOMS.feed(userId)).emit("totally:invented-event", { nothing: true });
-this.io.to(ROOMS.feed(userId)).emit(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, { wrong: "shape" });
-```
+## 2. Le +1 n'était pas une coquille de typage — c'était le défaut produit
 
 ```
-TSC_EXIT=0        ← zéro erreur, les DEUX lignes
+components/feed/PostsFeedScreen.tsx(596,85): error TS2339:
+  Property 'type' does not exist on type '{ id: string; author?: string; content?: string; }'
 ```
 
-Un nom d'événement **entièrement inventé** et une charge de forme **fausse**
-compilent l'un comme l'autre. Ce n'est pas un défaut de style : c'est l'absence
-totale de contrat, et c'est la forme exacte du défaut du cycle 101 —
-`message:edited` servi sans `senderId`/`messageType`/`createdAt`, rejeté en
-silence par tous les décodeurs iOS pendant des mois.
+Le commit précédent (`feat(web): le repost miroite le format de sa source`)
+câblait `targetType` sur les quatre sites de story et de réel, puis laissait le
+fil derrière avec cette justification, en commentaire dans le code :
 
-**~16 émissions temps réel traversaient ces portes**, dont les quatre familles de
-demande d'ami, `user:updated`, les compteurs et suppressions de notification,
-`call:ended` vers l'audience de terminaison complète, et les deux mises à jour de
-traduction de story.
+> « Le fil ne sert que POST et REEL, donc rien d'observable ne change ici. »
 
-### Pourquoi ni l'un ni l'autre des deux cliquets existants ne pouvait le voir
+C'est l'inverse. **Si le fil sert REEL, alors reposter un réel depuis le fil
+produit un POST** — la perte de nature que la loi du miroir existe pour
+empêcher, décrite mot pour mot dans la doc de `RepostRequest.targetType` :
+« Un réel y perdait aussi sa nature et quittait le fil des réels ».
 
-| cliquet | ce qu'il cherche | pourquoi il rate celui-ci |
+L'état `repostingPost` ne portait pas `type`. Donc :
+
+| geste | ce qu'il envoyait | signalé ? |
 |---|---|---|
-| `ServerEmitRatchet` (type, cycle 104) | ce que la porte REFUSE | il garde `serverEmit.ts` ; ces services ne l'importaient pas |
-| `sweepUntypedEmitDoors` (cycle 104/105) | une signature `emit` RÉÉCRITE trop librement | il n'y a **aucune** signature `emit` à trouver — rien n'est réécrit |
+| repost sec (l. 596) | `targetType: undefined` | oui — le TS2339 ci-dessus |
+| citation (l. 611) | **rien du tout** | **non** |
 
-> **Chercher une forme fautive par sa DÉCLARATION, c'est manquer tous les sites
-> qui l'obtiennent autrement.** La règle est écrite au cycle 105 pour le CAST.
-> Elle a une troisième instance, et c'est la plus discrète des trois : ne rien
-> écrire du tout, et prendre le type nu de la dépendance. Il n'y a ni
-> déclaration ni assertion à chercher — seulement un import qui a l'air normal.
+Les deux retombaient sur le `?? POST` de la passerelle. Les sites frères
+l'envoient pourtant sur leurs DEUX gestes (`reel/[postId]` 203 et 218,
+`feeds/post/[postId]` 202 et 223). Le fil était le seul site où la loi était
+ÉCRITE sans être CÂBLÉE — et c'est la surface de repost la plus fréquentée.
 
-## 3. Ce que le lot change
+**Ce que le cliquet a démontré au passage.** Il n'a pas attrapé une erreur de
+frappe : il a attrapé le défaut que le commit précédent croyait avoir corrigé.
+Relever la baseline d'un cran — le geste qui « débloque la CI » — l'aurait
+enterré. Un budget de dette n'est pas qu'un budget : c'est un filet sous les
+corrections incomplètes.
 
-**La porte élargie** (`socketio/serverEmit.ts`) — à la MESURE de ce que les
-porteurs font réellement, jamais une recopie de socket.io :
+La citation, elle, n'a été trouvée par aucun garde. Elle OMETTAIT le champ, et
+omettre un champ optionnel est licite. Le compilateur voyait la moitié bruyante
+du défaut ; la moitié silencieuse ne se lisait qu'en relisant les deux gestes
+côte à côte. **Un garde qui attrape une occurrence n'a pas attrapé la famille.**
 
-- `ServerEmitIO.to` accepte désormais `string | string[]` — `CallCleanupService`
-  diffuse `call:ended` vers l'audience complète en une émission. Élargir un
-  PARAMÈTRE est contravariant : les dizaines de sites qui passent une chaîne
-  restent vérifiés à l'identique.
-- `ServerEmitIOWithRooms` ajoute `in(room).fetchSockets()` — deux services
-  diffusent ET inspectent la room qu'ils viennent de servir (présence avant
-  repli e-mail ; éviction après terminaison d'appel). `ServerRoomSocket` est
-  réduit à `leave` : c'est tout ce qu'on en lit, et `NotificationService` n'en
-  lit même que la LONGUEUR.
+## 3. Le cliquet dérivait de 3 avec l'état du build
 
-**Les cinq porteurs retypés** : `NotificationService`, `CallCleanupService`,
-`StoryTextObjectTranslationService`, `AgentAdminRelay`, et `emitWithSeq` — ce
-dernier n'utilisait déjà son `io` que pour `.to()`, et émettait par
-`emitServerEvent` : sa charge était gouvernée, son CANAL ne l'était pas.
+Son en-tête énumère trois sources de dérive et les déclare absentes, dont :
 
-**Résultat de la fermeture : `tsc` 0 erreur.** Les ~16 charges étaient déjà
-justes. C'est le résultat le plus honnête à publier — et il ne rend pas le lot
-vide, il le rend VÉRIFIABLE : ce qui était vrai par accident est désormais vrai
-par construction, et le restera.
+> `@meeshy/shared` is resolved by web's `paths` to the shared package's SOURCE,
+> not to its `dist/`, so whether shared was built does not matter.
 
-> **Une charge NON gouvernée ne se trompe jamais** (cycle 94) — il n'y a pas de
-> contrat à contredire. Le cycle 107 bis a trouvé quatre divergences en fermant
-> sa porte ; celui-ci n'en trouve aucune. Les deux issues sont le même geste, et
-> annoncer une divergence qu'on n'a pas mesurée coûte la confiance dans les
-> cycles où il y en a une (règle du cycle 103).
+**Vrai de l'ALIAS, faux du PAQUET.**
+`__tests__/lentille/shared-law-dist-parity.test.ts` atteint la sortie construite
+par chemin RELATIF (`../../../../packages/shared/dist/utils/*.js`), ce qui ne
+consulte jamais `paths`. Mesure sur un arbre INCHANGÉ : **1243 sans le build,
+1240 avec.** Une dérive de exactement 3.
 
-## 4. La preuve du ROUGE, dans les deux sens
+Le défaut est celui de l'en-tête, pas du test : un test dont l'objet est de
+comparer la source au `dist/` doit évidemment importer `dist/`.
 
-**Après** fermeture, la MÊME mutation :
+Le coût a été payé dans ce cycle même : j'ai lu 1243, cru à une régression de 4,
+et cherché trois erreurs qui n'existaient pas. Le sens inverse est pire — une
+baseline prise un jour depuis un poste sans build offrirait 3 points
+silencieusement dépensables, ce que ce cliquet existe précisément pour empêcher.
 
-```
-src/services/posts/StoryTextObjectTranslationService.ts(163,45): error TS2345:
-  Type '"totally:invented-event"' is not assignable to type '"heartbeat:ack"'.
-src/services/posts/StoryTextObjectTranslationService.ts(164,88): error TS2345:
-  Object literal may only specify known properties, and 'wrong' does not exist
-  in type 'StoryTranslationUpdatedEventData'.
-```
+**L'état est ÉPINGLÉ plutôt que les erreurs exclues.** Exclure ces trois-là par
+chemin (comme `.next/` l'est) stabiliserait aussi le chiffre, mais rendrait ce
+fichier libre de toute dette à jamais. Refuser de mesurer dans un état indéfini
+ne coûte rien et garde chaque fichier compté. Self-test étendu aux trois états
+(absent, construit, **vide** — un build interrompu produit les mêmes TS2307).
 
-Zéro erreur avant, deux après, sur des lignes identiques.
+## 4. Seize casts, deux formes, et la seconde est la nuisible
 
-**Et le balayage tombe aussi** — `AgentAdminRelay` rendu à son `Server` nu :
+Le contrat existait déjà : `TypedSocket = Socket<ServerToClientEvents,
+ClientToServerEvents>`, et `getSocket()` le rend typé.
 
-```
-+ "file": "socketio/AgentAdminRelay.ts"
-Tests: 1 failed, 5 passed
-```
+**Forme A — `(socket as unknown).emit(…)`, 9 sites.**
+Ce n'est pas une échappatoire : `.emit` sur un `unknown` est une **erreur de
+compilation**. 30 des 1239 erreurs du cliquet venaient de là. Le geste avait
+l'apparence d'un contournement et l'effet d'une panne. Vraisemblablement une
+transformation `as any` → `as unknown` passée en masse pour satisfaire la règle
+« pas de `any` » : elle a converti des types SUPPRIMÉS en dette COMPTÉE.
 
-Les deux gardes sont DISJOINTES et aucune ne subsume l'autre : la première voit
-une porte RELÂCHÉE, la seconde une porte CONTOURNÉE — rien n'oblige un émetteur
-neuf à importer `serverEmit.ts`.
+**Forme B — `(socket as unknown as { emit: (e: string, d: unknown) => void })`, 7 sites.**
+Celle-ci **compile**. Elle ne contourne pas le contrat : elle en fabrique un
+FAUX, permissif, qui accepte n'importe quel nom d'événement et n'importe quelle
+charge. Aucun compteur ne la voit — ni avant, ni après.
 
-## 5. Le balayage, et son étroitesse assumée
+Trois fonctions de `CallManager` déclaraient en outre `socket: unknown` en
+PARAMÈTRE (le contrat jeté à la signature), alors que les trois appelants
+passent tous le retour typé de `getSocket()`.
 
-`sweepRawServerEmitters` — inventaire VIDE, aucune liste d'exemptions.
+## 5. Ce que le contrat a trouvé une fois appliqué
 
-Discriminant : le fichier importe `Server` depuis `socket.io` en **`import type`**
-ET contient `.emit(`. Les deux conditions comptent :
+`call:end` déclarait son ack **REQUIS**. Il ne l'est pas.
 
-- **`import type`** exclut `MeeshySocketIOManager`, qui importe `Server` en
-  VALEUR parce qu'il le CONSTRUIT (`new SocketIOServer(httpServer, …)`). C'est le
-  seul site du dépôt qui le peut ; lui interdire l'import n'aurait aucun sens.
-- **`.emit(`** exclut par CONSTRUCTION tout fichier qui détient un `Server` sans
-  jamais émettre. Détenir n'est pas émettre — sans cette condition, le balayage
-  mesurerait la popularité d'un import au lieu d'une propriété.
+| bout | réalité mesurée |
+|---|---|
+| passerelle | enregistre `ack?:`, invoque `ack?.({ success })` partout → fonctionne sans |
+| iOS | émet les DEUX façons — `emit("call:end", …)` et `emitWithAck` |
+| Android | `CallSignalManager.kt` — sans ack |
+| web | trois sites — sans ack |
 
-C'est la réponse directe aux **sept faux positifs du cycle 107**, dont le
-balayage a été JETÉ plutôt que gelé : geler un inventaire faux transforme une
-erreur de mesure en vérité de dépôt, et un cliquet ment plus longtemps qu'un
-journal.
+Le déclarer requis **interdisait le motif majoritaire que la passerelle soutient
+explicitement**.
 
-> **Une erreur commise en écrivant un cliquet est le meilleur cas de test qu'il
-> aura jamais** (cycle 104). Première rédaction de `rawServerAliases` : un `exec`
-> simple, qui ne rend que le PREMIER import du fichier — un fichier important
-> `Server` puis `Server as SocketIOServer` sur deux lignes aurait laissé le
-> second alias traverser en silence. Sa propre fixture l'a pris en défaut, et
-> porte les deux formes pour cette raison.
+C'est le même symptôme que `CallMediaToggleClientEvent` au cycle 107 bis et la
+résolution **INVERSE**, parce que la mesure diffère : là-bas l'ack a été RETIRÉ
+(personne ne l'envoyait, la passerelle ne l'appelait jamais) ; ici il est réel et
+devient donc OPTIONNEL. **Un même symptôme sur un ack a deux résolutions justes,
+et seule la mesure des deux bouts dit laquelle.** Le réflexe « retirer, comme la
+dernière fois » aurait cassé les variantes `emitWithAck` d'iOS.
 
-### Vérification de complétude : les quatre importateurs restants
+## 6. Sur le chemin de messagerie : six casts recopiaient le contrat à côté du contrat
 
-Un inventaire vide est une AFFIRMATION. Les quatre fichiers de production qui
-importent encore `socket.io` ont été ouverts un par un plutôt que comptés :
+Les six `.on` de `messaging.service.ts` sont partis **sans une seule erreur** :
+le contrat déclarait déjà ces six événements avec exactement les charges que les
+listeners transcrivaient à la main. Les casts ne compensaient aucun manque — ils
+dupliquaient ce qui existait. Leurs voisines immédiates (`MESSAGE_CONSUMED`,
+`MENTION_CREATED`) s'écrivaient d'ailleurs déjà sans cast : le fichier était
+incohérent avec lui-même.
 
-| fichier | import | verdict |
-|---|---|---|
-| `socketio/typed-socket.ts` | `type { Server, Socket }` | **c'est le fichier qui PARAMÈTRE le `Server` nu** (`MeeshyIOServer = Server<ClientToServerEvents, ServerToClientEvents>`) — exactement ce qu'il faut en faire. Exclu par les DEUX conditions : son seul `.emit(` est dans un commentaire, et `= Server<` n'est pas `: Server` |
-| `socketio/MeeshySocketIOManager.ts` | `Server` en VALEUR | le CONSTRUIT (`new SocketIOServer(…)`) — seul site du dépôt qui le puisse |
-| `socketio/utils/socket-helpers.ts` | `type { Socket }` | `Socket`, pas `Server` — autre famille |
-| `utils/socket-rate-limiter.ts` | `Socket` | idem |
+Le septième (`emitWithTimeout`) n'est **pas entièrement résolu**, et c'est
+délibéré. Son nom d'événement est désormais vérifié ; sa charge ne l'est pas,
+parce que corréler nom→charge exige un `messageData` TYPÉ, or il naît
+`Record<string, unknown>` et se complète par MUTATION (chiffrement, pièces
+jointes). Le typer suppose de rendre cette construction immuable — ce que le
+style du dépôt demande par ailleurs, et qui touche le chemin E2EE. Lot à part,
+consigné, pas forcé à la fin d'un cycle.
 
-Et les deux services frères (`agent`, `translator`) n'importent `socket.io` nulle
-part : la passerelle est le seul émetteur du dépôt, et le balayage la couvre en
-entier.
-
-## 6. Le miroir web — ce que le cycle 107 bis avait déjà débloqué sans le savoir
-
-`VideoCallInterface.tsx` portait cinq `(socket as unknown).emit(…)`, alors que
-`getSocket()` rend un `Socket<ServerToClientEvents, ClientToServerEvents>` et
-que la ligne 199 du MÊME fichier émet sans cast.
-
-Ces casts n'étaient pas gratuits : `CallMediaToggleClientEvent` exigeait
-`mediaType` et `participantId` et un ack, quand le web n'envoie que
-`{ callId, enabled }`. **Le cycle 107 bis a mesuré ce que les clients envoient
-réellement et corrigé le contrat** — rendant les cinq casts sans objet le jour
-même, sans que personne le remarque.
-
-> **Le lot qui rend une chose possible doit relire ce qui la déclarait
-> impossible** (cycle 105). Ici la variante est plus douce et tout aussi
-> coûteuse : un lot peut rendre un contournement INUTILE sans que le
-> contournement disparaisse. Il reste alors en place, et continue de soustraire
-> son site à toute vérification pour une raison qui n'existe plus.
-
-Retirés : dette web **1239 → 1234**, cinq points, **un par cast** — la mesure
-exacte de ce qu'un `as unknown` coûtait. Les cinq émissions d'appel du web sont
-désormais vérifiées contre `ClientToServerEvents`. Les six autres erreurs du
-fichier (`window`, `constraints`, `event`) sont sans rapport avec le contrat
-Socket.IO : hors du lot, toujours dans la dette.
+**Ce lot ne bouge pas le cliquet (1209 → 1209), et c'est sa leçon.** La forme B
+compile : son retrait n'est pas chiffrable. Un progrès réel peut être invisible
+au garde qui mesure — et le corollaire est plus inquiétant : la forme B peut
+revenir sans que rien ne rougisse.
 
 ## 7. Gates
 
-- `tsc --noEmit` passerelle : **0 erreur** — code de sortie lu DIRECTEMENT,
-  jamais à travers un pipe (règle du cycle 107 bis : le code de retour d'un
-  pipeline est celui de sa dernière commande).
-- `tsc --noEmit` shared : **0 erreur**.
-- `scripts/check-type-debt.sh` : vert à 1234, baseline abaissée avec sa raison.
-- Suite passerelle complète : voir §9.
-- Balayage `server-emit-door-sweep` : 6/6, inventaire de production VIDE sur les
-  deux formes, RED prouvé sur les deux fixtures ET sur une régression réelle.
+- `tsc` passerelle / shared / agent : **0 erreur** (prisma généré).
+- Cliquet web : 1240 (rouge) → **1209**, aucun fichier en hausse
+  (`CallManager` 31→6, `VideoCallInterface` 11→6 ; le reste de ces fichiers
+  appartient à une autre famille — `window`, `constraints`, `event`).
+- Suites web : appels 39/39 (391 témoins) + 11/11 (127), services 54/54 (1791),
+  cache-sync 1/1 (93), repost 6/6 (dont **2 RED prouvés** avant correction).
+- Suites passerelle : `CallEventsHandler` 2/2 (302 témoins).
 
-## 8. Note de mesure — le cliquet de dette et son en-tête
+## 8. Suivis
 
-L'en-tête de `check-type-debt.sh` affirme que l'absence du client Prisma « ne
-change rien » pour `apps/web`. Mesuré ici : **1242 sans prisma généré, 1239
-avec**. L'affirmation est donc fausse de trois points — sans conséquence sur le
-cliquet (la CI génère toujours), mais c'est une affirmation d'en-tête qui n'a
-jamais été confrontée, exactement la famille que le cycle 94 nomme. Non corrigée
-dans ce lot : la mesurer proprement (quel import de web atteint le client) est un
-lot à soi.
-
-## 9. Suivis
-
-- [ ] **La bivariance reste la limite, et elle est générale** (hérité, 107 bis).
-      `strictFunctionTypes: false` ⇒ aucune porte typée n'attrape une charge
-      divergente assignable dans un seul sens. Décision à instruire, elle dépasse
-      Socket.IO.
-- [ ] Hérité (106) — la LECTURE depuis Redis reste non validée à l'exécution.
-- [ ] Hérité — `_seq` n'est déclaré que sur `NotificationEventData`.
-- [ ] Hérité — `ReactionUpdateEvent` / `ReactionUpdateEventData`, deux
-      exemplaires de la même déclaration.
-- [ ] Hérité — `ConversationUpdatedEventData` et sa signature d'index.
-- [ ] **Neuf** — les six `as unknown` restants de `VideoCallInterface.tsx`
-      (`window.__preauthorizedMediaStream`, `constraints.facingMode`, `event`).
-      Aucun ne touche le contrat Socket.IO ; le premier nomme un canal
-      window-global entre deux composants, qui mérite un type.
-- [ ] **Neuf** — l'en-tête du cliquet de dette (§8), fausse de trois points.
+- [ ] **La forme B est hors de portée du cliquet.** Reintroduire un
+      `(socket as unknown as { emit: … })` ne rougit rien. C'est le seul garde
+      manquant de cette famille — un balayage textuel, sur le modèle du
+      `client-receive-door-sweep` du cycle 107 bis, est la réponse ; il n'a pas
+      été écrit ici pour ne pas ajouter un garde non éprouvé en fin de cycle.
+- [ ] **`messageData` naît `Record<string, unknown>` et se complète par
+      mutation** (`messaging.service.ts` l. 333–377). C'est la racine du dernier
+      cast, et le typer est aussi une mise en conformité avec la règle
+      d'immuabilité du dépôt. Touche le chemin E2EE — à faire avec ses témoins.
+- [ ] **79 autres sites `(x as unknown).membre` dans `apps/web`**, hors socket
+      (`window`, `user`, `conversation`, `constraints`…). Même transformation en
+      masse, même effet : des types supprimés devenus dette comptée. Chacun
+      demande une décision de domaine (le champ manque-t-il vraiment au type ?),
+      donc ce n'est pas un balayage mécanique — mais c'est ~1/3 de la dette web.
+- [ ] Suivi hérité (107 bis) — **la bivariance reste la limite générale.**
+      `strictFunctionTypes: false` : aucune porte typée n'attrape une charge
+      divergente. Décision qui dépasse Socket.IO.
+- [ ] Suivi hérité — trois services de la passerelle prennent encore un `Server`
+      NU pour ÉMETTRE.
+- [ ] Suivi hérité (106) — la LECTURE depuis Redis reste non validée à
+      l'exécution.
