@@ -47,6 +47,8 @@ public protocol PostServiceProviding: Sendable {
     /// de valeur par défaut, et tout double de test aurait cessé de conformer
     /// d'un coup — même patron que `createStory(… mentions:)`.
     func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost
+    /// Création porteuse d'une AUDIENCE NOMMÉE (`EXCEPT`/`ONLY`).
+    func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost
     func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?) async throws -> APIPost
     /// Même édition, plus le tri-état des références déclarées. Requirement
     /// SÉPARÉE et non un paramètre ajouté à la précédente : les protocoles
@@ -157,6 +159,13 @@ public extension PostServiceProviding {
         try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location)
     }
 
+    /// Défaut : un conformeur qui ne sait pas porter d'audience nommée
+    /// (mocks) retombe sur la signature sans liste — la visibilité part,
+    /// la liste est ignorée. `PostService` la surcharge réellement.
+    func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost {
+        try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions)
+    }
+
     /// Convenience texte-seul (attachements = nil). Préserve les appels existants
     /// depuis que `addComment` porte `attachmentIds` / `mobileTranscription` /
     /// `originalLanguage` (les protocoles Swift ne supportent pas les valeurs par défaut).
@@ -251,6 +260,20 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     /// lieu plus bas.
     public func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost {
         let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions)
+        let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
+        return response.data
+    }
+
+    /// Création porteuse d'une AUDIENCE NOMMÉE (`EXCEPT`/`ONLY`).
+    ///
+    /// `CreatePostRequest` portait déjà le champ ; aucune surcharge ne le
+    /// remplissait. Un post ne pouvait donc naître qu'en PUBLIC, FRIENDS,
+    /// COMMUNITY ou PRIVATE — les deux visibilités à liste étaient offertes
+    /// au composer story et hors d'atteinte du composer post, sans que rien
+    /// ne le dise. Le gateway, lui, les valide depuis toujours
+    /// (`CreatePostSchema` rejette un EXCEPT/ONLY sans destinataire).
+    public func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost {
+        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, visibilityUserIds: visibilityUserIds, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }
