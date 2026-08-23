@@ -1081,7 +1081,7 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle104.md`.
       inchangé** (préexistantes, fichiers de test, aucune sur les 3 fichiers
       touchés) · shared **103 suites / 2467 tests** (18 nouveaux) · web
       messaging **117/117** + ConversationLayout · gateway 39 suites adjacentes
-      **1274/1274** puis suite complète.
+      **1274/1274** puis suite complète VERTE (exit 0).
 - [ ] Suivi — un message de LIEU sans pièce jointe reste `'text'`, et iOS se
       tait toujours. Non traité ici sur MESURE : `'location'` n'est pas dans
       l'enum de la route REST, donc le combler touche la route, l'enum, iOS et

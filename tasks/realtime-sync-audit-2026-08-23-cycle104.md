@@ -173,7 +173,7 @@ existe.
   trois fichiers touchés.
 - shared **103 suites / 2467 tests verts** (18 nouveaux)
 - web `messaging.service` **117/117** + `ConversationLayout` **139/139 cumulé**
-- gateway : 39 suites adjacentes **1274/1274**, puis suite complète
+- gateway : 39 suites adjacentes **1274/1274**, puis **suite complète verte** (exit 0)
 
 ---
 
