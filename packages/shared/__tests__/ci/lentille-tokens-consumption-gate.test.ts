@@ -329,6 +329,23 @@ describe('Garde d\'ensemble des tokens Lentille (R-b) — déclaré ⇒ consomm�
     ).toEqual([]);
   });
 
+  /// Sens SYMÉTRIQUE, qui manquait : la garde ci-dessus ne teste que
+  /// JSON → table. Une famille supprimée du JSON laissait donc une entrée
+  /// PÉRIMÉE dans la table, en silence — exactement le motif « ligne d'audit
+  /// périmée » que ce dépôt combat ailleurs. Constaté le 2026-08-23 en
+  /// retirant `list.previewBubble` et `list.members`.
+  it('SWIFT_SYMBOL_BY_FAMILY ne garde aucune entrée orpheline (sens table → JSON)', () => {
+    const declared = new Set(allFamilies.map(({ section, family }) => `${section}.${family}`));
+    const orphaned = Object.keys(SWIFT_SYMBOL_BY_FAMILY).filter((key) => !declared.has(key));
+
+    expect(
+      orphaned,
+      `Entrée(s) de SWIFT_SYMBOL_BY_FAMILY sans famille correspondante dans ` +
+        `lentille-tokens.json : ${orphaned.join(', ')}. La famille a été supprimée — ` +
+        'supprimer la ligne avec elle.',
+    ).toEqual([]);
+  });
+
   it('les deux fichiers de définition Swift existent bien (chemins non périmés)', () => {
     for (const path of IOS_DEFINITION_FILES) {
       expect(() => readFileSync(path, 'utf8'), `fichier introuvable : ${path}`).not.toThrow();

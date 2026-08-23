@@ -1,7 +1,7 @@
 {
   "terms": {
     "title": "Terms of Service",
-    "lastUpdated": "Last updated: January 1, 2026",
+    "lastUpdated": "Last updated: August 23, 2026",
     "intro": "By accessing and using Meeshy, you agree to be bound by these terms of service.",
     "backHome": "Back to home",
     "print": "Print",
@@ -43,6 +43,7 @@
       "title": "5. User Content",
       "ownership": "You retain all rights to the content you create and share through Meeshy. By using our service, you grant us a limited license to process, store, and transmit your content as necessary to provide the service.",
       "responsibility": "You are solely responsible for the content you share. We do not endorse, support, or guarantee the accuracy of user-generated content.",
+      "attribution": "In return, we undertake to credit the author of any published content, including content that is forwarded or reshared, wherever its origin can be traced. This is a best-efforts commitment: the credit may be missing or incomplete where our systems do not retain that link, or where the privacy settings of the people concerned, including the author's, prevent it.",
       "license": "By submitting content, you grant Meeshy a worldwide, non-exclusive, royalty-free license to use, reproduce, and process your content solely for the purpose of providing and improving our services."
     },
     "limitation": {
