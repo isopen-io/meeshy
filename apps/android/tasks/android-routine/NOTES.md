@@ -5,6 +5,23 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-23 — copy+patch needs the `package.xml` `path=` attribute too, not only `<api-level>` (else "inconsistent location")
+
+Slice `story-text-element-fade-timing`. Ran the full copy+patch below (patched `source.properties` **and**
+`package.xml`'s `<api-level>37.0</api-level>`→`37`) — and the first `./gradlew` STILL died with
+**`Failed to find target with hash string 'android-37'`**, this time with the telltale line
+*"Observed package id 'platforms;android-37.0' in inconsistent location '.../android-37' (Expected
+'.../android-37.0')"*. Cause: the copied dir's `package.xml` still carried `path="platforms;android-37.0"`,
+so AGP treated the `android-37` folder as a misplaced `android-37.0` and refused it. The missing patch:
+```bash
+sed -i 's|path="platforms;android-37.0"|path="platforms;android-37"|' android-37/package.xml
+```
+With `<api-level>` **and** `path=` **and** `source.properties` all patched, `assembleDebug testDebugUnitTest`
+was BUILD SUCCESSFUL (973 tasks). Net: on THIS image the copy+patch needs THREE edits (source.properties
+ApiLevel, package.xml `<api-level>`, package.xml `path=`). The earlier 08-23 notes patched only the first two
+and worked — the images differ; patch all three to be safe, and read the first `./gradlew` error: an
+"inconsistent location" line means the `path=` attribute is the one still lying.
+
 ## 2026-08-23 — copy+patch needs `package.xml` too, not only `source.properties` (else the hash-string failure persists)
 
 Slice `story-text-element-font-size`. Ran the documented copy+patch (below) but patched **only**
