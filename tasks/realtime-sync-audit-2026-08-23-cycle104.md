@@ -183,6 +183,21 @@ dans un fichier que personne n'importe n'est jamais lu par le compilateur —
 donc jamais rouge. (C'est ce qui a d'abord rendu une sonde de ce lot
 trompeusement verte.)
 
+**Et ce qui les rend rouges EN CI est `ts-jest`, pas `tsc --noEmit`.** La
+première rédaction de ce lot affirmait le contraire — « `tsc --noEmit` est un
+gate de CI » — et c'était FAUX : l'étape « Type-check » de `ci.yml` porte
+`continue-on-error: true`, comme « Lint ». Un `tsc` rouge ne fait échouer aucun
+job. Ce qui bloque est le job de TEST : `ts-jest` compile ce module parce que les
+suites l'atteignent par leurs imports, et `TS2344` n'est pas dans son
+`diagnostics.ignoreCodes`. Vérifié en relâchant `ServerEmitArgs` : la suite
+`broadcastMessageMutation` refuse de se charger en nommant les trois lignes.
+
+> **Corollaire, et il vaut au-delà de ce lot : un fichier de production
+> qu'AUCUN test n'atteint n'a, en CI, aucune vérification de type du tout.**
+> C'est exactement la règle que le dépôt applique déjà aux commentaires — un
+> énoncé de contrainte est une AFFIRMATION, et se vérifie comme telle. Celui-ci
+> a failli partir non vérifié, dans le lot dont c'est le sujet.
+
 **RED prouvé, et les quatre assertions ne sont pas redondantes** :
 
 | mutation de `ServerEmitArgs` | assertions qui tombent |

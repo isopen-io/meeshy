@@ -1430,6 +1430,26 @@ n'importe n'est jamais lu — donc jamais rouge. `ServerEmitRatchet` vit donc da
 `serverEmit.ts` lui-même, en assertions d'assignabilité (`Assert<T extends true>`),
 sans une ligne exécutable.
 
+**Et ce qui rend un cliquet de type rouge EN CI est `ts-jest`, pas
+`tsc --noEmit`.** Mesuré : l'étape « Type-check » de `.github/workflows/ci.yml`
+porte `continue-on-error: true` (comme « Lint »), donc un `tsc` rouge ne fait
+échouer aucun job. Ce qui bloque, c'est le job de TEST — `ts-jest` compile tout
+fichier de production que les suites atteignent par leurs imports, et le code
+d'erreur d'une assertion de type (`TS2344`) n'est pas dans son
+`diagnostics.ignoreCodes` (`[2307, 2322, 2339, 2345, 2740]`).
+
+> **Corollaire, et il vaut au-delà des cliquets : un fichier de production
+> qu'AUCUN test n'atteint n'a, en CI, aucune vérification de type du tout.**
+> Avant de compter sur un garde au TYPE, vérifier que le fichier qui le porte est
+> atteint depuis une suite — sinon poser le garde ailleurs, ou l'écrire en
+> témoin.
+
+Noter aussi les codes IGNORÉS par `ts-jest` : `2322` et `2345` sont exactement
+ceux qu'un couple `(événement, charge)` dépareillé produit. Un TEST peut donc
+émettre un couple faux sans rougir — c'est sans conséquence (un double a le droit
+d'être permissif), mais cela veut dire qu'**un témoin ne peut pas servir de
+cliquet pour ces deux codes-là**. Seule la production les porte.
+
 **Et un cliquet de type ne suffit pas** : une porte RELÂCHÉE et une porte
 CONTOURNÉE sont deux régressions distinctes, la seconde étant la plus probable —
 rien n'oblige un nouvel émetteur à importer `serverEmit.ts`.

@@ -163,13 +163,25 @@ export interface ServerEmitSocket {
  * Une porte typée qu'on peut relâcher sans qu'un témoin tombe n'est pas une
  * garde, c'est une décoration : les huit surfaces que ce module remplace ont
  * chacune été écrite de bonne foi. Ces alias échouent à la COMPILATION si la
- * porte cesse de refuser ce pour quoi elle existe, et `tsc --noEmit` est un gate
- * de CI — le cliquet est donc gardé par le même outil que la production.
+ * porte cesse de refuser ce pour quoi elle existe.
  *
- * Ils vivent ICI, dans le module qu'ils gardent, plutôt que dans `__tests__/` :
- * `tsconfig.json` EXCLUT les tests, et n'inclut `src/socketio/**` que par
- * atteignabilité depuis `server.ts`. Un cliquet posé dans un fichier que
- * personne n'importe n'est jamais lu par le compilateur — donc jamais rouge.
+ * **Ce qui les rend ROUGES en CI est `ts-jest`, pas l'étape de type-check** — et
+ * c'est mesuré, pas supposé : l'étape « Type-check » de `ci.yml` est
+ * `continue-on-error: true`, donc un `tsc --noEmit` rouge ne fait échouer aucun
+ * job. Ce qui bloque, c'est le job de TEST : `ts-jest` compile ce module parce
+ * que les suites l'atteignent par leurs imports, et `TS2344` n'est pas dans son
+ * `diagnostics.ignoreCodes`. Vérifié en relâchant `ServerEmitArgs` : la suite
+ * `broadcastMessageMutation` refuse de se charger, en nommant les trois lignes.
+ *
+ * Corollaire à ne pas perdre : **un fichier de production qu'AUCUN test
+ * n'atteint n'a, en CI, aucune vérification de type du tout.** Ce module-ci est
+ * atteint largement ; un cliquet posé ailleurs doit se poser la question.
+ *
+ * Ces alias vivent ICI, dans le module qu'ils gardent, plutôt que dans
+ * `__tests__/` : `tsconfig.json` EXCLUT les tests, et n'inclut `src/socketio/**`
+ * que par atteignabilité depuis `server.ts`. Un cliquet posé dans un fichier que
+ * personne n'importe n'est lu par aucun des deux compilateurs — donc jamais
+ * rouge, ni en local ni en CI.
  * ------------------------------------------------------------------------- */
 
 /** Échoue à compiler dès que `T` n'est plus `true`. */
