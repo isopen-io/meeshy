@@ -105,7 +105,16 @@ NC='\033[0m'
 # contrat existait déjà (`TypedSocket`, `getSocket()` le rend typé) : ces casts ne
 # désactivaient aucune vérification, ils en FABRIQUAIENT l'échec — `.emit` sur un
 # `unknown` est une erreur à chaque site. Aucun fichier n'a monté.
-readonly WEB_BASELINE=1209
+# 1209 → 1200 au Vague 166 (instruit en parallèle du cycle 108, sur le même
+# suivi cycle-107-bis) : neuf erreurs restantes que ce lot-là avait laissées
+# vivre sur les MÊMES fichiers — cinq listeners `CallManager.attachedListeners`
+# passaient encore `data: unknown` tel quel aux handlers typés (`data as
+# CallXEvent` au point d'écoute, où le contrat serveur garantit la forme),
+# trois `VideoCallInterface.handleParticipantLeft(event: unknown)` typé
+# `CallParticipantLeftEvent`, et un `(event as unknown).anonymousId` mort
+# dupliqué dans `CallManager` (déjà retiré côté `VideoCallInterface` au
+# Vague 133 — le champ n'existe pas sur `CallParticipantLeftEvent`).
+readonly WEB_BASELINE=1200
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
