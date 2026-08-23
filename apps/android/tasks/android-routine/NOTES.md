@@ -5,6 +5,24 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-23 — copy+patch needs `package.xml` too, not only `source.properties` (else the hash-string failure persists)
+
+Slice `story-text-element-font-size`. Ran the documented copy+patch (below) but patched **only**
+`source.properties` (`AndroidVersion.ApiLevel=37`) — and the first `./gradlew` STILL died with
+**`Failed to find target with hash string 'android-37'`**, with a telltale warning: *"Observed package id
+'platforms;android-37.0' in inconsistent location '.../android-37'"*. Cause: AGP 8.13.0 reads the platform's
+**`package.xml`**, whose `<api-level>37.0</api-level>` still declared the minor-versioned id. Patching
+`source.properties` alone is not enough. Full recipe that worked this run:
+```bash
+sdkmanager --channel=3 "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+cd $ANDROID_SDK/platforms && cp -r android-37.0 android-37
+sed -i 's/^AndroidVersion\.ApiLevel=.*/AndroidVersion.ApiLevel=37/' android-37/source.properties
+sed -i 's|<api-level>37.0</api-level>|<api-level>37</api-level>|'     android-37/package.xml   # ← the missing step
+```
+With both patched, `assembleDebug testDebugUnitTest` was BUILD SUCCESSFUL (973 tasks). The 08-21/earlier notes'
+`source.properties`-only sed may have sufficed on other images; on THIS one, `package.xml` is the file AGP
+actually reads for the hash — patch both to be safe.
+
 ## 2026-08-23 — SDK recipe flipped AGAIN: on THIS container the `cp→android-37` patch works, pristine `android-37.0` FAILS (opposite of the 08-21 note)
 
 Slice `story-text-element-outline`. The 2026-08-21 NOTES said "install pristine `android-37.0`, patch NOTHING,
