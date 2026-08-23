@@ -50,6 +50,7 @@ data class ApiRepostOf(
     val content: String? = null,
     val originalLanguage: String? = null,
     val translations: Map<String, ApiPostTranslationEntry>? = null,
+    @Serializable(with = StoryEffectsWireSerializer::class)
     val storyEffects: StoryEffects? = null,
     val audioUrl: String? = null,
     val moodEmoji: String? = null,
@@ -114,6 +115,7 @@ data class ApiPost(
     val moodEmoji: String? = null,
     val audioUrl: String? = null,
     val audioDuration: Int? = null,
+    @Serializable(with = StoryEffectsWireSerializer::class)
     val storyEffects: StoryEffects? = null,
     val translations: Map<String, ApiPostTranslationEntry>? = null,
     val isLikedByMe: Boolean? = null,

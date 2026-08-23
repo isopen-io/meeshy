@@ -309,6 +309,7 @@ data class StorySlide(
     val id: String,
     val mediaURL: String? = null,
     val content: String? = null,
+    @Serializable(with = StoryEffectsWireSerializer::class)
     val effects: StoryEffects = StoryEffects(),
     val duration: Double = 12.0,
     val order: Int = 0,
