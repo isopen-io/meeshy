@@ -2301,7 +2301,41 @@ export interface MessageSendData {
   readonly messageType?: string;
   readonly replyToId?: string;
   readonly clientMessageId: string;
+  /** Réponse privée à une story — DM porteur du contexte de la story. */
+  readonly storyReplyToId?: string;
+  /** Transfert : le message source, et sa conversation si elle diffère. */
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
+  /**
+   * Diffusion à plusieurs destinataires (PAS un transfert) : la passerelle
+   * copie CÔTÉ SERVEUR les pièces jointes du message désigné, si bien que
+   * l'émetteur n'envoie ni texte ni `attachmentIds`.
+   */
+  readonly copyAttachmentsFromMessageId?: string;
+  readonly isBlurred?: boolean;
+  /** ISO 8601 — la passerelle en recompose le bit EPHEMERAL. */
+  readonly expiresAt?: string;
+  readonly effectFlags?: number;
+  readonly isViewOnce?: boolean;
+  readonly maxViewOnceCount?: number;
+  /**
+   * Lieu partagé — champ dédié, JAMAIS un `metadata` brut. La forme n'est pas
+   * contrainte ici : la validation stricte vit côté passerelle
+   * (`services/location/sharedPlace.ts`).
+   */
+  readonly location?: unknown;
+  readonly encryptedContent?: string;
+  readonly encryptionMode?: EncryptionModeOnWire;
+  readonly encryptionMetadata?: Readonly<Record<string, unknown>>;
+  readonly isEncrypted?: boolean;
 }
+
+/**
+ * Le mode de chiffrement TEL QU'IL VOYAGE. La passerelle normalise la casse à
+ * l'entrée (iOS émet « E2EE »), mais le jeu de valeurs est FERMÉ : ce sont les
+ * trois que le schéma accepte, ni plus ni moins.
+ */
+export type EncryptionModeOnWire = 'e2ee' | 'server' | 'hybrid';
 
 /**
  * Réponse d'envoi de message
@@ -2325,6 +2359,19 @@ export interface MessageSendWithAttachmentsData {
   readonly attachmentIds: readonly string[];
   readonly replyToId?: string;
   readonly clientMessageId: string;
+  readonly storyReplyToId?: string;
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
+  readonly isBlurred?: boolean;
+  readonly expiresAt?: string;
+  readonly effectFlags?: number;
+  readonly isViewOnce?: boolean;
+  readonly maxViewOnceCount?: number;
+  readonly location?: unknown;
+  readonly encryptedContent?: string;
+  readonly encryptionMode?: EncryptionModeOnWire;
+  readonly encryptionMetadata?: Readonly<Record<string, unknown>>;
+  readonly isEncrypted?: boolean;
 }
 
 /**
