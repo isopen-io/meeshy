@@ -48,6 +48,7 @@
     <string name="stories_composer_remove_text">Eliminar texto</string>
     <string name="stories_composer_bg_none">Sin fondo</string>
     <string name="stories_composer_outline">Contorno del texto</string>
+    <string name="stories_composer_size">Tamaño del texto</string>
     <string name="stories_composer_bg_glass">Cristal</string>
     <string name="stories_composer_add_sticker">Sticker</string>
     <string name="stories_composer_remove_sticker">Eliminar sticker</string>

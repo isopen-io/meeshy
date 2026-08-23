@@ -339,6 +339,23 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
+     * Advances the base font size of the on-canvas element [id] by one tap — to the next
+     * larger step, wrapping past the largest back to the smallest (decided by the pure
+     * [StoryTextSizeCycle.next]). Inert on an unknown id; selection and editing are
+     * untouched — you resize the element you are editing. The wire mapping
+     * ([StoryTextElement.toTextObject]) carries `fontSize` on publish.
+     */
+    fun onTextElementCycleSize(id: String) {
+        _state.update {
+            it.copy(
+                deck = it.deck.updateTextElement(id) { element ->
+                    element.copy(size = StoryTextSizeCycle.next(element.size))
+                },
+            )
+        }
+    }
+
+    /**
      * Advances the stroke outline of the on-canvas element [id] by one tap — thicken to the
      * next step, wrap past the thickest back to no-stroke, posting the default white the first
      * time a stroke appears (all decided by the pure [StoryTextOutlineCycle.advance]). Inert on

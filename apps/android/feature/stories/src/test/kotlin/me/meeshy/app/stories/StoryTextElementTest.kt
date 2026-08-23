@@ -173,6 +173,24 @@ class StoryTextElementTest {
     }
 
     @Test
+    fun `a fresh element is born at the iOS-parity medium size`() {
+        assertThat(StoryTextElement(id = "e1").size).isEqualTo(StoryTextSize.MEDIUM)
+    }
+
+    @Test
+    fun `toTextObject carries the default medium size as the iOS-parity fontSize 96`() {
+        val wire = StoryTextElement(id = "e1", text = "hi").toTextObject(sourceLanguage = "fr")
+        assertThat(wire.fontSize).isWithin(1e-9).of(96.0)
+    }
+
+    @Test
+    fun `toTextObject carries a chosen size onto the wire fontSize`() {
+        val wire = StoryTextElement(id = "e1", text = "hi", size = StoryTextSize.XLARGE)
+            .toTextObject(sourceLanguage = "fr")
+        assertThat(wire.fontSize).isWithin(1e-9).of(200.0)
+    }
+
+    @Test
     fun `every style and align exposes a distinct lowercase wire token`() {
         assertThat(StoryTextStyle.entries.map { it.wire })
             .containsExactly("bold", "neon", "typewriter", "handwriting", "classic")

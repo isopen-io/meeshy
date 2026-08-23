@@ -1504,6 +1504,42 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onTextElementCycleSize advances the edited element to the next larger step`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementCycleSize(id)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.size).isEqualTo(StoryTextSize.LARGE)
+        assertThat(element.style).isEqualTo(StoryTextStyle.BOLD)
+    }
+
+    @Test
+    fun `onTextElementCycleSize wraps past the largest step back to the smallest`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        repeat(3) { vm.onTextElementCycleSize(id) }
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().size)
+            .isEqualTo(StoryTextSize.SMALL)
+    }
+
+    @Test
+    fun `onTextElementCycleSize on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementCycleSize("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().size)
+            .isEqualTo(StoryTextSize.MEDIUM)
+    }
+
+    @Test
     fun `onTextElementTransform pinch-scales and rotates the edited element`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
