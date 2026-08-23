@@ -191,3 +191,69 @@ ce que VoiceOver entend change.
 5. La forme `one` de `accessibility.unread_count` · relecture native des 6 formes
    arabes · effectif « 199+ » · tap VoiceOver du picker de transfert ·
    `InteractiveProgressBar` · frères du lot « transfert ».
+
+---
+
+## Historique CI — deux runs, zéro test exécuté
+
+Ce lot a mis trois têtes à produire un verdict, et les deux premières n'ont
+**rien exécuté du tout**. Le détail vaut d'être consigné : les deux causes sont
+différentes, et aucune ne se voit dans la couleur du check.
+
+### Tête `970b4b2f` — `main` ne compilait plus
+
+Le sujet portait bien ` — run test`, la suite complète a donc été demandée. Elle
+n'a pas pu démarrer : **« No result bundle produced »**, 97 erreurs de compile,
+**toutes dans un seul fichier qui n'est pas de ce lot** —
+`MeeshyTests/Unit/Composer/PasteDestinationTests.swift`, `cannot find
+'PasteDestination' in scope`.
+
+`git grep` sur tout `origin/main` ne trouvait alors `PasteDestination` que dans
+ce test et un document de plan. **Pas une ligne de production.** Le commit
+fautif l'annonçait dans son propre sujet — `6127d311a` « **tasks,test**(composer)… » —
+et le plan qu'il cite intitule son étape 1 « Tests rouges ». Un pas TDD RED
+parfaitement légitime… **sur une branche**.
+
+La distinction est celle qui compte :
+
+| | Test rouge (assertion) | Type manquant |
+|---|---|---|
+| Le bundle compile | oui | **non** |
+| Tests exécutés | 7534, dont 1 rouge | **0** |
+| Portée | la suite concernée | **toute la piste iOS** |
+
+Un RED qui échoue sur une assertion laisse les autres tourner. Un RED qui
+référence un type inexistant empêche le bundle de **lier** : plus aucun test iOS
+ne s'exécute, sur `main` comme sur toutes les PR qui en descendent. Signalé en
+commentaire de PR, **sans mettre le test en quarantaine** (proscrit) et **sans
+inventer `PasteDestination`** (ce serait deviner une conception qui appartient à
+la piste composer).
+
+### Tête `17d25455` — verte, et toujours zéro test
+
+La piste composer a livré `PasteDestination.swift` ; `main` recompile. Une
+fusion de `main` a été poussée sur la branche pour rejuger l'arbre réellement
+fusionné — **mais son sujet ne portait pas l'opt-in**. Le check est donc revenu
+`Build app (app + cibles de test)` : **compile seule**, verte, posée sur une PR
+qui affiche 17/17.
+
+C'est exactement le piège documenté en 238i, réarmé par une main tierce. Et il
+est plus insidieux ici : la PR **paraît** intégralement verte alors que ses deux
+apports — six tests de `ReachMetricLabelTests`, cinq de la garde — n'ont
+**jamais** été exécutés, ni sur cette tête ni sur aucune autre.
+
+**Règle qui se dégage : sur une PR dont l'apport EST une suite ou une garde, le
+verdict ne se lit pas dans la couleur mais dans le NOM du check, et il faut le
+revérifier après CHAQUE poussée, y compris celles qu'on n'a pas faites soi-même.**
+
+### Contrôles rejoués sur l'arbre fusionné, avant la troisième tête
+
+`main` ayant beaucoup avancé (les deux gardes balaient tout le dépôt), les
+mesures sont refaites et non reconduites :
+
+| Contrôle | Résultat |
+|---|---|
+| Garde 239i sur les 6 racines | **1228 fichiers**, **0 puce**, **4/4 écrans consolidés** |
+| Extracteur de littéraux | **14** `accessibilityValue` extraites |
+| Garde 238i (liste à 5 hôtes) | **0 contrevenant**, **5/5 hôtes** |
+| Les 9 fichiers de 239i après la fusion tierce | intacts (composant, 4 écrans, formatter, 2 suites, garde re-listée) |
