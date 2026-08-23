@@ -108,6 +108,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -784,11 +785,20 @@ private fun TextElementLayer(
         // graphicsLayer `scale` above multiplies on top — mirroring iOS `fontSize × scale`.
         val canvasFontSize = (element.size.designSize * STORY_TEXT_CANVAS_FONT_FACTOR).sp
         val displayText = element.text.ifBlank { stringResource(R.string.stories_composer_text_placeholder) }
-        val baseStyle = if (typography.glow) {
-            LocalTextStyle.current.copy(shadow = Shadow(color = textColor, blurRadius = 24f))
-        } else {
-            LocalTextStyle.current
+        // Base writing direction is derived from the caption (iOS-parity render-time
+        // derivation via the pure StoryTextBidi), so an Arabic/Hebrew caption lays its
+        // paragraph out right-to-left. Applied to both the stroked underlay and the fill.
+        val textDirection = when (element.baseDirection) {
+            StoryTextDirection.LTR -> TextDirection.Ltr
+            StoryTextDirection.RTL -> TextDirection.Rtl
         }
+        val baseStyle = (
+            if (typography.glow) {
+                LocalTextStyle.current.copy(shadow = Shadow(color = textColor, blurRadius = 24f))
+            } else {
+                LocalTextStyle.current
+            }
+            ).copy(textDirection = textDirection)
         Box(
             modifier = Modifier
                 .storyTextBacking(element.background)

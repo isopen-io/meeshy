@@ -5,6 +5,32 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-23 — `android-37` copy→patch needs `build.prop`'s `ro.build.version.sdk_full` too (4th edit); and NEVER run two file-mutating gradle jobs at once
+
+Slice `story-text-element-rtl-direction`. Ran the documented three-edit copy→patch (`source.properties`
+ApiLevel + `package.xml` `<api-level>` + `path=`) and it STILL died with **`Failed to find target with hash
+string 'android-37'`** — this time with NO "inconsistent location" line, so the `path=` was already right.
+Cause: AGP 8.13.0 also reads `build.prop`, whose `ro.build.version.sdk_full=37.0` still declared the
+minor-versioned id. The 4th edit that fixed it:
+```bash
+sed -i 's/^ro.build.version.sdk_full=.*/ro.build.version.sdk_full=37/' android-37/build.prop
+rm -rf $ANDROID_SDK/platforms/android-37.0   # keep only android-37 to avoid any ambiguity
+```
+Full recipe THIS image needed (four edits): `source.properties` ApiLevel, `package.xml` `<api-level>`,
+`package.xml` `path=`, AND `build.prop` `ro.build.version.sdk_full`. Read the first `./gradlew` error:
+if it says `'android-37'` with no "inconsistent location", the `sdk_full` in `build.prop` is the one still
+lying. After the fix: `:feature:stories:testDebugUnitTest` BUILD SUCCESSFUL, full `assembleDebug
+testDebugUnitTest` green.
+
+**Process lesson (cost me ~4 wasted gradle runs): a mutation RED-proof that `cp`→`sed`→gradle→restore MUST run
+as a single isolated job, and you MUST wait for its REAL completion notification before starting another.** I
+mis-read a between-gradle-runs `pgrep` gap as "job done", restored the file, and launched a second mutation
+job while the first was still alive — two scripts editing the SAME `.kt` + `.bak` concurrently produced
+garbage `failures=0` results and a half-restored file. Also `--rerun-tasks` leaves a STALE result XML until it
+actually finishes, so reading the XML while gradle is mid-run reports the PREVIOUS run's counts. Rule: one
+mutation job at a time; confirm the task-completion notification (not `pgrep`); confirm the restore line in the
+job's own captured output; then `find apps/android -name '*.bak' -o -name '*.origbak'` before trusting the tree.
+
 ## 2026-08-23 — copy+patch needs the `package.xml` `path=` attribute too, not only `<api-level>` (else "inconsistent location")
 
 Slice `story-text-element-fade-timing`. Ran the full copy+patch below (patched `source.properties` **and**

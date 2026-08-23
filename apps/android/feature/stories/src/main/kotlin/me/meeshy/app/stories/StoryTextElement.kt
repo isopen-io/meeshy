@@ -129,6 +129,16 @@ data class StoryTextElement(
     val isPublishable: Boolean get() = text.isNotBlank()
 
     /**
+     * The base writing direction this element lays out in, derived from its [text] the way
+     * iOS derives it at render time — no direction field rides the wire, so every client
+     * re-derives it identically via [StoryTextBidi]. An Arabic/Hebrew caption resolves
+     * right-to-left; Latin, neutral, or empty text left-to-right. Consumed by the canvas
+     * Composable to set the paragraph layout direction; no stored field, so [toTextObject]
+     * is unaffected.
+     */
+    val baseDirection: StoryTextDirection get() = StoryTextBidi.resolveBaseDirection(text)
+
+    /**
      * A copy with every continuous field pulled back into its legal range: [x]/[y]
      * clamped into the canvas `0f..1f`, [scale] clamped to `[MIN_SCALE, MAX_SCALE]`,
      * and [rotationDeg] wrapped into `(-180, 180]`. Total even on a non-finite input
