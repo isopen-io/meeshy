@@ -2980,12 +2980,6 @@ export class MeeshySocketIOManager {
           isEdited: Boolean(message.isEdited),
           editedAt: updatedAt,
         }),
-        // Même VALEUR que celle du noyau, redéclarée pour son TYPE : le `io` de
-        // ce manager est typé contre `ServerToClientEvents`, qui déclare
-        // `messageType` en union `MessageType`. Le noyau le rend en `string`
-        // (c'est la dette que le suivi du flip `MessageHandler` doit trancher au
-        // producteur) ; sans ce resserrage local, l'émission ne compilerait pas.
-        messageType: (message.messageType || 'text') as MessageType,
         messageSource: message.messageSource || undefined,
         metadata: message.metadata ?? {},
         translations: messageTranslations,
