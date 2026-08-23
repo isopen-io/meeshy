@@ -1471,9 +1471,30 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108.md`
 - [ ] Suivi — les 13 casts sont eux-mêmes des ERREURS de type (TS2571) comptées
       dans les 1239 et tolérées par le cliquet. Les fermer fait DESCENDRE la
       dette.
-- [ ] Suivi neuf — **`call:end` déclare un ack REQUIS que le web n'envoie
-      jamais** (3 émetteurs). Trancher contre la passerelle laquelle des deux
-      moitiés ment.
+- [x] **Lot 2 du même cycle — les quatre acks que le contrat exigeait et que
+      personne n'envoie.** `ClientToServerEvents` déclarait 4 acks REQUIS contre
+      18 optionnels, et les quatre étaient les événements d'appel
+      (INITIATE/JOIN/SIGNAL/END). Les deux moitiés du fil les contredisent : la
+      passerelle déclare `ack?` sur les quatre et les appelle en `ack?.(…)` ;
+      cinq émetteurs sur sept n'en envoient aucun (3 web, 2 iOS). Le MÊME
+      fichier iOS émet `call:end` avec ET sans ack — l'optionalité est une
+      CONCEPTION, pas un oubli.
+- [x] **Le prix du mensonge se lisait dans le code appelant.** Les 4 émissions
+      `call:signal` du web sont typées (pas de cast) : le compilateur exigeait
+      le second argument, elles fabriquent donc un `() => {}` VIDE
+      (`use-webrtc-p2p.ts` 290/329/674/761). Le serveur acquitte bien
+      (`ack?.({success:true})`), donc chaque candidat ICE paie un paquet d'ACK
+      pour une fonction qui ne fait rien. Là où la cérémonie n'a pas été écrite,
+      c'est un cast qui soustrait le site. **Un contrat que tout site d'appel
+      doit contourner pour dire la vérité ne gouverne plus rien.**
+- [x] Les quatre passent à `ack?`, motif écrit au-dessus avec les numéros de
+      ligne des handlers ET des émetteurs. Cliquet de type
+      `_CallAcksAreOptional` + témoin NÉGATIF ; RED prouvé sur 2 mutations.
+      Gates : tsc shared 0, tsc passerelle 0, suites d'appel passerelle 36/36
+      (608), shared 2467, suites d'appel web 46/46 (598), cliquet web ✓ 1239.
+- [ ] Suivi — les 4 `() => {}` de `use-webrtc-p2p.ts` sont retirables ; les
+      retirer supprime un aller-retour d'ACK par candidat ICE. Changement de
+      COMPORTEMENT sur la signalisation d'appel : mérite sa propre mesure.
 - [ ] Suivi neuf — **`CallJoinAck` transcrit en ligne DEUX fois dans le même
       fichier** (`CallManager.tsx:810` et `:1005`), divergentes, et toutes deux
       rendant `success` optionnel là où le contrat le déclare requis.

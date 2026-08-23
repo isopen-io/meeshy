@@ -143,7 +143,94 @@ dont il a besoin les fois où il a raison.
       sortie lus DIRECTEMENT, jamais à travers un pipe (leçon du cycle 107 bis
       appliquée — un premier `| head` de ce cycle a rendu 141, SIGPIPE).
 
-## 6. Suivis
+## 6. Lot 2 — les quatre acks que le contrat exigeait et que personne n'envoie
+
+Suivi du §7 instruit dans le même cycle, et la mesure a tranché nettement.
+
+### 6.1 Le recensement
+
+`ClientToServerEvents` déclarait **4 acks REQUIS contre 18 optionnels**. Les
+quatre sont exactement les quatre événements d'appel :
+
+```
+CALL_INITIATE, CALL_JOIN, CALL_SIGNAL, CALL_END
+```
+
+Les deux moitiés du fil contredisent les quatre :
+
+| partie | ce qu'elle fait |
+|---|---|
+| passerelle, les 4 handlers | déclare `ack?` et appelle `ack?.(…)` — écrite pour fonctionner SANS |
+| web, `call:end` ×3 | n'envoie AUCUN ack (`CallManager.tsx` 175/974, `use-video-call.ts` 199) |
+| iOS, `call:join` / `call:signal` / `call:end` ×4 | `socket.emit(…)` nu (`MessageSocketManager.swift` 2898/3037/3077/3086) |
+| iOS, les mêmes événements ailleurs | `emitWithAck` (2858/2942/3053/3101/3125) |
+
+La dernière ligne est la preuve de conception : le MÊME fichier iOS émet
+`call:end` avec et sans ack, délibérément. L'ack est optionnel PAR CONCEPTION —
+`emitWithAck` là où la réponse sert, `emit` nu là où elle ne sert pas.
+
+### 6.2 Ce que le mensonge coûtait, lisible dans le code appelant
+
+Un contrat qu'aucun appelant ne peut honorer ne disparaît pas : il se paie en
+contournements, et il y en avait deux formes.
+
+**La cérémonie.** Les quatre émissions `call:signal` du web sont typées — elles
+ne passent PAS par un cast — donc le compilateur exigeait le second argument.
+Les quatre fabriquent la même fonction vide :
+
+```ts
+socket.emit(CLIENT_EVENTS.CALL_SIGNAL, { callId, signal } as CallSignalEvent, () => {});
+```
+
+`use-webrtc-p2p.ts` 290 / 329 / 674 / 761. Ces callbacks ne sont pas morts : le
+handler acquitte bien en succès (`ack?.({ success: true })`,
+`CallEventsHandler.ts:3809`), donc **chaque candidat ICE et chaque SDP paie un
+paquet d'ACK de retour** pour une fonction qui ne fait rien. Vérifié plutôt que
+supposé : l'hypothèse initiale d'une fuite dans la map `acks` du client était
+FAUSSE, le serveur répond bien.
+
+**Le cast.** Là où la cérémonie n'a pas été écrite, c'est
+`(socket as unknown).emit(…)` qui soustrait le site à la vérification — les
+trois `call:end` du web. Le suivi du §7 les compte parmi les 13.
+
+> Un contrat que tout site d'appel doit contourner pour dire la vérité ne
+> gouverne plus rien : il ne décrit plus le système, il décrit la forme des
+> contournements qu'il impose.
+
+### 6.3 Ce que le lot pose
+
+- [x] Les quatre déclarations passent à `ack?`, alignées sur la passerelle
+      (l'autorité d'exécution) et sur les émetteurs réels — et sur les 18 autres
+      événements du contrat, qui déclaraient déjà `callback?`.
+- [x] Le motif écrit AU-DESSUS des quatre lignes, avec les numéros de ligne des
+      handlers et des émetteurs : la prochaine session qui voudra les
+      re-durcir trouve la mesure, pas seulement la décision.
+- [x] Cliquet de type `_CallAcksAreOptional` — la charge SEULE est assignable à
+      `Parameters<…>` des quatre. Placé dans `socketio-events.ts` : les tests
+      sont exclus du `tsconfig` et l'`ignoreCodes` de `ts-jest` couvre
+      2322/2345, donc la production est le seul endroit d'où un cliquet mord —
+      et `packages/shared` type-check en BLOQUANT dans la CI.
+- [x] Témoin NÉGATIF `_RequiredAckWouldRefusePayloadAlone` : un ack requis
+      refuse bien la charge seule. Sans lui, un `Parameters<…>` dégénéré
+      laisserait le premier cliquet passer pour un garde.
+- [x] **RED prouvé sur 2 mutations** : `call:end` rendu requis → TS2344 sur
+      `_CallAcksAreOptional` ; témoin négatif inversé → TS2344 sur lui-même.
+- [x] Gates : `tsc` shared **0**, `tsc` passerelle **0**, suites d'appel
+      passerelle **36/36 (608 témoins)**, shared **2467**, suites d'appel web
+      **46/46 (598 témoins)**, cliquet de dette web ✓ 1239 INCHANGÉ.
+
+### 6.4 Ce que le lot NE fait PAS, et pourquoi
+
+Les quatre `() => {}` de `use-webrtc-p2p.ts` sont désormais RETIRABLES — le
+contrat ne les exige plus, et les retirer supprime un aller-retour d'ACK par
+candidat ICE. Ils sont laissés en place : les retirer change le trafic réel de
+la SIGNALISATION D'APPEL, le chemin le plus délicat du dépôt, et rien dans une
+exécution de routine ne permet d'exercer un vrai appel pour le vérifier. La
+correction du contrat est sûre (elle ÉLARGIT ce qui est accepté, elle ne peut
+casser aucun site existant) ; le retrait est un changement de comportement qui
+mérite sa propre mesure. Porté en suivi plutôt qu'embarqué.
+
+## 7. Suivis
 
 - [ ] **Corrigé et toujours ouvert — le cast d'émission côté WEB : 13 sites,
       pas 3** (tableau §0). Le contrat `TypedSocket = Socket<ServerToClientEvents,
@@ -152,14 +239,15 @@ dont il a besoin les fois où il a raison.
       `(socket as unknown).emit(…)` est lui-même une ERREUR de type (TS2571,
       « Object is of type 'unknown' »), comptée dans les 1239 et tolérée par le
       cliquet. Les fermer FAIT DESCENDRE la dette — le cliquet le capturera.
-- [ ] **Neuf, à instruire — `call:end` déclare un ack REQUIS que le web n'envoie
-      jamais.** `ClientToServerEvents` :
-      `(data: { callId; reason? }, ack: (r: { success: boolean }) => void) => void`.
-      Les trois émetteurs web (`CallManager.tsx` ×2, `use-video-call.ts`) passent
-      la charge SEULE. Le cast les soustrait à la vérification, donc rien ne l'a
-      jamais dit. Reste à trancher CONTRE la passerelle laquelle des deux moitiés
-      ment — comme le cycle 107 bis l'a fait pour `call:toggle-*`, où la mesure a
-      conclu au retrait de l'ack du contrat.
+- [x] **RÉSOLU dans ce cycle (§6)** — `call:end` (et `call:initiate`,
+      `call:join`, `call:signal`) déclaraient un ack REQUIS que ni la passerelle
+      n'exige ni cinq émetteurs sur sept n'envoient. Les quatre passent à
+      `ack?`, avec cliquet de type et témoin négatif.
+- [ ] Suivi de §6.4 — les quatre `() => {}` vides de `use-webrtc-p2p.ts`
+      (290/329/674/761) sont désormais retirables ; les retirer supprime un
+      aller-retour d'ACK par candidat ICE et par SDP. Changement de
+      COMPORTEMENT sur la signalisation d'appel : mérite sa propre mesure, avec
+      un vrai appel exercé.
 - [ ] **Neuf — `CallJoinAck` transcrit en ligne, deux fois, dans le MÊME
       fichier.** `CallManager.tsx:810` déclare
       `{ success?; data?: { iceServers? } }` et `:1005`
@@ -176,3 +264,24 @@ dont il a besoin les fois où il a raison.
 - [ ] Hérité — lecture Redis non validée à l'exécution ; `_seq` déclaré sur le
       seul `NotificationEventData` ; `ReactionUpdateEvent`/`…EventData` en
       doublon ; signature d'index de `ConversationUpdatedEventData`.
+
+- [ ] **Neuf, environnemental et mesuré** — sous la recette de parité locale du
+      `CLAUDE.md` (`bun install --ignore-scripts` + `prisma generate` +
+      `bun run build` de shared), **2 témoins de `MessageHandlerEditDelete.test.ts`
+      échouent** que la CI passe (`message:edited` n'est pas émis du tout ;
+      ce sont les témoins du cycle 101, ceux-là mêmes que l'en-tête du cliquet
+      de dette cite comme motif d'exister). Ce n'est PAS une régression de
+      `main` : les deux échouent À L'IDENTIQUE au commit `f69cbd26`, dont le job
+      « Test gateway » de la CI est vert. Donc la recette ne reproduit pas la CI
+      aussi complètement que le `CLAUDE.md` l'affirme (« suffit pour TOUS les
+      gates du gateway »). Cause non identifiée — aucune erreur avalée visible
+      dans la sortie. Même famille que le défaut du §3 : une affirmation de
+      parité qu'aucun garde ne vérifie.
+- [ ] **Méthode, pour la prochaine session** — deux fois dans ce cycle un rouge
+      local s'est révélé environnemental (le +3 du §1, ces 2 témoins). La
+      manœuvre qui tranche est la même et elle est bon marché : rejouer la
+      mesure au dernier commit dont la CI a PROUVÉ le vert. Trois commits de
+      `main` n'ont ici aucun run terminé — tous annulés par concurrence — donc
+      « `main` est vert » n'était même pas une donnée disponible avant de
+      remonter à `f69cbd26`.
+
