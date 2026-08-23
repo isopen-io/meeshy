@@ -5,6 +5,14 @@ import MeeshySDK
 struct ComposerToolPanelHost: View {
     let tool: StoryToolMode
     @ObservedObject var viewModel: StoryComposerViewModel
+    /// C7-UI — collecte du texte alternatif + `allowSoundExtraction`
+    /// (cf. `MediaAccessibilityStore`). INJECTÉ, jamais possédé ici : ce host
+    /// est démonté par `ComposerBottomBand` dès que l'état passe à `.hidden`
+    /// ou `.formatPanel` (branches distinctes de son `switch`), donc un
+    /// `@StateObject` local mourait avec lui — fermer puis rouvrir le panneau
+    /// Média perdait le texte alternatif DÉJÀ SAISI. Le propriétaire est
+    /// `ComposerControlsLayer`, qui survit à ces démontages.
+    @ObservedObject var accessibilityStore: MediaAccessibilityStore
     @Binding var selectedFilter: StoryFilter?
     @Binding var fgMediaItem: PhotosPickerItem?
     @Binding var showAudioDocumentPicker: Bool
@@ -35,6 +43,17 @@ struct ComposerToolPanelHost: View {
     /// fermeture (flicker visible).
     var onDeleteText: ((String) -> Void)? = nil
     var onShowInTimeline: (() -> Void)? = nil
+    /// C7-UI — relais du texte alternatif collecté par
+    /// `MediaAccessibilityPanel` (id du média, texte). L'état affiché vit
+    /// dans `accessibilityStore` (local à ce host) ; ce callback n'est que le
+    /// point de sortie vers un futur wiring publish/VM, hors du périmètre de
+    /// ce fichier.
+    var onMediaAltCommitted: ((String, String) -> Void)? = nil
+    /// C7-UI — relais du choix `allowSoundExtraction` collecté par
+    /// `SoundExtractionToggle` dans `mediaPanel`. Flag UNIQUE sur le post
+    /// entier (pas par média, cf. `MediaAccessibilityStore`), donc pas d'id
+    /// de média ici — contrairement à `onMediaAltCommitted`.
+    var onAllowSoundExtractionChanged: ((Bool) -> Void)? = nil
     /// Hauteur redimensionnable du panneau (drag du grabber), pour TOUS les outils
     /// (2026-06-02, plus seulement le dessin). Non-nil → remplace la hauteur fixe
     /// `panelHeight` (`.frame(height: panelHeight - 50)`), donc le menu suit le grabber.
@@ -49,6 +68,10 @@ struct ComposerToolPanelHost: View {
     /// media ouvre directement le picker système quand l'utilisateur n'a
     /// encore aucun media. Voir le `.onAppear` sur `mediaPanel`.
     @State private var autoOpenMediaPicker: Bool = false
+
+    /// Id du média dont le panneau accessibilité est déplié — un seul à la
+    /// fois, comme le format panel du texte.
+    @State private var expandedAccessibilityMediaId: String? = nil
 
     // Texte adaptatif. Le bandeau étant désormais opaque (tint indigo950@92% dark
     // / white@92% light), on peut viser de vrais ratios de contraste WCAG-AA :
@@ -328,6 +351,12 @@ struct ComposerToolPanelHost: View {
 
     // MARK: - Media Panel
 
+    /// Au moins une vidéo dans la slide courante — condition d'affichage du
+    /// `SoundExtractionToggle` composer-wide (cf. `mediaPanel`).
+    private var hasVideoMedia: Bool {
+        viewModel.currentEffects.mediaObjects?.contains(where: { $0.kind == .video }) ?? false
+    }
+
     private var mediaPanel: some View {
         // Bundle localisé hissé hors de la closure de label `PhotosPicker`
         // (inférée `@Sendable`) en constante Sendable — voir
@@ -394,6 +423,22 @@ struct ComposerToolPanelHost: View {
                 }
                 .frame(maxHeight: 150)
             }
+
+            // C7-UI — `Post.allowSoundExtraction` (`schema.prisma:3125`) est
+            // UN SEUL flag pour tout le post, pas un champ par média : un
+            // interrupteur composer-wide, montré seulement quand au moins
+            // une vidéo est présente (une slide sans vidéo n'a rien à
+            // extraire).
+            if hasVideoMedia {
+                SoundExtractionToggle(
+                    isOn: accessibilityStore.allowsSoundExtraction(),
+                    onChange: { allowed in
+                        accessibilityStore.setAllowsSoundExtraction(allowed)
+                        onAllowSoundExtractionChanged?(allowed)
+                    }
+                )
+                .padding(.horizontal, 4)
+            }
         }
         // Ouvrir l'outil Media sur une slide vierge déclenche directement le
         // PhotosPicker — parité avec `textPanel.onAppear` et l'audioPanel
@@ -420,99 +465,128 @@ struct ComposerToolPanelHost: View {
         let rowBgFill: Color = isBg
             ? MeeshyColors.indigo400.opacity(0.18)
             : (colorScheme == .dark ? Color.white.opacity(0.07) : MeeshyColors.indigo950.opacity(0.05))
-        HStack(spacing: 8) {
-            // Thumbnail
-            Group {
-                if let img = viewModel.loadedImages[media.id] {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    ZStack {
-                        (colorScheme == .dark ? Color.white.opacity(0.1) : MeeshyColors.indigo950.opacity(0.08))
-                        Image(systemName: isImage ? "photo" : "video")
-                            .font(.system(size: 12))
-                            .foregroundColor(mutedText)
+        let isAccessibilityExpanded = expandedAccessibilityMediaId == media.id
+        let hasAccessibilityInfo = !accessibilityStore.alt(for: media.id).isEmpty
+        VStack(alignment: .leading, spacing: isAccessibilityExpanded ? 6 : 0) {
+            HStack(spacing: 8) {
+                // Thumbnail
+                Group {
+                    if let img = viewModel.loadedImages[media.id] {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        ZStack {
+                            (colorScheme == .dark ? Color.white.opacity(0.1) : MeeshyColors.indigo950.opacity(0.08))
+                            Image(systemName: isImage ? "photo" : "video")
+                                .font(.system(size: 12))
+                                .foregroundColor(mutedText)
+                        }
                     }
                 }
-            }
-            .frame(width: 32, height: 32)
-            .clipShape(RoundedRectangle(cornerRadius: 5))
+                .frame(width: 32, height: 32)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
 
-            // Type + role
-            VStack(alignment: .leading, spacing: 1) {
-                Text(isImage
-                     ? String(localized: "story.media.image", defaultValue: "Image", bundle: .module)
-                     : String(localized: "story.media.video", defaultValue: "Vidéo", bundle: .module))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(primaryText)
-                Text(isBg
-                     ? String(localized: "story.media.background", defaultValue: "Fond", bundle: .module)
-                     : String(localized: "story.media.foreground", defaultValue: "Premier plan", bundle: .module))
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(isBg ? MeeshyColors.indigo400 : secondaryText)
-            }
+                // Type + role
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(isImage
+                         ? String(localized: "story.media.image", defaultValue: "Image", bundle: .module)
+                         : String(localized: "story.media.video", defaultValue: "Vidéo", bundle: .module))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(primaryText)
+                    Text(isBg
+                         ? String(localized: "story.media.background", defaultValue: "Fond", bundle: .module)
+                         : String(localized: "story.media.foreground", defaultValue: "Premier plan", bundle: .module))
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(isBg ? MeeshyColors.indigo400 : secondaryText)
+                }
 
-            Spacer(minLength: 4)
+                Spacer(minLength: 4)
 
-            // Action buttons — compact icon row
-            HStack(spacing: 6) {
-                // Mute un-bouton (vidéos uniquement — une image n'a rien à
-                // couper). Persisté via `volume` (0 = muet) : l'aperçu, le
-                // reader et l'export honorent tous ce réglage.
-                if media.kind == .video {
-                    let muted = media.isMuted
+                // Action buttons — compact icon row
+                HStack(spacing: 6) {
+                    // Mute un-bouton (vidéos uniquement — une image n'a rien à
+                    // couper). Persisté via `volume` (0 = muet) : l'aperçu, le
+                    // reader et l'export honorent tous ce réglage.
+                    if media.kind == .video {
+                        let muted = media.isMuted
+                        mediaActionBtn(
+                            icon: muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                            color: muted ? .red.opacity(0.85) : actionTint,
+                            tip: muted
+                                ? String(localized: "story.video.unmute", defaultValue: "Activer le son de la vidéo", bundle: .module)
+                                : String(localized: "story.video.mute", defaultValue: "Couper le son de la vidéo", bundle: .module)
+                        ) {
+                            viewModel.toggleMediaMute(id: media.id)
+                        }
+                    }
+
+                    // Toggle front/back
                     mediaActionBtn(
-                        icon: muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                        color: muted ? .red.opacity(0.85) : actionTint,
-                        tip: muted
-                            ? String(localized: "story.video.unmute", defaultValue: "Activer le son de la vidéo", bundle: .module)
-                            : String(localized: "story.video.mute", defaultValue: "Couper le son de la vidéo", bundle: .module)
+                        icon: isBg ? "square.3.layers.3d.top.filled" : "square.3.layers.3d.bottom.filled",
+                        color: isBg ? MeeshyColors.indigo400 : actionTint,
+                        tip: isBg
+                            ? String(localized: "story.media.foreground", defaultValue: "Premier plan", bundle: .module)
+                            : String(localized: "story.media.background", defaultValue: "Fond", bundle: .module)
                     ) {
-                        viewModel.toggleMediaMute(id: media.id)
+                        viewModel.toggleBackground(id: media.id)
+                    }
+
+                    // Accessibilité — texte alternatif (tous médias) + extraction
+                    // de son (vidéo). C7-UI : les deux champs que le transport
+                    // sait déjà porter (`mediaAlt`/`allowSoundExtraction`) mais
+                    // qu'aucune UI ne collectait avant ce panneau.
+                    mediaActionBtn(
+                        icon: "text.below.photo",
+                        color: hasAccessibilityInfo ? MeeshyColors.indigo400 : actionTint,
+                        tip: String(localized: "story.media.accessibility", defaultValue: "Accessibilité", bundle: .module)
+                    ) {
+                        expandedAccessibilityMediaId = isAccessibilityExpanded ? nil : media.id
+                    }
+
+                    // Edit
+                    mediaActionBtn(icon: "pencil", color: actionTint, tip: String(localized: "common.edit", defaultValue: "Éditer", bundle: .module)) {
+                        onEditMedia?(media.id)
+                    }
+
+                    // Timeline
+                    mediaActionBtn(icon: "timeline.selection", color: actionTint, tip: String(localized: "story.tool.timeline", defaultValue: "Timeline", bundle: .module)) {
+                        viewModel.selectedElementId = media.id
+                        onShowInTimeline?()
+                    }
+
+                    // Duplicate
+                    mediaActionBtn(icon: "doc.on.doc", color: actionTint, tip: String(localized: "common.duplicate", defaultValue: "Dupliquer", bundle: .module)) {
+                        viewModel.duplicateElement(id: media.id)
+                    }
+
+                    // Delete
+                    mediaActionBtn(icon: "trash", color: .red.opacity(0.8), tip: String(localized: "common.delete", defaultValue: "Supprimer", bundle: .module)) {
+                        accessibilityStore.remove(mediaId: media.id)
+                        if expandedAccessibilityMediaId == media.id { expandedAccessibilityMediaId = nil }
+                        viewModel.deleteElement(id: media.id)
+                        HapticFeedback.medium()
                     }
                 }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(rowBgFill)
+            )
 
-                // Toggle front/back
-                mediaActionBtn(
-                    icon: isBg ? "square.3.layers.3d.top.filled" : "square.3.layers.3d.bottom.filled",
-                    color: isBg ? MeeshyColors.indigo400 : actionTint,
-                    tip: isBg
-                        ? String(localized: "story.media.foreground", defaultValue: "Premier plan", bundle: .module)
-                        : String(localized: "story.media.background", defaultValue: "Fond", bundle: .module)
-                ) {
-                    viewModel.toggleBackground(id: media.id)
-                }
-
-                // Edit
-                mediaActionBtn(icon: "pencil", color: actionTint, tip: String(localized: "common.edit", defaultValue: "Éditer", bundle: .module)) {
-                    onEditMedia?(media.id)
-                }
-
-                // Timeline
-                mediaActionBtn(icon: "timeline.selection", color: actionTint, tip: String(localized: "story.tool.timeline", defaultValue: "Timeline", bundle: .module)) {
-                    viewModel.selectedElementId = media.id
-                    onShowInTimeline?()
-                }
-
-                // Duplicate
-                mediaActionBtn(icon: "doc.on.doc", color: actionTint, tip: String(localized: "common.duplicate", defaultValue: "Dupliquer", bundle: .module)) {
-                    viewModel.duplicateElement(id: media.id)
-                }
-
-                // Delete
-                mediaActionBtn(icon: "trash", color: .red.opacity(0.8), tip: String(localized: "common.delete", defaultValue: "Supprimer", bundle: .module)) {
-                    viewModel.deleteElement(id: media.id)
-                    HapticFeedback.medium()
-                }
+            if isAccessibilityExpanded {
+                MediaAccessibilityPanel(
+                    mediaId: media.id,
+                    altText: accessibilityStore.alt(for: media.id),
+                    onAltCommitted: { text in
+                        accessibilityStore.setAlt(text, for: media.id)
+                        onMediaAltCommitted?(media.id, text)
+                    }
+                )
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(rowBgFill)
-        )
     }
 
     private func mediaActionBtn(

@@ -287,6 +287,14 @@
       "addPhoto": "Añadir foto",
       "addVideo": "Añadir vídeo",
       "changeVisibility": "Cambiar visibilidad",
+      "mediaAlt": {
+        "label": "Texto alternativo",
+        "placeholder": "Describe este contenido para los lectores de pantalla"
+      },
+      "soundExtraction": {
+        "label": "Permitir la reutilización del sonido",
+        "caption": "Otras personas podrán reutilizar el audio de los vídeos de esta publicación en sus propias publicaciones."
+      },
       "reelToggle": {
         "groupLabel": "Tipo de publicación",
         "reel": "Reel",

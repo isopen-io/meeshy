@@ -2,23 +2,72 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Le gate du réel, en UN seul endroit.
+/// Le gate du réel, en UN seul endroit — **et nourri de la composition RÉELLE
+/// depuis V1**.
 ///
-/// Les deux sites qui construisent un `ComposerProfile` passaient chacun
-/// `compositionQualifiesAsReel: false` EN DUR. Deux littéraux jumeaux, dont
-/// V1 devra retrouver les deux occurrences pour brancher l'éventail sur la
-/// composition RÉELLE — et n'en corriger qu'une le ferait diverger en silence
-/// (le plateau offrirait le réel que le routage ne connaîtrait pas).
+/// Il fut une constante `false`, lue aux deux seuls sites qui construisent un
+/// profil : l'éventail était écrit, testé, et débranché. Ce qu'il lit
+/// maintenant est la composition que l'auteur a posée.
 ///
-/// Ce que V1 branchera ici : `ReelComposition.qualifiesAsReel(...)` sur la
-/// composition courante. Elle n'est pas lisible aujourd'hui — `slides` et
-/// `loadedVideoURLs` de `StoryComposerViewModel` sont internes au SDK, et
-/// `currentEffects` ne porte que la diapositive COURANTE, donc rien qui
-/// décrive une story multi-slides. Fabriquer une classification app-side
-/// serait un second prédicat à côté de `ReelComposition`, exactement la
-/// divergence que ce dépôt paie déjà ailleurs.
+/// **Aucun second prédicat n'est fabriqué ici.** `ReelComposition` reste
+/// l'unique juge — miroir du gateway (`reelComposition.ts`) et du web. Ce type
+/// ne fait qu'une PROJECTION : traduire les objets d'une diapositive en la
+/// liste `(kind, durationMs)` que le prédicat attend. Écrire « une vidéo de
+/// plus de 3 s qualifie » une seconde fois côté app aurait donné deux règles à
+/// faire diverger, exactement la dette que ce dépôt paie déjà ailleurs.
+///
+/// **Ce qu'il lit, et ce qu'il ne lit pas.** `currentEffects` est la seule
+/// lucarne publique du SDK sur la composition : `slides` et `loadedVideoURLs`
+/// sont internes à `MeeshyUI`. Le gate ne voit donc que la diapositive
+/// COURANTE. L'erreur est bornée dans un seul sens — il peut MANQUER un réel
+/// (deux images réparties sur deux diapositives), jamais en inventer un. C'est
+/// le sens sûr : la loi 9 dit que le gate AJOUTE le réel et ne retire jamais le
+/// format propre d'une porte, donc un gate qui sous-détecte dégrade l'offre
+/// sans jamais publier ce que personne n'a demandé.
 nonisolated enum ComposerReelGate {
-    static let compositionQualifiesAsReel = false
+
+    static func compositionQualifiesAsReel(_ effects: StoryEffects) -> Bool {
+        ReelComposition.qualifiesAsReel(mediaKinds: mediaKinds(of: effects))
+    }
+
+    /// Ce que vaut le gate quand il n'y a RIEN à juger. Dérivé du prédicat sur
+    /// une composition vide plutôt qu'écrit `false` : le littéral en dur est
+    /// précisément ce que V1 a eu à retrouver en deux exemplaires.
+    static var withoutComposition: Bool {
+        compositionQualifiesAsReel(StoryEffects())
+    }
+
+    /// La projection. Les images n'ont jamais de durée (la règle produit ne la
+    /// leur demande pas) ; pour une vidéo, la durée NATIVE de l'asset prime sur
+    /// sa durée de lecture — c'est celle du fichier téléversé que le serveur
+    /// jugera, et un clip de 10 s ramené à 1 s sur la timeline reste une vidéo
+    /// de 10 s aux yeux du gateway.
+    static func mediaKinds(of effects: StoryEffects) -> [(kind: FeedMediaType, durationMs: Int?)] {
+        let visuels: [(kind: FeedMediaType, durationMs: Int?)] = (effects.mediaObjects ?? [])
+            .compactMap { objet -> (kind: FeedMediaType, durationMs: Int?)? in
+                guard let kind = objet.kind else { return nil }
+                switch kind {
+                case .image:
+                    return (kind: .image, durationMs: nil)
+                case .video:
+                    return (kind: .video, durationMs: milliseconds(objet.intrinsicDuration ?? objet.duration))
+                }
+            }
+        let sons: [(kind: FeedMediaType, durationMs: Int?)] = (effects.audioPlayerObjects ?? [])
+            .map { objet -> (kind: FeedMediaType, durationMs: Int?) in
+                (kind: .audio, durationMs: milliseconds(objet.duration.map { Double($0) }))
+            }
+        return visuels + sons
+    }
+
+    /// Une durée nulle ou négative n'est pas une durée : elle rend `nil`, et le
+    /// prédicat la traite comme inconnue — donc non qualifiante. Le rendre `0`
+    /// aurait dit « connue et trop courte », ce qui est la même conclusion
+    /// aujourd'hui mais cesserait de l'être si le plancher passait à zéro.
+    private static func milliseconds(_ seconds: Double?) -> Int? {
+        guard let seconds, seconds > 0 else { return nil }
+        return Int((seconds * 1000).rounded())
+    }
 }
 
 /// **Le meuble** du composer unifié (C2) — plateau, scène, socle permanent.
@@ -103,13 +152,23 @@ struct MeeshyComposerHost: View {
     /// Le format COURANT — un champ, pas une identité (loi 9). Il s'ouvre sur
     /// `initialFormat` de la porte et, aujourd'hui, N'EN BOUGE PLUS : le
     /// sélecteur (`ComposerFormatFan`) existe et est testé, mais il n'est PAS
-    /// monté. Le monter maintenant peindrait un choix sans conséquence — une
-    /// offre qui ne varie jamais (`ComposerReelGate.compositionQualifiesAsReel`
-    /// est encore constante) et un chip dont la sélection n'est lue par
-    /// personne. C'est exactement l'UI morte que ce chantier passe son temps à
-    /// retirer. Condition d'armement : V1 (le gate réel nourrit l'éventail) ET
-    /// V2/V3 (changer de format change la surface montée).
+    /// monté.
+    ///
+    /// Sa garde négative nommait DEUX conditions de levée. V1 a levé la
+    /// première : l'offre varie désormais avec la composition. V2 a levé la
+    /// moitié de la seconde : changer de format change la SURFACE montée
+    /// (`ComposerSurfaceRouting`). Ce qui manque encore est l'autre moitié —
+    /// changer de format doit changer ce qui est PUBLIÉ, et le socle nomme
+    /// aujourd'hui la publication sans la piloter. Monter l'éventail avant
+    /// cela offrirait un choix que l'envoi ignore : le pire des deux mondes,
+    /// puisqu'il aurait l'air de marcher.
     @State private var currentFormat: ComposerFormat
+
+    /// Le contenu du DOCUMENT, quand la surface montée en est un. Il vit dans
+    /// le meuble et non dans la surface : c'est le meuble qui le remettra au
+    /// publieur, et une surface qui posséderait son texte le perdrait à chaque
+    /// bascule de format.
+    @State private var documentText = ""
 
     @State private var showsPreview = false
     @State private var previewSceneIndex = 0
@@ -136,7 +195,7 @@ struct MeeshyComposerHost: View {
 
         _currentFormat = State(initialValue: ComposerProfile.profile(
             for: intent.origin,
-            compositionQualifiesAsReel: ComposerReelGate.compositionQualifiesAsReel
+            compositionQualifiesAsReel: ComposerReelGate.compositionQualifiesAsReel(composer.currentEffects)
         ).initialFormat)
     }
 
@@ -144,19 +203,45 @@ struct MeeshyComposerHost: View {
         PlateauTint(rawValue: storedTint) ?? .defaultTint
     }
 
+    /// L'éventail RESPIRE : il est recalculé à chaque passe de rendu sur la
+    /// composition du moment. Poser deux images puis en retirer une retire le
+    /// réel de l'offre — c'est ce que V1 avait écrit et débranché.
+    private var reelGate: Bool {
+        ComposerReelGate.compositionQualifiesAsReel(viewModel.currentEffects)
+    }
+
     private var profile: ComposerProfile {
         ComposerProfile.profile(
             for: intent.origin,
-            compositionQualifiesAsReel: ComposerReelGate.compositionQualifiesAsReel
+            compositionQualifiesAsReel: reelGate
         )
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            composerSurface
+            surface
             socle
         }
         .background(tint.color.ignoresSafeArea())
+    }
+
+    // MARK: - Les deux surfaces (V2)
+
+    /// Le meuble a DEUX surfaces, et c'est `ComposerSurfaceRouting` qui tranche
+    /// — jamais une condition écrite ici. La règle vit à côté de la surface
+    /// document parce qu'elle est éprouvable sans monter la moindre vue ; la
+    /// recopier dans le `body` l'aurait rendue muette aux tests.
+    ///
+    /// Le socle, lui, ne dépend d'aucune des deux : il reste sous les deux
+    /// (loi 5 — le socle ne bouge jamais).
+    @ViewBuilder
+    private var surface: some View {
+        switch ComposerSurfaceRouting.surface(opening: profile.opensWith, format: currentFormat) {
+        case .scene:
+            composerSurface
+        case .document:
+            documentSurface
+        }
     }
 
     // MARK: - La scène
@@ -183,8 +268,46 @@ struct MeeshyComposerHost: View {
             .storyLocationPickerProvided()
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()
+            .storyPasteProvided()
         }
     }
+
+    /// La surface « document sans scène » (V2).
+    ///
+    /// Elle ne porte PAS le plateau d'outils : `plateauTools` outille une
+    /// scène — diapositives, timeline — et un document n'en a aucune. Le
+    /// profil de `.feedComposer` annonce pourtant `showsSlides`/`showsTimeline`
+    /// à `true`, et c'est cohérent : ils décrivent ce que la porte offre APRÈS
+    /// bascule vers la story, pas ce que le document a.
+    ///
+    /// Aucun outil n'y est servi aujourd'hui, et c'est la loi 4 qui le veut :
+    /// le meuble n'a pas encore de chemin d'ingestion. Le pipeline existe et
+    /// tourne (`ComposerDropResolver` / `ComposerIngestRouter`, six sites de
+    /// production) mais aucun de ses points d'entrée n'est dans le composer.
+    /// Peindre la rangée avant lui ouvrirait des sélecteurs dont le résultat
+    /// n'aurait nulle part où aller — l'affordance sans effet que ce chantier
+    /// retire partout. `ComposerDocumentTool.canonicalRow` attend V3, dans
+    /// l'ordre de la feuille historique, pour que rien n'ait à être réinventé.
+    ///
+    /// **Sa SORTIE est celle du meuble.** `onDismiss` n'était atteignable que
+    /// sous la scène, où l'atelier du SDK peint la croix ; le document n'a pas
+    /// d'atelier, et la surface serait restée un écran sans issue au moment
+    /// même où V3 devait la brancher sur la porte la plus utilisée de l'app.
+    /// Le host ne fabrique pas une seconde fermeture : il passe la SIENNE, la
+    /// même que reçoit l'atelier deux blocs plus haut.
+    private var documentSurface: some View {
+        ComposerDocumentSurface(
+            text: $documentText,
+            tools: ComposerDocumentToolPolicy.visibleTools(
+                served: servedDocumentTools,
+                allowsCapture: profile.allowsCapture
+            ),
+            focusesOnAppear: ComposerSurfaceRouting.focusesContentOnAppear(opening: profile.opensWith),
+            onClose: onDismiss
+        )
+    }
+
+    private var servedDocumentTools: [ComposerDocumentTool] { [] }
 
     /// Les outils du plateau suivent le PROFIL, et une capacité refusée n'est
     /// pas montée du tout (loi 4). Une affordance grisée promettrait une
@@ -310,10 +433,17 @@ struct MeeshyComposerHost: View {
 nonisolated extension ComposerIntent {
     /// `nil` ⇒ la porte ouvre `MeeshyComposerHost`. Non-`nil` ⇒ elle présente
     /// le composer historique nommé, et rien d'autre.
+    /// Le gate du réel n'entre PAS dans ce calcul, et ce n'est pas une
+    /// approximation : le routage legacy est le même pour les deux valeurs du
+    /// gate, sur les neuf portes — `ComposerIntentTests` le prouve porte par
+    /// porte plutôt que de le laisser se supposer. La composition vide est donc
+    /// lue ici pour ce qu'elle est, une valeur neutre, et non recopiée en
+    /// littéral : le `false` en dur est exactement ce que V1 a eu à retrouver
+    /// en deux exemplaires.
     var routesToLegacy: LegacyComposer? {
         ComposerProfile.profile(
             for: origin,
-            compositionQualifiesAsReel: ComposerReelGate.compositionQualifiesAsReel
+            compositionQualifiesAsReel: ComposerReelGate.withoutComposition
         ).routesToLegacy
     }
 }

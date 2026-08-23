@@ -441,6 +441,20 @@ export function PostsFeedScreen() {
           mediaIds: data.mediaIds,
           optimisticMedia: data.optimisticMedia,
           ...(data.mentions ? { mentions: data.mentions } : {}),
+          // C7-UI — les deux champs d'accessibilité collectés par
+          // `MediaAccessibilityFields` (monté par `PostComposer`) meurent ici
+          // s'ils ne sont pas relayés : le transport les accepte déjà
+          // (`CreatePostRequest.mediaAlt` / `.allowSoundExtraction`,
+          // `apps/web/services/posts.service.ts`), mais rien ne les portait
+          // du composer jusqu'à la mutation. Relais CONDITIONNEL des deux
+          // côtés : `mediaAlt` absent (jamais `{}`) quand aucun texte n'a été
+          // saisi, `allowSoundExtraction` absent (jamais `false`) tant que
+          // l'auteur n'a pas touché l'interrupteur — un `false` fabriqué
+          // écraserait un choix serveur que personne n'a révoqué.
+          ...(data.mediaAlt ? { mediaAlt: data.mediaAlt } : {}),
+          ...(data.allowSoundExtraction === undefined
+            ? {}
+            : { allowSoundExtraction: data.allowSoundExtraction }),
         },
         {
           onSuccess: () => showToast(t('toast.postPublished', 'Published!'), 'success', t('toast.postPublishedDesc', 'Your post has been shared.')),
