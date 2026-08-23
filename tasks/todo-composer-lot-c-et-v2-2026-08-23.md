@@ -115,6 +115,41 @@ aucune tâche C.
 
 ---
 
+## Partie 3 — Parité iOS ⇄ Web  *(rattrapages du lot F, dénominateur 65 → 67)*
+
+Directive du 2026-08-23 : **iOS et le web doivent fonctionner ISO.** Deux dettes
+du lot F, classées « lot futur » tant que la parité n'était pas l'objectif,
+deviennent des tâches. Audit croisé matrice ⇄ code, vérifié des deux côtés.
+
+- [ ] **W1 — les deux kinds muets du web** *(écart LIVE, priorité haute)*
+      `CanvasV3Scene.tsx:591-599` ne dispatche que `text · media · audio ·
+      sticker` ; `place` et `drawing` tombent sur un `return null` documenté
+      « ignoré EN SILENCE ». Or iOS **émet les deux**
+      (`CanvasV3Migration.swift:263` pour `drawing`, `:269` pour `place`) et le
+      golden PARTAGÉ porte un `('L1','place','fg')`.
+      **Symptôme** : une story composée sur iOS avec une épingle de lieu
+      s'affiche sur le web **sans son lieu, sans rien signaler**.
+      **Oracle** : `packages/shared/fixtures/canvas-v3/v1-legacy-full.v3.json`.
+- [ ] **W2 — enchaînement multi-scènes au web** *(écart LATENT, à caler AVANT
+      le multi-diapositives du lot C)*
+      Le web ne rend que `scenes[sceneIndex]` — le contrat en autorise 10.
+      Inoffensif tant qu'iOS n'émet qu'une scène ; **devient live le jour du
+      multi-slides**, qui appartient au lot C. Livrer W2 après C serait
+      fabriquer soi-même la régression.
+
+> **Nuance relevée en vérifiant l'audit** : le contrat déclare **sept** kinds
+> actifs (`text, media, sticker, audio, place, drawing, mention`) mais **aucun
+> écrivain n'émet `mention`** — iOS fait `continue` à la lecture
+> (`CanvasV3Migration.swift:576`). Deux écarts vivants, pas trois. Ne pas
+> écrire de rendu `mention` au web : il n'arrivera jamais.
+
+> **A5 — ne pas cocher.** Sa colonne « reste » exige « armement post-B/C/F5b/**H** ».
+> B et F5b sont faits ; H a livré la **lecture v3 + caps** mais **pas
+> l'émission v3**. La condition d'armement de `CANVAS_V3_READ`/`WRITE` n'est
+> donc PAS remplie.
+
+---
+
 ## Partage de propriété — pour qu'aucune tâche n'ait deux auteurs
 
 | Domaine | Propriétaire |
