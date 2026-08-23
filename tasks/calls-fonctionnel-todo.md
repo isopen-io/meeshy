@@ -11336,3 +11336,72 @@ Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~6300 lign
 sur `conversations/participants.ts` (hors périmètre calling) ; `handleHold`'s branche `catch`
 générique omet `videoSurvivalController.reset()` (iOS, actuellement inerte — toujours pas exercée en
 pratique, non traitée dans ce lot pour rester scopé à un seul défaut par Vague).
+
+## Vague 168 — `handleHold`'s unhold generic `catch` also skipped `videoSurvivalController.reset()` (iOS) (2026-08-23)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise directe
+du suivi laissé ouvert par la Vague 167 (« `handleHold`'s branche `catch` générique omet
+`videoSurvivalController.reset()` (iOS, actuellement inerte — toujours pas exercée en pratique, non
+traitée dans ce lot pour rester scopé à un seul défaut par Vague) ») — après vérification que la
+Vague 167 est bien mergée sur `main` (PR #3398, merge `0b340c063`) et qu'aucune branche
+`claude/upbeat-dirac-*` antérieure n'est en avance (branche redémarrée depuis `origin/main` pour
+cette Vague après qu'un premier essai en double de ce même correctif a été détecté au `git merge` —
+Vague 167 avait déjà été mergée par une session parallèle entre-temps ; aucun commit perdu, l'essai
+en double a été abandonné sans être poussé).
+
+### Root cause
+
+`handleHold(_:)`'s branche `!isOnHold` (reprise vidéo après un hold CallKit) retente
+`webRTCService.upgradeToVideo()` et, en cas d'échec, désactive la vidéo pour le reste de l'appel
+(`isVideoEnabled = false`). Deux branches `catch` gèrent cet échec : `catch
+WebRTCError.cameraPermissionDenied` (permission refusée) et un `catch {}` générique (toute autre
+erreur — négociation SDP, caméra occupée, etc.). La première appelle
+`self.videoSurvivalController.reset()` juste après avoir posé `isVideoEnabled = false` — geste
+documenté par son propre commentaire (« Audit finding ») comme nécessaire car `isVideoEnabled = false`
+seul ne fait retomber l'état de survie à `.initial` qu'au PROCHAIN tick de qualité
+(`VideoSurvivalController.handle` garde sur `userWantsVideo`), et ce `handle()` est lui-même un no-op
+complet tant qu'une transition suspend/resume est déjà en vol (`guard !isTransitioning else {
+return }`). La branche `catch {}` générique, juste en dessous, faisait le même `isVideoEnabled = false`
+mais **sans** ce `reset()` — même geste, même contrat, une seule des deux branches le respectait.
+
+### Impact
+
+Fenêtre étroite (déjà qualifiée « actuellement inerte » par la Vague 167, confirmé toujours réel et
+non un faux suivi) : un hold CallKit était en cours quand le contrôleur de survie avait lui-même une
+transition suspend/resume en vol (dégradation réseau détectée pendant le hold) au moment précis où
+l'unhold tentait de relancer la vidéo et échouait pour une raison AUTRE que la permission caméra. Sans
+le `reset()`, `isTransitioning` restait vrai après cet échec — le prochain tick de qualité ne
+retombait pas immédiatement sur `.initial` malgré `isVideoEnabled == false`, et la complétion de la
+transition en vol pouvait poser `isVideoSuspended = true` après coup, affichant l'indicateur « vidéo
+suspendue pour cause réseau » alors que la vidéo est en réalité totalement désactivée par un échec
+distinct — un état d'affichage trompeur, pas un crash, jusqu'au prochain hold/unhold ou fin d'appel.
+
+### Fix
+
+Un seul ajout, additif, miroir exact de la branche `cameraPermissionDenied` juste au-dessus :
+`self.videoSurvivalController.reset()` après `self.hasLocalVideoTrack = …` dans le `catch {}`
+générique. Aucun changement de signature, aucune nouvelle branche.
+
+### Tests (TDD, RED confirmé)
+
+Nouveau `CallManagerHandleHoldSurvivalResetSourceTests.swift` (même patron source-level que les
+Vagues 166/167 — pas de host XCTest disponible dans ce conteneur), borné SÉMANTIQUEMENT par le message
+de log unique de cette branche jusqu'au `emitCallToggleVideo(..., enabled: true)` qui suit la fin du
+`Task` — pas par un nombre de caractères (leçon Vague 167 / cycle 238i). **RED confirmé par `git
+stash` du seul fichier de production** : `self.videoSurvivalController.reset()` absent du bloc avant
+le correctif, présent après.
+
+### Risk assessment
+
+Minimal — additif pur (une ligne), aucun changement de signature. Le comportement qui change est
+exactement celui que la branche sœur `cameraPermissionDenied` applique déjà pour le même échec
+sous-jacent (`upgradeToVideo()` qui jette) ; ce correctif aligne la seule autre branche qui désactive
+la vidéo sur la même discipline.
+
+### Non fait volontairement / reste ouvert
+
+Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~6300 lignes, iOS) ; ADR
+`actor CallEventQueue` non implémenté ; iOS single-peer côté groupe ; même gap de hiérarchie de rôle
+sur `conversations/participants.ts` (hors périmètre calling). Aucun suivi ponctuel restant identifié
+pour cette famille précise à ce stade — les prochaines Vagues devront soit rouvrir un audit large du
+fichier, soit s'attaquer à l'un des trois chantiers architecturaux ci-dessus.
