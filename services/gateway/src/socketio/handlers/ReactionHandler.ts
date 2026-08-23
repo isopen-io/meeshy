@@ -18,6 +18,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import { enqueueOfflineReactionEvent, type ReactionEventType } from '../reactionOfflineQueue';
+import { emitServerEvent } from '../serverEmit';
 
 const logger = enhancedLogger.child({ module: 'ReactionHandler' });
 
@@ -450,7 +451,7 @@ export class ReactionHandler {
       conversationId,
       (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
     );
-    this.io.to(ROOMS.conversation(normalizedConversationId)).emit(eventType, updateEvent);
+    emitServerEvent(this.io.to(ROOMS.conversation(normalizedConversationId)), eventType, updateEvent);
   }
 
   /**

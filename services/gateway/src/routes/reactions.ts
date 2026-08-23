@@ -224,7 +224,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           eventType: 'reaction-added',
           messageId,
           emoji,
-          payload: updateEvent as unknown as Record<string, unknown>,
+          payload: updateEvent,
           onError: (error) => fastify.log.error({ error }, 'REST reaction broadcast failed'),
         });
       }
@@ -410,7 +410,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           eventType: 'reaction-removed',
           messageId,
           emoji: decodedEmoji,
-          payload: updateEvent as unknown as Record<string, unknown>,
+          payload: updateEvent,
           onError: (error) => fastify.log.error({ error }, 'REST reaction removal broadcast failed'),
         });
       }

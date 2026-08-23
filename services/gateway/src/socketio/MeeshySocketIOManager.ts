@@ -87,6 +87,7 @@ import { MentionService, resolveUsernamesToIds } from '../services/MentionServic
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
+import { emitServerEvent, type ServerEventName } from './serverEmit';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 
@@ -107,7 +108,7 @@ const BRIDGE_SNAPSHOT_LIMIT = 30;
 
 // Maps a queued entry's `eventType` (absent = legacy 'new') to the Socket.IO
 // event replayed on reconnect for that offline-queue entry.
-function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string {
+function _drainedEventName(eventType: QueuedMessagePayload['eventType']): ServerEventName {
   if (eventType === 'edited') return SERVER_EVENTS.MESSAGE_EDITED;
   if (eventType === 'deleted') return SERVER_EVENTS.MESSAGE_DELETED;
   if (eventType === 'reaction-added') return SERVER_EVENTS.REACTION_ADDED;
@@ -126,9 +127,19 @@ function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string
 // room emit owes — see `linkMessageEmissions`. A recipient who was offline when
 // a share-link guest wrote is precisely the one this had to reach: the live
 // emit had already gone out without them.
+//
+// La charge sort de Redis en `Record<string, unknown>` : c'est une frontière de
+// DÉSÉRIALISATION, et le rattachement au contrat s'y affirme, comme dans
+// `linkMessageEmissions`. Ce que le typage garde ici, c'est le NOM de
+// l'événement (`_drainedEventName` rend un `ServerEventName`, plus un `string`) ;
+// ce qu'il ne garde pas encore, c'est que la charge REJOUÉE ait la même forme que
+// la charge ÉMISE en direct — cela demanderait d'indexer
+// `QueuedMessagePayload.payload` par `eventType`, et c'est un lot en soi.
 function _drainedEmissions(entry: QueuedMessagePayload): SocketEmission[] {
   if (entry.eventType === 'link-message') return linkMessageEmissions(entry.payload);
-  return [{ event: _drainedEventName(entry.eventType), payload: entry.payload }];
+  return [
+    { event: _drainedEventName(entry.eventType), payload: entry.payload } as SocketEmission,
+  ];
 }
 
 export interface SocketUser {
@@ -589,13 +600,26 @@ export class MeeshySocketIOManager {
       // AuthHandler joins ROOMS.user(...) BEFORE registering the socket and
       // before the presence-snapshot/drain call, for both JWT and anonymous
       // paths (anonymous personal rooms use the participant id).
-      // Replayed payloads are stored as opaque JSON in the queue — they were
-      // shaped at enqueue time, so re-checking them against ServerToClientEvents
-      // here is impossible (loose emit, same as the previous raw-Socket path).
-      const userRoom = this.io.to(ROOMS.user(userId)) as unknown as { emit: (event: string, payload: unknown) => void };
+      // Ce site portait un cast — `as unknown as { emit(event: string, payload:
+      // unknown): void }` — sous ce commentaire : « les charges rejouées sont du
+      // JSON opaque, mises en forme à l'enfilage, donc les revérifier contre
+      // `ServerToClientEvents` ici est IMPOSSIBLE ».
+      //
+      // C'était vrai, et ça ne l'est plus depuis le cycle 104 : `_drainedEmissions`
+      // rend des `SocketEmission`, c'est-à-dire des `ServerEmission` — un couple
+      // `(événement, charge)` CORRÉLÉ — et l'affirmation de ce couple est posée
+      // là où la forme est réellement connue, à la frontière de désérialisation.
+      // Le rejeu n'a donc plus besoin d'une porte à lui : il passe par la même
+      // que la diffusion directe.
+      //
+      // Le cast était une PORTE, pas une commodité, et c'est ce qui l'a rendu
+      // invisible : le balayage du cycle 104 cherche des DÉCLARATIONS
+      // (`emit(event: string, …)`), et une porte peut aussi s'ouvrir par
+      // assertion de type.
+      const userRoom = this.io.to(ROOMS.user(userId));
       for (const entry of pending) {
         for (const emission of _drainedEmissions(entry)) {
-          userRoom.emit(emission.event, emission.payload);
+          emitServerEvent(userRoom, emission);
         }
       }
       const affectedConversationIds = [...new Set(pending.map(e => e.conversationId))];
@@ -2199,7 +2223,12 @@ export class MeeshySocketIOManager {
       }
 
       // Diffuser dans la room de conversation
-      this.io.to(roomName).emit(eventConstant, translationData);
+      // Nom d'événement CALCULÉ : socket.io ne le vérifie PAS (mesure du
+      // cycle 104 — sur un `Ev` union, `EventParams` s'effondre en union de
+      // tuples et n'importe quelle charge de la famille passe sous n'importe
+      // quel membre). Ce site AVAIT l'air gardé — il émet sur un `Server`
+      // paramétré par `ServerToClientEvents` — et ne l'était pas.
+      emitServerEvent(this.io.to(roomName), eventConstant, translationData);
       logger.info('audio-translation:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.language });
 
       // Generic attachment-updated delta : same rationale as the

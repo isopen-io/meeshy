@@ -14,6 +14,7 @@ import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
+import { emitServerEvent } from '../serverEmit';
 
 const logger = enhancedLogger.child({ module: 'AttachmentReactionHandler' });
 const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
@@ -164,7 +165,7 @@ export class AttachmentReactionHandler {
         reactionSummary,
         timestamp: new Date().toISOString(),
       };
-      this.deps.io.to(ROOMS.conversation(conversationId)).emit(event, payload);
+      emitServerEvent(this.deps.io.to(ROOMS.conversation(conversationId)), event, payload);
 
       void this._enqueueOfflineAttachmentReactionEvent(
         conversationId,

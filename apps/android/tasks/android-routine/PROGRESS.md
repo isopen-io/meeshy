@@ -2,6 +2,66 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-23 **feed post shows its shared location** (slice `feed-post-location-sticker`,
+> feature-parity §F — new "Feed post location sticker (display side)" box). iOS renders a received post's
+> shared place as a pin + label capsule under the media (`FeedPostLocationSticker`); the Android composer
+> already ATTACHED an outgoing `SharedPlace`, but `ApiPost` dropped the field on the way IN, so a received
+> location never surfaced on the feed card. This lands the display side — the cleanest thin Feed slice with
+> data already on the wire (the composer's own `SharedPlace` model proves the type is used both ways).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the one
+> open PR repo-wide is #3352, a gateway share-link language fix, not android-routine). Prior android iteration
+> (`feed-repost-embed-mood-emoji`) already merged into main as PR #3361 (commit `97742b98`). Branched off
+> freshly-fetched `origin/main` (`2e24d7cc`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe as recorded in NOTES: install
+> cmdline-tools + `platforms;android-37.0` via `--channel=3`, then **copy** `android-37.0` → a real
+> `android-37` dir and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37` (AGP reads the integer
+> ApiLevel, not the dir name). After that the full `assembleDebug testDebugUnitTest` (= `meeshy.sh check`) ran
+> locally, **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **Model reuse, not duplication**: I first almost re-declared `SharedPlace` in `Post.kt`, then found the
+> existing SSOT `:core:model/SharedPlace.kt` (`{latitude, longitude, name, address, category}`, no `id` — it
+> mirrors the *gateway* shape, deliberately not iOS's extra `id`). Reused it; `ApiPost` gained only
+> `location: SharedPlace? = null` (data-class boilerplate, coverage-exempt; key-based kotlinx.serialization,
+> order-independent).
+>
+> **`:feature:feed` `FeedPostLocationBuilder`** (pure, app-side — same grain as `RepostEmbedBuilder`):
+> `build(place)` → `FeedLocationPresentation(label, latitude, longitude)` or null when absent. Label resolves
+> `name?.takeIf { isNotBlank } ?: address?.takeIf { isNotBlank }` → null (mirror of iOS `displayLabel`
+> name → address precedence). A null label is NOT an absent sticker — the cell supplies the localized
+> "Position partagée" fallback so a hand-dropped, coordinate-only pin still renders a tappable sticker.
+> Projected into `FeedPostPresentation.location` (defaulted last field — the one direct-construction test,
+> `FeedMediaGalleryTest`, uses named args so it stays green).
+>
+> **`:feature:feed` `FeedPostLocationSticker`** (Compose glue, exempt): a reusable dumb atom (pin +
+> ellipsized label in an Indigo500@12% capsule, accent-coherent, a11y `Role.Button` + open-hint), taking an
+> `onTap` so the map-intent orchestration stays in the screen. Wired into `PostCard` after the image grid
+> (mirror of iOS ordering). Tap → `openPlaceOnMap`: a `geo:lat,lng?q=…` intent, `Locale.ROOT`-formatted so a
+> comma-decimal JVM locale never emits an invalid URI, with a Google-Maps-web `ACTION_VIEW` fallback on
+> `ActivityNotFoundException` — no dead-end when no map app is installed.
+>
+> **Tests: +11** — 9 `FeedPostLocationBuilderTest` (null place / name / name-over-address /
+> blank-name→address / absent-name→address / blank-both→null / absent-both→null / coord passthrough /
+> coord-only→null-label) + 2 `FeedPostBuilderTest` wiring (projects label+coords / absent→null). **Mutation
+> RED-proof ×1**: dropping the name `isNotBlank` guard fails EXACTLY the two blank-name tests (2 of 9), the
+> other 7 green. Restored via `cp` backup; production diff verified clean afterward. Compile-RED was also
+> genuine — the tests referenced `SharedPlace`/`FeedPostLocationBuilder`/`FeedLocationPresentation` before
+> they were plumbed.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (1 model field, 1 new pure builder + presentation, 1 new Compose cell, screen
+> wiring + map helper, strings ×4 locales, +11 tests, tracking docs). Verdict: **PASS** — pure app-side
+> projection through a tested builder + exempt Compose glue, behavioural tests through the public API, no
+> production logic outside apps/android.
+>
+> **Next**: still §F (Feed). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) the reposted post's **location** in the repost embed — now unblocked on the display side, needs a new
+> `ApiRepostOf.location` field + gateway payload confirmation (iOS `APIRepostOf.location` is on the wire per
+> `PostModels.swift`), then a small mirror of this slice's projection into `RepostEmbedBuilder`; (2) begin
+> decomposing the **Unified post composer** tabs (large, multi-slice); (3) advance to **§E Stories** (next in
+> build order). Prefer (1) — it is the last cleanly-doable repost-embed gap and reuses this slice's model.
+
 > On 2026-08-23 **repost embed shows the reposted post's mood emoji** (slice `feed-repost-embed-mood-emoji`,
 > feature-parity §F — "Repost / quote embed cell in the feed"). iOS prefixes the reposted post's mood emoji
 > to the quoted content (`FeedPostCard.swift:966` — `if let mood = repost.moodEmoji, !mood.isEmpty`), with an

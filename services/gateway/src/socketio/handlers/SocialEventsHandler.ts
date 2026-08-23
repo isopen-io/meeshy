@@ -10,6 +10,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { ServerToClientEvents } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
+import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
 import type {
   Post,
   PostComment,
@@ -62,28 +63,30 @@ const logger = enhancedLogger.child({ module: 'SocialEventsHandler' });
  * est ici la SEULE garde qui existe entre le producteur et les décodeurs
  * iOS/Android/web, qui sont tous les trois écrits contre `ServerToClientEvents`.
  */
-type SocialEventName = keyof ServerToClientEvents;
-type SocialEventPayload<E extends SocialEventName> = Parameters<ServerToClientEvents[E]>[0];
+// Alias locaux des deux dérivations du contrat. Elles ont été ÉCRITES ici au
+// cycle 100, puis retrouvées mot pour mot au cycle 104 dans les huit portes
+// d'émission de la passerelle — c'est ce qui a décidé de leur donner un
+// domicile unique (`socketio/serverEmit.ts`). Les noms locaux survivent parce
+// que vingt-et-un sites d'appel les lisent dans les signatures publiques.
+type SocialEventName = ServerEventName;
+type SocialEventPayload<E extends SocialEventName> = ServerEventPayload<E>;
 
 /**
- * L'UNIQUE cast de ce fichier, et il ne blanchit rien.
- *
- * `socket.io` enveloppe sa map d'événements dans
+ * L'erasure de corrélation vit désormais dans `emitServerEvent`
+ * (`socketio/serverEmit.ts`), partagée avec les huit autres portes d'émission
+ * de la passerelle. Elle ne blanchit toujours rien, et pour la même raison
+ * qu'ici : `socket.io` enveloppe sa map d'événements dans
  * `DecorateAcknowledgementsWithMultipleResponses<…>` avant d'en dériver la
- * signature d'`emit`. Sur un `E` GÉNÉRIQUE, TypeScript ne peut pas prouver que
- * cette enveloppe laisse le paramètre inchangé — alors qu'elle le fait pour tout
- * `E` concret, aucun de nos événements serveur→client ne portant d'accusé de
- * réception. L'erreur est une limite de l'inférence sur type mappé, pas un
- * désaccord de forme.
+ * signature d'`emit`, et sur un `E` GÉNÉRIQUE TypeScript ne peut pas prouver
+ * que cette enveloppe laisse le paramètre inchangé — alors qu'elle le fait pour
+ * tout `E` concret, aucun de nos événements serveur→client ne portant d'accusé
+ * de réception. Une limite d'inférence sur type mappé, pas un désaccord de
+ * forme.
  *
- * Le cast est donc placé ICI, une fois, et il porte sur le point exact que le
- * compilateur ne sait pas résoudre. Ce qu'il ne touche PAS : le couple
- * `(event, data)` a déjà été vérifié contre `ServerToClientEvents` à la
- * frontière des quatre helpers publics, donc à chacun des vingt-et-un sites
- * d'appel. Écrire le cast dans les helpers eux-mêmes aurait rouvert le seam
- * `(string, unknown)` qu'on vient de fermer — quatre fois.
+ * Ce que l'erasure ne touche PAS : le couple `(event, data)` a déjà été vérifié
+ * contre `ServerToClientEvents` à la frontière des quatre helpers publics, donc
+ * à chacun des vingt-et-un sites d'appel.
  */
-type EmitTarget = { emit: (event: string, ...args: unknown[]) => unknown };
 
 export interface SocialEventsHandlerDependencies {
   io: SocketIOServer;
@@ -158,7 +161,7 @@ export class SocialEventsHandler {
     // Inclure l'auteur pour feedback immédiat
     const targetIds = [...friendIds, authorId];
     for (const id of targetIds) {
-      (this.io.to(ROOMS.feed(id)) as EmitTarget).emit(event, data);
+      emitServerEvent(this.io.to(ROOMS.feed(id)), event, data);
     }
   }
 
@@ -178,7 +181,7 @@ export class SocialEventsHandler {
   ): void {
     const rooms = [...recipientIds, authorId].map((id) => ROOMS.feed(id));
     rooms.push(ROOMS.post(postId));
-    (this.io.to(rooms) as EmitTarget).emit(event, data);
+    emitServerEvent(this.io.to(rooms), event, data);
   }
 
   /**
@@ -189,7 +192,7 @@ export class SocialEventsHandler {
     event: E,
     data: SocialEventPayload<E>,
   ): void {
-    (this.io.to(ROOMS.feed(userId)) as EmitTarget).emit(event, data);
+    emitServerEvent(this.io.to(ROOMS.feed(userId)), event, data);
   }
 
   /**
@@ -210,7 +213,7 @@ export class SocialEventsHandler {
     event: E,
     data: SocialEventPayload<E>,
   ): void {
-    (this.io.to([ROOMS.feed(userId), ROOMS.post(postId)]) as EmitTarget).emit(event, data);
+    emitServerEvent(this.io.to([ROOMS.feed(userId), ROOMS.post(postId)]), event, data);
   }
 
   // ==============================================

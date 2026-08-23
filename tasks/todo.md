@@ -1029,3 +1029,206 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle103.md`.
       discriminant n'est pas syntaxique (il faut savoir si le gestionnaire
       distingue l'absence), donc l'outil ne peut pas trancher seul — mais il
       pourrait geler la liste et forcer à instruire tout site NEUF.
+
+## Cycle 104 — la porte d'émission : huit copies d'une déclaration qui ne dit rien
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle104.md`
+
+- [x] Instruit le suivi nommé du cycle 103 : « `PreviewEmitIO.emit(event: string,
+      payload: unknown)` reste la porte non typée de toute diffusion ». Le suivi
+      était juste et **sous-estimait son objet d'un facteur huit** — la même
+      déclaration était écrite HUIT fois à la main, dans huit fichiers qui ne se
+      citent pas. Plus deux exemplaires des mêmes dérivations de type dans
+      `SocialEventsHandler` (cycle 100), qui avait trouvé la bonne réponse sans
+      qu'elle soit disponible ailleurs.
+- [x] **Découverte MESURÉE : socket.io ne garde pas ce qu'on croit.** Sur un nom
+      d'événement UNION, son `EventParams` s'effondre en union de tuples et une
+      charge correspondant à N'IMPORTE lequel des membres passe sous n'importe
+      quel autre. Un nom d'événement CALCULÉ est exactement la forme qu'ont les
+      quatre émetteurs qui n'avaient pas de porte à eux (`ReactionHandler`,
+      `AttachmentReactionHandler`, `PostReactionHandler`, `SocialEventsHandler`).
+      **Ils avaient l'air gardés et ne l'étaient pas** — pire qu'ouvertement non
+      typés, parce que personne ne va les vérifier.
+- [x] **Aucune charge fausse sur le fil** — piège armé, pas panne, et c'est
+      mesuré et non supposé (règle du cycle 103). Les douze appelants de
+      `broadcastToUser`, ceux d'`emitToConversationParticipants`, les quatre
+      routes de réaction et les quatre émetteurs sociaux passent tous au contrat
+      sans une correction de valeur.
+- [x] **La JUMELLE portait la marque exacte du cycle précédent.**
+      `broadcastReactionMutation` déclarait le `Record<string, unknown>` que le
+      cycle 103 venait de retirer de `broadcastMessageMutation`, et ses QUATRE
+      sites d'appel portaient le double cast qui le dit
+      (`updateEvent as unknown as Record<string, unknown>`). Les quatre sont
+      partis ; la charge était déjà juste.
+- [x] **Défaut de HARNAIS bien réel, 3e exemplaire du patron (91, 93, 104).**
+      `SocialEventsHandler.test.ts` portait un double PARTIEL de
+      `socketio-events` : 27 constantes à la main, pas la 28e
+      (`COMMENT_UNLIKED`). `broadcastCommentUnliked` émettait donc un événement
+      au nom **`undefined`** sur ses deux adresses, avec un témoin VERT — il
+      n'assertait que les rooms, jamais le NOM. Double retiré, assertion posée.
+- [x] Correctif : `socketio/serverEmit.ts`, la porte dérivée de
+      `ServerToClientEvents` en **union de tuples** (la forme générique, celle
+      qu'on écrit spontanément, n'est pas satisfaite par le `Server` de
+      production — socket.io décore sa carte avant d'en dériver ses paramètres).
+- [x] **DEUX erasures nommées, et deux seulement** (TS#30581) : `emitServerEvent`,
+      derrière un paramètre dont le type EST la garantie qu'il est sans
+      conséquence. Les émetteurs dont le couple relève du flot de CONTRÔLE
+      gardent leur `switch`, qui corrèle sans rien effacer.
+- [x] **Deux frontières de désérialisation NOMMÉES** plutôt que fermées :
+      `linkMessageEmissions` et `_drainedEmissions` (charge relue de Redis).
+- [x] **Deux cliquets, aucun ne subsume l'autre.** Au TYPE (`ServerEmitRatchet`,
+      4 assertions, 0 ligne exécutable) contre une porte RELÂCHÉE ; au BALAYAGE
+      (inventaire VIDE, `src/` entier) contre une porte CONTOURNÉE — la 8e copie
+      vivait dans `utils/`, à deux répertoires de la 7e.
+- [x] **Le cliquet de type vit dans le module qu'il garde, PAS dans `__tests__/`,
+      et la raison est mesurée** : `tsconfig` EXCLUT les tests et n'inclut
+      `src/socketio/**` que par ATTEIGNABILITÉ. Un cliquet dans un fichier que
+      personne n'importe n'est jamais lu par le compilateur — donc jamais rouge.
+- [x] RED prouvé sur les deux cliquets, et les 4 assertions de type ne sont pas
+      redondantes : la mutation « relâchée en `[string, unknown]` » fait tomber
+      2/3/4, la mutation « corrélation retirée » fait tomber 2/3 seulement.
+- [x] Gates : `tsc --noEmit` **0 erreur** · suite complète passerelle
+      **836/836 suites, 19253/19253 témoins**.
+- [ ] Suivi — `ReactionUpdateEvent` et `ReactionUpdateEventData` sont DEUX
+      exemplaires structurellement identiques de la même déclaration, jusqu'au
+      commentaire de `userId`. Écarté par SCOPE : la seconde est importée par le
+      SDK web et les services, donc lot de dépendances, pas d'émission.
+- [ ] Suivi — **la charge REJOUÉE n'est pas vérifiée contre la charge ÉMISE.**
+      `QueuedMessagePayload.payload` est un `Record<string, unknown>` unique pour
+      onze `eventType`. L'indexer fermerait la dernière frontière que ce lot n'a
+      que NOMMÉE, et c'est le seul endroit où un rejeu hors ligne peut diverger
+      en silence de la diffusion directe.
+- [ ] Suivi — `ConversationUpdatedEventData` porte une signature d'index, donc la
+      porte n'y vérifie que les trois champs REQUIS. `lastMessagePreview` y
+      voyage sans contrat alors que trois émetteurs le posent — même famille que
+      `location` avant le cycle qui l'a déclaré.
+- [ ] Suivi — **le miroir client→serveur n'est pas gouverné.** Ce lot ferme
+      `ServerToClientEvents` ; `ClientToServerEvents` n'a pas d'équivalent, et
+      `socket.on(...)` reste libre de déclarer la forme qu'il veut de ce qu'il
+      REÇOIT — la moitié la plus hostile des deux.
+
+## Cycle 104 bis (2026-08-23) — `messageType` : la moitié CLIENT que le serveur ne peut pas corriger
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle104-bis.md`.
+
+- [x] Instruit le suivi nommé des cycles 102 et 103 — « le web porte le
+      CINQUIÈME exemplaire de la règle ». Sa note « retrait = changement de
+      contrat client » l'avait tenu ouvert deux cycles : elle décrit le geste
+      qu'il ne faut PAS faire (retirer le champ du fil) et masquait le geste
+      additif — faire écrire au client la MÊME règle, pas une autre.
+- [x] **La duplication n'est pas de style : elle est AUTORITATIVE.** La
+      dérivation serveur (`deriveMessageTypeForAttachments`) est délibérément
+      ADDITIVE — elle se tait dès que la colonne porte autre chose que `'text'`.
+      Corollaire jamais écrit, et écrit maintenant : **ce que le client DÉCLARE,
+      personne ne le corrige.** C'est ce qui sépare cette duplication de celles
+      des cycles 102/103, où les copies se rattrapaient entre elles.
+- [x] **TROIS sites, pas deux.** Le balayage a trouvé le troisième, absent du
+      suivi et le seul que l'utilisateur VOIE :
+      `ConversationLayout.tsx:593` compose le `messageType` de la ligne
+      OPTIMISTE avec un ternaire manuscrit — donc un flip visible dès que sa
+      règle diverge de celle que le serveur écrira.
+- [x] **D1 (persisté)** — les trois exemplaires lisaient `mimeTypes[0]`. Un lot
+      photo + PDF partait en `'image'` là où la canonique dit `'file'`, et le
+      repli REST le persistait sans que rien ne le corrige. Aval mesurable :
+      `contentTypeIcon` notifie 🖼️ au lieu de 📎 ;
+      `ConversationMessageStatsService` compte par la même colonne.
+- [x] **D2 (affichage)** — `text/*` et un MIME inconnu rendaient `'text'` : un
+      ballon de conversation sur un message qui porte un fichier. Distinction
+      MESURÉE, pas supposée : sur ces formes-là le serveur RATTRAPE le repli
+      REST (la colonne porte `'text'`, donc l'additif se déclenche). D2 n'est
+      persisté nulle part — c'est un défaut de ligne optimiste, et un piège
+      armé ailleurs. D1, lui, est persisté.
+- [x] **Le chemin socket ne pesait pas ce qu'on croyait** :
+      `SocketMessageSendWithAttachmentsSchema` n'a AUCUN champ `messageType`,
+      donc `z.object` le strippe et `MessageHandler` dérive lui-même. Le repli
+      REST est le SEUL des deux à atteindre la base.
+- [x] Correctif : la règle REMONTE dans
+      `packages/shared/utils/attachment-message-type.ts`. La passerelle garde
+      son module comme point d'import (ré-export de trois lignes) ; les
+      appelants n'ont pas à savoir où la règle habite.
+- [x] Une fonction AJOUTÉE, sans jumelle serveur et délibérément :
+      `messageTypeForClientAttachments({ hasAttachments, mimeTypes })` porte les
+      deux choses que seul un client sait — des pièces jointes sans MIME connu
+      ⇒ `'file'` (jamais `'text'`), et aucune pièce jointe ⇒ `'text'` (le seul
+      cas où il est vrai, et c'est `attachmentIds` qui le dit).
+- [x] RED prouvé dans les deux sens : ancienne règle rétablie ⇒ **5 témoins
+      tombent, 112 passent**. Les catégories homogènes et le cas sans pièce
+      jointe passent AVANT comme APRÈS — le lot est strictement additif sur eux.
+- [x] Gates : `tsc --noEmit` shared **0** · gateway **0** · web **1241
+      inchangé** (préexistantes, fichiers de test, aucune sur les 3 fichiers
+      touchés) · shared **103 suites / 2467 tests** (18 nouveaux) · web
+      messaging **117/117** + ConversationLayout · gateway 39 suites adjacentes
+      **1274/1274** puis suite complète VERTE (exit 0).
+- [ ] Suivi — un message de LIEU sans pièce jointe reste `'text'`, et iOS se
+      tait toujours. Non traité ici sur MESURE : `'location'` n'est pas dans
+      l'enum de la route REST, donc le combler touche la route, l'enum, iOS et
+      le service de stats — son propre lot.
+- [ ] Suivi — **`conversation:updated.senderId` est servi dans DEUX espaces
+      d'id** (WS = `User.id`, REST/ZMQ + aperçu = `Participant.id`). Piège ARMÉ,
+      pas panne : aucun client ne le lit — mesuré sur les trois.
+- [ ] Suivi — **`ConversationUpdatedEventData` ne déclare que 3 champs + une
+      signature d'index** ; tout le groupe d'aperçu voyage sans contrat. Le
+      suivi ci-dessus en est le premier symptôme mesuré.
+- [x] Corrigé dans ce lot — le commentaire de `MessageHandler.ts:1453` était
+      PÉRIMÉ (`io` EST typé `MeeshyIOServer`). Ce qui reste vrai, c'est que le
+      typage n'attrape rien ici — à cause de la signature d'index, pas d'un type
+      manquant. Un mauvais diagnostic écrit dans le code coûte plus qu'aucun.
+- [x] Suivi hérité `PreviewEmitIO.emit` non typé : **CLOS par le lot voisin**
+      (cycle 104, PR #3366), qui en a trouvé huit copies là où le suivi n'en
+      nommait qu'une. Deux lots du même jour, instruits en parallèle.
+- [ ] Suivis hérités restants — la règle du `senderId` du fil en QUATRE
+      exemplaires (dont un en `||` là où trois sont en `??`) ; un cliquet sur
+      les `default:` de schémas de REQUÊTE.
+
+## Cycle 105 — un cast est une porte, et `_seq` n'était déclaré nulle part
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle105.md`
+
+- [x] Part de la question que le cycle 104 n'a pas posée : son balayage cherche
+      des DÉCLARATIONS — **qu'est-ce qu'il ne peut PAS voir ?**
+- [x] **D1 — la NEUVIÈME porte, ouverte par ASSERTION DE TYPE.** Sur le rejeu
+      hors ligne (`_drainPendingMessages`) :
+      `as unknown as { emit: (event: string, payload: unknown) => void }`.
+      Un cast produit exactement la liberté d'une déclaration, sur exactement le
+      même appel, et il est plus discret : il ne crée aucun type nommé qu'on
+      puisse chercher.
+- [x] **Le commentaire qui la couvrait était une AFFIRMATION devenue fausse** —
+      « les revérifier ici est IMPOSSIBLE ». Vrai à l'écriture ; le cycle 104 l'a
+      périmé sans s'en apercevoir (`_drainedEmissions` rend des couples
+      CORRÉLÉS, `emitServerEvent` existe pour ça). **Un commentaire
+      d'impossibilité ne rougit jamais.**
+- [x] **D2 — trois émetteurs à nom CALCULÉ** que le cycle 104 n'avait pas
+      balayés (il les avait cherchés à la main) : le rejeu, les trois événements
+      de traduction AUDIO, et `emitWithSeq`.
+- [x] **D3 — `_seq` : lu par les TROIS clients, déclaré NULLE PART.** Curseur
+      monotone par utilisateur, signal de détection de trou du SyncEngine — web
+      (`observeSyncSeq`), iOS (`case seq = "_seq"`), Android. Il ne voyageait
+      que parce que la porte prenait `Record<string, unknown>` et que les deux
+      sites d'appel portaient le double cast. Exactement `location` sur
+      `ConversationUpdatedEventData` avant sa déclaration.
+- [x] **D4 — `context` déclaré `Record<string, unknown>`** alors que
+      `NotificationContext` (18 champs nommés) vit dans le MÊME paquet. Tombé en
+      une ligne au premier typage de l'émission. Une carte ouverte dans un
+      contrat est une absence de déclaration qui a l'air d'en être une — version
+      « carte » du `{ type: 'object' }` nu. Idem `metadata`.
+- [x] Le balayage voit désormais les DEUX formes (`emit(ev: string` et
+      `emit: (ev: string`), fixture à trois formes fautives.
+- [x] **RED prouvé de la façon la plus directe** : en réintroduisant le cast que
+      le cycle 104 avait laissé vivre, le balayage tombe EN NOMMANT
+      `socketio/MeeshySocketIOManager.ts`.
+- [x] Gates : `tsc` passerelle **0 erreur** · **836/836 suites, 19253/19253** ·
+      `packages/shared` **102/102 fichiers, 2449/2449** · `apps/web` aucune
+      erreur ajoutée (grep ciblé sur la surface du lot).
+- [ ] Suivi — **la charge REJOUÉE est AFFIRMÉE, pas PROUVÉE.**
+      `QueuedMessagePayload.payload` reste un `Record<string, unknown>` unique
+      pour onze `eventType` ; `_drainedEmissions` asserte le couple à la
+      frontière Redis. L'indexer par `eventType` remplacerait l'affirmation par
+      une vérification.
+- [ ] Suivi — `_seq` n'est déclaré que sur `NotificationEventData`, le seul
+      événement qui passe par `emitWithSeq` aujourd'hui. Un second l'y ferait
+      entrer sans que rien ne rappelle de le déclarer.
+- [ ] Suivi hérité — `ReactionUpdateEvent` / `ReactionUpdateEventData`, deux
+      exemplaires de la même déclaration.
+- [ ] Suivi hérité — `ConversationUpdatedEventData` porte une signature d'index ;
+      `lastMessagePreview` y voyage sans contrat.
+- [ ] Suivi hérité — **le miroir client→serveur n'est pas gouverné.**

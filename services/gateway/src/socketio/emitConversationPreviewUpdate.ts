@@ -7,15 +7,18 @@ import {
   resolveLastMessagePreviewPrism,
 } from './utils/lastMessagePreviewPrism';
 import { resolvePersonalPreviewOverrides } from './utils/personalPreviewOverride';
+import type { ServerEmitIO } from './serverEmit';
 
 /**
  * Minimal Socket.IO surface used by this helper. Kept structural so the
  * function is trivially unit-testable and accepts both the production
  * `Server` and the REST-side `socketIOManager.getIO()` shape.
+ *
+ * Alias de `ServerEmitIO` depuis le cycle 104 : la forme est inchangée, le
+ * couple `(événement, charge)` est désormais celui de `ServerToClientEvents`.
+ * Le nom survit parce que sept fichiers l'importent — voir `serverEmit.ts`.
  */
-export interface PreviewEmitIO {
-  to(room: string): { emit(event: string, payload: unknown): unknown };
-}
+export type PreviewEmitIO = ServerEmitIO;
 
 /**
  * Exporté pour que les relais qui ne font que TRANSMETTRE ce prisma

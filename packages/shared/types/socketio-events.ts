@@ -15,7 +15,9 @@ import type { ConversationJoinErrorReason } from '../utils/conversation-join-err
 
 // Prédicat des marquages de notifications en masse
 import type {
+  NotificationContext,
   NotificationDeletedBulkScope,
+  NotificationMetadata,
   NotificationReadBulkScope,
 } from './notification.js';
 
@@ -879,8 +881,23 @@ export interface NotificationEventData {
     readonly displayName?: string;
     readonly avatar?: string;
   };
-  readonly context?: Record<string, unknown>;
-  readonly metadata?: Record<string, unknown>;
+  /**
+   * Déclaré `NotificationContext` — le type RÉEL du producteur — et non plus
+   * `Record<string, unknown>` (cycle 105).
+   *
+   * L'opacité n'était pas un choix : elle n'a jamais été confrontée à
+   * l'émetteur, parce que `emitWithSeq` prenait `Record<string, unknown>` et
+   * que les deux sites d'appel portaient le double cast qui le dit
+   * (`socketPayload as unknown as Record<string, unknown>`). Le premier typage
+   * de l'émission l'a fait tomber : `NotificationContext` est une interface,
+   * donc SANS signature d'index, donc jamais assignable à une carte ouverte.
+   *
+   * Le type vit dans ce même paquet (`types/notification.ts`) : le déclarer ne
+   * fait entrer aucune dépendance, il cesse seulement de cacher ce que les
+   * trois clients reçoivent déjà.
+   */
+  readonly context?: NotificationContext;
+  readonly metadata?: NotificationMetadata;
   readonly state: {
     readonly isRead: boolean;
     readonly readAt: Date | null;
@@ -891,6 +908,33 @@ export interface NotificationEventData {
     readonly emailSent: boolean;
     readonly pushSent: boolean;
   };
+  /**
+   * Curseur MONOTONE par utilisateur, estampillé par `emitWithSeq`
+   * (`services/gateway/src/socketio/utils/emitWithSeq.ts`) — pas une propriété
+   * de la notification, une propriété du TRANSPORT.
+   *
+   * C'est le signal de détection de TROU du SyncEngine : un client qui reçoit
+   * `_seq = N+2` après `N` sait qu'un événement lui a échappé et déclenche une
+   * resynchronisation. **Les trois clients le lisent** — web
+   * (`observeSyncSeq(this.syncSeq, data?._seq)`,
+   * `notification-socketio.singleton.ts`), iOS (`case seq = "_seq"`,
+   * `MeeshySDK/Sockets/MessageSocketManager.swift`), Android
+   * (`MessageSocketManagerNotificationTest`).
+   *
+   * **Déclaré ici parce qu'il ne l'était NULLE PART** (cycle 105). Il ne
+   * voyageait que parce que `emitWithSeq` prenait
+   * `payload: Record<string, unknown>` : un champ porteur, lu par trois
+   * décodeurs, dont aucun contrat ne parlait — exactement le cas de `location`
+   * sur `ConversationUpdatedEventData` avant qu'on ne le déclare, et la même
+   * conséquence : la parité entre émetteurs ne tenait qu'à la lecture du code
+   * voisin.
+   *
+   * Optionnel, et l'absence est SIGNIFIANTE : `emitWithSeq` dégrade
+   * volontairement en émettant SANS `_seq` quand l'allocation du compteur
+   * rejette ou dépasse son délai. Le client traite alors l'événement sans
+   * avancer son curseur, et le trou éventuel est rattrapé au prochain `/sync`.
+   */
+  readonly _seq?: number;
 }
 
 /**

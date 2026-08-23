@@ -15,6 +15,30 @@ const makeFakeIO = () => {
   return { io: { to }, emit, to };
 };
 
+/**
+ * La charge RÉELLE de `category:created`, copiée clé par clé.
+ *
+ * Ce témoin passait `{ foo: 1 }` — ce que `payload: unknown` acceptait. Depuis
+ * que `broadcastToUser` est générique sur le nom de l'événement (cycle 104), la
+ * charge est vérifiée contre `ServerToClientEvents` aux DOUZE sites d'appel de
+ * la production comme ici. Ce que ce témoin garde — la RÉSOLUTION de la couche
+ * Socket.IO à travers ses trois formes — est inchangé.
+ */
+const CATEGORY_CREATED_PAYLOAD = {
+  userId: 'user-9',
+  category: {
+    id: 'cat-1',
+    userId: 'user-9',
+    name: 'Travail',
+    color: null,
+    icon: null,
+    order: 0,
+    isExpanded: true,
+    createdAt: '2026-08-23T10:00:00.000Z',
+    updatedAt: '2026-08-23T10:00:00.000Z',
+  },
+} as const;
+
 const makeFastify = (handler: unknown): FastifyInstance =>
   ({
     socketIOHandler: handler,
@@ -46,16 +70,19 @@ describe('broadcastToUser', () => {
     const fake = makeFakeIO();
     const fastify = makeFastify({ io: fake.io });
 
-    const ok = broadcastToUser(fastify, 'user-9', SERVER_EVENTS.CATEGORY_CREATED, { foo: 1 });
+    const ok = broadcastToUser(fastify, 'user-9', SERVER_EVENTS.CATEGORY_CREATED, CATEGORY_CREATED_PAYLOAD);
 
     expect(ok).toBe(true);
     expect(fake.to).toHaveBeenCalledWith(ROOMS.user('user-9'));
-    expect(fake.emit).toHaveBeenCalledWith(SERVER_EVENTS.CATEGORY_CREATED, { foo: 1 });
+    expect(fake.emit).toHaveBeenCalledWith(SERVER_EVENTS.CATEGORY_CREATED, CATEGORY_CREATED_PAYLOAD);
   });
 
   test('returns false (no throw) and logs a warning when socket layer is absent', () => {
     const fastify = makeFastify(undefined);
-    expect(broadcastToUser(fastify, 'u', SERVER_EVENTS.CATEGORY_DELETED, {})).toBe(false);
+    expect(broadcastToUser(fastify, 'u', SERVER_EVENTS.CATEGORY_DELETED, {
+      userId: 'u',
+      categoryId: 'cat-1',
+    })).toBe(false);
     expect((fastify.log.warn as jest.Mock)).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'u', event: SERVER_EVENTS.CATEGORY_DELETED }),
       expect.stringContaining('Socket.IO layer unavailable'),

@@ -1041,7 +1041,7 @@ export class NotificationService {
       // `create()` rendait `null` sur une ligne pourtant écrite.
       if (this.io) {
         await this.emitBestEffort(SERVER_EVENTS.NOTIFICATION_NEW, params.userId, async () => {
-          await emitWithSeq(this.io!, this.sequenceService, params.userId, SERVER_EVENTS.NOTIFICATION_NEW, socketPayload as unknown as Record<string, unknown>);
+          await emitWithSeq(this.io!, this.sequenceService, params.userId, SERVER_EVENTS.NOTIFICATION_NEW, socketPayload);
           // DANS le callback : « emitted » ne doit se dire que d'un emit qui est
           // effectivement parti. Sur échec, c'est le log `error` d'emitBestEffort
           // qui parle.
@@ -4919,7 +4919,7 @@ export class NotificationService {
           this.sequenceService,
           userId,
           SERVER_EVENTS.NOTIFICATION_NEW,
-          socketPayload as unknown as Record<string, unknown>
+          socketPayload
         )
       );
     }

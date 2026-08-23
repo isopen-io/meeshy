@@ -29,6 +29,12 @@ export * from './join-notice.js';
 export * from './conversation-join-error.js';
 export { getSenderUserId, isAnonymousSender } from './sender-identity.js';
 export {
+  type AttachmentMessageType,
+  messageTypeFromMimeTypes,
+  messageTypeForClientAttachments,
+  deriveMessageTypeForAttachments,
+} from './attachment-message-type.js';
+export {
   generateClientMessageId,
   isValidClientMessageId,
   CLIENT_MESSAGE_ID_REGEX,

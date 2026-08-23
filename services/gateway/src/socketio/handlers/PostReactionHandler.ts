@@ -33,6 +33,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import { resolveInteractionTarget, resolveConsumptionTarget } from '../../services/posts/postVisibility.js';
 import { SocialEventsHandler } from './SocialEventsHandler';
+import { emitServerEvent } from '../serverEmit';
 
 /** Emoji canonique du "like" — aligné REST (`interactions.ts`) + web (`HEART_EMOJI`). */
 const HEART_EMOJI = '❤️';
@@ -124,7 +125,7 @@ export class PostReactionHandler {
       }
     }
     const event = action === 'add' ? SERVER_EVENTS.POST_REACTION_ADDED : SERVER_EVENTS.POST_REACTION_REMOVED;
-    this.io.to(ROOMS.post(postId)).emit(event, updateEvent);
+    emitServerEvent(this.io.to(ROOMS.post(postId)), event, updateEvent);
   }
 
   /**
