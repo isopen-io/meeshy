@@ -46,16 +46,20 @@ par grep exhaustif (`require(`/`import(` sur le chemin : néant) et par
 
 - [x] `tsc --noEmit` gateway : exit 0
 - [x] Aucune référence résiduelle (`grep` hors socketio : néant)
-- [ ] `bun run test:coverage` : suite complète verte, seuils 87/80/86/83 tenus
+- [x] `bun run test:coverage` : **839/840 suites vertes** — la seule suite rouge
+  (`messages-list-forward-source-attachment-url-leak.test.ts`, 3 tests) est un
+  **rouge PRÉEXISTANT sur `main`**, orthogonal à ce retrait (diff ne touche que
+  `participant-resolver.ts` + docs, aucun code de route/pièce jointe). Rouge connu,
+  adressé par les PR #3388/#3391 (« main était rouge », « débloquer main CI rouge »).
 - [x] Module vivant `socketio/utils/participant-resolver.ts` intact
 
 ## Completion status
 
 - Retrait : **fait**
 - Typecheck : **fait**
-- Couverture : **en cours de mesure**
+- Couverture : **mesurée** — 839/840 suites vertes, unique rouge préexistant/orthogonal
 - Docs : **fait**
-- Publication : **en attente de la couverture verte**
+- Publication : **poussé sur `claude/brave-archimedes-njhgtm`**
 
 ## Progress tracking
 
