@@ -11003,3 +11003,71 @@ laisse le futur `call:ended` broadcast (qui porte déjà la vraie raison) faire 
 DIFFÉRENT, non instruit ici : si ce broadcast a été manqué pendant la coupure (le scénario même que
 ce rejoin existe pour couvrir), iOS ne semble offrir aucun retry du tout sur ce chemin — à vérifier
 lors d'une prochaine vague dédiée iOS plutôt que supposé par analogie avec le web.
+
+## Vague 162 — iOS : `call:join` rejeté en `CALL_ENDED` au reconnect ne transitionnait jamais `callState`, zombie UI sans retry (2026-08-23)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise directe
+du suivi laissé ouvert par la Vague 161 (« iOS ne semble offrir aucun retry du tout sur ce chemin — à
+vérifier lors d'une prochaine vague dédiée iOS plutôt que supposé par analogie avec le web ») — après
+vérification que la Vague 161 est bien mergée sur `main` et qu'aucune branche `claude/upbeat-dirac-*`
+antérieure n'est en avance (branche redémarrée depuis `origin/main`, aucun commit non mergé perdu).
+
+### Défaut — `emitCallJoinWithAck` collabsait l'ack complet en `Bool`, cachant `CALL_ENDED`/`endReason` au rejoin de reconnexion
+
+**Root cause** : `socket.didReconnect` (`CallManager.swift`) ré-émet `call:join` pour que la
+passerelle remette ce socket dans la room de l'appel. Vérifié : contrairement au web (Vague 161,
+`CallManager.tsx` lit `ack.error?.endReason`), le SDK iOS `emitCallJoinWithAck` ne renvoyait qu'un
+`Bool` — la gateway envoie pourtant déjà (Vague 161, `CallEventsHandler.ts` ligne 3028)
+`{ success: false, error: { code: 'CALL_ENDED', endReason } }` quand le join est rejeté parce que
+l'appel a déjà pris fin côté serveur, mais `emitCallJoinWithAck` ne lisait que `items.first?["success"]`
+et jetait tout le reste du payload. Le handler de reconnexion, sur `!joined`, se contentait de logger
+« proceeding anyway » sans jamais transitionner `callState` — s'appuyant sur le futur broadcast
+`call:ended` pour faire la descente. Exactement le scénario que la Vague 161 avait identifié comme
+non couvert : si ce broadcast a lui-même été perdu pendant LA MÊME coupure que ce chemin de reconnexion
+existe pour couvrir, l'app restait figée sur l'écran d'appel actif indéfiniment — aucune transition
+d'état, aucune offre « Réessayer », aucune indication que l'appel avait pris fin.
+
+**Fix, additif, iOS uniquement (aucun changement gateway — le contrat `endReason` existe déjà depuis
+la Vague 161)** :
+
+1. **`MessageSocketManager.swift`** — nouveau `public struct CallJoinAckResult { joined: Bool,
+   errorCode: String?, endReason: String? }` (SDK pur : `endReason` voyage en `String` brut, pas de
+   type `CallEndReason` — ce type vit dans l'app). Nouvelle méthode
+   `emitCallJoinWithAckDetailed(callId:) async -> CallJoinAckResult` qui lit `error.code`/
+   `error.endReason` du payload d'ack. `emitCallJoinWithAck` (signature Bool inchangée, aucun appelant
+   cassé) délègue désormais à la variante détaillée au lieu de reparser le payload indépendamment —
+   même famille de défaut que les Vagues 158-161 (deux sites sœurs qui parsent le même flux différemment)
+   évitée à la source plutôt que refermée après coup.
+2. **`CallManager.swift`** — le `Task` du handler `socket.didReconnect` appelle
+   `emitCallJoinWithAckDetailed` ; sur `errorCode == "CALL_ENDED"`, route vers `handleRemoteEnd(callId:
+   rawReason: ackResult.endReason)` (le chemin canonique déjà utilisé par `call:ended` et
+   `call:error CALL_ENDED`, `return` avant tout flush ICE / resync média). `CallEndReasonMapper` fait
+   le reste : `endReason == "connectionLost"` ⇒ `CallEndReason.connectionLost`, retryable via
+   `CallRetryPolicy.isRetryable` — l'offre « Réessayer » réapparaît pour la cause transitoire exacte
+   que ce chemin de reconnexion existe pour récupérer.
+
+**Tests** : 7 nouveaux tests structurels (`CallManagerReconnectCallEndedRetryTests`,
+`CallManagerAudioSessionTests.swift`, même convention source-based que le reste du fichier — pas de
+host XCTest disponible dans ce container) : usage de `emitCallJoinWithAckDetailed` dans le sink
+reconnect ; détection `ackResult.errorCode == "CALL_ENDED"` + forward exact de `ackResult.endReason`
+vers `handleRemoteEnd` ; `return` de la branche CALL_ENDED avant `flushPendingIceCandidates()` ;
+`CallJoinAckResult` expose `joined`/`errorCode`/`endReason` ; `emitCallJoinWithAckDetailed` lit bien
+`error["code"]`/`error["endReason"]` du payload ; `emitCallJoinWithAck` délègue à la variante détaillée
+sans reparser. Les tests existants (`CallManagerJoinRaceTests`) restent verts sans modification —
+`emitCallJoinWithAckDetailed` est un sur-ensemble textuel de `emitCallJoinWithAck`, et la signature
+Bool de ce dernier est inchangée. CI iOS (macOS runner) valide la compile + le run réel.
+
+**Risk assessment** : minimal — additif des deux côtés (nouveau struct, nouvelle méthode SDK, nouvelle
+branche app avant le chemin existant inchangé), aucune signature publique retirée, aucun appelant
+existant de `emitCallJoinWithAck`/`emitCallJoin` modifié (le join initial cold-start et le join
+incoming-call restent sur la variante Bool). Le chemin `CALL_ENDED` réutilise `handleRemoteEnd`, déjà
+exercé par trois autres sites de ce même fichier.
+
+**Non fait volontairement / reste ouvert** (reconduits, inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS single-peer
+côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors périmètre
+calling) ; `call:check-active` réarme le timer 45s du callee à chaque reconnexion même pour le même
+call déjà sonnant (web, confiance modérée) ; `handleHold`'s branche `catch` générique omet
+`videoSurvivalController.reset()` (iOS, actuellement inerte) ; `handleAudioRouteChange`'s
+`.newDeviceAvailable` ignore le résultat fallible d'`applySpeakerRoute()` (iOS, fenêtre étroite
+auto-corrigée).
