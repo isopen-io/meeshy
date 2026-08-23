@@ -595,6 +595,39 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `a foreground mediaObject carries its fadeIn fadeOut envelope into the projection`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "fg", fileUrl = "http://cdn/fg.mp4", mimeType = "video/mp4"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "fgObj",
+                        postMediaId = "fg",
+                        mediaURL = "http://cdn/fg.mp4",
+                        mediaType = "video",
+                        isBackground = false,
+                        startTime = 0.0,
+                        duration = 10.0,
+                        fadeIn = 2.0,
+                        fadeOut = 2.0,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val fg = vm.state.value.current?.foregroundMedia.orEmpty().first()
+        assertThat(fg.fadeIn).isEqualTo(2.0)
+        assertThat(fg.fadeOut).isEqualTo(2.0)
+        // The envelope is live, not dropped: the clip fades in over [0,2] and out over [8,10].
+        assertThat(fg.animated(atSeconds = 1f).opacity).isWithin(1e-4).of(0.5)
+        assertThat(fg.animated(atSeconds = 5f).opacity).isWithin(1e-4).of(1.0)
+        assertThat(fg.animated(atSeconds = 9f).opacity).isWithin(1e-4).of(0.5)
+    }
+
+    @Test
     fun `a background audioPlayerObject resolves its URL via postMediaId into backgroundAudioUrl`() = runTest {
         val post = storyPost("a1", "a", hoursAgo = 1).copy(
             media = listOf(
