@@ -5064,8 +5064,21 @@ final class CallManagerSocketReconnectMediaResyncTests: XCTestCase {
         guard let body = reconnectHandlerBody(source) else {
             XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
         }
+        // Le motif vise l'APPEL, pas un nom exact. La garde cherchait
+        // `emitCallJoinWithAck(callId:` et rougissait depuis que la Vague 162
+        // (`60f94f99e`) a renommé l'émetteur en `emitCallJoinWithAckDetailed`
+        // pour distinguer « la salle a été rejointe » de « l'appel était déjà
+        // terminé côté serveur ». La RÈGLE n'a jamais changé — le handler
+        // réémet toujours `call:join` avec ACK avant tout événement de salle —
+        // seul son encodage dans ce test était périmé.
+        //
+        // Le préfixe est ancré sur `await MessageSocketManager.shared.` et non
+        // sur le nom nu : `callManagerSource()` rend la source BRUTE, sans
+        // retirer les commentaires, et `emitCallJoinWithAck` apparaît dans
+        // plusieurs doc-comments du fichier. Un préfixe nu se serait donc laissé
+        // satisfaire par un commentaire, c'est-à-dire par rien.
         XCTAssertTrue(
-            body.contains("emitCallJoinWithAck(callId:"),
+            body.contains("await MessageSocketManager.shared.emitCallJoinWithAck"),
             "Socket reconnect handler must re-emit call:join so the gateway re-admits us " +
             "to the call room — without this, ICE candidates and call:ended are silently dropped."
         )
