@@ -1,7 +1,9 @@
 # MeeshyComposer v2 — Une seule entrée pour créer et pour éditer
 
 > **Statut** : conception approuvée section par section, non implémentée.
-> **Périmètre** : web + iOS. Android en lockstep, hors de ce document.
+> **Périmètre** : iOS en PRIORITÉ, web en seconde priorité (directive du
+> 2026-08-23). **Android est mis de côté** — le lot H de la spec d'exécution est
+> suspendu, sans tâche ni gate, tant que cette directive tient.
 > **Prédécesseur** : `2026-08-20-meeshy-composer-execution-spec.md` (lots A→H,
 > A/B/D/E/F et chrome C1–C8 livrés sur `main`).
 
@@ -427,5 +429,5 @@ promeut pas explicitement. S'y ajoute :
 
 - **la conversion de format par l'ÉDITION** au-delà de POST↔REEL — c'est le rôle
   du repost (loi 5) ;
-- **Android** — lockstep, équipe Android, hors de ce document ;
+- **Android** — **mis de côté** par directive du 2026-08-23 ; le lot H est suspendu, sans tâche ni gate ;
 - **le retrait de `StoryComposer.tsx`** — absorbé, pas supprimé.

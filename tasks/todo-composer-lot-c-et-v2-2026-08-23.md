@@ -48,6 +48,20 @@ registre de rendu. Aucune tâche ne construit d'aperçu.
 
 ---
 
+## Priorité — directive du 2026-08-23
+
+**iOS d'abord. Web en seconde priorité. Android mis de côté.**
+
+Cela ordonne l'intérieur des lots autant que les lots eux-mêmes : quand une
+tâche a deux moitiés (V0 bis en a une iOS et une web), **la moitié iOS part la
+première**. Le lot H (Android) de la spec d'exécution est **suspendu** — ni
+tâche, ni gate, ni ligne de matrice tant que cette directive tient.
+
+`V0` fait exception à l'ordre : il sert les deux plateformes ET débloque C2-C3
+côté iOS, donc il reste en tête.
+
+---
+
 ## Partie 2 — Le chantier v2  *(propriétaire : session conception/web)*
 
 Ces tâches **étendent** le dénominateur au-delà de 65. Elles ne remplacent
@@ -59,10 +73,18 @@ aucune tâche C.
       `ComposerIntent.swift` devient le miroir du contrat, et cesse d'en être la
       source. **Bloquant pour C2-C3** : la session composer construit le
       sélecteur derrière une frontière étroite en l'attendant.
-- [ ] **V0 bis — Le repost web miroite** *(aucune dépendance, livrable seul)*
-      `RepostRequest` gagne `targetType` ; chaque site passe le type de sa
-      source ; le viewer de story ajoute « reposter en post ».
-      **Puis les six sites iOS qui passent `nil`** — même loi, même correctif.
+- [ ] **V0 bis — Le repost miroite** *(aucune dépendance, livrable seul)*
+      - [ ] **iOS d'abord** — les six sites qui passent `targetType: nil`
+            (`ReelsViewModel:430`, `FeedViewModel:881`, `PostDetailView:301`,
+            `ProfileUserPostsList:969`, `RootViewComponents:329`,
+            `FeedView:449`) passent le format de leur source. Les deux sites
+            `.post` du viewer de story ne changent PAS : ils deviennent
+            l'option d'ancrage. Retirer au passage le commentaire périmé
+            `nil = le serveur cree un POST (2026-08-19)`, qui énonce
+            l'arbitrage renversé.
+      - [ ] **Web ensuite** — `RepostRequest` gagne `targetType` (le champ n'y
+            existe pas), chaque site passe le type de sa source, et le viewer
+            de story ajoute « reposter en post ».
 - [ ] **V1 — L'éventail** — `offeredFormats` gaté par `qualifiesAsReel`.
       *N'est pas une loi neuve* : c'est le raffinement de la **loi 9**. Contrainte
       de la **loi 4** : un format non offert est **ABSENT, jamais grisé**.
