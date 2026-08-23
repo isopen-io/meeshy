@@ -8,3 +8,11 @@ export interface LegacySocket {
   emit(event: string, payload: unknown): unknown;
   disconnect(close?: boolean): unknown;
 }
+
+// Cycle 105 — la porte par ASSERTION DE TYPE, en propriété-flèche. C'est la
+// forme qui avait échappé au balayage du cycle 104, sur le chemin de rejeu
+// hors ligne (`_drainPendingMessages`).
+export function legacyCastDoor(io: { to(room: string): unknown }): void {
+  const room = io.to('user:x') as unknown as { emit: (event: string, payload: unknown) => void };
+  room.emit('message:new', {});
+}

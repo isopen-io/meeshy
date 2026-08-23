@@ -1459,6 +1459,78 @@ balaye `src/` ENTIER : la huitième copie vivait dans `utils/socket-broadcast.ts
 jamais d'ajouter une ligne à un inventaire — il n'y a pas de porte non typée
 légitime à porter.
 
+### Un CAST est une porte, au même titre qu'une déclaration
+
+Le balayage du cycle 104 ne cherchait que la méthode abrégée
+(`emit(event: string, …)`), la forme des huit interfaces qu'il consolidait. Une
+**neuvième** porte lui a échappé pour cette seule raison — elle s'ouvrait par
+ASSERTION DE TYPE, sur le chemin de rejeu hors ligne :
+
+```ts
+const userRoom = this.io.to(ROOMS.user(userId)) as unknown as {
+  emit: (event: string, payload: unknown) => void;   // ← invisible au balayage
+};
+```
+
+Un cast produit **exactement** la liberté d'une déclaration, sur exactement le
+même appel, et il est plus discret : il ne crée aucun type nommé qu'on puisse
+chercher. Le balayage voit désormais les deux formes (`emit(ev: string` et
+`emit: (ev: string`) — mais la règle générale vaut au-delà de cet outil :
+**chercher une forme fautive par son NOM de déclaration, c'est manquer tous les
+sites qui l'obtiennent autrement.**
+
+### Le lot qui rend une chose possible doit relire les commentaires qui la déclaraient IMPOSSIBLE
+
+Le cast ci-dessus vivait sous cette phrase :
+
+```ts
+// Replayed payloads are stored as opaque JSON in the queue … so re-checking
+// them against ServerToClientEvents here is impossible (loose emit).
+```
+
+Elle était VRAIE quand elle a été écrite. Le cycle 104 l'a rendue fausse sans
+s'en apercevoir — `_drainedEmissions` rend depuis lors des couples CORRÉLÉS
+(`ServerEmission`), et `emitServerEvent` existe pour les émettre.
+
+> Un commentaire d'impossibilité ne rougit jamais. Il survit à ce qui l'a périmé,
+> et il se lit comme une raison de ne pas essayer. Même famille que « un
+> commentaire qui ÉNONCE une contrainte est une AFFIRMATION » (cycle 94), avec
+> une variante plus retorse : celui-ci n'était pas faux au départ, il l'est
+> DEVENU. Quand un lot déplace une frontière, la question à poser est « qu'est-ce
+> que je viens de rendre possible, et où est-ce écrit que ça ne l'est pas ? ».
+
+### Un `Record<string, unknown>` dans un contrat est une absence de déclaration
+
+C'est la version « carte » du `{ type: 'object' }` nu, et elle se diagnostique de
+la même façon : contre le PRODUCTEUR. `NotificationEventData.context` était
+déclaré `Record<string, unknown>` alors que `NotificationContext` — dix-huit
+champs nommés — vit dans le même paquet, deux fichiers plus loin.
+
+L'opacité n'était pas un choix : elle n'avait **jamais été confrontée à
+l'émetteur**, parce que les deux sites d'appel la castaient
+(`socketPayload as unknown as Record<string, unknown>`). Le premier typage de
+l'émission l'a fait tomber en une ligne — une interface n'a pas de signature
+d'index, donc n'est jamais assignable à une carte ouverte. **Le cast n'était pas
+une commodité de typage : c'était la MARQUE de la déclaration manquante**, comme
+au cycle 103 et au cycle 104.
+
+### Un champ que trois clients LISENT et qu'aucun contrat ne déclare
+
+`_seq` — le curseur monotone par utilisateur que `emitWithSeq` estampille, et le
+signal de détection de TROU du SyncEngine — était lu par le web
+(`observeSyncSeq`), par iOS (`case seq = "_seq"`) et par Android, et déclaré
+**nulle part**. Il ne voyageait que parce que la porte prenait
+`Record<string, unknown>`.
+
+C'est exactement `location` sur `ConversationUpdatedEventData` avant sa
+déclaration, avec la même conséquence : la parité entre émetteurs ne tient qu'à
+la lecture du code voisin, et le premier émetteur qui l'omet retire une
+fonctionnalité aux trois clients sans faire tomber quoi que ce soit.
+
+> **Typer une porte, c'est découvrir ce qui la traversait.** Les champs qu'un
+> canal non gouverné transporte ne sont pas hypothétiques — ils sont déjà en
+> production, déjà lus, et déjà indispensables.
+
 ## Une preuve TRANSPORTÉE n'est pas une preuve VÉRIFIÉE
 
 `signedPreKey.signature` est la seule chose qui rattache la pré-clé signée à la

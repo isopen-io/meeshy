@@ -1106,3 +1106,56 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle104.md`
       `ServerToClientEvents` ; `ClientToServerEvents` n'a pas d'équivalent, et
       `socket.on(...)` reste libre de déclarer la forme qu'il veut de ce qu'il
       REÇOIT — la moitié la plus hostile des deux.
+
+## Cycle 105 — un cast est une porte, et `_seq` n'était déclaré nulle part
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle105.md`
+
+- [x] Part de la question que le cycle 104 n'a pas posée : son balayage cherche
+      des DÉCLARATIONS — **qu'est-ce qu'il ne peut PAS voir ?**
+- [x] **D1 — la NEUVIÈME porte, ouverte par ASSERTION DE TYPE.** Sur le rejeu
+      hors ligne (`_drainPendingMessages`) :
+      `as unknown as { emit: (event: string, payload: unknown) => void }`.
+      Un cast produit exactement la liberté d'une déclaration, sur exactement le
+      même appel, et il est plus discret : il ne crée aucun type nommé qu'on
+      puisse chercher.
+- [x] **Le commentaire qui la couvrait était une AFFIRMATION devenue fausse** —
+      « les revérifier ici est IMPOSSIBLE ». Vrai à l'écriture ; le cycle 104 l'a
+      périmé sans s'en apercevoir (`_drainedEmissions` rend des couples
+      CORRÉLÉS, `emitServerEvent` existe pour ça). **Un commentaire
+      d'impossibilité ne rougit jamais.**
+- [x] **D2 — trois émetteurs à nom CALCULÉ** que le cycle 104 n'avait pas
+      balayés (il les avait cherchés à la main) : le rejeu, les trois événements
+      de traduction AUDIO, et `emitWithSeq`.
+- [x] **D3 — `_seq` : lu par les TROIS clients, déclaré NULLE PART.** Curseur
+      monotone par utilisateur, signal de détection de trou du SyncEngine — web
+      (`observeSyncSeq`), iOS (`case seq = "_seq"`), Android. Il ne voyageait
+      que parce que la porte prenait `Record<string, unknown>` et que les deux
+      sites d'appel portaient le double cast. Exactement `location` sur
+      `ConversationUpdatedEventData` avant sa déclaration.
+- [x] **D4 — `context` déclaré `Record<string, unknown>`** alors que
+      `NotificationContext` (18 champs nommés) vit dans le MÊME paquet. Tombé en
+      une ligne au premier typage de l'émission. Une carte ouverte dans un
+      contrat est une absence de déclaration qui a l'air d'en être une — version
+      « carte » du `{ type: 'object' }` nu. Idem `metadata`.
+- [x] Le balayage voit désormais les DEUX formes (`emit(ev: string` et
+      `emit: (ev: string`), fixture à trois formes fautives.
+- [x] **RED prouvé de la façon la plus directe** : en réintroduisant le cast que
+      le cycle 104 avait laissé vivre, le balayage tombe EN NOMMANT
+      `socketio/MeeshySocketIOManager.ts`.
+- [x] Gates : `tsc` passerelle **0 erreur** · **836/836 suites, 19253/19253** ·
+      `packages/shared` **102/102 fichiers, 2449/2449** · `apps/web` aucune
+      erreur ajoutée (grep ciblé sur la surface du lot).
+- [ ] Suivi — **la charge REJOUÉE est AFFIRMÉE, pas PROUVÉE.**
+      `QueuedMessagePayload.payload` reste un `Record<string, unknown>` unique
+      pour onze `eventType` ; `_drainedEmissions` asserte le couple à la
+      frontière Redis. L'indexer par `eventType` remplacerait l'affirmation par
+      une vérification.
+- [ ] Suivi — `_seq` n'est déclaré que sur `NotificationEventData`, le seul
+      événement qui passe par `emitWithSeq` aujourd'hui. Un second l'y ferait
+      entrer sans que rien ne rappelle de le déclarer.
+- [ ] Suivi hérité — `ReactionUpdateEvent` / `ReactionUpdateEventData`, deux
+      exemplaires de la même déclaration.
+- [ ] Suivi hérité — `ConversationUpdatedEventData` porte une signature d'index ;
+      `lastMessagePreview` y voyage sans contrat.
+- [ ] Suivi hérité — **le miroir client→serveur n'est pas gouverné.**

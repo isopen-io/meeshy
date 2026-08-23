@@ -55,8 +55,12 @@ describe('portes d’émission Socket.IO — dérivées du contrat, jamais redé
   it('le balayage VOIT la forme qu’il prétend interdire', () => {
     const doors = sweepUntypedEmitDoors(join(__dirname, 'fixtures', 'untyped-emit-door'));
 
-    expect(doors.map((d) => d.file)).toEqual(['door.ts', 'door.ts']);
+    // Trois formes fautives dans la fixture : la méthode abrégée avec `to(room)`,
+    // la même vers un socket tenu, et — depuis le cycle 105 — la porte ouverte
+    // par ASSERTION DE TYPE, en propriété-flèche.
+    expect(doors.map((d) => d.file)).toEqual(['door.ts', 'door.ts', 'door.ts']);
     expect(doors[0].declaration).toContain('emit(event: string');
+    expect(doors[2].declaration).toContain('emit: (event: string');
   });
 
   /**
