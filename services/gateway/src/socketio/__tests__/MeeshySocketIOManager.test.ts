@@ -4863,6 +4863,34 @@ describe('MeeshySocketIOManager', () => {
       (manager as any).connectedUsers.clear();
       expect((manager as any)._findUsersForLanguage('zh')).toHaveLength(0);
     });
+
+    it('canonicalizes a region-tagged target against a canonical resolvedLanguages', () => {
+      (manager as any).connectedUsers.clear();
+      (manager as any).connectedUsers.set('u-en', { id: 'u-en', socketId: 's-en', isAnonymous: false, language: 'en', resolvedLanguages: ['en'] });
+      const result = (manager as any)._findUsersForLanguage('en-US');
+      expect(result.some((u: any) => u.id === 'u-en')).toBe(true);
+    });
+
+    it('canonicalizes a region-tagged language field against a canonical target', () => {
+      (manager as any).connectedUsers.clear();
+      (manager as any).connectedUsers.set('u-raw', { id: 'u-raw', socketId: 's-raw', isAnonymous: false, language: 'en-US', resolvedLanguages: [] });
+      const result = (manager as any)._findUsersForLanguage('en');
+      expect(result.some((u: any) => u.id === 'u-raw')).toBe(true);
+    });
+
+    it('canonicalizes a 3-letter target (ISO 639-2) against a canonical resolvedLanguages', () => {
+      (manager as any).connectedUsers.clear();
+      (manager as any).connectedUsers.set('u-sv', { id: 'u-sv', socketId: 's-sv', isAnonymous: false, language: 'sv', resolvedLanguages: ['sv'] });
+      const result = (manager as any)._findUsersForLanguage('swe');
+      expect(result.some((u: any) => u.id === 'u-sv')).toBe(true);
+    });
+
+    it('never matches two distinct languages after canonicalization', () => {
+      (manager as any).connectedUsers.clear();
+      (manager as any).connectedUsers.set('u-fr', { id: 'u-fr', socketId: 's-fr', isAnonymous: false, language: 'fr-FR', resolvedLanguages: ['fr'] });
+      const result = (manager as any)._findUsersForLanguage('en-US');
+      expect(result).toHaveLength(0);
+    });
   });
 
   // -------------------------------------------------------------------------

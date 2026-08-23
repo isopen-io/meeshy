@@ -10,6 +10,7 @@ import { MessageTranslationService, MessageData } from '../services/message-tran
 import { isMessageTranslationTarget } from '../services/zmq-translation/utils/zmq-helpers';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
 import { filterMessagePayloadForLanguages, groupSocketsByLanguage } from './utils/message-payload-filter';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { applyResolvedLanguagesRefresh } from './utils/resolved-languages-refresh';
 import { MaintenanceService } from '../services/MaintenanceService';
 import { StatusService } from '../services/StatusService';
@@ -2262,13 +2263,19 @@ export class MeeshySocketIOManager {
   }
 
   private _findUsersForLanguage(targetLanguage: string): SocketUser[] {
-    const lang = targetLanguage.toLowerCase();
+    // Canonicalise via la SSOT `normalizeLanguageForDedup` (comme les autres
+    // sites de comparaison de codes de langue — cf. iterations 243/246/247/249)
+    // : `resolvedLanguages` est déjà canonique (`resolveUserLanguagesOrdered`),
+    // mais `targetLanguage` et le repli `user.language` sont bruts. Un `===`
+    // sur codes bruts perdait un destinataire tagué `'en-US'`/`'swe'` pour une
+    // cible `'en'`/`'sv'` (et réciproquement) — violation silencieuse du Prisme.
+    const lang = normalizeLanguageForDedup(targetLanguage);
     const targetUsers: SocketUser[] = [];
 
     for (const [, user] of this.connectedUsers) {
       const matches =
         user.resolvedLanguages.includes(lang) ||
-        user.language.toLowerCase() === lang;
+        normalizeLanguageForDedup(user.language) === lang;
       if (matches) {
         targetUsers.push(user);
       }
