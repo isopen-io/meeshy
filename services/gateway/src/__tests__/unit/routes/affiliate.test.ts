@@ -119,7 +119,18 @@ describe('POST /affiliate/tokens', () => {
   beforeAll(async () => { app = await buildApp(); });
   afterAll(async () => { await app.close(); });
 
+  /**
+   * La création SONDE désormais l'unicité du jeton avant d'écrire — le double
+   * global rend `mockAffiliateToken` à tout `findUnique`, ce qui déclarerait
+   * chaque candidat PRIS. Les routes de RÉSOLUTION en ont besoin ainsi ; la
+   * sonde de création, elle, doit voir la place libre.
+   */
+  function tokenSlotIsFree() {
+    (app as any).prisma.affiliateToken.findUnique.mockResolvedValueOnce(null);
+  }
+
   it('returns 200 on successful token creation', async () => {
+    tokenSlotIsFree();
     const res = await app.inject({
       method: 'POST', url: '/affiliate/tokens',
       payload: { name: 'My Campaign' },
@@ -128,7 +139,47 @@ describe('POST /affiliate/tokens', () => {
     expect(res.json().success).toBe(true);
   });
 
+  /**
+   * Le jeton d'affiliation vit dans une URL de parrainage publique et EST la
+   * capacité. Il valait `aff_<Date.now()>_<13 base36>` — 31 caractères qui
+   * donnaient l'instant de création en clair, tirés d'un `Math.random()`
+   * prédictible (2026-08-23).
+   */
+  it('frappe un jeton COMPACT, opaque et sans horodatage', async () => {
+    tokenSlotIsFree();
+    await app.inject({
+      method: 'POST', url: '/affiliate/tokens',
+      payload: { name: 'My Campaign' },
+    });
+    const written = (app as any).prisma.affiliateToken.create.mock.calls.at(-1)[0].data.token;
+    expect(written).toMatch(/^aff_[A-Za-z0-9]{8}$/);
+    expect(written).toHaveLength(12);
+    expect(written).not.toMatch(/\d{13}/);
+    expect(written).not.toContain(String(new Date().getUTCFullYear()));
+  });
+
+  it('SONDE l unicite avant d ecrire, et retire sur collision', async () => {
+    // La colonne porte un index `@unique` : sans sonde, une collision se
+    // presentait a l appelant sous la forme d un 500.
+    const prisma = (app as any).prisma;
+    prisma.affiliateToken.findUnique
+      .mockResolvedValueOnce({ id: 'deja-pris' })
+      .mockResolvedValueOnce(null);
+    const before = prisma.affiliateToken.findUnique.mock.calls.length;
+
+    const res = await app.inject({
+      method: 'POST', url: '/affiliate/tokens',
+      payload: { name: 'My Campaign' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const probes = prisma.affiliateToken.findUnique.mock.calls.slice(before);
+    expect(probes).toHaveLength(2);
+    expect(probes[0][0].where.token).not.toBe(probes[1][0].where.token);
+  });
+
   it('returns 500 on DB error', async () => {
+    tokenSlotIsFree();
     (app as any).prisma.affiliateToken.create.mockRejectedValueOnce(new Error('DB'));
     const res = await app.inject({
       method: 'POST', url: '/affiliate/tokens',

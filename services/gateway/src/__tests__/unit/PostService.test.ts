@@ -286,6 +286,53 @@ describe('PostService', () => {
       // No audio media → no transcription update
       expect(prisma.postMedia.update).not.toHaveBeenCalled();
     });
+
+    it('writes alt text only for media ids present in mediaIds', async () => {
+      prisma.post.create.mockResolvedValue(makePost());
+      prisma.postMedia.findFirst.mockResolvedValue(null);
+
+      await service.createPost(
+        {
+          ...basePostData,
+          mediaIds: ['media-1', 'media-2'],
+          mediaAlt: { 'media-1': 'A cat on a windowsill', 'media-foreign': 'not requested' },
+        },
+        'user-1',
+      );
+
+      expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
+        where: { id: 'media-1', postId: 'post-1' },
+        data: { alt: 'A cat on a windowsill' },
+      });
+      // `media-foreign` never appeared in `mediaIds` — never touched.
+      expect(prisma.postMedia.updateMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: 'media-foreign' }) }),
+      );
+    });
+
+    it('clears alt (null) when the client sends an empty string', async () => {
+      prisma.post.create.mockResolvedValue(makePost());
+      prisma.postMedia.findFirst.mockResolvedValue(null);
+
+      await service.createPost(
+        { ...basePostData, mediaIds: ['media-1'], mediaAlt: { 'media-1': '   ' } },
+        'user-1',
+      );
+
+      expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
+        where: { id: 'media-1', postId: 'post-1' },
+        data: { alt: null },
+      });
+    });
+
+    it('never touches postMedia for alt when mediaAlt is omitted', async () => {
+      prisma.post.create.mockResolvedValue(makePost());
+      prisma.postMedia.findFirst.mockResolvedValue(null);
+
+      await service.createPost({ ...basePostData, mediaIds: ['media-1'] }, 'user-1');
+
+      expect(prisma.postMedia.updateMany).toHaveBeenCalledTimes(1); // claim only
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -2039,6 +2086,35 @@ describe('PostService', () => {
         expect(claim.where.id).toEqual({ in: ['new-m1'] });
         expect(claim.where.uploaderId).toBe('user-1');
         expect(claim.data).toEqual({ postId: 'post-1' });
+      });
+
+      it('writes alt text for a newly attached media id', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', {
+          mediaIds: ['new-m1'],
+          mediaAlt: { 'new-m1': 'A sunset over the bay' },
+        });
+
+        expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
+          where: { id: 'new-m1', postId: 'post-1' },
+          data: { alt: 'A sunset over the bay' },
+        });
+      });
+
+      it('ignores mediaAlt entries for ids not in this mediaIds request (already-attached media)', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [{ id: 'already-attached' }] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', {
+          mediaIds: ['new-m1'],
+          mediaAlt: { 'already-attached': 'sneaky rewrite', 'new-m1': 'ok' },
+        });
+
+        expect(prisma.postMedia.updateMany).not.toHaveBeenCalledWith(
+          expect.objectContaining({ where: expect.objectContaining({ id: 'already-attached' }) }),
+        );
       });
     });
   });

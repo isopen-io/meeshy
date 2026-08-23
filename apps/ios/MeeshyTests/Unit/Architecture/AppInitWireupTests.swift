@@ -186,12 +186,52 @@ final class AppInitWireupTests: XCTestCase {
     /// Tous les fichiers qui MONTENT un composer de story. `StoryTrayActions`
     /// s'y est ajouté quand le cover de création est remonté au niveau racine :
     /// un site oublié par ce garde-fou est un site où les amorces de page
-    /// blanche disparaissent sans le moindre signal.
+    /// blanche disparaissent sans le moindre signal. `MeeshyComposerHost` (C3)
+    /// s'y ajoute pour la même raison — c'est le meuble qui enveloppe l'atelier,
+    /// donc un site de présentation à part entière.
     private static let storyComposerPresentationSites = [
         "Meeshy/Features/Main/Views/StoryTrayView.swift",
         "Meeshy/Features/Main/Views/StoryTrayActions.swift",
-        "Meeshy/Features/Main/Views/StoryViewerView.swift"
+        "Meeshy/Features/Main/Views/StoryViewerView.swift",
+        "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"
     ]
+
+    // MARK: - Composer de CRÉATION : l'audience mémorisée ne s'évapore pas
+
+    /// C3 — le piège le plus cher du lot composer, et il est SILENCIEUX.
+    ///
+    /// `StoryComposerView.init` donne à `initialVisibility` une valeur PAR
+    /// DÉFAUT (`PostVisibility.friends`). Un site de création qui l'oublie
+    /// compile, tourne, et publie simplement dans la mauvaise audience : la
+    /// mémoire du dernier choix (loi 10) disparaît sans un message, sans un
+    /// crash, sans un test rouge. C'est exactement ce que cette garde refuse.
+    ///
+    /// L'ÉDITION en est exclue à dessein, et ce n'est pas une exemption de
+    /// confort : `StoryComposerViewModel.editingInitialVisibility` SUPPLANTE le
+    /// paramètre dans `init(viewModel:)` (« mode édition : PRIORITÉ ABSOLUE »),
+    /// donc un site d'édition qui le passerait ne changerait rien. Une garde
+    /// qui l'exigerait quand même ferait rougir du code correct — et serait
+    /// désactivée à la première occasion.
+    private static let storyComposerCreationSites = [
+        "Meeshy/Features/Main/Views/StoryTrayActions.swift",
+        "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"
+    ]
+
+    func test_everyCreationComposerPresentation_passesTheMemorisedAudience() throws {
+        for path in Self.storyComposerCreationSites {
+            let src = try appSource(path)
+            let mounts = src.components(separatedBy: "StoryComposerView(").dropFirst()
+            XCTAssertGreaterThan(mounts.count, 0, "\(path) ne présente plus de composer de création ?")
+            for mount in mounts {
+                XCTAssertTrue(
+                    String(mount.prefix(600)).contains("initialVisibility:"),
+                    "\(path) : une présentation du composer de CRÉATION ne passe pas `initialVisibility`. "
+                        + "Le SDK retombe alors sur `PostVisibility.friends` sans rien dire, et le dernier "
+                        + "choix d'audience de l'auteur est perdu (loi 10)."
+                )
+            }
+        }
+    }
 
     /// R4 — le cover du composer de création n'est monté qu'UNE fois par racine.
     ///

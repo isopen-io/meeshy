@@ -135,16 +135,6 @@ struct FocalRow: View {
                     senderMoodEmoji: input.senderMoodEmoji,
                     senderIsAnonymous: input.senderIsAnonymous,
                     profileUser: input.profileSheetUser,
-                    // UNION des deux côtés, vérifiée : `FocalIdentityHeader`
-                    // (auto-fusionné) porte BIEN les trois paramètres, et
-                    // `headerTimeString` est un SUR-ENSEMBLE de
-                    // `content.meta.timeString` — il y retombe hors focus.
-                    // Prendre un seul côté aurait perdu soit la fiche de
-                    // profil (main), soit la date complète du message en
-                    // focus (branche liste).
-                    timeString: headerTimeString,
-                    revealsTimeAlways: input.isFocused,
-                    deliveryStatus: content.meta.deliveryStatus,
                     isDark: input.isDark,
                     // WS-10 (F-089) : `input.showsAgentGrammar` PORTE DÉJÀ la
                     // décision finale (précalculée par le mux qui construit
@@ -158,12 +148,7 @@ struct FocalRow: View {
                         isAgentAuthored: input.isAgentAuthored,
                         isAgentGrammarEnabled: input.showsAgentGrammar
                     ),
-                    onOpenProfile: actions.onOpenProfile,
-                    onShowReadStatus: actions.onShowReadStatus.map { show in { show(content.messageId) } },
-                    // F-083ter (F10) — « modifié » visible en tête de groupe.
-                    editedAt: content.editedAt,
-                    isEditSaving: content.isEditSaving,
-                    hasEditHistory: content.hasEditHistory
+                    onOpenProfile: actions.onOpenProfile
                 )
                 .opacity(input.isFocused ? 0 : 1)
             }
@@ -199,19 +184,25 @@ struct FocalRow: View {
                 // cette ligne — qui garde sa place (hauteur stable).
                 .opacity(input.isFocused ? 0 : 1)
 
-            if !input.isFirstInGroup {
-                FocalMetaRow(
-                    isMe: content.isMe,
-                    timeString: content.meta.timeString,
-                    deliveryStatus: content.meta.deliveryStatus,
-                    isDark: input.isDark,
-                    indent: indent,
-                    // F-083ter (F10) — « modifié » visible en rangée de suite.
-                    editedAt: content.editedAt,
-                    isEditSaving: content.isEditSaving,
-                    hasEditHistory: content.hasEditHistory
-                )
-            }
+            // Directive 2026-08-23 : la ligne BASSE date le message — tête de
+            // groupe comprise. Elle portait son heure et ses coches en haut,
+            // à côté du nom ; la même information changeait donc de bord
+            // selon la place du message dans son groupe. En focus, la chip du
+            // bas la remplace : la méta s'efface sans céder sa hauteur, comme
+            // l'en-tête et la ligne drapeaux.
+            FocalMetaRow(
+                isMe: content.isMe,
+                timeString: content.meta.timeString,
+                deliveryStatus: content.meta.deliveryStatus,
+                isDark: input.isDark,
+                indent: indent,
+                // F-083ter (F10) — « modifié » visible sur toute rangée.
+                editedAt: content.editedAt,
+                isEditSaving: content.isEditSaving,
+                hasEditHistory: content.hasEditHistory,
+                onShowReadStatus: actions.onShowReadStatus.map { show in { show(content.messageId) } }
+            )
+            .opacity(input.isFocused ? 0 : 1)
 
         }
         // Focus (2026-08-22) : la CARTE est le fond de ce bloc — même repère
@@ -225,21 +216,22 @@ struct FocalRow: View {
                 focusCardBackground
             }
         }
-        .overlay(alignment: .top) {
+        .overlay(alignment: .topLeading) {
+            if input.isFocused {
+                focusIdentityChip
+                    .padding(.horizontal, FocalMetrics.FocusStrip.chipInset)
+                    .offset(y: -FocalMetrics.FocusStrip.identityOverhang)
+            }
+        }
+        .overlay(alignment: .bottom) {
             if input.isFocused {
                 HStack(alignment: .center, spacing: 4) {
-                    focusIdentityChip
+                    focusStrip
                     Spacer(minLength: 4)
                     focusStampChip
                 }
                 .padding(.horizontal, FocalMetrics.FocusStrip.chipInset)
-                .offset(y: -FocalMetrics.FocusStrip.identityOverhang)
-            }
-        }
-        .overlay(alignment: .bottomLeading) {
-            if input.isFocused {
-                focusStrip
-                    .offset(y: FocalMetrics.FocusStrip.overhang)
+                .offset(y: FocalMetrics.FocusStrip.overhang)
             }
         }
         // F-083ter (F15) : « les effets (bitfield) s'appliquent au bloc
@@ -804,8 +796,11 @@ struct FocalRow: View {
         .accessibilityLabel(input.senderDisplayName)
     }
 
-    /// HAUT-DROITE : date complète (pré-calculée) + coche d'état de réception
-    /// (mes messages), sur la ligne du haut — toucher = détails de lecture.
+    /// BAS-DROITE : date complète (pré-calculée) + coche d'état de réception
+    /// (mes messages), sur la ligne basse à côté de la bande — toucher =
+    /// détails de lecture. Elle a quitté la ligne du HAUT le 2026-08-23 : la
+    /// carte affichait alors sa date deux fois, en haut par cette chip et en
+    /// bas par la méta.
     private var focusStampChip: some View {
         let metaTint: Color = input.isDark ? .white.opacity(FocalMetrics.MetaText.darkOpacity) : .black.opacity(FocalMetrics.MetaText.lightOpacity)
         let readTint: Color = input.isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo600

@@ -1768,6 +1768,69 @@ Trois règles en sont sorties :
 > qui enfilait le message nu aurait compilé pour produire un rejeu non routable.
 > L'assertion qui gèle ce point est née de l'erreur elle-même.
 
+### À une frontière de désérialisation, un champ AGRÉGÉ n'a pas de correctif local
+
+Les trois gardes de la file de rejeu ne sont pas de même nature, et c'est ce qui
+a fait rater la troisième pendant deux cycles. `drainedEventName` (le NOM,
+cycle 109 bis) et `isDeliverableQueuedPayload` (la CHARGE, cycle 111) se
+prononcent sur une entrée en la lisant **seule** : une entrée refusée n'emporte
+qu'elle. `isAddressableConversationId` (cycle 112) garde le seul champ que le
+drain **met en commun** — un unique `conversationId: { in: [...] }` porte tout le
+lot, pour le gate d'autorisation (`_dropEndedMemberships`) comme pour les accusés
+de remise.
+
+Une entrée dont l'id n'est pas interrogeable faisait donc lever la requête pour
+TOUT le monde. Mesuré contre le client Prisma généré, sans base : `undefined`,
+`null`, un nombre, un objet ⇒ `PrismaClientValidationError` côté client ; toute
+chaîne non-ObjectId (`''`, un identifiant lisible non normalisé) ⇒
+`Malformed ObjectID` côté moteur. **Le plancher est donc la forme ObjectId, pas
+`typeof === 'string'`** — s'arrêter à la chaîne laisse ouverte la moitié la plus
+plausible, le dépôt portant deux façons de nommer une conversation.
+
+> **Le test à faire passer à chaque champ d'une frontière de désérialisation
+> n'est pas « que vaut-il quand il est faux ? » mais « est-il lu SEUL, ou mis en
+> commun avec ceux des autres entrées ? »** — la seconde forme n'a pas de
+> correctif local.
+
+#### Un `catch` fail-open couvre aussi la question qu'on a mal posée
+
+Le corollaire, et il vaut au-delà de la file. `_dropEndedMemberships` échoue
+OUVERT **par décision écrite** : « une absence de réponse n'autorise rien à
+conclure », le drain étant destructif et une tempête de reconnexions étant
+exactement le moment où la base est sous pression. C'est juste pour ce qu'il
+vise.
+
+Ce qu'il ne peut pas faire, c'est distinguer « la dépendance n'a pas répondu »
+de « nous ne lui avons jamais posé de question valide ». La première est une
+panne subie et le fail-open est la bonne réponse ; la seconde est un défaut à
+nous, et le fail-open y devient l'**amplificateur** — ici, une seule entrée
+corrompue désactivait le gate d'autorisation du rejeu, et l'arriéré d'une
+conversation quittée ou d'où le lecteur avait été banni repartait en entier
+(jusqu'à 48 h et 500 entrées).
+
+**La garde va donc AVANT l'appel, jamais dedans**, et à l'endroit où l'entrée
+fautive est encore nommable une par une (`dropEntry`, journal par entrée). Un
+`catch` ne peut pas réparer ce qu'il ne peut pas attribuer.
+
+Seule exception à la règle du cycle 111 (« `conversationIds` ne se resserre
+pas ») : une entrée refusée POUR son `conversationId` n'a rien à nommer, et
+publier son id enverrait le client invalider une conversation qui n'existe pas.
+
+#### Un double de test ment aussi par ce qu'il ACCEPTE
+
+La leçon connue — « un double Prisma qui rend `[]` rend tout témoin de contenu
+trivialement vert » — porte sur ce que le double RÉPOND. Son jumeau porte sur ce
+qu'il ACCEPTE, et il est plus discret : un double qui répond faux finit par se
+voir ; **un double qui accepte un argument impossible ne se voit jamais, parce
+que le test qu'il sert PASSE.**
+
+Les fixtures de rejeu portaient `'conv-1'`, `'conv-kept'` — que la colonne
+ObjectId ne peut pas prendre — et onze entrées n'avaient pas de `conversationId`
+du tout. Toute la suite `_drainPendingMessages` attestait un drain dont la
+requête d'appartenance aurait levé en production. Le correctif est un double qui
+REFUSE ce que le vrai client refuse (`strictMembership`), et des ids de fixture
+de la forme de production (`convId('kept')`).
+
 ### Une clé venue d'un SPREAD est invisible au contrôle des propriétés excédentaires
 
 Corollaire direct du paragraphe précédent, et il change ce qu'il faut faire d'un

@@ -289,7 +289,7 @@ extension FeedView {
             HapticFeedback.success()
             if !text.isEmpty || pendingPlace != nil {
                 let lang = composerLanguage
-                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang, location: pendingPlace, mentions: declaredReferences) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds, originalLanguage: lang, location: pendingPlace, mentions: declaredReferences) }
             }
             return
         }
@@ -323,7 +323,7 @@ extension FeedView {
                 await viewModel.createOfflineMediaPost(
                     localMediaURLs: sources,
                     content: text,
-                    visibility: postVisibility,
+                    visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds,
                     originalLanguage: lang,
                     type: postType,
                     location: pendingPlace,
@@ -797,6 +797,25 @@ struct FeedComposerSheet: View {
     @State private var uploadProgress: UploadQueueProgress?
     @State private var isLoadingMedia = false
     @State private var postVisibility: String = "PUBLIC"
+    /// Audience nommée de la publication en cours (EXCEPT/ONLY) et le
+    /// sélecteur de personnes qui la remplit. Vides tant que l'auteur reste
+    /// sur une visibilité qui n'en demande pas.
+    @State private var postVisibilityUserIds: [String] = []
+    @State private var audiencePickerMode: PostVisibility? = nil
+
+    /// La visibilité choisie, relue comme un mode du modèle — un `rawValue`
+    /// inconnu (état corrompu) retombe sur PUBLIC, le défaut produit.
+    private var selectedPostVisibility: PostVisibility {
+        PostVisibility(rawValue: postVisibility) ?? .public
+    }
+
+    /// EXCEPT sans exclus = privé fantôme ; ONLY sans inclus = invisible pour
+    /// tous. Le gateway les REFUSE (`CreatePostSchema`) : mieux vaut retenir
+    /// l'envoi ici que le laisser échouer après coup.
+    private var postAudienceIncomplete: Bool {
+        selectedPostVisibility.requiresUserSelection && postVisibilityUserIds.isEmpty
+    }
+
     /// A QUALIFYING composition (video || audio || >= 2 images —
     /// `ReelComposition.qualifiesAsReel`) defaults to a REEL; the author can
     /// flip this to keep it a plain POST. A non-qualifying composition (single
@@ -886,7 +905,7 @@ struct FeedComposerSheet: View {
                                 .foregroundColor(hasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
                     }
-                    .disabled(!hasContent || isUploading)
+                    .disabled(!hasContent || isUploading || postAudienceIncomplete)
                 }
                 .padding(16)
                 .background(theme.backgroundSecondary)
@@ -905,28 +924,36 @@ struct FeedComposerSheet: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
 
+                        // Les SIX audiences du modèle, comme le composer story
+                        // et l'éditeur : trois d'entre elles (COMMUNITY,
+                        // EXCEPT, ONLY) étaient inatteignables à la création
+                        // d'un post — offertes ailleurs, refusées ici.
                         Menu {
-                            Button { postVisibility = "PUBLIC" } label: {
-                                Label(String(localized: "feed.post.visibility.public", defaultValue: "Public", bundle: .main), systemImage: "globe")
-                            }
-                            Button { postVisibility = "FRIENDS" } label: {
-                                Label(String(localized: "feed.post.visibility.friends", defaultValue: "Amis", bundle: .main), systemImage: "person.2")
-                            }
-                            Button { postVisibility = "PRIVATE" } label: {
-                                Label(String(localized: "feed.post.visibility.private", defaultValue: "Privé", bundle: .main), systemImage: "lock")
+                            ForEach(PostVisibility.allCases) { mode in
+                                Button {
+                                    postVisibility = mode.rawValue
+                                    if mode.requiresUserSelection {
+                                        audiencePickerMode = mode
+                                    } else {
+                                        postVisibilityUserIds = []
+                                    }
+                                } label: {
+                                    Label(mode.label, systemImage: mode.icon)
+                                }
                             }
                         } label: {
                             HStack(spacing: 4) {
-                                Image(systemName: postVisibility == "PUBLIC" ? "globe" : postVisibility == "FRIENDS" ? "person.2" : "lock")
+                                Image(systemName: selectedPostVisibility.icon)
                                     .font(MeeshyFont.relative(10))
-                                Text(postVisibility == "PUBLIC"
-                                    ? String(localized: "feed.post.visibility.public", defaultValue: "Public", bundle: .main)
-                                    : postVisibility == "FRIENDS"
-                                        ? String(localized: "feed.post.visibility.friends", defaultValue: "Amis", bundle: .main)
-                                        : String(localized: "feed.post.visibility.private", defaultValue: "Privé", bundle: .main))
+                                Text(selectedPostVisibility.label)
                                     .font(MeeshyFont.relative(12))
                             }
                             .foregroundColor(theme.textMuted)
+                        }
+                        .sheet(item: $audiencePickerMode) { mode in
+                            AudienceUserPickerView(mode: mode, initialSelection: postVisibilityUserIds) { ids in
+                                postVisibilityUserIds = ids
+                            }
                         }
                     }
                     // Toggle visible SEULEMENT quand la composition qualifie
@@ -1590,7 +1617,7 @@ struct FeedComposerSheet: View {
             HapticFeedback.success()
             if !text.isEmpty || pendingPlace != nil {
                 let lang = composerLanguage
-                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang, location: pendingPlace, mentions: declared) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds, originalLanguage: lang, location: pendingPlace, mentions: declared) }
             }
             return
         }
@@ -1618,7 +1645,7 @@ struct FeedComposerSheet: View {
                 await viewModel.createOfflineMediaPost(
                     localMediaURLs: sources,
                     content: text,
-                    visibility: postVisibility,
+                    visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds,
                     originalLanguage: lang,
                     type: postType,
                     location: pendingPlace,
@@ -1660,7 +1687,7 @@ struct FeedComposerSheet: View {
                 }
                 progressCancellable?.cancel()
 
-                await viewModel.createPost(content: text, type: ReelComposition.defaultType(mimeTypes: attachments.map(\.mimeType), durationsMs: attachments.map(\.duration), forcePlainPost: forcePlainPost).rawValue, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage, mentions: declared)
+                await viewModel.createPost(content: text, type: ReelComposition.defaultType(mimeTypes: attachments.map(\.mimeType), durationsMs: attachments.map(\.duration), forcePlainPost: forcePlainPost).rawValue, visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage, mentions: declared)
 
                 guard viewModel.publishError == nil else {
                     await MainActor.run {

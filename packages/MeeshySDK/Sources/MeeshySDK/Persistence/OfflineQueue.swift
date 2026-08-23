@@ -472,6 +472,12 @@ public protocol OfflineQueueing: Sendable {
         clientMutationId: String,
         content: String?,
         visibility: String,
+        /// Destinataires nommés d'une audience EXCEPT/ONLY. Le payload
+        /// persisté les portait déjà (`CreatePostPayload.visibilityUserIds`,
+        /// relu au flush) — rien ne les y METTAIT : un post hors-ligne à
+        /// audience nommée partait donc sans sa liste, et le gateway le
+        /// refusait (`CreatePostSchema`).
+        visibilityUserIds: [String]?,
         originalLanguage: String?,
         type: String?,
         location: SharedPlace?,
@@ -1842,6 +1848,12 @@ public actor OfflineQueue {
         clientMutationId cmid: String,
         content: String?,
         visibility: String,
+        /// Destinataires nommés d'une audience EXCEPT/ONLY. Le payload
+        /// persisté les portait déjà (`CreatePostPayload.visibilityUserIds`,
+        /// relu au flush) — rien ne les y METTAIT : un post hors-ligne à
+        /// audience nommée partait donc sans sa liste, et le gateway le
+        /// refusait (`CreatePostSchema`).
+        visibilityUserIds: [String]?,
         originalLanguage: String? = nil,
         type: String? = nil,
         location: SharedPlace? = nil,
@@ -1861,6 +1873,7 @@ public actor OfflineQueue {
             originalLanguage: originalLanguage,
             localMediaPaths: relativePaths,
             type: type,
+            visibilityUserIds: visibilityUserIds,
             location: location,
             mentions: mentions
         )
