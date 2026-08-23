@@ -1029,3 +1029,80 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle103.md`.
       discriminant n'est pas syntaxique (il faut savoir si le gestionnaire
       distingue l'absence), donc l'outil ne peut pas trancher seul — mais il
       pourrait geler la liste et forcer à instruire tout site NEUF.
+
+## Cycle 104 — la porte d'émission : huit copies d'une déclaration qui ne dit rien
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle104.md`
+
+- [x] Instruit le suivi nommé du cycle 103 : « `PreviewEmitIO.emit(event: string,
+      payload: unknown)` reste la porte non typée de toute diffusion ». Le suivi
+      était juste et **sous-estimait son objet d'un facteur huit** — la même
+      déclaration était écrite HUIT fois à la main, dans huit fichiers qui ne se
+      citent pas. Plus deux exemplaires des mêmes dérivations de type dans
+      `SocialEventsHandler` (cycle 100), qui avait trouvé la bonne réponse sans
+      qu'elle soit disponible ailleurs.
+- [x] **Découverte MESURÉE : socket.io ne garde pas ce qu'on croit.** Sur un nom
+      d'événement UNION, son `EventParams` s'effondre en union de tuples et une
+      charge correspondant à N'IMPORTE lequel des membres passe sous n'importe
+      quel autre. Un nom d'événement CALCULÉ est exactement la forme qu'ont les
+      quatre émetteurs qui n'avaient pas de porte à eux (`ReactionHandler`,
+      `AttachmentReactionHandler`, `PostReactionHandler`, `SocialEventsHandler`).
+      **Ils avaient l'air gardés et ne l'étaient pas** — pire qu'ouvertement non
+      typés, parce que personne ne va les vérifier.
+- [x] **Aucune charge fausse sur le fil** — piège armé, pas panne, et c'est
+      mesuré et non supposé (règle du cycle 103). Les douze appelants de
+      `broadcastToUser`, ceux d'`emitToConversationParticipants`, les quatre
+      routes de réaction et les quatre émetteurs sociaux passent tous au contrat
+      sans une correction de valeur.
+- [x] **La JUMELLE portait la marque exacte du cycle précédent.**
+      `broadcastReactionMutation` déclarait le `Record<string, unknown>` que le
+      cycle 103 venait de retirer de `broadcastMessageMutation`, et ses QUATRE
+      sites d'appel portaient le double cast qui le dit
+      (`updateEvent as unknown as Record<string, unknown>`). Les quatre sont
+      partis ; la charge était déjà juste.
+- [x] **Défaut de HARNAIS bien réel, 3e exemplaire du patron (91, 93, 104).**
+      `SocialEventsHandler.test.ts` portait un double PARTIEL de
+      `socketio-events` : 27 constantes à la main, pas la 28e
+      (`COMMENT_UNLIKED`). `broadcastCommentUnliked` émettait donc un événement
+      au nom **`undefined`** sur ses deux adresses, avec un témoin VERT — il
+      n'assertait que les rooms, jamais le NOM. Double retiré, assertion posée.
+- [x] Correctif : `socketio/serverEmit.ts`, la porte dérivée de
+      `ServerToClientEvents` en **union de tuples** (la forme générique, celle
+      qu'on écrit spontanément, n'est pas satisfaite par le `Server` de
+      production — socket.io décore sa carte avant d'en dériver ses paramètres).
+- [x] **DEUX erasures nommées, et deux seulement** (TS#30581) : `emitServerEvent`,
+      derrière un paramètre dont le type EST la garantie qu'il est sans
+      conséquence. Les émetteurs dont le couple relève du flot de CONTRÔLE
+      gardent leur `switch`, qui corrèle sans rien effacer.
+- [x] **Deux frontières de désérialisation NOMMÉES** plutôt que fermées :
+      `linkMessageEmissions` et `_drainedEmissions` (charge relue de Redis).
+- [x] **Deux cliquets, aucun ne subsume l'autre.** Au TYPE (`ServerEmitRatchet`,
+      4 assertions, 0 ligne exécutable) contre une porte RELÂCHÉE ; au BALAYAGE
+      (inventaire VIDE, `src/` entier) contre une porte CONTOURNÉE — la 8e copie
+      vivait dans `utils/`, à deux répertoires de la 7e.
+- [x] **Le cliquet de type vit dans le module qu'il garde, PAS dans `__tests__/`,
+      et la raison est mesurée** : `tsconfig` EXCLUT les tests et n'inclut
+      `src/socketio/**` que par ATTEIGNABILITÉ. Un cliquet dans un fichier que
+      personne n'importe n'est jamais lu par le compilateur — donc jamais rouge.
+- [x] RED prouvé sur les deux cliquets, et les 4 assertions de type ne sont pas
+      redondantes : la mutation « relâchée en `[string, unknown]` » fait tomber
+      2/3/4, la mutation « corrélation retirée » fait tomber 2/3 seulement.
+- [x] Gates : `tsc --noEmit` **0 erreur** · suite complète passerelle
+      **836/836 suites, 19253/19253 témoins**.
+- [ ] Suivi — `ReactionUpdateEvent` et `ReactionUpdateEventData` sont DEUX
+      exemplaires structurellement identiques de la même déclaration, jusqu'au
+      commentaire de `userId`. Écarté par SCOPE : la seconde est importée par le
+      SDK web et les services, donc lot de dépendances, pas d'émission.
+- [ ] Suivi — **la charge REJOUÉE n'est pas vérifiée contre la charge ÉMISE.**
+      `QueuedMessagePayload.payload` est un `Record<string, unknown>` unique pour
+      onze `eventType`. L'indexer fermerait la dernière frontière que ce lot n'a
+      que NOMMÉE, et c'est le seul endroit où un rejeu hors ligne peut diverger
+      en silence de la diffusion directe.
+- [ ] Suivi — `ConversationUpdatedEventData` porte une signature d'index, donc la
+      porte n'y vérifie que les trois champs REQUIS. `lastMessagePreview` y
+      voyage sans contrat alors que trois émetteurs le posent — même famille que
+      `location` avant le cycle qui l'a déclaré.
+- [ ] Suivi — **le miroir client→serveur n'est pas gouverné.** Ce lot ferme
+      `ServerToClientEvents` ; `ClientToServerEvents` n'a pas d'équivalent, et
+      `socket.on(...)` reste libre de déclarer la forme qu'il veut de ce qu'il
+      REÇOIT — la moitié la plus hostile des deux.

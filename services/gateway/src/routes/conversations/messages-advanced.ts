@@ -1419,7 +1419,7 @@ export function registerMessagesAdvancedRoutes(
             eventType: 'reaction-added',
             messageId,
             emoji,
-            payload: updateEvent as unknown as Record<string, unknown>,
+            payload: updateEvent,
             onError: (error) => logger.warn('[REACTION-REST] broadcast failed', error),
           });
         }
@@ -1580,7 +1580,7 @@ export function registerMessagesAdvancedRoutes(
             eventType: 'reaction-removed',
             messageId,
             emoji,
-            payload: updateEvent as unknown as Record<string, unknown>,
+            payload: updateEvent,
             onError: (error) => logger.warn('[REACTION-REST] removal broadcast failed', error),
           });
         }

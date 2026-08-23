@@ -1,5 +1,6 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { AuthSessionRevokedEventData } from '@meeshy/shared/types/socketio-events';
+import type { ServerEmitSocket } from './serverEmit';
 
 /**
  * A connected socket, reduced to the two verbs a revocation needs. Kept
@@ -8,8 +9,7 @@ import type { AuthSessionRevokedEventData } from '@meeshy/shared/types/socketio-
  * double all satisfy it. `fetchSockets()` hands back `RemoteSocket`s, which
  * carry exactly these two.
  */
-export interface RevokedSessionSocket {
-  emit(event: string, payload: unknown): unknown;
+export interface RevokedSessionSocket extends ServerEmitSocket {
   disconnect(close?: boolean): unknown;
 }
 

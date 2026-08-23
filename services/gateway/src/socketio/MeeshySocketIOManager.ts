@@ -87,6 +87,7 @@ import { MentionService, resolveUsernamesToIds } from '../services/MentionServic
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
+import type { ServerEventName } from './serverEmit';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 
@@ -107,7 +108,7 @@ const BRIDGE_SNAPSHOT_LIMIT = 30;
 
 // Maps a queued entry's `eventType` (absent = legacy 'new') to the Socket.IO
 // event replayed on reconnect for that offline-queue entry.
-function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string {
+function _drainedEventName(eventType: QueuedMessagePayload['eventType']): ServerEventName {
   if (eventType === 'edited') return SERVER_EVENTS.MESSAGE_EDITED;
   if (eventType === 'deleted') return SERVER_EVENTS.MESSAGE_DELETED;
   if (eventType === 'reaction-added') return SERVER_EVENTS.REACTION_ADDED;
@@ -126,9 +127,19 @@ function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string
 // room emit owes — see `linkMessageEmissions`. A recipient who was offline when
 // a share-link guest wrote is precisely the one this had to reach: the live
 // emit had already gone out without them.
+//
+// La charge sort de Redis en `Record<string, unknown>` : c'est une frontière de
+// DÉSÉRIALISATION, et le rattachement au contrat s'y affirme, comme dans
+// `linkMessageEmissions`. Ce que le typage garde ici, c'est le NOM de
+// l'événement (`_drainedEventName` rend un `ServerEventName`, plus un `string`) ;
+// ce qu'il ne garde pas encore, c'est que la charge REJOUÉE ait la même forme que
+// la charge ÉMISE en direct — cela demanderait d'indexer
+// `QueuedMessagePayload.payload` par `eventType`, et c'est un lot en soi.
 function _drainedEmissions(entry: QueuedMessagePayload): SocketEmission[] {
   if (entry.eventType === 'link-message') return linkMessageEmissions(entry.payload);
-  return [{ event: _drainedEventName(entry.eventType), payload: entry.payload }];
+  return [
+    { event: _drainedEventName(entry.eventType), payload: entry.payload } as SocketEmission,
+  ];
 }
 
 export interface SocketUser {
