@@ -402,7 +402,16 @@ export class MessagingService {
         return { success: false, timedOut: true };
       }
 
-      // Don't fallback to REST for E2EE messages (REST can't handle E2EE yet)
+      // Pas de repli REST pour un message chiffré — non parce que REST ne
+      // saurait pas le porter (il le porte : `encryptedContent` y est déclaré,
+      // validé et recomposé depuis toujours), mais parce que `sendMessageViaRest`
+      // RECONSTRUIT sa charge depuis `options`, où l'enveloppe de chiffrement
+      // n'existe pas. Se replier enverrait donc le message EN CLAIR.
+      //
+      // La phrase précédente — « REST can't handle E2EE yet » — désignait le
+      // mauvais coupable, et c'est le socket qui perdait le chiffré : son
+      // schéma strippait l'enveloppe en silence (corrigé côté passerelle,
+      // `validation/encryption-envelope.ts`).
       if (messageData.encryptedContent && messageData.encryptionMetadata) {
         return { success: false };
       }

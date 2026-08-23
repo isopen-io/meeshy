@@ -359,4 +359,23 @@ class StoryTextElementTest {
         assertThat(wire.scale).isWithin(1e-6).of(2.5)
         assertThat(wire.rotation).isWithin(1e-4).of(42.0)
     }
+
+    // --- baseDirection: derived from the caption, iOS-parity render-time direction ---
+
+    @Test
+    fun `a fresh empty element lays out left-to-right`() {
+        assertThat(StoryTextElement(id = "e1").baseDirection).isEqualTo(StoryTextDirection.LTR)
+    }
+
+    @Test
+    fun `a latin caption lays out left-to-right`() {
+        assertThat(StoryTextElement(id = "e1", text = "Bonjour").baseDirection)
+            .isEqualTo(StoryTextDirection.LTR)
+    }
+
+    @Test
+    fun `an arabic caption lays out right-to-left`() {
+        assertThat(StoryTextElement(id = "e1", text = "مرحبا").baseDirection)
+            .isEqualTo(StoryTextDirection.RTL)
+    }
 }
