@@ -11478,3 +11478,19 @@ sans reset identifié dans ce fichier à ce stade (5 sites confirmés : `toggleV
 corrigés —, `handleHold` ×2, `actuateSurvivalVideoSend` ×1, plus le chemin de succès de `toggleVideo`
 et le reset de fin d'appel — tous cohérents) ; les prochaines Vagues devront rouvrir un audit large du
 fichier ou s'attaquer à l'un des trois chantiers architecturaux ci-dessus.
+
+### Triage CI (PR #3408, hors périmètre de ce lot)
+
+Après merge de `origin/main` dans la branche (nécessaire pour repartir de l'état courant avant
+merge), `Test shared` échoue sur le head final : `__tests__/types/post.test.ts > loads without error
+and exports no runtime values` attend `Object.keys(mod)` de longueur 0 et obtient
+`['DEFAULT_PUBLICATION_VISIBILITY']`. **Confirmé pré-existant sur `main` lui-même**, sans lien avec ce
+lot ou avec le fichier `CallManager.swift` — vérifié directement sur le contenu de
+`origin/main:packages/shared/types/post.ts` (const `DEFAULT_PUBLICATION_VISIBILITY` ajoutée par
+`843e41481`, « une publication naît publique ») et `origin/main:packages/shared/__tests__/types/post.test.ts`
+(assertion « zéro export runtime » toujours en place, non mise à jour par ce même lot ou un suivant) :
+les deux coexistent sur `main` avant toute action de cette PR. Domaine visibilité de publication —
+hors périmètre calling, non corrigé ici (règle « ne pas élargir le lot » + règle CI rouge « base déjà
+rouge, ne pas pousser de correctif dedans »). PR laissée sous surveillance jusqu'à ce que `main`
+récupère ce test, puis remerge avant fusion — pas de merge sur un CI rouge hérité tant que la cause
+n'est pas confirmée résolue en amont.
