@@ -11562,3 +11562,91 @@ groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (
 La prochaine Vague devra soit rouvrir un audit sur un axe différent (accessibilité VoiceOver des
 écrans d'appel — déjà dense en labels existants, UX iPad/Stage Manager, tests de reconnexion réseau
 bout-en-bout), soit s'attaquer à l'un des trois chantiers architecturaux ci-dessus.
+
+## Vague 171 — `applySurvivalVideoSend`'s OS-suspension guard n'arrêtait que le RESUME, pas le SUSPEND (iOS) (2026-08-23)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Branche redémarrée
+depuis `origin/main` (Vague 170 déjà mergée, aucune PR ouverte sur `claude/upbeat-dirac-p6zgg8`). Audit
+large dédié (subagent, hors des familles déjà repassées par la Vague 170 — force unwraps, retain
+cycles, PushKit, interruption/route-change, ICE restart, teardown — toutes confirmées saines) a trouvé
+un site distinct dans la même famille « asymétrie de branches jumelles » que les Vagues 166-169, mais
+sur l'axe SUSPEND/RESUME de `VideoSurvivalController` plutôt que succès/échec.
+
+### Root cause
+
+`handleHold(true)` (déclenché par `CXSetHeldCallAction`, ex. une préemption d'appel cellulaire GSM)
+désactive la vidéo sortante directement via `webRTCService.downgradeFromVideo()` — il ne touche jamais
+`videoSurvivalController` et ne l'informe donc pas que la vidéo est coupée. Le moniteur de qualité
+(`startQualityMonitor`) continue de tourner pendant le hold (rien dans `handleHold` ne le met en
+pause), et son callback appelle inconditionnellement `videoSurvivalController.handle(level:,
+userWantsVideo: self.isVideoEnabled)` — gardé seulement par `isVideoEnabled`, que le hold ne touche
+jamais par conception (préserver l'intention utilisateur). Si le lien lit `.poor`/`.critical` pendant
+`suspendAfter` (6s) alors que l'appel est en hold, la politique pure déclenche `.suspend`, et
+`performTransition` appelle `actuator.suspendOutboundVideo()` → `applySurvivalVideoSend(enabled:
+false)`.
+
+Le garde-fou OS-suspension de cette fonction — `if enabled && (isVideoSuspendedByHold ||
+isVideoSuspendedByCaptureInterruption) { return false }`, dupliqué au pré-vol et dans la
+re-validation post-sérialisation du Task — ne bloquait QUE la direction resume (`enabled == true`),
+avec le commentaire « A network-quality recovery must not override either of those signals ». Rien
+n'empêchait la direction suspend de s'exécuter alors que la vidéo est déjà coupée pour une raison sans
+rapport (le hold), et son exécution pose `isVideoSuspended = true` — un drapeau que
+`handleHold(false)` (l'unhold) consulte comme preuve que « le réseau est encore réellement dégradé » :
+`if isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByCaptureInterruption` saute alors
+entièrement la ré-acquisition caméra/renégociation.
+
+### Impact
+
+Fenêtre étroite mais réelle, même famille que les Vagues 167-169 : un appel vidéo interrompu par
+CallKit (appel cellulaire entrant) pendant que le lien se dégrade quelques secondes — plausible, l'OS
+jonglant alors avec deux appels/radios. L'appel GSM se termine, CallKit lève le hold Meeshy : la vidéo
+reste noire jusqu'à ce que le minuteur de récupération PROPRE du contrôleur de survie s'écoule — jusqu'à
+`resumeAfter` (10s) de qualité SOUTENUE mesurée APRÈS l'unhold — alors que rien n'est réellement cassé
+(caméra disponible, lien déjà récupéré), sans erreur ni indication à l'utilisateur.
+
+### Fix
+
+Un seul geste, appliqué aux deux occurrences du garde-fou (pré-vol et re-validation post-sérialisation
+dans le Task) : retirer le préfixe `enabled &&`, bloquant désormais suspend ET resume dans les deux
+mêmes conditions. Miroir exact du garde `.reconnecting` juste au-dessus, qui bloque déjà les deux
+directions sans condition — la même raison s'applique : pendant un hold/interruption, l'état média est
+possédé par CallKit/AVFoundation, jamais par la politique réseau. Seuls les DEUX appelants de
+`applySurvivalVideoSend` (`suspendOutboundVideo`/`resumeOutboundVideo`, le contrat
+`VideoSurvivalActuating`) sont concernés — le hold lui-même appelle `webRTCService.downgradeFromVideo()`
+directement, en dehors de cette fonction, donc inchangé.
+
+Sur un `suspend` désormais bloqué, `performTransition` reçoit `ok == false` de l'actuateur et **revert**
+son état interne (`state.isSending = true`, `degradedSince = nil`) — le contrôleur retente simplement
+au prochain tick une fois le hold levé, sans jamais poser `isVideoSuspended`.
+
+### Tests (TDD, RED confirmé)
+
+Nouveau `CallManagerSurvivalHoldSuspendGuardSourceTests.swift` (même patron source-level que les
+Vagues 166-169 — pas de host XCTest disponible dans ce conteneur), deux tests bornant chacune des deux
+occurrences du garde-fou SÉMANTIQUEMENT (ancré sur le garde `.reconnecting` unique et sur
+`self.currentCallId == callId` — pas une fenêtre en nombre de caractères, leçon Vague 167 / cycle 238i).
+**RED confirmé par `git show HEAD:...` du fichier de production pré-correctif** : script Python
+reproduisant exactement la logique de bornage des deux tests, exécuté sur le contenu HEAD (forme
+asymétrique présente, forme symétrique absente) puis sur le contenu post-correctif (inverse) — les
+quatre assertions basculent comme attendu.
+
+### Risk assessment
+
+Faible-à-modéré — deux lignes de garde modifiées (retrait d'une condition), aucun changement de
+signature. Le seul comportement qui change est que `applySurvivalVideoSend(enabled: false)` échoue
+désormais pendant un hold/interruption au lieu de s'exécuter en double emploi avec le downgrade direct
+du hold — l'appel réseau réel (`webRTCService.downgradeFromVideo()`) n'était de toute façon jamais
+nécessaire dans ce cas (le hold l'a déjà fait), donc aucune régression fonctionnelle sur le chemin
+suspend ; le chemin resume était déjà bloqué avant ce correctif et reste inchangé dans son
+comportement observable.
+
+### Non fait volontairement / reste ouvert
+
+Le même défaut potentiel a été envisagé côté `isVideoSuspendedByCaptureInterruption` (interruption de
+capture caméra hors-hold) : `applyCameraSuspension` ne passe PAS par `webRTCService.downgradeFromVideo()`
+(seulement un flag + notification pair), donc le mécanisme exact diffère du hold ; le correctif ci-dessus
+le couvre par construction (même garde, même fonction) sans creuser plus loin son propre chemin de
+restauration — hors périmètre de cette Vague, qui vise le site vérifié (hold). Reconduits (inchangés) :
+dead code / god-object `CallManager.swift` (~6372 lignes) ; ADR `actor CallEventQueue` non implémenté ;
+iOS single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors
+périmètre calling).

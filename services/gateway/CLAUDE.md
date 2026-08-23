@@ -1878,6 +1878,52 @@ requête d'appartenance aurait levé en production. Le correctif est un double q
 REFUSE ce que le vrai client refuse (`strictMembership`), et des ids de fixture
 de la forme de production (`convId('kept')`).
 
+#### Gouverner ce que la file CONTIENT ne dit rien de la façon dont on l'ATTEINT
+
+Tout ce qui précède porte sur des entrées DÉJÀ ÉCRITES. L'écriture, elle, était
+sur les DEUX producteurs de `message:new` suspendue au succès de
+synchronisations que le code qualifie lui-même de non-bloquantes (cycle 116) :
+
+- **REST/ZMQ** — l'enfilage était la DERNIÈRE instruction du `try` `[CONV_SYNC]`,
+  dont tout le reste est cosmétique (`conversation:updated` par destinataire,
+  badges non-lus) et dont le `catch` journalise « non-bloquant ». Or
+  `io.to(room).emit(...)` LÈVE quand l'adaptateur ou l'encodeur est en défaut
+  (le dépôt l'écrit lui-même dans `emitWithSeq`) : une seule levée dans la
+  boucle par destinataire annulait le rejeu pour TOUS les absents.
+- **WS** — la requête participants avait son `try` dédié, mais retombait sur
+  `[]`. `enqueueForOfflineParticipants` lit `params.participants ?? sa propre
+  requête` : `[]` n'est pas nullish, donc l'unité partagée recevait
+  l'AFFIRMATION « aucun participant » et n'enfilait pour personne. La requête
+  qui tombe est le SUPERSET (Prisme + `joinedAt`) dont seule la cosmétique a
+  besoin ; la file, elle, ne demande que `{id, userId}`.
+
+Trois règles, et la première est la générale :
+
+> **Pour toute garantie DURABLE, la question n'est pas seulement « ce qu'elle
+> stocke est-il correct ? » mais « de quoi son EXÉCUTION dépend-elle, et ces
+> dépendances ont-elles le droit d'échouer ? »** Ici les deux dépendances
+> avaient ce droit, écrit et journalisé ; la garantie ne l'avait pas.
+
+> **`[]` par défaut décide à la place du consommateur.** Il rend le code d'après
+> plus court (`.map`, `.length` sans garde) et transforme une IGNORANCE en
+> AFFIRMATION. Rendre `undefined` est ce qui laisse chaque consommateur choisir
+> — c'est la même distinction que `bridgeComputed(undefined)` /
+> `bridgeNotComputed()`, un étage plus bas.
+
+> **Une étiquette de `catch` ne qualifie que ce que son auteur avait en tête.**
+> « non-bloquant » était vrai des deux premières instructions du `try` et faux
+> de la troisième. Une portée grandit toute seule à chaque instruction ajoutée
+> au bloc, et c'est l'étiquette qu'on relit, pas le bloc.
+
+L'ordre juste est donc, sur les deux producteurs : charger la liste → **enfiler
+(durable)** → diffuser la cosmétique. C'est la règle que `_emitPresenceSnapshot`
+applique déjà en plaçant le drain HORS de son `try` ; elle n'avait jamais été
+portée aux chemins d'ENVOI. Gardée par
+`socketio/__tests__/message-new-producer-parity.test.ts` (§ « la file hors ligne
+ne dépend pas de la synchro de liste »), qui fait lever `emit` PAR NOM
+d'événement — un double qui lève sur tout ne prouverait que la survie à un
+harnais mort.
+
 ### Une clé venue d'un SPREAD est invisible au contrôle des propriétés excédentaires
 
 Corollaire direct du paragraphe précédent, et il change ce qu'il faut faire d'un

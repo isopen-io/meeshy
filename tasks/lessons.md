@@ -13197,6 +13197,35 @@ posées à cette même frontière de désérialisation sont passés à côté.
 
 ---
 
+## 2026-08-23 — « Je n'ai pas trouvé de garde » n'est pas « il n'y a pas de garde » (239i)
+
+239i a laissé sciemment une clé i18n orpheline au catalogue, en s'appuyant sur
+deux affirmations dont AUCUNE ne tenait :
+
+1. « Le cliquet ne compte que les clés référencées, elle en sort d'elle-même. »
+   Vrai du cliquet — **et hors sujet**. Une garde DISTINCTE,
+   `test_everyAppCatalogIdentifierKeyIsReferencedInCode`, applique la contrainte
+   INVERSE : aucune clé du catalogue ne doit rester sans appelant. Je l'avais
+   cherchée par `grep` sur `orphan`, `unused.*key`, `cleUtilisee` — trois
+   formulations devinées, aucune n'étant son nom réel.
+2. « Retirer une clé du catalogue a cassé `main` en 236i. » **236i disait
+   l'inverse** : là-bas une clé avait été retirée **pendant qu'un site la
+   référençait encore**. Le défaut était le référencement orphelin, pas la
+   suppression.
+
+Corollaires :
+
+- **Pour prouver qu'aucune garde ne couvre un artefact, lister les tests qui LE
+  LISENT** — pas grepper des noms qu'on imagine. Une recherche par formulation
+  devinée ne peut produire qu'un faux négatif, et un faux négatif ici se paie
+  d'un rouge en CI.
+- **Une leçon passée invoquée de mémoire doit être RELUE avant d'être
+  appliquée.** Citer 236i sans la rouvrir m'a fait en tirer la règle
+  symétriquement opposée à ce qu'elle disait. Une leçon mal citée est pire
+  qu'aucune leçon : elle porte l'autorité d'une erreur déjà payée.
+- **Un catalogue partagé a souvent deux gardes de sens opposé.** Retirer le
+  dernier appelant d'une clé n'est pas neutre : cela crée une clé morte, et
+  oblige donc à retirer la clé dans le MÊME lot.
 ## Cycle 114 bis — un champ que PERSONNE n'écrit se lit comme un champ qui vaut faux
 
 ### 1. Une garde de confidentialité peut être livrée, testée, verte, et n'avoir jamais eu lieu
@@ -13300,6 +13329,64 @@ Devant une donnée de cette famille — provenance, intention, contexte de geste
 réponse commande le reste : elle s'écrit là, ou elle est perdue. Un lot qui la
 transporte sans l'écrire à la source déplace le problème en le rendant plus
 difficile à voir.
+
+---
+
+
+---
+
+## Leçon 258 — gouverner ce qu'une garantie CONTIENT ne dit rien de la façon dont on l'ATTEINT
+
+Cycle 116. Six cycles avaient durci la file de remise hors ligne : le nom
+d'événement qu'une entrée rejoue (109 bis), la forme minimale de sa charge
+(111), l'adressabilité de sa conversation (112), la corrélation du couple
+`(eventType, payload)` (106), le verdict d'indélivrabilité du drain (114).
+Tous portent sur des entrées **déjà écrites**.
+
+Aucun n'a demandé si l'écriture a lieu. Elle était, sur les DEUX producteurs de
+`message:new`, suspendue au succès de synchronisations que le code qualifie
+lui-même de non-bloquantes :
+
+- REST/ZMQ : l'enfilage était la DERNIÈRE instruction d'un `try` dont tout le
+  reste est cosmétique, sous un `catch` journalisant « non-bloquant ». Un
+  `emit` qui lève — l'adaptateur ou l'encodeur en défaut, ce que le dépôt écrit
+  lui-même ailleurs — annulait le rejeu pour tous les absents ;
+- WS : la requête participants avait bien son `try` dédié, mais retombait sur
+  `[]`, que l'unité partagée lit comme « voici la liste, elle est vide » et non
+  comme « je ne sais pas » (`params.participants ?? sa propre requête` —
+  `[]` n'est pas nullish).
+
+### La question à poser
+
+> Pour toute garantie DURABLE : **de quoi son exécution dépend-elle, et ces
+> dépendances ont-elles le droit d'échouer ?**
+
+Ici les deux dépendances avaient ce droit — écrit, assumé, journalisé. La
+garantie, elle, ne l'avait pas. Le dépôt connaissait déjà la règle et
+l'appliquait à l'instantané de reconnexion (le drain est placé HORS du `try`
+pour qu'un accroc cosmétique n'échoue jamais le rejeu destructif) ; elle n'avait
+jamais été portée aux deux chemins d'ENVOI.
+
+### Corollaire — un défaut choisi pour la commodité du site d'appel décide à la place du consommateur
+
+`let xs: T[] = []` rend le code d'après plus court (`.map`, `.length` sans
+garde) et transforme une IGNORANCE en AFFIRMATION. Le consommateur qui savait
+distinguer les deux — et qui avait un comportement pour chacune — n'a jamais eu
+l'occasion de le faire.
+
+C'est la même distinction que `bridgeComputed(undefined)` / `bridgeNotComputed()`
+(cycle 63), un étage plus bas et sans le vocabulaire pour la dire : les deux
+états y partageaient une valeur.
+
+### Corollaire — une étiquette de `catch` ne qualifie que ce que son auteur avait en tête
+
+« non-bloquant » était vrai des deux premières instructions du `try` et faux de
+la troisième. Personne ne relit un `try` pour vérifier son étiquette : c'est
+l'étiquette qu'on lit. Même famille que « un commentaire qui ÉNONCE une
+contrainte est une AFFIRMATION » (cycle 94) et que le commentaire
+d'impossibilité périmé (cycle 108) — avec cette variante : ici l'étiquette
+décrit une PORTÉE, et une portée grandit toute seule à chaque instruction
+qu'on ajoute au bloc.
 
 ---
 

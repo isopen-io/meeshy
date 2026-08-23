@@ -39,15 +39,28 @@ final class CompactCountConsolidationSourceGuardTests: XCTestCase {
     /// `"%.1fMB"`, dont le M est suivi d'une unité et non de la fin du littéral.
     private static let handmadeAbbreviations = ["\"%.1fk\"", "\"%.1fM\""]
 
-    /// Les surfaces qui rendaient l'abrégé à la main, et qui doivent donc
-    /// désormais nommer la source unique. Sans ce versant, la garde resterait
-    /// verte si quelqu'un supprimait purement et simplement les compteurs.
+    /// Les fichiers qui APPELLENT la source unique. Sans ce versant, la garde
+    /// resterait verte si quelqu'un supprimait purement et simplement les
+    /// compteurs.
+    ///
+    /// ⚠️ **Cette liste recense des APPELANTS, pas des écrans.** Elle est passée
+    /// de 8 à 5 en 239i sans qu'aucun compteur ne disparaisse : les quatre écrans
+    /// de portée (`FeedPostCard`, `ReelFeedCard`, `PostDetailView`, et la ligne
+    /// d'auteur de `PostDetailReachAndVisibility`) appellent maintenant
+    /// `ReachMetricLabel`, qui appelle `CompactCountLabel` pour eux. La règle est
+    /// donc nommée **une fois de moins**, pas moins souvent respectée.
+    ///
+    /// `ReelsPlayerView` reste dans la liste parce qu'il garde un appel DIRECT
+    /// hors portée d'auteur : le badge de compteur du rail d'actions.
+    ///
+    /// C'est la garde de 238i qui a signalé ce déplacement, en rougissant sur les
+    /// quatre écrans au moment où 239i les a convertis. Réduire cette liste sans
+    /// vérifier que la règle reste appliquée par un intermédiaire serait
+    /// exactement la façon de la vider de son sens : le versant INTERDICTION
+    /// ci-dessus, lui, n'a pas bougé et couvre toujours tout le dépôt.
     private static let consolidatedHosts = [
-        "FeedPostCard.swift",
-        "ReelFeedCard.swift",
+        "ReachMetricLabel.swift",
         "ReelsPlayerView.swift",
-        "PostDetailView.swift",
-        "PostDetailReachAndVisibility.swift",
         "ConversationDashboardView.swift",
         "ConversationListHelpers.swift",
         "CommunityListView.swift",
