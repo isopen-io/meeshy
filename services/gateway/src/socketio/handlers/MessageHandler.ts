@@ -49,6 +49,11 @@ import {
   groupSocketsByLanguage,
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
+import { resolveForwardSourceForBroadcast } from '../../services/preferences/forward-source-visibility.js';
+import {
+  carriesForwardSource,
+  withoutForwardSource,
+} from '@meeshy/shared/utils/forward-source-visibility';
 import { buildMessageAckData, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../utils/attachment-message-type.js';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
@@ -1262,6 +1267,27 @@ export class MessageHandler {
         (messagePayload as Record<string, unknown>).location = place;
       }
 
+      // Single participant query shared between the `message:new` fan-out,
+      // CONVERSATION_UPDATED and CONVERSATION_UNREAD_UPDATED to avoid
+      // duplicate DB round-trips. Lue AVANT la diffusion : la réciprocité
+      // des sources de transfert a besoin des lecteurs du salon pour
+      // décider qui a droit à la provenance — une liste, un lecteur.
+      // The superset select (PREVIEW_PRISM_PARTICIPANT_SELECT + joinedAt)
+      // satisfies both callers — `user` (préférences de langue) est le Prisme
+      // de la ligne de liste, résolu par destinataire ci-dessous ; `joinedAt`
+      // reste requis par `enqueueForOfflineParticipants` / `_updateUnreadCounts`.
+      // Parité avec le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`),
+      // qui charge le même superset pour la même raison.
+      let sharedParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> = [];
+      try {
+        sharedParticipants = await this.prisma.participant.findMany({
+          where: { conversationId: normalizedId, isActive: true },
+          select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
+        });
+      } catch (err) {
+        handlerLogger.warn('participant fetch failed — skipping CONVERSATION_UPDATED + unread', { error: err });
+      }
+
       const room = ROOMS.conversation(normalizedId);
 
       // Phase 4 §6.2 — split broadcast into two payloads :
@@ -1292,8 +1318,52 @@ export class MessageHandler {
       // map) and emit a trimmed payload once per distinct language set. The
       // original language is always kept (Prisme source fallback). The sender's
       // own devices still receive the full, cid-aware `senderPayload`.
+
+      // Réciprocité de la SOURCE d'un transfert (directive produit 2026-08-23).
+      //
+      // `visible ⇔ auteur ET lecteur`. L'auteur du transfert est FIXE pour ce
+      // message : son refus tranche pour tout le salon d'un coup. Son accord ne
+      // laisse que la moitié « lecteur », qui partage les destinataires en
+      // exactement DEUX groupes — jamais plus. C'est ce qui rend la règle
+      // finançable sur une diffusion de salon.
+      //
+      // Le découpage passe par les SALONS UTILISATEUR : l'adaptateur Redis les
+      // propage, donc un destinataire connecté à un AUTRE nœud est exclu comme
+      // il faut. Surtout PAS le motif de `_emitMessageNewByLanguage`, qui
+      // énumère des socket ids locaux et dont le repli multi-nœud rediffuse le
+      // payload COMPLET au salon : reproduire ce motif ici ferait fuiter le nom
+      // sur tout déploiement multi-nœud, en silence.
+      //
+      // Rien n'est payé quand le message ne nomme aucune source — c'est
+      // l'immense majorité des envois.
+      let peerPayload = broadcastPayload;
+      let forwardSourceHiddenRooms: string[] = [];
+      let forwardSourceHiddenUserIds: ReadonlySet<string> = new Set<string>();
+      if (carriesForwardSource(broadcastPayload)) {
+        const verdict = await resolveForwardSourceForBroadcast(
+          this.prisma,
+          senderUserId,
+          sharedParticipants.map((participant) => participant.userId)
+        );
+        if (!verdict.forwarderAllows) {
+          // L'auteur s'est retiré : plus personne n'apprend la provenance —
+          // sauf lui-même, servi par `senderPayload` (se cacher des autres
+          // n'est pas s'aveugler).
+          peerPayload = withoutForwardSource(broadcastPayload);
+        } else {
+          forwardSourceHiddenUserIds = verdict.refusingReaderIds;
+          forwardSourceHiddenRooms = [...verdict.refusingReaderIds].map((userId) => ROOMS.user(userId));
+        }
+      }
+
       // Opt-in (OFF by default) — flip per-deploy after staging measurement.
-      const langFilterOn = process.env.SOCKET_LANG_FILTER === 'true';
+      //
+      // Désactivé d'office dès qu'un lecteur doit être masqué : une règle de
+      // confidentialité ne se subordonne pas à un drapeau d'optimisation de
+      // bande passante, et `_emitMessageNewByLanguage` ne sait pas exclure de
+      // salon utilisateur.
+      const langFilterOn =
+        process.env.SOCKET_LANG_FILTER === 'true' && forwardSourceHiddenRooms.length === 0;
 
       if (senderUserId) {
         // Multi-device : send the cid-aware payload to the sender's
@@ -1302,21 +1372,23 @@ export class MessageHandler {
         // EXCEPT the sender's user room so peers do not receive a
         // duplicate.
         if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, broadcastPayload, { excludeUserId: senderUserId });
+          this._emitMessageNewByLanguage(room, peerPayload, { excludeUserId: senderUserId });
         } else {
           this.io
             .to(room)
-            .except(ROOMS.user(senderUserId))
-            .emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+            .except([ROOMS.user(senderUserId), ...forwardSourceHiddenRooms])
+            .emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
         }
         this.io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
       } else if (senderSocket) {
         // Anonymous sender with an active socket : same single-session
         // split as before. Multi-device anonymous is undefined.
         if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, broadcastPayload, { excludeSocketId: senderSocket.id });
+          this._emitMessageNewByLanguage(room, peerPayload, { excludeSocketId: senderSocket.id });
         } else {
-          senderSocket.broadcast.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+          const peers = senderSocket.broadcast.to(room);
+          (forwardSourceHiddenRooms.length > 0 ? peers.except(forwardSourceHiddenRooms) : peers)
+            .emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
         }
         senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
       } else {
@@ -1325,10 +1397,22 @@ export class MessageHandler {
         // for the whole room. The sender's other sessions still
         // reconcile via the REST / socket ACK path which carries the cid.
         if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, broadcastPayload, {});
+          this._emitMessageNewByLanguage(room, peerPayload, {});
         } else {
-          this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+          const peers = this.io.to(room);
+          (forwardSourceHiddenRooms.length > 0 ? peers.except(forwardSourceHiddenRooms) : peers)
+            .emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
         }
+      }
+
+      // Les lecteurs qui se sont retirés : le MÊME message, sans sa provenance.
+      // Émis après l'exclusion ci-dessus, jamais en plus d'elle — un
+      // destinataire reçoit exactement UN `message:new`, sinon le client
+      // insère la bulle deux fois.
+      if (forwardSourceHiddenRooms.length > 0) {
+        this.io
+          .to(forwardSourceHiddenRooms)
+          .emit(SERVER_EVENTS.MESSAGE_NEW, withoutForwardSource(peerPayload));
       }
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
@@ -1359,24 +1443,6 @@ export class MessageHandler {
             });
           }
         }
-      }
-
-      // Single participant query shared between CONVERSATION_UPDATED and
-      // CONVERSATION_UNREAD_UPDATED to avoid a duplicate DB round-trip.
-      // The superset select (PREVIEW_PRISM_PARTICIPANT_SELECT + joinedAt)
-      // satisfies both callers — `user` (préférences de langue) est le Prisme
-      // de la ligne de liste, résolu par destinataire ci-dessous ; `joinedAt`
-      // reste requis par `enqueueForOfflineParticipants` / `_updateUnreadCounts`.
-      // Parité avec le chemin REST/ZMQ (`MeeshySocketIOManager._broadcastNewMessage`),
-      // qui charge le même superset pour la même raison.
-      let sharedParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> = [];
-      try {
-        sharedParticipants = await this.prisma.participant.findMany({
-          where: { conversationId: normalizedId, isActive: true },
-          select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
-        });
-      } catch (err) {
-        handlerLogger.warn('participant fetch failed — skipping CONVERSATION_UPDATED + unread', { error: err });
       }
 
       // Notify each participant's user room that the conversation has
@@ -1454,7 +1520,22 @@ export class MessageHandler {
           actorUserId: message.senderId,
           eventType: 'new',
           messageId: message.id,
-          payload: broadcastPayload,
+          payload: peerPayload,
+          // La file est la TROISIÈME porte de sortie de ce message. Sans cette
+          // ligne, un destinataire hors ligne qui a refusé les sources de
+          // transfert se les verrait rejouer intactes à sa reconnexion : la
+          // règle ne serait qu'un rideau différé. `peerPayload` porte déjà le
+          // retrait quand c'est l'AUTEUR qui s'est retiré ; ceci ajoute le
+          // retrait par LECTEUR, que seule la boucle par participant peut
+          // faire.
+          ...(forwardSourceHiddenUserIds.size > 0
+            ? {
+                resolvePayloadForReader: (queueKey: string) =>
+                  forwardSourceHiddenUserIds.has(queueKey)
+                    ? withoutForwardSource(peerPayload)
+                    : peerPayload,
+              }
+            : {}),
           participants: sharedParticipants,
         }
       );

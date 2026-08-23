@@ -19,7 +19,10 @@
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { PRIVACY_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
+import {
+  PRIVACY_PREFERENCES_DEFAULTS,
+  type PrivacyPreferencesDefaults,
+} from '../config/user-preferences-defaults';
 import {
   clearPrivacyPreferencesCache,
   invalidatePrivacyPreferences,
@@ -31,16 +34,15 @@ import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'PrivacyPreferencesService' });
 
-export interface PrivacyPreferences {
-  showOnlineStatus: boolean;
-  showLastSeen: boolean;
-  showReadReceipts: boolean;
-  showTypingIndicator: boolean;
-  allowContactRequests: boolean;
-  allowGroupInvites: boolean;
-  saveMediaToGallery: boolean;
-  allowAnalytics: boolean;
-}
+/**
+ * Exactement les préférences que le serveur obéit — un ALIAS, non une copie.
+ *
+ * L'interface ré-énumérait les mêmes champs que `PrivacyPreferencesDefaults` :
+ * deux listes à tenir en phase, dont une seule que le compilateur reliait au
+ * reste. Une préférence ajoutée à l'une et oubliée dans l'autre s'écrivait en
+ * base sans qu'aucune porte ne puisse la lire.
+ */
+export type PrivacyPreferences = PrivacyPreferencesDefaults;
 
 export class PrivacyPreferencesService {
   constructor(private prisma: PrismaClient) {}
@@ -90,16 +92,7 @@ export class PrivacyPreferencesService {
    * Retourne les préférences par défaut
    */
   getDefaultPreferences(): PrivacyPreferences {
-    return {
-      showOnlineStatus: PRIVACY_PREFERENCES_DEFAULTS.showOnlineStatus,
-      showLastSeen: PRIVACY_PREFERENCES_DEFAULTS.showLastSeen,
-      showReadReceipts: PRIVACY_PREFERENCES_DEFAULTS.showReadReceipts,
-      showTypingIndicator: PRIVACY_PREFERENCES_DEFAULTS.showTypingIndicator,
-      allowContactRequests: PRIVACY_PREFERENCES_DEFAULTS.allowContactRequests,
-      allowGroupInvites: PRIVACY_PREFERENCES_DEFAULTS.allowGroupInvites,
-      saveMediaToGallery: PRIVACY_PREFERENCES_DEFAULTS.saveMediaToGallery,
-      allowAnalytics: PRIVACY_PREFERENCES_DEFAULTS.allowAnalytics,
-    };
+    return { ...PRIVACY_PREFERENCES_DEFAULTS };
   }
 
   /**

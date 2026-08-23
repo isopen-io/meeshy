@@ -28,6 +28,7 @@ describe('PrivacyPreferenceSchema', () => {
       showLastSeen: false,
       showReadReceipts: true,
       showTypingIndicator: true,
+      showForwardSource: false,
       allowContactRequests: true,
       allowGroupInvites: false,
       allowCallsFromNonContacts: false,
