@@ -2,6 +2,63 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-23 **story text elements get a background (none / solid / glass)** (slice
+> `story-text-element-background`, feature-parity §E — "Text elements … background (none/solid/glass) …",
+> the `story-text-element-styling` slice's first named-pending item). iOS lets a text element carry a
+> `StoryTextBackgroundStyle` (`.none`/`.solid(hex:)`/`.glass(radius:)`) chosen from `StoryTextBackgroundPresets`;
+> Android's on-canvas text element carried style/colour/align but no backing, so a caption always floated bare.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the open
+> PRs repo-wide are gateway/web/ios work — #3376/#3375/#3368/#3364/#3352 — none android-routine). Prior android
+> iteration (`feed-repost-embed-location`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`06e85aa4`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe as recorded in NOTES: install
+> cmdline-tools + `platforms;android-37.0` via `--channel=3`, then **copy** `android-37.0` → a real `android-37`
+> dir and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37`. Full `assembleDebug testDebugUnitTest`
+> (= `meeshy.sh check`) ran locally, **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **Model reuse, not duplication**: the wire model `StoryTextBackgroundStyle` (`{type,hex?,radius?}`, in
+> `:core:model`) already existed — this slice adds only the **app-side** composer model that projects onto it.
+> New pure `StoryTextBackground` sealed interface in `:feature:stories` (`None`/`Solid(hex)`/`Glass(radius)`)
+> — exhaustive `when`, impossible states unrepresentable — with `toStyleWire()` deciding the tagged-union
+> encoding in one place: `None`→`null` (absent = "no background" per the gateway's `resolvedBackgroundStyle`,
+> minimal payload, mirrors iOS purging the legacy `textBg`), `Solid`→`{type:"solid",hex}`, `Glass`→
+> `{type:"glass",radius}`. `StoryTextBackgroundPresets.all` mirrors the iOS `StoryTextBackgroundPresets.all`
+> order/values (None, Glass(24), then 10 solids incl. the `…A6` alpha variants) as the single ordered SSOT the
+> picker chips and the pure `next()` tap-cycle both read (they can't diverge). `next()` wraps at the end and
+> restarts at the first for an off-palette backing.
+>
+> **`StoryTextElement`**: gained `background: StoryTextBackground = None` (defaulted last-ish field — all
+> construction sites use named args, verified — so no call breaks); `toTextObject` now sets
+> `backgroundStyle = background.toStyleWire()`. **VM** `onTextElementBackground(id, background)` mirrors the
+> style/colour/align wrappers exactly (one-line `updateTextElement`, inert on unknown id, selection/editing
+> untouched). **Compose glue (exempt)**: `TextElementLayer` paints the backing behind the glyphs via a
+> `Modifier.storyTextBacking` (rounded solid fill / translucent frosted scrim for glass / nothing for none;
+> `parseBackingColor` handles both `RRGGBB` and `RRGGBBAA`→Compose `AARRGGBB`), and a `BackgroundSwatch` chip
+> row (accent-ringed selection, a slash icon for None) joins the `TextStyleToolbar`. 4 locales get
+> `stories_composer_bg_none`/`_glass`.
+>
+> **Tests: +14** — 8 `StoryTextBackgroundTest` (none/solid/8-digit-solid/glass wire mapping, preset order,
+> `next` advance/wrap/off-palette), 4 `StoryTextElementTest` (fresh element has no backing; `toTextObject`
+> omits `backgroundStyle` when none, carries solid, carries glass), 2 `StoryComposerViewModelTest`
+> (`onTextElementBackground` re-backs only the edited element / inert on unknown id). **Mutation RED-proof ×1**:
+> nulling `toTextObject`'s `backgroundStyle = background.toStyleWire()` failed EXACTLY the two positive-wiring
+> tests (solid + glass, 2 of 29 in that suite) while "omits when none" stayed green — genuine discrimination.
+> Restored via backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (1 new pure model file, 1 model field + wire wiring, 1 VM method, Compose glue in
+> the composer screen, strings ×4 locales, +14 tests across 3 files, tracking docs). Verdict: **PASS** — pure
+> app-side model projecting onto the existing wire type + exempt Compose glue, behavioural tests through the
+> public API, no production logic outside apps/android.
+>
+> **Next**: still §E (Stories). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) continue the text-element styling backlog — **size** (discrete font-size control) or **outline/stroke**
+> (`borderColor`/`borderWidth` already on the wire `StoryTextObject`), each a clean thin model+wire+chip slice
+> like this one; (2) RTL / fade timing (`fadeIn`/`fadeOut` on the wire); (3) the story-canvas **Effets** tiles
+> (filters/drawing/timeline). Prefer (1) — the wire fields exist and it mirrors this slice's shape exactly.
+
 > On 2026-08-23 **repost embed shows the reposted post's shared location** (slice
 > `feed-repost-embed-location`, feature-parity §F — "Repost / quote embed cell in the feed"). iOS renders
 > the SOURCE post's `SharedPlace` as a tappable sticker inside the quote block (`FeedPostCard.swift:989`),

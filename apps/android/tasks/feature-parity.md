@@ -3525,7 +3525,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       wrappers, inert on unknown id, selection untouched). `TextElementLayer` renders
       weight/slant/family/tracking + a neon glow `Shadow`; a `TextStyleToolbar` (style chips +
       L/C/R `AlignToggle` + `ColorSwatch` palette) appears while editing an element. Pending:
-      size/background/outline/RTL/fade.
+      size/outline/RTL/fade.
+      **Background (none/solid/glass) done** (`story-text-element-background`): a pure sealed
+      `StoryTextBackground` (`None` / `Solid(hex)` / `Glass(radius)`) with the tagged-union wire mapping in
+      one unit-tested place — `toStyleWire()` → gateway `StoryTextBackgroundStyle` `{type,hex?,radius?}`, with
+      `None`→absent (minimal payload, gateway reads null as none) mirroring iOS's `textBg` purge.
+      `StoryTextBackgroundPresets.all` mirrors the iOS preset order/values (None, Glass(24), then the 10
+      solids) as the single ordered source both the picker chips and the pure `next()` tap-cycle read.
+      `StoryTextElement.background` (defaulted `None`) rides through `toTextObject.backgroundStyle`; the VM's
+      `onTextElementBackground` (inert on unknown id, selection untouched) mirrors the style/color/align
+      wrappers. `TextElementLayer` paints the backing behind the glyphs (solid fill / frosted glass scrim /
+      none), and a `BackgroundSwatch` chip row joins the `TextStyleToolbar`. +14 tests (8 model+presets+wire,
+      4 element defaults+wire, 2 VM). Pending: size/outline/RTL/fade.
 - [~] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
       **Floating style toolbar + keyboard-aware shift done** (`story-floating-toolbar`): while a text
       element is edited the `TextStyleToolbar` no longer sits in a fixed bottom band — it floats
