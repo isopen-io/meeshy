@@ -1102,10 +1102,11 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle104.md`
       porte n'y vérifie que les trois champs REQUIS. `lastMessagePreview` y
       voyage sans contrat alors que trois émetteurs le posent — même famille que
       `location` avant le cycle qui l'a déclaré.
-- [ ] Suivi — **le miroir client→serveur n'est pas gouverné.** Ce lot ferme
-      `ServerToClientEvents` ; `ClientToServerEvents` n'a pas d'équivalent, et
-      `socket.on(...)` reste libre de déclarer la forme qu'il veut de ce qu'il
-      REÇOIT — la moitié la plus hostile des deux.
+- [x] ~~Suivi — le miroir client→serveur n'est pas gouverné.~~ **MESURÉ FAUX au
+      cycle 107.** Le constat de départ était exact (`ClientToServerEvents` n'a
+      pas de porte de type) ; la conclusion ne l'était pas — pour de l'ENTRANT
+      une porte de type ne garde rien, seule l'exécution garde, et elle existait
+      déjà (37 validations zod + gardes manuscrites + limiteur de débit partout).
 
 ## Cycle 104 bis (2026-08-23) — `messageType` : la moitié CLIENT que le serveur ne peut pas corriger
 
@@ -1231,7 +1232,7 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle105.md`
       exemplaires de la même déclaration.
 - [ ] Suivi hérité — `ConversationUpdatedEventData` porte une signature d'index ;
       `lastMessagePreview` y voyage sans contrat.
-- [ ] Suivi hérité — **le miroir client→serveur n'est pas gouverné.**
+- [x] ~~Suivi hérité — le miroir client→serveur n'est pas gouverné.~~ **MESURÉ FAUX au cycle 107.**
 
 ## Cycle 106 — la file rejoint le contrat : ce qu'on ENFILE est tenu à ce qu'on ÉMET
 
@@ -1281,10 +1282,10 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle106.md`
 - [ ] Suivi — `_seq` n'est déclaré que sur `NotificationEventData` (cycle 105).
 - [ ] Suivi hérité — `ReactionUpdateEvent` / `ReactionUpdateEventData`.
 - [ ] Suivi hérité — `ConversationUpdatedEventData` et son index signature.
-- [ ] **Suivi — le miroir client→serveur, reporté TROIS cycles, est désormais le
-      plus gros restant.** `ClientToServerEvents` n'a aucun équivalent de
-      `serverEmit.ts` : `socket.on(...)` reste libre de déclarer la forme qu'il
-      veut de ce qu'il REÇOIT. C'est la moitié HOSTILE du contrat.
+- [x] ~~Suivi — le miroir client→serveur, reporté TROIS cycles, est désormais le
+      plus gros restant.~~ **MESURÉ FAUX au cycle 107** — et c'est cette ligne-ci,
+      recopiée sans mesure pour la troisième fois, qui a fait du suivi « le plus
+      gros restant » alors qu'il n'existait pas.
 
 ## Cycle 106 bis — retirer la carte ouverte ne ferme rien : c'est le SPREAD qui fait taire le compilateur
 
