@@ -320,8 +320,14 @@ struct LentilleConversationRow: View {
 
     /// Troisième ligne — la date SEULE, poussée à droite (retour produit
     /// 2026-08-22 : « en bas sur une nouvelle ligne à droite mettre la date ;
-    /// la date gardera cette place même en magnificence »). Le glyphe d'outbox
-    /// la précède : il parle du même envoi.
+    /// la date gardera cette place même en magnificence »).
+    ///
+    /// **Le glyphe d'outbox ⟳ ne la précède plus** (behaviour-matrix L09,
+    /// amendement du lot 2, CONFIRMÉ par le porteur produit le 2026-08-23).
+    /// L'outbox continue de renvoyer toute seule — le retrait ne touche que
+    /// l'AFFORDANCE de liste, jamais le mécanisme. Une rangée n'est pas le bon
+    /// endroit pour dire l'état d'un envoi : elle le disait pour toutes les
+    /// conversations à la fois, sans rien offrir à faire de cette information.
     ///
     /// `LentilleRowTimestamp` garde son `TimelineView` — l'horodatage relatif
     /// doit ticker hors du portillon `.equatable()`, qui n'a délibérément
@@ -329,13 +335,6 @@ struct LentilleConversationRow: View {
     private var dateLine: some View {
         HStack(spacing: MeeshySpacing.xs) {
             Spacer(minLength: 0)
-
-            if conversation.userState.hasPendingSync {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                    .foregroundColor(accent.opacity(0.7))
-                    .accessibilityHidden(true)
-            }
 
             LentilleRowTimestamp(date: conversation.lastMessageAt)
                 .font(LentilleMetrics.Time.font)
