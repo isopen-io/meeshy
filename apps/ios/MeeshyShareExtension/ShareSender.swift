@@ -70,7 +70,7 @@ nonisolated enum ShareSender {
 /// délibéré.** L'invariant produit (décision user) est qu'aucun destinataire ne
 /// voie de marque de transfert : diffuser par `forwardedFromId` ferait afficher
 /// « Transféré depuis Famille » aux collègues (`MessageHandler.ts:1187-1195` +
-/// `ForwardBadgePolicy.swift:15-21`). Ne PAS pouvoir l'exprimer est une garantie
+/// `ForwardBadgePolicy.attribution(for:)`). Ne PAS pouvoir l'exprimer est une garantie
 /// plus solide que se rappeler de ne pas le faire.
 ///
 /// Les cibles 2..N passent par `copyAttachmentsFromMessageId` : le serveur crée

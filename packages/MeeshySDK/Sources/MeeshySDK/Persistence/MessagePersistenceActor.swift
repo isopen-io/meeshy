@@ -1712,9 +1712,15 @@ public actor MessagePersistenceActor {
                         senderAvatar: fwd.sender?.resolvedAvatar,
                         previewText: fwd.content ?? "",
                         conversationId: api.forwardedFromConversation?.id,
-                        conversationName: api.forwardedFromConversation?.title,
+                        // Même repli et même type que le chemin réseau
+                        // (`MessageModels.uiForwardRef`) : sans le type gravé,
+                        // toute rangée relue du cache rendait la politique de
+                        // badge aveugle — et elle échoue FERMÉE.
+                        conversationName: api.forwardedFromConversation?.title
+                            ?? api.forwardedFromConversation?.identifier,
                         attachmentType: firstAtt?.mimeType,
-                        attachmentThumbnailUrl: firstAtt?.thumbnailUrl
+                        attachmentThumbnailUrl: firstAtt?.thumbnailUrl,
+                        conversationType: api.forwardedFromConversation?.type
                     )
                     return encoder.encodeOrLog(ref, field: "forwardedFromJson", id: api.id)
                 }

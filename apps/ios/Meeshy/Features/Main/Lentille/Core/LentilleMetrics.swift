@@ -25,19 +25,24 @@ nonisolated public enum LentilleMetrics {
     /// `list.row` — padding `10/16`, marge latérale `8`, radius `16`,
     /// `transform-origin: 16% 50%`.
     nonisolated public enum Row {
-        /// **64 → 88 le 2026-08-22 (lot 2).** La hauteur n'est pas choisie :
-        /// elle est IMPOSÉE par les trois bandes que la rangée empile
-        /// désormais, mesurées à taille de police par défaut —
-        /// ligne de titre `24` (la pastille chiffrée de non-lus est le plus
-        /// haut de ses objets : `NotificationBadge`-like, cadre minimal
-        /// carré), `2` d'écart, bulle d'aperçu `24`
-        /// (`Line2.size` + deux `PreviewBubble.paddingVertical`), `2`
-        /// d'écart, ligne d'effectif `14` (`Members.size`) = `66`, plus les
-        /// deux `paddingVertical` du rang = `86`. `88` laisse la marge de
-        /// deux points qui absorbe l'arrondi de métrique de police sans
-        /// jamais rogner un glyphe (le rang reste à hauteur FIXE : il ne
-        /// peut pas grandir sans chevaucher son voisin, cf.
-        /// `LentilleRowDynamicTypeTests`).
+        /// **64 → 88 le 2026-08-22, INCHANGÉ le 2026-08-23.** La hauteur
+        /// n'est pas choisie : elle est IMPOSÉE par les trois bandes que la
+        /// rangée empile, mesurées à taille de police par défaut — ligne de
+        /// titre `24` (la pastille chiffrée de non-lus est le plus haut de
+        /// ses objets, cadre minimal carré), `2` d'écart, ligne 2 NUE ~`20`
+        /// (`Line2.size` = 13, sans plus aucune enveloppe : la bulle
+        /// d'aperçu et ses deux paddings verticaux sont partis avec la
+        /// directive « pas de bulles »), `2` d'écart, ligne de date ~`17`
+        /// (`Time.size` = 12 gras) = `65`, plus les deux `paddingVertical`
+        /// du rang = `85`. `88` laisse les trois points de marge qui
+        /// absorbent l'arrondi de métrique de police sans jamais rogner un
+        /// glyphe (le rang reste à hauteur FIXE : il ne peut pas grandir
+        /// sans chevaucher son voisin, cf. `LentilleRowDynamicTypeTests`).
+        ///
+        /// La cote NE BOUGE PAS : `list.row.height` est PARTAGÉE avec la peau
+        /// web (`--lentille-list-row-height`, consommée par `LentilleRow.tsx`
+        /// et `LentilleSkeletonRow.tsx`), et aucun témoin web n'en vérifie la
+        /// VALEUR — la déplacer déplacerait le web en silence.
         public static let height: CGFloat = 88
         public static let paddingVertical: CGFloat = 10
         public static let paddingHorizontal: CGFloat = 16
@@ -120,48 +125,6 @@ nonisolated public enum LentilleMetrics {
     /// arbitrage.
     nonisolated public enum UnreadDot {
         public static let size: CGFloat = 8
-    }
-
-    // MARK: - Bulle d'aperçu (lot 2, 2026-08-22)
-
-    /// `list.previewBubble` — surface arrondie qui entoure la LIGNE 2 et
-    /// loge l'heure en bas à droite (idiome de la bulle de messagerie).
-    ///
-    /// **Les quatre opacités sont un BUDGET DE CONTRASTE, pas un goût.**
-    /// L'heure est peinte en `MeeshyColors.textMuted`, qui ne dispose que
-    /// d'environ 5 % de marge de luminance sur le fond clair (4,76:1 contre
-    /// un seuil AA de 4,5:1, D-18) : toute teinte assombrissante mange cette
-    /// marge. Les valeurs ci-dessous sont les plus FORTES qui gardent
-    /// l'heure au-dessus de AA pour CHAQUE accent que
-    /// `DynamicColorGenerator` sait produire (528 couleurs énumérées, pas
-    /// échantillonnées) — mesure faite par
-    /// `LentilleTextMutedContrastAATests
-    /// .test_previewBubble_keepsTheTimestampAboveAA_onEveryGeneratedAccent`,
-    /// pire cas mesuré 4,55:1 en clair et 4,62:1 en sombre. C'est le CONTOUR
-    /// (opacités bien plus fortes, aucun texte posé dessus) qui donne sa
-    /// présence à la bulle, jamais le remplissage.
-    nonisolated public enum PreviewBubble {
-        public static let radius: CGFloat = 12
-        public static let paddingVertical: CGFloat = 4
-        public static let paddingHorizontal: CGFloat = 8
-        /// Écart entre la fin du contenu de ligne 2 et l'heure.
-        public static let gap: CGFloat = 6
-        public static let strokeWidth: CGFloat = 1
-        public static let fillOpacityLight: Double = 0.04
-        public static let fillOpacityDark: Double = 0.1
-        public static let strokeOpacityLight: Double = 0.22
-        public static let strokeOpacityDark: Double = 0.28
-    }
-
-    // MARK: - Effectif (lot 2)
-
-    /// `list.members` — libellé d'effectif posé en bas à droite du CADRE de
-    /// la rangée, hors de la bulle. Un cran sous la ligne 2 : c'est une
-    /// métadonnée, pas du contenu.
-    nonisolated public enum Members {
-        public static let size: CGFloat = 11
-        public static let weight: Font.Weight = .semibold
-        @MainActor public static var font: Font { MeeshyFont.relative(size, weight: weight) }
     }
 
     // MARK: - Carte de focus

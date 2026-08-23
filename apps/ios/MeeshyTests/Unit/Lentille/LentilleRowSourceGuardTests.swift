@@ -317,39 +317,52 @@ final class LentilleRowSourceGuardTests: XCTestCase {
         }
     }
 
-    /// **La bulle d'aperçu entoure le MUX, jamais une branche.** C'est la
-    /// seule forme qui couvre les HUIT chemins de `line2` sans qu'aucun
-    /// puisse être oublié : `LentilleConversationRow.line2` est le point de
-    /// passage OBLIGÉ de `typing`/`draft`/`bridge` et des cinq
-    /// sous-branches d'aperçu (`expired`/`hidden`/`viewOnce`/
-    /// `ephemeralActive`/`standard`). Envelopper chaque branche
-    /// individuellement aurait été la version fragile — un oubli dans une
-    /// branche rare (vue unique, message expiré) reste invisible sans
-    /// snapshot.
-    func test_previewBubble_wrapsTheLine2Mux_soNoBranchCanEscapeIt() throws {
+    /// **Directive produit 2026-08-23 : « les derniers messages de
+    /// conversation ne doivent pas être dans des bulles ! ».**
+    ///
+    /// INVERSION de `test_previewBubble_wrapsTheLine2Mux_soNoBranchCanEscapeIt`
+    /// (lot 2, 2026-08-22) : la bulle d'aperçu est RETIRÉE, la ligne 2 revient
+    /// nue sous la ligne de titre, et l'heure prend une bande à elle
+    /// (`dateLine`). La garde n'est pas supprimée — elle est retournée : elle
+    /// rougirait si la bulle revenait, sous ce nom ou sous un autre.
+    ///
+    /// La détection de contour est bornée au BLOC du contenu (`body`), jamais
+    /// au FICHIER : `strokeBorder`/`Capsule(` y sont légitimes ailleurs
+    /// (anneau d'avatar, bouton « Rejoindre »).
+    func test_theLine2_isNaked_noBubbleWrapsThePreviewAnyMore() throws {
         let code = normalizedCode(try rowSource())
-        XCTAssertTrue(
-            code.contains("LentillePreviewBubble("),
-            "LentilleConversationRow.swift doit construire la bulle d'aperçu (LentillePreviewBubble) — lot 2."
-        )
-        XCTAssertEqual(
-            occurrences(of: "{ line2 }", in: code), 1,
-            "La bulle doit envelopper le MUX `line2` EXACTEMENT une fois : c'est ce qui " +
-            "garantit la couverture des huit branches d'aperçu sans en énumérer aucune."
-        )
         XCTAssertFalse(
-            code.contains("headerLine line2"),
-            "La ligne 2 ne doit plus être posée NUE sous la ligne de titre — elle passe " +
-            "désormais par LentillePreviewBubble."
+            code.contains("LentillePreviewBubble"),
+            "La bulle d'aperçu est retirée (directive produit 2026-08-23) : ni construction, " +
+            "ni déclaration ne doivent subsister dans LentilleConversationRow.swift."
         )
+        XCTAssertTrue(
+            code.contains("headerLine line2 dateLine"),
+            "Le contenu de la rangée empile TROIS bandes nues, dans cet ordre : ligne de titre, " +
+            "ligne 2 SANS enveloppe, ligne de date seule."
+        )
+
+        guard let bodyStart = code.range(of: "var body: some View {"),
+              let bodyEnd = code.range(of: ".contentShape(Rectangle())", range: bodyStart.upperBound..<code.endIndex)
+        else {
+            XCTFail("les bornes du corps de la rangée sont introuvables — la garde doit être re-pointée")
+            return
+        }
+        let body = String(code[bodyStart.lowerBound..<bodyEnd.lowerBound])
+        for chrome in ["RoundedRectangle(cornerRadius: LentilleMetrics.PreviewBubble", ".background(shape", "strokeBorder(stroke"] {
+            XCTAssertFalse(
+                body.contains(chrome),
+                "Le contenu de la rangée ne peint plus aucune surface autour de l'aperçu (\(chrome))."
+            )
+        }
     }
 
     /// Les huit chemins, nommés un par un — pour que l'échec DÉSIGNE la
     /// branche perdue plutôt qu'un « la structure a changé » global. Chacun
     /// doit vivre à l'intérieur du mux (`line2`) ou d'une fonction que le
-    /// mux appelle (`previewLine`/`standardPreview`), donc à l'intérieur de
-    /// la bulle par construction.
-    func test_allEightPreviewBranches_liveInsideTheBubbleWrappedMux() throws {
+    /// mux appelle (`previewLine`/`standardPreview`) : c'est ce point de
+    /// passage unique qui garantit qu'aucune branche rare ne diverge.
+    func test_allEightPreviewBranches_liveInsideTheLine2Mux() throws {
         let code = normalizedCode(try rowSource())
         guard let muxStart = code.range(of: "private var line2: some View {") else {
             XCTFail("le mux `line2` est introuvable — la garde doit être re-pointée")
@@ -376,19 +389,24 @@ final class LentilleRowSourceGuardTests: XCTestCase {
             XCTAssertTrue(
                 muxThroughPreview.contains(needle),
                 "La branche « \(label) » (\(needle)) n'est plus dans la région couverte par le " +
-                "mux `line2` — elle échapperait donc à la bulle d'aperçu, et son heure " +
-                "disparaîtrait sans qu'aucun autre témoin ne rougisse (risque n°1 du lot 2)."
+                "mux `line2` — elle divergerait alors du rendu commun sans qu'aucun autre " +
+                "témoin ne rougisse."
             )
         }
     }
 
-    /// **L'heure quitte la ligne de titre et entre dans la bulle.** Deux
-    /// moitiés indissociables : si l'ancien emplacement survivait, l'heure
-    /// serait rendue DEUX fois.
-    func test_timestamp_leftTheTitleLine_andLivesAtTheBubblesBottomRight() throws {
+    /// **Directive produit 2026-08-23 : « la date reste en bas à droite dans
+    /// une ligne SEULE, AVEC ou SANS magnificence ».**
+    ///
+    /// INVERSION de `test_timestamp_leftTheTitleLine_andLivesAtTheBubblesBottomRight` :
+    /// l'heure ne partage plus sa ligne — ni avec le nom (avant le lot 2), ni
+    /// avec l'aperçu (dans la bulle du lot 2). Elle possède la troisième bande.
+    /// C'est aussi la disposition que `main` a livrée (266fcb765) : viser la
+    /// même forme rend la fusion possible.
+    func test_theDate_ownsItsOwnLine_pushedTrailing_belowThePreview() throws {
         let code = normalizedCode(try rowSource())
         guard let headerStart = code.range(of: "private var headerLine: some View {"),
-              let headerEnd = code.range(of: "private var tagPastilles: some View {", range: headerStart.upperBound..<code.endIndex)
+              let headerEnd = code.range(of: "private var dateLine: some View {", range: headerStart.upperBound..<code.endIndex)
         else {
             XCTFail("les bornes de headerLine sont introuvables — la garde doit être re-pointée")
             return
@@ -397,23 +415,32 @@ final class LentilleRowSourceGuardTests: XCTestCase {
 
         XCTAssertFalse(
             header.contains("LentilleRowTimestamp"),
-            "headerLine rend encore l'horodatage — l'heure appartient désormais à la bulle " +
-            "d'aperçu (bas à droite), comme l'heure d'une bulle de messagerie."
+            "headerLine rend encore l'horodatage — l'heure appartient à sa propre bande."
         )
         XCTAssertFalse(
             header.contains(#"Text("·")"#),
             "headerLine garde le point médian qui séparait le nom de l'heure — sans heure à " +
             "séparer, il ne sépare plus rien."
         )
+
+        guard let dateStart = code.range(of: "private var dateLine: some View {") else {
+            XCTFail("`dateLine` n'existe pas : la date n'a pas de ligne à elle")
+            return
+        }
+        let tail = String(code[dateStart.lowerBound...])
+        guard let spacer = tail.range(of: "Spacer(minLength: 0)"),
+              let stamp = tail.range(of: "LentilleRowTimestamp(date: conversation.lastMessageAt)")
+        else {
+            XCTFail("`dateLine` doit pousser l'horodatage à droite par un Spacer(minLength: 0)")
+            return
+        }
         XCTAssertTrue(
-            code.contains("struct LentillePreviewBubble"),
-            "La bulle d'aperçu doit être déclarée dans LentilleConversationRow.swift."
+            spacer.lowerBound < stamp.lowerBound,
+            "Le Spacer doit PRÉCÉDER l'horodatage : la date est en bas à DROITE."
         )
-        guard let bubbleStart = code.range(of: "struct LentillePreviewBubble") else { return }
-        XCTAssertTrue(
-            String(code[bubbleStart.lowerBound...]).contains("LentilleRowTimestamp(date: date)"),
-            "LentillePreviewBubble doit rendre l'horodatage (LentilleRowTimestamp) — c'est le " +
-            "nouveau domicile de l'heure."
+        XCTAssertEqual(
+            occurrences(of: "LentilleRowTimestamp(", in: code), 1,
+            "UN seul rendu d'horodatage dans la rangée : deux sites l'afficheraient en double."
         )
     }
 
@@ -451,37 +478,69 @@ final class LentilleRowSourceGuardTests: XCTestCase {
         )
     }
 
-    /// **L'effectif se pose en bas à droite du cadre, et JAMAIS sur un
-    /// `.direct`.** Le libellé vient de `MembersCountLabel` (règle plurielle
-    /// du catalogue + suffixe « + » du plafond) — jamais une concaténation
-    /// locale « nombre + + », le défaut que 234i a précisément supprimé.
-    func test_memberCountLine_isTrailing_absentForDirect_andReusesTheSharedLabel() throws {
-        let code = normalizedCode(try rowSource())
+    /// **Directive produit 2026-08-23 : « l'information du nombre de membre
+    /// disparaît SANS magnificence ».**
+    ///
+    /// INVERSION de `test_memberCountLine_isTrailing_absentForDirect_andReusesTheSharedLabel`
+    /// (lot 2). Le lot 2 avait posé l'effectif sur la rangée sans amender
+    /// behaviour-matrix L08 (« le badge de type + memberCount est absorbé par
+    /// la focus card ») : le retrait RESTAURE L08, il ne l'exceptionne pas.
+    ///
+    /// La garde est RE-DOMICILIÉE et non supprimée. L'ancienne portait une
+    /// assertion négative (`XCTAssertFalse(code.contains("memberCountDisplay"))`)
+    /// qui, l'effectif parti, passerait VACUEUSEMENT : elle est ici reportée
+    /// sur TOUT `Lentille/Row/**`, où elle garde du mordant — un futur retour
+    /// de l'effectif sur la rangée, sous quelque forme que ce soit, la ferait
+    /// rougir.
+    func test_theFlatRow_carriesNoMemberCount_theMagnificenceOwnsItAlone() throws {
+        for source in try rowSources() {
+            let code = normalizedCode(source.code)
+            XCTAssertFalse(
+                code.contains("MembersCountLabel"),
+                "\(source.name) compose un effectif : sans magnificence, l'information disparaît " +
+                "(directive produit 2026-08-23) — la carte de focus en est le seul domicile."
+            )
+            XCTAssertFalse(
+                code.contains("memberCountDisplay"),
+                "\(source.name) retombe sur memberCountDisplay (chiffres nus « 199+ ») — ni ce " +
+                "libellé ni aucun autre effectif n'a sa place sur la rangée plate."
+            )
+            XCTAssertFalse(
+                code.contains("memberCountLine"),
+                "\(source.name) garde la bande d'effectif du lot 2."
+            )
+        }
+    }
+
+    /// **Trou SILENCIEUX ouvert par le lot 2, refermé ici.** Le squelette
+    /// n'empilait que DEUX bandes quand la rangée réelle en empilait trois :
+    /// les témoins de squelette ne vérifiaient que la hauteur, les paddings et
+    /// les deux polices — jamais le NOMBRE de bandes. Le fichier promet
+    /// pourtant « aucun saut n'est possible à l'hydratation ».
+    ///
+    /// La garde compare les deux piles par leur nombre de polices de bande.
+    func test_theSkeleton_mirrorsTheThreeBandsOfTheRealRow() throws {
+        let row = normalizedCode(try rowSource())
+        guard let skeleton = try rowSources().first(where: { $0.name == "LentilleSkeletonRow.swift" }) else {
+            XCTFail("LentilleSkeletonRow.swift introuvable")
+            return
+        }
+        let skeletonCode = normalizedCode(skeleton.code)
+
+        for band in ["LentilleMetrics.Name.font", "LentilleMetrics.Line2.font", "LentilleMetrics.Time.font"] {
+            XCTAssertTrue(
+                row.contains(band),
+                "la rangée réelle doit porter la bande \(band)"
+            )
+            XCTAssertTrue(
+                skeletonCode.contains(band),
+                "le squelette n'a pas la bande \(band) : il occupera un volume différent de la " +
+                "rangée réelle et l'hydratation SAUTERA."
+            )
+        }
         XCTAssertTrue(
-            code.contains("guard conversation.type != .direct else { return nil }"),
-            "L'effectif doit être décidé par UN seul portillon `conversation.type != .direct` — " +
-            "une conversation directe n'affiche AUCUN effectif (contrat lot 2), et le libellé " +
-            "VoiceOver doit se taire exactement quand l'œil ne voit rien."
-        )
-        XCTAssertTrue(
-            code.contains("MembersCountLabel.text(conversation.memberCount, capped: conversation.memberCountCapped)"),
-            "L'effectif doit passer par MembersCountLabel.text(_:capped:) — la règle plurielle " +
-            "vit dans le catalogue et le « + » du plafond dans ce type, jamais réécrits ici."
-        )
-        XCTAssertEqual(
-            occurrences(of: "MembersCountLabel.text(", in: code), 1,
-            "UN seul site de composition de l'effectif : la ligne visible et le libellé " +
-            "VoiceOver doivent lire la MÊME chaîne (sinon l'oreille et l'œil divergent au " +
-            "premier changement de règle plurielle)."
-        )
-        XCTAssertTrue(
-            code.contains(".frame(maxWidth: .infinity, alignment: .trailing)"),
-            "La ligne d'effectif doit être alignée à DROITE dans le cadre du rang (contrat lot 2)."
-        )
-        XCTAssertFalse(
-            code.contains("memberCountDisplay"),
-            "Le rang ne doit pas retomber sur memberCountDisplay (chiffres nus « 199+ ») — la " +
-            "liste affiche un libellé ACCORDÉ (« 199+ membres »), pas un compteur nu."
+            skeletonCode.contains("Spacer(minLength: 0)"),
+            "la bande de date du squelette doit être poussée à droite comme celle de la rangée."
         )
     }
 

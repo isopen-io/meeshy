@@ -49,25 +49,13 @@
   /* list.unreadDot */
   --lentille-list-unread-dot-size: 8px;
 
-  /* list.previewBubble */
-  --lentille-list-preview-bubble-radius: 12px;
-  --lentille-list-preview-bubble-padding-vertical: 4px;
-  --lentille-list-preview-bubble-padding-horizontal: 8px;
-  --lentille-list-preview-bubble-gap: 6px;
-  --lentille-list-preview-bubble-stroke-width: 1px;
-  --lentille-list-preview-bubble-fill-opacity-light: 0.04;
-  --lentille-list-preview-bubble-fill-opacity-dark: 0.1;
-  --lentille-list-preview-bubble-stroke-opacity-light: 0.22;
-  --lentille-list-preview-bubble-stroke-opacity-dark: 0.28;
 
-  /* list.members */
-  --lentille-list-members-size: 11px;
-  --lentille-list-members-weight: 600;
 
   /* list.focusCard */
   --lentille-list-focus-card-ring-size: 1.5px;
   --lentille-list-focus-card-radius: 16px;
   --lentille-list-focus-card-height: 104px;
+  --lentille-list-focus-card-breathing: 8px;
   --lentille-list-focus-card-padding-vertical: 14px;
   --lentille-list-focus-card-avatar-size: 52px;
   --lentille-list-focus-card-name-size: 17px;

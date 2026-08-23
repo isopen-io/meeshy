@@ -62,17 +62,18 @@ final class LentilleFlatRowBridgeAriaTests: XCTestCase {
         return conversation
     }
 
-    /// **Lot 2 (2026-08-22).** Le rang plat annonce, EN PLUS du libellé
-    /// hérité, l'effectif qu'il est seul à afficher (le rang historique
-    /// l'absorbe dans son badge de type, hors de son libellé). L'invariant
-    /// « pont absent ⇒ inchangé » est donc devenu « pont absent ⇒ le libellé
-    /// hérité, caractère pour caractère, SUIVI de l'effectif » — vérifié
-    /// ci-dessous en composant depuis `MembersCountLabel` (jamais une chaîne
-    /// française recopiée, qui rougirait au premier simulateur en anglais).
+    /// **INVARIANT RESTAURÉ le 2026-08-23.** Le lot 2 avait fait annoncer au
+    /// rang plat, EN PLUS du libellé hérité, l'effectif qu'il était seul à
+    /// afficher. La directive produit « l'information du nombre de membre
+    /// disparaît sans magnificence » retire cette bande : l'oreille se tait
+    /// avec l'œil, et l'invariant redevient celui d'avant le lot 2 — « pont
+    /// absent ⇒ le libellé hérité, caractère pour caractère ».
+    ///
+    /// Le témoin `.direct` ci-dessous devient donc un CAS PARTICULIER du cas
+    /// général : il est conservé parce qu'il nomme la conversation directe
+    /// explicitement, pas parce qu'il teste une seconde règle.
     private func expectedFlatRowBaseLabel(_ conversation: MeeshyConversation) -> String {
-        let historical = ThemedConversationRow(conversation: conversation).conversationAccessibilityLabel
-        guard conversation.type != .direct else { return historical }
-        return historical + ", " + MembersCountLabel.text(conversation.memberCount, capped: conversation.memberCountCapped)
+        ThemedConversationRow(conversation: conversation).conversationAccessibilityLabel
     }
 
     private func makeFallbackBridge(messageCount: Int = 3, isComplete: Bool? = nil) -> ConversationBridge {
@@ -121,7 +122,7 @@ final class LentilleFlatRowBridgeAriaTests: XCTestCase {
 
     // MARK: - Pont absent ⇒ comportement inchangé au caractère près
 
-    func test_accessibilityLabel_bridgeAbsent_isTheHistoricalLabel_plusTheEffectifTheFlatRowAloneShows() {
+    func test_accessibilityLabel_bridgeAbsent_isTheHistoricalLabel_characterForCharacter() {
         let conversation = makeConversation(unreadCount: 4, bridge: nil, lastMessagePreview: "Hello there")
         let row = LentilleConversationRow(conversation: conversation)
 

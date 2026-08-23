@@ -166,7 +166,7 @@ struct LentilleFocusCard: View, Equatable {
                 }
                 Spacer(minLength: 0)
                 if conversation.type != .direct {
-                    typeBadge
+                    participantsChip
                 }
             }
             .padding(.horizontal, LentilleMetrics.ModeNotch.right)
@@ -210,6 +210,7 @@ struct LentilleFocusCard: View, Equatable {
             VStack(alignment: .leading, spacing: 3) {
                 headerLine
                 line2
+                dateLine
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -240,27 +241,21 @@ struct LentilleFocusCard: View, Equatable {
                 .font(LentilleMetrics.FocusCard.nameFont)
                 .foregroundColor(textPrimary)
                 .lineLimit(1)
-                // L'IDENTITÉ gagne toujours la ligne (2026-08-22). La date
-                // avait la priorité la plus forte : c'était le NOM qui
-                // tronquait en premier, sur une carte dont le seul métier est
-                // de montrer de qui il s'agit, en plus gros. La magnification
-                // rétrécissait l'identité.
+                // L'IDENTITÉ gagne toujours la ligne (2026-08-22) : elle ne
+                // cède qu'à la pastille de non-lus, seule à porter une
+                // priorité plus forte.
                 .layoutPriority(2)
             if conversation.userState.isMuted {
                 Text("🔕")
                     .font(MeeshyFont.relative(LentilleMetrics.Tags.emojiSize))
                     .accessibilityHidden(true)
             }
-            Text("·")
-                .font(LentilleMetrics.Time.font)
-                .foregroundColor(textMuted)
-            Text(Self.fullTimestamp(lastMessageAt: conversation.lastMessageAt, now: now, calendar: .current, locale: .current))
-                .font(LentilleMetrics.Time.font)
-                .foregroundColor(textMuted)
-                .lineLimit(1)
-                // La date complète reste — c'est une vraie valeur ajoutée de
-                // la magnification — mais elle cède la place la première.
-                .layoutPriority(0)
+            // 2026-08-23 — la date a QUITTÉ cette ligne pour `dateLine`
+            // (directive produit : « une ligne seule, en bas à droite, AVEC
+            // ou SANS magnificence »). Les deux artefacts de leur
+            // cohabitation partent avec elle : le point médian qui les
+            // séparait, et le duel de `layoutPriority` — il n'y a plus de
+            // largeur à arbitrer entre l'identité et une métadonnée.
             Spacer(minLength: 0)
             if conversation.userState.unreadCount > 0 {
                 // Jamais comprimé : c'est le NOM qui tronque, pas le badge.
@@ -277,13 +272,38 @@ struct LentilleFocusCard: View, Equatable {
             .foregroundColor(.white)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .background(Capsule(style: .continuous).fill(accent))
+            // ROUGE, jamais l'accent (directive produit 2026-08-23 : « la
+            // pastille dans la liste de conversation même en mode
+            // magnificence doit rester ROUGE »). Même source sémantique que
+            // l'atome `UnreadCountBadge` de la rangée plate — l'atome
+            // lui-même n'est pas substituable ici : son plancher carré de
+            // 24 pt ne tient pas dans les 104 pt FIXES de la carte une fois
+            // la ligne de date ajoutée (voir `LentilleFocusCardTests`).
+            .background(Capsule(style: .continuous).fill(MeeshyColors.unreadBadgeBackground(isDark: isDark)))
             // Le libellé annonce l'effectif RÉEL, pas le « 99+ » affiché : le
             // plafond est une contrainte de largeur du badge, pas une donnée.
             // Ce site était le TROISIÈME porteur de `accessibility.unread_messages`
             // — 235i n'en avait corrigé que deux, et la clé qu'elle a retirée du
             // catalogue est restée référencée ici.
             .accessibilityLabel(UnreadCountLabel.messages(conversation.userState.unreadCount))
+    }
+
+    /// **Directive produit 2026-08-23 — « la date de la bulle de magnificence
+    /// reste en bas à droite dans une ligne SEULE, AVEC ou SANS
+    /// magnificence ».** Même place que sur la rangée plate, au même rang de
+    /// la pile, poussée à droite par le même idiome.
+    ///
+    /// Même PLACE ne veut pas dire même FORMAT : la carte garde la date
+    /// COMPLÈTE de la loi du fil (`FocalFocusTimestamp.listLabel` via
+    /// `Self.fullTimestamp`, « Hier à 22:12 »), là où la rangée porte
+    /// l'horodatage relatif. C'est la valeur ajoutée de la magnification, et
+    /// elle n'est pas en cause dans la directive.
+    private var dateLine: some View {
+        Text(Self.fullTimestamp(lastMessageAt: conversation.lastMessageAt, now: now, calendar: .current, locale: .current))
+            .font(LentilleMetrics.Time.font)
+            .foregroundColor(textMuted)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     @ViewBuilder
@@ -344,27 +364,55 @@ struct LentilleFocusCard: View, Equatable {
     // premium de la carte, pour une information de second ordre. Retirée :
     // elle vit dans la feuille d'infos et à côté du champ Renommer.
 
-    /// L'effectif est une INFORMATION, pas un contrôle (2026-08-22).
+    /// **L'effectif est un CONTRÔLE — arbitrage du porteur produit,
+    /// 2026-08-23 :** « le nombre de participant en bas sur les lignes de
+    /// contour de la magnificence doit être un bouton d'action pour mener vers
+    /// la liste des participants, et dans une bulle/chips comme tout ce qui
+    /// est sur les lignes du contours ».
     ///
-    /// C'était un bouton vers la feuille des participants — que l'avatar de la
-    /// rangée SOUS la carte ouvre déjà, et qui reste touchable puisque la
-    /// carte ne capte pas les touches. Un doublon de tap, au prix d'une
-    /// capsule bordée d'accent de plus sur un bord déjà chargé. Ce qu'il
-    /// apportait vraiment, c'est le NOMBRE, qui n'existe nulle part ailleurs
-    /// dans la liste : il reste, en label nu et muet.
-    private var typeBadge: some View {
-        HStack(spacing: 3) {
-            Image(systemName: Self.typeBadgeIcon(for: conversation.type))
-                .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
-                .imageScale(.small)
-            if conversation.memberCount > 1 {
-                Text(conversation.memberCountDisplay)
-                    .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
+    /// Il avait été retiré le 2026-08-22 au matin (« un doublon de tap, au
+    /// prix d'une capsule bordée d'accent de plus »), au motif que l'avatar de
+    /// la rangée SOUS la carte ouvre la même feuille. Le porteur tranche
+    /// l'inverse — comme il avait tranché le retour de l'encoche de catégorie
+    /// le 22 au soir. La garde négative qui l'interdisait est INVERSÉE dans
+    /// `LentilleFocusCardTests`, jamais supprimée.
+    ///
+    /// **La chip passe par `notchChip`, jamais par une capsule copiée** : la
+    /// capsule bordée d'accent n'a qu'UN écrivain, et un témoin le compte.
+    ///
+    /// **Cible** : `onShowParticipants` — fil déjà câblé de bout en bout
+    /// (hôte → `ConversationListView` → `ConversationInfoSheet`, onglet
+    /// Membres par défaut) mais qui n'était appelé nulle part. JAMAIS
+    /// `ParticipantsView`, écran ORPHELIN qu'aucun site n'instancie : y router
+    /// créerait un second point d'entrée.
+    ///
+    /// **Portillon** : le MONTAGE reste `type != .direct` (une conversation
+    /// directe n'a pas de liste de participants — son avatar mène au profil) ;
+    /// `memberCount > 1` ne gouverne que l'affichage du NOMBRE, sans quoi un
+    /// groupe d'un seul membre offrirait une chip inerte.
+    ///
+    /// **Droit serveur** : le texte reste `memberCountDisplay`, miroir exact
+    /// de la loi partagée `formatMemberCount` (plafond 199 + `memberCountCapped`).
+    /// La vue ne lit jamais `memberCount` brut, donc elle ne peut pas
+    /// contourner le droit. L'ANNONCE, elle, passe par `MembersCountLabel` —
+    /// la même composition accordée que la rangée plate, jamais un compteur nu.
+    private var participantsChip: some View {
+        Button {
+            onShowParticipants()
+        } label: {
+            notchChip {
+                HStack(spacing: 3) {
+                    Image(systemName: Self.typeBadgeIcon(for: conversation.type))
+                        .imageScale(.small)
+                    if conversation.memberCount > 1 {
+                        Text(conversation.memberCountDisplay)
+                    }
+                }
             }
         }
-        .foregroundColor(textMuted)
-        .accessibilityElement(children: .combine)
-        .accessibilityValue(conversation.memberCountDisplay)
+        .buttonStyle(.plain)
+        .accessibilityLabel(MembersCountLabel.text(conversation.memberCount, capped: conversation.memberCountCapped))
+        .accessibilityHint(String(localized: "participants.title", defaultValue: "Membres", bundle: .main))
     }
 
     // `syncChip` a vécu ici jusqu'au 2026-08-22 : un BOUTON « synchroniser
@@ -413,7 +461,15 @@ struct LentilleFocusCard: View, Equatable {
     /// Le chip d'encoche — partagé par le mode (haut-droite) et la catégorie
     /// (haut-gauche) : « exactement comme le mode ».
     private func notchChip(_ text: String) -> some View {
-        Text(text)
+        notchChip { Text(text) }
+    }
+
+    /// UN seul corps, trois consommateurs (mode, catégorie, effectif). La
+    /// police est posée sur le CONTENEUR et non sur un `Text` : un label
+    /// composé (icône + nombre) doit la recevoir par l'environnement,
+    /// exactement comme un texte nu.
+    private func notchChip<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
             .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
             .foregroundColor(accent)
             .lineLimit(1)
@@ -670,6 +726,13 @@ struct LentilleFocusCardHost: View {
                 .position(x: geo.size.width / 2, y: y)
                 .opacity(scene.level)
                 .allowsHitTesting(scene.level > 0)
+                // Une vue d'opacité NULLE reste dans l'arbre d'accessibilité :
+                // au repos la carte y doublait déjà le nom, l'aperçu et la
+                // pastille de la rangée qu'elle recouvre — et depuis le
+                // 2026-08-23 elle y ajouterait un BOUTON activable pointant
+                // sur une carte invisible. Même source de vérité que les deux
+                // portillons ci-dessus.
+                .accessibilityHidden(scene.level == 0)
             }
         }
         .adaptiveOnChange(of: election.electedId, initial: true) { _, newId in
