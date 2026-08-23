@@ -1702,3 +1702,87 @@ ouvertes (6 sur 7 en conflit). Deux PR se sont ajoutées en cours de route.
       littéral, L06/L09 du rang plat, littéral « 900 » dans
       `ConversationListView`, `call:join` non ré-émis à la reconnexion. Vérifiés
       présents sur `main` avant ce train, qui en portait 13.
+
+## Cycle 114 (2026-08-23) — la garde de publication n'a jamais eu de quoi se déclencher
+
+Le cycle précédent laissait deux choses : un lot livré (« publier une capture se
+confirme ») et un point ouvert (« iOS n'a pas la publication depuis le
+partage »). Instruire le second a fait tomber le premier.
+
+### `capturedInApp` n'existait que dans la règle qui le lit
+
+- [x] Le champ n'apparaissait **nulle part ailleurs** que dans
+      `forward-to-publication.ts` : pas de colonne Prisma, pas de champ de
+      contrat, aucun chemin d'écriture. Le web le lisait par un CAST —
+      `(message as { attachments?: Array<{ …; capturedInApp?: boolean }> })` —
+      donc toujours `undefined`, donc `publicationNeedsCaptureConfirmation`
+      toujours `false`. **La confirmation était décorative.**
+- [x] Les témoins étaient verts parce qu'ils posaient `capturedInApp: true` À LA
+      MAIN dans leurs fixtures : ils attestaient une valeur que la production ne
+      peut pas produire. Même famille que le `MagicMock` nu (cycle 90) — le
+      double accepte ce que le monde n'envoie jamais.
+- [x] Le schéma Zod de la passerelle l'ÉNONÇAIT : « `capturedInApp` est DÉCLARÉ
+      par le client, et il est le seul à pouvoir le faire ». Vrai sur le
+      principe, faux en fait — aucun client n'avait de quoi le déclarer.
+- [x] Cause racine : **la provenance n'est connaissable qu'À LA CAPTURE**, et
+      rien ne la retenait. Le web tentait de la relire sur un attachement
+      redescendu du serveur, où l'information était perdue depuis longtemps.
+
+### Ce qui la fait voyager
+
+- [x] `MessageAttachment.capturedInApp` (Prisma, défaut `false`).
+- [x] Les DEUX chemins d'écriture d'`UploadProcessor` (clair et chiffré) la
+      persistent, lue **strictement** (`=== true`) : `providedMetadata` vient
+      d'un corps multipart non typé où la chaîne `'false'` est véridique, et une
+      garde de confidentialité qu'une coercition ouvre ne garde rien.
+- [x] `attachmentMediaSelect` (28 → **29** champs) — c'est la LISTE de messages
+      que la feuille lit, pas une requête de détail.
+- [x] `messageAttachmentSchema`, sans quoi fast-json-stringify la retire du fil.
+- [x] `Attachment.capturedInApp` **REQUIS** : le compilateur a désigné les cinq
+      fixtures web et — le défaut le plus discret — `transformers.service.ts`,
+      seul chemin entre la réponse et l'objet que la feuille lit. Un champ qu'un
+      mapping ne recopie pas est **indistinguable d'un champ que le serveur
+      n'envoie pas**.
+
+### iOS : le troisième client rejoint la règle
+
+- [x] `PublicationTargetRule` (SDK) — jumelle Swift de la règle partagée, dérivée
+      d'`AttachmentKind` (source de vérité MIME déjà présente), jamais de
+      l'extension du nom. Un témoin gèle les valeurs brutes contre l'énumération
+      Zod : un cas mal orthographié sortirait en 400 sans qu'un témoin tombe.
+- [x] La section « Publier » dans `ForwardPickerSheet`, avec la confirmation de
+      capture — qui a maintenant de quoi se déclencher.
+- [x] `capturedInApp` porté sur les TROIS étages iOS et les DEUX mappings qui
+      les relient (message + écriture GRDB) : ne pas réintroduire, trois lignes
+      plus loin, le défaut que ce train répare.
+- [x] HIG : cibles à 44 pt posées par `minHeight` (et non par du padding
+      vertical, qui grossit avec le corps sous Dynamic Type) ; la rangée de
+      pilules DÉFILE plutôt que de se laisser comprimer aux tailles accessibles.
+
+### Vérifié / non vérifié — la distinction est la mesure
+
+- [x] shared 2550/2550 · gateway `tsc` 0 erreur · shared `tsc` 0 erreur ·
+      apps/web **1196 = baseline** du cliquet (une régression posée puis rendue :
+      le transformateur était le +1).
+- [x] RED prouvé sur les trois gardes neuves — dont le témoin du transformateur,
+      qui tombe quand on retire la ligne qu'il garde.
+- [ ] **Swift non compilé** : aucune chaîne d'outils sur cette machine. Le
+      verdict vient de `sdk-tests.yml` / `ios.yml`, pas d'ici — et c'est écrit
+      dans le message de commit plutôt que passé sous silence.
+
+### Faux positif instruit, et écarté
+
+- [x] Trois écrans d'admin lisent `cacheInvalidation` par cast — même forme que
+      le défaut du jour. Ouvert : `successDataResponse` déclare
+      `additionalProperties: true`, le champ traverse. **Un cast n'est pas une
+      preuve de fuite** ; il faut traverser le sérialiseur (règle du cycle 84).
+
+### Reste ouvert
+
+- [ ] **iOS ne DÉCLARE pas encore `capturedInApp` à l'envoi.** Le champ voyage du
+      serveur vers le client ; le sens client → serveur demande de toucher le
+      chemin de capture (caméra/micro) et le pipeline TUS, ce qu'un lot séparé
+      instruira. En attendant la garde reste inerte en pratique — mais le tuyau
+      est posé, mesuré, et gardé, ce qui n'était pas le cas avant ce cycle.
+- [ ] **8 rouges iOS ANTÉRIEURS** (gardes du chantier Lentille) — hérités,
+      non touchés par ce train.
