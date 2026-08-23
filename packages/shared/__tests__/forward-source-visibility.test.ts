@@ -144,3 +144,42 @@ describe("le refus du LECTEUR ne dépend pas de l'identité de l'auteur", () => 
     expect(resolveForwardSourceVisibility(inputFor({ forwarderAllows: true, readerAllows: false }))).toBe(false);
   });
 });
+
+describe('troisième acteur — le veto de l\'auteur d\'origine, préparé mais non collecté', () => {
+  // Le porteur produit (2026-08-23) : « il faut que le système développé
+  // permette PLUS TARD que l'auteur puisse décider si on l'affiche ou non,
+  // notamment activable par les autorités ». Le champ existe donc dès
+  // maintenant, permissif par défaut, pour que la règle n'ait pas à être
+  // réécrite le jour où il sera alimenté.
+
+  it('omis ⇒ strictement identique au comportement bilatéral', () => {
+    // LE témoin qui compte : ajouter le champ ne doit RIEN changer tant que
+    // personne ne le renseigne. Les quatre combinaisons, sans le champ.
+    for (const forwarderAllows of [true, false]) {
+      for (const readerAllows of [true, false]) {
+        expect(resolveForwardSourceVisibility({ isSelf: false, forwarderAllows, readerAllows }))
+          .toBe(forwarderAllows && readerAllows);
+      }
+    }
+  });
+
+  it('undefined explicite ⇒ autorise, comme l\'absence', () => {
+    expect(resolveForwardSourceVisibility({
+      isSelf: false, forwarderAllows: true, readerAllows: true, originalAuthorAllows: undefined,
+    })).toBe(true);
+  });
+
+  it('false ⇒ masque, même quand les deux autres autorisent', () => {
+    expect(resolveForwardSourceVisibility({
+      isSelf: false, forwarderAllows: true, readerAllows: true, originalAuthorAllows: false,
+    })).toBe(false);
+  });
+
+  it('ne court-circuite PAS isSelf — relire son propre transfert reste possible', () => {
+    // Celui qui relit son propre transfert sait déjà d'où il vient : un veto ne
+    // lui apprendrait rien et rendrait seulement son historique illisible.
+    expect(resolveForwardSourceVisibility({
+      isSelf: true, forwarderAllows: false, readerAllows: false, originalAuthorAllows: false,
+    })).toBe(true);
+  });
+});

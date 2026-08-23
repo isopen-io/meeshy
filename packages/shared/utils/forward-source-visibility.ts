@@ -45,6 +45,26 @@ export type ForwardSourceVisibilityInput = {
   readonly forwarderAllows: boolean;
   /** Le lecteur autorise l'affichage des siennes — donc voit celles des autres. */
   readonly readerAllows: boolean;
+  /**
+   * L'AUTEUR D'ORIGINE du contenu transféré autorise qu'on le nomme.
+   *
+   * **Optionnel, et permissif par défaut** (`undefined` ⇒ autorise) : ce
+   * troisième acteur n'a AUCUN point de collecte aujourd'hui. La directive du
+   * 2026-08-23 ne confronte que deux volontés — le transféreur et le lecteur —
+   * et le porteur produit a explicitement demandé que le système « permette
+   * PLUS TARD que l'auteur puisse décider si on l'affiche ou non, notamment
+   * activable par les autorités ».
+   *
+   * Le champ existe donc pour que ce jour-là la règle n'ait pas à être
+   * réécrite : il suffira de l'alimenter. Le laisser absent conserve le
+   * comportement bilatéral au bit près — c'est ce que verrouille le témoin
+   * `omis ⇒ identique au bilatéral`.
+   *
+   * Il ne court-circuite PAS `isSelf` : celui qui relit son propre transfert
+   * sait déjà d'où il vient, un veto ne lui apprendrait rien et ne ferait que
+   * rendre son historique illisible.
+   */
+  readonly originalAuthorAllows?: boolean;
 };
 
 /**
@@ -56,7 +76,8 @@ export type ForwardSourceVisibilityInput = {
  * cochant une case de confidentialité.
  */
 export const resolveForwardSourceVisibility = (input: ForwardSourceVisibilityInput): boolean =>
-  input.isSelf || (input.forwarderAllows && input.readerAllows);
+  input.isSelf
+  || (input.forwarderAllows && input.readerAllows && (input.originalAuthorAllows ?? true));
 
 /**
  * Lit la préférence d'un document de confidentialité PARTIEL.
