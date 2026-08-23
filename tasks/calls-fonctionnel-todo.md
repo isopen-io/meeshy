@@ -11494,3 +11494,71 @@ hors périmètre calling, non corrigé ici (règle « ne pas élargir le lot » 
 rouge, ne pas pousser de correctif dedans »). PR laissée sous surveillance jusqu'à ce que `main`
 récupère ce test, puis remerge avant fusion — pas de merge sur un CI rouge hérité tant que la cause
 n'est pas confirmée résolue en amont.
+
+## Vague 170 — clôture de la Vague 169 (PR #3408) + audit large sans nouveau site trouvé (2026-08-23)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise directe
+du suivi laissé ouvert par la Vague 169 : la PR #3408 était complète (correctif + tests + CI iOS
+verte) mais bloquée par `Test shared`, rouge sur `main` pour une raison sans rapport avec le lot
+(cf. section « Triage CI (PR #3408) » ci-dessus).
+
+### Clôture de la Vague 169
+
+`origin/main` avait entre-temps récupéré le témoin (`a0b5c15b6`, « le témoin de `post.ts` affirmait
+« aucune valeur d'exécution » sur un module qui en exporte une »). Un `git merge origin/main` sur la
+branche de la PR #3408 (aucun conflit, 89 fichiers apportés par 6 PR mergées entre-temps) a suffi à
+faire repasser `Test shared` — tous les 17 checks de la PR sont revenus verts (`mergeable_state:
+clean`), et la PR a été mergée sur `main` (commit `7746685e3`). Vague 169 est donc maintenant
+pleinement livrée, pas seulement corrigée.
+
+### Audit large (suivi de la recommandation de clôture de la Vague 169)
+
+Avant d'ouvrir un nouveau site, un audit dédié a repassé `CallManager.swift` (~6372 lignes) et
+l'ensemble de `Features/Main/Services/WebRTC/` (`VideoSurvivalController`, `P2PWebRTCClient`,
+`WebRTCTypes`, `PiPCallController`, `PiPVideoRenderer`, `VideoFrameConverter`, `CallPiPPolicy`) plus
+`WebRTCService.swift`, à la recherche d'un nouveau site du même défaut (nettoyage incohérent entre
+branches succès/échec) ou d'un défaut distinct clairement atteignable (course, cycle de rétention,
+timer/observateur non invalidé). Familles repassées et confirmées cohérentes, sans écart :
+
+- Les 6 `Task` de sérialisation (`videoToggleTask`/`holdVideoTask`/`survivalVideoTask`/
+  `iceRestartTask`/`signalOfferAnswerTask`/`cameraSwitchTask`) : chacun des ~10 sites de création
+  attend les 5 autres avant d'agir, et tous sont annulés dans l'unique point de démontage
+  (`endCallInternal`).
+- La famille « flip optimiste + revert sur échec » (`toggleSpeaker`, `switchCamera`, `selectCamera`,
+  `.newDeviceAvailable` de la Vague 167) : les quatre revertent correctement ; les branches sans
+  mutation optimiste (`.oldDeviceUnavailable`/`.override`/`default`) n'ont, à raison, rien à revert.
+  `P2PWebRTCClient.switchCamera()` vs `switchToCamera(uniqueID:)` : asymétrie de `do/catch` en
+  apparence, mais sans bug — `switchToCamera` ne mute jamais son état de manière optimiste avant le
+  point de throw, donc rien à annuler à ce niveau ; la correction vit déjà côté appelant.
+- Hygiène observateurs/timers (`screenCaptureObserver`/`backgroundObserver`/`foregroundObserver`,
+  `disconnectDebounceTask`, rafraîchissement/watchdog TURN, tampon `pendingIceCandidates`, handlers
+  `CXProviderDelegate`) : tous démarrés/arrêtés par paires appariées, démontés une seule fois.
+- `PiPCallController`/`PiPVideoRenderer`/`VideoFrameConverter` : attach/detach, flush sur la queue,
+  et propagation du frame-rate thermique restent single-path, déjà documentés par leurs propres
+  commentaires d'audit.
+
+Deux quasi-correspondances creusées en détail puis écartées (non atteignables, pas un fantôme
+oublié) : le fallback audio-only imbriqué de `performLocalMediaStart` (le seul chemin de throw
+restant après le fallback est `WebRTCError.noPeerConnection`, qui suppose un `disconnect()`
+concurrent — c-à-d que l'appel s'est déjà terminé par un autre chemin) ; et les branches
+`call:error{CALL_ENDED}`/`socket.didReconnect` qui appellent `handleRemoteEnd` sans
+`clearPendingIncomingCall` contrairement à leurs 3 sœurs — mais `callId` y désigne toujours l'appel
+ACTIF, jamais `pendingIncomingCall.callId` (un appel en attente n'est jamais rejoint/signalé par cet
+appareil avant que l'utilisateur n'agisse dessus), donc le site manquant est un no-op prouvé sur le
+graphe d'appel actuel.
+
+Vérifications ponctuelles hors de cette famille, également sans écart : `NSAllowsArbitraryLoads`
+posé à `false` dans `Info.plist` (ATS correctement appliqué, pas de bypass) ; aucune fuite de secret
+(token, mot de passe, identifiants TURN) dans les logs `Logger.calls`/`VoIPPushManager` du fichier ;
+`CallManager` est un singleton (`static let shared`) — la capture forte de `self` dans ses propres
+`Task { }` n'est donc pas un cycle de rétention exploitable (l'instance vit pour la durée de l'app).
+
+### Non fait volontairement / reste ouvert
+
+Aucun nouveau site vérifiable trouvé cette Vague — documenté ici plutôt que forcé (règle « no
+temporary fixes », « senior developer standards »). Reconduits (inchangés) : dead code / god-object
+`CallManager.swift` (~6372 lignes) ; ADR `actor CallEventQueue` non implémenté ; iOS single-peer côté
+groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors périmètre calling).
+La prochaine Vague devra soit rouvrir un audit sur un axe différent (accessibilité VoiceOver des
+écrans d'appel — déjà dense en labels existants, UX iPad/Stage Manager, tests de reconnexion réseau
+bout-en-bout), soit s'attaquer à l'un des trois chantiers architecturaux ci-dessus.
