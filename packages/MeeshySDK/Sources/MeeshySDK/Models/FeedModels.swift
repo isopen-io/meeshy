@@ -545,6 +545,13 @@ public struct FeedPost: Identifiable, Sendable {
     public var isQuote: Bool = false
     public var media: [FeedMedia] = []
     public var originalLanguage: String?
+    /// Audience du post et sa liste nommée (EXCEPT/ONLY) — champs augmentés
+    /// serveur, posés par `APIPost.toFeedPost` / `PostRecord.toFeedPost`,
+    /// jamais par l'init memberwise. Ils rendent l'audience ÉDITABLE : sans
+    /// eux, la sheet d'édition ne saurait pas sur quoi rouvrir, et un post en
+    /// ONLY repartirait sans ses destinataires.
+    public var visibility: String?
+    public var visibilityUserIds: [String]?
     public var translations: [String: PostTranslation]?
     public var translatedContent: String?
     /// `[rawURL: token]` outbound-link tracking map carried from
@@ -681,6 +688,7 @@ extension FeedPost: Codable {
         case repost, repostAuthor, isQuote, media
         case originalLanguage, translations, translatedContent
         case storyEffects, audioUrl, location, mentions
+        case visibility, visibilityUserIds
     }
 
     public init(from decoder: Decoder) throws {
@@ -719,6 +727,8 @@ extension FeedPost: Codable {
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         translations = try c.decodeIfPresent([String: PostTranslation].self, forKey: .translations)
         translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
+        visibility = try c.decodeIfPresent(String.self, forKey: .visibility)
+        visibilityUserIds = try c.decodeIfPresent([String].self, forKey: .visibilityUserIds)
         // Resilience: a single malformed `storyEffects` payload must NOT fail
         // the whole decode (RepostContent/FeedPost are decoded inside strict
         // arrays — one throwing entry would drop the entire feed page). Degrade
@@ -766,6 +776,8 @@ extension FeedPost: Codable {
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(translations, forKey: .translations)
         try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
+        try c.encodeIfPresent(visibility, forKey: .visibility)
+        try c.encodeIfPresent(visibilityUserIds, forKey: .visibilityUserIds)
         try c.encodeIfPresent(storyEffects, forKey: .storyEffects)
         try c.encodeIfPresent(audioUrl, forKey: .audioUrl)
         try c.encodeIfPresent(location, forKey: .location)

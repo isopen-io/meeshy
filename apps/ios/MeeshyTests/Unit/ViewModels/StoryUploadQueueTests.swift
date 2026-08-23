@@ -477,7 +477,9 @@ final class StoryUploadQueueTests: XCTestCase {
 
     func test_publishStoryInBackground_exceptVisibility_isNotRemembered() async {
         publish(visibility: PostVisibility.except.rawValue)
-        XCTAssertEqual(sut.lastComposerVisibility, PostVisibility.friends.rawValue,
+        // Retombe sur le défaut produit — PUBLIC depuis 2026-08-23, la story
+        // naissant publique comme un post et un réel.
+        XCTAssertEqual(sut.lastComposerVisibility, PostVisibility.public.rawValue,
                        "EXCEPT/ONLY ne sont jamais mémorisés (garde-fou confidentialité)")
     }
 
