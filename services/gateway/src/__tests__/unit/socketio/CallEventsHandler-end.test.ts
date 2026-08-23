@@ -1034,5 +1034,29 @@ describe('CallEventsHandler — call:end handler', () => {
         })
       );
     });
+
+    // Group-calls gap analysis S3 regression: `ringingTimeouts` is keyed by
+    // callId, not by participant (CallService.ts) — it is the ONLY thing
+    // standing between "an invitee never answered" and a missed-call
+    // notification for them (buildRingingTimeoutHandler's count===0 branch).
+    // The `call:signal` answer handler deliberately leaves this timer armed
+    // for a group call for exactly this reason. This branch is reached only
+    // when the call is KNOWN to continue for other participants — clearing
+    // the call-wide timer here permanently loses the missed-call
+    // notification for whichever invitee never joined, with no recovery
+    // path (rehydrateActiveCalls only re-arms `initiated|ringing` calls, and
+    // an `active` call never re-enters that state).
+    it('does NOT clear the call-wide ring timer when the group call continues (S3)', async () => {
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+
+      expect(mockClearRingingTimeout).not.toHaveBeenCalled();
+    });
   });
 });

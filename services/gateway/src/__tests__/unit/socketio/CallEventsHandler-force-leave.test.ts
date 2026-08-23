@@ -345,7 +345,33 @@ describe('CallEventsHandler — call:force-leave handler', () => {
   // -------------------------------------------------------------------------
 
   describe('clears ringing timeout and buffered offer on force-leave (sibling-drift fix)', () => {
-    it('clears the ringing timeout for the force-left call', async () => {
+    it('clears the ringing timeout when the force-leave actually ends the call', async () => {
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([
+          makeActiveCallWithParticipant(USER_ID),
+        ]),
+      });
+      mockLeaveCall5.mockResolvedValue({ ...makeEndedCallSession(), status: 'ended' });
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect(mockClearRingingTimeout5).toHaveBeenCalledWith(CALL_ID);
+    });
+
+    // `ringingTimeouts` is keyed by callId, not by participant
+    // (CallService.ts) — it is the only thing standing between "an invitee
+    // never answered" and a missed-call notification for them. This site
+    // used to clear it unconditionally, on the FALSE premise (see its own
+    // "mirrors call:leave" comment) that call:leave already did the same —
+    // both were the same bug. When the force-leave leaves the call `active`
+    // (still running for others, exactly `makeEndedCallSession`'s fixture
+    // status despite its name), the call-wide timer must survive.
+    it('does NOT clear the ringing timeout when the group call continues (status stays active)', async () => {
       const prisma = makePrisma({
         callSessionFindMany: jest.fn<any>().mockResolvedValue([
           makeActiveCallWithParticipant(USER_ID),
@@ -360,7 +386,7 @@ describe('CallEventsHandler — call:force-leave handler', () => {
       handler.setupCallEvents(socket as any, io, () => USER_ID);
       await handlers['call:force-leave'](FORCE_LEAVE_DATA);
 
-      expect(mockClearRingingTimeout5).toHaveBeenCalledWith(CALL_ID);
+      expect(mockClearRingingTimeout5).not.toHaveBeenCalled();
     });
 
     it('clears the buffered offer slot addressed to the force-leaving user', async () => {
