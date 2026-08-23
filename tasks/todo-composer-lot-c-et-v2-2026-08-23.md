@@ -67,7 +67,14 @@ côté iOS, donc il reste en tête.
 Ces tâches **étendent** le dénominateur au-delà de 65. Elles ne remplacent
 aucune tâche C.
 
-- [ ] **V0 — Le contrat partagé** *(démarre en premier — attendu par C2-C3)*
+- [x] **V0 — Le contrat partagé** ✅ *(gate vert 2026-08-23)*
+      `packages/shared/utils/composer-contract.ts` + 23 tests
+      (`__tests__/composer-contract.test.ts`). Gate : **104 fichiers / 2 490
+      tests verts**, `tsc --noEmit` propre. Forme FIGÉE, consommable :
+      `COMPOSER_DOORS` (9), `composerOpening(door, ctx)` →
+      `{ initialFormat, offeredFormats }`, `buildUpdatePayload(known, draft)`.
+      *(détail de la mission d'origine ci-dessous)*
+- [x] **V0 — Le contrat partagé** *(démarre en premier — attendu par C2-C3)*
       `packages/shared` : les portes comme données, `initialFormat` +
       `offeredFormats`, `buildUpdatePayload(known, draft)`.
       `ComposerIntent.swift` devient le miroir du contrat, et cesse d'en être la
