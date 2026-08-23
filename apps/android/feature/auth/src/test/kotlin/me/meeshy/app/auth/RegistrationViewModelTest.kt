@@ -42,6 +42,7 @@ import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.sync.SyncSeqTracker
 import me.meeshy.sdk.session.SessionTeardown
 import me.meeshy.sdk.socket.RealtimeSessionCoordinator
 import me.meeshy.sdk.user.UserRepository
@@ -132,7 +133,7 @@ class RegistrationViewModelTest {
         val store = InMemoryTokenStore()
         val teardown = mockk<SessionTeardown>(relaxed = true)
         val vm = RegistrationViewModel(
-            AuthRepository(api, store, SessionRepository(api, store), teardown),
+            AuthRepository(api, store, SessionRepository(api, store), teardown, SyncSeqTracker()),
             coordinator,
             mediaRepository,
             userRepository,

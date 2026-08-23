@@ -13,8 +13,10 @@
  *
  * Ce module est une VALEUR PURE — même règle, même ordre (`detectGap` AVANT
  * `record`), même no-op sur l'absence de `_seq` (gateway antérieur) que le SDK
- * iOS. Ce n'est pas une seconde interprétation de la règle : toute évolution
- * touche les deux fichiers.
+ * iOS et le SDK Android
+ * (`apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/sync/SyncSeqState.kt`).
+ * Ce n'est pas une seconde interprétation de la règle : toute évolution touche
+ * les TROIS fichiers.
  */
 
 export type SyncSeqState = {

@@ -923,15 +923,23 @@ export interface NotificationEventData {
    *
    * C'est le signal de détection de TROU du SyncEngine : un client qui reçoit
    * `_seq = N+2` après `N` sait qu'un événement lui a échappé et déclenche une
-   * resynchronisation. **Les trois clients le lisent** — web
+   * resynchronisation. **Les trois clients l'OBSERVENT** — web
    * (`observeSyncSeq(this.syncSeq, data?._seq)`,
-   * `notification-socketio.singleton.ts`), iOS (`case seq = "_seq"`,
-   * `MeeshySDK/Sockets/MessageSocketManager.swift`), Android
-   * (`MessageSocketManagerNotificationTest`).
+   * `notification-socketio.singleton.ts`), iOS (`case seq = "_seq"` →
+   * `SyncSeqTracker.observe`, `MeeshySDK/Sockets/MessageSocketManager.swift`),
+   * Android (`syncSeqTracker.observe(raw.opt("_seq"))`,
+   * `sdk-core/.../socket/MessageSocketManager.kt`).
+   *
+   * Ce paragraphe a dit « les trois le lisent » pendant que **Android le
+   * jetait** : son décodeur (`Json.ignoreUnknownKeys`) déposait le champ, et la
+   * preuve citée — `MessageSocketManagerNotificationTest` — n'assertait rien sur
+   * `_seq` ; elle prouvait exactement l'inverse, que le décodage SURVIT au champ.
+   * Une citation n'est pas une mesure : le test cité prouvait la tolérance, pas
+   * la lecture. Android observe depuis que ce miroir a été écrit (cycle 108).
    *
    * **Déclaré ici parce qu'il ne l'était NULLE PART** (cycle 105). Il ne
    * voyageait que parce que `emitWithSeq` prenait
-   * `payload: Record<string, unknown>` : un champ porteur, lu par trois
+   * `payload: Record<string, unknown>` : un champ porteur, traversant trois
    * décodeurs, dont aucun contrat ne parlait — exactement le cas de `location`
    * sur `ConversationUpdatedEventData` avant qu'on ne le déclare, et la même
    * conséquence : la parité entre émetteurs ne tenait qu'à la lecture du code
