@@ -135,8 +135,24 @@ Toute la machinerie qui rend l'ancrage réel **existe déjà côté serveur** :
 
 Le manque est **entièrement côté clients** : `targetType: .post` n'est envoyé
 que depuis `StoryViewerView.swift:874` et `:1275` ; aucun client n'envoie jamais
-`targetType: STORY` ; le web (`RepostModal.tsx`, 114 l.) n'offre que
-repost-nu / citation, sans aucun choix de format.
+`targetType: STORY`.
+
+**Le web est le cas le plus grave, et le plus simple à refermer.**
+`RepostRequest` (`apps/web/services/posts.service.ts:68`) ne porte que
+`content` et `isQuote` — **le champ `targetType` n'existe pas côté web**. Le
+viewer de story envoie littéralement `{ isQuote: false }`
+(`app/story/[postId]/page.tsx:118`), le gateway retombe sur `POST`, et
+**reposter une story sur le web fabrique silencieusement un post permanent**.
+L'utilisateur croyait repartager une story ; il a ancré. La loi 5 est violée
+dans le sens le plus coûteux — celui qui rend permanent ce qui devait
+disparaître, sans jamais l'avoir demandé.
+
+Directive produit du 2026-08-23 : **le web reposte un post en post, une story
+en story, un mood en mood — et le viewer de story offre en plus « reposter en
+post »**, qui est l'ancrage nommé par cette même loi.
+
+Le type de la source est **déjà en main à chaque site d'appel** (`stories`,
+`current`, `post.type`) : le miroir ne coûte aucune requête.
 
 ### Loi 6 — La fiche de forward est le « où va ceci ? » universel
 
@@ -202,6 +218,20 @@ Ordre contraint par les dépendances, pas par la taille.
 `buildUpdatePayload(known, draft)`. `ComposerIntent.swift` devient le **miroir**
 du contrat, et cesse d'en être la source. **DoD** : la fonction testée une fois, les deux
 plateformes compilent contre elle.
+
+### Lot 0 bis — Le repost web miroite *(aucune dépendance — livrable immédiatement)*
+Défaut vivant, indépendant de tout le reste du chantier, et de coût minime.
+
+1. `RepostRequest` gagne `targetType?: 'POST' | 'REEL' | 'STORY' | 'STATUS'` ;
+2. chaque site d'appel passe **le type de la source** — il l'a déjà ;
+3. le viewer de story ajoute l'option **« reposter en post »** (l'ancrage).
+
+**Ne dépend ni du lot 0 ni d'aucun autre.** Peut partir avant que la première
+ligne du composer unifié soit écrite, et referme immédiatement la violation la
+plus coûteuse de la loi 5.
+**DoD** : un test RED qui prouve qu'aujourd'hui reposter une story produit un
+`POST`, puis vert ; les moods reposent en `STATUS` (1 h) et non en post
+permanent.
 
 ### Lot 1 — L'éventail
 `ComposerProfile` gagne `offeredFormats` ; le sélecteur de format monte dans le
