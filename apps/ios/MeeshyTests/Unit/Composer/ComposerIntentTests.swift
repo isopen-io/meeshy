@@ -434,36 +434,54 @@ final class ComposerIntentTests: XCTestCase {
         XCTAssertEqual(profil(.edit(postId: "d", documentFormat: .reel)).initialFormat, .reel)
     }
 
-    /// Le modèle reste INERTE tant que le maillon manque : aucun consommateur
-    /// applicatif ne peut donc afficher un format que la chaîne ne produirait
-    /// pas. Cette garde rougit le jour où quelqu'un câble le profil sans que
-    /// les appelants du repost envoient le type de leur carte.
+    /// **Sentinelle LEVÉE le 2026-08-23 (C2), et transformée — pas supprimée.**
     ///
-    /// La condition a CHANGÉ en cours de lot : elle nommait d'abord un repli
-    /// serveur qui devait miroiter, décision retirée le 2026-08-23 après
-    /// vérification (le format doit suivre la carte, pas la racine résolue).
-    /// Une garde hérite de la fragilité de ce qu'elle affirme — qui change la
-    /// condition change la garde, dans le même commit, sinon on obtient un
-    /// commentaire périmé EXÉCUTABLE, auquel on fait confiance.
-    func test_leProfil_nEstEncoreConsommeParAucuneSurface() {
+    /// Elle affirmait « le profil n'est consommé par AUCUNE surface », et son
+    /// rôle était d'empêcher qu'on le câble AVANT que les appelants du repost
+    /// n'envoient le type de leur carte — sans quoi une porte aurait pu ouvrir
+    /// un repost sur un format que la chaîne d'envoi ne produisait pas.
+    ///
+    /// Les deux moitiés de cette condition sont désormais vraies :
+    /// V0 bis moitié iOS a livré les six sites (`92529dac5`, arrivé sur `main`
+    /// par la PR #3389), et C2 câble le profil dans `MeeshyComposerHost`.
+    ///
+    /// Supprimer la garde à ce moment-là aurait été le geste facile et faux :
+    /// on aurait rendu la suite verte en PERDANT la protection, et rien
+    /// n'aurait plus empêché un futur site de repost de repasser à `nil`. Elle
+    /// encode donc maintenant la CONDITION elle-même — les six sites portent
+    /// leur format — au lieu de l'attente qui la précédait. C'est la même
+    /// exigence, exprimée du bon côté du seuil.
+    func test_lesSixSitesDuRepost_portentLeFormatDeLeurCarte() throws {
         let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy")
-        guard let enumerateur = FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil) else {
-            return XCTFail("Arborescence app introuvable à \(racine.path)")
+
+        // Les six sites recensés le 2026-08-23. Les deux sites `.post` du viewer
+        // de story ne sont PAS ici : ils étaient déjà conformes, et sont devenus
+        // l'option explicite d'ancrage (loi 5).
+        let sites = ["ReelsViewModel", "FeedViewModel", "PostDetailView",
+                     "ProfileUserPostsList", "RootViewComponents", "FeedView"]
+
+        for site in sites {
+            guard let enumerateur = FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil) else {
+                return XCTFail("Arborescence app introuvable à \(racine.path)")
+            }
+            var trouve = false
+            for case let url as URL in enumerateur where url.lastPathComponent == "\(site).swift" {
+                let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+                trouve = true
+                XCTAssertTrue(
+                    source.contains("targetType"),
+                    "\(site) n'envoie plus de `targetType` — le repost y retomberait sur le défaut serveur `?? POST`, et un réel ou une story y perdrait son format"
+                )
+                XCTAssertFalse(
+                    source.contains("targetType: nil"),
+                    "\(site) repasse `targetType: nil` — c'est exactement l'arbitrage que la loi du miroir a renversé"
+                )
+            }
+            XCTAssertTrue(trouve, "Site de repost introuvable : \(site).swift — la garde ne mesurerait rien pour lui")
         }
-        var consommateurs: [String] = []
-        for case let url as URL in enumerateur where url.pathExtension == "swift" {
-            guard url.lastPathComponent != "ComposerIntent.swift",
-                  let source = try? String(contentsOf: url, encoding: .utf8),
-                  source.contains("ComposerProfile.profile(for:") else { continue }
-            consommateurs.append(url.lastPathComponent)
-        }
-        XCTAssertEqual(
-            consommateurs, [],
-            "Le profil est CÂBLÉ (\(consommateurs)) : vérifier que les appelants du repost envoient le type de leur CARTE avant d'ouvrir un repost sur son format."
-        )
     }
 
     // MARK: - Règle : la table est une fonction de l'ORIGINE seule
