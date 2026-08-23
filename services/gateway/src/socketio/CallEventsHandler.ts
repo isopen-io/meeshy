@@ -3113,8 +3113,6 @@ export class CallEventsHandler {
         });
         this.invalidateSignalSession(data.callId);
 
-        // Phase 1 fix P2 — caller cancel or callee reject ends ringing
-        this.callService.clearRingingTimeout(data.callId);
         // §4.6 — drop only THIS leaver's own buffered slot (calling-stack
         // audit 2026-08-16 — see clearBufferedOfferFor's doc comment). A
         // group call keeps running for whoever remains; a sibling pair's
@@ -3163,6 +3161,15 @@ export class CallEventsHandler {
         // connected".
         const finalStatus = callSession.status as string;
         if (finalStatus === 'ended' || finalStatus === 'missed') {
+          // Phase 1 fix P2 — caller cancel or callee reject ends ringing.
+          // Scoped to the terminal branch (calling-stack audit 2026-08-16
+          // follow-up): `ringingTimeouts` is call-wide, keyed by callId, not
+          // by participant — clearing it unconditionally on every leave,
+          // including a group-call leave that leaves the call `active` for
+          // remaining invitees, silently dropped the missed-call
+          // notification for whoever never answered, with no recovery path.
+          this.callService.clearRingingTimeout(data.callId);
+
           const endedEvent: CallEndedEvent = {
             callId: callSession.id,
             duration: callSession.duration || 0,
@@ -3351,12 +3358,11 @@ export class CallEventsHandler {
               // Sibling-drift fix — mirrors the `call:leave` handler above:
               // this is an explicit leave just like `call:leave`, so it must
               // clear the same per-call in-memory state. Without this, a
-              // still-armed ringing timer or buffered offer for this callId
-              // lingers in memory until its own unrelated sweep/timeout,
-              // instead of being released the moment the leave is known.
+              // still-armed buffered offer for this callId lingers in memory
+              // until its own unrelated sweep/timeout, instead of being
+              // released the moment the leave is known.
               // Leaver-scoped (calling-stack audit 2026-08-16), same fix as
               // `call:leave` — see `clearBufferedOfferFor`'s doc comment.
-              this.callService.clearRingingTimeout(call.id);
               this.clearBufferedOfferFor(call.id, userId, cleanupParticipantId);
 
               // Broadcast participant left event
@@ -3383,6 +3389,15 @@ export class CallEventsHandler {
               // had no UX trace the call ever happened, even after answering.
               const forceLeaveStatus = callSession.status as string;
               if (forceLeaveStatus === 'ended' || forceLeaveStatus === 'missed') {
+                // Scoped to the terminal branch (calling-stack audit
+                // 2026-08-16 follow-up, same fix as `call:leave` above):
+                // `ringingTimeouts` is call-wide, keyed by callId, not by
+                // participant — clearing it unconditionally, including on a
+                // group-call force-leave that leaves the call `active` for
+                // remaining invitees, silently dropped their missed-call
+                // notification with no recovery path.
+                this.callService.clearRingingTimeout(call.id);
+
                 const endedEvent: CallEndedEvent = {
                   callId: callSession.id,
                   duration: callSession.duration || 0,
@@ -3989,7 +4004,15 @@ export class CallEventsHandler {
         // the PARTICIPANT_LEFT the fast path already sent covers the room.
         if (willContinueAsGroupLeave && !(CALL_TERMINAL_STATUSES as readonly string[]).includes(callSession.status)) {
           this.invalidateSignalSession(data.callId);
-          this.callService.clearRingingTimeout(data.callId);
+          // Group-calls gap analysis S3 regression fix: `ringingTimeouts` is
+          // keyed by callId, not by participant (CallService.ts) — it is the
+          // ONLY thing standing between "an invitee never answered" and a
+          // missed-call notification for them. This branch is reached only
+          // when the call is KNOWN to continue for other participants (see
+          // `willContinueAsGroupLeave` above), so the call-wide timer is NOT
+          // this hanger-up's to clear — `call:signal`'s answer handler
+          // deliberately leaves it armed for exactly this reason. Do NOT
+          // call `this.callService.clearRingingTimeout(data.callId)` here.
           // Leaver-scoped (calling-stack audit 2026-08-16) — mirrors
           // `call:leave`'s own fix (see `clearBufferedOfferFor`'s doc
           // comment): the call continues for the other participants, whose

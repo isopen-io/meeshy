@@ -45,6 +45,36 @@ export interface PreviewPrismParticipant {
   } | null;
 }
 
+/**
+ * L'horodatage du groupe d'aperçu, sous la forme que le CONTRAT énonce : une
+ * chaîne ISO, comme `updatedAt` son jumeau dans le même payload.
+ *
+ * Les trois émetteurs passaient l'objet `Date` de Prisma. Sur le fil la
+ * différence ne se voyait pas — la passerelle n'installe aucun parseur
+ * socket.io personnalisé, donc l'encodeur est `JSON.stringify`, qui rend
+ * exactement `toISOString()`. Ce que ça coûtait est ailleurs : `lastMessageAt`
+ * était le seul horodatage du payload dont le type était décidé par l'encodeur
+ * au lieu d'être énoncé, si bien que tout témoin en cours de route attestait
+ * une `Date` là où les trois clients reçoivent une chaîne.
+ *
+ * Ici plutôt que trois fois : c'est le même groupe d'aperçu, et un quatrième
+ * émetteur qui l'écrirait à la main rouvrirait l'écart que ce lot ferme.
+ *
+ * Une chaîne passe telle quelle — ce chemin sert des messages dont le
+ * `createdAt` a déjà traversé une frontière JSON (agent, retour du traducteur).
+ * La revalider ici la rejetterait sans rien avoir de mieux à mettre à la place.
+ *
+ * Une `Date` INVALIDE rend `null`, parce que `toISOString()` LÈVE sur elle : un
+ * aperçu ne vaut pas de faire tomber une diffusion, et les clients traitent
+ * l'horodatage absent comme « je ne compose pas de ligne » — exactement la
+ * bonne issue.
+ */
+export function toIsoOrNull(value: Date | string | null | undefined): string | null {
+  if (value == null) return null;
+  if (typeof value === 'string') return value;
+  return Number.isNaN(value.getTime()) ? null : value.toISOString();
+}
+
 export interface PreviewPrismMessage {
   /**
    * Le texte du dernier message, c'est-à-dire l'aperçu SERVI au lecteur dont le

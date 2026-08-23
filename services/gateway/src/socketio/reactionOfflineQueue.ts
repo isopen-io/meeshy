@@ -1,3 +1,5 @@
+import type { QueuedVariantFor } from './queuedEventContract';
+import { queuedVariantOf } from './queuedEventContract';
 import {
   enqueueForOfflineParticipants,
   type OfflineParticipantQueueDeps,
@@ -11,14 +13,12 @@ export type ReactionEventType = 'reaction-added' | 'reaction-removed';
  */
 export type ReactionOfflineQueueDeps = OfflineParticipantQueueDeps;
 
-export interface ReactionOfflineQueueParams {
+export type ReactionOfflineQueueParams = QueuedVariantFor<ReactionEventType> & {
   conversationId: string;
   actorParticipantId: string | null | undefined;
-  eventType: ReactionEventType;
   messageId: string;
   emoji: string;
-  payload: Record<string, unknown>;
-}
+};
 
 /**
  * The single implementation of the offline-replay audience for a message
@@ -56,13 +56,15 @@ export async function enqueueOfflineReactionEvent(
   deps: ReactionOfflineQueueDeps,
   params: ReactionOfflineQueueParams
 ): Promise<void> {
-  const { conversationId, actorParticipantId, eventType, messageId, emoji, payload } = params;
+  const { conversationId, actorParticipantId, messageId, emoji } = params;
   await enqueueForOfflineParticipants(deps, {
     conversationId,
     actorParticipantId,
-    eventType,
     messageId,
-    payload,
     dedupKey: `${messageId}:${actorParticipantId ?? 'unknown'}:${emoji}`,
+    // Le couple reste CORRÉLÉ : le destructurer rendrait `eventType` et
+    // `payload` à deux unions indépendantes, et le relais perdrait la
+    // vérification que la file vient d'acquérir.
+    ...queuedVariantOf(params.eventType, params.payload),
   });
 }
