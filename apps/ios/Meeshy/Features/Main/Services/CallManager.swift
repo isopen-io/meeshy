@@ -915,9 +915,19 @@ final class CallManager: ObservableObject {
         switch reason {
         case .newDeviceAvailable:
             // Headset / Bluetooth connected — clear a stale speaker override.
+            // Same discipline as toggleSpeaker() (§7.8): overrideOutputAudioPort
+            // can throw (e.g. `insufficientPriority` when the just-connected
+            // accessory itself holds route priority), and discarding that failure
+            // here left `isSpeaker` at `false` even when the override never
+            // actually applied — desyncing the speaker-toggle UI from the real
+            // audio route until an unrelated route change or manual toggle
+            // happened to reconcile it.
+            let previousSpeaker = isSpeaker
             isSpeaker = false
-            applySpeakerRoute()
-            Logger.calls.info("Audio route: new device available — isSpeaker = false")
+            if !applySpeakerRoute() {
+                isSpeaker = previousSpeaker
+            }
+            Logger.calls.info("Audio route: new device available — isSpeaker = \(self.isSpeaker)")
         case .oldDeviceUnavailable:
             // Headset / Bluetooth disconnected — iOS routes back to built-in;
             // re-apply the current speaker preference so RTCAudioSession follows.
