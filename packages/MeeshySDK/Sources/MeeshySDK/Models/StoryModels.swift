@@ -2587,6 +2587,34 @@ public struct ReactionRequest: Encodable {
     public init(emoji: String) { self.emoji = emoji }
 }
 
+/// Corps de `POST /posts/from-attachment` — publier une pièce jointe DÉJÀ
+/// reçue en conversation, sans la retélécharger.
+///
+/// Miroir de `PublishAttachmentSchema` (services/gateway/src/routes/posts/types.ts).
+/// Les trois champs optionnels sont OMIS quand ils sont nils : le serveur
+/// applique les mêmes défauts, et une clé absente vaut mieux qu'une
+/// affirmation sans contenu.
+public struct PublishAttachmentRequest: Encodable {
+    /// La pièce jointe à publier. L'appartenance à sa conversation est vérifiée
+    /// serveur : un identifiant seul n'autorise rien.
+    public let attachmentId: String
+    /// `nil` ⇒ la règle partagée choisit d'après le type MIME. Une STORY ne
+    /// sort jamais de cette déduction — elle expire, donc elle se demande.
+    public let target: String?
+    /// Le mot que l'utilisateur ajoute à la publication.
+    public let content: String?
+    /// Le média sort de la caméra ou du micro de l'app. Le serveur ne s'en sert
+    /// pas pour décider — il le journalise.
+    public let capturedInApp: Bool?
+
+    public init(attachmentId: String, target: String? = nil, content: String? = nil, capturedInApp: Bool? = nil) {
+        self.attachmentId = attachmentId
+        self.target = target
+        self.content = content
+        self.capturedInApp = capturedInApp
+    }
+}
+
 public struct RepostRequest: Encodable {
     public let content: String?
     public let isQuote: Bool

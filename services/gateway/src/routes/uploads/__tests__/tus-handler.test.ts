@@ -208,6 +208,11 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
     filetype: string;
     bytes: Buffer;
     uploadId?: string;
+    /// Métadonnées TUS SUPPLÉMENTAIRES (en-tête `Upload-Metadata`), au-delà de
+    /// `filename`/`filetype` que tout envoi porte. Ce sont des CHAÎNES : c'est
+    /// la forme réelle du canal, et c'est ce qui distingue ce chemin du JSON
+    /// que reçoit `UploadProcessor`.
+    extraMetadata?: Record<string, string>;
   }) {
     const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
     await registerTusRoutes(buildFakeFastify(params.prisma));
@@ -216,7 +221,10 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
     const uploadId = params.uploadId ?? 'upload-1';
     const created = await captured.onUploadCreate(
       { headers: headersFrom(params.headers) },
-      { metadata: { filename: params.filename, filetype: params.filetype }, size: params.bytes.length }
+      {
+        metadata: { filename: params.filename, filetype: params.filetype, ...(params.extraMetadata ?? {}) },
+        size: params.bytes.length,
+      }
     );
 
     // Écrit les octets réels au chemin que `onUploadFinish` s'attend à
@@ -241,6 +249,79 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       return thrown as { status_code?: number; body?: string };
     }
   }
+
+  // ── Provenance : le TROISIÈME site de création d'attachement ─────────────
+
+  describe('capturedInApp — la provenance déclarée survit AUSSI par TUS', () => {
+    const RAW_SESSION_TOKEN = 'anon-session-token-xyz';
+    const ANONYMOUS_HEADERS = { 'x-session-token': RAW_SESSION_TOKEN };
+
+    const openLinkPrisma = () => buildFakePrisma({
+      participant: { id: 'participant-1', anonymousSession: { shareLinkId: 'sharelink-open' } },
+      shareLink: { allowAnonymousFiles: true, allowAnonymousImages: true },
+    });
+
+    it('persiste la provenance quand le client la DÉCLARE', async () => {
+      // Ce gestionnaire écrit `MessageAttachment` LUI-MÊME, sans passer par
+      // `UploadProcessor` : c'est le troisième site de création du dépôt, et
+      // celui qu'emprunte iOS. Un champ posé sur les deux autres et oublié ici
+      // est perdu pour le client qui en a le plus besoin — celui qui possède
+      // une caméra.
+      const prisma = openLinkPrisma();
+
+      const result = await runFullUpload({
+        prisma,
+        headers: ANONYMOUS_HEADERS,
+        filename: 'voice.webm',
+        filetype: 'audio/webm',
+        bytes: WEBM_HEADER,
+        extraMetadata: { capturedinapp: 'true' },
+      });
+
+      expect(result.status_code).toBe(200);
+      const createCall = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0] as any;
+      expect(createCall.data.capturedInApp).toBe(true);
+    });
+
+    it("n'affirme une capture que sur la chaîne EXACTE « true »", async () => {
+      // Les métadonnées TUS sont des chaînes, et `'false'` est véridique en
+      // JavaScript : une lecture laxiste déclarerait capture ce qui n'en est pas
+      // une, donc poserait une confirmation sans fondement. La lecture est
+      // stricte, comme sur le chemin JSON.
+      const prisma = openLinkPrisma();
+
+      const result = await runFullUpload({
+        prisma,
+        headers: ANONYMOUS_HEADERS,
+        filename: 'voice.webm',
+        filetype: 'audio/webm',
+        bytes: WEBM_HEADER,
+        extraMetadata: { capturedinapp: 'false' },
+      });
+
+      expect(result.status_code).toBe(200);
+      const createCall = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0] as any;
+      expect(createCall.data.capturedInApp).toBe(false);
+    });
+
+    it("traite l'absence de déclaration comme « pas une capture »", async () => {
+      // Tout client qui ignore ce champ, et tout fichier choisi dans une
+      // galerie. L'absence ne peut pas valoir capture.
+      const prisma = openLinkPrisma();
+
+      const result = await runFullUpload({
+        prisma,
+        headers: ANONYMOUS_HEADERS,
+        filename: 'voice.webm',
+        filetype: 'audio/webm',
+        bytes: WEBM_HEADER,
+      });
+
+      expect(result.status_code).toBe(200);
+      const createCall = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0] as any;
+      expect(createCall.data.capturedInApp).toBe(false);
+    });
+  });
 
   // ── Critical 1 : contournement d'autorisation anonyme ────────────────────
 

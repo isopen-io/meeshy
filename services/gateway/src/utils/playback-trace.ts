@@ -27,6 +27,8 @@
  * @see docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md
  */
 
+import { isMsRangeStrictlyOrdered } from '@meeshy/shared/utils/time-range';
+
 import { mergePlaybackSegments, type PlaybackSegment } from './playback-segments.js';
 
 /** Ce qui a mis fin à une écoute continue. */
@@ -75,7 +77,11 @@ function isUsable(candidate: unknown): candidate is PlaybackStretch {
     Number.isFinite(startMs) &&
     Number.isFinite(endMs) &&
     startMs >= 0 &&
-    endMs > startMs &&
+    // `endMs > startMs` STRICT via la brique partagée : une écoute continue de
+    // durée nulle n'est pas une écoute (cf. `isMsRangeStrictlyOrdered`, dont le
+    // gate de wire `playbackStretch` et le filtre de `playback-segments` sont
+    // les jumeaux).
+    isMsRangeStrictlyOrdered({ startMs, endMs }) &&
     typeof endedBy === 'string' &&
     STRETCH_ENDS.has(endedBy)
   );
