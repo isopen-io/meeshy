@@ -1423,32 +1423,39 @@ ouverte** — c'est toute la différence avec les huit copies.
 
 ### Un cliquet doit être ATTEIGNABLE par le compilateur
 
-`services/gateway/tsconfig.json` **exclut** `__tests__` et n'inclut pas
-`src/socketio/**` : les fichiers y sont typés uniquement par ATTEIGNABILITÉ
-depuis `server.ts`. Un cliquet de TYPE posé dans un fichier que personne
-n'importe n'est jamais lu — donc jamais rouge. `ServerEmitRatchet` vit donc dans
-`serverEmit.ts` lui-même, en assertions d'assignabilité (`Assert<T extends true>`),
-sans une ligne exécutable.
+`services/gateway/tsconfig.json` **exclut** `__tests__`. Un cliquet de TYPE posé
+dans un fichier que personne n'importe n'est jamais lu — donc jamais rouge.
+`ServerEmitRatchet` vit donc dans `serverEmit.ts` lui-même, en assertions
+d'assignabilité (`Assert<T extends true>`), sans une ligne exécutable.
 
-**Et ce qui rend un cliquet de type rouge EN CI est `ts-jest`, pas
-`tsc --noEmit`.** Mesuré : l'étape « Type-check » de `.github/workflows/ci.yml`
-porte `continue-on-error: true` (comme « Lint »), donc un `tsc` rouge ne fait
-échouer aucun job. Ce qui bloque, c'est le job de TEST — `ts-jest` compile tout
-fichier de production que les suites atteignent par leurs imports, et le code
-d'erreur d'une assertion de type (`TS2344`) n'est pas dans son
-`diagnostics.ignoreCodes` (`[2307, 2322, 2339, 2345, 2740]`).
+**L'`include` couvre `src/**/*` depuis le cycle 105.** Il portait avant une
+ÉNUMÉRATION de dix-huit répertoires, qui ne nommait ni `adapters`, ni
+`migrations`, ni `validation`, et n'atteignait `socketio/` que par le graphe
+d'imports de `server.ts`. Six fichiers de production échappaient au compilateur ;
+deux étaient cassés. **Ne pas revenir à une liste tenue à la main** : elle est en
+retard par construction, et son retard ne ressemble pas à une erreur — il
+ressemble à des fichiers qui compilent. Vérifier plutôt que supposer :
+`tsc --listFiles` contre `find src -name '*.ts'`.
 
-> **Corollaire, et il vaut au-delà des cliquets : un fichier de production
-> qu'AUCUN test n'atteint n'a, en CI, aucune vérification de type du tout.**
-> Avant de compter sur un garde au TYPE, vérifier que le fichier qui le porte est
-> atteint depuis une suite — sinon poser le garde ailleurs, ou l'écrire en
-> témoin.
+**Ce qui rend un cliquet de type rouge EN CI, et c'est mesuré.** Deux mécanismes
+disjoints, savoir lequel s'applique :
 
-Noter aussi les codes IGNORÉS par `ts-jest` : `2322` et `2345` sont exactement
-ceux qu'un couple `(événement, charge)` dépareillé produit. Un TEST peut donc
-émettre un couple faux sans rougir — c'est sans conséquence (un double a le droit
-d'être permissif), mais cela veut dire qu'**un témoin ne peut pas servir de
-cliquet pour ces deux codes-là**. Seule la production les porte.
+- `ts-jest` compile tout fichier de production qu'une suite atteint par ses
+  imports, et `TS2344` — le code d'une assertion de type — n'est pas dans son
+  `diagnostics.ignoreCodes` (`[2307, 2322, 2339, 2345, 2740]`). C'est ce qui
+  garde `ServerEmitRatchet`.
+- L'étape « Type-check » de `.github/workflows/ci.yml` a porté
+  `continue-on-error: true` jusqu'au cycle 105, qui l'a SCINDÉE : les trois
+  packages TypeScript à zéro erreur (`shared`, `gateway`, `agent`) sont
+  désormais BLOQUANTS ; `apps/web`, qui en porte 1241, passe par un cliquet
+  chiffré (`scripts/check-type-debt.sh`).
+
+Noter les codes IGNORÉS par `ts-jest` : `2322` et `2345` sont exactement ceux
+qu'un couple `(événement, charge)` dépareillé produit. **Un témoin ne peut donc
+pas servir de cliquet pour ces deux-là** — et jusqu'au cycle 105 rien ne le
+pouvait, l'amnistie couvrant le seul outil qui les voit. C'est `tsc` bloquant qui
+les porte maintenant ; les retirer d'`ignoreCodes` reste inutile, un double de
+test ayant le droit d'être permissif.
 
 **Et un cliquet de type ne suffit pas** : une porte RELÂCHÉE et une porte
 CONTOURNÉE sont deux régressions distinctes, la seconde étant la plus probable —
