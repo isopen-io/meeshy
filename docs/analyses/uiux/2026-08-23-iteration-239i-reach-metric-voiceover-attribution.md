@@ -179,10 +179,9 @@ ce que VoiceOver entend change.
    `FeedCommentsSheet:2354`, `PostDetailView:1640 / 1770 / 2262`. Même défaut de
    chiffres que celui soldé ici, autre composant (boutons d'action, pas portée).
    Volontairement hors périmètre : élargir aurait mélangé deux familles.
-3. **`feed.post.reach` est devenue une clé orpheline** — plus aucun appelant Swift
-   depuis ce lot. Laissée au catalogue : le cliquet ne compte que les clés
-   RÉFÉRENCÉES depuis les sources, elle en sort donc d'elle-même, et retirer une
-   clé du catalogue est précisément ce qui a cassé `main` en 236i.
+3. ~~**`feed.post.reach` laissée au catalogue**~~ — **DÉCISION ERRONÉE, corrigée
+   dans ce même lot.** Voir « Le rouge qui m'a détrompé » ci-dessous : la clé est
+   retirée.
 4. **Trois fenêtres `prefix(1400)` subsistent** dans
    `ConversationDashboardViewAccessibilityTests` (`ArcGauge`, `periodPicker`,
    libellés de période). Même classe de fragilité que le `prefix(2600)` corrigé
@@ -257,3 +256,42 @@ mesures sont refaites et non reconduites :
 | Extracteur de littéraux | **14** `accessibilityValue` extraites |
 | Garde 238i (liste à 5 hôtes) | **0 contrevenant**, **5/5 hôtes** |
 | Les 9 fichiers de 239i après la fusion tierce | intacts (composant, 4 écrans, formatter, 2 suites, garde re-listée) |
+
+
+---
+
+## Le rouge qui m'a détrompé — `feed.post.reach`
+
+La première exécution réelle de la suite a rougi sur
+`LocalizationConsistencyTests.test_everyAppCatalogIdentifierKeyIsReferencedInCode` :
+
+```
+These app-catalog identifier keys are never referenced in code (dead keys):
+feed.post.reach
+```
+
+**J'avais explicitement décidé de laisser cette clé**, en écrivant que « le
+cliquet ne compte que les clés RÉFÉRENCÉES depuis les sources, elle en sort donc
+d'elle-même » et qu'« en retirer une du catalogue est ce qui a cassé `main` en
+236i ». Les deux moitiés du raisonnement étaient fausses ici :
+
+1. **Le cliquet n'est pas la seule garde.** J'avais vérifié
+   `test_untranslatedKeyBacklogDoesNotGrow` (qui, lui, ne compte bien que les
+   clés référencées) et parcouru `LocalizationCatalogGuardTests`. Mais la garde
+   qui compte est ailleurs, dans `LocalizationConsistencyTests`, et elle
+   applique la contrainte **inverse** : aucune clé du catalogue ne doit rester
+   sans appelant. Mon `grep` cherchait `orphan|unused.*key|cleUtilisee` — trois
+   formulations, aucune ne correspondant au nom anglais réel de la garde.
+2. **236i disait le contraire de ce que j'en ai tiré.** Là-bas, une clé avait été
+   retirée **alors qu'un site la référençait encore** — le défaut était le
+   RÉFÉRENCEMENT ORPHELIN, pas la suppression. Ici, plus rien ne la référence :
+   la retirer est exactement ce que le dépôt exige.
+
+Correctif : suppression chirurgicale de l'entrée (47 lignes, JSON revalidé, une
+seule clé retirée sur 3312 — les 3311 autres intactes au caractère près).
+
+**Leçon : « je n'ai pas trouvé de garde » n'est pas « il n'y a pas de garde ».**
+Un `grep` sur trois formulations devinées ne prouve rien ; ce qui l'aurait prouvé,
+c'est de lister les tests qui LISENT le catalogue. Et une leçon passée invoquée
+de mémoire doit être relue : celle de 236i disait l'inverse de l'usage que j'en
+ai fait.

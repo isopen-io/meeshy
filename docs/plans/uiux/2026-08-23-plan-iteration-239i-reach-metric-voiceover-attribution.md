@@ -58,7 +58,8 @@ Solder la suite **(c)** du pointeur 238i. Le pointeur annonçait un défaut i18n
 
 - Compteurs de like/commentaire à l'entier brut (4 sites) — même défaut de
   chiffres, **autre famille** de composants.
-- `feed.post.reach`, devenue orpheline : laissée au catalogue (le cliquet ne
-  compte que les clés référencées ; retirer une clé a cassé `main` en 236i).
+- ~~`feed.post.reach` laissée au catalogue~~ — **erreur, corrigée dans le lot** :
+  une garde distincte (`test_everyAppCatalogIdentifierKeyIsReferencedInCode`)
+  interdit les clés sans appelant. Entrée supprimée.
 - Les 3 `prefix(1400)` restants — ancrés sur des sites d'appel, pas sur des
   déclarations : la borne sémantique y demande un autre repère.
