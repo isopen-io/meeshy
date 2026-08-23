@@ -56,6 +56,7 @@ import { emitToConversationParticipants, participantUserRoomTargets } from '../e
 import {
   PREVIEW_PRISM_PARTICIPANT_SELECT,
   resolveLastMessagePreviewPrism,
+  toIsoOrNull,
   type PreviewPrismParticipant,
 } from '../utils/lastMessagePreviewPrism';
 import { validateMessageLength } from '../../config/message-limits';
@@ -1466,7 +1467,12 @@ export class MessageHandler {
           // silence (#3122). Le diagnostic à garder est celui de la signature
           // d'index, pas celui d'un `io` non typé.
           updatedBy: { id: senderUserId ?? message.senderId },
-          lastMessageAt: message.createdAt,
+          // Chaîne ISO, comme `updatedAt` deux lignes plus bas : c'est ce que
+          // les trois clients reçoivent de toute façon (l'encodeur par défaut
+          // de socket.io est `JSON.stringify`, qui rend exactement ceci), et le
+          // dire ici est ce qui rend le contrat vérifiable au lieu de laisser
+          // le type se décider chez l'encodeur.
+          lastMessageAt: toIsoOrNull(message.createdAt),
           lastMessageId: message.id,
           // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism` avec
           // le reste de la paire, sous le même plafond qu'elle.

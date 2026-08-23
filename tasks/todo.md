@@ -1232,3 +1232,57 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle105.md`
 - [ ] Suivi hérité — `ConversationUpdatedEventData` porte une signature d'index ;
       `lastMessagePreview` y voyage sans contrat.
 - [ ] Suivi hérité — **le miroir client→serveur n'est pas gouverné.**
+
+## Cycle 106 — retirer la carte ouverte ne ferme rien : c'est le SPREAD qui fait taire le compilateur
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle106.md`
+
+- [x] Part du suivi hérité (« `ConversationUpdatedEventData` porte une signature
+      d'index ») en **l'exécutant d'abord pour le mesurer** : retrait de
+      `readonly [key: string]: unknown` ⇒ **0 erreur** sur shared + passerelle.
+      La prescription héritée était INERTE.
+- [x] **D1 — une clé venue d'un SPREAD est invisible au contrôle des propriétés
+      excédentaires** (mesuré sous `--strict`). Les QUATRE émetteurs de
+      `conversation:updated` composent leur charge dans une variable avant de la
+      répandre : le contrôle n'avait jamais lieu. La signature d'index ne
+      supprimait qu'un contrôle que le spread supprimait déjà.
+- [x] **Ce qui SURVIT au spread** : champ requis ABSENT et champ déclaré de TYPE
+      FAUX, tous deux attrapés. **Le levier n'est donc pas de fermer la carte,
+      c'est de DÉCLARER les champs** — deux gestes qui se ressemblent et ne font
+      pas le même travail.
+- [x] **D2 — le contrat déclarait 7 champs, les clients en lisent 17.** Les
+      douze non déclarés (4 porteurs du groupe d'aperçu + 8 réglages métadonnées)
+      voyagent depuis toujours et iOS les décode tous. Déclarés TELS QU'ILS SONT
+      SERVIS (règle du cycle 94).
+- [x] **D3 — `lastMessageAt` était le seul horodatage du payload dont le type
+      était décidé par l'ENCODEUR** (objet `Date`, quand son jumeau `updatedAt`
+      est une chaîne ISO). Aucun octet ne change sur le fil — aucun parseur
+      socket.io personnalisé, `JSON.stringify(Date)` ≡ `toISOString()`. Ce que
+      ça coûtait : un témoin attestait une forme que personne ne reçoit, et il
+      est tombé au premier typage. Repli dans `toIsoOrNull`, une fois.
+- [x] **D4 — le suivi du cycle 104 bis se trompait sur les lecteurs de
+      `senderId`** : le web LE LIT (`neutralLastMessage`) et iOS LE DÉCODE. Ce
+      qui sauve le cas est l'étage d'après (aucun rendu n'en dépend).
+      « Personne ne le lit » ≠ « personne n'en tire de rendu ». Conclusion
+      inchangée, preuve refaite.
+- [x] **Cliquet = balayage, pas type** : le typage ne peut pas voir un champ
+      NOUVEAU non déclaré (spread). `conversation-updated-declared-fields.ts` lit
+      les champs déclarés À LA SOURCE du contrat et les confronte aux clés
+      réellement émises par les TROIS émetteurs.
+- [x] **ROUGE prouvé, et c'est l'argument du cycle** : sur la même mutation
+      (`probeUndeclaredField`), `tsc --noEmit` rend **0 erreur** pendant que le
+      balayage tombe **en nommant** le transport et le champ.
+- [x] Gates : `tsc` passerelle **0** · passerelle **836/836 suites,
+      19258/19258** · `packages/shared` **103/103, 2467/2467** · `apps/web`
+      **1241 avant / 1241 après**, mesuré des deux côtés au `git stash`.
+- [ ] Suivi — **`senderId` sous DEUX espaces d'ids** (`Participant.id` canonique,
+      `User.id` sur le chemin socket). Déclaré + averti ici ; l'unifier est un
+      changement de sémantique sur le chemin le plus chaud du service.
+- [ ] Suivi — les autres contrats à signature d'index (`LinkMessagePayload`,
+      `SocketIOMessage` à vérifier). Le balayage est écrit POUR
+      `conversation:updated`.
+- [ ] Suivi hérité — la charge REJOUÉE est AFFIRMÉE, pas PROUVÉE
+      (`QueuedMessagePayload.payload`). **Même famille que ce lot.**
+- [ ] Suivis hérités — `_seq` déclaré sur le seul `NotificationEventData` ;
+      `ReactionUpdateEvent` / `ReactionUpdateEventData` en double ; le miroir
+      client→serveur non gouverné.

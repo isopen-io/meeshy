@@ -16,6 +16,31 @@ import {
  * `MeeshySocketIOManager._broadcastNewMessage` pour l'envoi) de diverger — et
  * l'aperçu de redevenir dépendant du transport.
  */
+/**
+ * L'horodatage du groupe d'aperçu, sous la forme que le CONTRAT énonce :
+ * une chaîne ISO, comme `updatedAt` son jumeau dans le même payload.
+ *
+ * Les trois émetteurs passaient l'objet `Date` de Prisma. Sur le fil la
+ * différence ne se voyait pas — l'encodeur par défaut de socket.io est
+ * `JSON.stringify`, qui rend exactement `toISOString()` — mais `lastMessageAt`
+ * était alors le seul horodatage du payload dont le type était décidé par
+ * l'encodeur plutôt qu'énoncé, et tout témoin en cours de route voyait une
+ * `Date` là où les trois clients reçoivent une chaîne.
+ *
+ * Ici plutôt que trois fois : c'est le même groupe, et un troisième émetteur
+ * qui l'écrirait à la main rouvrirait l'écart que ce lot vient de fermer.
+ */
+export function toIsoOrNull(value: Date | string | null | undefined): string | null {
+  if (value == null) return null;
+  if (typeof value === 'string') return value;
+  const time = value.getTime();
+  // Une `Date` invalide rend `"Invalid Date"` à `toISOString()`… non : elle
+  // LÈVE. Un aperçu ne vaut pas de faire tomber une diffusion — le client
+  // traite l'absence d'horodatage comme « je ne compose rien », ce qui est
+  // exactement la bonne issue ici.
+  return Number.isNaN(time) ? null : value.toISOString();
+}
+
 export const PREVIEW_PRISM_PARTICIPANT_SELECT = {
   id: true,
   userId: true,
