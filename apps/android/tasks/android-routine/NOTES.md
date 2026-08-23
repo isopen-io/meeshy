@@ -5,6 +5,32 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-23 — SDK recipe THIRD mode: NEITHER dir alone works, BOTH `android-37` + `android-37.0` present does
+
+Slice `story-clip-transition-opacity`. On this image *both* single-dir recipes the earlier notes record
+FAILED identically with **`Failed to find target with hash string 'android-37'`**:
+- Pristine `android-37.0` alone (the "let AGP map compileSdk 37 → android-37.0" recipe) → hash error, and
+  the first `./gradlew` also printed `Installing Android SDK Platform 37.0` (AGP re-materialised it) yet
+  still failed — so that install line is NOT a reliable success signal.
+- The full four-edit copy→patch `android-37` alone (`source.properties` ApiLevel, `package.xml`
+  `<api-level>` + `path=`, `build.prop` `sdk_full` incl. `ro.system.build.version.sdk_full`) → same hash
+  error, NO "inconsistent location" line, descriptor demonstrably correct (`<api-level>37</api-level>`,
+  `<base-extension>true</base-extension>`, `path="platforms;android-37"`, `sdk_full=37`, and
+  `sdkmanager --list_installed` showing `platforms;android-37 | 2 | ... | platforms/android-37`).
+  Clearing `.gradle`/config-cache + `--stop` + `-Pandroid.builder.sdkDownload=false` did not help.
+
+**What worked: keep BOTH dirs.** After the copy→patch `android-37` was in place, `sdkmanager --channel=3
+"platforms;android-37.0"` to reinstall the pristine dir *alongside* it — so `platforms/` holds both
+`android-37` AND `android-37.0` — and `./gradlew` resolved on the next run (BUILD SUCCESSFUL, 973 tasks).
+```bash
+# after the four-edit copy→patch of android-37 (see entries below):
+sdkmanager --channel=3 "platforms;android-37.0"   # reinstall pristine ALONGSIDE the patched dir
+ls $ANDROID_SDK/platforms   # must list BOTH android-37 and android-37.0
+```
+**Net rule (updated): the recipe is image-dependent and now has THREE modes — pristine-only, patched-only,
+and both-together. Try pristine first (cheapest); if it hash-errors, add the four-edit copy→patch; if THAT
+still hash-errors, reinstall the pristine so both coexist. Read the first `./gradlew` outcome and escalate.**
+
 ## 2026-08-23 — SDK recipe flipped AGAIN: on THIS container the copy→patch `android-37` FAILS, pristine `android-37.0` WORKS (opposite of the previous entry)
 
 Slice `story-keyframe-interpolation`. The full four-edit copy→patch (`source.properties` ApiLevel,
