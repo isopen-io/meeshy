@@ -1232,3 +1232,56 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle105.md`
 - [ ] Suivi hérité — `ConversationUpdatedEventData` porte une signature d'index ;
       `lastMessagePreview` y voyage sans contrat.
 - [ ] Suivi hérité — **le miroir client→serveur n'est pas gouverné.**
+
+## Cycle 106 — la file rejoint le contrat : ce qu'on ENFILE est tenu à ce qu'on ÉMET
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle106.md`
+
+- [x] Instruit le suivi nommé DEUX fois (cycles 104 et 105) : « la charge REJOUÉE
+      n'est pas vérifiée contre la charge ÉMISE ». C'était le plus urgent des
+      quatre restants, pour une raison précise : **le seul témoin d'une
+      divergence entre l'émission directe et le rejeu est un destinataire qui
+      était hors ligne au mauvais moment** — c'est-à-dire personne.
+- [x] `socketio/queuedEventContract.ts` : **la** table `eventType` → événement
+      serveur (`DRAINED_EVENT`), et la charge qui s'en dérive
+      (`QueuedPayloadFor`, `QueuedEventVariant`).
+- [x] **Une chaîne de onze `if` n'est pas une table.** `_drainedEventName`
+      portait un repli final (`return MESSAGE_NEW`) : un `eventType` neuf s'y
+      serait rejoué sous le mauvais nom, sans bruit. `as const satisfies
+      Record<Union, …>` rend la couverture exhaustive au compilateur.
+- [x] **La corrélation devait remonter SEPT relais** — chacun redéclarait un
+      `eventType` en union ET un `payload: Record<string, unknown>`, donc deux
+      unions indépendantes de plus par étage. Le contrat se perdait AVANT
+      d'atteindre la file. Même leçon que le cycle 98, appliquée en amont :
+      gouverner une frontière ne sert à rien tant que ses relais ne la relaient
+      pas.
+- [x] 5 doubles casts de plus retirés (`editedPayload`, `updateEvent` ×3,
+      `translationData`).
+- [x] **Une erreur commise, mesurée, transformée en cliquet.** `'link-message'`
+      d'abord mappé vers `MESSAGE_NEW` : faux, la file stocke l'ENVELOPPE
+      `{ message }`, pas le message nu. Le typage aurait été un cran trop bas, et
+      un appelant enfilant le message nu aurait compilé pour produire un rejeu
+      NON ROUTABLE. Une erreur commise en écrivant un cliquet est le meilleur cas
+      de test qu'il aura jamais.
+- [x] **`satisfies` garde la TOTALITÉ, jamais la JUSTESSE** : 5 assertions
+      d'assignabilité ancrent les correspondances dont une inversion serait
+      SILENCIEUSE (les deux réactions, `new`/`edited`, l'enveloppe du lien).
+- [x] **Aucun écrivain n'enfilait une charge divergente**, et aucune fixture
+      n'est tombée — sur un lot qui resserre un type, c'est la mesure elle-même.
+      Piège armé, pas panne : 3e fois de suite (104, 105, 106), et le dire chaque
+      fois est ce qui rendra crédible le cycle où ce ne sera pas le cas.
+- [x] RED prouvé sur 3 mutations : réactions croisées (2 assertions), link-message
+      repointé (1 assertion), `eventType` retiré (exhaustivité `satisfies`).
+- [x] Gates : `tsc` **0 erreur** · **836/836 suites, 19253/19253 témoins**.
+- [ ] Suivi — la LECTURE depuis Redis reste non validée à l'exécution. Le typage
+      borne ce qu'on ÉCRIT, pas ce qu'on RELIT. Un `zod.parse` par `eventType` au
+      drain la transformerait en vérification, mais coûte une validation par
+      entrée rejouée sur le chemin de reconnexion : décision de PERFORMANCE avant
+      d'être une décision de typage, et elle demande une mesure.
+- [ ] Suivi — `_seq` n'est déclaré que sur `NotificationEventData` (cycle 105).
+- [ ] Suivi hérité — `ReactionUpdateEvent` / `ReactionUpdateEventData`.
+- [ ] Suivi hérité — `ConversationUpdatedEventData` et son index signature.
+- [ ] **Suivi — le miroir client→serveur, reporté TROIS cycles, est désormais le
+      plus gros restant.** `ClientToServerEvents` n'a aucun équivalent de
+      `serverEmit.ts` : `socket.on(...)` reste libre de déclarer la forme qu'il
+      veut de ce qu'il REÇOIT. C'est la moitié HOSTILE du contrat.

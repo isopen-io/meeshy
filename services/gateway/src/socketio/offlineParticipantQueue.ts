@@ -6,6 +6,7 @@ import {
 } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import type { QueuedEventVariant } from './queuedEventContract';
 
 const logger = enhancedLogger.child({ module: 'offlineParticipantQueue' });
 
@@ -38,7 +39,14 @@ interface OfflineQueueParticipant {
   } | null;
 }
 
-export interface OfflineParticipantQueueParams {
+/**
+ * Le couple `(eventType, payload)` est désormais CORRÉLÉ (cycle 106) : il vient
+ * de `QueuedEventVariant`, dérivé de la table `DRAINED_EVENT` et donc du
+ * contrat de fil. Un transport ne peut plus diffuser une forme et en enfiler
+ * une autre — la divergence n'aurait eu pour témoin qu'un destinataire hors
+ * ligne au mauvais moment.
+ */
+export type OfflineParticipantQueueParams = QueuedEventVariant & {
   conversationId: string;
   /**
    * Who caused the event, in whichever identity the calling transport holds.
@@ -50,9 +58,7 @@ export interface OfflineParticipantQueueParams {
    */
   actorParticipantId?: string | null;
   actorUserId?: string | null;
-  eventType: QueuedMessagePayload['eventType'];
   messageId: string;
-  payload: Record<string, unknown>;
   /**
    * Overrides the (messageId, eventType) dedup identity `RedisDeliveryQueue`
    * uses by default. Required whenever more than one distinct occurrence of the

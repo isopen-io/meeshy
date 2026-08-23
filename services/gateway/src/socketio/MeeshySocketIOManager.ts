@@ -90,6 +90,8 @@ import { linkMessageEmissions, type SocketEmission } from './linkMessageEmission
 import { emitServerEvent, type ServerEventName } from './serverEmit';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
+import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
+import { drainedEventName } from './queuedEventContract';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -106,21 +108,6 @@ const logger = enhancedLogger.child({ module: 'SocketIOManager' });
  */
 const BRIDGE_SNAPSHOT_LIMIT = 30;
 
-// Maps a queued entry's `eventType` (absent = legacy 'new') to the Socket.IO
-// event replayed on reconnect for that offline-queue entry.
-function _drainedEventName(eventType: QueuedMessagePayload['eventType']): ServerEventName {
-  if (eventType === 'edited') return SERVER_EVENTS.MESSAGE_EDITED;
-  if (eventType === 'deleted') return SERVER_EVENTS.MESSAGE_DELETED;
-  if (eventType === 'reaction-added') return SERVER_EVENTS.REACTION_ADDED;
-  if (eventType === 'reaction-removed') return SERVER_EVENTS.REACTION_REMOVED;
-  if (eventType === 'attachment-reaction-added') return SERVER_EVENTS.ATTACHMENT_REACTION_ADDED;
-  if (eventType === 'attachment-reaction-removed') return SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
-  if (eventType === 'attachment-updated') return SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED;
-  if (eventType === 'translation') return SERVER_EVENTS.MESSAGE_TRANSLATION;
-  if (eventType === 'pinned') return SERVER_EVENTS.MESSAGE_PINNED;
-  if (eventType === 'unpinned') return SERVER_EVENTS.MESSAGE_UNPINNED;
-  return SERVER_EVENTS.MESSAGE_NEW;
-}
 
 // What one queued entry actually puts on the wire. Every eventType replays as a
 // single event EXCEPT 'link-message', which owes the same two events the live
@@ -130,15 +117,22 @@ function _drainedEventName(eventType: QueuedMessagePayload['eventType']): Server
 //
 // La charge sort de Redis en `Record<string, unknown>` : c'est une frontière de
 // DÉSÉRIALISATION, et le rattachement au contrat s'y affirme, comme dans
-// `linkMessageEmissions`. Ce que le typage garde ici, c'est le NOM de
-// l'événement (`_drainedEventName` rend un `ServerEventName`, plus un `string`) ;
-// ce qu'il ne garde pas encore, c'est que la charge REJOUÉE ait la même forme que
-// la charge ÉMISE en direct — cela demanderait d'indexer
-// `QueuedMessagePayload.payload` par `eventType`, et c'est un lot en soi.
+// `linkMessageEmissions`.
+//
+// Ce que le cycle 106 a changé, c'est l'autre bout. L'ENFILAGE est désormais
+// vérifié : `queuedEventContract.ts` dérive de `DRAINED_EVENT` la charge que
+// chaque `eventType` doit porter, et les huit écrivains y sont tenus. Un
+// transport ne peut donc plus diffuser une forme et en enfiler une autre — la
+// divergence n'aurait eu pour témoin qu'un destinataire hors ligne au mauvais
+// moment, c'est-à-dire personne.
+//
+// Ce qui reste une AFFIRMATION, et le restera sans validation à l'exécution :
+// que l'octet relu de Redis soit bien ce qu'on y a écrit. Le typage borne ce
+// qu'on ÉCRIT, pas ce qu'on RELIT.
 function _drainedEmissions(entry: QueuedMessagePayload): SocketEmission[] {
   if (entry.eventType === 'link-message') return linkMessageEmissions(entry.payload);
   return [
-    { event: _drainedEventName(entry.eventType), payload: entry.payload } as SocketEmission,
+    { event: drainedEventName(entry.eventType), payload: entry.payload } as SocketEmission,
   ];
 }
 
@@ -675,7 +669,7 @@ export class MeeshySocketIOManager {
   ): Promise<void> {
     // Delivery receipts only make sense for entries that announce a message
     // ARRIVING — a mutation entry (edit, delete, reaction, pin, attachment
-    // enrichment, translation) replays its own event (see `_drainedEventName`)
+    // enrichment, translation) replays its own event (see `drainedEventName`)
     // but was never awaiting a "delivered" checkmark in the first place.
     //
     // Le prédicat est NOMMÉ et vit avec le vocabulaire (`queuedMessageArrival`)
@@ -819,10 +813,8 @@ export class MeeshySocketIOManager {
   async enqueueOfflineMessageMutation(params: {
     conversationId: string;
     actorUserId: string | null | undefined;
-    eventType: 'pinned' | 'unpinned' | 'edited' | 'deleted';
     messageId: string;
-    payload: Record<string, unknown>;
-  }): Promise<void> {
+  } & QueuedVariantFor<'pinned' | 'unpinned' | 'edited' | 'deleted'>): Promise<void> {
     await this._enqueueForOfflineParticipants(params);
   }
 
@@ -851,7 +843,7 @@ export class MeeshySocketIOManager {
     conversationId: string;
     actorParticipantId: string | null | undefined;
     messageId: string;
-    payload: Record<string, unknown>;
+    payload: QueuedPayloadFor<'link-message'>;
   }): Promise<void> {
     await this._enqueueForOfflineParticipants({ ...params, eventType: 'link-message' });
   }
@@ -1186,7 +1178,7 @@ export class MeeshySocketIOManager {
   /**
    * Remet les pastilles d'aplomb à la reconnexion — le SEUL signal qui le
    * fasse. La file hors-ligne rejoue l'aperçu, le rang et la promotion en tête
-   * de chaque ligne (`_drainedEventName` ne mappe que des événements de
+   * de chaque ligne (`drainedEventName` ne mappe que des événements de
    * message) ; le COMPTEUR, lui, ne se calcule que côté serveur, depuis les
    * curseurs de lecture.
    *
@@ -1964,7 +1956,7 @@ export class MeeshySocketIOManager {
           conversationId: normalizedId,
           eventType: 'translation',
           messageId: result.messageId,
-          payload: translationData as unknown as Record<string, unknown>,
+          payload: translationData,
           dedupKey: `${result.messageId}:${targetLanguage}`,
           restrictToReadersOfLanguage: targetLanguage,
         });
@@ -3037,7 +3029,7 @@ export class MeeshySocketIOManager {
         actorUserId: null,
         eventType: 'edited',
         messageId: message.id,
-        payload: editedPayload as unknown as Record<string, unknown>,
+        payload: editedPayload,
       });
     } catch (error) {
       logger.error('broadcast message:edited (call) failed', error);
@@ -3385,7 +3377,7 @@ export class MeeshySocketIOManager {
           eventType: 'reaction-added',
           messageId: reaction.targetMessageId,
           emoji: reaction.emoji,
-          payload: updateEvent as unknown as Record<string, unknown>,
+          payload: updateEvent,
         });
 
         const authorParticipant = message.senderId
