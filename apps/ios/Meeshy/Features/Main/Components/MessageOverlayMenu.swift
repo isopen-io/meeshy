@@ -10,12 +10,16 @@ struct MessageOverlayMenu: View {
     let message: Message
     let contactColor: String
     let messageBubbleFrame: CGRect
-    /// Focal : les PIXELS de la cellule vivante, capturés au moment du geste
-    /// (`MessageListViewController.focalOverlayPreview`). Quand présent,
-    /// l'aperçu élevé rend cette image au lieu de reconstruire un
-    /// `ThemedMessageBubble` — aucun second chemin de rendu, toute évolution
-    /// de `FocalRow` se propage ici par construction. `nil` en mode bulles.
-    var focalPreviewImage: UIImage? = nil
+    // `focalPreviewImage` a vécu ici : en mode Focal, l'aperçu élevé rendait
+    // les PIXELS de la cellule vivante, capturés au geste. L'intention était
+    // bonne — « aucun second chemin de rendu » — mais le résultat ne l'était
+    // pas : la cellule Focal fait tenir l'identité et la barre de méta À CHEVAL
+    // sur son cadre, si bien que la capture, bornée aux `bounds` de la cellule,
+    // les tranchait en deux. Directive produit 2026-08-23 : « le mode focal,
+    // lorsqu'on y fait long-press, doit afficher le message NORMAL ; ici on a
+    // les éléments coupés, ce n'est pas élégant. » L'aperçu élevé rend donc le
+    // même `ThemedMessageBubble` que partout ailleurs — un message entier, à
+    // sa taille naturelle, quel que soit le mode de lecture du fil.
     @Binding var isPresented: Bool
     var canDelete: Bool = false
     var canEdit: Bool = false
@@ -313,6 +317,35 @@ struct MessageOverlayMenu: View {
                         .offset(y: isVisible ? 0 : 18)
                     }
 
+                    if !useSourceFrame {
+                        // Legacy : la LISTE D'ACTIONS vit elle aussi dans le
+                        // VStack, sous la barre d'emojis.
+                        //
+                        // Elle n'existait que dans la branche `useSourceFrame`
+                        // jusqu'au 2026-08-23 : ce chemin n'était plus emprunté
+                        // que par des call sites sans frame source, et personne
+                        // n'avait remarqué qu'il ne présentait plus AUCUNE
+                        // action. Le retrait de la capture Focal (voir
+                        // `focalPreviewImage` plus haut) l'a rendu de nouveau
+                        // vivant — un appui long en mode Focal/Script y passe —
+                        // et le trou est devenu visible immédiatement : bulle,
+                        // emojis, puis rien.
+                        //
+                        // Positionnée par le FLUX, jamais par `.position(…)` :
+                        // toute la géométrie de l'autre branche (`nlMenuY`,
+                        // `nlBubbleMidY`…) se calcule depuis `bubbleRect`, qui
+                        // vaut précisément `.zero` ici.
+                        MessageActionsMenu(
+                            actions: primaryActions,
+                            accentHex: contactColor,
+                            onSelect: { handlePrimaryAction($0) }
+                        )
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 12)
+                        .opacity(isVisible ? 1 : 0)
+                        .scaleEffect(isVisible ? 1.0 : 0.85, anchor: .top)
+                    }
+
                     // Panneau grille retiré (native-lean) — les détails
                     // passent désormais par la feuille « Plus… » (MessageMoreSheet).
                 }
@@ -356,39 +389,32 @@ struct MessageOverlayMenu: View {
                     // visible — la position du cluster (action bar / emoji
                     // bar) reste cohérente.
                     Group {
-                        if let focalPreviewImage {
-                            // Focal : l'aperçu EST la cellule vivante — ses
-                            // pixels, capturés au geste. Pas de second rendu.
-                            Image(uiImage: focalPreviewImage)
-                                .resizable()
-                        } else {
-                            ThemedMessageBubble(
-                                message: message,
-                                contactColor: contactColor,
-                                isDirect: isDirect,
-                                isDark: isDark,
-                                transcription: transcription,
-                                translatedAudios: translatedAudios,
-                                textTranslations: textTranslations,
-                                preferredTranslation: preferredTranslation,
-                                showAvatar: !isDirect,
-                                isLastInGroup: true,
-                                isLastReceivedMessage: true,
-                                isLastSentMessage: true,
-                                mentionDisplayNames: mentionDisplayNames,
-                                currentUserId: currentUserId,
-                                userLanguages: (
-                                    regional: userRegionalLanguage,
-                                    custom: userCustomDestinationLanguage
-                                )
+                        ThemedMessageBubble(
+                            message: message,
+                            contactColor: contactColor,
+                            isDirect: isDirect,
+                            isDark: isDark,
+                            transcription: transcription,
+                            translatedAudios: translatedAudios,
+                            textTranslations: textTranslations,
+                            preferredTranslation: preferredTranslation,
+                            showAvatar: !isDirect,
+                            isLastInGroup: true,
+                            isLastReceivedMessage: true,
+                            isLastSentMessage: true,
+                            mentionDisplayNames: mentionDisplayNames,
+                            currentUserId: currentUserId,
+                            userLanguages: (
+                                regional: userRegionalLanguage,
+                                custom: userCustomDestinationLanguage
                             )
-                            // Gate Equatable (H3) : pendant le drag 60 fps
-                            // (`clusterDragOffset`) le body du GeometryReader se
-                            // ré-évalue ; sans ce gate, `ThemedMessageBubble` se
-                            // re-rendrait à chaque frame. Ses inputs sont stables
-                            // pendant le drag → EquatableView saute son body.
-                            .equatable()
-                        }
+                        )
+                        // Gate Equatable (H3) : pendant le drag 60 fps
+                        // (`clusterDragOffset`) le body du GeometryReader se
+                        // ré-évalue ; sans ce gate, `ThemedMessageBubble` se
+                        // re-rendrait à chaque frame. Ses inputs sont stables
+                        // pendant le drag → EquatableView saute son body.
+                        .equatable()
                     }
                     .frame(width: bubbleRect.width, height: bubbleRect.height, alignment: .leading)
                     .scaleEffect(nlFitScale, anchor: .center)

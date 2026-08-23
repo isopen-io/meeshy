@@ -1090,6 +1090,51 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertNil(postService.lastUpdateVisibilityUserIds)
     }
 
+    // MARK: - createPost() — audience nommée
+
+    /// Une publication peut NAÎTRE avec une audience nommée. `EXCEPT`/`ONLY`
+    /// étaient offertes au composer story et hors d'atteinte du composer post :
+    /// `CreatePostRequest` portait le champ, aucune surcharge de
+    /// `PostService.create` ne le remplissait.
+    ///
+    /// Le post porte un média : un post TEXTE seul ne passe pas par le service
+    /// mais par la file durable (`isDurableTextOnly`) — c'est l'objet du test
+    /// suivant, et prendre ce chemin ici rendrait le mock muet.
+    func test_createPost_carriesANamedAudience_toTheService() async {
+        let (sut, _, _, postService) = makeSUT()
+
+        await sut.createPost(content: "Salut", visibility: "ONLY", visibilityUserIds: ["u1", "u2"], mediaIds: ["m1"])
+
+        XCTAssertEqual(postService.lastCreateVisibility, "ONLY")
+        XCTAssertEqual(postService.lastCreateVisibilityUserIds, ["u1", "u2"])
+    }
+
+    /// Le chemin DURABLE — celui de l'immense majorité des posts, le texte seul
+    /// — doit porter la même liste : sans elle, un post à audience nommée écrit
+    /// hors ligne partirait au flush sans ses destinataires et le gateway le
+    /// refuserait (`CreatePostSchema`).
+    func test_createPost_textOnly_persistsTheNamedAudience_inTheDurableQueue() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.createPost(content: "Salut", visibility: "EXCEPT", visibilityUserIds: ["u3"])
+
+        let payload = queue.lastPayload as? CreatePostPayload
+        XCTAssertEqual(payload?.visibility, "EXCEPT")
+        XCTAssertEqual(payload?.visibilityUserIds, ["u3"])
+    }
+
+    /// Une publication ordinaire n'envoie AUCUNE liste — `nil`, jamais `[]` :
+    /// le payload porte un verdict, et « je n'en parle pas » n'est pas
+    /// « efface » (même règle que `mentions`).
+    func test_createPost_withoutANamedAudience_sendsNoList() async {
+        let (sut, _, _, postService) = makeSUT()
+
+        await sut.createPost(content: "Salut", visibility: "PUBLIC", mediaIds: ["m1"])
+
+        XCTAssertNil(postService.lastCreateVisibilityUserIds)
+    }
+
     // MARK: - EditPostSheet — règle d'audience (pure)
 
     func test_editPostAudience_reportsUnchangedVisibilityAsAbsent() {

@@ -122,4 +122,136 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "Le host doit lire `routesToLegacy` — sans quoi la table de C1 ne gouverne rien"
         )
     }
+
+    // MARK: - C3 — le host rend au cover ce que le cover donne
+
+    /// **Le piège le plus cher de ce lot.** `StoryComposerView.init` donne à
+    /// `initialVisibility` une valeur PAR DÉFAUT (`PostVisibility.friends`) :
+    /// monter l'atelier sans le paramètre ne produit AUCUNE erreur de
+    /// compilation, et la mémoire d'audience — la loi 10 — disparaît en
+    /// silence. Le host la reçoit donc de sa porte et la transmet.
+    ///
+    /// Le jumeau de cette garde vit dans `AppInitWireupTests` : il vérifie que
+    /// TOUT site de création passe le paramètre, ici comme dans le cover.
+    func test_host_handsTheMemorisedAudienceToTheWorkshop() throws {
+        let code = try hostCode()
+        XCTAssertTrue(
+            code.contains("initialVisibility: initialVisibility"),
+            "Le host doit passer `initialVisibility` à l'atelier — le défaut du SDK avalerait la mémoire d'audience sans un mot"
+        )
+        XCTAssertTrue(
+            code.contains("let initialVisibility: String"),
+            "L'audience d'ouverture est un paramètre OBLIGATOIRE du host : un défaut ici recréerait le même silence un cran plus haut"
+        )
+    }
+
+    /// Sans adoption, le composer s'autosauvegarde sous un id NEUF et le
+    /// brouillon repris reste intact à côté, en double. L'adoption doit se
+    /// faire à la construction du ViewModel : l'atelier décide dès son premier
+    /// passage s'il propose une reprise.
+    func test_host_adoptsThePendingDraft_atViewModelConstruction() throws {
+        let code = try hostCode()
+        XCTAssertTrue(
+            code.contains("adoptDraft(id:"),
+            "Le host doit adopter le brouillon désigné par la porte — sinon la reprise se dédouble"
+        )
+        guard let adoption = code.range(of: "adoptDraft(id:"),
+              let stateObject = code.range(of: "StateObject(wrappedValue:") else {
+            return XCTFail("L'adoption et la construction du @StateObject doivent être nommées dans le host")
+        }
+        XCTAssertTrue(
+            adoption.lowerBound < stateObject.lowerBound,
+            "L'adoption précède la construction du @StateObject — adopter après coup arrive trop tard pour l'offre de reprise"
+        )
+    }
+
+    /// Les trois fournisseurs d'environnement restent app-side (MapKit,
+    /// AVCaptureSession, PhotoKit). Un site de présentation qui les oublie fait
+    /// disparaître la pastille « Lieu » et les amorces de page blanche — sans
+    /// le moindre signal. `AppInitWireupTests` compte l'égalité
+    /// injections == présentations fichier par fichier ; cette garde-ci nomme
+    /// les trois pour que l'échec soit lisible depuis la suite du composer.
+    func test_host_injectsTheThreeAppSideProviders() throws {
+        let code = try hostCode()
+        for provider in [".storyLocationPickerProvided()",
+                         ".storyCameraCaptureProvided()",
+                         ".storyRecentCameraRollProvided()"] {
+            XCTAssertTrue(code.contains(provider), "Le host doit injecter \(provider) sur l'atelier qu'il monte")
+        }
+    }
+
+    // MARK: - L'éventail (loi 4)
+
+    /// Garde NÉGATIVE, et son sens est l'inverse de ce qu'on attendrait.
+    ///
+    /// `ComposerFormatFan` est écrit et testé, mais le host ne le monte PAS,
+    /// et ce n'est pas un oubli : l'offre ne varie jamais à l'exécution
+    /// (`ComposerReelGate.compositionQualifiesAsReel` est encore constante) et
+    /// la sélection n'est lue par personne — changer de chip ne changerait ni
+    /// la surface montée ni le type publié. Un sélecteur sans conséquence est
+    /// l'UI morte que ce chantier retire partout ailleurs ; l'y réintroduire
+    /// parce que le composant existe serait la reproduire.
+    ///
+    /// Elle rougit à la RÉINTRODUCTION du montage. Sa condition de LEVÉE est
+    /// écrite ici pour que la prochaine session n'ait pas à la deviner : V1
+    /// (le gate réel nourrit l'éventail) ET V2/V3 (changer de format change la
+    /// surface). Quand les deux tiennent, ce test se RETOURNE — il ne se
+    /// supprime pas.
+    func test_host_doesNotMountTheFan_whileTheOfferCannotVary() throws {
+        let code = try hostCode()
+        XCTAssertFalse(
+            code.contains("ComposerFormatFan("),
+            "L'éventail ne se monte pas tant qu'il n'a aucune conséquence — cf. V1 + V2/V3"
+        )
+        XCTAssertFalse(
+            code.contains("ComposerFormatFanPolicy."),
+            "… et sa politique de sélection n'a pas de lecteur non plus tant qu'il n'est pas monté"
+        )
+    }
+
+    // MARK: - Gardes NÉGATIVES : un seul chemin de publication, un seul gate réel
+
+    /// Le host ne publie pas. `publishAllSlides()` du SDK flush la timeline
+    /// ouverte, rabat les effets du canvas courant sur la diapositive
+    /// (`handoffSlides`) et lit la visibilité tenue par l'atelier — tout cela
+    /// dans l'état privé de `StoryComposerView`. Reconstituer ce paquet
+    /// app-side enverrait un document que personne n'a rabattu, et doublerait
+    /// une file que V7 doit unifier.
+    ///
+    /// Garde NÉGATIVE : elle rougit à la RÉINTRODUCTION de l'un de ces appels
+    /// dans le host, pas à la disparition d'un fichier —
+    /// `test_theGuardsReadANonEmptySource` en répond.
+    func test_host_opensNoSecondPublicationPath() throws {
+        let code = try hostCode()
+        for forbidden in ["onPublishAllInBackground(",
+                         "publishStoryInBackground(",
+                         "updateStoryInBackground(",
+                         "PostService",
+                         "StoryPublishService"] {
+            XCTAssertFalse(
+                code.contains(forbidden),
+                "Le host appelle « \(forbidden) » : c'est un SECOND chemin de publication. Le seul publieur est la barre du SDK."
+            )
+        }
+    }
+
+    /// Le gate du réel était écrit DEUX fois en dur (`compositionQualifiesAsReel: false`,
+    /// aux deux seuls sites de production qui construisent un profil). V1 doit
+    /// avoir UN endroit à brancher : deux littéraux jumeaux se corrigent à
+    /// moitié, et le plateau offrirait alors un réel que le routage ignore.
+    func test_host_hasASingleReelGate_notTwinHardcodedLiterals() throws {
+        let code = try hostCode()
+        XCTAssertEqual(
+            occurrences(of: "compositionQualifiesAsReel: false", in: code), 0,
+            "Le gate du réel ne se réécrit pas en dur : il passe par `ComposerReelGate`, le seul point que V1 aura à brancher"
+        )
+        XCTAssertGreaterThanOrEqual(
+            occurrences(of: "ComposerReelGate.compositionQualifiesAsReel", in: code), 2,
+            "Les deux constructions de profil du host lisent le MÊME gate"
+        )
+    }
+
+    private func occurrences(of needle: String, in haystack: String) -> Int {
+        haystack.components(separatedBy: needle).count - 1
+    }
 }

@@ -41,9 +41,20 @@ export interface CreatePostRequest {
   readonly audioDuration?: number;
   readonly originalLanguage?: string;
   readonly mediaIds?: string[];
+  /**
+   * Alt text per media (accessibility, `PostMedia.alt`) — key is one of the
+   * ids in `mediaIds` above; the gateway ignores any key absent from it.
+   */
+  readonly mediaAlt?: Record<string, string>;
   readonly mobileTranscription?: MobileTranscription;
   /** Declared, non-INLINE references only — absent (not `[]`) when not touched (tri-state). */
   readonly mentions?: readonly PostReferenceInput[];
+  /**
+   * Author opt-in: extract the soundtrack of the post's VIDEOS into the
+   * sound library (credited to the author). Governs video demuxing only —
+   * audio-only media always feeds the library regardless of this flag.
+   */
+  readonly allowSoundExtraction?: boolean;
 }
 
 export interface UpdatePostRequest {
@@ -54,6 +65,14 @@ export interface UpdatePostRequest {
   readonly moodEmoji?: string;
   /** Ids of attached media (PostMedia) to detach during the edit. */
   readonly removeMediaIds?: readonly string[];
+  /** Ids of freshly uploaded media (postId=null) to attach during the edit. */
+  readonly mediaIds?: readonly string[];
+  /**
+   * Alt text per media — same contract as `CreatePostRequest.mediaAlt`: key
+   * is one of the ids in `mediaIds` above, ignored otherwise. Media already
+   * attached to the post cannot be re-tagged through this channel.
+   */
+  readonly mediaAlt?: Record<string, string>;
   /**
    * Declared, non-INLINE references only — TRI-STATE, exactly like
    * `CreatePostRequest.mentions` above: absent preserves the declared set,
@@ -63,6 +82,8 @@ export interface UpdatePostRequest {
    * unrelated edit (caption tweak, visibility change, media removal).
    */
   readonly mentions?: readonly PostReferenceInput[];
+  /** Opt-in extraction of the video soundtrack — `undefined` = unchanged. */
+  readonly allowSoundExtraction?: boolean;
 }
 
 export interface RepostRequest {

@@ -167,7 +167,7 @@ public class ThemeManager: ObservableObject, @unchecked Sendable {
     // MARK: - Background Colors
 
     public var backgroundPrimary: Color {
-        mode.isDark ? Color(hex: "09090B") : Color(hex: "FFFFFF")
+        MeeshyColors.backgroundPrimary(isDark: mode.isDark)
     }
 
     public var backgroundSecondary: Color {
