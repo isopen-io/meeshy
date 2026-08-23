@@ -1577,6 +1577,91 @@ Trois règles en sont sorties :
 > qui enfilait le message nu aurait compilé pour produire un rejeu non routable.
 > L'assertion qui gèle ce point est née de l'erreur elle-même.
 
+### Une clé venue d'un SPREAD est invisible au contrôle des propriétés excédentaires
+
+Corollaire direct du paragraphe précédent, et il change ce qu'il faut faire d'un
+contrat trop libre. Mesuré sous `--strict` (cycle 106) :
+
+```ts
+type Target = { readonly a: string; readonly b?: number };
+declare function take(t: Target): void;
+
+take({ a: 'x', zzz: 1 });        // TS2353 — attrapé
+const built = { a: 'x', zzz: 1 };
+take({ ...built });              // SILENCE
+take({ ...built, www: 2 });      // TS2353 sur `www` SEULEMENT
+take(built);                     // SILENCE
+```
+
+Or **la charge d'un événement se compose presque toujours dans une variable**
+(`updatePayload`, `basePayload`, `changedFields`) avant d'être répandue dans
+l'appel à `emit`. Le contrôle des propriétés excédentaires n'a donc jamais lieu
+sur ces sites-là.
+
+> **Conséquence contre-intuitive : retirer un `readonly [key: string]: unknown`
+> d'un contrat d'événement ne fait tomber AUCUNE compilation.** Mesuré sur
+> `ConversationUpdatedEventData` — 0 erreur sur `packages/shared` +
+> `services/gateway`. La signature d'index ne supprimait qu'un contrôle que le
+> spread supprimait déjà. Elle a l'air d'être la cause parce qu'elle est la
+> seule des deux qui soit ÉCRITE ; le spread, lui, est la forme normale du code.
+
+**Ce qui SURVIT au spread**, en revanche, et c'est ce sur quoi il faut s'appuyer :
+
+| à travers un spread | verdict |
+|---|---|
+| champ NON déclaré (excédent) | **silence** |
+| champ requis ABSENT | TS2345 — attrapé |
+| champ déclaré de TYPE FAUX | TS2345 — attrapé |
+
+> **Le levier n'est donc pas de fermer la carte, c'est de DÉCLARER les champs.**
+> Les deux gestes se ressemblent, portent sur la même interface, et ne font pas
+> le même travail : le premier est cosmétique, le second est le seul qui vérifie
+> quoi que ce soit. Devant un suivi qui prescrit « retirer la signature
+> d'index », l'exécuter D'ABORD pour mesurer ce qu'il produit — un lot vert,
+> propre et sans effet est le résultat par défaut.
+
+**Et le trou que le typage ne peut pas boucher** : un champ NOUVEAU, ajouté à un
+émetteur et à aucun contrat, redevient invisible au premier spread. C'est
+exactement ce qui était arrivé à `location` (#3122), omise par le seul chemin
+REST/ZMQ pendant que les deux autres la portaient. Ce trou-là se ferme par un
+BALAYAGE, jamais par un type — qui lit le jeu de champs déclarés **à la source
+du contrat** (jamais une seconde liste écrite dans le témoin, qui dériverait) et
+le confronte aux clés que les émetteurs émettent réellement. Référence :
+`socketio/__tests__/conversation-updated-declared-fields.ts`.
+
+La double mesure à reproduire quand on pose un tel cliquet : sur la même
+mutation, `tsc --noEmit` rend **0 erreur** pendant que le balayage tombe en
+NOMMANT le transport et le champ. Les deux côte à côte sont ce qui prouve que le
+balayage n'est pas redondant avec le compilateur.
+
+### Un contrat peut déclarer la DÉCORATION et taire le SUJET
+
+`ConversationUpdatedEventData` déclarait sept champs ; les trois clients en
+lisent dix-sept (iOS les décode tous). Les non déclarés n'étaient pas des
+détails : c'étaient les champs **PORTEURS** — l'identité du dernier message, son
+horodatage, son texte, son auteur — pendant que les déclarés étaient ceux qui les
+DÉCORENT (la carte du Prisme, la langue d'origine, le drapeau de recalcul).
+
+Le biais est mécanique et vaut d'être connu : **on déclare ce qu'on vient
+d'ajouter, pas ce qui était déjà là.** Chaque champ décoratif a été déclaré par
+le lot qui l'a introduit ; les porteurs, présents depuis l'origine, n'ont jamais
+eu de lot à eux. Devant un contrat partiellement déclaré, la question n'est donc
+pas « que manque-t-il ? » mais **« les champs déclarés sont-ils les plus
+importants, ou seulement les plus récents ? »**
+
+### Un horodatage dont le type n'est pas énoncé est décidé par l'ENCODEUR
+
+`lastMessageAt` partait en objet `Date` sur les trois émetteurs, quand
+`updatedAt` — son jumeau, dans le même payload — est une chaîne ISO. Sur le fil
+la différence ne se voit pas : la passerelle n'installe aucun parseur socket.io
+personnalisé, donc `JSON.stringify` rend exactement `toISOString()`.
+
+Ce que ça coûte n'est pas une panne, c'est une divergence de MESURE : **tout
+témoin en cours de route atteste alors une forme que personne ne reçoit.** Il y
+en avait un, qui assertait `toEqual(new Date(…))` sur une charge que le client
+reçoit en chaîne. Énoncer le type dans le contrat est ce qui aligne les deux.
+
+
 ## Une preuve TRANSPORTÉE n'est pas une preuve VÉRIFIÉE
 
 `signedPreKey.signature` est la seule chose qui rattache la pré-clé signée à la

@@ -421,6 +421,10 @@ jest.mock('../../utils/logger-enhanced', () => ({
 // ---------------------------------------------------------------------------
 import { MeeshySocketIOManager } from '../MeeshySocketIOManager';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import {
+  declaredConversationUpdatedFields,
+  contractKeepsIndexSignature,
+} from './conversation-updated-declared-fields';
 
 // ---------------------------------------------------------------------------
 // Harnais
@@ -671,5 +675,121 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
       keys.filter((k) => !enrichments.has(k)).sort();
 
     expect(contractOf(restKeys)).toEqual(contractOf(socketKeys));
+  });
+
+  // -------------------------------------------------------------------------
+  // `conversation:updated` — le JUMEAU que les deux mêmes producteurs émettent
+  // -------------------------------------------------------------------------
+
+  /**
+   * Charge utile `conversation:updated` réellement passée à `emit`.
+   *
+   * Un payload PAR destinataire (le Prisme de la ligne de liste est résolu pour
+   * le lecteur) : on prend la première, les clés et l'horodatage ne dépendant
+   * pas du destinataire.
+   */
+  function emittedConversationUpdated(): Record<string, unknown> | undefined {
+    const call = (ioState.toEmit.mock.calls as any[]).find(
+      (c) => c[0] === SERVER_EVENTS.CONVERSATION_UPDATED
+    );
+    return call?.[1] as Record<string, unknown> | undefined;
+  }
+
+  /**
+   * Le `conversation:updated` n'est émis qu'AUX PARTICIPANTS : les deux
+   * producteurs abandonnent sur une liste vide (`sharedParticipants.length > 0`
+   * côté socket, `senderId` + `findMany` côté REST). Le double partagé de ce
+   * fichier en rend une VIDE — c'est ce qu'il faut aux témoins `message:new`,
+   * qui ne veulent aucun enrichissement. On la peuple donc ICI, pour les seuls
+   * témoins du jumeau, plutôt que de changer le double sous les autres.
+   *
+   * Forme : `PREVIEW_PRISM_PARTICIPANT_SELECT` + `joinedAt`, ce que les deux
+   * producteurs sélectionnent réellement.
+   */
+  function seedParticipants(): void {
+    (prisma.participant.findMany as any).mockResolvedValue([
+      {
+        id: 'sender-participantId',
+        userId: 'sender-userId',
+        joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+        user: {
+          systemLanguage: 'fr',
+          regionalLanguage: null,
+          customDestinationLanguage: null,
+          deviceLocale: null,
+        },
+      },
+      {
+        id: 'peer-participantId',
+        userId: 'peer-userId',
+        joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+        user: {
+          systemLanguage: 'en',
+          regionalLanguage: null,
+          customDestinationLanguage: null,
+          deviceLocale: null,
+        },
+      },
+    ]);
+  }
+
+  async function updatedFromSocketPath(message: unknown): Promise<Record<string, unknown>> {
+    seedParticipants();
+    ioState.toEmit.mockClear();
+    await messageHandler.broadcastNewMessage(message as any, CONVERSATION_ID);
+    const payload = emittedConversationUpdated();
+    expect(payload).toBeDefined();
+    return payload as Record<string, unknown>;
+  }
+
+  async function updatedFromRestPath(message: unknown): Promise<Record<string, unknown>> {
+    seedParticipants();
+    ioState.toEmit.mockClear();
+    await manager.broadcastMessage(message as any, CONVERSATION_ID);
+    const payload = emittedConversationUpdated();
+    expect(payload).toBeDefined();
+    return payload as Record<string, unknown>;
+  }
+
+  it('les DEUX producteurs émettent `lastMessageAt` comme une CHAÎNE ISO', async () => {
+    const message = makeContractMessage();
+
+    const socketPayload = await updatedFromSocketPath(message);
+    const restPayload = await updatedFromRestPath(message);
+
+    // `updatedAt`, son jumeau déclaré dans le MÊME payload, est une chaîne ISO
+    // depuis toujours. `lastMessageAt` partait en objet `Date` — le fil ne le
+    // montrait pas (l'encodeur par défaut de socket.io est `JSON.stringify`,
+    // qui rend exactement `toISOString()`), mais le contrat le montrait :
+    // c'est le seul horodatage du payload dont le type dépendait de l'encodeur
+    // au lieu d'être énoncé. Un témoin en cours de route — celui-ci — voyait
+    // donc une `Date` là où les trois clients reçoivent une chaîne.
+    for (const payload of [socketPayload, restPayload]) {
+      expect(typeof payload.lastMessageAt).toBe('string');
+      expect(payload.lastMessageAt).toBe('2026-08-22T10:00:00.000Z');
+    }
+  });
+
+  it("aucun producteur n'émet un champ que le contrat ne DÉCLARE pas", async () => {
+    // Le cliquet du lot : voir l'en-tête de `conversation-updated-declared-fields.ts`.
+    // Le typage seul ne peut pas le tenir — une clé écrite dans la source d'un
+    // spread est invisible au contrôle des propriétés excédentaires, et les
+    // quatre émetteurs composent tous leur charge par spread.
+    const message = makeContractMessage();
+    const declared = declaredConversationUpdatedFields();
+
+    const socketKeys = Object.keys(await updatedFromSocketPath(message));
+    const restKeys = Object.keys(await updatedFromRestPath(message));
+
+    for (const [transport, keys] of [['socket', socketKeys], ['REST/ZMQ', restKeys]] as const) {
+      const undeclared = keys.filter((k) => !declared.has(k)).sort();
+      expect({ transport, undeclared }).toEqual({ transport, undeclared: [] });
+    }
+  });
+
+  it('le contrat ne garde AUCUNE signature d\'index', () => {
+    // Sans elle, « déclaré » veut dire quelque chose ; avec elle, tout l'est
+    // d'avance et le témoin ci-dessus ne peut plus tomber.
+    expect(contractKeepsIndexSignature()).toBe(false);
   });
 });

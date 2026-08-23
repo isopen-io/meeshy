@@ -48,6 +48,7 @@ import {
 import {
   PREVIEW_PRISM_PARTICIPANT_SELECT,
   resolveLastMessagePreviewPrism,
+  toIsoOrNull,
 } from './utils/lastMessagePreviewPrism';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
@@ -2793,7 +2794,11 @@ export class MeeshySocketIOManager {
           const updatePayload = {
             conversationId: normalizedId,
             updatedBy: { id: resolvedSenderId ?? message.senderId ?? '' },
-            lastMessageAt: message.createdAt || new Date(),
+            // Chaîne ISO — voir `toIsoOrNull`. `|| new Date()` conservé : ce
+            // chemin sert aussi des messages fabriqués (agent, traducteur) dont
+            // le `createdAt` peut manquer, et la ligne de liste a besoin d'un
+            // rang pour se trier.
+            lastMessageAt: toIsoOrNull(message.createdAt || new Date()),
             lastMessageId: message.id,
             // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism`
             // avec le reste de la paire, sous le même plafond qu'elle.
