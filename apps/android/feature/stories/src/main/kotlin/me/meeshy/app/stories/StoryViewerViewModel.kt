@@ -15,8 +15,10 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.LanguageData
+import me.meeshy.sdk.model.StoryClipTransition
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -31,18 +33,79 @@ import javax.inject.Inject
 /**
  * A foreground media layer on a slide — a non-background [StoryMediaObject]
  * (video or image) composited on top of the background. Position/scale are
- * normalised canvas fractions (0..1), matching the wire model; keyframe
- * animation, rotation and transitions are not applied in this projection.
+ * normalised canvas fractions (0..1), matching the wire model. [x]/[y]/[scale]/
+ * [opacity] are the layer's *static* base transform; when the clip carries
+ * [keyframes] or participates in a slide [clipTransitions] entry, call [animated]
+ * with the playhead to obtain the transform for that instant. [id] matches the
+ * clip against transitions; [duration] bounds its own timing window. Rotation is
+ * still not applied in this projection.
  */
 @Immutable
 data class StoryForegroundMediaView(
+    val id: String,
     val url: String,
     val isVideo: Boolean,
     val x: Double,
     val y: Double,
     val scale: Double,
     val aspectRatio: Double,
-)
+    val opacity: Double = 1.0,
+    val startTime: Double = 0.0,
+    val duration: Double = 0.0,
+    val keyframes: List<StoryKeyframe> = emptyList(),
+    val clipTransitions: List<StoryClipTransition> = emptyList(),
+) {
+    /**
+     * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
+     * unchanged when nothing animates — no keyframes that key a channel AND no
+     * clip transition this layer takes part in. Otherwise a copy whose
+     * [x]/[y]/[scale] follow the interpolated keyframe animation (un-keyed channels
+     * holding their static base) and whose [opacity] additionally folds in the
+     * crossfade/dissolve ramp of any transition naming this clip. Keyframe times are
+     * offsets from [startTime], per the timeline spec.
+     *
+     * A layer that participates in a transition but carries no [duration] is left
+     * untouched: window-clipping on a zero-length window (`end == start`) would hide
+     * the clip at almost every instant. Pure — the Compose canvas ticks a clock in
+     * and renders the result.
+     */
+    fun animated(atSeconds: Float): StoryForegroundMediaView {
+        val resolved = StoryKeyframeResolver.resolve(
+            keyframes = keyframes,
+            currentTime = atSeconds,
+            startTime = startTime.toFloat(),
+            baseX = x,
+            baseY = y,
+            baseScale = scale,
+            baseOpacity = opacity,
+        )
+        val transitions = if (duration > 0.0) {
+            clipTransitions.filter { it.fromClipId == id || it.toClipId == id }
+        } else {
+            emptyList()
+        }
+        if (resolved == null && transitions.isEmpty()) return this
+
+        val base = resolved ?: ResolvedKeyframeTransform(x = x, y = y, scale = scale, opacity = opacity)
+        val transitionOpacity = if (transitions.isEmpty()) {
+            1.0
+        } else {
+            StoryClipTransitionResolver.opacity(
+                mediaId = id,
+                startTime = startTime,
+                duration = duration,
+                transitions = transitions,
+                currentTime = atSeconds.toDouble(),
+            )
+        }
+        return copy(
+            x = base.x,
+            y = base.y,
+            scale = base.scale,
+            opacity = base.opacity * transitionOpacity,
+        )
+    }
+}
 
 /**
  * A single slide projected for the viewer. Pure data.
@@ -459,9 +522,10 @@ class StoryViewerViewModel @Inject constructor(
         rawItems[id] = this
         val resolved = StoryContentResolver.resolve(this, prefs)
         val background = resolveBackgroundMedia()
+        val clipTransitions = storyEffects?.clipTransitions.orEmpty()
         val foreground = storyEffects?.mediaObjects.orEmpty()
             .filterNot { it.isBackground }
-            .mapNotNull { it.toForegroundMediaView() }
+            .mapNotNull { it.toForegroundMediaView(clipTransitions) }
         return StorySlideView(
             id = id,
             text = resolved.content,
@@ -509,15 +573,22 @@ class StoryViewerViewModel @Inject constructor(
         return BackgroundMedia(imageUrl = imageUrl, videoUrl = null, loop = true)
     }
 
-    private fun StoryMediaObject.toForegroundMediaView(): StoryForegroundMediaView? {
+    private fun StoryMediaObject.toForegroundMediaView(
+        clipTransitions: List<StoryClipTransition>,
+    ): StoryForegroundMediaView? {
         val url = mediaURL?.let { resolveMediaUrl(it, config.socketUrl) } ?: return null
         return StoryForegroundMediaView(
+            id = id,
             url = url,
             isVideo = mediaType == "video",
             x = x,
             y = y,
             scale = scale,
             aspectRatio = aspectRatio,
+            startTime = startTime ?: 0.0,
+            duration = duration ?: 0.0,
+            keyframes = keyframes.orEmpty(),
+            clipTransitions = clipTransitions,
         )
     }
 

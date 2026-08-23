@@ -8,21 +8,38 @@ import MeeshySDK
 
 // MARK: - StoryComposerView + Publication
 
-/// Ce que la fermeture par la croix doit proposer. Deux questions distinctes,
-/// que l'ancien `guard !composerHasContent` confondait en une : « y a-t-il du
-/// travail à perdre ? » et « le brouillon sait-il le retenir ? ».
+/// Ce que la fermeture par la croix trouve à protéger. Deux questions
+/// distinctes, que l'ancien `guard !composerHasContent` confondait en une :
+/// « y a-t-il du travail à perdre ? » et « le brouillon sait-il le retenir ? ».
+///
+/// M10 (zéro question à la sortie) a changé l'ACTE, jamais la règle : le cas
+/// `confirm` ne fait plus apparaître de feuille d'action, il commande
+/// l'enregistrement silencieux. Son nom survit parce qu'il est PUBLIC — le
+/// renommer casserait les intégrations hors du dépôt ; sa seule lecture est
+/// `offersSave`, qui se lit désormais « il y a de quoi écrire ».
 public nonisolated enum ComposerExitPrompt: Equatable, Sendable {
-    /// Rien à perdre : la croix ferme, sans un mot.
+    /// Rien à perdre : la croix ferme, sans un mot et sans rien écrire.
     case leaveSilently
-    /// Il y a du travail en cours. `offersSave` dit si la feuille a le droit de
-    /// proposer « Sauvegarder » — le reste (« Quitter », « Annuler ») est
-    /// toujours offert.
+    /// Il y a du travail en cours. `offersSave` dit si le brouillon sait le
+    /// retenir — donc si la fermeture doit l'écrire.
     case confirm(offersSave: Bool)
 
     public var offersSave: Bool {
         if case .confirm(let offersSave) = self { return offersSave }
         return false
     }
+}
+
+/// Ce que la fermeture FAIT du magasin, une fois la règle lue. Un aiguillage
+/// PUR, pour que la loi M10 s'éprouve sans hôte SwiftUI — `StoryComposerView`
+/// n'est pas « hostable » en XCTest, et une règle qui ne vit que dans le corps
+/// d'une vue ne se teste que par analyse de source.
+public nonisolated enum ComposerExitAction: Equatable, Sendable {
+    /// Rien à retenir : seuls les fantômes tombent.
+    case purgePhantoms
+    /// Il y a du travail : le brouillon est écrit, sans un mot et sans
+    /// question. C'est la promesse M10 — fermer, c'est enregistrer.
+    case saveDraft
 }
 
 extension StoryComposerView {
@@ -331,25 +348,34 @@ extension StoryComposerView {
 
     /// Protection de sortie — règle DÉDIÉE, distincte du gate du bouton Publier.
     ///
-    /// L'alerte s'arme sur tout ce que le bouton Publier accepterait, audio
-    /// compris : une story « fond + musique » est du travail, et la croix la
-    /// jetait sans un mot — `composerHasContent` ne voit que le VISUEL.
+    /// La protection s'arme sur tout ce que le bouton Publier accepterait,
+    /// audio compris : une story « fond + musique » est du travail, et la croix
+    /// la jetait sans un mot — `composerHasContent` ne voit que le VISUEL.
     ///
-    /// « Sauvegarder » s'offre sur le même périmètre : la prémisse historique
-    /// (« le brouillon ne retient pas l'audio, rabattu au seul hand-off de
+    /// `offersSave` couvre le même périmètre : la prémisse historique (« le
+    /// brouillon ne retient pas l'audio, rabattu au seul hand-off de
     /// publication ») est caduque — `persistDraft()` passe par
     /// `syncCurrentSlideEffects()` → `mergeEffects` qui écrit
     /// `backgroundAudioId` dans la slide via le proxy `currentEffects`, et
     /// `restoreCanvas` re-sème `selectedAudioId` depuis les effets restaurés.
-    /// Sans cette offre, la seule issue d'une session audio-seule était
-    /// « Quitter » — DESTRUCTIVE.
+    /// Une session audio-seule est donc du travail que le magasin SAIT tenir.
     ///
     /// Le formuler ici plutôt que d'appeler `canPublish` garde les deux règles
     /// libres d'évoluer : le jour où le bouton acceptera un cas de plus, la
-    /// feuille n'offrira pas automatiquement de le sauvegarder.
+    /// fermeture n'écrira pas automatiquement ce que le brouillon ne sait pas
+    /// retenir.
     nonisolated static func exitPrompt(hasContent: Bool, carriesAudio: Bool) -> ComposerExitPrompt {
         guard hasContent || carriesAudio else { return .leaveSilently }
         return .confirm(offersSave: hasContent || carriesAudio)
+    }
+
+    /// M10 — la règle de sortie ne pose plus de question, elle commande. Ce que
+    /// la feuille d'action offrait de sauvegarder est exactement ce que la
+    /// fermeture écrit ; ce qu'elle laissait partir sans un mot part toujours
+    /// sans un mot, en n'emportant que les fantômes.
+    nonisolated static func exitAction(_ prompt: ComposerExitPrompt) -> ComposerExitAction {
+        guard case .leaveSilently = prompt else { return .saveDraft }
+        return .purgePhantoms
     }
 
     var exitPrompt: ComposerExitPrompt {
@@ -378,27 +404,30 @@ extension StoryComposerView {
     /// le voile plein écran de l'ancienne carte l'interdisait.
     ///
     /// Seuls les fantômes tombent (`clearPhantomDraftsOnly`, même règle que
-    /// `checkForDraft()` à l'ouverture). Les discards EXPLICITES restent
-    /// destructifs : « Quitter » (`cancelAndDismiss`) et « Recommencer ».
+    /// `checkForDraft()` à l'ouverture). Le seul discard EXPLICITE restant est
+    /// « Recommencer », dans le bandeau de reprise.
     ///
-    /// La condition d'alerte vient d'`exitPrompt`, pas de `composerHasContent` :
-    /// la story « fond + musique » n'a rien de visuel et partait donc en silence.
+    /// M10 — zéro question à la sortie : la feuille « Sauvegarder / Quitter /
+    /// Annuler » a disparu, et avec elle la seule issue destructive de la
+    /// croix. Ce que la feuille offrait d'enregistrer, la fermeture
+    /// l'enregistre. C'est une écriture DEMANDÉE (l'utilisateur ferme), donc
+    /// elle emprunte le chemin explicite `saveDraft()` et non le gate des
+    /// écritures silencieuses (`mayOverwriteStoredDraft`).
+    ///
+    /// Le terme lu reste `exitPrompt`, pas `composerHasContent` : la story
+    /// « fond + musique » n'a rien de visuel et partait sinon en silence.
     func handleDismiss() {
-        guard case .leaveSilently = exitPrompt else { showDiscardAlert = true; return }
-        clearPhantomDraftsOnly()
-        onDismiss()
+        switch Self.exitAction(exitPrompt) {
+        case .saveDraft:
+            saveDraftAndDismiss()
+        case .purgePhantoms:
+            clearPhantomDraftsOnly()
+            onDismiss()
+        }
     }
 
     func saveDraftAndDismiss() {
         saveDraft()
-        onDismiss()
-    }
-
-    func cancelAndDismiss() {
-        clearCurrentDraft()
-        // E1 — le « Quitter » jette le brouillon : suspendre l'autosave pour
-        // qu'un debounce en vol ne le re-persiste pas pendant le démontage.
-        draftAutosaveSuspended = true
         onDismiss()
     }
 

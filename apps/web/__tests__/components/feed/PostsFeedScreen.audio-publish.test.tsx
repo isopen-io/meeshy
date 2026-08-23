@@ -75,7 +75,7 @@ jest.mock('@/hooks/social/use-stories-realtime', () => ({
 }));
 
 jest.mock('@/stores/user-preferences-store', () => ({
-  useStoryPreferences: () => ({ preferences: { defaultVisibility: 'FRIENDS' } }),
+  useStoryPreferences: () => ({ preferences: { defaultVisibility: 'PUBLIC' } }),
 }));
 
 jest.mock('@/hooks/social/use-statuses', () => ({

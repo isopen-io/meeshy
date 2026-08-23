@@ -847,7 +847,36 @@ struct ConversationListView: View {
             // résolus UNE fois ici (valeur stable boxée — voir le doc de
             // `nativeContextMenu` dans ConversationRowItem : le builder
             // re-exécuté à chaque body pass crashait au lancement).
-            nativeContextMenu: { nativeContextMenuView(for: conversation) }
+            nativeContextMenu: { nativeContextMenuView(for: conversation) },
+            // Magasins PAR RÉFÉRENCE (jamais `focusElection.electedId` lu
+            // ici : la garde `FocusCardElectionTests
+            // .test_electedState_neverLivesInTheListBody` l'interdit, et
+            // c'est ce qui empêche la liste entière de se ré-évaluer à chaque
+            // élection).
+            focusElection: focusElection,
+            sceneActivity: sceneActivity,
+            magnification: LentilleMagnification(
+                isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true,
+                categories: conversationViewModel.userCategories,
+                activeTagFilter: conversationViewModel.activeTagFilter,
+                onMoveToSection: { sectionId in
+                    HapticFeedback.light()
+                    conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: sectionId)
+                },
+                onFilterByTag: { tag in
+                    HapticFeedback.light()
+                    conversationViewModel.activeTagFilter = tag
+                },
+                onRemoveTag: { tag in
+                    HapticFeedback.light()
+                    // Même mutation que la feuille d'infos (optimiste + rollback).
+                    ConversationOptionsViewModel(conversation: conversation).removeTag(tag.name)
+                },
+                onShowParticipants: {
+                    HapticFeedback.light()
+                    handleConversationInfoView(conversation)
+                }
+            )
         )
         .equatable()
     }
@@ -1441,44 +1470,14 @@ struct ConversationListView: View {
                 registry: focusCandidateRegistry,
                 election: focusElection
             )
-            LentilleFocusCardHost(
-                election: focusElection,
-                relay: scrollOffsetRelay,
-                registry: focusCandidateRegistry,
-                // Résolu au CHANGEMENT d'élu seulement (jamais par tick, jamais
-                // un aplatissement de la liste par passe de body — H15).
-                conversationById: { id in conversationViewModel.conversations.first { $0.id == id } },
-                isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true,
-                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
-                categories: conversationViewModel.userCategories,
-                activeTagFilter: conversationViewModel.activeTagFilter,
-                onMoveToSection: { conversationId, sectionId in
-                    HapticFeedback.light()
-                    conversationViewModel.moveToSection(conversationId: conversationId, sectionId: sectionId)
-                },
-                onFilterByTag: { tag in
-                    HapticFeedback.light()
-                    conversationViewModel.activeTagFilter = tag
-                },
-                onRemoveTag: { conversation, tag in
-                    HapticFeedback.light()
-                    // Même mutation que la feuille d'infos (optimiste + rollback).
-                    ConversationOptionsViewModel(conversation: conversation).removeTag(tag.name)
-                },
-                // Même source que la rangée plate (pastille de présence).
-                presenceFor: { conversation in
-                    presenceManager.presenceState(for: conversation.participantUserId ?? "")
-                },
-                onForceSync: { _ in
-                    HapticFeedback.light()
-                    conversationViewModel.forceSync()
-                },
-                // Même feuille que l'avatar de la rangée (onglet Membres par défaut).
-                onShowParticipants: { conversation in
-                    HapticFeedback.light()
-                    handleConversationInfoView(conversation)
-                }
-            )
+            // `LentilleFocusCardHost` a vécu ICI jusqu'au 2026-08-23 : il
+            // peignait la carte de magnification par-dessus la rangée élue.
+            // Retiré — la magnification vit désormais DANS la rangée
+            // (`LentilleMagnifiableRow` → `LentilleConversationRow
+            // .magnification`), seule position d'où elle peut à la fois
+            // porter des pastilles actionnables et laisser à la rangée son
+            // swipe, son glisser-déposer et son appui long. Voir l'en-tête de
+            // `Lentille/Mode/LentilleFocusCard.swift`.
             // Scène (2026-08-21) : un consommateur de plus du MÊME relais —
             // niveau d'activité lu par les rangées et par la carte.
             LentilleSceneActivityHost(relay: scrollOffsetRelay, scene: sceneActivity)

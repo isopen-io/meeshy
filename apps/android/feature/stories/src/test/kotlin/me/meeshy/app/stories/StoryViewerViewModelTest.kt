@@ -23,8 +23,11 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketStoryReactedData
 import me.meeshy.sdk.model.SocketStoryUnreactedData
 import me.meeshy.sdk.model.StoryAudioPlayerObject
+import me.meeshy.sdk.model.StoryClipTransition
 import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.StoryTransitionKind
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
@@ -514,6 +517,81 @@ class StoryViewerViewModelTest {
         assertThat(fg.first().isVideo).isTrue()
         assertThat(fg.first().x).isEqualTo(0.3)
         assertThat(fg.first().y).isEqualTo(0.7)
+    }
+
+    @Test
+    fun `a foreground mediaObject carries its keyframes and startTime into the projection`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "fg", fileUrl = "http://cdn/fg.mp4", mimeType = "video/mp4"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "fgObj",
+                        postMediaId = "fg",
+                        mediaURL = "http://cdn/fg.mp4",
+                        mediaType = "video",
+                        isBackground = false,
+                        x = 0.2,
+                        y = 0.2,
+                        startTime = 1.0,
+                        keyframes = listOf(
+                            StoryKeyframe(time = 0f, x = 0.2),
+                            StoryKeyframe(time = 4f, x = 0.8),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val fg = vm.state.value.current?.foregroundMedia.orEmpty().first()
+        assertThat(fg.startTime).isEqualTo(1.0)
+        assertThat(fg.keyframes).hasSize(2)
+        // The keyframes are live, not dropped: the layer animates across its window.
+        assertThat(fg.animated(atSeconds = 1f).x).isWithin(1e-9).of(0.2)
+        assertThat(fg.animated(atSeconds = 3f).x).isWithin(1e-9).of(0.5)
+    }
+
+    @Test
+    fun `a foreground mediaObject carries the slide's clip transitions and fades on the ramp`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "fg", fileUrl = "http://cdn/fg.mp4", mimeType = "video/mp4"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "toClip",
+                        postMediaId = "fg",
+                        mediaURL = "http://cdn/fg.mp4",
+                        mediaType = "video",
+                        isBackground = false,
+                        startTime = 3.0,
+                        duration = 4.0,
+                    ),
+                ),
+                clipTransitions = listOf(
+                    StoryClipTransition(
+                        id = "t1",
+                        fromClipId = "fromClip",
+                        toClipId = "toClip",
+                        kind = StoryTransitionKind.CROSSFADE,
+                        duration = 2f,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val fg = vm.state.value.current?.foregroundMedia.orEmpty().first()
+        assertThat(fg.id).isEqualTo("toClip")
+        assertThat(fg.duration).isEqualTo(4.0)
+        assertThat(fg.clipTransitions).hasSize(1)
+        // The transition is live, not dropped: the incoming clip fades in across its window [3,5].
+        assertThat(fg.animated(atSeconds = 3f).opacity).isWithin(1e-4).of(0.0)
+        assertThat(fg.animated(atSeconds = 4f).opacity).isWithin(1e-4).of(0.5)
     }
 
     @Test

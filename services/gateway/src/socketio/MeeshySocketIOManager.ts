@@ -98,7 +98,7 @@ import { emitServerEvent, type ServerEventName } from './serverEmit';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
-import { drainedEventName, isDeliverableQueuedPayload } from './queuedEventContract';
+import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -551,6 +551,18 @@ export class MeeshySocketIOManager {
    * `bannedAt: null` ne matche pas les documents où le champ est ABSENT (jamais
    * écrit), et exclurait donc les lignes historiques — le piège que `ban.ts`
    * documente déjà pour `leftAt` (audit C5).
+   *
+   * **PRÉCONDITION, tenue par l'appelant** : chaque entrée porte un
+   * `conversationId` de forme ObjectId (`isAddressableConversationId`). Elle
+   * n'est pas cosmétique — les ids sont AGRÉGÉS en un seul `in`, donc une seule
+   * entrée illisible fait lever la requête pour le lot ENTIER, et l'échec
+   * atterrit dans le `catch` ci-dessous, qui rejoue tout SANS FILTRE. Le
+   * fail-open y est délibéré et juste pour ce qu'il vise (une base qui ne répond
+   * pas) ; il ne peut simplement pas distinguer ce cas de « nous n'avons jamais
+   * posé de question valide », et sur ce second cas il transforme une entrée
+   * corrompue en désactivation du gate d'autorisation. La garde vit donc chez
+   * l'appelant, AVANT la requête : c'est le seul endroit où l'entrée fautive est
+   * encore nommable une par une.
    */
   private async _dropEndedMemberships(
     userId: string,
@@ -595,13 +607,71 @@ export class MeeshySocketIOManager {
       const drained = await this.deliveryQueue.drain(userId);
       if (drained.length === 0) return;
 
+      // Le journal par entrée est monté AVANT le gate d'appartenance, parce que
+      // la première chose à refuser se refuse avant lui — voir le tri
+      // d'adressabilité juste en dessous.
+      //
+      // `delivered` ne retient que ce qui est RÉELLEMENT parti. Les trois
+      // signaux qui suivent en descendent, parce qu'ils AFFIRMENT tous les trois
+      // la même chose : que le message est arrivé. La règle est celle que la
+      // garde d'appartenance énonce plus bas — « l'affirmer d'un message qu'on
+      // vient de refuser de livrer mentirait à son auteur ». Elle ne couvrait
+      // que le refus ; elle couvre maintenant l'échec.
+      //
+      // Le journal est PAR ENTRÉE, et il NOMME son message. C'est la seule
+      // trace qu'une perte de rejeu laissera jamais : ni exception qui remonte,
+      // ni événement côté client, ni compteur qui bouge — le destinataire n'a
+      // simplement pas reçu son message. Un résumé chiffré ne suffirait pas,
+      // parce que ce qu'il faut pour rattraper la perte est l'IDENTITÉ de ce
+      // qui est tombé, pas son nombre.
+      const delivered: QueuedMessagePayload[] = [];
+      const undelivered: QueuedMessagePayload[] = [];
+      const dropEntry = (entry: QueuedMessagePayload, reason: string, error?: unknown): void => {
+        undelivered.push(entry);
+        logger.error('Queued entry dropped without delivery — it is already out of the queue', {
+          userId,
+          reason,
+          conversationId: entry.conversationId,
+          messageId: entry.messageId,
+          eventType: entry.eventType ?? 'new',
+          error,
+        });
+      };
+
+      // PREMIER refus, et il est en amont du gate d'autorisation par nécessité,
+      // pas par goût de l'ordre : `_dropEndedMemberships` AGRÈGE les
+      // `conversationId` du lot en un seul `conversationId: { in: [...] }`. Une
+      // entrée dont l'id n'est pas interrogeable ne se contente donc pas de se
+      // perdre elle-même — elle fait lever la requête pour TOUT le lot, et
+      // l'échec tombe dans un `catch` qui rejoue l'arriéré SANS FILTRE.
+      // C'est-à-dire : une seule entrée illisible désactive le gate
+      // d'autorisation du rejeu, et l'arriéré d'une conversation quittée — ou
+      // dont le lecteur a été banni — repart en entier.
+      //
+      // C'est l'isolation que la couche du dessous PROMET (« so one corrupt
+      // entry can never poison a whole drain/peek », `parseRawEntries`) et que
+      // le cycle 111 a déjà dû rétablir une fois, sur le comparateur de tri.
+      // Même famille, une couche plus haut, et cette fois sur l'AUTORISATION :
+      // l'entrée corrompue n'y désordonne pas les entrées saines, elle les
+      // déshabille de leur gate.
+      const addressable = drained.filter(entry => {
+        if (isAddressableConversationId(entry.conversationId)) return true;
+        dropEntry(entry, 'conversation-id-not-addressable');
+        return false;
+      });
+      // Rien d'adressable : il n'y a aucune conversation à NOMMER, donc rien à
+      // faire chercher au client. Le journal ci-dessus est la seule trace
+      // possible, et c'est déjà la règle que ce chemin applique — on ne
+      // fabrique pas un signal de récupération qui ne désigne rien.
+      if (addressable.length === 0) return;
+
       // Gate d'autorisation, avant toute émission : une entrée dont
       // l'appartenance a pris fin n'est pas rejouée, et ne compte donc dans
       // aucun des trois signaux ci-dessous (émission, `pending-messages:delivered`,
       // accusé de réception). Un accusé affirme « ce message est arrivé chez son
       // destinataire » — l'affirmer d'un message qu'on vient de refuser de livrer
       // mentirait à son auteur.
-      const pending = await this._dropEndedMemberships(userId, isAnonymous, drained);
+      const pending = await this._dropEndedMemberships(userId, isAnonymous, addressable);
       if (pending.length === 0) return;
 
       logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
@@ -645,33 +715,11 @@ export class MeeshySocketIOManager {
       // à une couche peut être défait par la couche qui le consomme » — en
       // amont, et sur le chemin le plus destructif du système.
       //
-      // `delivered` ne retient que ce qui est RÉELLEMENT parti. Les trois
-      // signaux qui suivent en descendent, parce qu'ils AFFIRMENT tous les trois
-      // la même chose : que le message est arrivé. La règle est celle que la
-      // garde d'appartenance énonce vingt lignes plus haut — « l'affirmer d'un
-      // message qu'on vient de refuser de livrer mentirait à son auteur ». Elle
-      // ne couvrait que le refus ; elle couvre maintenant l'échec.
-      //
-      // Le journal est PAR ENTRÉE, et il NOMME son message. C'est la seule
-      // trace qu'une perte de rejeu laissera jamais : ni exception qui remonte,
-      // ni événement côté client, ni compteur qui bouge — le destinataire n'a
-      // simplement pas reçu son message. Un résumé chiffré ne suffirait pas,
-      // parce que ce qu'il faut pour rattraper la perte est l'IDENTITÉ de ce
-      // qui est tombé, pas son nombre.
-      const delivered: QueuedMessagePayload[] = [];
-      const undelivered: QueuedMessagePayload[] = [];
-      const dropEntry = (entry: QueuedMessagePayload, reason: string, error?: unknown): void => {
-        undelivered.push(entry);
-        logger.error('Queued entry dropped without delivery — it is already out of the queue', {
-          userId,
-          reason,
-          conversationId: entry.conversationId,
-          messageId: entry.messageId,
-          eventType: entry.eventType ?? 'new',
-          error,
-        });
-      };
-
+      // Le journal par entrée (`dropEntry`, monté avant le gate d'appartenance)
+      // porte les QUATRE refus de ce chemin — l'id de conversation illisible, la
+      // charge informe, le nom d'événement non résolu, l'enveloppe de lien
+      // privée de son message — chacun sous sa propre `reason`, parce qu'aucun
+      // des quatre n'envoie chercher au même endroit.
       for (const entry of pending) {
         // Les deux moitiés du couple, refusées séparément parce que le journal
         // doit NOMMER laquelle a manqué : c'est la seule trace qu'une perte de
@@ -683,7 +731,19 @@ export class MeeshySocketIOManager {
         }
         const emissions = _drainedEmissions(entry);
         if (emissions.length === 0) {
-          dropEntry(entry, 'unresolvable-event-type');
+          // Deux façons de ne rien savoir diffuser, et le journal doit les
+          // SÉPARER : elles n'envoient pas chercher au même endroit. Un nom
+          // d'événement non résolu accuse la file (un `eventType` d'une version
+          // plus récente de la passerelle) ; une enveloppe de lien sans message
+          // accuse son producteur. `'link-message'` est le seul `eventType` dont
+          // la charge se DÉPLIE, donc le seul qui puisse échouer par autre chose
+          // que son nom.
+          dropEntry(
+            entry,
+            entry.eventType === 'link-message'
+              ? 'link-envelope-without-message'
+              : 'unresolvable-event-type'
+          );
           continue;
         }
         try {
@@ -719,8 +779,17 @@ export class MeeshySocketIOManager {
       // Nu, il faisait porter aux seconds le sort du premier — et la panne qui
       // fait lever un `emit` les fait lever tous les deux.
       try {
+        // Filtré par la MÊME garde que le tri d'adressabilité : une entrée
+        // refusée pour son id de conversation n'a rien à nommer ici. Publier son
+        // id enverrait le client invalider une conversation qui n'existe pas —
+        // un signal de récupération qui ne désigne rien vaut moins que le
+        // silence, et le journal par entrée reste, lui, la trace de la perte.
         const affectedConversationIds = [
-          ...new Set([...delivered, ...undelivered].map(e => e.conversationId)),
+          ...new Set(
+            [...delivered, ...undelivered]
+              .map(e => e.conversationId)
+              .filter(isAddressableConversationId)
+          ),
         ];
         userRoom.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: delivered.length, conversationIds: affectedConversationIds });
       } catch (error) {

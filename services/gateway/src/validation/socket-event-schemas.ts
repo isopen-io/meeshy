@@ -10,6 +10,7 @@ import {
   noSilentDowngrade,
   NO_SILENT_DOWNGRADE_ISSUE,
 } from './encryption-envelope.js';
+import { MENTIONED_USER_IDS_SHAPE } from './mention-list.js';
 
 const mongoId = z
   .string()
@@ -66,6 +67,11 @@ export const SocketMessageSendSchema = z.object({
   // validation stricte des coordonnées / longueurs vit dans
   // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
   location: z.unknown().optional(),
+  // Liste EXPLICITE de mentionnés — déclarée dans `mention-list.ts`, la MÊME
+  // que celle de `POST /messages`. Elle était strippée ici, et le repli par
+  // extraction des `@` du contenu ne la remplace que tant que le contenu porte
+  // le texte : en `e2ee` il vaut `[Encrypted]`. Voir l'unité pour le récit.
+  ...MENTIONED_USER_IDS_SHAPE,
   // Enveloppe de chiffrement — déclarée dans `encryption-envelope.ts`, la MÊME
   // que celle de `POST /messages`. Ces champs n'étaient déclarés NULLE PART
   // ici : `z.object` les strippait donc en silence, et le chiffré n'atteignait
@@ -101,6 +107,11 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   maxViewOnceCount: z.number().int().optional(),
   // Lieu partagé — même contrat que SocketMessageSendSchema ci-dessus.
   location: z.unknown().optional(),
+  // Liste explicite de mentionnés — même unité que le path texte ci-dessus. Un
+  // message porteur d'une pièce jointe nomme quelqu'un exactement comme un
+  // message de texte, et ce path-ci est celui de TOUT l'audio : sa légende est
+  // souvent le seul texte du message.
+  ...MENTIONED_USER_IDS_SHAPE,
   // Enveloppe de chiffrement — même unité que le path texte ci-dessus. Ce
   // schéma-ci ne la portait pas davantage : une pièce jointe envoyée dans une
   // conversation chiffrée perdait son chiffré exactement de la même façon.

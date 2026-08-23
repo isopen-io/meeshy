@@ -119,6 +119,20 @@ nonisolated public enum LentilleMetrics {
     // MARK: - Carte de focus
 
     /// `list.focusCard` — fond `bg2` + ring INTERNE `1.5` accent, radius `16`.
+    ///
+    /// **La peau iOS ne peint plus de CARTE depuis le 2026-08-23** (directive
+    /// produit : « pas de bordure, on complète juste les informations,
+    /// directement sur le row existant ; l'objet reste le même »). Les valeurs
+    /// ci-dessous restent le miroir FIDÈLE de `list.focusCard` dans
+    /// `packages/shared/design/lentille-tokens.json` — verrouillé contre lui
+    /// par `LentilleMetricsTests.test_focusCard` — parce que le token, lui,
+    /// est toujours vivant : la peau WEB le consomme
+    /// (`apps/web/styles/lentille-tokens.css`,
+    /// `--lentille-list-focus-card-{ring-size,radius,height,…}`). Ce qui a
+    /// changé n'est pas la LOI partagée, c'est ce que la peau iOS en peint :
+    /// elle lit désormais `FocusInline` (ci-dessous) et les métriques de la
+    /// RANGÉE. `ringSize` reste consommé — par le liseré blanc du filtre
+    /// d'étiquette actif ; `breathing` aussi, par la respiration des voisines.
     nonisolated public enum FocusCard {
         public static let ringSize: CGFloat = 1.5
         public static let radius: CGFloat = 16
@@ -135,12 +149,11 @@ nonisolated public enum LentilleMetrics {
         public static let avatarContext: AvatarContext = .conversationList
         public static let nameSize: CGFloat = 17
         @MainActor public static var nameFont: Font { MeeshyFont.relative(nameSize, weight: Name.weight) }
-        public static let shadowRadius: CGFloat = 12
-        public static let shadowY: CGFloat = 4
-        /// Ombre de la carte — nommée ici (`Core/`) : `0.35` est un littéral
-        /// de loi interdit en dur dans les fichiers de peau.
-        public static let shadowOpacityDark: Double = 0.35
-        public static let shadowOpacityLight: Double = 0.12
+        // `shadowRadius`/`shadowY`/`shadowOpacity{Dark,Light}` ont vécu ici
+        // jusqu'au 2026-08-23 : l'ombre portée de la carte. Retirées avec la
+        // carte elle-même — elles n'avaient AUCUN token dans
+        // `lentille-tokens.json` (contrairement au reste de cet enum) et plus
+        // aucun consommateur. Une valeur de loi sans loi ni lecteur.
         /// Respiration (2026-08-22, « le triple de l'espace actuel ») : les
         /// rangées voisines s'écartent de la ligne de focus de ce montant
         /// pendant la scène — translation de compositor, zéro relayout.
@@ -174,6 +187,38 @@ nonisolated public enum LentilleMetrics {
         /// pas), pleine une rangée plus loin — jamais de saut au passage.
         public static let breathingRampStart: CGFloat = 36
         public static let breathingRampLength: CGFloat = 40
+    }
+
+    // MARK: - Magnification EN PLACE (2026-08-23)
+
+    /// La rangée élue n'est plus RECOUVERTE par une carte : elle est
+    /// COMPLÉTÉE. Directive produit du 2026-08-23, mot pour mot : « pas de
+    /// bordure, on complète juste les informations, directement sur le row
+    /// existant ; sans que l'utilisateur ne sente un changement si ce n'est le
+    /// surplus d'information, l'objet reste le même ».
+    ///
+    /// AUCUN nombre neuf, et c'est le point : chaque valeur DÉRIVE des
+    /// métriques de la rangée. Un token de plus dans
+    /// `packages/shared/design/lentille-tokens.json` aurait fabriqué une
+    /// seconde géométrie à tenir synchronisée avec la première, alors que la
+    /// loi est justement « la même géométrie, plus d'information ».
+    nonisolated public enum FocusInline {
+        /// La rangée, plus ses deux marges — exactement le pas que la liste
+        /// lui réserve déjà. Assez pour loger la QUATRIÈME ligne (l'aperçu qui
+        /// coule sur deux lignes), jamais assez pour mordre une voisine : la
+        /// respiration (`FocusCard.breathing`, la même marge) les écarte
+        /// d'autant pendant la scène.
+        public static let height: CGFloat = Row.height + 2 * Row.marginVertical
+
+        /// Le MÊME padding vertical que la rangée : ce qui déborde déborde de
+        /// la marge, jamais du padding — sinon l'aperçu et le nom bougeraient
+        /// entre repos et magnification, et l'objet ne serait plus le même.
+        public static let paddingVertical: CGFloat = Row.paddingVertical
+
+        /// Le MÊME avatar que la rangée (44). La magnification n'agrandit plus
+        /// rien : elle ajoute. Un avatar qui passe de 44 à 52 sous le doigt,
+        /// c'est précisément le « changement senti » que la directive interdit.
+        public static let avatarContext: AvatarContext = Avatar.context
     }
 
     // MARK: - Encoche de mode

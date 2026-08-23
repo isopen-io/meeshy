@@ -118,6 +118,48 @@ export function isDeliverableQueuedPayload(payload: unknown): payload is Record<
   return typeof payload === 'object' && payload !== null && !Array.isArray(payload);
 }
 
+const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
+
+/**
+ * L'entrée relue porte-t-elle une conversation qu'on puisse INTERROGER ?
+ *
+ * Troisième garde de la frontière de désérialisation, et la seule des trois qui
+ * ne protège pas l'entrée d'elle-même : elle protège **les AUTRES entrées**
+ * d'elle.
+ *
+ * `drainedEventName` ferme le NOM et `isDeliverableQueuedPayload` la CHARGE ;
+ * les deux se prononcent sur une entrée en la lisant seule, et une entrée
+ * refusée n'emporte qu'elle. `conversationId` n'a pas cette propriété : le drain
+ * l'AGRÈGE — un seul `conversationId: { in: [...] }` porte la totalité du lot —
+ * pour deux requêtes qui décident du sort de tous :
+ *
+ * 1. `_dropEndedMemberships`, le gate d'AUTORISATION du rejeu ;
+ * 2. la résolution des participants qui porte les accusés de remise.
+ *
+ * **Le plancher est la forme ObjectId, pas « une chaîne ».** Mesuré contre le
+ * client Prisma généré du dépôt, sans base : `undefined`, `null`, un nombre et
+ * un objet sont refusés côté CLIENT (`PrismaClientValidationError`) ; une chaîne
+ * qui n'est pas un ObjectId atteint le moteur et lève
+ * `PrismaClientKnownRequestError: Malformed ObjectID`. Les deux moitiés
+ * atterrissent dans le même `catch`, donc s'arrêter à `typeof === 'string'`
+ * laisserait la seconde ouverte — et la seconde est la plus plausible, le dépôt
+ * portant DEUX façons de nommer une conversation (`normalizeConversationId`
+ * traduit un identifiant lisible en ObjectId).
+ *
+ * Ce que la garde vaut, et c'est le point : le `catch` de
+ * `_dropEndedMemberships` échoue OUVERT **par décision** — « une absence de
+ * réponse n'autorise rien à conclure », écrite pour une base indisponible. Il ne
+ * peut pas distinguer « la base n'a pas répondu » de « nous ne lui avons jamais
+ * posé de question valide », et la seconde rend le gate d'autorisation
+ * INOPÉRANT pour le lot ENTIER — l'arriéré des conversations qu'un lecteur a
+ * quittées, ou d'où il a été banni, rejoué en entier à cause d'une seule entrée
+ * illisible. Aucun `catch` ne peut réparer ça : la seule réponse est de ne pas
+ * mettre l'entrée dans la question.
+ */
+export function isAddressableConversationId(conversationId: unknown): conversationId is string {
+  return typeof conversationId === 'string' && OBJECT_ID.test(conversationId);
+}
+
 /**
  * La charge que le CONTRAT associe au rejeu de ce `eventType`.
  *

@@ -13,6 +13,7 @@ import {
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../middleware/auth';
+import { generateUniquePublicIdentifier } from '../utils/public-identifier';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../utils/response';
 
@@ -50,6 +51,34 @@ const registerAffiliateSchema = z.object({
   referredUserId: z.string(),
   sessionKey: z.string().optional(),
 });
+
+/**
+ * Préfixe de famille du jeton d'affiliation — conservé : il rend la valeur
+ * reconnaissable dans une URL de parrainage et dans les journaux.
+ */
+export const AFFILIATE_TOKEN_PREFIX = 'aff_';
+
+/**
+ * Un jeton d'affiliation garanti libre sur sa colonne, tiré au CSPRNG.
+ * `aff_` + 8 caractères base62 = **12 caractères**, contre 31 auparavant.
+ * L'escalade anti-collision et le dimensionnement viennent de la loi partagée
+ * (`utils/public-identifier.ts`), qui sert aussi les liens de partage.
+ */
+export async function generateUniqueAffiliateToken(prisma: {
+  affiliateToken: { findUnique: (args: any) => Promise<{ id: string } | null> };
+}): Promise<string> {
+  return generateUniquePublicIdentifier({
+    prefix: AFFILIATE_TOKEN_PREFIX,
+    label: "jeton d'affiliation",
+    isTaken: async (candidate) => {
+      const existing = await prisma.affiliateToken.findUnique({
+        where: { token: candidate },
+        select: { id: true }
+      });
+      return existing !== null;
+    }
+  });
+}
 
 export default async function affiliateRoutes(fastify: FastifyInstance) {
   /**
@@ -140,8 +169,15 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const body = createAffiliateTokenSchema.parse(request.body);
       const { name, maxUses, expiresAt } = body;
 
-      // Générer un token unique
-      const token = `aff_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+      // Jeton PUBLIC d'affiliation — il vit dans une URL de parrainage
+      // (`/signup/affiliate/<token>`) et il EST la capacité : qui le devine
+      // s'attribue le parrainage. Il valait `aff_<Date.now()>_<13 base36>`,
+      // soit 31 caractères qui donnaient l'instant de création en clair, tirés
+      // d'un `Math.random()` prédictible — et créés SANS aucune vérification
+      // d'unicité, alors que la colonne porte un index `@unique` : une
+      // collision se serait présentée à l'appelant sous la forme d'un 500.
+      // Voir `utils/public-identifier.ts`.
+      const token = await generateUniqueAffiliateToken(fastify.prisma);
       
       // Créer le token d'affiliation
       const affiliateToken = await fastify.prisma.affiliateToken.create({

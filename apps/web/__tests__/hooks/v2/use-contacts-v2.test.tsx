@@ -200,6 +200,32 @@ describe('useContactsV2', () => {
       });
     });
 
+    it('should resolve languageCode via the full prism — customDestinationLanguage counts, and codes are normalized', async () => {
+      mockGetAllUsers.mockResolvedValue({
+        data: [
+          { id: 'c-custom', username: 'custom', systemLanguage: '', regionalLanguage: '', customDestinationLanguage: 'de', isOnline: false, lastActiveAt: new Date() } as unknown as User,
+          { id: 'c-upper', username: 'upper', systemLanguage: 'EN', isOnline: false, lastActiveAt: new Date() } as unknown as User,
+          { id: 'c-region', username: 'region', systemLanguage: 'pt-BR', isOnline: false, lastActiveAt: new Date() } as unknown as User,
+          { id: 'c-none', username: 'none', isOnline: false, lastActiveAt: new Date() } as unknown as User,
+        ],
+      });
+
+      const { result } = renderHook(() => useContactsV2(), {
+        wrapper: createWrapper(),
+      });
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      const byId = (id: string): ContactV2 | undefined =>
+        result.current.contacts.find(c => c.id === id);
+      expect(byId('c-custom')?.languageCode).toBe('de');
+      expect(byId('c-upper')?.languageCode).toBe('en');
+      expect(byId('c-region')?.languageCode).toBe('pt');
+      expect(byId('c-none')?.languageCode).toBe('fr');
+    });
+
     it('should use displayName when available', async () => {
       const { result } = renderHook(() => useContactsV2(), {
         wrapper: createWrapper(),

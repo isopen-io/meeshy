@@ -210,12 +210,25 @@ final class UnreadCountLabelTests: XCTestCase {
             ("Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift", "UnreadCountLabel.messages("),
             ("Meeshy/Features/Main/Views/GlobalSearchView.swift", "UnreadCountLabel.messages("),
             ("Meeshy/Features/Main/Views/RootView.swift", "UnreadCountLabel.notifications("),
-            // Cinquième site, découvert par la CI de cette PR : 235i avait retiré
+            // Un cinquième site a vécu ici — `Lentille/Mode/LentilleFocusCard.swift`,
+            // découvert par la CI parce que 235i avait retiré
             // `accessibility.unread_messages` du catalogue en ne corrigeant que
-            // DEUX de ses trois porteurs. Sa CI est passée parce qu'elle tournait
-            // sur une base antérieure ; l'orpheline n'est apparue qu'une fois la
-            // branche confrontée à `main`.
-            ("Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift", "UnreadCountLabel.messages(")
+            // DEUX de ses trois porteurs. Il n'a plus de SUJET depuis le
+            // 2026-08-23 : la carte de magnification a été dissoute, et le
+            // compteur qu'elle peignait n'existe plus — la rangée monte l'atome
+            // partagé `UnreadCountBadge`, décoratif à l'intérieur d'un élément
+            // combiné, et le compte est annoncé par le libellé de RANGÉE, qui
+            // dérive de `ThemedConversationRow` (site 1 ci-dessus).
+            //
+            // Seule l'assertion POSITIVE disparaît avec son sujet. La moitié
+            // NÉGATIVE — les clés retirées du catalogue ne doivent réapparaître
+            // nulle part — est ce qui avait attrapé l'orpheline, et elle survit
+            // en balayant les deux dossiers Lentille (boucle ci-dessous), qui
+            // n'ont plus de site nommé dans cet inventaire.
+        ]
+        let retiredKeyScopes = [
+            "Meeshy/Features/Main/Lentille/Mode",
+            "Meeshy/Features/Main/Lentille/Row"
         ]
         for site in sites {
             let source = try iosSource(at: site.path)
@@ -234,6 +247,30 @@ final class UnreadCountLabelTests: XCTestCase {
                 )
             }
         }
+
+        for scope in retiredKeyScopes {
+            let directory = try iosRootURL().appendingPathComponent(scope)
+            let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                .filter { $0.pathExtension == "swift" }
+            XCTAssertFalse(
+                files.isEmpty,
+                "Le balayage n'a chargé AUCUN fichier depuis \(scope) — une garde qui lit zéro " +
+                "fichier passe TOUJOURS au vert sans avoir rien vérifié (leçon 257)."
+            )
+            for file in files {
+                let source = try String(contentsOf: file, encoding: .utf8)
+                for removed in [
+                    "\"conversation.scroll-to-bottom.a11y-unread\"",
+                    "\"unit.unread\"",
+                    "\"accessibility.unread_messages\""
+                ] {
+                    XCTAssertFalse(
+                        source.contains(removed),
+                        "\(file.lastPathComponent) : clé retirée du catalogue, elle ne doit plus être référencée en code"
+                    )
+                }
+            }
+        }
     }
 
     /// La concaténation elle-même ne doit pas revenir : c'est la forme d'écriture
@@ -245,6 +282,14 @@ final class UnreadCountLabelTests: XCTestCase {
             source.contains("unreadUnit"),
             "le nom au pluriel nu ne doit plus être collé au nombre — une concaténation ne peut pas accorder"
         )
+    }
+
+    private func iosRootURL() throws -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Components
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
     }
 
     private func iosSource(at relativePath: String) throws -> String {

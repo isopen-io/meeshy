@@ -13005,3 +13005,191 @@ structurels ⇒ risque de DÉRIVE, pas divergence.
 - **Et surtout pas dans le même lot** : 4 des 11 sont sur le chemin d'envoi de
   message, le plus fréquenté du produit. Un lot de consistance n'y entre pas
   sans ses propres témoins.
+
+## 2026-08-23 — Le repli couvrait tout, sauf le mode où il était seul (cycle 112)
+
+### 1. Une mesure PUBLIÉE est une affirmation, au même titre qu'un suivi hérité
+
+Le cycle 110 a instruit `mentionedUserIds` — champ que le web émet, que le schéma
+socket strippe, que REST honore — et l'a classé sous un titre sans ambiguïté :
+« Ce qui a été **MESURÉ CORRECT**, et pourquoi on l'écrit ». Motif : la passerelle
+retombe sur l'extraction des `@` du CONTENU quand la liste explicite est vide.
+
+Chaque phrase était vraie. La conclusion manquait une condition — et le titre,
+plus qu'un suivi ordinaire, décourageait d'y revenir.
+
+- **Un inventaire de NON-défauts se relit avec le soupçon d'un inventaire de
+  suivis.** La règle du cycle 107 (« un suivi hérité est une AFFIRMATION ») vaut
+  par l'autre bout : ce qu'un cycle déclare mesuré et sain est aussi une
+  affirmation, et elle se vérifie.
+
+### 2. Deux canaux qui lisent la MÊME variable ne sont pas deux canaux
+
+Le repli existe bien : `if (explicit.length === 0 && !content.includes('@'))`.
+Reste à savoir ce que `content` porte, et c'est le CLIENT qui en décide douze
+fichiers plus tôt :
+
+```ts
+if (encryptionMode === 'e2ee') messageData.content = '[Encrypted]';
+```
+
+| mode | `content` sur le fil | liste explicite | mentions |
+|---|---|---|---|
+| clair / `server` / `hybrid` | `coucou @alice` | strippée | extraites — rien n'est perdu |
+| **`e2ee`** | **`[Encrypted]`** | strippée | **AUCUNE** |
+
+Nommer quelqu'un dans une conversation chiffrée ne produisait ni ligne `Mention`,
+ni `validatedMentions` (le web surligne depuis ce champ), ni notification — le
+compositeur affichant la pastille du mentionné, l'expéditeur voyait un succès.
+
+- **Une redondance ne se mesure pas à ce que chaque voie PORTE, mais à ce qui les
+  fait TOMBER.** Deux voies qui échouent sur la même cause n'en font qu'une. La
+  question n'est pas « existe-t-il un autre chemin ? » mais « cet autre chemin,
+  dans quel état est-il quand celui-ci est coupé ? ».
+- **Un repli mal conditionné n'est jamais silencieux là où on le teste.** Trois
+  modes sur quatre n'en avaient aucun besoin et le rendaient invisible ; le
+  quatrième en dépendait entièrement et n'en recevait rien.
+
+### 3. Un plafond appartient à la RÉSOLUTION, pas au transport — et il TRONQUE
+
+L'extraction depuis le contenu borne à 50 depuis toujours ; la liste EXPLICITE
+n'était bornée nulle part. Déclarer le champ sur le transport qui porte le trafic
+sans le borner aurait ouvert une entrée non bornée de plus.
+
+Posé à la CONVERGENCE des deux sources, jamais dans les schémas :
+
+- dans un schéma, `.max(50)` **REJETTE** l'envoi ;
+- à la convergence, il **TRONQUE** — ce que l'autre source fait déjà.
+
+- **Deux sources de la même donnée doivent subir la même règle ET le même
+  comportement.** Aligner la règle en divergeant sur l'issue (rejet contre
+  troncature) fabrique une seconde incohérence en fermant la première.
+
+### 4. Fermer l'ENTRÉE avant la SORTIE n'était pas un ordre de commodité
+
+Le suivi n°1 du cycle 110 — typer la charge d'émission du web, qui naissait
+`Record<string, unknown>` et partait sous deux `as unknown as` — ne pouvait pas
+être exécuté plus tôt : **le contrat était faux**. Il ne déclarait ni l'enveloppe
+de chiffrement ni les dix champs que la passerelle honore. Typer l'émetteur
+d'abord aurait produit des erreurs sur un contrat mensonger, qu'on aurait fait
+taire par des casts.
+
+- **Un `Record<string, unknown>` de charge est un symptôme de CONSTRUCTION, pas
+  de typage.** Tant que l'objet se complétait par MUTATION (chiffrement, puis
+  pièces jointes), aucun type ne pouvait le décrire. Le corriger commence par
+  rendre la construction immuable — résoudre le chiffrement en VALEUR — pas par
+  écrire une annotation.
+- **Rendre l'émission à l'appelant supprime le besoin de corréler.** Deux
+  branches monomorphes portant chacune un nom d'événement LITTÉRAL sont vérifiées
+  par le socket typé ; l'enveloppe de délai n'a plus à connaître ni le nom ni la
+  charge. Les deux casts n'ont pas été contournés, ils sont devenus inutiles.
+
+### 5. Ce que la porte typée a fait tomber — trois déclarations manquantes
+
+À la première compilation, et aucune n'avait été nommée par une relecture :
+
+1. **`SendMessageRequest`** (contrat REST des clients) ne déclarait pas
+   `mentionedUserIds` — troisième site du même champ ;
+2. **le repli REST du web** ne l'envoyait pas non plus : même défaut que le lot,
+   sur le chemin de secours du MÊME envoi, et invisible parce que rien ne relie
+   visuellement les deux sites ;
+3. **`EncryptionMetadata` était une `interface`** — donc sans signature d'index
+   implicite, donc assignable à AUCUNE carte ouverte. Le contrat de fil déclare
+   la métadonnée en `Readonly<Record<string, unknown>>` délibérément (trois
+   clients, trois formes, JSON opaque en base). Tant que ce type était une
+   interface, **aucun émetteur typé ne pouvait remplir ce champ** : c'est ce qui
+   rendait le cast du web inévitable, et le cast, à son tour, empêchait de le
+   remarquer.
+
+- **Un cast sur un objet de contrat NOMME la déclaration qui manque** (cycle 96),
+  et la troisième vivait dans le paquet PARTAGÉ, à deux fichiers du contrat
+  qu'elle empêchait de satisfaire.
+
+### 6. Un commentaire qui justifie de GARDER quelque chose est une affirmation
+
+La charge socket portait `messageType` sous cette phrase :
+
+```ts
+// Elle reste posée — et posée JUSTE — parce que l'objet sert aussi de charge
+// au repli REST, où elle est, elle, autoritative (cf. `sendMessageViaRest`).
+```
+
+Le contrat ne déclare aucun champ de ce nom et le schéma le STRIPPE : ce motif
+justifiait, seul, de continuer à le poser. Il était faux — `sendMessageViaRest`
+reconstruit sa charge depuis `options` et recalcule `messageType` lui-même. Les
+deux objets ne se touchent jamais.
+
+Rien n'était perdu (le serveur dérive la même règle), mais **huit témoins
+attestaient une clé que la passerelle ne reçoit jamais**. Recalibrés sur le repli
+REST — seul site où la valeur est autoritative, donc le seul dont un changement
+casse quelque chose — plus un neuvième, en négatif, qui gèle son absence sur la
+charge socket.
+
+- Même famille que le compte (93) et le tri (86 bis) : **une justification de
+  maintien s'ouvre avant d'être crue**, et celle-ci tenait en vie le seul champ
+  que le typage refuserait.
+
+## Leçon 255 — un gate qui s'exprime par un PROXY peut être incapable de dire NON à l'un de ses membres
+
+Le drain de la file hors ligne ne demande pas à une entrée « quelle est ta
+forme ? ». Il lui demande **« sais-tu te diffuser ? »**, et lit la réponse dans
+la longueur d'une liste :
+
+```ts
+const emissions = _drainedEmissions(entry);
+if (emissions.length === 0) { dropEntry(entry, 'unresolvable-event-type'); continue; }
+```
+
+Le contrat est écrit dans la fonction elle-même : « une liste VIDE dit *je ne
+sais pas diffuser ceci*. C'est la seule réponse honnête. » Onze `eventType` sur
+douze passent par une table qui peut rendre `undefined`, donc `[]`. Le douzième —
+`'link-message'`, le seul dont la charge se **DÉPLIE** — passait par
+`linkMessageEmissions`, qui poussait l'enveloppe INCONDITIONNELLEMENT avant de
+regarder ce qu'elle contenait. **Il ne pouvait pas rendre `[]`.**
+
+Le refus du message dérivé était pourtant là, ancien et juste. Il ne servait à
+rien : il retirait la seule émission qui compte et laissait la liste à 1.
+
+Ce que l'enveloppe seule livre : rien (son unique auditeur, le web, lit
+`data.message` ; iOS et Android n'écoutent que le `message:new` refusé). Ce que
+la liste non vide AFFIRMAIT, en revanche, coûtait trois signaux — `count`
+comptait la remise, `conversationIds` ne nommait pas la conversation (donc rien
+n'envoyait le client rechercher un message toujours en base), et l'accusé de
+remise partait, avançant un curseur **MONOTONE** : la coche de l'auteur passait
+à « remis » pour un message qu'aucun destinataire n'a reçu. Sur le seul
+transport d'envoi dont dispose un participant anonyme.
+
+> La question à poser à tout gate qui s'exprime par un proxy (une longueur, un
+> `null`, un booléen dérivé) n'est pas « est-il correct ? » mais **« chaque
+> membre de ce qu'il arbitre peut-il le faire répondre NON ? »**. Le proxy avait
+> l'air uniforme parce qu'il est écrit UNE FOIS, au-dessus de la boucle — c'est
+> exactement ce qui cache l'exception.
+
+- Corollaire de journal : quand un refus a plusieurs causes, la `reason` les
+  SÉPARE. `'unresolvable-event-type'` accuse la file,
+  `'link-envelope-without-message'` accuse le producteur de l'enveloppe.
+
+## Leçon 256 — un témoin qui nomme correctement la moitié qu'il garde GÈLE l'autre
+
+Quatre des six témoins du cycle 114 ne sont pas des ajouts : ce sont des
+**retournements**. Ils existaient, ils étaient verts, et ils assertaient le
+défaut mot pour mot :
+
+```ts
+it("n'ajoute PAS `message:new` quand l'enveloppe ne porte aucun message", () => {
+  expect(linkMessageEmissions({}).map((e) => e.event)).toEqual([SERVER_EVENTS.LINK_MESSAGE_NEW]);
+});
+```
+
+L'intitulé dit VRAI, et c'est précisément cette vérité qui a rendu la seconde
+moitié de l'assertion invisible : `⇒ [LINK_MESSAGE_NEW]` se relit comme le RESTE
+de la phrase, pas comme une affirmation à instruire. Deux cycles de gardes
+posées à cette même frontière de désérialisation sont passés à côté.
+
+> **Un `toEqual` sur une liste entière affirme autant sur ce qu'il GARDE que sur
+> ce qu'il ADMET.** Les deux moitiés se relisent séparément — et l'intitulé du
+> témoin ne couvre en général que la première.
+
+- Même famille que le compte (93), le tri (86 bis) et le commentaire qui énonce
+  une contrainte (94) : **une affirmation portée par un témoin vert reste une
+  affirmation.**

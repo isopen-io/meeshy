@@ -126,6 +126,7 @@ const VALID_CONV_ID = 'a1b2c3d4e5f6a1b2c3d4e5f6';
 const VALID_CID = 'cid_11223344-5566-7788-aabb-ccddeeff0011';
 const USER_ID = 'user0011223344556677889900';
 const PARTICIPANT_ID = 'part0011223344556677889900';
+const MENTIONED_USER_ID = 'ment0011223344556677889900';
 
 function makeSocket(overrides: Partial<Socket> = {}): jest.Mocked<Socket> {
   return {
@@ -508,6 +509,71 @@ describe('MessageHandler', () => {
 
       expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
         expect.objectContaining({ encryptedPayload: undefined }),
+        PARTICIPANT_ID,
+      );
+    });
+
+    // Les mentionnés que l'ÉMETTEUR nomme, dans le sens ENTRANT.
+    //
+    // Le compositeur web retient la liste (`useMentions` →
+    // `getMentionedUserIds()`) et la pose sur le fil ; `POST /messages` l'honore
+    // depuis toujours ; ce handler-ci ne la lisait pas, et le schéma socket ne
+    // la déclarait pas — donc `z.object` la strippait.
+    //
+    // Le cycle 110 avait classé l'écart « consistance, pas perte » : la
+    // résolution retombe sur l'extraction des `@` du CONTENU. Le repli existe,
+    // et sa précondition tombe exactement sur le mode où il serait le seul
+    // recours — cf. le témoin `e2ee` qui suit.
+    it('carries the sender-named mention list through to the messaging service', async () => {
+      const sent = makeValidSendData({
+        content: 'coucou @alice',
+        mentionedUserIds: [MENTIONED_USER_ID],
+      });
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: sent });
+
+      await handler.handleMessageSend(socket, sent, callback);
+
+      expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ mentionedUserIds: [MENTIONED_USER_ID] }),
+        PARTICIPANT_ID,
+      );
+    });
+
+    // LE témoin du lot : en `e2ee`, le client remplace `content` par le littéral
+    // `[Encrypted]` AVANT d'émettre. Il n'y a plus aucun `@` à extraire, donc la
+    // liste explicite est le SEUL canal qui rattache le message à ceux qu'il
+    // nomme — et c'était précisément celui qu'on retirait. Nommer quelqu'un dans
+    // une conversation chiffrée ne produisait ni ligne `Mention`, ni
+    // `validatedMentions` (le surlignage du web se lit dessus), ni notification,
+    // pendant que le compositeur affichait la pastille du mentionné.
+    it('carries the mention list on an e2ee send, whose content holds no @ to extract', async () => {
+      const sent = makeValidSendData({
+        content: '[Encrypted]',
+        encryptedContent: 'Y2lwaGVydGV4dA==',
+        encryptionMode: 'e2ee',
+        mentionedUserIds: [MENTIONED_USER_ID],
+      });
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: sent });
+
+      await handler.handleMessageSend(socket, sent, callback);
+
+      const request = (deps.messagingService.handleMessage as jest.Mock<any>).mock.calls[0][0];
+      expect(request.mentionedUserIds).toEqual([MENTIONED_USER_ID]);
+      expect(request.content).not.toContain('@');
+    });
+
+    // Le négatif : un envoi qui ne nomme personne transmet `undefined`, jamais
+    // un tableau vide fabriqué par le transport. `resolveMessageMentions`
+    // discrimine sur `explicit.length === 0` pour décider s'il faut extraire
+    // depuis le contenu ; `undefined` est la seule forme qui dise « je
+    // n'affirme rien », et c'est elle qu'on transmet.
+    it('passes no mention list when the sender named nobody', async () => {
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: makeValidSendData() });
+
+      await handler.handleMessageSend(socket, makeValidSendData(), callback);
+
+      expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ mentionedUserIds: undefined }),
         PARTICIPANT_ID,
       );
     });

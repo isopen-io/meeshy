@@ -516,6 +516,10 @@ extension APIPost {
         // Outbound-link tracking map (runtime-only, like the counters above).
         feedPost.trackedLinkMap = trackedLinkMap
         feedPost.mentions = mentions
+        // Audience : sans ce hissage, la sheet d'édition rouvrirait toujours
+        // sur « Public » et un post en ONLY perdrait ses destinataires.
+        feedPost.visibility = visibility
+        feedPost.visibilityUserIds = visibilityUserIds
         return feedPost
     }
 

@@ -29,6 +29,7 @@ import { useCommentTarget } from '@/hooks/use-comment-target';
 import { postBackgroundSound } from '@/lib/story-transforms';
 import { PostDetail } from '@/components/v2/PostDetail';
 import { PostEditor } from '@/components/v2/PostEditor';
+import type { PostVisibility } from '@meeshy/shared/types/post';
 import { RepostModal } from '@/components/v2/RepostModal';
 import { useToast } from '@/components/v2';
 import { Skeleton } from '@/components/v2/Skeleton';
@@ -180,11 +181,19 @@ export default function PostDetailPage() {
 
   const handleEdit = () => setEditorOpen(true);
 
-  const handleSaveEdit = (data: { content: string; visibility: string }) => {
+  const handleSaveEdit = (data: {
+    content: string;
+    visibility: PostVisibility;
+    visibilityUserIds: string[];
+  }) => {
     updateMutation.mutate(
       {
         postId: post.id,
-        data: { content: data.content, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
+        data: {
+          content: data.content,
+          visibility: data.visibility,
+          visibilityUserIds: data.visibilityUserIds,
+        },
       },
       {
         onSuccess: () => {
@@ -303,6 +312,7 @@ export default function PostDetailPage() {
           open={editorOpen}
           initialContent={post.content ?? ''}
           initialVisibility={post.visibility}
+          initialVisibilityUserIds={post.visibilityUserIds}
           onSave={handleSaveEdit}
           onClose={() => setEditorOpen(false)}
           saving={updateMutation.isPending}

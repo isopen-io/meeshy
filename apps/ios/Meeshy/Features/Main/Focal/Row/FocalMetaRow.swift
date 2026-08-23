@@ -40,6 +40,28 @@ struct FocalMetaRow: View, Equatable {
     var editedAt: Date? = nil
     var isEditSaving: Bool = false
     var hasEditHistory: Bool = false
+    /// Toucher les COCHES ouvre les « détails de lecture ». Cette affordance
+    /// vivait dans `FocalIdentityHeader` tant que les têtes de groupe se
+    /// dataient par le haut ; elle a suivi les coches en bas (directive
+    /// 2026-08-23) — la date, elle, reste informative.
+    var onShowReadStatus: (() -> Void)? = nil
+
+    /// `==` MANUEL : `onShowReadStatus` est une closure, donc la synthèse
+    /// automatique d'`Equatable` ne s'applique plus. Elle est volontairement
+    /// HORS comparaison — c'est une action, pas un état ; la comparer
+    /// rendrait la rangée inégale à chaque reconstruction du parent et
+    /// annulerait le `.equatable()` qui protège la liste des re-rendus.
+    /// Même écart que `FocalIdentityHeader` pour `onOpenProfile`.
+    static func == (lhs: FocalMetaRow, rhs: FocalMetaRow) -> Bool {
+        lhs.isMe == rhs.isMe
+            && lhs.timeString == rhs.timeString
+            && lhs.deliveryStatus == rhs.deliveryStatus
+            && lhs.isDark == rhs.isDark
+            && lhs.indent == rhs.indent
+            && lhs.editedAt == rhs.editedAt
+            && lhs.isEditSaving == rhs.isEditSaving
+            && lhs.hasEditHistory == rhs.hasEditHistory
+    }
 
     private var metaTint: Color {
         isDark ? .white.opacity(FocalMetrics.MetaText.darkOpacity) : .black.opacity(FocalMetrics.MetaText.lightOpacity)
@@ -55,16 +77,30 @@ struct FocalMetaRow: View, Equatable {
             editedIndicator
             stamp
             if isMe, let deliveryStatus {
-                BubbleDeliveryCheck(
-                    status: deliveryStatus,
-                    isOffline: false,
-                    tint: metaTint,
-                    readTint: readTint
-                )
+                deliveryChecks(deliveryStatus)
             }
         }
         .padding(.leading, indent)
         .accessibilityHidden(true)
+    }
+
+    /// Les coches : un bouton quand la rangée sait ouvrir les détails de
+    /// lecture (zone de toucher élargie, le glyphe reste au gabarit méta).
+    @ViewBuilder
+    private func deliveryChecks(_ status: Message.DeliveryStatus) -> some View {
+        let check = BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint)
+        if let onShowReadStatus {
+            Button(action: onShowReadStatus) {
+                check
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "message.read_status", defaultValue: "Détails de lecture", bundle: .main))
+        } else {
+            check
+        }
     }
 
     /// L'horodatage de la rangée de suite : `FocalRevealedTime`, masqué au
