@@ -29,8 +29,17 @@ le dernier qui merge.
 Extrait de la matrice. Colonne « exécution » = `tout` pour chacune : le plan est
 revu, **rien n'est écrit**.
 
-- [ ] **C2-C3** — Portes de présentation consommant `ComposerIntent`
-      (tray iPhone/iPad ; *le feed reste la sheet v1*)
+- [x] **C2** ✅ *(livrée 2026-08-23)* — `MeeshyComposerHost` : plateau
+      (`PlateauTint`, 3 teintes-jetons, `@AppStorage`), scène (l'atelier SDK
+      ENVELOPPÉ, jamais réécrit), socle permanent (audience → œil → publier).
+      L'œil est `MeeshyScenePlayer(.preview)` — loi 6. **65/65 verts.**
+      Deux frontières SDK bougées : `currentEffects` en `public internal(set)`
+      (lecture seule hors module) et deux jetons `MeeshyColors` ajoutés.
+      Constat consigné : `textMuted` mesure **4,41:1** sur le violet profond,
+      sous AA — témoin négatif posé.
+- [ ] **C3** — le CÂBLAGE des portes vers le host (tray iPhone/iPad ; *le feed
+      reste la sheet v1*). Une part est déjà sur main (`eafead645`, les portes
+      portent leur format).
 - [ ] **C4b** — Rupture cliente restante : `UpgradeGateView` (426) + porte iPad
       + porte de mise à jour
 - [ ] **C5** — Collage O12 (la surface décide) + « Mes stickers » LRU
@@ -145,12 +154,52 @@ deviennent des tâches. Audit croisé matrice ⇄ code, vérifié des deux côt�
       s'affiche sur le web **sans son lieu, sans rien signaler**.
       **Oracle** : `packages/shared/fixtures/canvas-v3/v1-legacy-full.v3.json`.
       </details>
-- [ ] **W2 — enchaînement multi-scènes au web** *(écart LATENT, à caler AVANT
-      le multi-diapositives du lot C)*
+- [x] **W2 — enchaînement multi-scènes au web** ✅ *(livrée 2026-08-23, AVANT
+      le lot C comme sa contrainte l'exigeait)* — `StoryViewer` avance le rang
+      au fil des durées cumulées ; `computeStoryDurationMs` devient la SOMME
+      des scènes et la tête de lecture servie à la scène devient RELATIVE.
+      **750/750 suites, 13 980 tests verts.**
+      *Dette laissée, dite une fois* : les transitions inter-scènes
+      (`scene.opening`/`closing`) ne sont pas peintes — le web ne les a JAMAIS
+      peintes, pas même en legacy ; leur donner un rendu serait du neuf, pas de
+      la parité.
+      <details><summary>énoncé d'origine</summary>
       Le web ne rend que `scenes[sceneIndex]` — le contrat en autorise 10.
       Inoffensif tant qu'iOS n'émet qu'une scène ; **devient live le jour du
       multi-slides**, qui appartient au lot C. Livrer W2 après C serait
       fabriquer soi-même la régression.
+      </details>
+- [x] **W2 — enchaînement multi-scènes au web** ✅ *(livrée 2026-08-23, avant le
+      lot C comme exigé)*
+      Le partage est celui d'iOS, pas un partage neuf : `CanvasV3Scene` peint le
+      SEUL rang demandé — miroir de `MeeshyScenePlayer`, qui reçoit lui aussi
+      `sceneIndex` en Binding et n'en change jamais de lui-même — et c'est
+      `StoryViewer` qui l'avance au fil de sa tête de lecture. La durée d'une
+      scène n'est pas inventée non plus : une scène projetée en familles v1 EST
+      une slide (`StoryEffects(rendering:sceneIndex:)` iOS ⇄ `v1ViewOfScene`
+      web), donc sa durée est `computedTotalDuration()` — pin `timelineDuration`
+      d'abord, sinon les trois termes du contenu. W2 l'applique à CHAQUE scène
+      (`canvasV3SceneDurationsMs`) au lieu de la seule première. Gate :
+      **750/750 suites, 13 980 tests verts**, `tsc --noEmit` sans erreur neuve.
+      **Deux conséquences câblées, l'une et l'autre correctrices** :
+      `computeStoryDurationMs` devient la SOMME des scènes (sans quoi le timer
+      coupait la story à la fin de la scène 1 et les suivantes n'étaient jamais
+      peintes), et la tête de lecture servie à la scène devient RELATIVE à celle
+      qui joue — repère dans lequel les `timing`/`keyframes` des objets sont
+      écrits, une scène démarrant toujours à 0.
+      **Décidé seul, faute de source** : (1) le tap gauche/droite garde sa
+      sémantique story ↔ story, il ne parcourt pas les scènes — rien dans le
+      code ni les tâches ne le fixe, et le changer serait un arbitrage produit ;
+      (2) la barre de progression garde UN segment par story, la scène restant
+      l'intérieur d'une story ; (3) les transitions inter-scènes
+      (`scene.opening`/`closing`) restent hors périmètre — le web ne les a
+      jamais peintes, pas même en legacy.
+      **Trouvé au passage, non corrigé** : le golden PARTAGÉ
+      `story-3-slides.json` écrit son objet `place` en `payload: {name,
+      precision}`, alors qu'iOS émet `payload: {place: {...}}`
+      (`CanvasV3Migration.swift:269`, forme confirmée par `v1-legacy-full.v3.json`).
+      Sa scène 2 ne peint donc RIEN au web. Fixture partagée avec les tests
+      Swift — à trancher hors W2.
 
 > **Nuance relevée en vérifiant l'audit** : le contrat déclare **sept** kinds
 > actifs (`text, media, sticker, audio, place, drawing, mention`) mais **aucun
@@ -186,3 +235,40 @@ carte rendue). Figer la signature sans lui obligerait à la rouvrir aussitôt.
 ## Revue
 
 *(à remplir au fil des gates — un P0 périmé est un défaut bloquant)*
+
+---
+
+## Trouvé en chemin, à trancher hors des tâches ci-dessus
+
+- **Le golden PARTAGÉ `packages/shared/fixtures/canvas-v3/story-3-slides.json`
+  écrit son objet `place` sous une forme qu'aucun client ne lit** : `payload:
+  {name, precision}`, là où iOS émet `payload: {place: {...}}`
+  (`CanvasV3Migration.swift:269`, forme confirmée par `v1-legacy-full.v3.json`).
+  **Sa scène 2 ne peint donc rien au web.** La fixture est consommée par des
+  suites Swift (`CanvasV3DecodingTests`, `ScenePlayerIdentityRootTests`) :
+  corriger la fixture demande de rejouer ces suites, ce qui dépasse W1/W2.
+- **`Localizable.xcstrings` contient une clé EN DOUBLE**
+  (`reading_mode.bubbles.subtitle`, deux entrées). Tout script qui relit puis
+  réécrit ce JSON en détruit une **sans rien signaler** — c'est pourquoi les
+  clés de C2 y ont été insérées par ancrage TEXTUEL, avec preuve que le reste du
+  fichier est intact octet pour octet. Laquelle des deux entrées fait foi reste
+  à trancher.
+- **`CommentDraftStoreTests.swift` était sur `main` sans être enregistré au
+  projet** — sa suite ne s'exécutait pas. `xcodegen` l'a ramassée au lot C2 ;
+  elle tourne désormais.
+
+- **Le chemin d'upload tus échappe au funnel d'en-têtes.**
+  `packages/MeeshySDK/Sources/MeeshySDK/Networking/TusUploadManager.swift`
+  construit ses requêtes À LA MAIN (lignes 316-319, 447-449, 480-481) et
+  n'appelle JAMAIS `ClientInfoProvider.buildHeaders()` — vérifié : zéro
+  occurrence. Il ne pose donc que l'auth et les en-têtes `Tus-*`, et **aucun**
+  des en-têtes de plateforme : ni `X-App-Version`, ni `X-App-Platform`, ni
+  `X-Canvas-Caps`.
+  **Inoffensif aujourd'hui** — la porte serveur de rupture ne juge que
+  `POST /posts`, et `isBelowFloor` rend `false` sur l'absence, donc un upload
+  n'est jamais bloqué à tort. **Le jour où une porte serait posée sur la route
+  d'upload, les binaires périmés passeraient au travers sans être vus.**
+  Non corrigé par C4b : hors des fichiers nommés par son plan, et le correctif
+  demande ses propres tests plus un gate. À arbitrer — la question est de savoir
+  si le funnel d'en-têtes doit être une garantie du CLIENT (un seul chemin
+  sortant, garde de source à l'appui) ou une simple convention.

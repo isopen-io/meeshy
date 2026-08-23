@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.FormatColorReset
+import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerticalAlignBottom
@@ -253,6 +254,7 @@ fun StoryComposerScreen(
                             onColor = { color -> viewModel.onTextElementColor(element.id, color) },
                             onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
                             onBackground = { bg -> viewModel.onTextElementBackground(element.id, bg) },
+                            onCycleSize = { viewModel.onTextElementCycleSize(element.id) },
                             onCycleOutline = { viewModel.onTextElementCycleOutline(element.id) },
                             onDuplicate = { viewModel.onDuplicateTextElement(element.id) },
                             onReorder = { op -> viewModel.onReorderTextElement(element.id, op) },
@@ -771,6 +773,10 @@ private fun TextElementLayer(
     ) {
         val typography = element.style.typography()
         val textColor = parseHexColor(element.color)
+        // The pure model carries the base size in wire "design units" (1080-referential,
+        // iOS parity); the on-canvas preview shows it scaled to sp, and the element's own
+        // graphicsLayer `scale` above multiplies on top — mirroring iOS `fontSize × scale`.
+        val canvasFontSize = (element.size.designSize * STORY_TEXT_CANVAS_FONT_FACTOR).sp
         val displayText = element.text.ifBlank { stringResource(R.string.stories_composer_text_placeholder) }
         val baseStyle = if (typography.glow) {
             LocalTextStyle.current.copy(shadow = Shadow(color = textColor, blurRadius = 24f))
@@ -789,6 +795,7 @@ private fun TextElementLayer(
                 Text(
                     text = displayText,
                     color = parseHexColor(outline.color!!),
+                    fontSize = canvasFontSize,
                     fontWeight = FontWeight(typography.fontWeight),
                     fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
                     fontFamily = typography.family.toFontFamily(),
@@ -800,6 +807,7 @@ private fun TextElementLayer(
             Text(
                 text = displayText,
                 color = textColor,
+                fontSize = canvasFontSize,
                 fontWeight = FontWeight(typography.fontWeight),
                 fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
                 fontFamily = typography.family.toFontFamily(),
@@ -1003,6 +1011,13 @@ private fun StoryTextFontFamily.toFontFamily(): FontFamily = when (this) {
 /** The intrinsic on-canvas emoji size before per-sticker [StoryStickerElement.scale]. */
 private val STICKER_BASE_FONT_SIZE = 48.sp
 
+/**
+ * Maps a text element's wire "design-unit" size ([StoryTextSize.designSize], 1080-referential)
+ * to the on-canvas preview size in sp. The medium default (96 design units) previews at 18 sp;
+ * the element's own `scale` multiplies on top. Preview-only — the wire carries the design units.
+ */
+private const val STORY_TEXT_CANVAS_FONT_FACTOR = 0.1875f
+
 /** The on-canvas text colour palette — hex (no `#`), [StoryTextElement.DEFAULT_COLOR] first. */
 private val STORY_TEXT_COLORS = listOf(
     StoryTextElement.DEFAULT_COLOR,
@@ -1037,6 +1052,7 @@ private fun TextStyleToolbar(
     onColor: (String) -> Unit,
     onAlign: (StoryTextAlign) -> Unit,
     onBackground: (StoryTextBackground) -> Unit,
+    onCycleSize: () -> Unit,
     onCycleOutline: () -> Unit,
     onDuplicate: () -> Unit,
     onReorder: (StoryZOrder) -> Unit,
@@ -1059,6 +1075,17 @@ private fun TextStyleToolbar(
             AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
             AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
             AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
+            IconButton(onClick = onCycleSize) {
+                Icon(
+                    Icons.Filled.FormatSize,
+                    contentDescription = stringResource(R.string.stories_composer_size),
+                    tint = if (element.size != StoryTextSize.DEFAULT) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
             IconButton(onClick = onCycleOutline) {
                 Icon(
                     Icons.Filled.BorderColor,

@@ -16,6 +16,20 @@ public nonisolated struct MeeshyColors {
     public static let indigo900 = Color(hex: "312E81")
     public static let indigo950 = Color(hex: "1E1B4B")
 
+    // MARK: - Plateau du composer (O6)
+    //
+    // Les deux teintes que la rampe indigo ne couvrait pas. Le plateau du
+    // composer est un fond CHOISI par l'auteur, et un fond choisi doit rester
+    // un jeton : un `Color.black` local dans la vue échapperait au design
+    // system et aux mesures de contraste qui le gardent lisible.
+    //
+    // `violet950` vient de la même provenance que la rampe indigo (Tailwind),
+    // pour que les trois teintes se lisent comme une famille et non comme trois
+    // décisions séparées.
+
+    public static let plateauNoir = Color(hex: "000000")
+    public static let violet950 = Color(hex: "2E1065")
+
     // MARK: - Additional Brand Accents
 
     public static let purple500 = Color(hex: "A855F7")

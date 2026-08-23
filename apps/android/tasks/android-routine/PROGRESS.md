@@ -2,6 +2,70 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-23 **story text elements get a discrete font size (fontSize), born at the iOS-parity 96** (slice
+> `story-text-element-font-size`, feature-parity §E — the `story-text-element-styling` backlog's **size** item,
+> the follow-up the outline slice named). iOS births a fresh text element at `fontSize: 96` design units
+> (1080-referential) and changes it by pinch (baked into `fontSize`); Android's `StoryTextElement.toTextObject`
+> never set `fontSize`, so it leaked the wire default `64.0` — a caption rendered ~⅓ smaller than iOS. This lands
+> the parity size **and** a discrete size ladder so a size can be chosen by a single tap (an Android-side
+> improvement; iOS has no discrete size control).
+>
+> **Step 0 — merged the prior iteration's open PR first.** #3384 (`story-text-element-outline`) was left ⚠ blocked
+> last run on a base-red `ci.yml`. Re-examined: the **Android** merge gate was GREEN, and the gateway time-bomb
+> that held it (a `MessageHandlerEditDelete` fixture pinning `createdAt = 2026-08-22T10:00:00Z`, expiring at the
+> 24 h edit window) is **fixed on main** — commit `68e4285b` made the fixture relative to the real clock. #3384's
+> `ci.yml` was red only because its base (`e87b7b0d`) predated that fix. `ci.yml` remains red on main itself, now
+> on **Quality (bun)** — an `apps/web` type-debt ratchet regression (1240 vs baseline 1239, +1) — again zero
+> Android lines, unfixable in `apps/android` scope. Merge criteria held (Android gate green, diff `apps/android`
+> only, mergeable), so squash-merged #3384 → main (`4141bfd5`), documented the base-red resolution on the PR.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe refinement: the copy→patch for
+> `android-37` needs to patch **`package.xml`'s `<api-level>37.0</api-level>` → `37`**, not only
+> `source.properties`'s `AndroidVersion.ApiLevel` — AGP reads `package.xml` for the platform hash, so patching
+> only `source.properties` still fails with `Failed to find target with hash string 'android-37'`. With both
+> patched, full `assembleDebug testDebugUnitTest` ran locally, **BUILD SUCCESSFUL** (973 tasks). Local gate
+> available this run. (NOTES updated.)
+>
+> **Model, not duplication**: the wire `StoryTextObject.fontSize` (default `64.0`) already existed — this slice
+> adds only the **app-side** discrete model that projects onto it. New pure `StoryTextSize` enum ladder
+> (`SMALL 64` / `MEDIUM 96` / `LARGE 140` / `XLARGE 200` design units) with `DEFAULT = MEDIUM` (iOS-parity birth
+> size). `StoryTextSizeCycle.next` wraps largest→smallest (no "off" step — text always has a size; unlike the
+> outline cycle), off the ordered `StoryTextSize.entries` SSOT the tap and any future picker share.
+>
+> **`StoryTextElement`**: gained `size: StoryTextSize = StoryTextSize.DEFAULT`; `toTextObject` now sets
+> `fontSize = size.designSize.toDouble()` (default → 96.0, the parity fix). The effective on-screen size is
+> `designSize × scale`, mirroring iOS `fontSize × scale` — Android keeps the pinch on the separate `scale`
+> multiplier, so the two compose rather than fight. **VM** `onTextElementCycleSize(id)` advances one tap via the
+> pure cycle, inert on unknown id, selection/editing untouched — mirrors the outline/bg/style/align wrappers.
+> **Compose glue (exempt)**: a `FormatSize` toolbar button (tinted `primary` when the size is non-default, else
+> `onSurfaceVariant`) drives the tap; the canvas previews the size in sp via `designSize ×
+> STORY_TEXT_CANVAS_FONT_FACTOR` (0.1875, so MEDIUM→18 sp) on both the fill and the stroked underlay. 4 locales
+> get `stories_composer_size`.
+>
+> **Tests: +11** — 5 `StoryTextSizeTest` (the four-step design-unit ladder, `DEFAULT`=MEDIUM=96, cycle steps
+> order, `next` visits-all-then-wraps, `next` past-largest wraps), 3 `StoryTextElementTest` (fresh element born
+> MEDIUM; `toTextObject` carries default→96.0 and a chosen size→200.0), 3 `StoryComposerViewModelTest`
+> (`onTextElementCycleSize` advances / wraps at the top / inert on unknown id). **Mutation RED-proof ×2**:
+> dropping the `toTextObject` `fontSize` projection failed EXACTLY the 2 fontSize element tests (the ladder/cycle
+> stayed green); a no-advance `next` (return `steps[index]`) failed EXACTLY the 4 cycle tests (2 size + 2 VM; the
+> inert VM test and the born-MEDIUM test stayed green) — genuine discrimination, restored via backup.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, **BUILD SUCCESSFUL** (4m47s, no test failures).
+> Reviewer PASS. Diff is `apps/android` only (1 new pure model file, 1 model field + wire wiring, 1 VM method,
+> Compose glue in the composer screen, strings ×4 locales, +11 tests across 3 files, tracking docs). Verdict:
+> **PASS** — pure app-side model projecting onto the existing wire field + exempt Compose glue, behavioural tests
+> through the public API, no production logic outside apps/android.
+>
+> **Next**: still §E (Stories). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) **RTL** for text elements (a per-element writing-direction override; the wire has no dedicated field — iOS
+> derives it, so scout whether it's a client-only concern or needs a wire field); (2) **fade timing**
+> (`StoryTextObject.fadeIn`/`fadeOut` are Double? wire fields already — a per-element fade in/out, same shape as
+> this slice, projecting onto existing wire fields — likely the cleanest next thin slice); (3) the story-canvas
+> **Effets** tiles (filters / drawing / timeline). Prefer (2) — two existing wire fields, mirrors this slice.
+> NOTE: `frame` (iOS `StoryTextFrameShape` cycle) is NOT cleanly wire-backed — the frame fields live on iOS's
+> client `StoryTextObject` but are absent from the gateway/shared contract and the canvas-v3 fixtures, so skip it
+> unless a wire field is confirmed.
+
 > On 2026-08-23 **story text elements get a stroke outline (borderColor / borderWidth)** (slice
 > `story-text-element-outline`, feature-parity §E — the `story-text-element-styling` backlog's `outline/stroke`
 > item, the pending follow-up the `story-text-element-background` entry named). iOS lets a text element carry a

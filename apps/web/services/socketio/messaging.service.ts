@@ -22,6 +22,8 @@ import type {
   MessageHiddenForMeEventData,
   MessageRestoredForMeEventData,
   ReactionUpdateEventData,
+  MessageSendData,
+  MessageSendWithAttachmentsData,
 } from '@meeshy/shared/types/socketio-events';
 import type {
   Message,
@@ -224,27 +226,27 @@ export class MessagingService {
       this.consumedListeners.forEach(listener => listener(data));
     });
 
-    (socket as unknown as { on: (event: string, handler: (data: AttachmentStatusUpdatedEventData) => void) => void }).on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, (data: AttachmentStatusUpdatedEventData) => {
+    socket.on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, (data: AttachmentStatusUpdatedEventData) => {
       this.attachmentStatusListeners.forEach(listener => listener(data));
     });
 
-    (socket as unknown as { on: (event: string, handler: (data: AttachmentUpdatedEventData) => void) => void }).on(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, (data: AttachmentUpdatedEventData) => {
+    socket.on(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, (data: AttachmentUpdatedEventData) => {
       this.messageAttachmentUpdatedListeners.forEach(listener => listener(data));
     });
 
-    (socket as unknown as { on: (event: string, handler: (data: { count: number; conversationIds: string[] }) => void) => void }).on(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, (data: { count: number; conversationIds: string[] }) => {
+    socket.on(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, (data: { count: number; conversationIds: string[] }) => {
       this.pendingDeliveredListeners.forEach(listener => listener(data));
     });
 
-    (socket as unknown as { on: (event: string, handler: (data: LinkMessageNewEventData) => void) => void }).on(SERVER_EVENTS.LINK_MESSAGE_NEW, (data: LinkMessageNewEventData) => {
+    socket.on(SERVER_EVENTS.LINK_MESSAGE_NEW, (data: LinkMessageNewEventData) => {
       this.linkMessageNewListeners.forEach(listener => listener(data));
     });
 
-    (socket as unknown as { on: (event: string, handler: (data: MessagePinnedEventData) => void) => void }).on(SERVER_EVENTS.MESSAGE_PINNED, (data: MessagePinnedEventData) => {
+    socket.on(SERVER_EVENTS.MESSAGE_PINNED, (data: MessagePinnedEventData) => {
       this.messagePinnedListeners.forEach(listener => listener(data));
     });
 
-    (socket as unknown as { on: (event: string, handler: (data: MessageUnpinnedEventData) => void) => void }).on(SERVER_EVENTS.MESSAGE_UNPINNED, (data: MessageUnpinnedEventData) => {
+    socket.on(SERVER_EVENTS.MESSAGE_UNPINNED, (data: MessageUnpinnedEventData) => {
       this.messageUnpinnedListeners.forEach(listener => listener(data));
     });
 
@@ -551,11 +553,27 @@ export class MessagingService {
   }
 
   /**
-   * Emit event with timeout protection
+   * Emit event with timeout protection.
+   *
+   * `event` est NARROWED aux deux seuls noms que l'unique appelant lui passe.
+   * C'est ce que le contrat peut garder ici, et ce n'est pas tout ce qu'il
+   * faudrait : la CHARGE reste hors contrat, pour une raison mesurée.
+   *
+   * Les deux événements ne portent pas la même (`MessageSendData` contre
+   * `MessageSendWithAttachmentsData`), donc corréler nom→charge demande que
+   * l'appelant construise une charge TYPÉE. Or `messageData` naît
+   * `Record<string, unknown>` et se complète par MUTATION (chiffrement,
+   * pièces jointes) — la corrélation échoue sur cette forme, pas sur le
+   * contrat. Le typer suppose de rendre cette construction immuable, ce que le
+   * style du dépôt demande par ailleurs : c'est un lot à part, pas un ajout à
+   * celui-ci. Consigné en suivi plutôt que forcé ici.
+   *
+   * Le cast restant est donc RÉDUIT à la charge, et ne fabrique plus de faux
+   * contrat : le nom d'événement, lui, est désormais vérifié.
    */
   private async emitWithTimeout(
     socket: TypedSocket,
-    event: string,
+    event: typeof CLIENT_EVENTS.MESSAGE_SEND | typeof CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS,
     data: Record<string, unknown>,
     timeoutMs: number
   ): Promise<MessageAckResponse> {
@@ -580,7 +598,15 @@ export class MessagingService {
         }
       };
 
-      (socket as unknown as { emit: (event: string, data: unknown, cb: typeof callback) => void }).emit(event, data, callback);
+      // Le nom d'événement est une union de LITTÉRAUX : le tester le rétrécit,
+      // et chaque branche redevient monomorphe — donc chaque assertion nomme la
+      // charge réellement attendue pour CET événement, au lieu d'une
+      // intersection qui prétendrait satisfaire les deux à la fois.
+      if (event === CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS) {
+        socket.emit(event, data as unknown as MessageSendWithAttachmentsData, callback);
+      } else {
+        socket.emit(event, data as unknown as MessageSendData, callback);
+      }
     });
   }
 

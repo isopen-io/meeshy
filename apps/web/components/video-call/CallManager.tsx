@@ -926,7 +926,7 @@ export function CallManager() {
     const { currentCall: active } = useCallStore.getState();
     const socket = meeshySocketIOService.getSocket();
     if (socket && active?.id) {
-      (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_LEAVE, {
+      socket.emit(CLIENT_EVENTS.CALL_LEAVE, {
         callId: active.id,
       });
     }
