@@ -1431,3 +1431,49 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle107-bis.md`
       `VideoCallInterface.tsx`. Le défaut de ce lot, reproduit côté client.
 - [ ] Suivi — trois services prennent encore un `Server` NU pour ÉMETTRE ; ni le
       balayage de réception (par construction) ni celui d'émission ne les couvre.
+
+## Cycle 108 — le garde disait « RÉGRESSION » sur un arbre intact
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108.md`
+
+- [x] **Le cliquet de dette de types rendait un verdict FAUX, en rouge, sur un
+      arbre que personne n'avait touché.** Sur un clone frais aux commandes que
+      le `CLAUDE.md` prescrit (`bun install --ignore-scripts`), il annonçait
+      « RÉGRESSION : 1242 erreurs, baseline 1239 (+3) » — alors que `main` était
+      vert, la CI l'ayant prouvé au même arbre. Les dix fichiers qu'il désignait
+      comme « les plus touchés » n'avaient aucun rapport avec les trois erreurs.
+- [x] **Le tiers exact, mesuré** : `packages/shared/dist` absent → 1242 ;
+      présent → 1239. Le delta est constitué des trois seuls TS2307 de
+      `__tests__/lentille/shared-law-dist-parity.test.ts`, qui importe
+      `packages/shared/dist/utils/*.js` par chemin RELATIF.
+- [x] **Un invariant documenté peut être exact sur le mécanisme qu'il inspecte
+      et faux sur le système.** L'en-tête jurait que le build de `shared` ne
+      change rien, « puisque les `paths` résolvent vers la SOURCE ». Vrai du
+      spécificateur — et c'est exactement pourquoi le fichier de parité le
+      contourne par chemin relatif, comme son propre en-tête l'explique. La
+      dérive passait par la porte que le raisonnement déclarait infranchissable.
+- [x] Octave suivante de la leçon du cycle 107 bis : là, la sortie du gate était
+      silencée ; ici elle est lue, le code de sortie honnête, le compteur
+      self-testé — et le verdict faux quand même, parce que la PRÉCONDITION de
+      la mesure n'était ni vérifiée ni vérifiable.
+- [x] `unresolved_dist_imports()` : le garde REFUSE DE MESURER tant que les
+      artefacts manquent, et nomme les modules non résolus + la commande qui y
+      remédie. Ni les chemins ni le fichier ne sont codés en dur — un import
+      ajouté demain est couvert sans retouche. C'est la déclaration `.d.ts` qui
+      est consultée, pas le `.js` : un build partiel reste détecté.
+- [x] 3 cas de self-test neufs ; **RED prouvé sur 4 mutations**, chacune tombant
+      sur le cas écrit pour elle, + RED sur l'arbre réel (`dist/` mis de côté).
+      Gates : self-test 6/6, cliquet ✓ 1239 inchangé, `bash -n` propre.
+- [x] **Recensement corrigé du suivi web** : le cycle 107 bis annonçait « trois
+      casts d'émission » ; il y en a **13**, dans 4 fichiers (`CallManager.tsx`
+      6, `VideoCallInterface.tsx` 5, `use-video-call.ts` 1,
+      `messaging.service.ts` 1).
+- [ ] Suivi — les 13 casts sont eux-mêmes des ERREURS de type (TS2571) comptées
+      dans les 1239 et tolérées par le cliquet. Les fermer fait DESCENDRE la
+      dette.
+- [ ] Suivi neuf — **`call:end` déclare un ack REQUIS que le web n'envoie
+      jamais** (3 émetteurs). Trancher contre la passerelle laquelle des deux
+      moitiés ment.
+- [ ] Suivi neuf — **`CallJoinAck` transcrit en ligne DEUX fois dans le même
+      fichier** (`CallManager.tsx:810` et `:1005`), divergentes, et toutes deux
+      rendant `success` optionnel là où le contrat le déclare requis.
