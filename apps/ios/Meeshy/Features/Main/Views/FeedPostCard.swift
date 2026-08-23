@@ -828,16 +828,21 @@ struct FeedPostCard: View {
                     if isAuthor {
                         Text("·").font(.caption).foregroundColor(theme.textMuted)
                         HStack(spacing: 3) {
-                            Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
-                            Text(CompactCountLabel.text(post.impressionCount)).font(.caption2.weight(.medium))
-                            Text("·").font(.caption2)
-                            Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                            Text(CompactCountLabel.text(post.viewCount)).font(.caption2.weight(.medium))
+                            ReachMetricLabel(
+                                icon: "chart.bar.fill",
+                                count: post.impressionCount,
+                                label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
+                                tint: theme.textMuted
+                            )
+                            Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                                .accessibilityHidden(true)
+                            ReachMetricLabel(
+                                icon: "eye.fill",
+                                count: post.viewCount,
+                                label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
+                                tint: theme.textMuted
+                            )
                         }
-                        .foregroundColor(theme.textMuted)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
-                        .accessibilityValue("\(post.impressionCount) · \(post.viewCount)")
                     }
                 }
             }
