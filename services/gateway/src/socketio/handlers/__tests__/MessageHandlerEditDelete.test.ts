@@ -251,6 +251,18 @@ function makeSocketUser(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// `admitMessageEdit` refuse une édition passé UNE FENÊTRE DE 24 H depuis
+// `createdAt`. Un littéral de date dans une fixture d'édition n'est donc pas une
+// constante : c'est une bombe à retardement, qui passe le jour où on l'écrit et
+// échoue pour tout le monde 24 h plus tard. Deux cas l'ont fait — `2026-08-22T10:00:00Z`,
+// vert jusqu'au 2026-08-23 10:00 UTC, rouge ensuite et définitivement.
+//
+// Ces cas-là portent sur la FORME de la charge (`createdAt` présent) et sur
+// l'identité de `senderId` — jamais sur l'âge du message. L'instant doit donc
+// être RELATIF, et seulement assez ancien pour n'être pas confondu avec l'instant
+// de l'édition.
+const WITHIN_EDIT_WINDOW = () => new Date(Date.now() - 60_000);
+
 function makeMessageRecord(overrides: Record<string, unknown> = {}) {
   return {
     id: VALID_MSG_ID,
@@ -592,7 +604,7 @@ describe('MessageHandler — handleMessageEdit', () => {
   // résultat exact d'un correctif naïf (`senderId: message.senderId`).
   it('sert le noyau que `SocketIOMessage` EXIGE — sans quoi le décodeur iOS jette la charge utile entière', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord({
-      createdAt: new Date('2026-08-22T10:00:00Z'),
+      createdAt: WITHIN_EDIT_WINDOW(),
       messageType: 'text',
     }));
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
@@ -616,7 +628,7 @@ describe('MessageHandler — handleMessageEdit', () => {
   // l'identité utilisateur.
   it('sert le `User.id` de l\'expéditeur, jamais le `Participant.id` de la colonne', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord({
-      createdAt: new Date('2026-08-22T10:00:00Z'),
+      createdAt: WITHIN_EDIT_WINDOW(),
     }));
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
