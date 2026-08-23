@@ -54,6 +54,8 @@ data class FeedPostPresentation(
     val impressionCount: Int,
     /** True when the signed-in viewer authored this post — gates the author-only reach line. */
     val isAuthor: Boolean,
+    /** The post's shared place, or null when none — mirror of iOS `post.location`. */
+    val location: FeedLocationPresentation? = null,
 )
 
 object FeedPostBuilder {
@@ -127,6 +129,7 @@ object FeedPostBuilder {
             viewCount = post.viewCount ?: 0,
             impressionCount = post.impressionCount ?: 0,
             isAuthor = currentUserId != null && post.author?.id == currentUserId,
+            location = FeedPostLocationBuilder.build(post.location),
         )
     }
 
