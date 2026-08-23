@@ -776,10 +776,22 @@ function CanvasV3Object({
 /// le gateway ne l'émet, et iOS fait `continue` à la lecture — ne pas lui écrire
 /// de rendu, il n'arrivera jamais.
 ///
-/// Dette assumée : un document MULTI-SCÈNES (le contrat en autorise 10) ne rend
-/// que `sceneIndex`, sans enchaînement ni transition inter-scènes. iOS n'en émet
-/// qu'une aujourd'hui ; l'enchaînement est la tâche W2, qui se cale AVANT le
-/// multi-diapositives du lot C — après lui, ce serait une régression.
+/// W2 (2026-08-23) a refermé la dette d'enchaînement que la ligne précédente
+/// annonçait. Ce composant peint TOUJOURS le seul rang demandé, et c'est son
+/// contrat, pas une lacune : c'est le miroir de `MeeshyScenePlayer`, qui reçoit
+/// lui aussi `sceneIndex` (en Binding) et n'en change jamais de lui-même. Ce
+/// qui manquait vivait chez l'hôte — `StoryViewer` ne faisait jamais varier ce
+/// rang, si bien qu'un document à 10 scènes (le plafond du contrat) n'en
+/// montrait qu'une. L'hôte fait désormais avancer le rang au fil de sa tête de
+/// lecture, une scène à la fois, chacune pour SA durée
+/// (`canvasV3SceneDurationsMs`, `lib/story-transforms.ts`), et sert une tête de
+/// lecture RELATIVE à la scène qui joue — le repère dans lequel les `timing`
+/// des objets sont écrits.
+///
+/// Reste hors périmètre, et le sera tant qu'aucun lecteur ne le rendra : les
+/// TRANSITIONS inter-scènes (`scene.opening` / `scene.closing`). Le web ne les
+/// a jamais peintes, pas même sur son chemin legacy ; leur donner un rendu
+/// serait du neuf, pas de la parité.
 export function CanvasV3Scene({
   doc,
   sceneIndex = 0,

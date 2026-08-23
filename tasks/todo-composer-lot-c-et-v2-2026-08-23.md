@@ -169,6 +169,37 @@ deviennent des tâches. Audit croisé matrice ⇄ code, vérifié des deux côt�
       multi-slides**, qui appartient au lot C. Livrer W2 après C serait
       fabriquer soi-même la régression.
       </details>
+- [x] **W2 — enchaînement multi-scènes au web** ✅ *(livrée 2026-08-23, avant le
+      lot C comme exigé)*
+      Le partage est celui d'iOS, pas un partage neuf : `CanvasV3Scene` peint le
+      SEUL rang demandé — miroir de `MeeshyScenePlayer`, qui reçoit lui aussi
+      `sceneIndex` en Binding et n'en change jamais de lui-même — et c'est
+      `StoryViewer` qui l'avance au fil de sa tête de lecture. La durée d'une
+      scène n'est pas inventée non plus : une scène projetée en familles v1 EST
+      une slide (`StoryEffects(rendering:sceneIndex:)` iOS ⇄ `v1ViewOfScene`
+      web), donc sa durée est `computedTotalDuration()` — pin `timelineDuration`
+      d'abord, sinon les trois termes du contenu. W2 l'applique à CHAQUE scène
+      (`canvasV3SceneDurationsMs`) au lieu de la seule première. Gate :
+      **750/750 suites, 13 980 tests verts**, `tsc --noEmit` sans erreur neuve.
+      **Deux conséquences câblées, l'une et l'autre correctrices** :
+      `computeStoryDurationMs` devient la SOMME des scènes (sans quoi le timer
+      coupait la story à la fin de la scène 1 et les suivantes n'étaient jamais
+      peintes), et la tête de lecture servie à la scène devient RELATIVE à celle
+      qui joue — repère dans lequel les `timing`/`keyframes` des objets sont
+      écrits, une scène démarrant toujours à 0.
+      **Décidé seul, faute de source** : (1) le tap gauche/droite garde sa
+      sémantique story ↔ story, il ne parcourt pas les scènes — rien dans le
+      code ni les tâches ne le fixe, et le changer serait un arbitrage produit ;
+      (2) la barre de progression garde UN segment par story, la scène restant
+      l'intérieur d'une story ; (3) les transitions inter-scènes
+      (`scene.opening`/`closing`) restent hors périmètre — le web ne les a
+      jamais peintes, pas même en legacy.
+      **Trouvé au passage, non corrigé** : le golden PARTAGÉ
+      `story-3-slides.json` écrit son objet `place` en `payload: {name,
+      precision}`, alors qu'iOS émet `payload: {place: {...}}`
+      (`CanvasV3Migration.swift:269`, forme confirmée par `v1-legacy-full.v3.json`).
+      Sa scène 2 ne peint donc RIEN au web. Fixture partagée avec les tests
+      Swift — à trancher hors W2.
 
 > **Nuance relevée en vérifiant l'audit** : le contrat déclare **sept** kinds
 > actifs (`text, media, sticker, audio, place, drawing, mention`) mais **aucun
