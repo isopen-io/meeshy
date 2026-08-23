@@ -9,7 +9,7 @@ import { NotificationService } from '../../services/notifications/NotificationSe
 import { notifyReactionAdded, notifyReactionRemoved } from '../../services/notifications/reactionNotify';
 import { ReactionService } from '../../services/ReactionService.js';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
-import type { SocketIOResponse, ReactionUpdateEventData } from '@meeshy/shared/types/socketio-events';
+import type { AckOf, AckResponseOf, ReactionUpdateEventData } from '@meeshy/shared/types/socketio-events';
 import type { ReactionUpdateEvent } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS, RATE_LIMIT_REFUSAL_MESSAGE } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
@@ -68,7 +68,7 @@ export class ReactionHandler {
   async handleReactionAdd(
     socket: Socket,
     data: { messageId: string; emoji: string },
-    callback?: (response: SocketIOResponse<unknown>) => void
+    callback?: AckOf<'reaction:add'>
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketReactionAddSchema, data);
@@ -81,7 +81,7 @@ export class ReactionHandler {
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
         logger.error('reaction:add — unauthenticated socket', { socketId: socket.id });
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'reaction:add'> = {
           success: false,
           error: 'User not authenticated'
         };
@@ -106,7 +106,7 @@ export class ReactionHandler {
 
       const participantId = await this._resolveParticipantId(user, userId, isAnonymous, validated.messageId);
       if (!participantId) {
-        const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
+        const errorResponse: AckResponseOf<'reaction:add'> = { success: false, error: 'Could not resolve participant' };
         if (callback) callback(errorResponse);
         return;
       }
@@ -120,7 +120,7 @@ export class ReactionHandler {
       });
 
       if (!addResult) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'reaction:add'> = {
           success: false,
           error: 'Failed to add reaction'
         };
@@ -150,7 +150,7 @@ export class ReactionHandler {
       // and leave peers uninformed until the next reaction:sync. The success
       // response is sent here, before any further await, so the aggregation read
       // can never gate it.
-      const successResponse: SocketIOResponse<unknown> = {
+      const successResponse: AckResponseOf<'reaction:add'> = {
         success: true,
         data: reaction
       };
@@ -191,7 +191,7 @@ export class ReactionHandler {
       void this._createReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous, reaction.id);
     } catch (error: unknown) {
       logger.error('reaction:add failed', { error });
-      const errorResponse: SocketIOResponse<unknown> = {
+      const errorResponse: AckResponseOf<'reaction:add'> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to add reaction'
       };
@@ -205,7 +205,7 @@ export class ReactionHandler {
   async handleReactionRemove(
     socket: Socket,
     data: { messageId: string; emoji: string },
-    callback?: (response: SocketIOResponse<unknown>) => void
+    callback?: AckOf<'reaction:remove'>
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketReactionRemoveSchema, data);
@@ -217,7 +217,7 @@ export class ReactionHandler {
 
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'reaction:remove'> = {
           success: false,
           error: 'User not authenticated'
         };
@@ -242,7 +242,7 @@ export class ReactionHandler {
 
       const participantId = await this._resolveParticipantId(user, userId, isAnonymous, validated.messageId);
       if (!participantId) {
-        const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
+        const errorResponse: AckResponseOf<'reaction:remove'> = { success: false, error: 'Could not resolve participant' };
         if (callback) callback(errorResponse);
         return;
       }
@@ -262,7 +262,7 @@ export class ReactionHandler {
         // and roll the optimistic removal back, re-showing a reaction that is
         // gone. Mirrors the idempotent REST DELETE (R-GW2) and the add path's
         // P2002 handling.
-        if (callback) callback({ success: true, data: { message: 'Reaction already absent' } });
+        if (callback) callback({ success: true });
         return;
       }
 
@@ -272,10 +272,7 @@ export class ReactionHandler {
       // those reads must NOT flip the ACK to failure — that would make the client
       // roll its optimistic un-react back and re-show a reaction that is already
       // gone from the DB.
-      const successResponse: SocketIOResponse<unknown> = {
-        success: true,
-        data: { message: 'Reaction removed successfully' }
-      };
+      const successResponse: AckResponseOf<'reaction:remove'> = { success: true };
       if (callback) callback(successResponse);
 
       // Wrapped in its own try/catch so a throw never reaches the outer catch
@@ -311,7 +308,7 @@ export class ReactionHandler {
       void this._retractReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous);
     } catch (error: unknown) {
       logger.error('reaction:remove failed', { error });
-      const errorResponse: SocketIOResponse<unknown> = {
+      const errorResponse: AckResponseOf<'reaction:remove'> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to remove reaction'
       };
@@ -325,13 +322,13 @@ export class ReactionHandler {
   async handleReactionSync(
     socket: Socket,
     messageId: string,
-    callback?: (response: SocketIOResponse<unknown>) => void
+    callback?: AckOf<'reaction:request-sync'>
   ): Promise<void> {
     try {
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
         logger.error('reaction:sync — unauthenticated socket', { socketId: socket.id });
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'reaction:request-sync'> = {
           success: false,
           error: 'User not authenticated'
         };
@@ -352,7 +349,7 @@ export class ReactionHandler {
 
       const participantId = await this._resolveParticipantId(user, userId, isAnonymous, messageId);
       if (!participantId) {
-        const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
+        const errorResponse: AckResponseOf<'reaction:request-sync'> = { success: false, error: 'Could not resolve participant' };
         if (callback) callback(errorResponse);
         return;
       }
@@ -364,14 +361,14 @@ export class ReactionHandler {
         currentParticipantId: participantId
       });
 
-      const successResponse: SocketIOResponse<unknown> = {
+      const successResponse: AckResponseOf<'reaction:request-sync'> = {
         success: true,
         data: reactionSync
       };
       if (callback) callback(successResponse);
     } catch (error: unknown) {
       logger.error('reaction:sync failed', { error });
-      const errorResponse: SocketIOResponse<unknown> = {
+      const errorResponse: AckResponseOf<'reaction:request-sync'> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to sync reactions'
       };
