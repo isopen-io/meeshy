@@ -123,9 +123,31 @@ public protocol PostServiceProviding: Sendable {
     func recordImpressions(postIds: [String], source: String) async throws
     func recordImpression(postId: String, source: String) async throws
     func recordEngagement(_ sessions: [EngagementSession]) async throws
+    /// `POST /posts/from-attachment` — publie une pièce jointe DÉJÀ reçue en
+    /// conversation, sans la retélécharger ni la réenvoyer : le fichier est
+    /// déjà sur le stockage, le serveur le duplique côté post.
+    ///
+    /// `target` absent laisse la règle partagée choisir d'après le type MIME
+    /// (image → POST, vidéo/son → REEL) ; une STORY se demande toujours
+    /// explicitement. `capturedInApp` est REDÉCLARÉ ici parce que le serveur ne
+    /// l'infère pas : il le journalise pour que « publié depuis une capture »
+    /// reste lisible après coup.
+    ///
+    /// Requirement SÉPARÉE avec défaut ci-dessous — même convention que le
+    /// reste de ce protocole : un double de test qui ne la surcharge pas reste
+    /// conforme.
+    func publishAttachment(attachmentId: String, target: PublicationTarget?, content: String?, capturedInApp: Bool) async throws -> APIPost
 }
 
 public extension PostServiceProviding {
+    /// Défaut : un conformeur qui ne publie pas depuis une pièce jointe (tous
+    /// les doubles de test existants) reste valide. Il ÉCHOUE plutôt que de
+    /// rendre un post fabriqué — un défaut silencieux ferait passer un témoin
+    /// qui croit avoir publié.
+    func publishAttachment(attachmentId: String, target: PublicationTarget?, content: String?, capturedInApp: Bool) async throws -> APIPost {
+        throw APIError.serverError(501, "publishAttachment not implemented by \(Self.self)")
+    }
+
     /// Défaut : un conformeur qui n'implémente que la signature SANS mentions
     /// (mocks existants) reste valide — les pastilles sont simplement ignorées
     /// tant que le type ne surcharge pas cette méthode. `PostService` la
@@ -481,6 +503,28 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             method: "POST",
             body: bodyData
         )
+        return response.data
+    }
+
+    /// Publie une pièce jointe reçue en conversation. Le corps ne porte que ce
+    /// que le serveur ne peut PAS déduire : l'identifiant du média, la
+    /// destination quand l'utilisateur l'a choisie, le mot qu'il ajoute, et la
+    /// provenance — que seul le client qui a ouvert la caméra connaît.
+    public func publishAttachment(
+        attachmentId: String,
+        target: PublicationTarget? = nil,
+        content: String? = nil,
+        capturedInApp: Bool = false
+    ) async throws -> APIPost {
+        let body = PublishAttachmentRequest(
+            attachmentId: attachmentId,
+            target: target?.rawValue,
+            content: content,
+            // Omis quand faux : le serveur applique le même défaut, et une clé
+            // absente vaut mieux qu'une affirmation sans contenu.
+            capturedInApp: capturedInApp ? true : nil
+        )
+        let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts/from-attachment", body: body)
         return response.data
     }
 

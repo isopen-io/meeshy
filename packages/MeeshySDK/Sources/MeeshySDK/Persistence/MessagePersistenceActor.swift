@@ -1616,6 +1616,7 @@ public actor MessagePersistenceActor {
                             mimeType: apiAtt.mimeType ?? "application/octet-stream",
                             fileSize: apiAtt.fileSize ?? 0,
                             fileUrl: apiAtt.fileUrl ?? "",
+                            capturedInApp: apiAtt.capturedInApp == true,
                             width: apiAtt.width,
                             height: apiAtt.height,
                             thumbnailUrl: apiAtt.thumbnailUrl,
