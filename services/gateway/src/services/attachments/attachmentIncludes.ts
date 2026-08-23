@@ -94,6 +94,10 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
   createdAt: true,
   transcription: true,
   translations: true,
+  // La provenance voyage avec le média : la feuille de partage lit ce drapeau
+  // sur l'attachement livré par la LISTE de messages pour décider si publier
+  // demande confirmation. Absent d'ici, la garde ne se déclenche jamais.
+  capturedInApp: true,
   // BUG2 A' — réactions par-image (agrégées au mapping en reactionSummary + currentUserReactions)
   reactions: { select: { emoji: true, participantId: true } },
 });
