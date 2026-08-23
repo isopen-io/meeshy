@@ -3,7 +3,13 @@
  * Gestion des connexions, conversations et traductions en temps réel
  */
 
-import { Server as SocketIOServer, type Socket } from 'socket.io';
+import { Server as SocketIOServer } from 'socket.io';
+// Cycle 107 — le `Socket` vient du contrat, pas de `socket.io`. Ce module
+// CONSTRUIT le serveur (d'où l'import de `Server` ci-dessus, immédiatement
+// paramétré par les deux cartes du contrat), mais il ÉCOUTE comme les autres :
+// ses paramètres de socket n'ont aucune raison d'être plus permissifs que ceux
+// des six handlers qui dérivent déjà les leurs.
+import type { MeeshySocket as Socket } from './typed-socket';
 import { Server as HTTPServer } from 'http';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
@@ -350,13 +356,13 @@ export class MeeshySocketIOManager {
 
     // Initialiser le SocialEventsHandler pour les broadcasts feed
     this.socialEventsHandler = new SocialEventsHandler({
-      io: this.io as SocketIOServer,
+      io: this.io,
       prisma: this.prisma,
     });
 
     // Initialiser le LocationHandler pour les événements de partage de localisation
     this.locationHandler = new LocationHandler({
-      io: this.io as SocketIOServer,
+      io: this.io,
       prisma: this.prisma,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
@@ -367,7 +373,7 @@ export class MeeshySocketIOManager {
     PostAudioService.init(this.prisma, this.socialEventsHandler);
 
     // Initialiser le StoryTextObjectTranslationService singleton
-    StoryTextObjectTranslationService.init(this.prisma, this.io as SocketIOServer);
+    StoryTextObjectTranslationService.init(this.prisma, this.io);
 
     this.authHandler = new AuthHandler({
       prisma: this.prisma,
@@ -383,9 +389,9 @@ export class MeeshySocketIOManager {
       // disconnect leave reuse CallEventsHandler's PARTICIPANT_LEFT/
       // call:ended fanout instead of leaving the other party's UI "in call".
       broadcastCallParticipantLeft: (opts) =>
-        this.callEventsHandler.broadcastParticipantLeftResult({ io: this.io as SocketIOServer, ...opts }),
+        this.callEventsHandler.broadcastParticipantLeftResult({ io: this.io, ...opts }),
       forceCleanupCallParticipant: (opts) =>
-        this.callEventsHandler.forceCleanupParticipationAfterLeaveFailure({ io: this.io as SocketIOServer, ...opts }),
+        this.callEventsHandler.forceCleanupParticipationAfterLeaveFailure({ io: this.io, ...opts }),
     });
 
     this.adminAgentHandler = new AdminAgentHandler({
@@ -1018,7 +1024,7 @@ export class MeeshySocketIOManager {
   ): Promise<void> {
     if (!this.io) return;
     await this.callEventsHandler.endCallParticipationForDepartedMember({
-      io: this.io as SocketIOServer,
+      io: this.io,
       conversationId,
       userId
     });
@@ -2281,22 +2287,6 @@ export class MeeshySocketIOManager {
       SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED,
       '✅'
     );
-  }
-
-  private _findUsersForLanguage(targetLanguage: string): SocketUser[] {
-    const lang = targetLanguage.toLowerCase();
-    const targetUsers: SocketUser[] = [];
-
-    for (const [, user] of this.connectedUsers) {
-      const matches =
-        user.resolvedLanguages.includes(lang) ||
-        user.language.toLowerCase() === lang;
-      if (matches) {
-        targetUsers.push(user);
-      }
-    }
-
-    return targetUsers;
   }
 
   /**
