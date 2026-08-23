@@ -237,7 +237,7 @@ re-balayer cette famille : la garde est le balayage.
 
 ## Résultat CI — et ce que la suite complète a réellement appris
 
-**PR [#3364](https://github.com/isopen-io/meeshy/pull/3364)** · têtes successives `4c2512f2` → `e678a9e0` → `e28fcc8a`.
+**PR [#3364](https://github.com/isopen-io/meeshy/pull/3364)** · têtes successives `4c2512f2` → `e678a9e0` → `e28fcc8a` → `819d49c2` → **`4d9ee573`** (fusion de `main`).
 
 ### Le premier run n'a rien exécuté, et il fallait le voir
 
@@ -314,3 +314,31 @@ Trivy neutre, Voice E2E sauté) · **1 rouge, rouge sur `main`**.
 `CompactCountConsolidationSourceGuardTests` et les 7 de
 `PostDetailReachAndVisibilityTests` réécrits, qui n'avaient jamais tourné au
 premier run.
+
+### Verdict final — suite complète contre la base courante
+
+Tête **`4d9ee573`** (fusion de `main` jusqu'à `2faff711`, 17 commits, zéro
+conflit, aucun fichier de 238i touché) :
+
+**7529 passés · 1 échec · 5 sautés · 7535 au total.**
+
+L'unique échec est le rouge de base des appels, revérifié contre `2faff711` :
+toujours rouge, toujours pas de ce lot. **Tout ce que 238i apporte est vert.**
+
+### Le piège qui a rendu cette fusion nécessaire
+
+Le commit de docs précédent (`819d49c2`) ne touchait ni `apps/ios/**` ni
+`packages/MeeshySDK/**` — j'en avais conclu que le workflow iOS ne se
+déclencherait pas. **Faux** : sur un événement `pull_request`, GitHub évalue le
+filtre `paths` sur l'**ENSEMBLE des fichiers de la PR**, pas sur la poussée. La
+tête a donc reçu un `Build app (app + cibles de test)` vert — compile seule —
+posé par-dessus le run complet de `e28fcc8a`. Un relecteur y aurait lu
+« tests verts ».
+
+La fusion de base, dont le sujet porte l'opt-in ` — run test`, corrige les deux
+d'un coup : elle resynchronise ET fait juger la tête par la suite complète.
+
+**Conséquence pratique pour la suite de cette PR** : tout commit ajouté ensuite,
+fût-il purement documentaire, reposera un vert compile-seule sur la tête. Le
+verdict qui fait foi reste celui de `4d9ee573`, dernier commit à avoir été jugé
+par la suite complète — et le seul après lequel aucun code n'a changé.
