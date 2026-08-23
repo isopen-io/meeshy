@@ -4595,10 +4595,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       "un corps vide" — a republished mood status is no longer an empty embed on Android. +3
       `RepostEmbedBuilderTest` (projects / absent→null / blank→null; mutation-proven: dropping the
       `takeIf { isNotBlank() }` fails exactly the blank test). No new strings (emoji is verbatim text).
-      **Still open:** the full story-/reel-canvas embed (needs an Android story-canvas
-      renderer — iOS `StoryRepostEmbedCell`/`ReelRepostEmbedCell`); the reposted post's location
-      sticker (needs a new `ApiRepostOf.location` field — model plumbing + gateway payload
-      confirmation first).
+      **Reposted post's location now shown** (slice `feed-repost-embed-location`, 2026-08-23):
+      gateway payload confirmed on the wire (iOS `APIRepostOf.location` decodes it), so Android's
+      `ApiRepostOf` gained `location: SharedPlace?` (reusing the `:core:model` SSOT — not duplicated)
+      and `RepostEmbedBuilder` projects it through the **same** `FeedPostLocationBuilder` the outer
+      feed card uses → `RepostEmbedPresentation.location`, so the label resolution has one source of
+      truth. The shared cell renders a tappable `FeedPostLocationSticker` inside the quote block after
+      the media preview (parity iOS `FeedPostCard.swift:989`); tap reuses the screen's `openPlaceOnMap`
+      (`internal`, one map-open path, `geo:` intent + Google-Maps-web fallback — no dead-end). +3
+      `RepostEmbedBuilderTest` (projects label+coords / absent→null / coordinate-only→null-label; the
+      builder delegates to the already-mutation-proven `FeedPostLocationBuilder`). No new strings
+      (reuses `feed_location_shared`/`feed_location_open`). **Still open:** the full story-/reel-canvas
+      embed (needs an Android story-canvas renderer — iOS
+      `StoryRepostEmbedCell`/`ReelRepostEmbedCell`).
 - [x] Feed post location sticker (display side) — a received post's shared place rendered as an
       accent-coherent pin + label capsule under the post's media (slice `feed-post-location-sticker`,
       2026-08-23, parity iOS `FeedPostLocationSticker`). The composer already ATTACHED an outgoing
@@ -4614,7 +4623,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       absent-name→address, blank-both→null, absent-both→null, coord passthrough, coord-only; +2
       `FeedPostBuilderTest` wiring). Mutation-proven: dropping the name `isNotBlank` guard fails exactly
       the two blank-name tests. New strings `feed_location_shared`/`feed_location_open` EN/FR/ES/PT.
-      **Still open:** the reposted post's location in the repost embed (needs `ApiRepostOf.location`).
+      **Repost-embed location now closed** (slice `feed-repost-embed-location`, 2026-08-23 — see the
+      Repost / quote embed entry above): `ApiRepostOf.location` plumbed and projected through this same
+      `FeedPostLocationBuilder`.
 
 ## G. Statuses / Moods
 > **TTL correction (slice `status-mood-core`, 2026-07-19):** a mood **status expires 1h** after creation
