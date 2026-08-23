@@ -170,7 +170,11 @@ export function PostsFeedScreen() {
 
   // Edit + Repost + Audio modals
   const [editingPost, setEditingPost] = useState<{ id: string; content: string; visibility: string } | null>(null);
-  const [repostingPost, setRepostingPost] = useState<{ id: string; author?: string; content?: string } | null>(null);
+  // `type` fait partie de l'identité reportée de la source, pas d'un détail
+  // d'affichage : c'est lui qui porte la loi du miroir jusqu'aux DEUX gestes du
+  // modal. Sans lui, les deux retombent sur le `?? POST` du gateway et un réel
+  // repartagé depuis le fil quitte le fil des réels.
+  const [repostingPost, setRepostingPost] = useState<{ id: string; type: PostType; author?: string; content?: string } | null>(null);
   const [audioComposerOpen, setAudioComposerOpen] = useState(false);
 
   // Constat 2 (F7c) — état muet du lecteur LOCAL du badge B3.3-6, par post
@@ -583,7 +587,7 @@ export function PostsFeedScreen() {
   const handleRepostOpen = useCallback(
     (postId: string) => {
       const post = posts.find((p) => p.id === postId);
-      if (post) setRepostingPost({ id: post.id, author: post.author?.displayName ?? post.author?.username, content: post.content ?? undefined });
+      if (post) setRepostingPost({ id: post.id, type: post.type, author: post.author?.displayName ?? post.author?.username, content: post.content ?? undefined });
     },
     [posts],
   );
@@ -591,8 +595,9 @@ export function PostsFeedScreen() {
   const handleRepost = useCallback(() => {
     if (!repostingPost) return;
     repostMutation.mutate(
-      // Loi du miroir : le format suit la CARTE. Le fil ne sert que POST et
-      // REEL, donc rien d'observable ne change ici — la loi devient explicite.
+      // Loi du miroir : le format suit la CARTE. Le fil sert POST **et** REEL,
+      // donc le changement est bien observable — sans ce champ, reposter un réel
+      // depuis le fil fabriquait un POST et le sortait du fil des réels.
       { postId: repostingPost.id, data: { isQuote: false, targetType: repostingPost.type } },
       {
         onSuccess: () => {
@@ -608,7 +613,9 @@ export function PostsFeedScreen() {
     (content: string) => {
       if (!repostingPost) return;
       repostMutation.mutate(
-        { postId: repostingPost.id, data: { content, isQuote: true } },
+        // La citation publie autant que le repost sec : elle porte la même loi.
+        // Les sites réel et post l'envoient déjà sur leurs DEUX gestes.
+        { postId: repostingPost.id, data: { content, isQuote: true, targetType: repostingPost.type } },
         {
           onSuccess: () => {
             setRepostingPost(null);
