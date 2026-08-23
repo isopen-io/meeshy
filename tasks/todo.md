@@ -1285,3 +1285,60 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle106.md`
       plus gros restant.** `ClientToServerEvents` n'a aucun équivalent de
       `serverEmit.ts` : `socket.on(...)` reste libre de déclarer la forme qu'il
       veut de ce qu'il REÇOIT. C'est la moitié HOSTILE du contrat.
+
+## Cycle 107 — la porte d'ÉCOUTE : `socket.on` rejoint le contrat
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle107.md`
+
+- [x] Instruit le suivi nommé TROIS fois (104, 105, 106) : « `ClientToServerEvents`
+      n'a aucun équivalent de `serverEmit.ts` ». C'était le plus gros restant, et
+      la moitié HOSTILE du contrat — ce qu'on émet vient de soi, ce qu'on écoute
+      vient du réseau.
+- [x] **La cause n'était pas un oubli de déclaration mais un CAST.**
+      `this.io as SocketIOServer`, SIX fois dans le manager, vers un `Server` sans
+      générique : sous `DefaultEventsMap`, les 22 sites d'écoute de
+      `CallEventsHandler` déclaraient chacun la forme de ce qu'ils recevaient.
+      Un cast est une porte (cycle 105) — celui-ci ouvrait un SOUS-SYSTÈME, dans
+      les deux sens à la fois.
+- [x] `socketio/clientReceive.ts` — la jumelle en RÉCEPTION, dérivée du contrat,
+      avec son cliquet de type (5 assertions).
+- [x] **`call:analytics` était écouté, validé par Zod et agrégé en production sans
+      figurer NULLE PART dans le contrat**, ses 19 champs transcrits dans la
+      signature du listener, pendant que les trois clients l'émettaient chacun
+      contre sa propre transcription. C'est `conversation:join-error` (cycle 99)
+      dans l'autre sens — et la réception est le sens le plus cher.
+- [x] `call:toggle-*` : trois sources en désaccord (contrat, listener, Zod) plus
+      un ack que personne n'envoie ni n'appelle. Réconcilié sur les deux seules
+      qui décident — ce que les clients ENVOIENT, ce que Zod ACCEPTE. Piège armé,
+      pas panne, et c'est MESURÉ.
+- [x] **Typer la porte a fait tomber 4 divergences d'ÉMISSION en une compilation**
+      — le sens qui n'était pas visé. Dont `iceServers` sur `call:initiated` : les
+      identifiants TURN que le SDK iOS décode pour traverser un NAT dès la
+      SONNERIE, émis par les deux producteurs, déclarés par aucun contrat.
+- [x] `socketSignalSchema` en union DISCRIMINÉE : un `.refine` ne restreint pas
+      `z.infer`. Mêmes contraintes d'exécution (les 78 témoins écrits contre la
+      forme plate passent inchangés), et Zod retire désormais les champs de
+      l'autre membre — ce dont le relais dépend déjà pour sa sécurité.
+- [x] **Portée de la garde MESURÉE avant d'être annoncée** : elle refuse un nom
+      d'événement absent du contrat, elle NE refuse PAS une charge divergente mais
+      assignable (`strictFunctionTypes: false` ⇒ bivariance). Le dire est ce qui
+      la rend utile — une porte annoncée plus stricte qu'elle n'est vaut moins que
+      pas de porte.
+- [x] **Une erreur commise, mesurée, écrite** : un RED annoncé « ne tombe pas »
+      était un `bun run build` échoué dont la sortie partait dans `/dev/null` — la
+      passerelle compilait contre un `dist` périmé. Un gate qu'on silence ne
+      mesure plus ce qu'on croit, et un build raté ressemble à un test qui passe.
+- [x] Balayage-cliquet `client-receive-door-sweep`, inventaire VIDE **sans liste
+      d'exemptions** : le discriminant exige d'ÉCOUTER et d'importer le type nu,
+      donc les trois services émetteurs purs sortent par construction.
+- [x] RED prouvé sur 5 mutations ; les 6 casts retirés, aucun réintroduit.
+- [ ] Suivi — **la bivariance est la limite du lot, et elle est générale.** Aucune
+      porte typée de la passerelle n'attrapera une charge divergente tant que
+      `strictFunctionTypes` vaut `false`. Le basculer est la seule chose qui
+      rendrait les DEUX portes strictes — décision à instruire, elle dépasse
+      Socket.IO.
+- [ ] Suivi — trois services prennent encore un `Server` NU pour ÉMETTRE. Ni le
+      balayage de réception (par construction) ni celui d'émission (qui ne voit
+      que les portes réécrites) ne les couvre : troisième forme de la famille.
+- [ ] Suivis hérités — lecture Redis non validée au drain, `_seq`,
+      `ReactionUpdateEvent`, `ConversationUpdatedEventData`.

@@ -1577,6 +1577,87 @@ Trois règles en sont sorties :
 > qui enfilait le message nu aurait compilé pour produire un rejeu non routable.
 > L'assertion qui gèle ce point est née de l'erreur elle-même.
 
+## La porte d'ÉCOUTE se dérive aussi — et c'est la moitié HOSTILE
+
+`serverEmit.ts` gouverne ce que la passerelle ÉMET. Sa jumelle est
+`socketio/clientReceive.ts` (cycle 107), dérivée de `ClientToServerEvents`. La
+distinction n'est pas symétrique : **ce qu'on émet vient de soi, ce qu'on écoute
+vient du réseau** — donc d'un émetteur que le dépôt ne contrôle pas.
+
+Le socket et le serveur d'un handler viennent de `socketio/typed-socket.ts`
+(`MeeshySocket`, `MeeshyIOServer`), **jamais** de `socket.io`. Le type nu porte
+`DefaultEventsMap` (`[event: string]: (...args: any[]) => void`) : sous lui,
+`socket.on(n'importe quoi, (data: n'importe quoi) => …)` compile.
+
+### Ce que le cast d'un `io` typé ouvre
+
+La porte n'a pas été laissée ouverte par un oubli de déclaration, mais par un
+CAST — `this.io as SocketIOServer`, **six fois**, vers un `Server` sans
+générique. Un `as` vers le type NU d'une dépendance efface un contrat aussi
+complètement qu'une redéclaration, et il est plus discret : il ne crée aucun type
+nommé qu'on puisse chercher.
+
+> Celui-ci n'ouvrait pas un appel, il ouvrait un SOUS-SYSTÈME — les 22 sites
+> d'écoute de la signalisation d'appel **et** tout ce que le même handler émet.
+
+Coût mesuré : `call:analytics` a vécu écouté, validé par Zod et agrégé en
+production **sans figurer dans `ClientToServerEvents`**, ses dix-neuf champs
+transcrits dans la signature du listener, pendant que les trois clients
+l'émettaient chacun contre sa propre transcription. C'est
+`conversation:join-error` (cycle 99) dans l'autre sens.
+
+### Portée MESURÉE de la garde — elle est modeste, et il faut le dire
+
+Passée au compilateur sous le `tsconfig` réel avant d'être annoncée :
+
+| ce qu'on écoute | verdict |
+|---|---|
+| un nom d'événement ABSENT du contrat | **refusé** (TS2345) |
+| une charge SANS RECOUVREMENT avec la déclarée | **refusé** |
+| une charge divergente mais assignable dans UN sens | **ACCEPTÉ** |
+
+La troisième ligne est structurelle : la passerelle compile en
+`strictFunctionTypes: false`, donc les paramètres se comparent **bivariamment**.
+Un type de DIFFUSION réemployé en réception (`CallMediaToggleEvent` sous
+`call:toggle-audio`) passe sans un mot.
+
+> **Une porte annoncée plus stricte qu'elle n'est vaut moins que pas de porte** :
+> personne n'ira vérifier derrière. Ce que celle-ci garde vraiment, et qui suffit
+> à la justifier : **aucun événement ne peut plus être ÉCOUTÉ sans être DÉCLARÉ.**
+
+### Trois sources peuvent décrire le même événement, et se contredire
+
+Sur `call:toggle-*` : le contrat, la signature du listener, et le schéma Zod
+disaient trois choses différentes — plus un ack REQUIS au contrat que **aucun
+client n'envoie et que la passerelle n'appelle jamais**. Les deux seules sources
+qui décident sont **ce que les clients ENVOIENT** (lire le fil) et **ce que Zod
+ACCEPTE** (l'autorité d'exécution). Le type TypeScript n'arbitre rien tant qu'il
+n'a pas été confronté aux deux.
+
+Et déclarer un ack qui n'existe pas n'est pas une tolérance, c'est une
+**promesse** : un client écrit contre le contrat l'attend indéfiniment.
+
+### Un `.refine` Zod ne restreint pas `z.infer`
+
+Un objet PLAT gardé par un `.refine` transversal et une union DISCRIMINÉE
+expriment les mêmes contraintes à l'EXÉCUTION, et des types INFÉRÉS différents :
+le premier sort `{ type: union, sdp?: …, candidate?: … }`, le second une vraie
+union où chaque membre exige son champ. Quand le contrat partagé déclare l'union,
+c'est le SCHÉMA qu'on répare — jamais le site d'émission par un cast, ce qui
+rouvrirait la porte qu'on vient de fermer.
+
+Bénéfice réel de l'union : Zod RETIRE les champs de l'autre membre. Un relais qui
+émet `validation.data` plutôt que `data` en dépend déjà pour sa sécurité.
+
+### Et un gate dont on silence la sortie ne mesure plus ce qu'on croit
+
+Un RED annoncé « ne tombe pas » était en réalité un `bun run build` du paquet
+partagé ÉCHOUÉ, dont la sortie partait dans `/dev/null` : la passerelle compilait
+contre un `dist` périmé, et le vert mesurait un artefact. **Un build intermédiaire
+raté ne ressemble pas à une panne — il ressemble à un test qui passe.** Vérifier
+le CODE DE SORTIE de chaque étape d'une chaîne de mesure, surtout quand on mute
+volontairement le code pour prouver un rouge.
+
 ## Une preuve TRANSPORTÉE n'est pas une preuve VÉRIFIÉE
 
 `signedPreKey.signature` est la seule chose qui rattache la pré-clé signée à la
