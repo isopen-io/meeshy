@@ -534,8 +534,11 @@ private fun postRelativeTime(iso: String): String {
  * app), falling back to a Google Maps web URL when no map app is installed — so the
  * sticker never dead-ends. Coordinates are formatted with [Locale.ROOT] so a
  * comma-decimal JVM locale never emits an invalid `geo:` value.
+ *
+ * `internal` so the shared [RepostEmbedCell] can reuse the same intent orchestration
+ * for a reposted post's location sticker — one map-open path, not a copy per screen.
  */
-private fun openPlaceOnMap(context: Context, location: FeedLocationPresentation) {
+internal fun openPlaceOnMap(context: Context, location: FeedLocationPresentation) {
     val coords = String.format(Locale.ROOT, "%f,%f", location.latitude, location.longitude)
     val query = location.label?.let { Uri.encode(it) }
     val geoUri = if (query != null) "geo:$coords?q=$coords($query)" else "geo:$coords?q=$coords"

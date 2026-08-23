@@ -2,6 +2,55 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-23 **repost embed shows the reposted post's shared location** (slice
+> `feed-repost-embed-location`, feature-parity §F — "Repost / quote embed cell in the feed"). iOS renders
+> the SOURCE post's `SharedPlace` as a tappable sticker inside the quote block (`FeedPostCard.swift:989`),
+> below the reposted media. Android's `ApiRepostOf` did not even carry the field, so a reposted location
+> never surfaced in the embed. This closes the last repost-embed data gap that reuses this cycle's models.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the
+> open PRs repo-wide are gateway/ios/shared work — #3370/#3368/#3364/#3352 — none android-routine). Prior
+> android iteration (`feed-post-location-sticker`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`09caa5a3`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe as recorded in NOTES:
+> install cmdline-tools + `platforms;android-37.0` via `--channel=3`, then **copy** `android-37.0` → a real
+> `android-37` dir and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37` (AGP reads the integer
+> ApiLevel, not the dir name). Full `assembleDebug testDebugUnitTest` ran locally, **BUILD SUCCESSFUL**
+> (973 tasks). Local gate available this run.
+>
+> **Model reuse, not duplication**: `ApiRepostOf` gained only `location: SharedPlace? = null` — the same
+> `:core:model` SSOT `ApiPost.location` already uses (mirrors the *gateway* shape, no iOS-extra `id`).
+> `RepostEmbedPresentation` gained `location: FeedLocationPresentation? = null`, projected through the
+> **same** `FeedPostLocationBuilder.build(repost.location)` the outer feed card uses — one label-resolution
+> source of truth (name → address → null), not a second copy. The Compose glue (exempt) renders the
+> existing dumb `FeedPostLocationSticker` atom inside `RepostEmbedCell` after the media preview (mirror of
+> iOS ordering), tap wired to the screen's `openPlaceOnMap` — promoted `private` → `internal` so the shared
+> cell reuses the one `geo:`-intent + Google-Maps-web-fallback path (no dead-end, no per-screen copy). All
+> 4 `RepostEmbedCell` call sites (feed, detail, bookmarks, user-posts) get the sticker with zero signature
+> change.
+>
+> **Tests: +3** `RepostEmbedBuilderTest` — projects label+coords / absent→null / coordinate-only→null-label.
+> **Mutation RED-proof ×1**: forcing `location = null` in the builder fails EXACTLY the two positive-projection
+> tests (2 of 3), while `absentLocationBecomesNull` correctly stays green (it asserts null for null input) —
+> genuine discrimination, not a blanket break. Restored via backup; production diff verified clean afterward.
+> The label-resolution branches themselves are already mutation-proven in `FeedPostLocationBuilderTest`
+> (prior slice), so these 3 cover the wiring, not a re-test of the delegate.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks); `RepostEmbedBuilderTest`
+> 23/23 green after restore. Reviewer PASS. Diff is `apps/android` only (1 model field, 1 presentation field
+> + builder wiring, 1 Compose sticker in the shared cell, `openPlaceOnMap` visibility bump, +3 tests, tracking
+> docs — no new strings, reuses `feed_location_shared`/`feed_location_open`). Verdict: **PASS** — pure app-side
+> projection through a tested builder + exempt Compose glue, behavioural tests through the public API, no
+> production logic outside apps/android.
+>
+> **Next**: still §F (Feed). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) begin decomposing the **Unified post composer** tabs (large, multi-slice) — the largest remaining Feed
+> gap; (2) the **story-/reel-canvas repost embed** (needs an Android story-canvas renderer — iOS
+> `StoryRepostEmbedCell`/`ReelRepostEmbedCell`, a bigger dependency); (3) advance to **§E Stories** (next in
+> build order). Prefer (1) or (3) — the cleanly-doable repost-embed data gaps are now closed (like count,
+> mood emoji, location all landed).
+
 > On 2026-08-23 **feed post shows its shared location** (slice `feed-post-location-sticker`,
 > feature-parity §F — new "Feed post location sticker (display side)" box). iOS renders a received post's
 > shared place as a pin + label capsule under the media (`FeedPostLocationSticker`); the Android composer
