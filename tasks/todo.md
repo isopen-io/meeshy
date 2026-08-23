@@ -1498,3 +1498,37 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle108.md`
 - [ ] Suivi neuf — **`CallJoinAck` transcrit en ligne DEUX fois dans le même
       fichier** (`CallManager.tsx:810` et `:1005`), divergentes, et toutes deux
       rendant `success` optionnel là où le contrat le déclare requis.
+
+### Lot 3 du cycle 108 — le témoin qui a viré au rouge tout seul, à 10:00:00Z
+
+- [x] **`main` était ROUGE, et personne ne pouvait le savoir.** `Test gateway`
+      échouait sur `main` @ `e87b7b0d` (2 failed / 19214 passed / 836 suites) —
+      chiffres IDENTIQUES à ceux de la PR de ce cycle, donc la PR n'y ajoutait
+      rien. Entre `f69cbd26` (dernier vert PROUVÉ) et `e87b7b0d`, **tous les runs
+      de `main` ont été ANNULÉS par concurrence** : « main est-il vert ? » n'était
+      pas une question à laquelle le dépôt pouvait répondre.
+- [x] **La cause n'est aucun commit : c'est l'HORLOGE.** Les 2 témoins portaient
+      `createdAt: new Date('2026-08-22T10:00:00Z')`, et `admitMessageEdit` refuse
+      l'auteur au-delà de `MESSAGE_EDIT_WINDOW_MS` (24 h). Verts exactement 24
+      heures, rouges ensuite pour toujours, sur TOUTE branche. Bascule prouvée à
+      la minute : run 09:12 vert, run 10:15 rouge.
+- [x] **Un témoin dont le verdict dépend de l'horloge murale n'est pas un témoin,
+      il est une bombe à retardement.** Il ne tombe pas quand la production casse,
+      il tombe quand l'heure tourne — indiscernable d'une régression de la base.
+- [x] Corrigé par `withinEditWindow()` (`Date.now() - 60_000`), commenté avec
+      l'horaire de bascule et les deux runs qui l'encadrent. **66/66** (contre
+      64/66).
+- [x] **La signature d'une bombe n'est pas « une date en dur »** mais « une date
+      en dur ENCORE dans une fenêtre » — seule celle-là a un instant de bascule
+      devant elle. Les dates de 2025/2026-01 du sous-arbre sont inertes (déjà
+      expirées, ou hors de toute règle de fenêtre).
+- [x] **Deux rouges lus de travers dans le même cycle, même remède.** Le `+3` du
+      lot 1 (cru régression, en fait défaut du garde) et ces 2 témoins (crus
+      environnementaux, en fait bombes). Rejouer un arbre historique **ne rejoue
+      pas son environnement** : l'heure fait partie de l'entrée, et une
+      bissection qui change l'arbre en gardant l'horloge ne peut pas distinguer
+      « le code a changé » de « le temps a passé ». Ce qui tranche : remonter au
+      dernier verdict que la CI a PROUVÉ, et comparer des runs CI entre eux.
+- [ ] Suivi — aucun garde n'empêche la prochaine bombe. Un balayage « date en dur
+      passée à une règle de fenêtre » est possible mais demande de relier un
+      littéral à la règle qui le consomme : à instruire, pas à improviser.

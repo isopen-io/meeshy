@@ -230,7 +230,98 @@ correction du contrat est sûre (elle ÉLARGIT ce qui est accepté, elle ne peut
 casser aucun site existant) ; le retrait est un changement de comportement qui
 mérite sa propre mesure. Porté en suivi plutôt qu'embarqué.
 
-## 7. Suivis
+## 7. Lot 3 — le témoin qui a viré au rouge tout seul, à 10:00:00Z
+
+Découvert en réponse à un échec CI sur la PR de ce cycle, et il ne venait pas
+d'elle.
+
+### 7.1 Ce que la CI disait, et ce qui était vrai
+
+`Test gateway` a échoué sur la PR : `MessageHandlerEditDelete.test.ts`, 2 témoins
+sur 19 216. Le premier réflexe — « mon lot a cassé quelque chose » — était faux,
+et le second — « c'est environnemental, mon poste diverge » — l'était aussi. Ce
+que la mesure a établi :
+
+| arbre | verdict |
+|---|---|
+| `main` @ `e87b7b0d`, run 32633238504 | **ÉCHEC — 2 failed / 19214 passed / 836 suites** |
+| la PR @ `fead2d61` | ÉCHEC — **exactement les mêmes chiffres** |
+
+**`main` était rouge, et la PR n'y ajoutait rien.** Personne ne le savait parce
+qu'entre `f69cbd26` (dernier vert PROUVÉ, 09:12) et `e87b7b0d` (10:15), **tous
+les runs de `main` ont été ANNULÉS par concurrence**. « `main` est-il vert ? »
+n'était pas une question à laquelle le dépôt pouvait répondre.
+
+### 7.2 La cause : une bombe à retardement, pas une régression
+
+Aucun commit n'a rien cassé. Les deux témoins portaient
+
+```ts
+createdAt: new Date('2026-08-22T10:00:00Z'),
+```
+
+et `admitMessageEdit` refuse l'auteur au-delà de `MESSAGE_EDIT_WINDOW_MS`
+(**24 h**, `services/messaging/messageEditAdmission`). Écrits le 2026-08-22 vers
+10:00Z, ils ont été verts **exactement 24 heures**, puis rouges pour toujours.
+
+L'horloge le prouve à la minute près :
+
+| run | heure | verdict |
+|---|---|---|
+| `f69cbd26` | **09:12** | vert (fenêtre encore ouverte) |
+| `e87b7b0d` | **10:15** | rouge |
+| PR #3385 | **10:32** | rouge |
+
+La bascule est à `2026-08-23T10:00:00Z`. Le troisième témoin du même bloc, qui
+n'écrase PAS `createdAt` (la fabrique n'en pose aucun par défaut), passait et
+passe toujours — c'est lui qui a localisé le tiers.
+
+> **Un témoin dont le verdict dépend de l'horloge murale n'est pas un témoin, il
+> est une bombe à retardement.** Il ne tombe pas quand la production casse ; il
+> tombe quand l'heure tourne — donc sur TOUTE branche à la fois, et de façon
+> parfaitement indiscernable d'une régression de la base.
+
+### 7.3 Le correctif
+
+`withinEditWindow()` — `new Date(Date.now() - 60_000)` — nommé, commenté, et
+posé à côté de la fabrique. Ce que ces témoins exigent de `createdAt`, c'est
+d'être PRÉSENT et défini (contrat `SocketIOMessage`, cycle 101) ; jamais d'être
+une date particulière. Le commentaire porte l'horaire exact de la bascule et les
+deux runs qui l'encadrent, pour que la prochaine session qui lira ce code trouve
+la mesure et pas une convention.
+
+Vérifié : **66/66** sur la suite, là où 64/66 passaient.
+
+### 7.4 Balayage, et sa borne
+
+Les autres dates absolues du sous-arbre (`2025-01-01`, `2026-01-01`, …) sont
+INERTES : soit elles ne traversent aucune règle de fenêtre, soit elles sont déjà
+expirées — et une date déjà vieille reste vieille. **La signature d'une bombe
+n'est pas « une date en dur », c'est « une date en dur qui est ENCORE dans une
+fenêtre »** : elle seule a un instant de bascule devant elle. Les deux sites
+corrigés étaient les seuls du dépôt à porter cette signature, et la suite
+complète (835/836 avant correctif) le confirme — aucune autre n'avait sauté.
+
+### 7.5 Deux erreurs de diagnostic, dans le même cycle, et leur remède commun
+
+Ce cycle a lu DEUX rouges de travers avant de les mesurer :
+
+1. le `+3` du §1 — lu comme une régression de `main`, en fait un défaut du garde ;
+2. ces 2 témoins — lus comme environnementaux (« ils échouent aussi au commit
+   CI-vert `f69cbd26` »), en fait une bombe. Le raisonnement était juste et la
+   conclusion fausse : ils échouaient à `f69cbd26` **parce que je les rejouais
+   après 10:00Z**, pas parce que l'arbre différait. Comparer un arbre ancien avec
+   une horloge d'aujourd'hui ne compare pas ce qu'on croit.
+
+> **Rejouer un arbre historique ne rejoue pas son ENVIRONNEMENT.** L'heure fait
+> partie de l'entrée. Une manœuvre de bissection qui change l'arbre en gardant
+> l'horloge ne peut pas distinguer « le code a changé » de « le temps a passé ».
+
+Le remède qui a tranché les deux : **remonter au dernier verdict que la CI a
+PROUVÉ**, et comparer des runs CI entre eux plutôt que des exécutions locales.
+C'est ce qui a nommé la minute de bascule.
+
+## 8. Suivis
 
 - [ ] **Corrigé et toujours ouvert — le cast d'émission côté WEB : 13 sites,
       pas 3** (tableau §0). Le contrat `TypedSocket = Socket<ServerToClientEvents,
@@ -265,18 +356,13 @@ mérite sa propre mesure. Porté en suivi plutôt qu'embarqué.
       seul `NotificationEventData` ; `ReactionUpdateEvent`/`…EventData` en
       doublon ; signature d'index de `ConversationUpdatedEventData`.
 
-- [ ] **Neuf, environnemental et mesuré** — sous la recette de parité locale du
-      `CLAUDE.md` (`bun install --ignore-scripts` + `prisma generate` +
-      `bun run build` de shared), **2 témoins de `MessageHandlerEditDelete.test.ts`
-      échouent** que la CI passe (`message:edited` n'est pas émis du tout ;
-      ce sont les témoins du cycle 101, ceux-là mêmes que l'en-tête du cliquet
-      de dette cite comme motif d'exister). Ce n'est PAS une régression de
-      `main` : les deux échouent À L'IDENTIQUE au commit `f69cbd26`, dont le job
-      « Test gateway » de la CI est vert. Donc la recette ne reproduit pas la CI
-      aussi complètement que le `CLAUDE.md` l'affirme (« suffit pour TOUS les
-      gates du gateway »). Cause non identifiée — aucune erreur avalée visible
-      dans la sortie. Même famille que le défaut du §3 : une affirmation de
-      parité qu'aucun garde ne vérifie.
+- [x] **CORRIGÉ, et le diagnostic « environnemental » était FAUX (§7)** — les 2
+      témoins de `MessageHandlerEditDelete` ne divergeaient pas selon la machine :
+      c'étaient des BOMBES À RETARDEMENT (`createdAt` en dur, fenêtre d'édition de
+      24 h, bascule à `2026-08-23T10:00:00Z`). Ils faisaient échouer `main` ET
+      toute PR. Corrigés par `withinEditWindow()`. La raison pour laquelle ils
+      échouaient aussi au commit CI-vert `f69cbd26` est que je les y rejouais
+      APRÈS la bascule — l'arbre était le bon, c'est l'horloge qui ne l'était pas.
 - [ ] **Méthode, pour la prochaine session** — deux fois dans ce cycle un rouge
       local s'est révélé environnemental (le +3 du §1, ces 2 témoins). La
       manœuvre qui tranche est la même et elle est bon marché : rejouer la

@@ -251,6 +251,27 @@ function makeSocketUser(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/**
+ * Un `createdAt` DANS la fenêtre d'édition, exprimé RELATIVEMENT à maintenant.
+ *
+ * `admitMessageEdit` refuse l'auteur au-delà de `MESSAGE_EDIT_WINDOW_MS` (24 h,
+ * `services/messaging/messageEditAdmission`). Un témoin qui a besoin que
+ * l'édition ABOUTISSE doit donc naître dans la fenêtre — et une date ABSOLUE en
+ * fait une bombe à retardement, pas un témoin.
+ *
+ * Ce n'est pas une précaution théorique : les deux témoins ci-dessous portaient
+ * `new Date('2026-08-22T10:00:00Z')`. Ils ont été verts pendant exactement 24
+ * heures, ont viré au rouge le 2026-08-23 à 10:00:00Z — en plein vol, sans
+ * qu'aucun commit n'y touche — et auraient échoué sur TOUTE branche à jamais.
+ * La CI l'a montré à la minute près : `f69cbd26` vert à 09:12, `e87b7b0d` rouge
+ * à 10:15. Le diagnostic a d'abord été lu comme une régression de `main`.
+ *
+ * Ce que ces témoins exigent de `createdAt`, c'est d'être PRÉSENT et défini
+ * (le contrat `SocketIOMessage` le rend obligatoire, cf. cycle 101) — jamais
+ * d'être une date particulière.
+ */
+const withinEditWindow = () => new Date(Date.now() - 60_000);
+
 function makeMessageRecord(overrides: Record<string, unknown> = {}) {
   return {
     id: VALID_MSG_ID,
@@ -592,7 +613,7 @@ describe('MessageHandler — handleMessageEdit', () => {
   // résultat exact d'un correctif naïf (`senderId: message.senderId`).
   it('sert le noyau que `SocketIOMessage` EXIGE — sans quoi le décodeur iOS jette la charge utile entière', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord({
-      createdAt: new Date('2026-08-22T10:00:00Z'),
+      createdAt: withinEditWindow(),
       messageType: 'text',
     }));
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
@@ -616,7 +637,7 @@ describe('MessageHandler — handleMessageEdit', () => {
   // l'identité utilisateur.
   it('sert le `User.id` de l\'expéditeur, jamais le `Participant.id` de la colonne', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord({
-      createdAt: new Date('2026-08-22T10:00:00Z'),
+      createdAt: withinEditWindow(),
     }));
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
