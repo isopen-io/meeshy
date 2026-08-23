@@ -222,6 +222,7 @@ export {
   GLOBAL_ROLE_HIERARCHY,
   MEMBER_ROLE_HIERARCHY,
   WRITE_PERMISSION_HIERARCHY,
+  globalRoleLevel,
   hasMinimumRole,
   hasMinimumMemberRole,
   normalizeGlobalRole,

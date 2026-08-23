@@ -2084,7 +2084,7 @@ struct RootView: View {
 
             // Calculate button position on screen
             let minEdgePadding: CGFloat = MeeshySpacing.xl
-            let topSafeZone: CGFloat = 50
+            let topSafeZone: CGFloat = FloatingButtonSafeZone.top
             let bottomSafeZone: CGFloat = isScrollingDown ? 50 : 110
             let buttonSize: CGFloat = 52
             let halfButton = buttonSize / 2
@@ -2261,13 +2261,14 @@ private struct ReelsRevealMaskModifier: ViewModifier {
 /// to a `UnitPoint` (0-1 fraction of the full screen rect) for the reveal focus.
 ///
 /// Mirrors `FreeFloatingButton.screenPosition(for:)` EXACTLY (same constants:
-/// buttonSize 52, minEdgePadding 20, topSafeZone 50, bottomSafeZone 110/50) so
+/// buttonSize 52, minEdgePadding 20, topSafeZone `FloatingButtonSafeZone.top`,
+/// bottomSafeZone 110/50) so
 /// the disc is born at the button's true center, not a naive linear corner map.
 /// Kept as a standalone helper so the math is unit-testable without SwiftUI.
 enum FeedButtonAnchor {
     static let buttonSize: CGFloat = 52
     static let minEdgePadding: CGFloat = 20
-    static let topSafeZone: CGFloat = 50
+    static let topSafeZone: CGFloat = FloatingButtonSafeZone.top
     static let bottomSafeZoneWithSearch: CGFloat = 110
     static let bottomSafeZoneNoSearch: CGFloat = 50
 

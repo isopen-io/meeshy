@@ -45,7 +45,7 @@ export async function resolveCallerParticipant(
   prisma: Pick<PrismaClient, 'participant'>,
   authContext: CallerParticipantIdentity | null | undefined,
   conversationId: string
-): Promise<{ id: string } | null> {
+): Promise<{ id: string; role: string } | null> {
   const participantId = authContext?.participantId;
   if (participantId) {
     return prisma.participant.findFirst({
@@ -55,7 +55,7 @@ export async function resolveCallerParticipant(
         isActive: true,
         ...unsetOrNull('bannedAt')
       },
-      select: { id: true }
+      select: { id: true, role: true }
     });
   }
 
@@ -64,7 +64,7 @@ export async function resolveCallerParticipant(
 
   return prisma.participant.findFirst({
     where: { conversationId, userId, isActive: true },
-    select: { id: true }
+    select: { id: true, role: true }
   });
 }
 
