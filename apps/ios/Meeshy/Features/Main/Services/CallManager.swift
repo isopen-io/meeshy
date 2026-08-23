@@ -2636,6 +2636,13 @@ final class CallManager: ObservableObject {
             if target, await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false) == false {
                 guard !Task.isCancelled else { return }
                 self.isVideoEnabled = false
+                // Same reset as the success path below and toggleVideo's own
+                // catch branches: isVideoEnabled = false alone only clears
+                // survival state on the controller's NEXT quality tick, and
+                // handle() no-ops entirely while a suspend/resume transition
+                // is already in flight — user intent (video refused) must win
+                // immediately, not after that transition settles.
+                self.videoSurvivalController.reset()
                 FeedbackToastManager.shared.showError(
                     String(localized: "call.video.permission.denied",
                            defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
@@ -2691,6 +2698,12 @@ final class CallManager: ObservableObject {
                 Logger.calls.error("toggleVideo failed: camera permission denied — prompting settings redirect")
                 self.isVideoEnabled = false
                 self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                // Audit finding (Vague 169) — mirrors handleHold's unhold catches
+                // (Vague 167/168) and this same function's success path above:
+                // isVideoEnabled = false alone only clears survival state on the
+                // controller's NEXT quality tick, and handle() no-ops entirely
+                // while a suspend/resume transition is already in flight.
+                self.videoSurvivalController.reset()
                 // Show a tappable error so the user can open Settings to grant
                 // camera access without ending the audio-only call. The toast's
                 // tap action is the primary affordance; the message text says "tap"
@@ -2708,6 +2721,11 @@ final class CallManager: ObservableObject {
                 Logger.calls.error("toggleVideo failed: \(error.localizedDescription)")
                 self.isVideoEnabled = false
                 self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                // Same reset as the cameraPermissionDenied catch just above —
+                // any OTHER upgradeToVideo()/downgradeFromVideo() failure disables
+                // video for the rest of the call just as surely, and owes the
+                // survival controller the same immediate clear.
+                self.videoSurvivalController.reset()
                 FeedbackToastManager.shared.showError(String(localized: "call.video.enable.error", defaultValue: "Impossible d'activer la vidéo", bundle: .main))
             }
         }
