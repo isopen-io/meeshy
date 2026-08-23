@@ -3786,7 +3786,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       iOS by subtracting the clip `startTime` uniformly across ALL channels (iOS omits it for
       scale/opacity). Pending: keyframe **editing** (add/move/delete + undo/redo, part of the V2
       timeline editor) and text/audio clip keyframe application.
-- [ ] Clip transitions (crossfade / dissolve, adjustable duration); slide opening animations
+- [~] Clip transitions (crossfade / dissolve, adjustable duration); slide opening animations
+      — **reader/playback opacity ramp shipped** (slice `story-clip-transition-opacity`, 2026-08-23):
+      pure `StoryClipTransitionResolver` ports iOS `ReaderTransitionResolver.opacity` + its canonical
+      primitive `StoryRenderer.clipTransitionOpacity` — the outgoing clip (`fromClipId`) fades 1→0 over
+      `[end−dur, end]`, the incoming clip (`toClipId`) fades 0→1 over `[start, start+dur]`, stacked
+      transitions multiply, a clip outside its own `[start, end]` window is invisible, and `dissolve`
+      is degraded to the crossfade ramp for live playback (per iOS `liveRenderableTransition`; the MP4
+      exporter keeps the per-pixel dissolve). Wired into `StoryForegroundMediaView.animated()` (folds
+      the transition factor into keyframe-resolved opacity; a participating clip with no `duration` is
+      left untouched to avoid a degenerate zero-length window hiding it) — the Compose `.alpha()` glue
+      is unchanged. Pending: transition **editing** (add/adjust duration + kind) and the per-pixel
+      dissolve on any Android export path (both part of the V2 timeline editor).
 - [ ] Per-clip inspector (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)

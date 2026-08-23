@@ -2,6 +2,71 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-23 **story clip transitions fade the foreground on the viewer canvas** (slice
+> `story-clip-transition-opacity`, feature-parity §E — the previous entry's `Next` pointer's preferred
+> candidate: the wire-backed clip-transition reader resolver, chosen over the text-keyframe alternative for
+> the cleaner pure core). iOS ramps a transitioning clip's opacity over the transition window (`fromClipId`
+> fades out, `toClipId` fades in) via `ReaderTransitionResolver.opacity` + the canonical primitive
+> `StoryRenderer.clipTransitionOpacity`; the Android viewer decoded `StoryClipTransition[]` on the wire
+> (`Story.kt`) but **dropped** it from the projection — a serialized crossfade/dissolve rendered as a hard cut.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3409 (shared/gateway it. 256),
+> #3408 (calls Vague 169), #3404 (web it. 255), #3395 (iOS 239i), #3392 (gateway it. 254): none is a
+> `claude/apps/android/*` slice, none in this routine's scope, none touched. Prior iteration
+> (`story-keyframe-interpolation`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`b38adef6`).
+>
+> **One pure resolver, ported 1:1 from iOS's canonical SOTA path** (`StoryReaderResolvers.swift`
+> `ReaderTransitionResolver` + `StoryRenderer.clipTransitionOpacity`): new `StoryClipTransitionResolver`
+> with (1) `crossfadeFactor(mediaId, transitions, transitionStart, at)` — the canonical primitive: crossfade
+> only (other kinds + zero-duration → opaque, defensively guarding the `0/0` NaN iOS would hit), window guard,
+> `fromClipId → 1−progress`, `toClipId → progress`, else `1.0`; (2) `opacity(mediaId, startTime, duration,
+> transitions, currentTime)` — the reader layer: clips to the clip's own `[start, end]` window (→0 outside),
+> degrades `dissolve → crossfade` for live playback (iOS `liveRenderableTransition` — the MP4 exporter keeps
+> the per-pixel dissolve), computes each matching transition's `transitionStart` (outgoing `end−dur`, incoming
+> `start`), multiplies the factors, clamps `[0,1]`.
+>
+> **Real wiring (not orphan logic)**: `StoryForegroundMediaView` now carries `id`, `duration`, and the slide's
+> `clipTransitions` (threaded through `toForegroundMediaView`, previously discarded). `animated(atSeconds)`
+> folds the transition opacity into the keyframe-resolved opacity (`base.opacity * transitionOpacity`),
+> returning `this` only when neither keyframes nor a participating transition animate. **Degenerate-window
+> guard (improvement over a naive port)**: a clip that participates in a transition but has `duration == 0`
+> is left untouched — `end == start` would make the window-clip hide it at almost every instant. **Zero Compose
+> glue change**: the viewer already applied `.alpha(animated.opacity)`, so a transitioning clip now fades
+> instead of hard-cutting with no screen edit.
+>
+> **SDK bootstrap — NEW recipe: BOTH dirs present** (NOTES updated). This image failed with *both* the pristine
+> `android-37.0` alone (`Failed to find target with hash string 'android-37'`) AND the full four-edit copy→patch
+> `android-37` alone (same error, no "inconsistent location" line — descriptor demonstrably correct:
+> `<api-level>37</api-level>`, `base-extension true`, `path="platforms;android-37"`, `sdk_full=37`). What worked:
+> keep the patched `android-37` AND reinstall the pristine `android-37.0` so **both** platform dirs coexist —
+> AGP 8.13.0 then resolved the target. Neither-alone-both-together is a third mode past the two the NOTES record.
+>
+> **Tests: +23** — 16 `StoryClipTransitionResolverTest` (8 `crossfadeFactor`: outgoing 1→0 across window with
+> start/mid/end boundaries, incoming 0→1 likewise, neither-role opaque, before-window opaque, after-window
+> opaque, dissolve opaque in raw primitive, zero-duration opaque no-divide-by-zero, empty-list opaque; 8
+> `opacity`: before-start invisible, after-end invisible, no-transition-in-window opaque, incoming fades in +
+> settles full past window, outgoing fades out at tail, dissolve degraded to crossfade ramp, stacked
+> incoming×outgoing multiply to 0.25, empty-transitions opaque), 6 `StoryForegroundTransitionTest` (no-kf-no-tr
+> → identity, incoming folds ramp, outgoing folds fade-out, zero-duration participant untouched, bystander
+> keeps base opacity, keyframe×transition opacity multiply), +1 `StoryViewerViewModelTest` (foreground
+> projection carries id/duration/clipTransitions and fades on the ramp). **Mutation RED-proof (isolated,
+> restored after)**: inverting the outgoing branch `1−progress → progress` failed EXACTLY the 2 outgoing tests
+> (start/end boundaries where the ramp direction actually differs), the other 20 stayed green — genuine
+> discrimination; production verified clean after restore, no stray `.bak`.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, **BUILD SUCCESSFUL** (973 tasks, 4m27s, no test
+> failures). Reviewer PASS. Diff is `apps/android` only (1 new pure file, 1 view-model data-class + projection
+> threading, +23 tests across 3 files, tracking docs). Verdict: **PASS** — pure app-side resolver reading an
+> existing wire model + `animated()` folding, behavioural tests through the public API, no production logic
+> outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) V2-timeline neighbours — extend keyframe application to **text** clips (the wire
+> `StoryTextObject.keyframes` already decode; a text element could animate the same way the foreground media
+> now does — genuinely wire-backed pure logic), OR the **per-clip inspector** volume/fade/loop derivation, OR
+> the timeline transport (play/pause/scrub) pure state. Prefer the candidate with the cleanest pure core;
+> scout read-only first to confirm the wire fields and avoid glue-only work.
+
 > On 2026-08-23 **story keyframe animation plays back on the viewer canvas** (slice
 > `story-keyframe-interpolation`, feature-parity §E — the `Next` pointer's preferred candidate: a genuinely
 > wire-backed keyframe interpolation reducer, chosen over glue-only work). iOS animates a canvas clip's

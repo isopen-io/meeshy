@@ -425,6 +425,19 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
             lineCount: metadata.lineCount || null,
             uploadedBy: userId,
             isAnonymous,
+            // La provenance déclarée par le client : ce fichier sort-il de la
+            // caméra ou du micro de l'application ? Rien dans un fichier ne
+            // permet de la déduire, et elle n'est connaissable qu'AU MOMENT de
+            // la capture — non écrite ici, elle est perdue pour toujours.
+            //
+            // Les métadonnées TUS sont des CHAÎNES (en-tête `Upload-Metadata`),
+            // là où `UploadProcessor` reçoit du JSON : la comparaison porte donc
+            // sur `'true'` et non sur `true`. Elle reste STRICTE pour la même
+            // raison — toute autre valeur, `'false'` comprise, vaut « pas une
+            // capture », et une garde de confidentialité qu'une coercition
+            // ouvre ne garde rien.
+            // @see packages/shared/utils/forward-to-publication.ts
+            capturedInApp: upload.metadata?.capturedinapp === 'true',
           },
         });
         recordId = attachment.id;

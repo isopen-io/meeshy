@@ -1703,7 +1703,7 @@ ouvertes (6 sur 7 en conflit). Deux PR se sont ajoutées en cours de route.
       `ConversationListView`, `call:join` non ré-émis à la reconnexion. Vérifiés
       présents sur `main` avant ce train, qui en portait 13.
 
-## Cycle 114 (2026-08-23) — la garde de publication n'a jamais eu de quoi se déclencher
+## Cycle 114 bis (2026-08-23) — la garde de publication n'a jamais eu de quoi se déclencher
 
 Le cycle précédent laissait deux choses : un lot livré (« publier une capture se
 confirme ») et un point ouvert (« iOS n'a pas la publication depuis le
