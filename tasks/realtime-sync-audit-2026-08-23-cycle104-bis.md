@@ -1,4 +1,4 @@
-# Cycle 104 — `messageType` : la moitié CLIENT que le serveur ne peut pas corriger
+# Cycle 104 bis — `messageType` : la moitié CLIENT que le serveur ne peut pas corriger
 
 **Date** : 2026-08-23
 **Branche** : `claude/keen-hamilton-edf771`

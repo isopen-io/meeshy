@@ -1030,9 +1030,9 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle103.md`.
       distingue l'absence), donc l'outil ne peut pas trancher seul — mais il
       pourrait geler la liste et forcer à instruire tout site NEUF.
 
-## Cycle 104 (2026-08-23) — `messageType` : la moitié CLIENT que le serveur ne peut pas corriger
+## Cycle 104 bis (2026-08-23) — `messageType` : la moitié CLIENT que le serveur ne peut pas corriger
 
-Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle104.md`.
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle104-bis.md`.
 
 - [x] Instruit le suivi nommé des cycles 102 et 103 — « le web porte le
       CINQUIÈME exemplaire de la règle ». Sa note « retrait = changement de
