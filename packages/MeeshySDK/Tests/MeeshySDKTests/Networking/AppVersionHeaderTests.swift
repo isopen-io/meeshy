@@ -56,11 +56,25 @@ final class AppVersionHeaderTests: XCTestCase {
         )
     }
 
-    func test_value_quandLeBundleNAPasDeVersionCourte_rendLeReplisParDefaut() {
-        XCTAssertEqual(
-            AppVersionHeader.value(bundle: Bundle(for: AppVersionHeaderTests.self)),
-            AppVersionHeader.value(bundle: Bundle(for: AppVersionHeaderTests.self)),
-            "La lecture doit être stable — pas d'aléa selon l'ordre d'appel."
+    /// Le repli n'est pas une valeur neutre : c'est un ARBITRAGE. Un bundle
+    /// sans `CFBundleShortVersionString` ne peut pas être jugé, et `0.0.0`
+    /// décide que dans le doute la porte se FERME. La propriété qui compte
+    /// n'est donc pas la constante elle-même mais ce qu'elle produit face au
+    /// comparateur — et elle doit rester vraie si quelqu'un la change.
+    func test_fallbackVersion_faceAToutPlancherArme_estEnDessous() {
+        for plancher in ["0.0.1", "1.0.0", "1.2.0", "99.0.0"] {
+            XCTAssertTrue(
+                AppVersionHeader.isBelow(AppVersionHeader.fallbackVersion, floor: plancher),
+                "Repli \(AppVersionHeader.fallbackVersion) contre plancher \(plancher) : dans le doute, la porte se ferme."
+            )
+        }
+    }
+
+    func test_fallbackVersion_faceAUnPlancherVide_nEstPasEnDessous() {
+        XCTAssertFalse(
+            AppVersionHeader.isBelow(AppVersionHeader.fallbackVersion, floor: ""),
+            "Un plancher vide reste une porte DÉSARMÉE, même pour un binaire dont on ignore la version : "
+            + "l'absence de configuration ne doit jamais devenir un interrupteur d'extinction."
         )
     }
 

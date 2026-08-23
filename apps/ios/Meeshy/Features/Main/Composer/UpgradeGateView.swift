@@ -73,12 +73,6 @@ struct UpgradeGateView: View {
                                 requirement.minVersion))
                         .font(MeeshyFont.relative(14, weight: .medium))
                         .foregroundColor(.secondary)
-                        .accessibilityLabel(
-                            String(format: String(localized: "upgradeGate.min_version",
-                                                  defaultValue: "Version minimale : %@",
-                                                  bundle: .main),
-                                   requirement.minVersion)
-                        )
                 }
 
                 Spacer()
