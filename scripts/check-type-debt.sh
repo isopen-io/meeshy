@@ -87,10 +87,17 @@ NC='\033[0m'
 # EFFET d'un lot passerelle, ce qui est le cas que ce cliquet existe pour
 # capturer : sans lui, les deux points regagnés redeviendraient dépensables en
 # silence.
-# 1239 → PLACEHOLDER à l'intégration beta : deux points rendus par le routage des
-# comparaisons de langue vers la SSOT (itération 251), un troisième par le type
-# du repost du fil.
-readonly WEB_BASELINE=PLACEHOLDER
+# 1239 → 1235 à l'intégration beta du 2026-08-23, en deux mouvements mesurés
+# fichier par fichier (et non déduits d'un total) :
+#   - `components/feed/PostsFeedScreen.tsx` 1 → 0 : le repost du fil lisait un
+#     `.type` que son état ne portait pas. C'est le +1 qui a fait rougir `main`,
+#     et le compilateur était le seul à le voir — noyé dans le total, donc muet
+#     sur la CAUSE ;
+#   - `components/common/BubbleMessage.tsx` 5 → 1 : effet du routage des
+#     comparaisons de langue vers la SSOT (itération 251). Quatre points, là où
+#     l'itération n'en annonçait que deux — l'écart est exactement ce que ce
+#     cliquet existe pour capturer.
+readonly WEB_BASELINE=1235
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
