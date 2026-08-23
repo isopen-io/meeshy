@@ -12465,11 +12465,11 @@ seul à connaître entièrement, il faut compter les clients qui peuvent le dire
 il y en a toujours un qui ne peut pas.**
 
 
-## Leçon 249 — Une amnistie de CI ne pardonne pas un package, elle pardonne le RÉPERTOIRE (2026-08-23, cycle 105)
+## Leçon 249 — Une amnistie de CI ne pardonne pas un package, elle pardonne le RÉPERTOIRE (2026-08-23, cycle 105 bis)
 
 Six cycles (99–104) ont bâti pour la passerelle un contrat d'émission
 Socket.IO : une charge typée par événement, une porte d'émission dérivée du
-contrat, un cliquet au TYPE sur la forme de la porte. Le cycle 105 a posé la
+contrat, un cliquet au TYPE sur la forme de la porte. Le cycle 105 bis a posé la
 question qu'aucun des six n'avait posée : **qu'est-ce qui, en CI, devient rouge
 quand ce contrat est violé ?**
 

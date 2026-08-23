@@ -1,5 +1,5 @@
 #!/bin/bash
-# Type debt ratchet — apps/web [cycle 105]
+# Type debt ratchet — apps/web [cycle 105 bis]
 #
 # Fails (exit 1) if `apps/web` carries MORE type errors than the recorded
 # baseline, or FEWER without the baseline having been lowered.

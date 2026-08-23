@@ -64,7 +64,7 @@ export class NodeIdentityKeyStore extends IdentityKeyStore {
    * Ce fichier a porté le booléen sans que rien ne le dise, parce qu'aucun
    * compilateur ne le lisait : il est hors du `include` de `tsconfig.json`, et
    * aucun test ne l'atteint, donc `ts-jest` ne le compilait pas non plus. Le
-   * cycle 105 l'a fait entrer dans le premier des deux.
+   * cycle 105 bis l'a fait entrer dans le premier des deux.
    *
    * La correction ne change AUCUNE valeur observable : `NewOrUnchanged` vaut 0
    * et `ReplacedExisting` vaut 1, exactement ce que le booléen produisait par

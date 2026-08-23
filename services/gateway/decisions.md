@@ -1700,7 +1700,7 @@ Gate : `tsc --noEmit` 0 erreur, 208/208 sur les quatre suites touchées.
 
 ---
 
-## L'amnistie de type-check est SCINDÉE, pas levée (2026-08-23, cycle 105)
+## L'amnistie de type-check est SCINDÉE, pas levée (2026-08-23, cycle 105 bis)
 
 **Contexte**: `.github/workflows/ci.yml` portait UNE étape `Type-check` sur tout le monorepo, avec `continue-on-error: true`. Ce drapeau n'était pas un avis sur le typage : c'était la seule façon pour l'étape d'être verte, `apps/web` portant 1241 erreurs de types quand `@meeshy/shared`, `@meeshy/gateway` et `@meeshy/agent` sont à ZÉRO. Une amnistie, quatre packages — les 1241 du quatrième achetaient le silence sur le zéro des trois premiers.
 

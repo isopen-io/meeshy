@@ -1428,7 +1428,7 @@ dans un fichier que personne n'importe n'est jamais lu — donc jamais rouge.
 `ServerEmitRatchet` vit donc dans `serverEmit.ts` lui-même, en assertions
 d'assignabilité (`Assert<T extends true>`), sans une ligne exécutable.
 
-**L'`include` couvre `src/**/*` depuis le cycle 105.** Il portait avant une
+**L'`include` couvre `src/**/*` depuis le cycle 105 bis.** Il portait avant une
 ÉNUMÉRATION de dix-huit répertoires, qui ne nommait ni `adapters`, ni
 `migrations`, ni `validation`, et n'atteignait `socketio/` que par le graphe
 d'imports de `server.ts`. Six fichiers de production échappaient au compilateur ;
@@ -1445,14 +1445,14 @@ disjoints, savoir lequel s'applique :
   `diagnostics.ignoreCodes` (`[2307, 2322, 2339, 2345, 2740]`). C'est ce qui
   garde `ServerEmitRatchet`.
 - L'étape « Type-check » de `.github/workflows/ci.yml` a porté
-  `continue-on-error: true` jusqu'au cycle 105, qui l'a SCINDÉE : les trois
+  `continue-on-error: true` jusqu'au cycle 105 bis, qui l'a SCINDÉE : les trois
   packages TypeScript à zéro erreur (`shared`, `gateway`, `agent`) sont
   désormais BLOQUANTS ; `apps/web`, qui en porte 1241, passe par un cliquet
   chiffré (`scripts/check-type-debt.sh`).
 
 Noter les codes IGNORÉS par `ts-jest` : `2322` et `2345` sont exactement ceux
 qu'un couple `(événement, charge)` dépareillé produit. **Un témoin ne peut donc
-pas servir de cliquet pour ces deux-là** — et jusqu'au cycle 105 rien ne le
+pas servir de cliquet pour ces deux-là** — et jusqu'au cycle 105 bis rien ne le
 pouvait, l'amnistie couvrant le seul outil qui les voit. C'est `tsc` bloquant qui
 les porte maintenant ; les retirer d'`ignoreCodes` reste inutile, un double de
 test ayant le droit d'être permissif.
