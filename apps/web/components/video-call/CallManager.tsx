@@ -28,6 +28,7 @@ import type {
 } from '@meeshy/shared/types/video-call';
 import { CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { TypedSocket } from '@/services/socketio/types';
 import { getCallMediaConstraints, stopPreauthorizedStream } from '@/lib/calls/call-media-constraints';
 import { callsService } from '@/services/calls.service';
 import { isRetryableCallFailure } from '@/lib/calls/call-retry-policy';
@@ -142,7 +143,7 @@ export function CallManager() {
         // Emit leave event to server
         const socket = meeshySocketIOService.getSocket();
         if (socket) {
-          (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
+          socket.emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
         }
 
         // Reset local state
@@ -172,7 +173,7 @@ export function CallManager() {
   const rejectWaitingCall = useCallback((callId: string) => {
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_END, {
+      socket.emit(CLIENT_EVENTS.CALL_END, {
         callId,
         reason: 'rejected',
       });
@@ -807,7 +808,7 @@ export function CallManager() {
           () => reject(new Error('CALL_JOIN_ACK_TIMEOUT')),
           CALL_JOIN_ACK_TIMEOUT_MS
         );
-        (socket as unknown).emit(
+        socket.emit(
           CLIENT_EVENTS.CALL_JOIN,
           {
             callId: params.callId,
@@ -922,7 +923,7 @@ export function CallManager() {
     const { currentCall: active } = useCallStore.getState();
     const socket = meeshySocketIOService.getSocket();
     if (socket && active?.id) {
-      (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_LEAVE, {
+      socket.emit(CLIENT_EVENTS.CALL_LEAVE, {
         callId: active.id,
       });
     }
@@ -971,7 +972,7 @@ export function CallManager() {
     // immédiatement à l'appelant.
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_END, {
+      socket.emit(CLIENT_EVENTS.CALL_END, {
         callId: incomingCall.callId,
         reason: 'rejected',
       });
@@ -995,14 +996,14 @@ export function CallManager() {
    * is ended server-side even though both peers' media is fine. Mirrors iOS
    * CallManager.didReconnect.
    */
-  const rejoinActiveCallAfterReconnect = useCallback((socket: unknown) => {
+  const rejoinActiveCallAfterReconnect = useCallback((socket: TypedSocket | null) => {
     const { isInCall: activeInCall, currentCall: activeCall } = useCallStore.getState();
     if (!socket || !activeInCall || !activeCall?.id) return;
 
     const callId = activeCall.id;
     logger.info('[CallManager]', 'Socket reconnected — re-joining call room', { callId });
 
-    (socket as unknown).emit(
+    socket.emit(
       CLIENT_EVENTS.CALL_JOIN,
       { callId, settings: { audioEnabled: true, videoEnabled: true } },
       (ack: { success?: boolean; error?: { code?: string; message?: string; endReason?: CallEndReason } }) => {
@@ -1113,7 +1114,7 @@ export function CallManager() {
     // ever removes exactly those.
     let attachedListeners: Record<string, (...args: unknown[]) => void> | null = null;
 
-    const attachListeners = (socket: unknown) => {
+    const attachListeners = (socket: TypedSocket | null) => {
       if (!isSubscribed || !socket?.connected) return;
 
       // Cleanup this component's OWN previously-attached listeners only.
@@ -1199,7 +1200,7 @@ export function CallManager() {
     // unconditional `call:check-active` emit on connect. Idempotent: the
     // gateway scopes the replay to the 60s ringing window and the client
     // dedups by callId (see CallEventsHandler.ts `call:check-active`).
-    const checkForActiveCall = (socket: unknown) => {
+    const checkForActiveCall = (socket: TypedSocket | null) => {
       // Only ever invoked from an already-established `connect` context
       // (initial-connected branch, the `connect` event itself, or the
       // socket-becomes-available poll below), so `.connected` is implied —

@@ -99,7 +99,13 @@ NC='\033[0m'
 # EFFET d'un lot passerelle, ce qui est le cas que ce cliquet existe pour
 # capturer : sans lui, les deux points regagnés redeviendraient dépensables en
 # silence.
-readonly WEB_BASELINE=1239
+# 1239 → 1209 au cycle 108 : neuf casts `(socket as unknown).emit(…)` retirés de
+# `CallManager.tsx` / `VideoCallInterface.tsx` / `use-video-call.ts`, et les trois
+# paramètres `socket: unknown` de `CallManager` typés `TypedSocket | null`. Le
+# contrat existait déjà (`TypedSocket`, `getSocket()` le rend typé) : ces casts ne
+# désactivaient aucune vérification, ils en FABRIQUAIENT l'échec — `.emit` sur un
+# `unknown` est une erreur à chaque site. Aucun fichier n'a monté.
+readonly WEB_BASELINE=1209
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
