@@ -1,5 +1,6 @@
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { linkMessageEmissions } from './linkMessageEmissions';
+import { emitServerEvent, type ServerEmitIO } from './serverEmit';
 
 /**
  * The `MeeshySocketIOManager` surface this helper needs, kept structural so it
@@ -7,7 +8,7 @@ import { linkMessageEmissions } from './linkMessageEmissions';
  * file never has to import the manager class.
  */
 export interface LinkMessageManager {
-  getIO(): { to(room: string): { emit(event: string, payload: unknown): void } } | null | undefined;
+  getIO(): ServerEmitIO | null | undefined;
   enqueueOfflineLinkMessage(params: {
     conversationId: string;
     actorParticipantId: string | null | undefined;
@@ -100,7 +101,7 @@ export async function broadcastLinkMessage(params: {
     // d'un participant anonyme.
     if (room) {
       for (const emission of linkMessageEmissions(payload)) {
-        room.emit(emission.event, emission.payload);
+        emitServerEvent(room, emission);
       }
     }
   } catch (error) {

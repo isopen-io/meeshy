@@ -598,6 +598,23 @@ comportement de SÉCURITÉ, préférer le vrai code — un double ne peut qu'att
 l'absence d'un repli vulnérable, le vrai code la prouve. Patron : `communities-live-wiring.test.ts`, qui n'assert que ce
 que deux modules concurrents ne partagent pas.
 
+**TROISIÈME exemplaire au cycle 104, et la perte n'est plus un schéma mais un
+NOM D'ÉVÉNEMENT.** `SocialEventsHandler.test.ts` portait un double de
+`@meeshy/shared/types/socketio-events` énumérant vingt-sept constantes de
+`SERVER_EVENTS` à la main — pas la vingt-huitième, `COMMENT_UNLIKED`. Sous ce
+harnais, `broadcastCommentUnliked` émettait un événement au nom **`undefined`**
+sur ses DEUX adresses, et son témoin était vert : il assertait les rooms
+(`io.to`), jamais le NOM.
+
+> **Une ADRESSE juste ne dit rien de ce qui y arrive.** Un témoin d'émission
+> assert sur le COUPLE `(événement, charge)`, pas seulement sur la room —
+> c'est le nom, et lui seul, qui décide si un client branche quoi que ce soit
+> dessus.
+
+Et quand le module doublé n'expose que des CONSTANTES pures (`SERVER_EVENTS`,
+`ROOMS`), la bonne réponse n'est même pas `jest.requireActual` : c'est **pas de
+double du tout**.
+
 Et **poser au moins un témoin de SURFACE** : « cette route est-elle
 enregistrée ? ». Aucun ne le demandait, et un `404` sur une route qu'un client
 appelle depuis toujours n'était vu par personne.
@@ -1335,6 +1352,92 @@ change rien à la conclusion (règle du cycle 84 : on ne laisse pas un piège ar
 au motif que personne n'a encore marché dessus), mais change tout au récit :
 annoncer une panne qu'on n'a pas mesurée coûte la confiance dans les cycles où
 il y en a une.
+
+## La porte d'ÉMISSION se DÉRIVE du contrat, elle ne se redéclare pas
+
+Gouverner la CHARGE d'un événement sans gouverner le CANAL ne garde que le site
+où la valeur est construite : le canal reste libre de la porter sous un autre nom
+d'événement, et libre de porter n'importe quoi d'autre sous le bon.
+
+La déclaration à ne JAMAIS réécrire :
+
+```ts
+to(room: string): { emit(event: string, payload: unknown): unknown }   // ✗
+```
+
+Elle vivait **huit fois** dans la passerelle, dans huit fichiers qui ne se citent
+pas — chacune commentée « structurale, pour accepter le `Server` de production
+comme un double de test », ce qui est vrai et n'exige à aucun moment de renoncer
+au contrat. La forme juste est dans `socketio/serverEmit.ts` : `ServerEmitIO`,
+`ServerEmitTarget`, `ServerEmitSocket`, tous dérivés de `ServerToClientEvents`,
+et tous aussi structuraux que les huit copies qu'ils remplacent.
+
+### `Server<…, ServerToClientEvents>` ne garde PAS un nom d'événement CALCULÉ
+
+C'est le point le plus contre-intuitif, et il est mesuré sous le `tsconfig` de
+la production :
+
+| ce qu'on émet | `Server` de socket.io | `ServerEmitTarget` |
+|---|---|---|
+| nom LITTÉRAL + charge fausse | refuse | refuse |
+| nom **UNION** + charge d'un SEUL membre | **ACCEPTE** | refuse |
+
+`EventParams<…, Ev>` sur un `Ev` UNION s'effondre en UNION de tuples de
+paramètres : une charge correspondant à n'importe lequel des membres passe sous
+n'importe quel autre. Or un nom calculé — `action === 'add' ? X_ADDED : X_REMOVED` —
+est une union, et c'est la forme de TOUTE paire `added`/`removed`.
+
+> **Un émetteur qui a l'air gardé et ne l'est pas est pire qu'un émetteur
+> ouvertement non typé** : personne ne va le vérifier. Quatre émetteurs de la
+> passerelle étaient dans ce cas (`ReactionHandler`, `AttachmentReactionHandler`,
+> `PostReactionHandler`, `SocialEventsHandler`) — ils émettent sur un `Server`
+> typé, avec un nom calculé. Même famille que « un schéma qui *marche* peut
+> cacher une fuite au lieu de l'empêcher » (cycle 92 bis).
+
+### La forme du type : union de tuples, pas méthode générique
+
+`emit<E extends ServerEventName>(event: E, payload: ServerEventPayload<E>)` est
+ce qu'on écrit spontanément, et **le `Server` de production ne la satisfait
+pas** : socket.io décore sa carte d'événements
+(`DecorateAcknowledgementsWithMultipleResponses`) avant d'en dériver ses
+paramètres, et deux signatures génériques ne s'unifient pas à travers ce mappage.
+`emit(...args: ServerEmitArgs)`, où `ServerEmitArgs` est l'union des 120 tuples
+`[event, payload]`, n'a pas de paramètre de type à unifier — chaque site d'appel
+choisit son membre, et la signature décorée lui est assignable.
+
+### Corréler par un `switch`, effacer seulement quand le couple est une DONNÉE
+
+`EVENT_NAME[eventType]` d'un côté et `payload` de l'autre sont **deux unions
+indépendantes** : rien ne dit qu'on prend le même membre dans les deux. La porte
+typée le refuse, et elle a raison. Le `switch` sur le discriminant n'est pas une
+préférence de style, c'est le seul moyen de corréler sans rien effacer — la forme
+à préférer partout où elle est possible.
+
+TypeScript ne propage pas la corrélation à travers l'accès à deux propriétés
+d'une union discriminée (microsoft/TypeScript#30581). Quand le couple voyage
+comme une DONNÉE (une liste d'émissions à rejouer) ou qu'on l'émet depuis
+l'INTÉRIEUR d'une fonction générique, l'effacement est inévitable : il vit dans
+`emitServerEvent`, **une fois**, derrière un paramètre dont le type EST la
+garantie qu'il est sans conséquence. **Une exception nommée, pas une porte
+ouverte** — c'est toute la différence avec les huit copies.
+
+### Un cliquet doit être ATTEIGNABLE par le compilateur
+
+`services/gateway/tsconfig.json` **exclut** `__tests__` et n'inclut pas
+`src/socketio/**` : les fichiers y sont typés uniquement par ATTEIGNABILITÉ
+depuis `server.ts`. Un cliquet de TYPE posé dans un fichier que personne
+n'importe n'est jamais lu — donc jamais rouge. `ServerEmitRatchet` vit donc dans
+`serverEmit.ts` lui-même, en assertions d'assignabilité (`Assert<T extends true>`),
+sans une ligne exécutable.
+
+**Et un cliquet de type ne suffit pas** : une porte RELÂCHÉE et une porte
+CONTOURNÉE sont deux régressions distinctes, la seconde étant la plus probable —
+rien n'oblige un nouvel émetteur à importer `serverEmit.ts`.
+`socketio/__tests__/server-emit-door-sweep.test.ts` garde l'inventaire à VIDE, et
+balaye `src/` ENTIER : la huitième copie vivait dans `utils/socket-broadcast.ts`,
+à deux répertoires de la septième. Quand il tombe, la réparation est de dériver,
+jamais d'ajouter une ligne à un inventaire — il n'y a pas de porte non typée
+légitime à porter.
 
 ## Une preuve TRANSPORTÉE n'est pas une preuve VÉRIFIÉE
 
