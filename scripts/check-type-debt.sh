@@ -87,7 +87,10 @@ NC='\033[0m'
 # EFFET d'un lot passerelle, ce qui est le cas que ce cliquet existe pour
 # capturer : sans lui, les deux points regagnés redeviendraient dépensables en
 # silence.
-readonly WEB_BASELINE=1239
+# 1239 → PLACEHOLDER à l'intégration beta : deux points rendus par le routage des
+# comparaisons de langue vers la SSOT (itération 251), un troisième par le type
+# du repost du fil.
+readonly WEB_BASELINE=PLACEHOLDER
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
