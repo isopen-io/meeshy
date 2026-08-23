@@ -1029,3 +1029,72 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle103.md`.
       discriminant n'est pas syntaxique (il faut savoir si le gestionnaire
       distingue l'absence), donc l'outil ne peut pas trancher seul — mais il
       pourrait geler la liste et forcer à instruire tout site NEUF.
+
+## Cycle 104 (2026-08-23) — `messageType` : la moitié CLIENT que le serveur ne peut pas corriger
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle104.md`.
+
+- [x] Instruit le suivi nommé des cycles 102 et 103 — « le web porte le
+      CINQUIÈME exemplaire de la règle ». Sa note « retrait = changement de
+      contrat client » l'avait tenu ouvert deux cycles : elle décrit le geste
+      qu'il ne faut PAS faire (retirer le champ du fil) et masquait le geste
+      additif — faire écrire au client la MÊME règle, pas une autre.
+- [x] **La duplication n'est pas de style : elle est AUTORITATIVE.** La
+      dérivation serveur (`deriveMessageTypeForAttachments`) est délibérément
+      ADDITIVE — elle se tait dès que la colonne porte autre chose que `'text'`.
+      Corollaire jamais écrit, et écrit maintenant : **ce que le client DÉCLARE,
+      personne ne le corrige.** C'est ce qui sépare cette duplication de celles
+      des cycles 102/103, où les copies se rattrapaient entre elles.
+- [x] **TROIS sites, pas deux.** Le balayage a trouvé le troisième, absent du
+      suivi et le seul que l'utilisateur VOIE :
+      `ConversationLayout.tsx:593` compose le `messageType` de la ligne
+      OPTIMISTE avec un ternaire manuscrit — donc un flip visible dès que sa
+      règle diverge de celle que le serveur écrira.
+- [x] **D1 (persisté)** — les trois exemplaires lisaient `mimeTypes[0]`. Un lot
+      photo + PDF partait en `'image'` là où la canonique dit `'file'`, et le
+      repli REST le persistait sans que rien ne le corrige. Aval mesurable :
+      `contentTypeIcon` notifie 🖼️ au lieu de 📎 ;
+      `ConversationMessageStatsService` compte par la même colonne.
+- [x] **D2 (affichage)** — `text/*` et un MIME inconnu rendaient `'text'` : un
+      ballon de conversation sur un message qui porte un fichier. Distinction
+      MESURÉE, pas supposée : sur ces formes-là le serveur RATTRAPE le repli
+      REST (la colonne porte `'text'`, donc l'additif se déclenche). D2 n'est
+      persisté nulle part — c'est un défaut de ligne optimiste, et un piège
+      armé ailleurs. D1, lui, est persisté.
+- [x] **Le chemin socket ne pesait pas ce qu'on croyait** :
+      `SocketMessageSendWithAttachmentsSchema` n'a AUCUN champ `messageType`,
+      donc `z.object` le strippe et `MessageHandler` dérive lui-même. Le repli
+      REST est le SEUL des deux à atteindre la base.
+- [x] Correctif : la règle REMONTE dans
+      `packages/shared/utils/attachment-message-type.ts`. La passerelle garde
+      son module comme point d'import (ré-export de trois lignes) ; les
+      appelants n'ont pas à savoir où la règle habite.
+- [x] Une fonction AJOUTÉE, sans jumelle serveur et délibérément :
+      `messageTypeForClientAttachments({ hasAttachments, mimeTypes })` porte les
+      deux choses que seul un client sait — des pièces jointes sans MIME connu
+      ⇒ `'file'` (jamais `'text'`), et aucune pièce jointe ⇒ `'text'` (le seul
+      cas où il est vrai, et c'est `attachmentIds` qui le dit).
+- [x] RED prouvé dans les deux sens : ancienne règle rétablie ⇒ **5 témoins
+      tombent, 112 passent**. Les catégories homogènes et le cas sans pièce
+      jointe passent AVANT comme APRÈS — le lot est strictement additif sur eux.
+- [x] Gates : `tsc --noEmit` shared **0** · gateway **0** · web **1241
+      inchangé** (préexistantes, fichiers de test, aucune sur les 3 fichiers
+      touchés) · shared **103 suites / 2467 tests** (18 nouveaux) · web
+      messaging **117/117** + ConversationLayout · gateway 39 suites adjacentes
+      **1274/1274** puis suite complète.
+- [ ] Suivi — un message de LIEU sans pièce jointe reste `'text'`, et iOS se
+      tait toujours. Non traité ici sur MESURE : `'location'` n'est pas dans
+      l'enum de la route REST, donc le combler touche la route, l'enum, iOS et
+      le service de stats — son propre lot.
+- [ ] Suivi — **`conversation:updated.senderId` est servi dans DEUX espaces
+      d'id** (WS = `User.id`, REST/ZMQ + aperçu = `Participant.id`). Piège ARMÉ,
+      pas panne : aucun client ne le lit — mesuré sur les trois.
+- [ ] Suivi — **`ConversationUpdatedEventData` ne déclare que 3 champs + une
+      signature d'index** ; tout le groupe d'aperçu voyage sans contrat. Le
+      suivi ci-dessus en est le premier symptôme mesuré.
+- [ ] Suivi — le commentaire de `MessageHandler.ts:1462` est PÉRIMÉ (`io` EST
+      typé `MeeshyIOServer`) ; ce qui reste vrai, c'est que le typage n'attrape
+      rien — à cause de la signature d'index, pas d'un type manquant.
+- [ ] Suivis hérités — `PreviewEmitIO.emit` non typé ; la règle du `senderId` du
+      fil en QUATRE exemplaires (dont un en `||` là où trois sont en `??`) ; un
+      cliquet sur les `default:` de schémas de REQUÊTE.
