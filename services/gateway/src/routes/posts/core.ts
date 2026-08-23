@@ -5,7 +5,14 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
-import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
+import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema } from './types';
+import { MediaService } from '../../services/MediaService';
+import {
+  planAttachmentPublication,
+  postMediaFieldsFromAttachment,
+  DEFAULT_PUBLICATION_VISIBILITY,
+} from '../../services/posts/publishAttachment';
+import { canAccessConversation } from '../conversations/utils/access-control';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
@@ -182,6 +189,107 @@ export function registerCoreRoutes(
   // Le bodyLimit global serveur (50MB) reste actif pour les routes d'upload
   // audio/TUS qui en ont besoin ; ici on durcit avant que Zod parse, évite
   // le DoS où un attaquant force 50MB de JSON à parser (CPU/RAM).
+  /**
+   * Publier une pièce jointe reçue en conversation — sans la retélécharger.
+   *
+   * La feuille de partage offre les conversations ET les destinations publiques.
+   * Le fichier existe déjà sur le stockage : le faire redescendre chez le client
+   * pour le remonter paierait deux fois la bande passante d'un octet immobile.
+   *
+   * Le fichier est DUPLIQUÉ, jamais partagé : un `PostMedia` pointant sur le
+   * fichier d'un `MessageAttachment` ferait de la suppression du post une
+   * suppression DANS la conversation — `reclaimMediaRowBytes` n'interroge que
+   * la table `Sound` avant d'effacer des octets, et les pièces jointes n'y
+   * figurent pas.
+   */
+  fastify.post('/posts/from-attachment', {
+    preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('create') },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.isAuthenticated || !authContext.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const parsed = PublishAttachmentSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+      }
+
+      const attachment = await prisma.messageAttachment.findUnique({
+        where: { id: parsed.data.attachmentId },
+        select: {
+          id: true, messageId: true, mimeType: true, fileUrl: true, thumbnailUrl: true,
+          originalName: true, width: true, height: true, duration: true, codec: true, thumbHash: true,
+          message: { select: { conversationId: true, conversation: { select: { identifier: true } } } },
+        },
+      });
+
+      // L'appartenance est établie AVANT de planifier : le plan lui-même refuse
+      // sans elle, mais lui donner un verdict d'accès faux le rendrait complice.
+      const conversationId = attachment?.message?.conversationId ?? null;
+      const isMember = conversationId
+        ? await canAccessConversation(
+            prisma,
+            authContext,
+            conversationId,
+            attachment?.message?.conversation?.identifier ?? conversationId,
+          )
+        : false;
+
+      const plan = planAttachmentPublication({
+        attachment: attachment
+          ? { ...attachment, messageId: attachment.messageId ?? null }
+          : null,
+        callerIsMemberOfConversation: isMember,
+        target: parsed.data.target,
+      });
+
+      if (plan.ok === false) {
+        const { reason } = plan;
+        if (reason === 'forbidden') {
+          return sendForbidden(reply, 'Not a member of this conversation', { code: 'FORBIDDEN' });
+        }
+        if (reason === 'unpublishable-media') {
+          return sendBadRequest(reply, 'This media cannot be published', { code: 'UNPUBLISHABLE_MEDIA' });
+        }
+        return sendNotFound(reply, 'Attachment not found', { code: 'ATTACHMENT_NOT_FOUND' });
+      }
+
+      const media = new MediaService();
+      const duplicated = await media.duplicate(plan.plan.attachment.fileUrl);
+      const duplicatedThumbnail = plan.plan.attachment.thumbnailUrl
+        ? (await media.duplicate(plan.plan.attachment.thumbnailUrl)).fileUrl
+        : null;
+
+      const postMedia = await prisma.postMedia.create({
+        data: postMediaFieldsFromAttachment({
+          attachment: { ...plan.plan.attachment, messageId: plan.plan.attachment.messageId },
+          duplicated,
+          duplicatedThumbnailUrl: duplicatedThumbnail,
+          uploaderId: authContext.registeredUser.id,
+        }),
+      });
+
+      const post = await postService.createPost(
+        {
+          type: plan.plan.postType,
+          visibility: parsed.data.visibility ?? DEFAULT_PUBLICATION_VISIBILITY,
+          content: parsed.data.content
+            ? SecuritySanitizer.sanitizeText(parsed.data.content)
+            : undefined,
+          mediaIds: [postMedia.id],
+        },
+        authContext.registeredUser.id,
+      );
+
+      return sendSuccess(reply, post, { message: 'Published' });
+    } catch (error) {
+      return sendInternalError(reply, 'Failed to publish attachment', { code: 'PUBLISH_FAILED' });
+    }
+  });
+
   fastify.post('/posts', {
     preValidation: [requiredAuth],
     config: { rateLimit: createPostRouteRateLimitConfig('create') },

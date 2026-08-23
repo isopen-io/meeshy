@@ -308,6 +308,24 @@ export const postsService = {
     return unwrap(response);
   },
 
+  /**
+   * Publie une pièce jointe déjà reçue en conversation, sans la retélécharger :
+   * le fichier existe sur le stockage, la passerelle le duplique là-bas.
+   *
+   * `target` omis laisse la règle partagée choisir d'après le type MIME (image
+   * → POST, vidéo/son → REEL). Une STORY se demande explicitement : elle expire.
+   */
+  async publishAttachment(data: {
+    readonly attachmentId: string;
+    readonly target?: 'POST' | 'REEL' | 'STORY';
+    readonly content?: string;
+    readonly visibility?: PostVisibility;
+    readonly capturedInApp?: boolean;
+  }): Promise<{ success: boolean; data: Post }> {
+    const response = await apiService.post<{ success: boolean; data: Post }>('/posts/from-attachment', data);
+    return unwrap(response);
+  },
+
   async updatePost(postId: string, data: UpdatePostRequest): Promise<{ success: boolean; data: Post }> {
     const response = await apiService.put<{ success: boolean; data: Post }>(`/posts/${postId}`, data);
     return unwrap(response);
