@@ -2347,6 +2347,18 @@ export interface MessageSendData {
    * (`services/location/sharedPlace.ts`).
    */
   readonly location?: unknown;
+  /**
+   * Les mentionnés que l'ÉMETTEUR nomme, plutôt que ceux que la passerelle
+   * déduit du texte.
+   *
+   * Ce n'est pas une commodité : c'est le seul canal qui survit au chiffrement.
+   * La passerelle retombe sur l'extraction des `@username` du CONTENU quand la
+   * liste est absente — mais en mode `e2ee` le client remplace `content` par le
+   * littéral `[Encrypted]` avant d'émettre, si bien qu'il n'y a plus rien à
+   * extraire. La liste explicite est alors la seule chose qui rattache un
+   * message à ceux qu'il nomme.
+   */
+  readonly mentionedUserIds?: readonly string[];
   readonly encryptedContent?: string;
   readonly encryptionMode?: EncryptionModeOnWire;
   readonly encryptionMetadata?: Readonly<Record<string, unknown>>;
@@ -2391,6 +2403,8 @@ export interface MessageSendWithAttachmentsData {
   readonly isViewOnce?: boolean;
   readonly maxViewOnceCount?: number;
   readonly location?: unknown;
+  /** Même contrat que `MessageSendData.mentionedUserIds` ci-dessus. */
+  readonly mentionedUserIds?: readonly string[];
   readonly encryptedContent?: string;
   readonly encryptionMode?: EncryptionModeOnWire;
   readonly encryptionMetadata?: Readonly<Record<string, unknown>>;

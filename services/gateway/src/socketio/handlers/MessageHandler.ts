@@ -432,6 +432,14 @@ export class MessageHandler {
         // Lieu partagé — champ dédié transmis tel quel ; validé et écrit
         // dans `metadata.location` par `MessageProcessor.saveMessage`.
         location: validated.location,
+        // Mentionnés nommés par l'ÉMETTEUR — parité avec POST /messages, qui
+        // les honore depuis toujours. Sans cette propagation, la résolution
+        // retombe sur l'extraction des `@` du CONTENU : un repli suffisant tant
+        // que le contenu porte le texte, et VIDE en mode `e2ee`, où le client
+        // a remplacé `content` par le littéral `[Encrypted]` avant d'émettre.
+        // Nommer quelqu'un dans une conversation chiffrée ne produisait alors
+        // ni ligne `Mention`, ni `validatedMentions`, ni notification.
+        mentionedUserIds: validated.mentionedUserIds,
         metadata: {
           source: 'websocket',
           socketId: socket.id,
@@ -661,6 +669,10 @@ export class MessageHandler {
         attachmentIds: validated.attachmentIds,
         // Lieu partagé — même contrat que handleMessageSend ci-dessus.
         location: validated.location,
+        // Mentionnés nommés par l'émetteur — même contrat que handleMessageSend.
+        // Ce path porte TOUT l'audio : la légende d'un média y est souvent le
+        // seul texte, et c'est là qu'un `@` a le plus de chances de manquer.
+        mentionedUserIds: validated.mentionedUserIds,
         // Enveloppe de chiffrement — même unité que handleMessageSend. Ce
         // chemin-ci ne la portait pas du tout : une pièce jointe envoyée dans
         // une conversation chiffrée perdait son chiffré sans qu'aucun type ni
