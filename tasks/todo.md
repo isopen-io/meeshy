@@ -1285,3 +1285,31 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle106.md`
       plus gros restant.** `ClientToServerEvents` n'a aucun équivalent de
       `serverEmit.ts` : `socket.on(...)` reste libre de déclarer la forme qu'il
       veut de ce qu'il REÇOIT. C'est la moitié HOSTILE du contrat.
+
+## Cycle 107 — le suivi porté trois cycles était FAUX, et je l'ai mesuré
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle107.md`
+
+- [x] Instruit « le miroir client→serveur n'est pas gouverné », clos identique
+      par les cycles 104, 105 et 106 — le dernier le disant « le plus gros
+      restant ». **La première mesure l'a démenti.**
+- [x] Mesure : 37 validations zod (`validateSocketEvent`) sur 8 familles, gardes
+      manuscrites sur 2 autres (`_validateCoordinates`, `OBJECT_ID.test`), et un
+      limiteur de débit sur CHAQUE famille. La surface entrante est gouvernée, et
+      l'était déjà quand j'ai écrit pour la première fois qu'elle ne l'était pas.
+- [x] **La cause : typage et VALIDATION ne sont pas la même chose.** Pour du
+      SORTANT une porte de type est la seule garde (aucun sérialiseur sur une
+      diffusion Socket.IO) ; pour de l'ENTRANT elle ne garde RIEN — le client
+      n'est pas compilé par nous. La symétrie était LEXICALE (« le miroir »), et
+      elle a suffi à transposer la conclusion sans ré-instruire la question.
+- [x] **Un suivi hérité est une AFFIRMATION**, comme un compte (cycle 93) ou un
+      tri (cycle 86 bis) : il se mesure avant d'être recopié. Le recopier trois
+      fois ne le rend pas vrai.
+- [x] **Mon propre balayage a rendu SEPT faux positifs** en cherchant un seul
+      idiome — règle du cycle 84 rejouée par inadvertance. Le balayage a été
+      JETÉ, pas gelé : geler un inventaire faux aurait transformé une erreur de
+      mesure en vérité de dépôt, et un cliquet ment plus longtemps qu'un journal.
+- [x] Aucun changement de production — lot de MESURE et de correction du dossier.
+- [ ] Suivi, à sa taille : 2 familles sur 12 valident à la main. Écart de
+      CONSISTANCE, pas de couverture. La question utile n'est pas « sont-elles
+      gardées ? » mais « la douzième le sera-t-elle ? ».
