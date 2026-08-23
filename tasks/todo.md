@@ -1092,9 +1092,10 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle104.md`.
 - [ ] Suivi — **`ConversationUpdatedEventData` ne déclare que 3 champs + une
       signature d'index** ; tout le groupe d'aperçu voyage sans contrat. Le
       suivi ci-dessus en est le premier symptôme mesuré.
-- [ ] Suivi — le commentaire de `MessageHandler.ts:1462` est PÉRIMÉ (`io` EST
-      typé `MeeshyIOServer`) ; ce qui reste vrai, c'est que le typage n'attrape
-      rien — à cause de la signature d'index, pas d'un type manquant.
+- [x] Corrigé dans ce lot — le commentaire de `MessageHandler.ts:1453` était
+      PÉRIMÉ (`io` EST typé `MeeshyIOServer`). Ce qui reste vrai, c'est que le
+      typage n'attrape rien ici — à cause de la signature d'index, pas d'un type
+      manquant. Un mauvais diagnostic écrit dans le code coûte plus qu'aucun.
 - [ ] Suivis hérités — `PreviewEmitIO.emit` non typé ; la règle du `senderId` du
       fil en QUATRE exemplaires (dont un en `||` là où trois sont en `??`) ; un
       cliquet sur les `default:` de schémas de REQUÊTE.

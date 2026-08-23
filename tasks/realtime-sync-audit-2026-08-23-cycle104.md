@@ -200,12 +200,15 @@ existe.
       des trois émetteurs est justement ce que l'en-tête de `location` dit avoir
       déjà échoué une fois pour cette raison exacte. Le suivi précédent est le
       premier symptôme mesuré de celui-ci.
-- [ ] **Le commentaire de `MessageHandler.ts:1462` est PÉRIMÉ** : il dit « ici
-      `io` est le Socket.IO Server lâche, donc le compilateur n'a jamais attrapé
-      l'omission », alors que `MessageHandler.io: MeeshyIOServer` est typé
-      (`socketio/typed-socket.ts`). Ce qui reste vrai, c'est que le typage
-      n'attrape rien — non pas faute de type, mais à cause de la signature
-      d'index ci-dessus.
+- [x] **Le commentaire de `MessageHandler.ts:1453` était PÉRIMÉ, et il est
+      corrigé dans ce lot** : il disait « ici `io` est le Socket.IO Server lâche,
+      donc le compilateur n'a jamais attrapé l'omission », alors que
+      `MessageHandler.io: MeeshyIOServer` est typé (`socketio/typed-socket.ts`),
+      exactement comme celui du manager. Ce qui reste vrai, c'est que le typage
+      n'attrape rien ICI — non par manque de type, mais à cause de la signature
+      d'index ci-dessus. Le diagnostic à garder est celui-là, et un mauvais
+      diagnostic écrit dans le code coûte plus qu'aucun (règle du cycle 84 : une
+      garde qui a l'air de couvrir).
 - [ ] Suivi hérité — `PreviewEmitIO.emit(event: string, payload: unknown)` reste
       la porte non typée de toute diffusion d'aperçu.
 - [ ] Suivi hérité — la règle du `senderId` du fil a QUATRE exemplaires

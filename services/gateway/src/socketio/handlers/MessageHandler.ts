@@ -1450,9 +1450,21 @@ export class MessageHandler {
           conversationId: normalizedId,
           // `updatedBy` is REQUIRED by ConversationUpdatedEventData — the sender's
           // User.id (participant senderId fallback for anonymous). Parity with the
-          // REST/ZMQ send path in MeeshySocketIOManager, whose typed `io` forced
-          // this field; here `io` is the loose Socket.IO Server, so the compiler
-          // never caught the omission.
+          // REST/ZMQ send path in MeeshySocketIOManager.
+          //
+          // Cette ligne a longtemps dit « ici `io` est le Socket.IO Server
+          // lâche, donc le compilateur n'a jamais attrapé l'omission ». C'est
+          // FAUX : `MessageHandler.io` est typé `MeeshyIOServer`
+          // (`socketio/typed-socket.ts`), exactement comme celui du manager. Ce
+          // qui reste vrai, c'est que le typage n'attrape rien ici — non par
+          // manque de type, mais parce que `ConversationUpdatedEventData` finit
+          // sur `readonly [key: string]: unknown`. Ne déclarant que trois
+          // champs, il laisse TOUT le groupe d'aperçu (`lastMessageAt`,
+          // `lastMessageId`, `lastMessagePreview`, `senderId`) voyager sans
+          // contrat — et c'est ce que l'en-tête de `location` raconte déjà être
+          // arrivé une fois : la parité des trois émetteurs y a échoué en
+          // silence (#3122). Le diagnostic à garder est celui de la signature
+          // d'index, pas celui d'un `io` non typé.
           updatedBy: { id: senderUserId ?? message.senderId },
           lastMessageAt: message.createdAt,
           lastMessageId: message.id,
