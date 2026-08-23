@@ -11071,3 +11071,70 @@ call déjà sonnant (web, confiance modérée) ; `handleHold`'s branche `catch` 
 `videoSurvivalController.reset()` (iOS, actuellement inerte) ; `handleAudioRouteChange`'s
 `.newDeviceAvailable` ignore le résultat fallible d'`applySpeakerRoute()` (iOS, fenêtre étroite
 auto-corrigée).
+
+## Vague 163 — `call:check-active` réarmait le timer 45s du callee à CHAQUE reconnexion, même pour le même call déjà sonnant (web) (2026-08-23)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise directe
+du suivi laissé ouvert par la Vague 162 (« confiance modérée — fréquence réelle en prod non
+confirmée ») — après vérification que la Vague 162 est bien mergée sur `main` (PR #3362, dans le lot
+cycle 103) et qu'aucune branche `claude/upbeat-dirac-*` antérieure n'est en avance (branche
+redémarrée depuis `origin/main`, aucun commit non mergé perdu).
+
+**Root cause, confirmée par lecture directe (la confiance passe de « modérée » à mesurée) :**
+`call:check-active` (`CallEventsHandler.ts`) replaie le `call:initiated` d'un appel EN COURS DE
+SONNERIE à chaque `connect`/reconnexion du socket — mécanisme délibéré : un callee dont le socket
+tombe puis revient pendant que l'appel sonne encore doit revoir la bannière d'appel entrant, pas la
+manquer. Le commentaire du handler affirme « the client dedups by callId » — mais `handleIncomingCall`
+(`CallManager.tsx`, branche callee) ne dédupliquait en réalité JAMAIS un replay pour le `callId` déjà
+affiché comme `incomingCall` : sa seule garde de bump (`incomingCall.callId !== event.callId`) ne
+couvre que le cas d'un `callId` DIFFÉRENT. Un replay pour le MÊME call tombait donc directement dans
+`setIncomingCall(event)` + `startCallTimeout(event.callId)` — et `startCallTimeout` commence par
+`clearCallTimeout()`, donc chaque replay repart pour 45s pleins depuis l'instant du reconnect, au lieu
+de laisser courir le délai déjà entamé.
+
+**Impact mesuré, pas supposé** : sur une connexion instable (le cas même que ce mécanisme de replay
+existe pour couvrir), chaque reconnexion pendant que l'appel sonne repousse l'échéance locale de 45s
+côté callee — la bannière peut ainsi survivre indéfiniment à la propre échéance de 45s de l'appelant
+(qui, lui, n'a pas cette resynchronisation et raccroche à l'heure), une reconnexion à la fois. Le
+callee voit sonner un appel que l'appelant a déjà abandonné, jusqu'à ce que le `call:missed`/
+`call:ended` serveur (backstop 60s) finisse par arriver — ou pas, si les reconnexions se succèdent
+plus vite que ce backstop.
+
+**Fix, additif, un seul site** : garde ajoutée en tête de la branche callee de `handleIncomingCall` —
+si `incomingCall.callId === event.callId` (replay pour l'appel déjà affiché), `return` immédiat, sans
+toucher `setIncomingCall` ni `startCallTimeout`. Un VRAI second appelant (callId différent) continue
+de traverser les branches existantes (busy-path, bump) inchangées ; seul le doublon exact devient un
+no-op, ce que le commentaire du handler prétendait déjà être le comportement.
+
+**Tests (TDD, RED confirmé)** : `CallManager.duplicateIncomingReplay.test.tsx`, 2 nouveaux témoins —
+(1) un `call:initiated` répété pour le même `callId` à t=40s n'empêche pas la bannière de disparaître
+à t=46s (délai original respecté, pas de ré-armement) ; un timer ré-armé aurait laissé ~39s de plus,
+donc la bannière serait restée visible — c'est exactement ce que le RED a montré, `git stash` du seul
+fichier de production. (2) le replay ne modifie aucun état du store (`isInCall`/`currentCall`
+inchangés — no-op pur pour un call déjà affiché). Suite complète calling web
+(`--testPathPatterns="CallManager|video-call"`) **42/42 suites, 281/281 tests** (279 + 2 neufs, tous
+les témoins existants — `doubleIncomingCall`, `callWaitingBump`, `reconnect` — restent verts sans
+modification, aucun n'exerçait ce chemin précis). `tsc --noEmit` web **1834/1834 identique à la
+baseline** (mesuré par `git stash` du fichier de production).
+
+**Risk assessment** : minimal — un seul `return` anticipé ajouté à un branchement existant, aucune
+signature modifiée, aucun état nouveau. Le seul comportement qui change est celui explicitement décrit
+comme un bug par le suivi de la Vague 162 et par le commentaire du handler lui-même (qui prétendait
+dédupliquer sans le faire).
+
+**Non fait volontairement / reste ouvert** (reconduits, inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS
+single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors
+périmètre calling) ; `handleHold`'s branche `catch` générique omet `videoSurvivalController.reset()`
+(iOS, actuellement inerte) ; `handleAudioRouteChange`'s `.newDeviceAvailable` ignore le résultat
+fallible d'`applySpeakerRoute()` (iOS, fenêtre étroite auto-corrigée). **Jumelle iOS vérifiée, PAS le
+même défaut** : iOS émet bien `call:check-active` au reconnect
+(`MessageSocketManager.swift:3247`, même mécanisme), et son `callOfferReceived` reçoit donc le même
+replay — mais le sink app-side (`CallManager.swift`, souscription à `socket.callOfferReceived`) garde
+`guard self.currentCallId != event.callId else { return }`, et `currentCallId` est écrit tout en tête
+de `handleIncomingCallNotification`, AVANT même le début de la sonnerie. Un replay pour le callId déjà
+en cours d'appel trouve donc `currentCallId` déjà égal et sort par ce guard sans jamais rappeler
+`handleIncomingCallNotification` — donc sans jamais réarmer quoi que ce soit. La différence de forme
+avec le web (qui gardait sur `incomingCall.callId !== event.callId`, actif seulement pour un callId
+DIFFÉRENT) explique pourquoi le même mécanisme serveur produisait un défaut sur un client et pas
+l'autre.
