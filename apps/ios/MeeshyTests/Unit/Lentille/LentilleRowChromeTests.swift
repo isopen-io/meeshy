@@ -143,17 +143,24 @@ final class LentilleRowChromeTests: XCTestCase {
         let code = try rowSource()
         let header = try viewBlock("headerLine", in: code)
         let spacer = try XCTUnwrap(header.range(of: "Spacer(minLength: 0)"))
-        let badge = try XCTUnwrap(header.range(of: "unreadBadge"))
+        let badge = try XCTUnwrap(header.range(of: "UnreadCountBadge("))
         XCTAssertLessThan(spacer.lowerBound, badge.lowerBound, "poussé en fin de ligne du nom")
         XCTAssertTrue(header.contains("conversation.userState.unreadCount > 0"), "… et seulement s'il y a des non-lus")
 
-        let chip = try viewBlock("unreadBadge", in: code)
-        XCTAssertTrue(chip.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"), "fond ROUGE sémantique")
-        XCTAssertFalse(chip.contains("fill(accent)"), "jamais l'accent de la conversation")
+        // Le rang ne peint plus son chrome : il monte l'ATOME PARTAGÉ (matrice
+        // L06, « via l'atome partagé UnreadCountBadge »). Le rouge sémantique et
+        // l'interdit `fill(accent)` sont donc vérifiés là où le chrome vit
+        // désormais — `UnreadCountBadgeTests.test_theBadgeIsSemanticRed_neverTheConversationAccent`,
+        // où l'assertion a MIGRÉ plutôt que d'être supprimée avec son ancien site.
+        // Ce qui se teste ICI est ce que l'atome ne peut pas savoir : sa PLACE
+        // dans la ligne du nom, et sa condition d'apparition.
 
-        // Même composition des deux côtés de la loupe.
+        // La carte de magnification, elle, garde encore sa copie locale — autre
+        // surface, migration non décidée. Tant qu'elle l'a, elle doit peindre le
+        // MÊME rouge : la loupe agrandit, elle ne recompose pas.
         let cardChip = try viewBlock("unreadBadge", in: try cardSource())
         XCTAssertTrue(cardChip.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"))
+        XCTAssertFalse(cardChip.contains("fill(accent)"), "jamais l'accent de la conversation")
     }
 
     func test_focusCard_memberCount_isABubbleToo_sameGaugeAsTheTagChips() throws {
