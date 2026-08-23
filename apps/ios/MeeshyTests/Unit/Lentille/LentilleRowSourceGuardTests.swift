@@ -330,6 +330,35 @@ final class LentilleRowSourceGuardTests: XCTestCase {
     /// Le token `LentilleMetrics.UnreadDot` SURVIT et ne doit pas être retiré :
     /// la peau web le consomme encore (`--lentille-list-unread-dot-size`).
     /// Ce qui est interdit, c'est qu'une peau iOS le lise.
+    /// **Le glyphe outbox ⟳ est retiré du rang** (décision produit lot 2,
+    /// CONFIRMÉE par le porteur produit le 2026-08-23 : « NON »). Le renvoi
+    /// automatique par l'outbox est conservé — seule l'affordance visuelle de
+    /// la liste disparaît. Voir `LentilleRowBehaviourAnchorTests.test_L09_…`
+    /// pour l'amendement de la matrice comportementale.
+    ///
+    /// Cette garde avait été écrite par l'auteur du lot 2 (`35f28209d`) puis
+    /// PERDUE dans la fusion `c5f11826f` — l'une des sept que ce fichier a
+    /// laissées sur le carreau, de 17 témoins à 10. Elle est restaurée telle
+    /// quelle : une garde qui disparaît ne rougit jamais, et c'est ce silence
+    /// qui a laissé le glyphe revenir sans que rien ne le signale.
+    func test_pendingSyncGlyph_isRemovedFromTheFlatRow() throws {
+        guard let source = try rowSources().first(where: { $0.name == "LentilleConversationRow.swift" }) else {
+            XCTFail("LentilleConversationRow.swift introuvable parmi les fichiers découverts de Lentille/Row/")
+            return
+        }
+        let code = normalizedCode(source.code)
+        XCTAssertFalse(
+            code.contains("arrow.triangle.2.circlepath"),
+            "LentilleConversationRow.swift rend encore le glyphe de synchronisation — le lot 2 " +
+            "le retire de la liste (l'outbox continue de renvoyer, sans affordance de rang)."
+        )
+        XCTAssertFalse(
+            code.contains("hasPendingSync"),
+            "LentilleConversationRow.swift lit encore userState.hasPendingSync — plus rien ne " +
+            "doit en dépendre côté rendu du rang plat."
+        )
+    }
+
     func test_unreadDotToken_isGoneFromEveryRowFile_supersededByTheCountedBadge() throws {
         for source in try rowSources() {
             XCTAssertEqual(

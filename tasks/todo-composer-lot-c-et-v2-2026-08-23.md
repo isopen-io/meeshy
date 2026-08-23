@@ -342,3 +342,39 @@ carte rendue). Figer la signature sans lui obligerait à la rouvrir aussitôt.
   rien dire.
   **À trancher** : soit le chantier Lentille les reprend, soit elles deviennent
   du bruit permanent qui masquera la prochaine vraie régression.
+
+---
+
+## Piste ouverte — un réglage d'envoi dans les Paramètres *(porteur produit, 2026-08-23)*
+
+En tranchant L09 (« l'icône ⟳ doit-elle rester sur la rangée ? » → **NON**), le
+porteur produit a ouvert une piste : *« mettre dans les paramètres peut-être une
+configuration pour push »*.
+
+**Ce que le retrait de ⟳ laisse effectivement sans surface.** Le glyphe était la
+seule trace visible qu'un envoi attendait — l'outbox, elle, continue de renvoyer
+toute seule (`OfflineQueue`, flush FIFO à la reconnexion). Après retrait, un
+message en attente ne se voit plus *nulle part dans la liste*. Ce n'est pas une
+perte de mécanisme, c'est une perte d'INFORMATION — et c'était l'intention : une
+rangée disait l'état d'un envoi pour toutes les conversations à la fois, sans
+rien offrir à en faire.
+
+**Ce qu'il faut cadrer avant d'écrire une ligne** — la formulation « configuration
+pour push » recouvre au moins trois choses différentes, et elles n'ont ni le même
+écran, ni le même coût :
+
+1. **Un réglage de RENVOI** — quand l'outbox rejoue sa file : toujours, seulement
+   en Wi-Fi, à la demande. Touche `OfflineQueue` et la politique réseau.
+2. **Un état d'ENVOIS EN ATTENTE consultable** — un écran qui liste ce qui n'est
+   pas parti, avec « réessayer maintenant ». C'est l'affordance que ⟳ promettait
+   sans la tenir.
+3. **Les notifications PUSH** — préférences APNs par type d'événement. Rien à voir
+   avec l'outbox, mais le mot « push » les désigne aussi.
+
+**Question à trancher, une phrase :** *le réglage doit-il gouverner le RENVOI des
+messages en attente, offrir un ÉCRAN pour les consulter et les relancer, ou
+concerner les notifications push — ou plusieurs de ces trois ?*
+
+Hors périmètre du lot C tant que la réponse n'est pas connue : écrire un réglage
+avant de savoir ce qu'il gouverne produirait exactement l'affordance sans effet
+que le retrait de ⟳ vient de supprimer.
