@@ -52,6 +52,14 @@ lui-même — et la distinction est mesurée, pas supposée. L'ack du contrat é
 une fiction symétrique : personne ne l'envoie, personne ne l'appelle ; un client
 écrit contre le contrat l'aurait attendu indéfiniment.
 
+**Vérifié contre les ÉMETTEURS, pas seulement contre Zod** (règle du cycle 90 :
+« avant de déclarer un champ, remonter jusqu'à l'émetteur »). Les dix-huit clés
+de `CallManager.swift:3914` plus le `callId` que `emitCallAnalytics` ajoute
+correspondent une à une à `CallAnalyticsEvent` ; iOS et Android émettent le
+toggle en `{callId, enabled}` **sans ack**, et le web aussi. C'est cette
+lecture-là — pas le compilateur, qui est bivariant — qui a tranché les deux
+retraits du §B.
+
 ### En ÉMISSION — 4 divergences que la porte a fait tomber en une compilation
 
 C'est l'effet annoncé par le cycle 105 (« typer une porte, c'est découvrir ce qui
@@ -158,6 +166,16 @@ Même famille que « un témoin qui ne peut pas tomber n'est pas un témoin », 
 - [ ] Suivi hérité — `ReactionUpdateEvent` / `ReactionUpdateEventData`, deux
       exemplaires de la même déclaration.
 - [ ] Suivi hérité — `ConversationUpdatedEventData` et sa signature d'index.
+- [ ] **Neuf — le même cast, côté WEB.** `apps/web` déclare pourtant un
+      `TypedSocket = Socket<ServerToClientEvents, ClientToServerEvents>`
+      (`services/socketio/types.ts`), et `VideoCallInterface.tsx` l'ouvre trois
+      fois par `(socket as unknown).emit(…)`. C'est mot pour mot le défaut que ce
+      lot ferme sur la passerelle, dans le sens ÉMISSION et sur le client : le
+      contrat existe, il est déclaré, et un cast le retire au site d'appel.
+      Vérifié au passage que ces trois émissions n'envoient AUCUN ack — c'est la
+      mesure qui a tranché le retrait de l'ack au contrat (§2 B), et c'est aussi
+      pourquoi le changement de signature ne casse rien côté web : le cast le
+      soustrait déjà à toute vérification.
 - [ ] **Neuf** — trois services (`CallCleanupService`,
       `StoryTextObjectTranslationService`, `NotificationService`) prennent encore
       un `Server` NU pour ÉMETTRE. Le balayage de RÉCEPTION ne les concerne pas
