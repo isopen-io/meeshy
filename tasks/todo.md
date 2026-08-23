@@ -1102,10 +1102,11 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle104.md`
       porte n'y vérifie que les trois champs REQUIS. `lastMessagePreview` y
       voyage sans contrat alors que trois émetteurs le posent — même famille que
       `location` avant le cycle qui l'a déclaré.
-- [ ] Suivi — **le miroir client→serveur n'est pas gouverné.** Ce lot ferme
-      `ServerToClientEvents` ; `ClientToServerEvents` n'a pas d'équivalent, et
-      `socket.on(...)` reste libre de déclarer la forme qu'il veut de ce qu'il
-      REÇOIT — la moitié la plus hostile des deux.
+- [x] ~~Suivi — le miroir client→serveur n'est pas gouverné.~~ **MESURÉ FAUX au
+      cycle 107.** Le constat de départ était exact (`ClientToServerEvents` n'a
+      pas de porte de type) ; la conclusion ne l'était pas — pour de l'ENTRANT
+      une porte de type ne garde rien, seule l'exécution garde, et elle existait
+      déjà (37 validations zod + gardes manuscrites + limiteur de débit partout).
 
 ## Cycle 104 bis (2026-08-23) — `messageType` : la moitié CLIENT que le serveur ne peut pas corriger
 
@@ -1231,4 +1232,202 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle105.md`
       exemplaires de la même déclaration.
 - [ ] Suivi hérité — `ConversationUpdatedEventData` porte une signature d'index ;
       `lastMessagePreview` y voyage sans contrat.
-- [ ] Suivi hérité — **le miroir client→serveur n'est pas gouverné.**
+- [x] ~~Suivi hérité — le miroir client→serveur n'est pas gouverné.~~ **MESURÉ FAUX au cycle 107.**
+
+## Cycle 106 — la file rejoint le contrat : ce qu'on ENFILE est tenu à ce qu'on ÉMET
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle106.md`
+
+- [x] Instruit le suivi nommé DEUX fois (cycles 104 et 105) : « la charge REJOUÉE
+      n'est pas vérifiée contre la charge ÉMISE ». C'était le plus urgent des
+      quatre restants, pour une raison précise : **le seul témoin d'une
+      divergence entre l'émission directe et le rejeu est un destinataire qui
+      était hors ligne au mauvais moment** — c'est-à-dire personne.
+- [x] `socketio/queuedEventContract.ts` : **la** table `eventType` → événement
+      serveur (`DRAINED_EVENT`), et la charge qui s'en dérive
+      (`QueuedPayloadFor`, `QueuedEventVariant`).
+- [x] **Une chaîne de onze `if` n'est pas une table.** `_drainedEventName`
+      portait un repli final (`return MESSAGE_NEW`) : un `eventType` neuf s'y
+      serait rejoué sous le mauvais nom, sans bruit. `as const satisfies
+      Record<Union, …>` rend la couverture exhaustive au compilateur.
+- [x] **La corrélation devait remonter SEPT relais** — chacun redéclarait un
+      `eventType` en union ET un `payload: Record<string, unknown>`, donc deux
+      unions indépendantes de plus par étage. Le contrat se perdait AVANT
+      d'atteindre la file. Même leçon que le cycle 98, appliquée en amont :
+      gouverner une frontière ne sert à rien tant que ses relais ne la relaient
+      pas.
+- [x] 5 doubles casts de plus retirés (`editedPayload`, `updateEvent` ×3,
+      `translationData`).
+- [x] **Une erreur commise, mesurée, transformée en cliquet.** `'link-message'`
+      d'abord mappé vers `MESSAGE_NEW` : faux, la file stocke l'ENVELOPPE
+      `{ message }`, pas le message nu. Le typage aurait été un cran trop bas, et
+      un appelant enfilant le message nu aurait compilé pour produire un rejeu
+      NON ROUTABLE. Une erreur commise en écrivant un cliquet est le meilleur cas
+      de test qu'il aura jamais.
+- [x] **`satisfies` garde la TOTALITÉ, jamais la JUSTESSE** : 5 assertions
+      d'assignabilité ancrent les correspondances dont une inversion serait
+      SILENCIEUSE (les deux réactions, `new`/`edited`, l'enveloppe du lien).
+- [x] **Aucun écrivain n'enfilait une charge divergente**, et aucune fixture
+      n'est tombée — sur un lot qui resserre un type, c'est la mesure elle-même.
+      Piège armé, pas panne : 3e fois de suite (104, 105, 106), et le dire chaque
+      fois est ce qui rendra crédible le cycle où ce ne sera pas le cas.
+- [x] RED prouvé sur 3 mutations : réactions croisées (2 assertions), link-message
+      repointé (1 assertion), `eventType` retiré (exhaustivité `satisfies`).
+- [x] Gates : `tsc` **0 erreur** · **836/836 suites, 19253/19253 témoins**.
+- [ ] Suivi — la LECTURE depuis Redis reste non validée à l'exécution. Le typage
+      borne ce qu'on ÉCRIT, pas ce qu'on RELIT. Un `zod.parse` par `eventType` au
+      drain la transformerait en vérification, mais coûte une validation par
+      entrée rejouée sur le chemin de reconnexion : décision de PERFORMANCE avant
+      d'être une décision de typage, et elle demande une mesure.
+- [ ] Suivi — `_seq` n'est déclaré que sur `NotificationEventData` (cycle 105).
+- [ ] Suivi hérité — `ReactionUpdateEvent` / `ReactionUpdateEventData`.
+- [ ] Suivi hérité — `ConversationUpdatedEventData` et son index signature.
+- [x] ~~Suivi — le miroir client→serveur, reporté TROIS cycles, est désormais le
+      plus gros restant.~~ **MESURÉ FAUX au cycle 107** — et c'est cette ligne-ci,
+      recopiée sans mesure pour la troisième fois, qui a fait du suivi « le plus
+      gros restant » alors qu'il n'existait pas.
+
+## Cycle 106 bis — retirer la carte ouverte ne ferme rien : c'est le SPREAD qui fait taire le compilateur
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle106-bis.md`
+Homonyme : un lot « cycle 106 » (PR #3372) a atterri sur main pendant
+celui-ci — instruits en parallèle depuis la MÊME liste de suivis du cycle 105,
+sans chevauchement de code.
+
+- [x] Part du suivi hérité (« `ConversationUpdatedEventData` porte une signature
+      d'index ») en **l'exécutant d'abord pour le mesurer** : retrait de
+      `readonly [key: string]: unknown` ⇒ **0 erreur** sur shared + passerelle.
+      La prescription héritée était INERTE.
+- [x] **D1 — une clé venue d'un SPREAD est invisible au contrôle des propriétés
+      excédentaires** (mesuré sous `--strict`). Les QUATRE émetteurs de
+      `conversation:updated` composent leur charge dans une variable avant de la
+      répandre : le contrôle n'avait jamais lieu. La signature d'index ne
+      supprimait qu'un contrôle que le spread supprimait déjà.
+- [x] **Ce qui SURVIT au spread** : champ requis ABSENT et champ déclaré de TYPE
+      FAUX, tous deux attrapés. **Le levier n'est donc pas de fermer la carte,
+      c'est de DÉCLARER les champs** — deux gestes qui se ressemblent et ne font
+      pas le même travail.
+- [x] **D2 — le contrat déclarait 7 champs, les clients en lisent 17.** Les
+      douze non déclarés (4 porteurs du groupe d'aperçu + 8 réglages métadonnées)
+      voyagent depuis toujours et iOS les décode tous. Déclarés TELS QU'ILS SONT
+      SERVIS (règle du cycle 94).
+- [x] **D3 — `lastMessageAt` était le seul horodatage du payload dont le type
+      était décidé par l'ENCODEUR** (objet `Date`, quand son jumeau `updatedAt`
+      est une chaîne ISO). Aucun octet ne change sur le fil — aucun parseur
+      socket.io personnalisé, `JSON.stringify(Date)` ≡ `toISOString()`. Ce que
+      ça coûtait : un témoin attestait une forme que personne ne reçoit, et il
+      est tombé au premier typage. Repli dans `toIsoOrNull`, une fois.
+- [x] **D4 — le suivi du cycle 104 bis se trompait sur les lecteurs de
+      `senderId`** : le web LE LIT (`neutralLastMessage`) et iOS LE DÉCODE. Ce
+      qui sauve le cas est l'étage d'après (aucun rendu n'en dépend).
+      « Personne ne le lit » ≠ « personne n'en tire de rendu ». Conclusion
+      inchangée, preuve refaite.
+- [x] **Cliquet = balayage, pas type** : le typage ne peut pas voir un champ
+      NOUVEAU non déclaré (spread). `conversation-updated-declared-fields.ts` lit
+      les champs déclarés À LA SOURCE du contrat et les confronte aux clés
+      réellement émises par les TROIS émetteurs.
+- [x] **ROUGE prouvé, et c'est l'argument du cycle** : sur la même mutation
+      (`probeUndeclaredField`), `tsc --noEmit` rend **0 erreur** pendant que le
+      balayage tombe **en nommant** le transport et le champ.
+- [x] Gates : `tsc` passerelle **0** · passerelle **836/836 suites,
+      19258/19258** · `packages/shared` **103/103, 2467/2467** · `apps/web`
+      **1241 avant / 1241 après**, mesuré des deux côtés au `git stash`.
+- [ ] Suivi — **`senderId` sous DEUX espaces d'ids** (`Participant.id` canonique,
+      `User.id` sur le chemin socket). Déclaré + averti ici ; l'unifier est un
+      changement de sémantique sur le chemin le plus chaud du service.
+- [ ] Suivi — les autres contrats à signature d'index (`LinkMessagePayload`,
+      `SocketIOMessage` à vérifier). Le balayage est écrit POUR
+      `conversation:updated`.
+- [x] Suivi hérité — la charge REJOUÉE est AFFIRMÉE, pas PROUVÉE
+      (`QueuedMessagePayload.payload`) : **CLOS par le lot homonyme** (PR #3372).
+      Même famille que celui-ci — deux cartes ouvertes, deux lots du même jour.
+- [ ] Suivis hérités — `_seq` déclaré sur le seul `NotificationEventData` ;
+      `ReactionUpdateEvent` / `ReactionUpdateEventData` en double ; le miroir
+      client→serveur non gouverné.
+
+## Cycle 107 — le suivi porté trois cycles était FAUX, et je l'ai mesuré
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle107.md`
+
+- [x] Instruit « le miroir client→serveur n'est pas gouverné », clos identique
+      par les cycles 104, 105 et 106 — le dernier le disant « le plus gros
+      restant ». **La première mesure l'a démenti.**
+- [x] Mesure : 37 validations zod (`validateSocketEvent`) sur 8 familles, gardes
+      manuscrites sur 2 autres (`_validateCoordinates`, `OBJECT_ID.test`), et un
+      limiteur de débit sur CHAQUE famille. La surface entrante est gouvernée, et
+      l'était déjà quand j'ai écrit pour la première fois qu'elle ne l'était pas.
+- [x] **La cause : typage et VALIDATION ne sont pas la même chose.** Pour du
+      SORTANT une porte de type est la seule garde (aucun sérialiseur sur une
+      diffusion Socket.IO) ; pour de l'ENTRANT elle ne garde RIEN — le client
+      n'est pas compilé par nous. La symétrie était LEXICALE (« le miroir »), et
+      elle a suffi à transposer la conclusion sans ré-instruire la question.
+- [x] **Un suivi hérité est une AFFIRMATION**, comme un compte (cycle 93) ou un
+      tri (cycle 86 bis) : il se mesure avant d'être recopié. Le recopier trois
+      fois ne le rend pas vrai.
+- [x] **Mon propre balayage a rendu SEPT faux positifs** en cherchant un seul
+      idiome — règle du cycle 84 rejouée par inadvertance. Le balayage a été
+      JETÉ, pas gelé : geler un inventaire faux aurait transformé une erreur de
+      mesure en vérité de dépôt, et un cliquet ment plus longtemps qu'un journal.
+- [x] Aucun changement de production — lot de MESURE et de correction du dossier.
+- [ ] Suivi, à sa taille : 2 familles sur 12 valident à la main. Écart de
+      CONSISTANCE, pas de couverture. La question utile n'est pas « sont-elles
+      gardées ? » mais « la douzième le sera-t-elle ? ».
+- [x] **Limite de mon cycle 106, trouvée par le cycle 106 bis parallèle** : une
+      clé venue d'un SPREAD échappe au contrôle des propriétés excédentaires. La
+      file vérifie donc les champs REQUIS et leur TYPE (l'assignabilité traverse
+      le spread), mais PAS les clés en trop d'une charge composée en variable.
+      Le journal du cycle 106 surestimait d'un cran ; corrigé dans celui du 107.
+
+## Cycle 107 bis — ce que le CAST ouvrait dans les DEUX sens
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-23-cycle107-bis.md`
+Écrit en parallèle du cycle 107 ci-dessus, sur le MÊME suivi, par une autre session.
+
+- [x] **Le cycle 107 a raison sur la prémisse, et je souscris** : une porte
+      d'écoute typée ne garde RIEN à l'exécution, la surface entrante est déjà
+      gouvernée par zod, et « le miroir » était une symétrie LEXICALE. Ce lot-ci
+      l'avait mesuré de son côté sans en tirer la formulation — son tableau de
+      portée montre une porte qui refuse un nom d'événement non déclaré et laisse
+      passer une charge divergente (bivariance, `strictFunctionTypes: false`).
+- [x] **Mais le cast n'effaçait pas la moitié entrante : il effaçait les DEUX.**
+      `this.io as SocketIOServer` (SIX sites) prive `CallEventsHandler` du contrat
+      pour ce qu'il écoute ET pour ce qu'il émet — donc précisément la moitié dont
+      le cycle 107 établit lui-même qu'aucune autre garde ne la couvre. D'où le
+      seul point de divergence entre les deux lots : « aucun changement de
+      production » d'un côté, six défauts réels de l'autre.
+- [x] **Une piste peut être fausse sur son MOTIF et juste sur son ADRESSE.**
+      Mesurer la prémisse fait abandonner la piste ; mesurer le SITE la résout. La
+      conclusion complète n'est pas « le suivi est faux, on passe » mais « le
+      suivi est faux, ET voilà ce qu'il y a effectivement là ».
+- [x] **4 divergences SORTANTES tombées à la première compilation** sous la porte.
+      Dont `iceServers` sur `call:initiated` : les identifiants TURN calculés par
+      destinataire, que le SDK iOS décode pour traverser un NAT dès la SONNERIE,
+      émis par les deux producteurs et déclarés par aucun contrat (famille `_seq` /
+      `location`). Et `CallEndedEvent.endedBy`, promis par le contrat alors que
+      l'émetteur l'élargit délibérément.
+- [x] **`call:analytics` : validé par zod (donc GARDÉ) et pourtant absent du
+      contrat**, 19 champs transcrits dans la signature du listener, trois clients
+      émetteurs avec chacun sa transcription. Garde d'exécution et dérive de
+      contrat sont deux propriétés DISJOINTES — il en faut une garde chacune.
+- [x] `socketSignalSchema` en union DISCRIMINÉE : un `.refine` ne restreint pas
+      `z.infer`. Mêmes contraintes d'exécution (78 témoins inchangés), et zod
+      retire désormais les champs de l'autre membre — ce dont le relais dépend
+      déjà pour sa sécurité.
+- [x] Balayage-cliquet au périmètre VOLONTAIREMENT étroit (écouter **et** importer
+      le type nu), en réponse directe aux sept faux positifs du cycle 107 :
+      inventaire vide, aucune liste d'exemptions.
+- [x] RED prouvé sur 5 mutations ; les 6 casts retirés. `tsc` 0 ; suite passerelle
+      837/837 (2 workers SIGKILL par OOM concurrent, repassés isolément 39/39) ;
+      cliquet de dette web resserré 1241 → 1239.
+- [x] **Un gate rend DEUX verdicts et ils peuvent se contredire** : deux fois dans
+      ce cycle un seul des deux a été lu (un build échoué vers `/dev/null` ; un
+      `| tail` qui rend le code de sortie de `tail`). Ne jamais interroger le code
+      de sortie d'un gate à travers un pipe.
+- [ ] Suivi — **la bivariance est la limite du lot, et elle est générale.** Aucune
+      porte typée n'attrapera une charge divergente tant que `strictFunctionTypes`
+      vaut `false`. Décision à instruire, elle dépasse Socket.IO.
+- [ ] Suivi — **le même cast, côté WEB** : `apps/web` déclare un `TypedSocket` et
+      l'ouvre trois fois par `(socket as unknown).emit(…)` dans
+      `VideoCallInterface.tsx`. Le défaut de ce lot, reproduit côté client.
+- [ ] Suivi — trois services prennent encore un `Server` NU pour ÉMETTRE ; ni le
+      balayage de réception (par construction) ni celui d'émission ne les couvre.

@@ -9,8 +9,22 @@
  * - Broadcasting events to participants
  */
 
-import { Socket } from 'socket.io';
-import type { Server as SocketIOServer } from 'socket.io';
+/**
+ * Cycle 107 — le `Socket` et le `Server` de ce handler, TYPÉS contre le contrat
+ * partagé.
+ *
+ * Ils portaient les types NUS de `socket.io` jusqu'ici, dont les génériques
+ * valent `DefaultEventsMap` : sous eux, `socket.on(n'importe quoi, (data:
+ * n'importe quoi) => …)` compile. C'est ce qui a permis à `call:analytics` —
+ * vingt-deux sites d'écoute plus bas, dix-neuf champs transcrits dans la
+ * signature du listener, trois clients émetteurs — de n'être déclaré NULLE PART
+ * dans `ClientToServerEvents`.
+ *
+ * Ces deux alias-là ne changent aucune forme : ils rendent l'écart VISIBLE au
+ * compilateur. Portée exacte de ce qu'ils gardent (mesurée, pas supposée) :
+ * `socketio/clientReceive.ts`.
+ */
+import type { MeeshySocket as Socket, MeeshyIOServer as SocketIOServer } from './typed-socket';
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 import { CallService, CallAlreadyEndedError } from '../services/CallService';
 import { NotificationService } from '../services/notifications/NotificationService';
@@ -55,6 +69,8 @@ import type {
   CallSignalEvent,
   CallEndedEvent,
   CallMediaToggleEvent,
+  CallMediaToggleClientEvent,
+  CallAnalyticsEvent,
   CallError,
   CallHeartbeatEvent,
   CallQualityReportEvent,
@@ -990,10 +1006,18 @@ export class CallEventsHandler {
           endReasonHint: CallEndReason.completed
         });
 
-        // Même hygiène par-partant que `call:leave`/`call:force-leave` : la
-        // minuterie de sonnerie et l'offre bufferisée du partant n'ont plus
-        // de destinataire (voir clearBufferedOfferFor).
-        this.callService.clearRingingTimeout(callId);
+        // `leaveParticipationAndBroadcast` délègue à `CallService.leaveCall`,
+        // qui clear déjà `ringingTimeouts` lui-même — mais SEULEMENT quand ce
+        // partant était le DERNIER participant actif (branche
+        // `isLastParticipant`). Pour un appel de groupe qui continue pour
+        // d'autres invités encore non répondus, `leaveCall` laisse
+        // délibérément le timer armé, exactement comme `call:signal` (answer)
+        // le fait pour la même raison. Un `clearRingingTimeout(callId)`
+        // INCONDITIONNEL ici — comme `call:end`/`call:leave`/`call:force-leave`
+        // avant la Vague 164 — leur ferait perdre leur notification d'appel
+        // manqué. Seule l'offre bufferisée du partant n'a plus de
+        // destinataire (voir clearBufferedOfferFor) : elle est scopée au
+        // partant, donc toujours sûre à nettoyer ici.
         this.clearBufferedOfferFor(callId, userId, participation.participantId);
 
         // Et l'écran du sorti, que rien d'autre ne referme. `call:participant
@@ -1649,7 +1673,7 @@ export class CallEventsHandler {
   private async handleMediaToggle(
     socket: Socket,
     getUserId: (socketId: string) => string | undefined,
-    data: CallMediaToggleEvent,
+    data: CallMediaToggleClientEvent,
     mediaType: 'audio' | 'video'
   ): Promise<void> {
     try {
@@ -3113,8 +3137,6 @@ export class CallEventsHandler {
         });
         this.invalidateSignalSession(data.callId);
 
-        // Phase 1 fix P2 — caller cancel or callee reject ends ringing
-        this.callService.clearRingingTimeout(data.callId);
         // §4.6 — drop only THIS leaver's own buffered slot (calling-stack
         // audit 2026-08-16 — see clearBufferedOfferFor's doc comment). A
         // group call keeps running for whoever remains; a sibling pair's
@@ -3163,6 +3185,15 @@ export class CallEventsHandler {
         // connected".
         const finalStatus = callSession.status as string;
         if (finalStatus === 'ended' || finalStatus === 'missed') {
+          // Phase 1 fix P2 — caller cancel or callee reject ends ringing.
+          // Scoped to the terminal branch (calling-stack audit 2026-08-16
+          // follow-up): `ringingTimeouts` is call-wide, keyed by callId, not
+          // by participant — clearing it unconditionally on every leave,
+          // including a group-call leave that leaves the call `active` for
+          // remaining invitees, silently dropped the missed-call
+          // notification for whoever never answered, with no recovery path.
+          this.callService.clearRingingTimeout(data.callId);
+
           const endedEvent: CallEndedEvent = {
             callId: callSession.id,
             duration: callSession.duration || 0,
@@ -3351,12 +3382,11 @@ export class CallEventsHandler {
               // Sibling-drift fix — mirrors the `call:leave` handler above:
               // this is an explicit leave just like `call:leave`, so it must
               // clear the same per-call in-memory state. Without this, a
-              // still-armed ringing timer or buffered offer for this callId
-              // lingers in memory until its own unrelated sweep/timeout,
-              // instead of being released the moment the leave is known.
+              // still-armed buffered offer for this callId lingers in memory
+              // until its own unrelated sweep/timeout, instead of being
+              // released the moment the leave is known.
               // Leaver-scoped (calling-stack audit 2026-08-16), same fix as
               // `call:leave` — see `clearBufferedOfferFor`'s doc comment.
-              this.callService.clearRingingTimeout(call.id);
               this.clearBufferedOfferFor(call.id, userId, cleanupParticipantId);
 
               // Broadcast participant left event
@@ -3383,6 +3413,15 @@ export class CallEventsHandler {
               // had no UX trace the call ever happened, even after answering.
               const forceLeaveStatus = callSession.status as string;
               if (forceLeaveStatus === 'ended' || forceLeaveStatus === 'missed') {
+                // Scoped to the terminal branch (calling-stack audit
+                // 2026-08-16 follow-up, same fix as `call:leave` above):
+                // `ringingTimeouts` is call-wide, keyed by callId, not by
+                // participant — clearing it unconditionally, including on a
+                // group-call force-leave that leaves the call `active` for
+                // remaining invitees, silently dropped their missed-call
+                // notification with no recovery path.
+                this.callService.clearRingingTimeout(call.id);
+
                 const endedEvent: CallEndedEvent = {
                   callId: callSession.id,
                   duration: callSession.duration || 0,
@@ -3655,15 +3694,29 @@ export class CallEventsHandler {
         // schema.parse() strips any field not declared in it. Forwarding
         // the unvalidated `data` would let a client smuggle arbitrary extra
         // fields into the peer's signaling payload.
+        // Cycle 107 — recomposé en littéral plutôt que relayé tel quel, et SANS
+        // cast. Zod 4 infère toute propriété d'union comme OPTIONNELLE sous le
+        // `strictNullChecks: false` de la passerelle (artefact d'INFÉRENCE : à
+        // l'exécution, `signal` est requis et `socketSignalSchema` refuse une
+        // charge qui l'omet). `{ signal?: WebRTCSignal }` n'est donc pas
+        // assignable à `CallSignalEvent`, qui le déclare requis — alors que
+        // LIRE la propriété rend bien l'union, `strictNullChecks` étant désactivé.
+        // Reconstruire le littéral suffit à rétablir la correspondance ; le
+        // `as CallSignalEvent` d'en dessous, lui, était une porte (cycle 105) et
+        // part avec.
+        const relayedSignal: CallSignalEvent = {
+          callId: validation.data.callId,
+          signal: validation.data.signal
+        };
         for (const targetSocketId of targetSocketIds) {
-          io.to(targetSocketId).emit(CALL_EVENTS.SIGNAL, validation.data);
+          io.to(targetSocketId).emit(CALL_EVENTS.SIGNAL, relayedSignal);
         }
 
         // §4.6 — also buffer successfully-relayed offers. The target may have
         // received it but then churn its socket before answering; the buffer
         // lets it recover on rejoin (epoch-guarded, last-write-wins).
         if (data.signal.type === 'offer' || data.signal.type === 'ice-restart') {
-          this.bufferOffer(data.callId, validation.data as CallSignalEvent);
+          this.bufferOffer(data.callId, relayedSignal);
         }
 
         // Transition to active on first successful signal exchange
@@ -3778,7 +3831,7 @@ export class CallEventsHandler {
      * CVE-002: Added rate limiting (50 req/min)
      * CVE-006: Added input validation
      */
-    socket.on(CALL_EVENTS.TOGGLE_AUDIO, async (data: CallMediaToggleEvent) => {
+    socket.on(CALL_EVENTS.TOGGLE_AUDIO, async (data: CallMediaToggleClientEvent) => {
       await this.handleMediaToggle(socket, getUserId, data, 'audio');
     });
 
@@ -3787,7 +3840,7 @@ export class CallEventsHandler {
      * CVE-002: Added rate limiting (50 req/min)
      * CVE-006: Added input validation
      */
-    socket.on(CALL_EVENTS.TOGGLE_VIDEO, async (data: CallMediaToggleEvent) => {
+    socket.on(CALL_EVENTS.TOGGLE_VIDEO, async (data: CallMediaToggleClientEvent) => {
       await this.handleMediaToggle(socket, getUserId, data, 'video');
     });
 
@@ -3989,7 +4042,15 @@ export class CallEventsHandler {
         // the PARTICIPANT_LEFT the fast path already sent covers the room.
         if (willContinueAsGroupLeave && !(CALL_TERMINAL_STATUSES as readonly string[]).includes(callSession.status)) {
           this.invalidateSignalSession(data.callId);
-          this.callService.clearRingingTimeout(data.callId);
+          // Group-calls gap analysis S3 regression fix: `ringingTimeouts` is
+          // keyed by callId, not by participant (CallService.ts) — it is the
+          // ONLY thing standing between "an invitee never answered" and a
+          // missed-call notification for them. This branch is reached only
+          // when the call is KNOWN to continue for other participants (see
+          // `willContinueAsGroupLeave` above), so the call-wide timer is NOT
+          // this hanger-up's to clear — `call:signal`'s answer handler
+          // deliberately leaves it armed for exactly this reason. Do NOT
+          // call `this.callService.clearRingingTimeout(data.callId)` here.
           // Leaver-scoped (calling-stack audit 2026-08-16) — mirrors
           // `call:leave`'s own fix (see `clearBufferedOfferFor`'s doc
           // comment): the call continues for the other participants, whose
@@ -4697,26 +4758,12 @@ export class CallEventsHandler {
     // ─── call:analytics ──────────────────────────────────────────────────────
     // Fire-and-forget lifecycle telemetry emitted once at call end by iOS.
     // Validated and logged; no response sent back to the client.
-    socket.on(CALL_EVENTS.ANALYTICS, async (data: {
-      callId: string;
-      setupTimeMs: number;
-      negotiationTimeMs?: number;
-      durationSeconds: number;
-      reconnectionCount: number;
-      networkTransitions: number;
-      averageRtt: number;
-      averagePacketLoss: number;
-      maxPacketLoss: number;
-      codec: string;
-      effectsUsed: string[];
-      filtersUsed: boolean;
-      transcriptionUsed: boolean;
-      qualityDistribution: { excellent: number; good: number; fair: number; poor: number };
-      platform: string;
-      deviceModel: string;
-      isVideo: boolean;
-      endReason: string;
-    }) => {
+    // Cycle 107 — la forme vient du contrat (`CallAnalyticsEvent`), plus d'une
+    // transcription de dix-neuf champs dans cette signature. L'événement était
+    // écouté, validé et agrégé sans figurer dans `ClientToServerEvents` : c'est
+    // le cast d'`io` qui le rendait possible, et c'est le seul défaut de ce lot
+    // que la porte typée aurait attrapé toute seule.
+    socket.on(CALL_EVENTS.ANALYTICS, async (data: CallAnalyticsEvent) => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;

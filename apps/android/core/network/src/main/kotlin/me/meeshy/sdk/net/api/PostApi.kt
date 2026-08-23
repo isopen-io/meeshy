@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.PostViewersResponse
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.StoryEffectsWireSerializer
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -61,6 +62,7 @@ data class MobileTranscriptionSegment(
 data class CreateStoryRequest(
     val type: String = "STORY",
     val content: String? = null,
+    @Serializable(with = StoryEffectsWireSerializer::class)
     val storyEffects: StoryEffects? = null,
     val visibility: String = "PUBLIC",
     val originalLanguage: String? = null,

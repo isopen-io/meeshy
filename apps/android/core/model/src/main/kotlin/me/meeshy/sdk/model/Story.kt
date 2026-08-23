@@ -98,7 +98,17 @@ enum class StoryEasing {
 /** A single animation keyframe — port of StoryKeyframe (StoryModels.swift). */
 @Serializable
 data class StoryKeyframe(
-    val id: String,
+    /**
+     * Le fil n'envoie PAS cet identifiant — il n'en a jamais envoyé. iOS en
+     * synthétise un à la lecture (`StoryModels.swift:4137`) ; l'exiger ici
+     * faisait échouer kotlinx sur le DOCUMENT entier, donc emportait le post
+     * complet dès qu'un objet portait une animation.
+     *
+     * Il ne sert que de clé de liste : le repli doit rester UNIQUE, jamais une
+     * constante partagée. Corollaire assumé, identique à iOS : deux lectures
+     * du même JSON ne sont pas `equals` si l'identifiant a été synthétisé.
+     */
+    val id: String = java.util.UUID.randomUUID().toString(),
     val time: Float = 0f,
     val x: Double? = null,
     val y: Double? = null,
@@ -276,7 +286,9 @@ data class StoryEffects(
     val backgroundAudioEnd: Double? = null,
     val voiceAttachmentId: String? = null,
     val voiceTranscriptions: List<StoryVoiceTranscription>? = null,
+    @Serializable(with = StoryTransitionTolerantSerializer::class)
     val opening: StoryTransitionEffect? = null,
+    @Serializable(with = StoryTransitionTolerantSerializer::class)
     val closing: StoryTransitionEffect? = null,
     val textObjects: List<StoryTextObject> = emptyList(),
     val mediaObjects: List<StoryMediaObject>? = null,
@@ -297,6 +309,7 @@ data class StorySlide(
     val id: String,
     val mediaURL: String? = null,
     val content: String? = null,
+    @Serializable(with = StoryEffectsWireSerializer::class)
     val effects: StoryEffects = StoryEffects(),
     val duration: Double = 12.0,
     val order: Int = 0,

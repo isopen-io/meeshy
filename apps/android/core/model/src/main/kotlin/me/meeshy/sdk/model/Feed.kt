@@ -57,6 +57,7 @@ data class RepostContent(
     val type: String? = null,
     val originalLanguage: String? = null,
     val audioUrl: String? = null,
+    @Serializable(with = StoryEffectsWireSerializer::class)
     val storyEffects: StoryEffects? = null,
     val media: List<FeedMedia> = emptyList(),
     val translations: Map<String, PostTranslation>? = null,
