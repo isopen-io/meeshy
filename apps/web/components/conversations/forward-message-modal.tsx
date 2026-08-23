@@ -327,6 +327,26 @@ export function ForwardMessageModal({
         );
         const ok = result?.success ?? false;
         if (ok) clientMessageIds.delete(cidKey);
+
+        // Le mot part APRÈS, et seulement si le transfert a abouti : l'envoyer
+        // sur un transfert échoué laisserait « regarde ça » seul dans un fil,
+        // sans le message qu'il commente. Il voyage comme un message PROPRE —
+        // aucun `forwardedFromId` — parce que `forwardedFromId` désigne un
+        // message d'origine dont le texte est celui de l'original ; réécrire ce
+        // texte ferait mentir l'aperçu de source servi aux clients.
+        const trimmedNote = noteRef.current.trim();
+        if (ok && trimmedNote) {
+          await meeshySocketIOService.sendMessage(
+            conversationId,
+            trimmedNote,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            generateClientMessageId(),
+          );
+        }
         model.finishSend(rowId, ok, ok ? undefined : t('forward.failed', 'Échec du transfert'));
         if (ok && !hasToastedRef.current) {
           hasToastedRef.current = true;
@@ -392,6 +412,15 @@ export function ForwardMessageModal({
     bump();
   }, []);
 
+  const [note, setNote] = useState('');
+  // Lu par `transmit` sans le faire dépendre de la frappe : une dépendance sur
+  // `note` recréerait le callback à chaque caractère, et avec lui toute la liste
+  // de cibles qui le porte.
+  const noteRef = useRef('');
+  useEffect(() => {
+    noteRef.current = note;
+  }, [note]);
+
   const selectedCount = modelRef.current.selectedIds().length;
 
   return (
@@ -408,6 +437,7 @@ export function ForwardMessageModal({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              data-testid="forward-search"
               placeholder={t('forward.search', 'Rechercher une conversation...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -500,6 +530,19 @@ export function ForwardMessageModal({
               {isBrowsing && <div data-testid="forward-load-more-sentinel" ref={sentinelRef} />}
             </div>
           </div>
+        </div>
+
+        {/* Le mot d'accompagnement, au plus près du geste d'envoi — il vaut pour
+            TOUTES les cibles retenues, comme la feuille de partage des
+            applications de référence. */}
+        <div className="pt-2">
+          <Input
+            data-testid="forward-note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={t('forward.note', 'Ajouter un message…')}
+            aria-label={t('forward.note', 'Ajouter un message…')}
+          />
         </div>
 
         <DialogFooter>
