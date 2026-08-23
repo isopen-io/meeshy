@@ -1,6 +1,7 @@
 import type { Server } from 'socket.io';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { SequenceService } from '../../services/SequenceService';
+import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
 
 /**
  * SyncEngine unifié (spec §5+§7.5, sous-tâche A2) — émission Socket.IO
@@ -59,12 +60,12 @@ const userEmitChains = new Map<string, Promise<void>>();
 
 export const DEFAULT_SEQ_TIMEOUT_MS = 2000;
 
-export function emitWithSeq(
+export function emitWithSeq<E extends ServerEventName>(
   io: Server,
   sequenceService: SequenceService,
   userId: string,
-  event: string,
-  payload: Record<string, unknown>,
+  event: E,
+  payload: ServerEventPayload<E>,
   timeoutMs: number = DEFAULT_SEQ_TIMEOUT_MS,
 ): Promise<void> {
   const previous = userEmitChains.get(userId) ?? Promise.resolve();
@@ -98,17 +99,22 @@ export function emitWithSeq(
   return next;
 }
 
-async function emitEnriched(
+async function emitEnriched<E extends ServerEventName>(
   io: Server,
   sequenceService: SequenceService,
   userId: string,
-  event: string,
-  payload: Record<string, unknown>,
+  event: E,
+  payload: ServerEventPayload<E>,
   timeoutMs: number,
 ): Promise<void> {
   const seq = await allocateSeq(sequenceService, userId, timeoutMs);
+  // `_seq` est DÉCLARÉ au contrat depuis le cycle 105 : l'enrichissement rend
+  // donc `ServerEventPayload<E> & { _seq: number }`, assignable à
+  // `ServerEventPayload<E>` sans aucune assertion. Tant que ce paramètre valait
+  // `Record<string, unknown>`, le champ voyageait chez les trois clients sans
+  // qu'aucun contrat n'en parle.
   const enriched = seq === undefined ? payload : { ...payload, _seq: seq };
-  io.to(ROOMS.user(userId)).emit(event, enriched);
+  emitServerEvent(io.to(ROOMS.user(userId)), event, enriched);
 }
 
 /**
