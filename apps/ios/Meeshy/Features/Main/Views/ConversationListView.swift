@@ -1534,20 +1534,25 @@ struct ConversationListView: View {
     /// pilule est montée dès qu'il existe une section à nommer et reste dans
     /// l'arbre : c'est son opacité qui bascule, sinon le fondu de 250 ms n'a
     /// rien à animer (une vue démontée n'a pas d'état d'où partir).
+    /// **RETIRÉE** (directive produit 2026-08-23) : « on n'a pas besoin de
+    /// sticker de section central, car les sections stick sur place quand on
+    /// les dépasse ».
+    ///
+    /// Le doublon était systématique, pas accidentel. La pilule n'avait aucune
+    /// règle de coexistence avec le sticker : sa visibilité tient à la seule
+    /// loi de défilement — visible au premier événement d'offset, invisible
+    /// 900 ms après le dernier. Or « on défile » est EXACTEMENT l'état où un
+    /// sticker est épinglé. Mesuré : sticker « MEESHY TEAM » à (0, 122.0,
+    /// 402×21.3) et capsule portant le MÊME mot à (160.0, 130.0, 82×13.3),
+    /// soit 81 % de recouvrement de la bande, pour zéro information de plus.
+    ///
+    /// `SectionScrollPill` et `SectionScrollPillHost` restent dans l'arbre
+    /// Xcode : les supprimer touche `project.pbxproj`, geste à faire à froid.
+    /// Ils sont donc du code NON MONTÉ, et `SectionScrollPillTests`
+    /// `test_sectionPill_isNoLongerMounted_…` garde ce retrait.
     @ViewBuilder
     private var sectionScrollPillOverlay: some View {
-        if LentilleFeatureFlag.isLentilleListEnabled,
-           let title = Self.sectionPillTitle(
-                visibleSectionId: visibleSectionId,
-                sections: conversationViewModel.groupedConversations.map(\.section)
-           ) {
-            SectionScrollPillHost(
-                relay: scrollOffsetRelay,
-                title: title,
-                sections: conversationViewModel.groupedConversations.map(\.section),
-                positions: sectionPositionRegistry
-            )
-        }
+        EmptyView()
     }
 
     private var mainContentZStack: AnyView {
