@@ -3,7 +3,7 @@
  * Covers branches and paths not reached by auth.test.ts:
  * - createUnifiedAuthMiddleware factory (all branches)
  * - Helper: authUserCacheKey, isRegisteredUser, isAnonymousUser, getUserPermissions
- * - Legacy: requireRole, requireEmailVerification, authenticate
+ * - Legacy: requireRole, requireEmailVerification
  * - JWT cache hit (JWT verify result cached)
  * - Auth user cache hit (user row cached; inactive cached user)
  * - JWT expired + sessionToken trusted-session paths
@@ -17,16 +17,6 @@ import jwt from 'jsonwebtoken';
 import { hashSessionToken } from '../../../utils/session-token';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
-
-const mockAuthServiceVerify = jest.fn() as jest.Mock<any>;
-const mockAuthServiceGetUser = jest.fn() as jest.Mock<any>;
-
-jest.mock('../../../services/AuthTestService', () => ({
-  AuthService: {
-    verifyToken: (...args: unknown[]) => mockAuthServiceVerify(...args),
-    getUserById: (...args: unknown[]) => mockAuthServiceGetUser(...args),
-  },
-}));
 
 jest.mock('../../../services/CacheStore', () => {
   const store = new Map<string, { value: string; expiresAt: number }>();
@@ -78,7 +68,6 @@ import {
   getUserPermissions,
   requireEmailVerification,
   requireRole as requireRoleLegacy,
-  authenticate,
   findTrustedSession,
 } from '../../../middleware/auth';
 
@@ -564,71 +553,6 @@ describe('requireEmailVerification', () => {
 
     expect(reply.code).not.toHaveBeenCalled();
     expect(reply.send).not.toHaveBeenCalled();
-  });
-});
-
-// ─── authenticate (legacy) ────────────────────────────────────────────────────
-
-describe('authenticate (legacy)', () => {
-  it('sends 401 when authorization header is missing', async () => {
-    const req = { headers: {} } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(401);
-    expect(reply.send).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false })
-    );
-  });
-
-  it('sends 401 when authorization header does not start with Bearer', async () => {
-    const req = { headers: { authorization: 'Basic dXNlcjpwYXNz' } } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(401);
-  });
-
-  it('passes when jwtVerify succeeds and userId is present', async () => {
-    const req = {
-      headers: { authorization: 'Bearer sometoken' },
-      jwtVerify: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined),
-      user: { userId: 'user-123' },
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    expect(reply.code).not.toHaveBeenCalled();
-    expect((req as any).user.id).toBe('user-123');
-  });
-
-  it('sends 401 when jwtVerify succeeds but userId is missing', async () => {
-    const req = {
-      headers: { authorization: 'Bearer sometoken' },
-      jwtVerify: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined),
-      user: {},
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(401);
-  });
-
-  it('sends 401 when jwtVerify throws', async () => {
-    const req = {
-      headers: { authorization: 'Bearer badtoken' },
-      jwtVerify: (jest.fn() as jest.Mock<any>).mockRejectedValue(new Error('invalid signature')),
-      user: null,
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    expect(reply.code).toHaveBeenCalledWith(401);
   });
 });
 
@@ -1142,33 +1066,6 @@ describe('createUnifiedAuthMiddleware — user not active error', () => {
   });
 });
 
-// ─── authenticate legacy — development mode path ──────────────────────────────
-// Lines 607-620: only reached when NODE_ENV === 'development'
-
-describe('authenticate legacy — development mode', () => {
-  afterEach(() => {
-    process.env.NODE_ENV = 'test';
-    mockAuthServiceVerify.mockReset();
-    mockAuthServiceGetUser.mockReset();
-  });
-
-  it('falls through to jwtVerify when NODE_ENV=development and verifyToken returns null', async () => {
-    process.env.NODE_ENV = 'development';
-    mockAuthServiceVerify.mockReturnValue(null);
-
-    const req = {
-      headers: { authorization: 'Bearer dev-token' },
-      jwtVerify: (jest.fn() as jest.Mock<any>).mockResolvedValue(undefined),
-      user: { userId: 'dev-user-id' },
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    expect(req.jwtVerify).toHaveBeenCalled();
-  });
-});
-
 // ─── createUnifiedAuthMiddleware legacy req.user unauthenticated branch (498-502) ─
 
 describe('createUnifiedAuthMiddleware — unauthenticated req.user branch', () => {
@@ -1297,83 +1194,6 @@ describe('createUnifiedAuthMiddleware — catch blocks for req.user and req.auth
     } catch {
       // acceptable
     }
-  });
-});
-
-// ─── authenticate legacy — development mode with valid user ───────────────────
-
-describe('authenticate legacy — development mode with valid user returned', () => {
-  afterEach(() => {
-    process.env.NODE_ENV = 'test';
-    mockAuthServiceVerify.mockReset();
-    mockAuthServiceGetUser.mockReset();
-  });
-
-  it('sets req.user and returns early when AuthTestService verifies token with known user', async () => {
-    process.env.NODE_ENV = 'development';
-
-    // Configure the top-level mocks (set up at jest.mock level above)
-    // Use mockReturnValue (not Once) so it persists through entire test
-    mockAuthServiceVerify.mockReturnValue({ userId: 'dev-user-id' });
-    mockAuthServiceGetUser.mockReturnValue({
-      id: 'dev-user-id',
-      username: 'devuser',
-      email: 'dev@example.com',
-      role: 'USER',
-    });
-
-    const req = {
-      headers: { authorization: 'Bearer dev-test-token' },
-      jwtVerify: jest.fn().mockReturnValue(Promise.resolve()),
-      user: {},
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    // In dev mode with valid user from AuthTestService: req.user should be populated
-    // and jwtVerify should NOT be called (early return at line 620)
-    expect(req.user.userId).toBe('dev-user-id');
-    expect(req.user.username).toBe('devuser');
-    expect(req.jwtVerify).not.toHaveBeenCalled();
-  });
-
-  it('falls through to jwtVerify when AuthTestService returns null decoded token', async () => {
-    process.env.NODE_ENV = 'development';
-
-    mockAuthServiceVerify.mockReturnValue(null);
-    mockAuthServiceGetUser.mockReturnValue(null);
-
-    const req = {
-      headers: { authorization: 'Bearer dev-unknown-token' },
-      jwtVerify: jest.fn().mockReturnValue(Promise.resolve()),
-      user: { userId: 'from-jwt' },
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    // Since AuthTestService returned null, should fall through to jwtVerify
-    expect(req.jwtVerify).toHaveBeenCalled();
-  });
-
-  it('falls through to jwtVerify when AuthTestService decoded token but getUserById returns null', async () => {
-    process.env.NODE_ENV = 'development';
-
-    mockAuthServiceVerify.mockReturnValue({ userId: 'known-dev-user' });
-    mockAuthServiceGetUser.mockReturnValue(null); // User not in dev service
-
-    const req = {
-      headers: { authorization: 'Bearer dev-token-user-null' },
-      jwtVerify: jest.fn().mockReturnValue(Promise.resolve()),
-      user: { userId: 'from-jwt-fallback' },
-    } as any;
-    const reply = createReply();
-
-    await authenticate(req, reply);
-
-    // Falls through to jwtVerify when user lookup returns null
-    expect(req.jwtVerify).toHaveBeenCalled();
   });
 });
 
