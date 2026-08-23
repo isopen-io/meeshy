@@ -154,9 +154,14 @@ function TranslationToggle({
     // parchemin qu'elle remplace recopiait un extrait par langue et plafonnait à
     // trois : il coûtait la moitié de l'écran et rendait la quatrième langue
     // inatteignable. Un drapeau dit la même chose en une ligne, sans plafond.
-    const allVersions = [
+    // Type explicite : sans lui, l'union « original | traduction » rend
+    // `version.isOriginal` de type `unknown` sous `in`, et le drapeau repart en
+    // `unknown` dans `handleSelect`.
+    const allVersions: Array<TranslationItem & { isOriginal: boolean }> = [
       originalVersion,
-      ...translations.filter((t) => !sameLanguage(t.languageCode, originalLanguage)),
+      ...translations
+        .filter((t) => !sameLanguage(t.languageCode, originalLanguage))
+        .map((t) => ({ ...t, isOriginal: false })),
     ];
     const hasChoice = allVersions.length > 1;
 
@@ -175,7 +180,6 @@ function TranslationToggle({
           <div className="flex items-center gap-1.5 flex-wrap">
             {allVersions.map((version) => {
               const isSelected = sameLanguage(version.languageCode, displayedVersion.languageCode);
-              const isOriginal = 'isOriginal' in version ? version.isOriginal : false;
               return (
                 <button
                   key={version.languageCode}
@@ -189,7 +193,7 @@ function TranslationToggle({
                       languageCode: version.languageCode,
                       languageName: version.languageName,
                       content: version.content,
-                      isOriginal,
+                      isOriginal: version.isOriginal,
                     })
                   }
                   className={cn(
