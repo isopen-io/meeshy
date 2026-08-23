@@ -75,7 +75,20 @@ NC='\033[0m'
 # EFFET d'un lot passerelle, ce qui est le cas que ce cliquet existe pour
 # capturer : sans lui, les deux points regagnés redeviendraient dépensables en
 # silence.
-readonly WEB_BASELINE=1239
+#
+# 1239 → 1234 au cycle 108, et c'est la SUITE du même mouvement. Le cycle 107 bis
+# a mesuré ce que les clients envoient réellement sur `call:toggle-audio` /
+# `call:toggle-video`, et corrigé `CallMediaToggleClientEvent` en conséquence
+# (`mediaType`/`participantId` optionnels, ack retiré). Les cinq
+# `(socket as unknown).emit(…)` de `VideoCallInterface.tsx` existaient pour faire
+# taire précisément cette divergence : le contrat réparé, ils n'avaient plus
+# d'objet, et les retirer rend ces cinq émissions d'appel vérifiées contre
+# `ClientToServerEvents` au lieu d'être castées hors de toute vérification.
+#
+# Cinq points, un par cast — la mesure exacte de ce qu'un `as unknown` coûtait.
+# Le fichier en porte six autres (`window`, `constraints`, `event`), sans rapport
+# avec le contrat Socket.IO : hors du lot, toujours dans la dette.
+readonly WEB_BASELINE=1234
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #

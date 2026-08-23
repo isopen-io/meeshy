@@ -85,3 +85,111 @@ export function sweepUntypedEmitDoors(srcDir: string): UntypedEmitDoor[] {
 
   return found;
 }
+
+/* ------------------------------------------------------------------------- *
+ * La TROISIÈME forme — le `Server` NU pris pour émettre [cycle 108]
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Un émetteur qui détient le `Server` de socket.io TEL QUEL.
+ *
+ * Les deux balayages ci-dessus cherchent une porte RÉÉCRITE — une signature
+ * `emit` trop libre, déclarée ou castée. Aucun ne voit la forme la plus simple
+ * et la plus fréquente : ne rien réécrire du tout, et prendre le type nu de la
+ * dépendance.
+ *
+ * ```ts
+ * import type { Server } from 'socket.io';
+ * constructor(private io: Server) {}
+ * this.io.to(room).emit(SERVER_EVENTS.X, payload);   // ← vérifié par RIEN
+ * ```
+ *
+ * **Ce n'est pas un défaut de style, c'est une absence totale de contrat.**
+ * `Server` sans paramètres de type retombe sur `DefaultEventsMap`, dont la
+ * signature est `emit(ev: string, ...args: any[])`. Mesuré au cycle 108 sous le
+ * `tsconfig` de production : un nom d'événement INVENTÉ (`"totally:invented-event"`)
+ * et une charge de forme FAUSSE compilent tous les deux à **zéro erreur**. C'est
+ * la forme exacte du défaut du cycle 101 — `message:edited` servi sans
+ * `senderId`/`messageType`/`createdAt`, rejeté en silence par tous les décodeurs
+ * iOS pendant des mois.
+ *
+ * Quatre porteurs au moment où ce balayage est écrit, tous corrigés dans le même
+ * lot : `NotificationService` (12 émissions, dont les quatre familles de demande
+ * d'ami et `user:updated`), `CallCleanupService` (`call:ended` vers l'audience de
+ * terminaison complète), `StoryTextObjectTranslationService` (2), `AgentAdminRelay`
+ * (1) — plus le helper partagé `emitWithSeq`, qui prenait le `Server` nu pour le
+ * compte de tous ses appelants.
+ */
+export interface RawServerEmitter {
+  readonly file: string;
+  readonly declaration: string;
+}
+
+/**
+ * Le discriminant est l'import TYPE-ONLY, et il est étroit par DÉCISION.
+ *
+ * `MeeshySocketIOManager` importe `Server` en VALEUR parce qu'il le CONSTRUIT
+ * (`new SocketIOServer(httpServer, …)`) — c'est le seul endroit du dépôt qui le
+ * peut, et lui interdire l'import n'aurait aucun sens. Un `import type` ne peut,
+ * lui, servir qu'à DÉCLARER : c'est exactement la population visée.
+ *
+ * Le cycle 107 a rendu sept faux positifs en cherchant un IDIOME plutôt qu'une
+ * propriété, et son balayage a été JETÉ plutôt que gelé — geler un inventaire
+ * faux transforme une erreur de mesure en vérité de dépôt. D'où l'étroitesse
+ * assumée ici : le fichier doit à la fois importer le type NU et ÉMETTRE. Un
+ * fichier qui détient un `Server` sans jamais émettre (câblage, cycle de vie)
+ * sort par construction, pas par exemption — l'inventaire n'a aucune liste
+ * d'exceptions, et ne doit jamais en acquérir.
+ */
+const TYPE_ONLY_SOCKETIO_IMPORT =
+  /import\s+type\s*\{([^}]*)\}\s*from\s*['"]socket\.io['"]/g;
+
+/**
+ * TOUS les imports du fichier, jamais le premier.
+ *
+ * Écrit d'abord avec un `exec` simple, et pris en défaut par sa propre fixture :
+ * un fichier qui importe `Server` puis `Server as SocketIOServer` sur deux
+ * lignes n'aurait rendu que le premier alias, et le second aurait traversé le
+ * cliquet en silence. C'est la règle du cycle 104 appliquée à l'outil lui-même —
+ * une erreur commise en écrivant un cliquet est le meilleur cas de test qu'il
+ * aura jamais, et la fixture porte les deux formes pour cette raison.
+ */
+function rawServerAliases(source: string): string[] {
+  const aliases: string[] = [];
+  for (const match of source.matchAll(TYPE_ONLY_SOCKETIO_IMPORT)) {
+    for (const binding of match[1].split(',')) {
+      const trimmed = binding.trim();
+      if (!/^Server\b/.test(trimmed)) continue;
+      const aliased = /^Server\s+as\s+([A-Za-z_$][\w$]*)$/.exec(trimmed);
+      aliases.push(aliased ? aliased[1] : 'Server');
+    }
+  }
+  return aliases;
+}
+
+export function sweepRawServerEmitters(srcDir: string): RawServerEmitter[] {
+  const found: RawServerEmitter[] = [];
+
+  for (const file of walk(srcDir)) {
+    const relative = file.slice(srcDir.length + 1);
+    if (relative.includes('__tests__') || relative.endsWith('.test.ts')) continue;
+
+    const source = stripComments(readFileSync(file, 'utf8'));
+    const aliases = rawServerAliases(source);
+    if (aliases.length === 0) continue;
+    // Détenir n'est pas ÉMETTRE. Sans cette seconde condition, le balayage
+    // mesurerait la popularité d'un import au lieu d'une propriété.
+    if (!source.includes('.emit(')) continue;
+
+    for (const line of source.split('\n')) {
+      for (const alias of aliases) {
+        // Une DÉCLARATION : `io: Server`, `io?: Server`, `io: Server | null`.
+        if (!new RegExp(`:\\s*${alias}\\b`).test(line)) continue;
+        found.push({ file: relative, declaration: line.trim() });
+        break;
+      }
+    }
+  }
+
+  return found;
+}

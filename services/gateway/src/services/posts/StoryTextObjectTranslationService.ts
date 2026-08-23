@@ -12,7 +12,7 @@ import type { Prisma } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { StoryTranslationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import type { PostTranslationUpdatedEventData } from '@meeshy/shared/types/post';
-import type { Server as SocketIOServer } from 'socket.io';
+import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getCommunityCoMemberIds } from './communityVisibility';
 import {
@@ -34,10 +34,10 @@ export class StoryTextObjectTranslationService {
 
   private constructor(
     private readonly prisma: PrismaClient,
-    private readonly io: SocketIOServer,
+    private readonly io: ServerEmitIO,
   ) {}
 
-  static init(prisma: PrismaClient, io: SocketIOServer): StoryTextObjectTranslationService {
+  static init(prisma: PrismaClient, io: ServerEmitIO): StoryTextObjectTranslationService {
     StoryTextObjectTranslationService._shared = new StoryTextObjectTranslationService(prisma, io);
     return StoryTextObjectTranslationService._shared;
   }

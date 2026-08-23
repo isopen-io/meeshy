@@ -39,7 +39,7 @@ import { notificationLogger, securityLogger } from '../../utils/logger-enhanced'
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { filterMutedRecipients } from './mutedRecipients';
 import { visibleNotificationsWhere } from './visibleNotificationsWhere';
-import type { Server as SocketIOServer } from 'socket.io';
+import type { ServerEmitIOWithRooms } from '../../socketio/serverEmit';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
 import { getCommunityCoMemberIds } from '../posts/communityVisibility';
@@ -642,7 +642,7 @@ export class NotificationService {
 
   constructor(
     private prisma: PrismaClient,
-    private io?: SocketIOServer
+    private io?: ServerEmitIOWithRooms
   ) {
     // A2 — allocation des `_seq` per-user pour les events user-scoped.
     this.sequenceService = new SequenceService(prisma);
@@ -4973,7 +4973,7 @@ export class NotificationService {
   /**
    * Configure Socket.IO pour les notifications temps réel
    */
-  setSocketIO(io: SocketIOServer, _userSocketsMap?: Map<string, Set<string>>): void {
+  setSocketIO(io: ServerEmitIOWithRooms, _userSocketsMap?: Map<string, Set<string>>): void {
     notificationLogger.info('🔌 [SOCKET.IO] setSocketIO appelé', {
       hasIo: !!io,
       ioType: typeof io,

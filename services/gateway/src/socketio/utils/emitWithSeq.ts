@@ -1,7 +1,11 @@
-import type { Server } from 'socket.io';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { SequenceService } from '../../services/SequenceService';
-import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
+import {
+  emitServerEvent,
+  type ServerEmitIO,
+  type ServerEventName,
+  type ServerEventPayload,
+} from '../serverEmit';
 
 /**
  * SyncEngine unifié (spec §5+§7.5, sous-tâche A2) — émission Socket.IO
@@ -61,7 +65,7 @@ const userEmitChains = new Map<string, Promise<void>>();
 export const DEFAULT_SEQ_TIMEOUT_MS = 2000;
 
 export function emitWithSeq<E extends ServerEventName>(
-  io: Server,
+  io: ServerEmitIO,
   sequenceService: SequenceService,
   userId: string,
   event: E,
@@ -100,7 +104,7 @@ export function emitWithSeq<E extends ServerEventName>(
 }
 
 async function emitEnriched<E extends ServerEventName>(
-  io: Server,
+  io: ServerEmitIO,
   sequenceService: SequenceService,
   userId: string,
   event: E,
