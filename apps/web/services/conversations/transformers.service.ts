@@ -265,6 +265,7 @@ export class TransformersService {
       isAnonymous: Boolean(att.isAnonymous),
       createdAt: String(att.createdAt || new Date().toISOString()),
       isForwarded: Boolean(att.isForwarded),
+      capturedInApp: att.capturedInApp === true,
       isViewOnce: Boolean(att.isViewOnce),
       viewOnceCount: Number(att.viewOnceCount) || 0,
       isBlurred: Boolean(att.isBlurred),

@@ -181,7 +181,8 @@ scripts/migrations/mongodb/
 ├── 008_add_email_verification_code.js                   # Add email verification code fields
 ├── 009_partial_index_post_originalRepostOfId.js         # Partial-filter index on reposts
 ├── 010_notification_expiry_index.js                     # Notification [userId, isRead, expiresAt]
-└── 011_user_blocked_user_ids_index.js                   # User.blockedUserIds multikey
+├── 011_user_blocked_user_ids_index.js                   # User.blockedUserIds multikey
+└── 012_backfill_attachment_capturedInApp.js             # MessageAttachment.capturedInApp = false
 ```
 
 ### 010_notification_expiry_index.js
@@ -209,6 +210,26 @@ over every user — the cost moved rather than removed. As a multikey index the
 lookup is bounded by how many people actually blocked that account. Additive
 (nothing is dropped), idempotent, and a no-op on a database created by
 `prisma db push` from the current schema.
+
+### 012_backfill_attachment_capturedInApp.js
+
+Sets `capturedInApp = false` on every `MessageAttachment` that does not carry
+the field.
+
+**This one is not optional.** `capturedInApp` is a non-nullable scalar, and a
+non-nullable scalar missing from a document makes the Prisma *read* fail
+("Field capturedInApp is required to return data, got null") — on the very
+query that serves the message list. Without this backfill, any conversation
+holding an attachment older than the field stops loading. The schema's
+`@default(false)` applies on WRITE; it does not reconstitute an absent field on
+read. Same reason as step 4 of `scripts/migrate-effect-flags.js`.
+
+Every pre-existing attachment gets `false`, with no heuristic: provenance is
+knowable only at capture time, by the client that opened the camera or the
+microphone. Nothing in a file, a MIME type or a name distinguishes a photo just
+taken from a photo imported, so any catch-up rule would manufacture a claim
+nobody made. Idempotent — it only touches documents where the field is absent,
+so a re-run never overwrites a declaration a client made in the meantime.
 
 ## Expected Results After Migration
 

@@ -75,6 +75,7 @@ extension View {
             .storyLocationPickerProvided()
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()
+            .storyPasteProvided()
         }
     }
 }

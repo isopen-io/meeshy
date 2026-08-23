@@ -3798,7 +3798,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       left untouched to avoid a degenerate zero-length window hiding it) — the Compose `.alpha()` glue
       is unchanged. Pending: transition **editing** (add/adjust duration + kind) and the per-pixel
       dissolve on any Android export path (both part of the V2 timeline editor).
-- [ ] Per-clip inspector (volume, fade in/out, loop, background, delete)
+- [~] Per-clip **reader fade envelope** shipped (slice `story-media-fade-envelope`, 2026-08-23):
+      pure `StoryMediaFadeResolver.fadeOpacity` ports iOS `StoryRenderer.fadeOpacity(item:at:)` — a
+      timed foreground clip ramps `0→1` over its own `fadeIn`, holds at `1`, then ramps `1→0` over its
+      `fadeOut`, clipped to the clip's `[startTime, startTime+duration)` window (a `null` duration = an
+      open-ended clip whose fade-out edge never fires). Threaded `fadeIn`/`fadeOut` into
+      `StoryForegroundMediaView` (previously discarded from the wire projection) and folded into
+      `animated()` at iOS render precedence `fade ?? keyframeOpacity ?? base`, then × the clip-transition
+      ramp — so an authored envelope overrides a keyframe opacity and still multiplies with a crossfade.
+      Compose `.alpha()` glue unchanged. Pending (editor side): the per-clip inspector UI to author
+      volume / fade in-out / loop / background / delete.
+- [ ] Per-clip inspector EDITOR (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)
 - [ ] Story media audio-focus arbitration (claim app audio, restore on dismiss)

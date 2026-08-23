@@ -5,6 +5,28 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-23 — this container: `dl.google.com` REACHABLE, pristine `android-37.0` alone worked (slice `story-media-fade-envelope`)
+Egress to `dl.google.com` returned **200** this run (unlike the containers the CI-reality note describes,
+where it's 403), so the local gate WAS available. Full bootstrap ran clean: `commandlinetools`, then
+`sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"`, then
+`sdkmanager --channel=3 "platforms;android-37.0"` for the preview compileSdk 37 — **pristine alone**, no
+copy→patch, no both-dirs mode. `./gradlew :feature:stories:help` resolved `android-37` on the first run;
+full `assembleDebug testDebugUnitTest` **BUILD SUCCESSFUL** (973 tasks, 4m11s). Confirms the "try pristine
+first" net rule. Practical timing on this image: config ~1m40s cold, targeted module test ~2m30s, full
+check ~4m10s — background the gradle invocations and wait on a `grep -qE 'BUILD (SUCCESSFUL|FAILED)'`
+until-loop; `--console=plain … | tail -N` buffers, so the output file stays empty until the run exits.
+
+## 2026-08-23 — opacity fold precedence for foreground clips is `fade ?? keyframeOpacity ?? base`, THEN × transition (NOT all-multiply)
+Porting `StoryRenderer.fadeOpacity`: iOS composes the media layer's opacity as
+`base = fade ?? kfOverrides.opacity ?? 1.0; layer.opacity = base × transitionFactor`
+(`StoryRenderer.swift:246-247`, comment "fade envelope (écrase) > opacité keyframes > 1"). So a live
+fadeIn/fadeOut envelope **overrides** an authored keyframe opacity — it does NOT multiply with it — and
+only the clip-transition factor multiplies. Android `StoryForegroundMediaView.animated()` mirrors this:
+`opacityBase = fadeEnvelope ?: base.opacity; opacity = opacityBase * transitionOpacity`. Easy to get wrong
+by multiplying all three; the mutation `fadeEnvelope ?: base.opacity → base.opacity` (drop the override)
+is the RED-proof for it. Same not-in-ItemSignature reasoning as the transition factor: the envelope is a
+per-tick post-pass, so on Android it belongs in the pure `animated()` fold, never baked into the projection.
+
 ## 2026-08-23 — SDK recipe THIRD mode: NEITHER dir alone works, BOTH `android-37` + `android-37.0` present does
 
 Slice `story-clip-transition-opacity`. On this image *both* single-dir recipes the earlier notes record

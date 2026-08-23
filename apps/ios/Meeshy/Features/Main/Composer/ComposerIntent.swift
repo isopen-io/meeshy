@@ -225,10 +225,28 @@ nonisolated extension ComposerProfile {
             )
 
         case .draft, .share:
-            // Rév. 3 (revue d'intégration I5) : `.post` est un état TRANSITOIRE.
-            // Le host rebascule au format du document une fois celui-ci chargé —
-            // la table reste une fonction de l'origine, elle n'ouvre pas le
+            // Rév. 3 (revue d'intégration I5) : `.post` est un état TRANSITOIRE
+            // — la table reste une fonction de l'origine, elle n'ouvre pas le
             // document pour le deviner.
+            //
+            // Rév. 5 (revue adversariale du 2026-08-23) : la rév. 3 promettait
+            // ici que « le host rebascule au format du document une fois
+            // celui-ci chargé ». **Cet écrivain n'existe pas.** Rien ne
+            // réaffecte `currentFormat` après la construction du host, et un
+            // commentaire qui énonce un invariant que le code ne tient pas
+            // devient la loi que lira la session suivante — celle qui aurait
+            // monté `.draft` en confiance.
+            //
+            // Ce qui tient VRAIMENT la conséquence est ailleurs, et c'est
+            // volontaire : `ComposerSurfaceRouting` fait de `.resume` une
+            // SCÈNE quel que soit le format, parce que le seul mécanisme de
+            // reprise du meuble (`adoptDraft`) repeuple l'atelier. Le `.post`
+            // transitoire ne décide donc plus d'aucune surface, et reprendre un
+            // brouillon ne peut plus ouvrir un éditeur de texte vide pendant
+            // que le brouillon adopté attend derrière.
+            //
+            // La bascule au format du document reste À ÉCRIRE (V3+) ; elle est
+            // consignée comme dette, plus promise comme acquise.
             return ComposerProfile(
                 initialFormat: .post,
                 offeredFormats: plusReel([.post, .story]),

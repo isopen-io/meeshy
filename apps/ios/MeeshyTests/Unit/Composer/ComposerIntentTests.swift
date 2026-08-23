@@ -123,13 +123,25 @@ final class ComposerIntentTests: XCTestCase {
         XCTAssertEqual(profil.initialFormat, .post)
     }
 
+    /// Rév. 5 (revue adversariale du 2026-08-23) : la rév. 3 justifiait ce
+    /// `.post` transitoire par « c'est le host qui rebascule au format du
+    /// brouillon une fois le document chargé ». **Cet écrivain n'existe pas** —
+    /// `MeeshyComposerHostGuardTests.test_host_neReaffectePasLeFormatCourant_…`
+    /// le grave, avec sa condition de levée.
+    ///
+    /// Ce qui rend le transitoire INOFFENSIF est ailleurs, et vérifié ailleurs :
+    /// `ComposerSurfaceRouting` fait d'une `.resume` une SCÈNE quel que soit le
+    /// format, donc reprendre un brouillon montre l'atelier qui l'a adopté et
+    /// non un éditeur de texte vide
+    /// (`ComposerDocumentSurfaceTests.test_surface_desDeuxPortesQuiReprennentSansLegacy_estLAtelier`).
     func test_profile_draft_reprendUnDocumentAuFormatPost() {
         let profil = profil(.draft(id: "brouillon-42"))
 
         XCTAssertEqual(
             profil.initialFormat, .post,
-            "Rév. 3 : `.draft` ouvre en état TRANSITOIRE `.post` ; c'est le host qui rebascule au format du "
-            + "brouillon une fois le document chargé (loi 9 — les capacités suivent le format courant)."
+            "Rév. 3 : `.draft` ouvre en état TRANSITOIRE `.post` — la table reste une fonction de l'origine et "
+            + "n'ouvre pas le document pour le deviner. Ce que ce format d'ouverture NE décide pas, c'est la "
+            + "surface montée : la reprise monte l'atelier."
         )
         XCTAssertEqual(profil.opensWith, .resume)
         XCTAssertNil(profil.routesToLegacy)
@@ -672,6 +684,26 @@ final class ComposerIntentTests: XCTestCase {
 
     func test_moodChip_nOffreQueLeStatut() {
         XCTAssertEqual(eventail(.moodChip, reel: true), [.status])
+    }
+
+    /// Le gate du réel gouverne l'ÉVENTAIL, jamais le ROUTAGE. C'est ce qui
+    /// autorise `ComposerIntent.routesToLegacy` à trancher sans composition
+    /// sous la main — la porte doit savoir quoi présenter AVANT que quoi que
+    /// ce soit soit composé, et une supposition à cet endroit-là ouvrirait le
+    /// mauvais composer.
+    ///
+    /// Sans ce test, la propriété se supposerait : le jour où une porte se
+    /// mettrait à router différemment selon la qualification, `routesToLegacy`
+    /// répondrait faux en silence, et la porte présenterait le meuble là où le
+    /// legacy était attendu.
+    func test_routageLegacy_neDependJamaisDeLaQualificationEnReel() {
+        for origin in Self.toutesLesOrigines {
+            XCTAssertEqual(
+                ComposerProfile.profile(for: origin, compositionQualifiesAsReel: false).routesToLegacy,
+                ComposerProfile.profile(for: origin, compositionQualifiesAsReel: true).routesToLegacy,
+                "\(nom(de: origin)) change de composer historique selon la composition — le routage doit être stable."
+            )
+        }
     }
 
     // MARK: - Règle : ce que vise un repost — la racine, au format de la carte
