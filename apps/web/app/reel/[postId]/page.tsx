@@ -197,7 +197,10 @@ export default function ReelPage() {
   const handleRepost = useCallback(() => {
     if (!current) return;
     repostMutation.mutate(
-      { postId: current.id, data: { isQuote: false } },
+      // Loi du miroir : un réel repartagé RESTE un réel. Sans `targetType`, le
+      // gateway retombait sur `?? POST` et le repost quittait le fil des réels
+      // — rétrogradation silencieuse, jamais demandée.
+      { postId: current.id, data: { isQuote: false, targetType: current.type } },
       {
         onSuccess: () => {
           setRepostModalOpen(false);
@@ -212,7 +215,7 @@ export default function ReelPage() {
     (quoteContent: string) => {
       if (!current) return;
       repostMutation.mutate(
-        { postId: current.id, data: { content: quoteContent, isQuote: true } },
+        { postId: current.id, data: { content: quoteContent, isQuote: true, targetType: current.type } },
         {
           onSuccess: () => {
             setRepostModalOpen(false);

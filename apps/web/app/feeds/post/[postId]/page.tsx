@@ -198,7 +198,8 @@ export default function PostDetailPage() {
 
   const handleRepost = () => {
     repostMutation.mutate(
-      { postId: post.id, data: { isQuote: false } },
+      // Loi du miroir : le format suit celui de la CARTE sur laquelle on a agi.
+      { postId: post.id, data: { isQuote: false, targetType: post.type } },
       {
         onSuccess: () => {
           setRepostModalOpen(false);
@@ -219,7 +220,7 @@ export default function PostDetailPage() {
 
   const handleQuote = (content: string) => {
     repostMutation.mutate(
-      { postId: post.id, data: { content, isQuote: true } },
+      { postId: post.id, data: { content, isQuote: true, targetType: post.type } },
       {
         onSuccess: () => {
           setRepostModalOpen(false);

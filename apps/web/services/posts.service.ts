@@ -68,6 +68,24 @@ export interface UpdatePostRequest {
 export interface RepostRequest {
   readonly content?: string;
   readonly isQuote?: boolean;
+  /**
+   * Format du repost — **loi du miroir** (directive produit 2026-08-23).
+   *
+   * Le format suit celui de la CARTE sur laquelle l'utilisateur a agi ;
+   * reposter dans un AUTRE format est le geste d'**ancrage** — « garder ça
+   * pour de bon ». Une story repartagée reste éphémère (20 h) ; la reposter en
+   * `POST` la rend permanente.
+   *
+   * Le champ manquait entièrement côté web : tous les sites envoyaient
+   * `{ isQuote: false }`, le gateway retombait sur son défaut `?? POST`
+   * (`PostService.ts:2221`), et **republier une story fabriquait donc un post
+   * permanent en silence** — le geste disait « repartager », le résultat disait
+   * « ancrer ». Un réel y perdait aussi sa nature et quittait le fil des réels.
+   *
+   * Omettre le champ reste licite : le filet `?? POST` du gateway vaut mieux
+   * qu'une supposition quand le type de la source est inconnu.
+   */
+  readonly targetType?: PostType;
 }
 
 export interface SharePostOptions {

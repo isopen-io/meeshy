@@ -168,6 +168,13 @@ interface StoryViewerProps {
   onReport?: (storyId: string) => void;
   onShare?: (storyId: string) => void;
   onRepost?: (storyId: string) => void;
+  /**
+   * L'ANCRAGE — « garder ça pour de bon ». Action DISTINCTE de `onRepost`,
+   * pas une variante : le miroir laisse la story éphémère (20 h), l'ancrage
+   * la rend permanente en la republiant comme post. Deux effets différents,
+   * donc deux contrôles (loi 4 : un contrôle existe s'il a un effet).
+   */
+  onRepostAsPost?: (storyId: string) => void;
   /** Whether to show the comments panel (default: true) */
   enableComments?: boolean;
   /** Commentaire ciblé par une navigation notification (`#comment-<id>`) :
@@ -435,6 +442,19 @@ function ShareIcon() {
   );
 }
 
+/**
+ * L'ancrage — « garder sur mon fil ». Glyphe DISTINCT du repost : les deux
+ * actions publient, mais l'une laisse l'éphémère éphémère et l'autre le rend
+ * permanent. Un même glyphe pour deux permanences différentes tromperait.
+ */
+function KeepOnFeedIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 function RepostIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -464,6 +484,7 @@ function StoryViewer({
   onReport,
   onShare,
   onRepost,
+  onRepostAsPost,
   enableComments = true,
   targetCommentId,
   targetParentCommentId,
@@ -1196,6 +1217,19 @@ function StoryViewer({
                 aria-label={t('repost', 'Repost')}
               >
                 <RepostIcon />
+              </button>
+            )}
+            {onRepostAsPost && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRepostAsPost(story.id);
+                }}
+                className="p-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors duration-300"
+                aria-label={t('repostAsPost', 'Keep on my feed')}
+                title={t('repostAsPost', 'Keep on my feed')}
+              >
+                <KeepOnFeedIcon />
               </button>
             )}
             {onReport && currentUserId && story.authorId && story.authorId !== currentUserId && (

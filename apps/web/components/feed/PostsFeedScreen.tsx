@@ -36,7 +36,7 @@ import { TusUploadService } from '@/services/tusUploadService';
 import { reportService } from '@/services/report.service';
 import { postsService } from '@/services/posts.service';
 import type { MobileTranscription } from '@/services/posts.service';
-import type { Post, PostVisibility } from '@meeshy/shared/types/post';
+import type { Post, PostType, PostVisibility } from '@meeshy/shared/types/post';
 import type { PostReferenceInput } from '@meeshy/shared/types/post-reference';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 import { shareLink } from '@/lib/share-utils';
@@ -361,10 +361,17 @@ export function PostsFeedScreen() {
     [activeStoryData, showToast, t],
   );
 
-  const handleRepostStory = useCallback(
-    (storyId: string) => {
+  /**
+   * Loi du miroir (directive 2026-08-23). Second site éphémère du web, avec la
+   * page `/story/[postId]` : sans `targetType`, le gateway retombait sur
+   * `?? POST` et repartager une story depuis le tray du fil fabriquait un post
+   * PERMANENT. Le miroir et l'ancrage partent ensemble — livrer le premier seul
+   * donnerait 20 h là où l'on obtenait du définitif, sans recours.
+   */
+  const repostStory = useCallback(
+    (storyId: string, targetType: PostType) => {
       repostMutation.mutate(
-        { postId: storyId, data: { isQuote: false } },
+        { postId: storyId, data: { isQuote: false, targetType } },
         {
           onSuccess: () => showToast(t('toast.reposted', 'Reposted!'), 'success'),
           onError: () => showToast(t('toast.error', 'Error'), 'error'),
@@ -372,6 +379,18 @@ export function PostsFeedScreen() {
       );
     },
     [repostMutation, showToast, t],
+  );
+
+  /** Le miroir — la story repartagée reste éphémère. */
+  const handleRepostStory = useCallback(
+    (storyId: string) => repostStory(storyId, 'STORY'),
+    [repostStory],
+  );
+
+  /** L'ANCRAGE — « garder ça pour de bon ». */
+  const handleRepostStoryAsPost = useCallback(
+    (storyId: string) => repostStory(storyId, 'POST'),
+    [repostStory],
   );
 
   const handleStoryViewerClose = useCallback(() => {
@@ -572,7 +591,9 @@ export function PostsFeedScreen() {
   const handleRepost = useCallback(() => {
     if (!repostingPost) return;
     repostMutation.mutate(
-      { postId: repostingPost.id, data: { isQuote: false } },
+      // Loi du miroir : le format suit la CARTE. Le fil ne sert que POST et
+      // REEL, donc rien d'observable ne change ici — la loi devient explicite.
+      { postId: repostingPost.id, data: { isQuote: false, targetType: repostingPost.type } },
       {
         onSuccess: () => {
           setRepostingPost(null);
@@ -891,6 +912,7 @@ export function PostsFeedScreen() {
           onReport={handleReportStory}
           onShare={handleShareStory}
           onRepost={activeStoryGroupIsRepostable ? handleRepostStory : undefined}
+          onRepostAsPost={activeStoryGroupIsRepostable ? handleRepostStoryAsPost : undefined}
         />
       )}
 
