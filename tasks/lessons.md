@@ -13006,7 +13006,7 @@ structurels ⇒ risque de DÉRIVE, pas divergence.
   message, le plus fréquenté du produit. Un lot de consistance n'y entre pas
   sans ses propres témoins.
 
-## 2026-08-23 — Le repli couvrait tout, sauf le mode où il était seul (cycle 111)
+## 2026-08-23 — Le repli couvrait tout, sauf le mode où il était seul (cycle 112)
 
 ### 1. Une mesure PUBLIÉE est une affirmation, au même titre qu'un suivi hérité
 

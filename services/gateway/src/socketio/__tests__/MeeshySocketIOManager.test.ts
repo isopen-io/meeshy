@@ -3004,6 +3004,84 @@ describe('MeeshySocketIOManager', () => {
     });
 
     /**
+     * Le NOM est vérifié depuis le cycle 109 bis ; la CHARGE ne l'était pas.
+     * Les douze événements de `DRAINED_EVENT` portent tous un OBJET — c'est ce
+     * dont dépend le routage chez les trois clients, exactement comme
+     * `linkMessageEmissions` l'exige déjà du message qu'il DÉPLIE : « un payload
+     * sans `conversationId` au premier niveau — donc non routable, donc jeté ».
+     *
+     * L'asymétrie était là : la valeur DÉRIVÉE était inspectée
+     * (`typeof message === 'object' && !Array.isArray(message)`), la valeur dont
+     * elle est dérivée partait sans contrôle. Une chaîne, un tableau ou un `null`
+     * relu de Redis — `JSON.parse(…) as QueuedMessagePayload` ne vérifie RIEN —
+     * s'émettait donc sous un nom d'événement PARFAITEMENT valide, que chaque
+     * décodeur client jette en silence. Le drain étant destructif, le message est
+     * alors perdu sans recours et sans trace : la forme exacte du défaut que le
+     * cycle 109 bis a fermé pour le nom.
+     */
+    it('ne diffuse RIEN dont la charge ne soit pas un objet routable', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-object' }, conversationId: 'conv-1', messageId: 'msg-object' },
+          { payload: 'not-an-object', conversationId: 'conv-1', messageId: 'msg-string' },
+          { payload: [{ id: 'msg-array' }], conversationId: 'conv-1', messageId: 'msg-array' },
+          { payload: null, conversationId: 'conv-1', messageId: 'msg-null' },
+          {
+            payload: 'not-an-envelope',
+            conversationId: 'conv-1',
+            messageId: 'msg-link',
+            eventType: 'link-message',
+          },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-shapeless', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, {
+        id: 'msg-object',
+      });
+      // Le point du témoin : aucune charge diffusée n'est autre chose qu'un objet.
+      const wireEmissions = ioState.toEmit.mock.calls.filter(
+        (c: any[]) => c[0] !== SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      for (const [, payload] of wireEmissions) {
+        expect(payload).toEqual(expect.any(Object));
+        expect(Array.isArray(payload)).toBe(false);
+      }
+      expect(wireEmissions).toHaveLength(1);
+    });
+
+    /**
+     * Le pendant du témoin précédent, sur les deux signaux que le cycle 109 bis
+     * a rendus solidaires du LIVRÉ : une entrée dont la charge est indélivrable
+     * ne compte pas dans `count`, et sa conversation est NOMMÉE quand même —
+     * c'est ce qui rend la perte récupérable plutôt que définitive.
+     */
+    it('n’accuse pas la remise d’une charge informe, mais nomme sa conversation', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-ok' }, conversationId: 'conv-delivered', messageId: 'msg-ok' },
+          { payload: 'informe', conversationId: 'conv-shapeless', messageId: 'msg-shapeless' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const receiptsSpy = jest
+        .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
+        .mockResolvedValue(undefined);
+      await (manager as any)._drainPendingMessages('user-shapeless-receipt', false);
+
+      const call = ioState.toEmit.mock.calls.find(
+        (c: any[]) => c[0] === SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      expect(call?.[1].count).toBe(1);
+      expect(call?.[1].conversationIds).toEqual(
+        expect.arrayContaining(['conv-delivered', 'conv-shapeless'])
+      );
+      const [, forwarded] = receiptsSpy.mock.calls[0] as [string, any[], boolean];
+      expect(forwarded.map((e: any) => e.messageId)).toEqual(['msg-ok']);
+    });
+
+    /**
      * Un accusé de remise AFFIRME « ce message est arrivé chez son
      * destinataire ». La règle est déjà écrite dans `_drainPendingMessages`,
      * pour la garde d'appartenance : « l'affirmer d'un message qu'on vient de

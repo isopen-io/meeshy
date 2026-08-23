@@ -98,7 +98,7 @@ import { emitServerEvent, type ServerEventName } from './serverEmit';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
-import { drainedEventName } from './queuedEventContract';
+import { drainedEventName, isDeliverableQueuedPayload } from './queuedEventContract';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -673,6 +673,14 @@ export class MeeshySocketIOManager {
       };
 
       for (const entry of pending) {
+        // Les deux moitiés du couple, refusées séparément parce que le journal
+        // doit NOMMER laquelle a manqué : c'est la seule trace qu'une perte de
+        // rejeu laissera jamais, et « le nom » et « la charge » n'envoient pas
+        // chercher au même endroit.
+        if (!isDeliverableQueuedPayload(entry.payload)) {
+          dropEntry(entry, 'payload-not-an-object');
+          continue;
+        }
         const emissions = _drainedEmissions(entry);
         if (emissions.length === 0) {
           dropEntry(entry, 'unresolvable-event-type');
