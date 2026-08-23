@@ -199,3 +199,29 @@ ROUGES avant correction** :
       Même conclusion ici : le levier est de DÉCLARER les champs, pas de fermer
       la carte.
 - [ ] Hérité (108 ter) — l'en-tête du cliquet de dette, fausse de trois points.
+
+## 8. Intégration avec le cycle 109 parallèle
+
+Les deux sessions ont travaillé le même `main` en même temps, sur deux moitiés
+disjointes de la couche Socket.IO :
+
+| lot | ce qu'il ferme |
+|---|---|
+| cycle 109 (PR #3397) | la porte d'ACQUITTEMENT des réactions — ce que l'ack DIT |
+| cycle 109 bis (celui-ci) | le REJEU hors ligne — ce que le drain ÉMET, et ce qu'il PERD |
+
+**Un seul fichier commun** : `packages/shared/types/socketio-events.ts`. Les deux
+lots y touchent des déclarations DISTINCTES — l'autre les charges d'ack des
+quatre familles de réaction, celui-ci la documentation de
+`PENDING_MESSAGES_DELIVERED`. Fusion manuelle (`git merge origin/main`), **zéro
+conflit**, et surtout aucune règle contradictoire : les deux vont dans le même
+sens, celui de rendre EXPLICITE ce qu'un canal transporte réellement.
+
+Les gates ont été rejoués ENTIÈREMENT sur l'arbre FUSIONNÉ, pas seulement sur la
+branche : un merge propre au texte ne prouve rien du comportement, et l'autre lot
+introduit un cliquet neuf (`ack-door-sweep`) que ma branche n'avait jamais vu.
+
+> **Deux sessions sur le même `main` ne se dupliquent pas nécessairement** —
+> constat déjà posé au cycle 108 ter, et vérifié une seconde fois. Ce qui les
+> sépare proprement ici, c'est que chacune est partie d'un SUIVI différent plutôt
+> que du même.
