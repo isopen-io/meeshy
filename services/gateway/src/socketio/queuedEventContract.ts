@@ -56,8 +56,32 @@ export const DRAINED_EVENT = {
 /**
  * L'événement serveur qu'une entrée de file rejoue. L'absence d'`eventType`
  * vaut `'new'` — la forme héritée.
+ *
+ * **Le type de retour porte `undefined`, et ce n'est pas une précaution :
+ * c'est la seule chose vraie que cette fonction puisse dire.** Son argument est
+ * typé `QueuedEventType`, mais il ne l'est qu'à l'ÉCRITURE. À la lecture il
+ * sort d'un `JSON.parse(...) as QueuedMessagePayload` — une AFFIRMATION, jamais
+ * une vérification — sur des octets écrits jusqu'à 48 h plus tôt
+ * (`DELIVERY_QUEUE_TTL_SECONDS`) par une version de la passerelle qui n'est pas
+ * forcément celle qui relit. Un déploiement progressif suffit : deux versions
+ * se partagent la même file Redis, et celle qui ne connaît pas un `eventType`
+ * neuf le lit quand même.
+ *
+ * Déclarer `ServerEventName` tout court rendait cette recherche INFAILLIBLE au
+ * compilateur alors qu'elle rend `undefined` en production — et le seul
+ * consommateur émettait donc sous un nom absent. `emit(undefined, payload)` ne
+ * lève PAS sur socket.io 4.8 (mesuré) : l'événement part anonyme, nul ne
+ * l'écoute, et le destinataire hors ligne perd le message SANS TRACE. C'est la
+ * famille « une déclaration présente, bien formée, et fausse contre son
+ * producteur » — ici le producteur est Redis, pas un émetteur du dépôt.
+ *
+ * Rendre l'`undefined` VISIBLE au typage oblige chaque appelant à décider quoi
+ * faire d'une entrée qu'il ne sait pas nommer. C'est tout l'objet du
+ * changement : la valeur était déjà là, seul le type la cachait.
  */
-export function drainedEventName(eventType: QueuedMessagePayload['eventType']): ServerEventName {
+export function drainedEventName(
+  eventType: QueuedMessagePayload['eventType'],
+): ServerEventName | undefined {
   return DRAINED_EVENT[eventType ?? 'new'];
 }
 
