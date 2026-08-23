@@ -1608,6 +1608,75 @@ chercher. Le balayage voit désormais les deux formes (`emit(ev: string` et
 **chercher une forme fautive par son NOM de déclaration, c'est manquer tous les
 sites qui l'obtiennent autrement.**
 
+### La TROISIÈME forme : ne rien réécrire, et prendre le `Server` NU
+
+La règle ci-dessus a une instance de plus, et c'est la plus discrète des trois —
+il n'y a ni déclaration ni assertion à chercher, seulement un import qui a l'air
+parfaitement normal (cycle 108) :
+
+```ts
+import type { Server } from 'socket.io';
+constructor(private io: Server) {}
+this.io.to(room).emit(SERVER_EVENTS.X, payload);   // ← vérifié par RIEN
+```
+
+**Ce n'est pas un défaut de style, c'est une absence totale de contrat.** `Server`
+sans paramètres de type retombe sur `DefaultEventsMap`, dont la signature est
+`emit(ev: string, ...args: any[])`. Mesuré sous le `tsconfig` de production :
+
+| ce qu'on émet à travers un `Server` NU | verdict |
+|---|---|
+| un nom d'événement **entièrement inventé** | **0 erreur** |
+| une charge de forme **fausse** sous un vrai nom | **0 erreur** |
+
+C'est la forme exacte du défaut du cycle 101 — `message:edited` servi sans
+`senderId`/`messageType`/`createdAt`, rejeté en silence par tous les décodeurs
+iOS pendant des mois.
+
+Cinq porteurs au cycle 108, ~16 émissions temps réel (les quatre familles de
+demande d'ami, `user:updated`, les compteurs de notification, `call:ended`) —
+dont le helper PARTAGÉ `emitWithSeq`, qui prenait le `Server` nu **pour le compte
+de tous ses appelants** : sa charge était gouvernée (il émet par
+`emitServerEvent`), son CANAL ne l'était pas.
+
+> **Aucun des deux cliquets existants ne pouvait le voir.** Celui du TYPE garde
+> `serverEmit.ts`, que ces services n'importaient pas ; celui du BALAYAGE cherche
+> une signature `emit` réécrite, et ici **rien n'est réécrit**. Une porte se
+> ferme, une porte se contourne — et une porte peut aussi n'avoir jamais été
+> construite parce qu'on a pris celle de la dépendance.
+
+`sweepRawServerEmitters` (`socketio/__tests__/server-emit-door-sweep.ts`) garde
+l'inventaire à VIDE. Son discriminant est ÉTROIT par décision — `import type` +
+`.emit(` :
+
+- **`import type`** exclut `MeeshySocketIOManager`, qui importe `Server` en
+  VALEUR parce qu'il le CONSTRUIT. Un `import type` ne peut, lui, que DÉCLARER.
+- **`.emit(`** exclut par CONSTRUCTION tout fichier qui détient un `Server` sans
+  émettre. **Détenir n'est pas ÉMETTRE** — sans cette condition le balayage
+  mesurerait la popularité d'un import au lieu d'une propriété (cycle 107, sept
+  faux positifs, balayage JETÉ plutôt que gelé).
+
+**Quand il tombe** : la réparation est de dériver (`ServerEmitIO`, ou
+`ServerEmitIOWithRooms` si le porteur lit aussi ses rooms), jamais d'ajouter une
+ligne à un inventaire — il n'y a pas de `Server` nu légitime pour émettre.
+
+### Un lot peut rendre un contournement INUTILE sans le faire disparaître
+
+Variante douce de « le lot qui rend une chose possible doit relire les
+commentaires qui la déclaraient impossible » (§ suivant), et elle coûte autant.
+
+Les cinq `(socket as unknown).emit(…)` de `VideoCallInterface.tsx` (web)
+n'étaient pas gratuits : `CallMediaToggleClientEvent` exigeait `mediaType`,
+`participantId` et un ack, quand le web n'envoie que `{ callId, enabled }`. Le
+cycle 107 bis a mesuré ce que les clients émettent RÉELLEMENT et corrigé le
+contrat — rendant les cinq casts sans objet le jour même, sans que personne le
+remarque. Ils sont restés un cycle de plus, continuant de soustraire cinq
+émissions d'appel à toute vérification **pour une raison qui n'existait plus**.
+
+> Quand un lot répare un contrat contre ses émetteurs réels, la question à poser
+> dans le même lot est : **qui avait contourné ce contrat, et pourquoi ?** Un
+> contournement ne se périme pas tout seul, et il ne rougit jamais.
+
 ### Le lot qui rend une chose possible doit relire les commentaires qui la déclaraient IMPOSSIBLE
 
 Le cast ci-dessus vivait sous cette phrase :
