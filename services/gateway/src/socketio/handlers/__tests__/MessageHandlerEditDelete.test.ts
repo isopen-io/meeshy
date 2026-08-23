@@ -592,7 +592,11 @@ describe('MessageHandler — handleMessageEdit', () => {
   // résultat exact d'un correctif naïf (`senderId: message.senderId`).
   it('sert le noyau que `SocketIOMessage` EXIGE — sans quoi le décodeur iOS jette la charge utile entière', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord({
-      createdAt: new Date('2026-08-22T10:00:00Z'),
+      // RELATIF, jamais figé : `admitMessageEdit` refuse au-delà de
+      // `MESSAGE_EDIT_WINDOW_MS` en comparant `createdAt` à l'horloge RÉELLE.
+      // Une date en dur passe le jour où elle est écrite puis expire seule le
+      // lendemain — ces deux cas sont partis au rouge ainsi.
+      createdAt: new Date(Date.now() - 60 * 60 * 1000),
       messageType: 'text',
     }));
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
@@ -616,7 +620,11 @@ describe('MessageHandler — handleMessageEdit', () => {
   // l'identité utilisateur.
   it('sert le `User.id` de l\'expéditeur, jamais le `Participant.id` de la colonne', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord({
-      createdAt: new Date('2026-08-22T10:00:00Z'),
+      // RELATIF, jamais figé : `admitMessageEdit` refuse au-delà de
+      // `MESSAGE_EDIT_WINDOW_MS` en comparant `createdAt` à l'horloge RÉELLE.
+      // Une date en dur passe le jour où elle est écrite puis expire seule le
+      // lendemain — ces deux cas sont partis au rouge ainsi.
+      createdAt: new Date(Date.now() - 60 * 60 * 1000),
     }));
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
