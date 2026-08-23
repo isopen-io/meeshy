@@ -250,3 +250,47 @@ nonisolated extension ComposerProfile {
         }
     }
 }
+
+/// Ce que vise un repost : la RACINE, et le format de la CARTE.
+///
+/// Deux choses différentes, qu'il est naturel de confondre — la confusion a
+/// été faite puis rattrapée en revue le 2026-08-23, et c'est pour qu'elle ne
+/// se refasse pas que la règle vit ici plutôt que recopiée sur six sites.
+///
+/// - La RÉFÉRENCE remonte à la racine (`originalRepostOfId`), sans quoi le
+///   repost d'un repost embarquerait une carte de partage vide.
+/// - Le FORMAT reste celui de la carte sur laquelle l'utilisateur a agi. Il ne
+///   suit PAS la racine : reposter depuis son fil le repost-de-story de
+///   quelqu'un doit donner un post dans son fil, jamais une story de 20 h dans
+///   son tray. L'utilisateur a agi sur une carte de fil ; il veut son fil.
+nonisolated struct RepostTarget: Equatable {
+    let postId: String
+    /// Le vocabulaire du SDK (`PostType`), pas celui du composer : c'est ce que
+    /// `PostService.repost(postId:targetType:…)` attend, et donc ce qui part
+    /// sur le fil. `nil` laisse le repli du gateway décider (`?? POST`) — c'est
+    /// le FILET, jamais l'intention.
+    let targetType: PostType?
+}
+
+nonisolated enum RepostTargeting {
+    /// - Parameters:
+    ///   - cardId: la carte sur laquelle l'utilisateur a agi.
+    ///   - cardType: son type tel que le fil l'a servi. `nil` laisse le repli
+    ///     du gateway décider — c'est le filet, jamais l'intention.
+    ///   - repostOfId: la publication que la carte repartage, s'il y en a une.
+    ///   - originalRepostOfId: la racine de la chaîne, si le serveur l'a
+    ///     hydratée. Elle prime, parce qu'une chaîne se replie sur sa racine.
+    static func target(
+        cardId: String,
+        cardType: String?,
+        repostOfId: String? = nil,
+        originalRepostOfId: String? = nil
+    ) -> RepostTarget {
+        let reference = originalRepostOfId ?? repostOfId ?? cardId
+        let brut = cardType?.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() ?? ""
+        // Un type que le SDK ne connaît pas retombe sur `nil` plutôt que
+        // d'inventer un format : le filet du gateway vaut mieux qu'une
+        // supposition.
+        return RepostTarget(postId: reference, targetType: PostType(rawValue: brut))
+    }
+}

@@ -324,9 +324,18 @@ struct ThemedFeedOverlay: View {
         Task {
             defer { Task { @MainActor in postRepostInFlightIds.remove(postId) } }
             do {
+                // Instantané pris sur le main actor : le socket peut muter
+                // `viewModel.posts` entre le tap et l'envoi (même précaution
+                // que la sauvegarde de cache voisine).
+                let carte = await MainActor.run { viewModel.posts.first(where: { $0.id == postId }) }
+                let cible = RepostTargeting.target(
+                    cardId: postId, cardType: carte?.type,
+                    repostOfId: carte?.repost?.id,
+                    originalRepostOfId: carte?.repost?.originalRepostOfId
+                )
                 _ = try await PostService.shared.repost(
-                    postId: postId,
-                    targetType: nil,
+                    postId: cible.postId,
+                    targetType: cible.targetType,
                     content: nil,
                     isQuote: false
                 )

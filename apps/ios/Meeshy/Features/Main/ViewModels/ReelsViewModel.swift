@@ -427,7 +427,12 @@ final class ReelsViewModel: ObservableObject {
         Task {
             defer { repostInFlight.remove(id) }
             do {
-                _ = try await service.repost(postId: id, targetType: nil, content: nil, isQuote: false, visibility: nil)
+                let cible = RepostTargeting.target(
+                    cardId: id, cardType: post.type,
+                    repostOfId: post.repost?.id, originalRepostOfId: post.repost?.originalRepostOfId
+                )
+                _ = try await service.repost(postId: cible.postId, targetType: cible.targetType,
+                                             content: nil, isQuote: false, visibility: nil)
                 FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.repost.success", defaultValue: "Repartage", bundle: .main))
             } catch {
                 repostedIds.remove(id)

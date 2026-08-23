@@ -436,8 +436,15 @@ final class ComposerIntentTests: XCTestCase {
 
     /// Le modèle reste INERTE tant que le maillon manque : aucun consommateur
     /// applicatif ne peut donc afficher un format que la chaîne ne produirait
-    /// pas. Cette garde rougit le jour où quelqu'un câble le profil sans avoir
-    /// d'abord fait basculer le repli du gateway.
+    /// pas. Cette garde rougit le jour où quelqu'un câble le profil sans que
+    /// les appelants du repost envoient le type de leur carte.
+    ///
+    /// La condition a CHANGÉ en cours de lot : elle nommait d'abord un repli
+    /// serveur qui devait miroiter, décision retirée le 2026-08-23 après
+    /// vérification (le format doit suivre la carte, pas la racine résolue).
+    /// Une garde hérite de la fragilité de ce qu'elle affirme — qui change la
+    /// condition change la garde, dans le même commit, sinon on obtient un
+    /// commentaire périmé EXÉCUTABLE, auquel on fait confiance.
     func test_leProfil_nEstEncoreConsommeParAucuneSurface() {
         let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -455,7 +462,7 @@ final class ComposerIntentTests: XCTestCase {
         }
         XCTAssertEqual(
             consommateurs, [],
-            "Le profil est CÂBLÉ (\(consommateurs)) : vérifier que le repli du gateway miroite avant d'ouvrir un repost sur son format."
+            "Le profil est CÂBLÉ (\(consommateurs)) : vérifier que les appelants du repost envoient le type de leur CARTE avant d'ouvrir un repost sur son format."
         )
     }
 
@@ -647,5 +654,71 @@ final class ComposerIntentTests: XCTestCase {
 
     func test_moodChip_nOffreQueLeStatut() {
         XCTAssertEqual(eventail(.moodChip, reel: true), [.status])
+    }
+
+    // MARK: - Règle : ce que vise un repost — la racine, au format de la carte
+
+    /// La confusion a été faite en revue puis rattrapée : « seul le serveur
+    /// connaît le type de la racine, donc lui seul peut miroiter » est
+    /// mécaniquement vrai et produit FAUX. Ces cas sont ce qui empêche de la
+    /// refaire.
+
+    func test_repostTarget_sansChaine_viseLaCarteElleMeme() {
+        let cible = RepostTargeting.target(cardId: "carte-1", cardType: "POST")
+
+        XCTAssertEqual(cible.postId, "carte-1")
+        XCTAssertEqual(cible.targetType, .post)
+    }
+
+    /// La RÉFÉRENCE remonte à la racine : sans quoi le repost d'un repost
+    /// embarquerait une carte de partage vide.
+    func test_repostTarget_dUneChaine_viseLaRacine() {
+        let cible = RepostTargeting.target(
+            cardId: "carte-2", cardType: "POST",
+            repostOfId: "intermediaire", originalRepostOfId: "racine"
+        )
+
+        XCTAssertEqual(cible.postId, "racine")
+    }
+
+    func test_repostTarget_sansRacineHydratee_viseCeQueLaCarteRepartage() {
+        let cible = RepostTargeting.target(cardId: "carte-3", cardType: "POST", repostOfId: "partagee")
+
+        XCTAssertEqual(cible.postId, "partagee")
+    }
+
+    /// LE CAS QUI TRANCHE. Une carte de fil de type POST qui embarque une
+    /// story : la référence remonte à la story, le format reste POST. Faire
+    /// suivre le format à la racine donnerait une story de 20 h dans le tray
+    /// de quelqu'un qui a agi sur une carte de fil et voulait son fil.
+    func test_repostTarget_dUnePosteQuiEmbarqueUneStory_resteUnPost() {
+        let cible = RepostTargeting.target(
+            cardId: "carte-4", cardType: "POST",
+            repostOfId: "story-source", originalRepostOfId: "story-source"
+        )
+
+        XCTAssertEqual(cible.postId, "story-source", "La référence remonte à la racine.")
+        XCTAssertEqual(cible.targetType, .post, "Le format reste celui de la CARTE, jamais de la racine.")
+    }
+
+    func test_repostTarget_dUnReel_resteUnReel() {
+        XCTAssertEqual(RepostTargeting.target(cardId: "r", cardType: "REEL").targetType, .reel)
+    }
+
+    /// Le vocabulaire serveur est en capitales ; un fil qui sert autre chose ne
+    /// doit pas produire un type que la passerelle ne reconnaîtrait pas.
+    func test_repostTarget_normaliseLeVocabulaireServeur() {
+        XCTAssertEqual(RepostTargeting.target(cardId: "c", cardType: " reel ").targetType, .reel)
+    }
+
+    /// `nil` reste le FILET du gateway (`?? POST`), jamais une intention : une
+    /// carte sans type déclaré ne doit pas inventer de format.
+    func test_repostTarget_sansTypeDeCarte_laisseLeRepliDecider() {
+        XCTAssertNil(RepostTargeting.target(cardId: "c", cardType: nil).targetType)
+        XCTAssertNil(RepostTargeting.target(cardId: "c", cardType: "   ").targetType)
+        XCTAssertNil(
+            RepostTargeting.target(cardId: "c", cardType: "PODCAST").targetType,
+            "Un type que le SDK ne connaît pas ne doit pas inventer de format."
+        )
     }
 }
