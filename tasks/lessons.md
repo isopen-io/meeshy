@@ -181,6 +181,8 @@ ce qu'on vient de pousser.
 
 ## Leçon 162 — Avant d'OUVRIR un chantier, regarder qui d'autre est déjà dessus — la leçon 159 vaut aussi à l'aller (2026-08-14, routine messaging, cycle 123bis)
 
+## Leçon 162 — Avant d'OUVRIR un chantier, regarder qui d'autre est déjà dessus — la leçon 159 vaut aussi à l'aller (2026-08-14, routine messaging, cycle 123bis)
+
 La leçon 160 disait : avant de RÉPARER un fichier cassé, chercher qui d'autre le répare déjà. Ce
 cycle a montré que la règle vaut à l'identique pour une FONCTIONNALITÉ, et qu'elle se paie plus
 cher — parce qu'un chantier dure des heures, pas trois minutes.

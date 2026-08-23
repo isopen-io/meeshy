@@ -233,6 +233,14 @@ export function resolveLastMessagePreview(params: {
  * Génère un identifiant unique pour une conversation
  * Format: mshy_<titre_sanitisé>-YYYYMMDDHHMMSS ou mshy_<unique_id>-YYYYMMDDHHMMSS si pas de titre
  */
+/**
+ * Longueur maximale du slug lisible d'un identifiant de conversation.
+ *
+ * 50 (plafond impose par l'API aux identifiants clients) moins `mshy_` (5),
+ * le separateur (1) et l'horodate `YYYYMMDDHHMMSS` (14) = 30.
+ */
+const MAX_IDENTIFIER_SLUG_LENGTH = 30;
+
 export function generateConversationIdentifier(title?: string): string {
   const now = new Date();
   // Use UTC methods for consistent identifiers across timezones
@@ -266,13 +274,69 @@ export function generateConversationIdentifier(title?: string): string {
       .replace(/^-|-$/g, ''); // Enlever les tirets en début/fin
 
     if (sanitizedTitle.length > 0) {
-      return `mshy_${sanitizedTitle}-${timestamp}`;
+      // Plafond : `mshy_` (5) + slug + `-` (1) + horodate (14) = 20 + slug.
+      // L'API refuse au-dela de 50 les identifiants soumis par les clients
+      // (packages/shared/utils/validation.ts) ; le serveur doit s'y tenir
+      // aussi. Un slug de 30 laisse donc exactement 50, et un titre de 37
+      // caracteres — parfaitement ordinaire — depassait auparavant.
+      // Le tiret final eventuel est retire : sans cela, un slug tronque sur
+      // un separateur produirait `--` devant l'horodate.
+      const cappedTitle = sanitizedTitle.slice(0, MAX_IDENTIFIER_SLUG_LENGTH).replace(/-+$/, '');
+      return `mshy_${cappedTitle}-${timestamp}`;
     }
   }
 
   // Fallback: générer un identifiant unique avec préfixe mshy_
-  const uniqueId = Math.random().toString(36).slice(2, 10);
-  return `mshy_${uniqueId}-${timestamp}`;
+  return generateCompactConversationIdentifier();
+}
+
+/**
+ * Alphabet base64url — 64 symboles, donc exactement 6 bits par caractère.
+ *
+ * Le choix n'est pas cosmétique : avec un alphabet dont la taille est une
+ * puissance de deux, `octet & 63` est UNIFORME. Un alphabet de 62 (base62)
+ * imposerait `octet % 62`, qui sur-représente les 8 premiers symboles — un
+ * biais invisible en lecture et qui réduit l'entropie réelle. C'est aussi
+ * l'alphabet exact qu'accepte la validation d'identifiant de l'API
+ * (`/^[a-zA-Z0-9\-_]+$/`, packages/shared/utils/validation.ts).
+ */
+const COMPACT_ID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const COMPACT_ID_LENGTH = 12;
+
+/**
+ * Génère un identifiant de conversation COMPACT, opaque et URL-safe.
+ *
+ * Format : `mshy_` + 12 caractères base64url = **17 caractères**.
+ *
+ * Remplace la concaténation des ObjectId des participants, qui souffrait de
+ * deux défauts distincts :
+ *
+ * 1. **Longueur** — `mshy_<oid24>_<oid24>` fait 54 caractères et
+ *    `direct_<oid24>_<oid24>_<ms>` en fait 69, alors que l'API refuse au-delà
+ *    de 50 les identifiants que lui soumettent les clients. Le serveur
+ *    s'affranchissait d'une règle qu'il imposait aux autres.
+ * 2. **Fuite d'information** — un identifiant de conversation est PUBLIC : il
+ *    circule dans les URL et les liens de partage. Y encoder l'ObjectId des
+ *    deux participants revenait à publier qui parle à qui. Un identifiant
+ *    opaque ne dit rien de ses membres.
+ *
+ * Entropie : 12 × 6 = **72 bits**. Sur 10⁷ conversations, la probabilité de
+ * collision reste de l'ordre de 10⁻⁸ ; la contrainte `@unique` en base reste
+ * le filet de sécurité, elle n'est pas la première ligne de défense.
+ *
+ * L'aléa vient de `crypto.getRandomValues` — cryptographiquement sûr et
+ * disponible aussi bien sous Node que dans un navigateur. `Math.random()`,
+ * qu'employait l'ancien fallback, est prédictible : pour un identifiant que
+ * l'on peut tenter de deviner, c'est une faiblesse, pas un détail.
+ */
+export function generateCompactConversationIdentifier(): string {
+  const bytes = new Uint8Array(COMPACT_ID_LENGTH);
+  globalThis.crypto.getRandomValues(bytes);
+
+  let id = '';
+  for (const byte of bytes) id += COMPACT_ID_ALPHABET[byte & 63];
+
+  return `mshy_${id}`;
 }
 
 /**

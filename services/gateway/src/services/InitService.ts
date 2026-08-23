@@ -1,6 +1,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AuthService } from './AuthService';
 import { UserRoleEnum } from '@meeshy/shared/types';
+import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 // Logger dédié pour InitService
@@ -497,13 +498,27 @@ export class InitService {
   private async createDirectConversation(userId1: string, userId2: string): Promise<void> {
 
     try {
-      // Générer un identifiant unique pour la conversation directe
-      const identifier = `mshy_${userId1}_${userId2}`;
-      
-      // Vérifier si la conversation existe déjà
+      // Idempotence par les PARTICIPANTS, pas par l'identifiant.
+      //
+      // L'ancien code cherchait `where: { identifier }` avec un identifiant
+      // DERIVE des deux userId (`mshy_<id1>_<id2>`) : la clé d'idempotence et
+      // l'identifiant public étaient le même objet. Rendre l'identifiant
+      // opaque casse ce couplage — un identifiant aléatoire ne se retrouve
+      // pas — il faut donc porter l'idempotence là où elle appartient : sur
+      // les membres de la conversation. C'est déjà le motif retenu par
+      // `routes/conversations/core.ts` pour dédupliquer les DM.
       const existingConversation = await this.prisma.conversation.findFirst({
-        where: { identifier }
+        where: {
+          type: 'direct',
+          AND: [
+            { participants: { some: { userId: userId1, isActive: true } } },
+            { participants: { some: { userId: userId2, isActive: true } } }
+          ]
+        }
       });
+
+      // Identifiant COMPACT — voir routes/friends.ts, meme raison.
+      const identifier = generateCompactConversationIdentifier();
 
       if (existingConversation) {
         this.directConversationId = existingConversation.id;
