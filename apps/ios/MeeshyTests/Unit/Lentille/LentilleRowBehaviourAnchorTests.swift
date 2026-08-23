@@ -52,8 +52,8 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         try source(at: "Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift")
     }
 
-    private func focusCardSource() throws -> String {
-        try source(at: "Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift")
+    private func magnificationSource() throws -> String {
+        try source(at: "Meeshy/Features/Main/Lentille/Mode/LentilleMagnification.swift")
     }
 
     private func providersSource() throws -> String {
@@ -271,13 +271,26 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
     /// (compteur, seuil `> 1`, identique au badge historique) : le type de
     /// conversation et le nombre de membres sont maintenant affichés sur la
     /// carte de focus, pas sur le rang.
-    func test_L08_typeBadgeAndMemberCount_areAbsorbedByTheFocusCard() throws {
-        let code = normalizedCode(try focusCardSource())
+    ///
+    /// **2026-08-23 — le porteur a changé, pas la loi.** La focus card a été
+    /// dissoute (la magnification vit dans la rangée) ; le badge de type et
+    /// l'effectif vivent désormais dans `LentilleMagnifiedRow`/`LentilleMemberCountChip`
+    /// (`Lentille/Mode/LentilleMagnification.swift`), montés par la rangée
+    /// SEULEMENT sous magnification. Ce que L08 protège — « ni le type ni
+    /// l'effectif sur le rang au REPOS » — est inchangé, et ce témoin le dit
+    /// désormais dans les deux sens.
+    func test_L08_typeBadgeAndMemberCount_areAbsorbedByTheMagnification() throws {
+        let magnification = normalizedCode(try magnificationSource())
         XCTAssertTrue(
-            code.contains("memberCount") || code.contains("conversation.type"),
-            "behaviour-matrix:L08 : « le badge de type (groupe/canal/bot + " +
-            "memberCount) est absorbé par la focus card » — LentilleFocusCard.swift doit " +
-            "référencer memberCount et/ou conversation.type."
+            magnification.contains("conversation.memberCount") && magnification.contains("conversation.type"),
+            "behaviour-matrix:L08 : « le badge de type (groupe/canal/bot + memberCount) est " +
+            "absorbé par la magnification » — LentilleMagnification.swift doit porter les deux."
+        )
+        let row = normalizedCode(try rowSource())
+        XCTAssertFalse(
+            row.contains("conversation.memberCount"),
+            "… et le rang au REPOS ne doit toujours pas les afficher : il ne connaît que la " +
+            "pastille, montée sous `if let magnification`."
         )
     }
 

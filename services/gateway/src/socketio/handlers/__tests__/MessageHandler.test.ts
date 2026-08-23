@@ -126,6 +126,7 @@ const VALID_CONV_ID = 'a1b2c3d4e5f6a1b2c3d4e5f6';
 const VALID_CID = 'cid_11223344-5566-7788-aabb-ccddeeff0011';
 const USER_ID = 'user0011223344556677889900';
 const PARTICIPANT_ID = 'part0011223344556677889900';
+const MENTIONED_USER_ID = 'ment0011223344556677889900';
 
 function makeSocket(overrides: Partial<Socket> = {}): jest.Mocked<Socket> {
   return {
@@ -396,14 +397,17 @@ describe('MessageHandler', () => {
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Too long' }));
     });
 
-    it('skips length validation when encryptedPayload present', async () => {
+    // RECALIBRÉ : ce témoin nommait `encryptedPayload` — le nom que le handler
+    // lisait sur le `data` BRUT, qu'aucun client n'émet et qu'aucun schéma ne
+    // produit. Il attestait donc l'exemption sur une charge que la production
+    // ne voit jamais. L'exemption elle-même est juste et reste gardée ; c'est
+    // son déclencheur qui devient celui du fil : `encryptedContent`, VALIDÉ.
+    it('skips length validation when the wire carries an encrypted body', async () => {
       mockValidateMessageLength.mockReturnValue({ isValid: false, error: 'Too long' });
-      mockValidateSocketEvent.mockReturnValue({
-        success: true,
-        data: makeValidSendData({ content: '' }),
-      });
+      const sent = makeValidSendData({ content: '', encryptedContent: 'Y2lwaGVydGV4dA==' });
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: sent });
 
-      await handler.handleMessageSend(socket, makeValidSendData({ encryptedPayload: { ciphertext: 'abc' } }), callback);
+      await handler.handleMessageSend(socket, sent, callback);
 
       // Should not return early from length check — proceeds to resolveParticipantId
       expect(mockResolveParticipant).toHaveBeenCalled();
@@ -452,6 +456,124 @@ describe('MessageHandler', () => {
 
       expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
         expect.objectContaining({ copyAttachmentsFromMessageId: SOURCE_MSG_ID }),
+        PARTICIPANT_ID,
+      );
+    });
+
+    // L'enveloppe de chiffrement, dans le sens ENTRANT.
+    //
+    // Le client pose sur le fil `encryptedContent` + `encryptionMetadata` —
+    // deux champs PLATS, ceux-là mêmes que la route REST déclare et valide. Le
+    // handler, lui, lisait `data.encryptedPayload` : un nom qu'AUCUN client
+    // n'émet, et qu'aucun schéma ne produit. Le chiffré n'arrivait donc jamais
+    // au service, et le message était persisté avec le `content` que le client
+    // avait laissé — le littéral `[Encrypted]` en mode e2ee, le texte EN CLAIR
+    // dans l'autre mode.
+    //
+    // Le témoin porte sur ce que le service REÇOIT, pas sur la forme du fil :
+    // c'est la seule frontière où les deux transports doivent dire la même
+    // chose (`MessagingService.handleMessage` lit `encryptedPayload.ciphertext`
+    // pour les deux).
+    it('carries the wire encryption envelope through to the messaging service', async () => {
+      const sent = makeValidSendData({
+        content: '[Encrypted]',
+        encryptedContent: 'Y2lwaGVydGV4dA==',
+        encryptionMode: 'e2ee',
+        encryptionMetadata: { algorithm: 'aes-256-gcm', iv: 'aXY=' },
+      });
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: sent });
+
+      await handler.handleMessageSend(socket, sent, callback);
+
+      expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          encryptedPayload: expect.objectContaining({
+            ciphertext: 'Y2lwaGVydGV4dA==',
+            mode: 'e2ee',
+            algorithm: 'aes-256-gcm',
+            iv: 'aXY=',
+          }),
+        }),
+        PARTICIPANT_ID,
+      );
+    });
+
+    // Un envoi ORDINAIRE ne doit pas fabriquer d'enveloppe vide : `MessagingService`
+    // ne teste que la PRÉSENCE de `encryptedPayload` pour décider d'écrire
+    // `encryptedContent` et `encryptionMetadata` — un objet vide mais présent
+    // marquerait chiffré un message qui ne l'est pas.
+    it('leaves the envelope absent on an ordinary plaintext send', async () => {
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: makeValidSendData() });
+
+      await handler.handleMessageSend(socket, makeValidSendData(), callback);
+
+      expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ encryptedPayload: undefined }),
+        PARTICIPANT_ID,
+      );
+    });
+
+    // Les mentionnés que l'ÉMETTEUR nomme, dans le sens ENTRANT.
+    //
+    // Le compositeur web retient la liste (`useMentions` →
+    // `getMentionedUserIds()`) et la pose sur le fil ; `POST /messages` l'honore
+    // depuis toujours ; ce handler-ci ne la lisait pas, et le schéma socket ne
+    // la déclarait pas — donc `z.object` la strippait.
+    //
+    // Le cycle 110 avait classé l'écart « consistance, pas perte » : la
+    // résolution retombe sur l'extraction des `@` du CONTENU. Le repli existe,
+    // et sa précondition tombe exactement sur le mode où il serait le seul
+    // recours — cf. le témoin `e2ee` qui suit.
+    it('carries the sender-named mention list through to the messaging service', async () => {
+      const sent = makeValidSendData({
+        content: 'coucou @alice',
+        mentionedUserIds: [MENTIONED_USER_ID],
+      });
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: sent });
+
+      await handler.handleMessageSend(socket, sent, callback);
+
+      expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ mentionedUserIds: [MENTIONED_USER_ID] }),
+        PARTICIPANT_ID,
+      );
+    });
+
+    // LE témoin du lot : en `e2ee`, le client remplace `content` par le littéral
+    // `[Encrypted]` AVANT d'émettre. Il n'y a plus aucun `@` à extraire, donc la
+    // liste explicite est le SEUL canal qui rattache le message à ceux qu'il
+    // nomme — et c'était précisément celui qu'on retirait. Nommer quelqu'un dans
+    // une conversation chiffrée ne produisait ni ligne `Mention`, ni
+    // `validatedMentions` (le surlignage du web se lit dessus), ni notification,
+    // pendant que le compositeur affichait la pastille du mentionné.
+    it('carries the mention list on an e2ee send, whose content holds no @ to extract', async () => {
+      const sent = makeValidSendData({
+        content: '[Encrypted]',
+        encryptedContent: 'Y2lwaGVydGV4dA==',
+        encryptionMode: 'e2ee',
+        mentionedUserIds: [MENTIONED_USER_ID],
+      });
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: sent });
+
+      await handler.handleMessageSend(socket, sent, callback);
+
+      const request = (deps.messagingService.handleMessage as jest.Mock<any>).mock.calls[0][0];
+      expect(request.mentionedUserIds).toEqual([MENTIONED_USER_ID]);
+      expect(request.content).not.toContain('@');
+    });
+
+    // Le négatif : un envoi qui ne nomme personne transmet `undefined`, jamais
+    // un tableau vide fabriqué par le transport. `resolveMessageMentions`
+    // discrimine sur `explicit.length === 0` pour décider s'il faut extraire
+    // depuis le contenu ; `undefined` est la seule forme qui dise « je
+    // n'affirme rien », et c'est elle qu'on transmet.
+    it('passes no mention list when the sender named nobody', async () => {
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: makeValidSendData() });
+
+      await handler.handleMessageSend(socket, makeValidSendData(), callback);
+
+      expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ mentionedUserIds: undefined }),
         PARTICIPANT_ID,
       );
     });
@@ -652,6 +774,35 @@ describe('MessageHandler', () => {
           expiresAt: expect.any(Date),
           effectFlags: 3,
           maxViewOnceCount: 1,
+        }),
+        PARTICIPANT_ID,
+      );
+    });
+
+    // Jumeau exact du témoin d'enveloppe du chemin texte. Ce path-ci ne
+    // déclarait même pas `encryptedPayload` sur sa porte : une pièce jointe
+    // envoyée dans une conversation chiffrée perdait son chiffré sans que rien,
+    // ni type ni schéma, ne puisse le dire.
+    it('carries the wire encryption envelope through to the messaging service', async () => {
+      const sent = {
+        ...validAttachData(),
+        content: '[Encrypted]',
+        encryptedContent: 'Y2lwaGVydGV4dA==',
+        encryptionMode: 'e2ee',
+        encryptionMetadata: { algorithm: 'aes-256-gcm', iv: 'aXY=' },
+      };
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: sent });
+
+      await handler.handleMessageSendWithAttachments(socket, sent, callback);
+
+      expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          encryptedPayload: expect.objectContaining({
+            ciphertext: 'Y2lwaGVydGV4dA==',
+            mode: 'e2ee',
+            algorithm: 'aes-256-gcm',
+            iv: 'aXY=',
+          }),
         }),
         PARTICIPANT_ID,
       );

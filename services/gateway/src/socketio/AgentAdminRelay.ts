@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import type { Server } from 'socket.io';
+import type { ServerEmitIO } from './serverEmit';
 import {
   AGENT_ADMIN_EVENT_CHANNEL,
   AGENT_ADMIN_EVENT_KINDS,
@@ -47,7 +47,7 @@ export class AgentAdminRelay {
   private subscriber: RedisSubscriber | null = null;
 
   constructor(
-    private io: Server,
+    private io: ServerEmitIO,
     private createSubscriber: () => RedisSubscriber | null = createDefaultSubscriber,
   ) {}
 

@@ -241,10 +241,8 @@ describe('ReactionHandler — Fix 4: self-reaction notification guard', () => {
 
     await handler.handleReactionRemove(socket as any, { messageId: MESSAGE_ID, emoji: EMOJI }, callback);
 
-    expect(callback).toHaveBeenCalledWith({
-      success: true,
-      data: { message: 'Reaction already absent' },
-    });
+    // Reçu SANS `data` : rien n'a changé, donc rien à refléter.
+    expect(callback).toHaveBeenCalledWith({ success: true });
     // Nothing changed → no reaction:removed broadcast.
     expect(mockIO.emit).not.toHaveBeenCalled();
   });

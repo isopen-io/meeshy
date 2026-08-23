@@ -71,6 +71,45 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
         try [listViewSource()] + chromeSources()
     }
 
+    /// Les mêmes sources, **commentaires retirés** — réservé aux témoins de
+    /// LITTÉRAUX, jamais aux détecteurs.
+    ///
+    /// La distinction n'est pas cosmétique, elle sépare deux intentions
+    /// opposées :
+    ///
+    /// - un **détecteur** (`ScrollViewReader`, `onScrollGeometryChange`, un
+    ///   `PreferenceKey` de défilement) interdit jusqu'à la MENTION du symbole,
+    ///   parce qu'une mention en commentaire est déjà une invitation à le
+    ///   réintroduire. Ces trois-là lisent le BRUT, et le disent dans leur
+    ///   message (« commentaires compris ») ;
+    /// - un **littéral de loi** interdit qu'une constante soit RECOPIÉE dans le
+    ///   code au lieu d'être lue depuis son miroir Swift. En CITER une dans une
+    ///   phrase qui explique une décision n'est pas la recopier.
+    ///
+    /// Le cas qui a tranché : `463547f5d` a retiré la pilule de section, et a
+    /// laissé dans `ConversationListView.swift` le commentaire qui explique
+    /// pourquoi — « invisible 900 ms après le dernier [événement d'offset] ».
+    /// Le témoin des littéraux, qui lisait en brut, s'est mis à rougir sur la
+    /// PROSE qui documente le retrait. La garde accusait le texte qui la
+    /// justifiait.
+    ///
+    /// Même idiome que `FocalNoBubbleSourceGuardTests`, qui strippe déjà dans
+    /// son chargeur et épingle à part ses occurrences légitimes.
+    ///
+    /// Portée VOLONTAIREMENT étroite : seul le témoin des littéraux interdits
+    /// de `ConversationListView` consomme cette lecture. Les deux autres
+    /// témoins de littéraux du fichier n'en ont pas besoin et ne sont pas
+    /// touchés — `test_softLawLiterals_areNeverUsedAsNumericComparisons` ne
+    /// compte que des COMPARAISONS (un chiffre en prose n'en est pas une), et
+    /// `test_hardLawLiteral520_…` épingle un compte de 1 sur une occurrence qui
+    /// vit dans le CODE (`min(windowWidth * 0.42, 520)`), donc identique dans
+    /// les deux lectures. Élargir sans nécessité aurait déplacé les bases de
+    /// comptage de gardes actuellement justes.
+    private func listViewLiteralSource() throws -> (name: String, code: String) {
+        let source = try listViewSource()
+        return (source.name, AppSourceGuard.stripComments(source.code))
+    }
+
     private func occurrences(of needle: String, in haystack: String) -> Int {
         haystack.components(separatedBy: needle).count - 1
     }
@@ -205,12 +244,12 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
     // compte FIXE détecte toute variation dans les deux sens.
 
     func test_hardLawLiterals_thatHaveNoLegitimateOccurrence_areAbsent_fromConversationListView() throws {
-        let (name, code) = try listViewSource()
+        let (name, code) = try listViewLiteralSource()
         for literal in ["900", "380", "0.45", "0.82"] {
             let count = occurrences(of: literal, in: code)
             XCTAssertEqual(
                 count, 0,
-                "\(name) contient « \(literal) » (\(count) fois, commentaires compris) — " +
+                "\(name) contient « \(literal) » (\(count) fois, hors commentaires) — " +
                 "aucune occurrence légitime de cette constante n'existe dans ce fichier ; " +
                 "c'est une constante de loi gelée (pilule 900 ms ou courbe de focus " +
                 "380/0.45/0.82) qui doit être lue depuis son miroir Swift, jamais recopiée."

@@ -962,9 +962,11 @@ struct PostDetailView: View {
                     originalType: post.type,
                     media: post.media.map { EditablePostMedia($0) },
                     originalLocation: post.location,
+                    originalVisibility: post.visibility,
+                    originalVisibilityUserIds: post.visibilityUserIds ?? [],
                     isRepost: post.repost != nil,
                     onSave: { draft in
-                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds)
                     },
                     onDismiss: { isEditing = false }
                 )

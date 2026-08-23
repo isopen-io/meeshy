@@ -87,16 +87,28 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
     /// « MÊMES entrées que ThemedConversationRow » (contrat §LWS-7) vérifié
     /// au site d'appel : aucun argument n'est ajouté ni retiré entre les
     /// deux constructions.
+    /// **2026-08-23 — un argument de plus, et un seul.** La branche ON passe
+    /// désormais par `LentilleMagnifiableRow`, l'enveloppe minuscule qui
+    /// s'abonne à l'élection et à la scène, et la rangée reçoit un
+    /// `magnification:` supplémentaire. Le jeu d'arguments RESTE celui de
+    /// `ThemedConversationRow` — c'est ce que ce témoin protège : que la
+    /// branche ON n'oublie ni le brouillon, ni la saisie en cours, ni l'anneau
+    /// story, ni le mood. La magnification s'AJOUTE, elle ne remplace rien.
     func test_rowCore_onBranch_buildsLentilleConversationRow_withSameArgumentSet() throws {
         let code = normalizedCode(try rowsSource())
         let expectedCall = """
-        if LentilleFeatureFlag.isLentilleListEnabled { LentilleConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, preferredContentLanguages: preferredContentLanguages ) .equatable()
+        LentilleConversationRow( conversation: conversation, community: community, availableWidth: rowWidth, isDragging: isDragging, presenceState: presenceState, onViewStory: onViewStory, onViewProfile: onViewProfile, onViewConversationInfo: onViewConversationInfo, onMoodBadgeTap: onMoodBadgeTap, onCreateShareLink: onCreateShareLink, isDark: isDark, storyRingState: storyRingState, moodStatus: moodStatus, typingUsername: typingUsername, isSelected: isSelected, draftSummary: draftSummary, preferredContentLanguages: preferredContentLanguages, magnification: context )
         """
         .split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
 
         XCTAssertTrue(
             code.contains(expectedCall),
-            "La branche ON doit construire LentilleConversationRow avec le MÊME jeu d'arguments que ThemedConversationRow"
+            "La branche ON doit construire LentilleConversationRow avec le MÊME jeu d'arguments que " +
+            "ThemedConversationRow, plus la magnification."
+        )
+        XCTAssertTrue(
+            code.contains("if LentilleFeatureFlag.isLentilleListEnabled { LentilleMagnifiableRow( election: focusElection, scene: sceneActivity, conversationId: conversation.id, magnification: magnification )"),
+            "… et elle passe par le portillon d'élection, qui décide si `context` est nil ou non."
         )
     }
 
@@ -129,9 +141,18 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
         )
     }
 
-    /// Deux occurrences de `.equatable()` attendues dans `rowCore` (une par
-    /// branche) — ni plus (un troisième site serait une fuite du mux), ni
-    /// moins (une branche qui perdrait le portillon).
+    /// UNE occurrence de `.equatable()` attendue dans `rowCore` depuis le
+    /// 2026-08-23 : celle de la branche OFF (`ThemedConversationRow`). La
+    /// branche ON n'a pas PERDU son portillon — elle l'a DÉPLACÉ d'un cran,
+    /// dans `LentilleMagnifiableRow.body`, qui est précisément l'endroit où
+    /// il doit vivre : c'est là que l'abonnement à l'élection provoque la
+    /// ré-évaluation, et c'est donc là que le portillon doit décider. Posé
+    /// ici, il n'aurait rien gardé — le body de `rowCore` ne se ré-évalue pas
+    /// à l'élection.
+    ///
+    /// Le témoin vérifie donc les DEUX moitiés : un `.equatable()` ici, un
+    /// dans l'enveloppe. Sans la seconde assertion, supprimer le portillon de
+    /// l'enveloppe passerait au vert.
     func test_rowCore_hasExactlyTwoEquatableCalls() throws {
         let code = normalizedCode(try rowsSource())
         guard let rowCoreStart = code.range(of: "@ViewBuilder private var rowCore: some View {") else {
@@ -149,8 +170,15 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
         }
         let rowCoreBody = String(code[rowCoreStart.upperBound..<sectionEnd.lowerBound])
         XCTAssertEqual(
-            occurrences(of: ".equatable()", in: rowCoreBody), 2,
-            "rowCore doit contenir EXACTEMENT deux .equatable() — un par branche du mux"
+            occurrences(of: ".equatable()", in: rowCoreBody), 1,
+            "rowCore doit contenir EXACTEMENT un .equatable() — celui de la branche OFF ; " +
+            "celui de la branche ON vit dans LentilleMagnifiableRow (voir ci-dessous)."
+        )
+
+        let gate = normalizedCode(try source(at: "Meeshy/Features/Main/Lentille/Mode/LentilleMagnification.swift"))
+        XCTAssertTrue(
+            gate.contains("row(isMagnified ? magnification : nil) .equatable()"),
+            "La branche ON garde son portillon, un cran plus bas, là où l'élection le ré-évalue."
         )
     }
 }

@@ -39,6 +39,7 @@ import { DraggableParticipantOverlay } from './DraggableParticipantOverlay';
 import { computeParticipantOverlayPosition } from '@/lib/calls/overlay-grid-layout';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { CallParticipantLeftEvent } from '@meeshy/shared/types/video-call';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
@@ -658,7 +659,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     const socket = meeshySocketIOService.getSocket();
     if (!socket) return;
 
-    const handleParticipantLeft = (event: unknown) => {
+    const handleParticipantLeft = (event: CallParticipantLeftEvent) => {
       if (event.callId !== callId) return;
 
       // Vague 133 — `CallParticipantLeftEvent` has no `anonymousId` field

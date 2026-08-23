@@ -3561,7 +3561,37 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       selection untouched) advances one tap; a `FormatSize` toolbar button (tinted when non-default)
       drives it, and the canvas previews the size in sp. +11 tests (5 size model+ladder+cycle, 3 element
       defaults+wire, 3 VM); mutation-RED-proven (dropping the wire `fontSize` fails exactly the 2 fontSize
-      tests; a no-advance cycle fails exactly the 4 cycle tests). Pending: RTL/fade.
+      tests; a no-advance cycle fails exactly the 4 cycle tests). Pending: RTL.
+      **Fade timing done** (`story-text-element-fade-timing`): a pure `StoryTextFade` `(inSeconds, outSeconds)`
+      flat pair (the two ends are independent, exactly as iOS binds `fadeIn`/`fadeOut` to two separate
+      `StoryTextEditorView` controls) plus `StoryTextFadeCycle.advance` — a tap-friendly form of the iOS
+      `0…5 s` slider: discrete durations `[0.5,1,2,3,5]` short→long, one tap advances to the next HIGHER step
+      (a between-steps value jumps up, never shortens), wraps past the longest back to no-fade; every step stays
+      within the iOS-accepted `0…5 s` range. `StoryTextElement.fade` (defaulted no-fade) rides through
+      `toTextObject` → `fadeIn`/`fadeOut`, each omitted while its end is 0 (the value iOS folds to `nil`). The
+      VM's `onTextElementCycleFadeIn`/`onTextElementCycleFadeOut` (inert on unknown id, selection untouched, each
+      advancing only its own end) drive it; two toolbar buttons (Login/Logout icons, tinted when that end fades)
+      sit in a now-horizontally-scrollable style row. +20 tests (10 model+cycle, 5 element defaults+wire, 5 VM);
+      mutation-RED-proven (nulling the wire `fadeIn` / a no-op `advance` fail exactly the projection & cycle
+      tests, 10 total).
+      **RTL / writing direction done** (`story-text-element-rtl-direction`): the last named text-element
+      attribute. iOS derives a text object's direction from its content at render time — the wire
+      `StoryTextObject` has NO direction field (confirmed: `textAlign` is the only alignment-ish field), so
+      every client re-derives it and it never rides the wire. Android now matches: a pure `StoryTextBidi`
+      `resolveBaseDirection(text) -> StoryTextDirection` (LTR/RTL) implementing the **Unicode Bidi Algorithm
+      P2/P3 "first strong character" rule** — scan for the first strong character (skipping neutrals,
+      whitespace, digits, punctuation, and the whole content of any directional isolate LRI/RLI/FSI…PDI) and
+      take RTL iff it is R or AL; no strong character defaults LTR. `Character.getDirectionality` (the JDK's
+      UBA table) is the classification SSOT, so Arabic/Hebrew/Adlam (incl. supplementary-plane, surrogate
+      pairs) and the strong marks LRM/RLM/ALM all resolve correctly. `StoryTextElement.baseDirection` is a
+      DERIVED property (no stored field, `toTextObject` untouched — honest parity, no dead wire field), and
+      the canvas glue sets `TextStyle.textDirection` from it on both the stroked underlay and the fill, so an
+      Arabic caption lays its paragraph out right-to-left instead of the previous forced LTR. No VM intent —
+      direction follows the text automatically, exactly as iOS derives it (no false manual override that
+      couldn't persist). +20 tests (17 `StoryTextDirectionTest`, 3 element `baseDirection`);
+      mutation-RED-proven twice (RTL branch→LTR fails exactly the 9 RTL-detection tests; removing the
+      isolate-skip guard fails exactly the 2 isolate tests). **§E text-element attribute parity now complete**
+      (style, colour, size, alignment, background, outline/stroke, fade, RTL).
 - [~] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
       **Floating style toolbar + keyboard-aware shift done** (`story-floating-toolbar`): while a text
       element is edited the `TextStyleToolbar` no longer sits in a fixed bottom band — it floats
@@ -3746,8 +3776,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] thumbHash blur-placeholder generation per slide
 - [ ] **V2 timeline editor**: multi-track, Quick + Pro modes, size-class adaptive, zoomable
 - [ ] Clip add / move / trim / split / delete with full undo/redo (command stack, FIFO 50, persisted)
-- [ ] Keyframe animation (position/scale/opacity, easing) per clip/element
-- [ ] Clip transitions (crossfade / dissolve, adjustable duration); slide opening animations
+- [~] Keyframe animation (position/scale/opacity, easing) per clip/element — **reader/playback
+      interpolation shipped** (slice `story-keyframe-interpolation`, 2026-08-23): pure
+      `StoryKeyframeInterpolator` (clamp/ease/lerp, unsorted-safe) + `StoryEasing.eased`
+      (linear/easeIn/easeOut/easeInOut, ports `StoryEasing.apply`) + `StoryKeyframeResolver`
+      (per-channel x/y/scale/opacity projection, ports iOS `ReaderKeyframeResolver`), wired into
+      the story viewer's foreground layer via `StoryForegroundMediaView.animated(atSeconds)` driven
+      by the slide progress clock — keyframes are no longer dropped from the projection. Improves on
+      iOS by subtracting the clip `startTime` uniformly across ALL channels (iOS omits it for
+      scale/opacity). Pending: keyframe **editing** (add/move/delete + undo/redo, part of the V2
+      timeline editor) and text/audio clip keyframe application.
+- [~] Clip transitions (crossfade / dissolve, adjustable duration); slide opening animations
+      — **reader/playback opacity ramp shipped** (slice `story-clip-transition-opacity`, 2026-08-23):
+      pure `StoryClipTransitionResolver` ports iOS `ReaderTransitionResolver.opacity` + its canonical
+      primitive `StoryRenderer.clipTransitionOpacity` — the outgoing clip (`fromClipId`) fades 1→0 over
+      `[end−dur, end]`, the incoming clip (`toClipId`) fades 0→1 over `[start, start+dur]`, stacked
+      transitions multiply, a clip outside its own `[start, end]` window is invisible, and `dissolve`
+      is degraded to the crossfade ramp for live playback (per iOS `liveRenderableTransition`; the MP4
+      exporter keeps the per-pixel dissolve). Wired into `StoryForegroundMediaView.animated()` (folds
+      the transition factor into keyframe-resolved opacity; a participating clip with no `duration` is
+      left untouched to avoid a degenerate zero-length window hiding it) — the Compose `.alpha()` glue
+      is unchanged. Pending: transition **editing** (add/adjust duration + kind) and the per-pixel
+      dissolve on any Android export path (both part of the V2 timeline editor).
 - [ ] Per-clip inspector (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)

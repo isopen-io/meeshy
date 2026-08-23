@@ -88,6 +88,13 @@ function isStaleCursorMessageId(params: {
 // `/sync`, qui ne peut pas importer ce module de routes) et reste ré-exporté ici
 // pour les appelants historiques.
 import { messageSenderUserSelect } from './utils/message-sender-select';
+import {
+  ENCRYPTION_ENVELOPE_SHAPE,
+  noSilentDowngrade,
+  NO_SILENT_DOWNGRADE_ISSUE,
+  toEncryptedPayload,
+} from '../../validation/encryption-envelope.js';
+import { MENTIONED_USER_IDS_SHAPE } from '../../validation/mention-list.js';
 export { messageSenderUserSelect };
 
 // `content` est optionnel : un message média-seul (image/vidéo/fichier sans
@@ -122,25 +129,11 @@ export const SendMessageBodySchema = z.object({
   // sans `forwardedFromId` ni marque de transfert sur les copies. Voir
   // `services/messaging/copyAttachments.ts`.
   copyAttachmentsFromMessageId: z.string().optional(),
-  encryptedContent: z.string().optional(),
-  // Le mode arrive avec la casse du client : iOS émet « E2EE », et la
-  // description OpenAPI de cette route annonçait « e2e » — deux valeurs que
-  // l'enum rejetait en 400, sur un champ dont le jeu est pourtant connu.
-  // Normalisé à la frontière d'écriture, comme le code de langue l'est déjà
-  // (`normalizeLanguageForDedup`). Le jeu de valeurs reste FERMÉ : la
-  // normalisation corrige la casse, elle n'ouvre aucune valeur nouvelle.
-  encryptionMode: z
-    .string()
-    .transform((v) => v.toLowerCase())
-    .pipe(z.enum(['e2ee', 'server', 'hybrid']))
-    .optional(),
-  encryptionMetadata: z.record(z.string(), z.unknown())
-    .refine(
-      (m) => { try { return JSON.stringify(m).length <= 8 * 1024; } catch { return false; } },
-      { message: 'encryptionMetadata exceeds 8KB serialized' }
-    )
-    .optional(),
-  isEncrypted: z.boolean().optional(),
+  // Enveloppe de chiffrement — déclarée dans `validation/encryption-envelope.ts`.
+  // Elle vivait ICI, et ici seulement : le transport SOCKET, pourtant le chemin
+  // d'envoi PRIMAIRE, n'en portait aucun champ et perdait donc tout chiffré.
+  // Les deux transports lisent désormais la même déclaration.
+  ...ENCRYPTION_ENVELOPE_SHAPE,
   // Même plafond que le schéma socket et que `MessageValidator` — ce tableau
   // n'était borné nulle part sur le chemin REST.
   attachmentIds: z.array(z.string()).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
@@ -149,7 +142,10 @@ export const SendMessageBodySchema = z.object({
   effectFlags: z.number().int().optional(),
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
-  mentionedUserIds: z.array(z.string()).optional(),
+  // Liste explicite de mentionnés — déclarée dans `validation/mention-list.ts`,
+  // la MÊME que celle des deux schémas socket. Elle vivait ici seule ; le
+  // transport SOCKET, qui porte le trafic, la strippait.
+  ...MENTIONED_USER_IDS_SHAPE,
   // Lieu partagé — champ dédié, JAMAIS un `metadata` brut (cf.
   // services/location/sharedPlace.ts). Validation stricte déléguée à
   // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
@@ -162,14 +158,7 @@ export const SendMessageBodySchema = z.object({
     Boolean(data.copyAttachmentsFromMessageId) ||
     Boolean(data.encryptedContent),
   { message: 'Le message ne peut pas être vide', path: ['content'] },
-).refine(
-  (data) => !data.isEncrypted || Boolean(data.encryptedContent),
-  {
-    message:
-      "encryptedContent est requis quand isEncrypted vaut true — le serveur ne rétrograde jamais en clair un message déclaré chiffré",
-    path: ['encryptedContent'],
-  },
-);
+).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
@@ -1858,11 +1847,7 @@ export function registerMessagesRoutes(
         // le compte comme porteur de contenu), et le drapeau sans le chiffré
         // faisait mentir le `!` puis écrivait le message EN CLAIR. Le schéma
         // refuse désormais le second cas ; ici on sert le premier.
-        encryptedPayload: encryptedContent ? {
-          ciphertext: encryptedContent,
-          mode: (encryptionMode ?? 'e2ee') as any,
-          ...encryptionMetadata as any
-        } : undefined,
+        encryptedPayload: toEncryptedPayload({ encryptedContent, encryptionMode, encryptionMetadata }),
         metadata: {
           source: 'rest' as const,
           requestId: request.id

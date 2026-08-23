@@ -1,6 +1,16 @@
 import { z } from 'zod';
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
+import type {
+  MessageSendData,
+  MessageSendWithAttachmentsData,
+} from '@meeshy/shared/types/socketio-events';
+import {
+  ENCRYPTION_ENVELOPE_SHAPE,
+  noSilentDowngrade,
+  NO_SILENT_DOWNGRADE_ISSUE,
+} from './encryption-envelope.js';
+import { MENTIONED_USER_IDS_SHAPE } from './mention-list.js';
 
 const mongoId = z
   .string()
@@ -57,7 +67,18 @@ export const SocketMessageSendSchema = z.object({
   // validation stricte des coordonnées / longueurs vit dans
   // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
   location: z.unknown().optional(),
-});
+  // Liste EXPLICITE de mentionnés — déclarée dans `mention-list.ts`, la MÊME
+  // que celle de `POST /messages`. Elle était strippée ici, et le repli par
+  // extraction des `@` du contenu ne la remplace que tant que le contenu porte
+  // le texte : en `e2ee` il vaut `[Encrypted]`. Voir l'unité pour le récit.
+  ...MENTIONED_USER_IDS_SHAPE,
+  // Enveloppe de chiffrement — déclarée dans `encryption-envelope.ts`, la MÊME
+  // que celle de `POST /messages`. Ces champs n'étaient déclarés NULLE PART
+  // ici : `z.object` les strippait donc en silence, et le chiffré n'atteignait
+  // jamais la base sur le chemin d'envoi PRIMAIRE. Voir l'unité pour le récit
+  // complet du défaut.
+  ...ENCRYPTION_ENVELOPE_SHAPE,
+}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
 
 export type SocketMessageSendData = z.infer<typeof SocketMessageSendSchema>;
 
@@ -86,7 +107,16 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   maxViewOnceCount: z.number().int().optional(),
   // Lieu partagé — même contrat que SocketMessageSendSchema ci-dessus.
   location: z.unknown().optional(),
-});
+  // Liste explicite de mentionnés — même unité que le path texte ci-dessus. Un
+  // message porteur d'une pièce jointe nomme quelqu'un exactement comme un
+  // message de texte, et ce path-ci est celui de TOUT l'audio : sa légende est
+  // souvent le seul texte du message.
+  ...MENTIONED_USER_IDS_SHAPE,
+  // Enveloppe de chiffrement — même unité que le path texte ci-dessus. Ce
+  // schéma-ci ne la portait pas davantage : une pièce jointe envoyée dans une
+  // conversation chiffrée perdait son chiffré exactement de la même façon.
+  ...ENCRYPTION_ENVELOPE_SHAPE,
+}).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
 
 export type SocketMessageSendWithAttachmentsData = z.infer<typeof SocketMessageSendWithAttachmentsSchema>;
 
@@ -210,3 +240,45 @@ export const SocketAuthenticateSchema = z.object({
 });
 
 export type SocketAuthenticateData = z.infer<typeof SocketAuthenticateSchema>;
+
+// ─── Le cliquet de la porte d'ENVOI ────────────────────────────────────────
+//
+// Un envoi de message est décrit DEUX fois : par le CONTRAT que les trois
+// clients compilent (`MessageSendData` / `MessageSendWithAttachmentsData`,
+// `@meeshy/shared`) et par le SCHÉMA qui décide, à l'exécution, de ce que la
+// passerelle accepte. Rien ne les confrontait, et les deux moitiés du fil ne
+// disaient pas la même chose :
+//
+// - un champ que le SCHÉMA ignore est STRIPPÉ en silence (`z.object`). Un
+//   client qui l'émet croit l'avoir envoyé ; il n'atteint jamais la base. C'est
+//   ainsi que l'enveloppe de chiffrement entière — `encryptedContent`,
+//   `encryptionMetadata` — se perdait sur le chemin d'envoi PRIMAIRE, laissant
+//   les messages d'une conversation chiffrée persistés en clair (ou réduits au
+//   littéral `[Encrypted]` en mode e2ee) ;
+// - un champ que le CONTRAT ignore est INEXPRIMABLE. Dix champs que la
+//   passerelle accepte et honore — les effets de message (`isViewOnce`,
+//   `isBlurred`, `expiresAt`), le lieu partagé, le transfert, la réponse à une
+//   story — n'existaient pour aucun client typé. Ils ne voyageaient que parce
+//   que le web compose sa charge en `Record<string, unknown>`.
+//
+// Le cliquet est une ÉGALITÉ de jeux de clés, dans les DEUX sens : chacune des
+// deux dérives ci-dessus en fait tomber la moitié correspondante, et aucune ne
+// subsume l'autre. Il vit dans un fichier de PRODUCTION, jamais dans un
+// `__tests__` — `tsconfig.json` les exclut, et un cliquet que le compilateur
+// n'atteint pas n'est jamais rouge.
+//
+// Quand il tombe : le champ neuf s'ajoute des DEUX côtés. Il n'y a pas de champ
+// légitime à ne déclarer que d'un seul — c'est exactement l'état que ce cliquet
+// existe pour rendre impossible.
+
+type Assert<T extends true> = T;
+type KeysEqual<A, B> = [keyof A] extends [keyof B]
+  ? [keyof B] extends [keyof A]
+    ? true
+    : false
+  : false;
+
+export type SendDoorRatchet = [
+  Assert<KeysEqual<SocketMessageSendData, MessageSendData>>,
+  Assert<KeysEqual<SocketMessageSendWithAttachmentsData, MessageSendWithAttachmentsData>>,
+];

@@ -140,6 +140,16 @@ public nonisolated struct MeeshyColors {
         isDark ? indigo300.opacity(0.7) : indigo700.opacity(0.8)
     }
 
+    /// Fond PRIMAIRE de l'app — le blanc/noir sur lequel les écrans plats
+    /// posent leur contenu. Il vivait uniquement en propriété d'instance de
+    /// `ThemeManager` (qui délègue désormais ici, comme il le fait déjà pour
+    /// `backgroundSecondary`) : une vue sans accès au thème observé, mais qui
+    /// connaît son `isDark`, ne pouvait pas le nommer sans recopier les deux
+    /// hexadécimaux.
+    public static func backgroundPrimary(isDark: Bool) -> Color {
+        isDark ? Color(hex: "09090B") : Color(hex: "FFFFFF")
+    }
+
     public static func backgroundSecondary(isDark: Bool) -> Color {
         isDark ? Color(hex: "13111C") : Color(hex: "F8F7FF")
     }

@@ -284,9 +284,11 @@ struct ProfileUserPostsList: View {
                 originalType: post.type,
                 media: post.media.map { EditablePostMedia($0) },
                 originalLocation: post.location,
+                originalVisibility: post.visibility,
+                originalVisibilityUserIds: post.visibilityUserIds ?? [],
                 isRepost: post.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds)
                 },
                 onDismiss: { editingPost = nil }
             )
@@ -1019,7 +1021,16 @@ final class ProfileUserPostsViewModel: ObservableObject {
         }
     }
 
-    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async {
+    func updatePost(
+        _ postId: String,
+        content: String,
+        language: String? = nil,
+        type: String? = nil,
+        removeMediaIds: [String]? = nil,
+        location: PostLocationUpdate? = nil,
+        visibility: String? = nil,
+        visibilityUserIds: [String]? = nil
+    ) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
         var optimistic = snapshot
@@ -1031,9 +1042,13 @@ final class ProfileUserPostsViewModel: ObservableObject {
         case .remove: optimistic.location = nil
         case nil: break
         }
+        if let visibility {
+            optimistic.visibility = visibility
+            optimistic.visibilityUserIds = visibilityUserIds
+        }
         posts[idx] = optimistic
         do {
-            let updated = try await postService.update(postId: postId, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            let updated = try await postService.update(postId: postId, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
             if let newIdx = posts.firstIndex(where: { $0.id == postId }) {
                 let edited = updated.toFeedPost(preferredLanguages: languageProvider.preferredLanguages)
                 posts[newIdx] = edited

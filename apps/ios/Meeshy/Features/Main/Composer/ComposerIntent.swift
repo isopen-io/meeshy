@@ -92,10 +92,16 @@ nonisolated extension ComposerProfile {
     /// La table. Des DONNÉES, pas un calcul : chaque porte est écrite en toutes
     /// lettres, et le `switch` exhaustif interdit d'en ajouter une sans profil.
     ///
-    /// Elle est fonction de l'ORIGINE SEULE — jamais de ce que l'origine
-    /// apporte : deux reposts de deux posts différents ouvrent le même
-    /// composer. Trois lois la traversent, et la suite `ComposerIntentTests`
-    /// les éprouve une par une :
+    /// Elle ignore la GRAINE — les identifiants qu'une porte transporte : deux
+    /// reposts de deux posts DU MÊME FORMAT ouvrent le même composer. Elle ne
+    /// les ignore pas tous : le FORMAT qu'une porte porte fait partie de son
+    /// identité, et un repost de story n'ouvre pas ce qu'ouvre un repost de
+    /// post. C'est la loi du miroir, et elle a précisé celle de C1 — qui
+    /// disait « fonction de l'ORIGINE SEULE » et devenait fausse dès qu'une
+    /// porte s'est mise à porter son format.
+    ///
+    /// Quatre lois la traversent, et `ComposerIntentTests` les éprouve une par
+    /// une :
     ///
     /// - **les diapositives et la timeline suivent le FORMAT** — une story et un
     ///   post ont des pages, un réel est une prise continue, un mood une carte
@@ -104,9 +110,14 @@ nonisolated extension ComposerProfile {
     ///   (repost, édition — la caméra n'a rien à y ajouter) **et au mood** (qui
     ///   n'a pas de média). Un brouillon, lui, n'est pas publié : son atelier
     ///   reste entier ;
-    /// - **ce qui route vers un composer historique annonce le format que ce
-    ///   composer sait produire** — annoncer autre chose promettrait une surface
-    ///   qui n'existe pas.
+    /// - **une porte qui FIXE son format annonce celui que son composer
+    ///   historique produit** — annoncer autre chose promettrait une surface
+    ///   qui n'existe pas ;
+    /// - **une porte qui PORTE son format annonce le format porté**, et c'est
+    ///   alors la CHAÎNE COMPLÈTE qui doit savoir le produire. Le maillon est
+    ///   posé depuis que les appelants du repost envoient le type de leur carte
+    ///   (`RepostTargeting`).
+    ///
     /// - Parameter compositionQualifiesAsReel: `qualifiesAsReel` de la
     ///   composition COURANTE. Le gate AJOUTE le réel, il ne RETIRE jamais le
     ///   format propre d'une porte — sans quoi l'invariant « l'éventail

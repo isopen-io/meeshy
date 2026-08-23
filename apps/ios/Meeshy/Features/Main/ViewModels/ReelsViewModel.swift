@@ -503,7 +503,16 @@ final class ReelsViewModel: ObservableObject {
     /// Met à jour le texte d'un reel possédé. Miroir de `FeedViewModel.updatePost`
     /// mais sur `reels` : mutation optimiste immédiate, re-hydratation depuis la
     /// réponse serveur, rollback sur échec.
-    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async {
+    func updatePost(
+        _ postId: String,
+        content: String,
+        language: String? = nil,
+        type: String? = nil,
+        removeMediaIds: [String]? = nil,
+        location: PostLocationUpdate? = nil,
+        visibility: String? = nil,
+        visibilityUserIds: [String]? = nil
+    ) async {
         guard let idx = reels.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = reels[idx]
         var optimistic = snapshot
@@ -515,9 +524,16 @@ final class ReelsViewModel: ObservableObject {
         case .remove: optimistic.location = nil
         case nil: break
         }
+        // L'audience bouge tout de suite, comme le texte : sans cela le badge
+        // de visibilité garde l'ancienne valeur jusqu'au prochain
+        // rafraîchissement et l'auteur croit son resserrement perdu.
+        if let visibility {
+            optimistic.visibility = visibility
+            optimistic.visibilityUserIds = visibilityUserIds
+        }
         reels[idx] = optimistic
         do {
-            let updated = try await service.update(postId: postId, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            let updated = try await service.update(postId: postId, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
             if let newIdx = reels.firstIndex(where: { $0.id == postId }) {
                 reels[newIdx] = updated.toFeedPost(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
             }

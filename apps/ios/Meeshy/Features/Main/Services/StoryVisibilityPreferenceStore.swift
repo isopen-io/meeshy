@@ -13,7 +13,10 @@ import MeeshyUI
 /// confidentialité, ce n'est pas un compromis acceptable.
 struct StoryVisibilityPreferenceStore {
     static let key = "story.composer.lastVisibility"
-    static let fallback = PostVisibility.friends.rawValue
+    /// Loi produit 2026-08-23 : une publication naît PUBLIQUE — posts, réels
+    /// et stories confondus. Ce n'est que le point de départ : le composer
+    /// mémorise ensuite le dernier mode retenu par l'auteur.
+    static let fallback = PostVisibility.public.rawValue
 
     /// Règle pure : les modes qui exigent une sélection d'utilisateurs
     /// (EXCEPT/ONLY) ne sont JAMAIS mémorisés — restaurer « Seulement… » sans

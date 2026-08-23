@@ -37,7 +37,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { join } from 'path';
 
-import { sweepUntypedEmitDoors } from './server-emit-door-sweep';
+import { sweepRawServerEmitters, sweepUntypedEmitDoors } from './server-emit-door-sweep';
 
 const SRC_DIR = join(__dirname, '..', '..');
 
@@ -69,5 +69,43 @@ describe('portes d’émission Socket.IO — dérivées du contrat, jamais redé
    */
   it('le balayage ne signale pas les portes dérivées du contrat', () => {
     expect(sweepUntypedEmitDoors(join(__dirname, 'fixtures', 'typed-emit-door'))).toEqual([]);
+  });
+});
+
+/**
+ * La TROISIÈME forme [cycle 108] — ne rien réécrire, et prendre le type NU.
+ *
+ * Les deux cliquets précédents gardent contre une porte RÉÉCRITE trop librement.
+ * Ils ne pouvaient pas voir un service qui déclare `private io: Server` et émet
+ * dessus : il n'y a aucune signature `emit` à trouver, la liberté venant de
+ * `DefaultEventsMap` — `emit(ev: string, ...args: any[])`.
+ *
+ * Mesuré avant correction : un nom d'événement INVENTÉ et une charge de forme
+ * FAUSSE compilaient tous deux à zéro erreur à travers ces portes. Cinq porteurs
+ * (quatre services + `emitWithSeq`) couvraient ~16 émissions temps réel, dont
+ * les quatre familles de demande d'ami, `user:updated`, les compteurs de
+ * notification et `call:ended`.
+ */
+describe('portes d’émission Socket.IO — aucun `Server` NU détenu pour émettre', () => {
+  it('aucun émetteur de production ne prend le type nu de socket.io', () => {
+    expect(sweepRawServerEmitters(SRC_DIR)).toEqual([]);
+  });
+
+  it('le balayage VOIT la forme qu’il prétend interdire', () => {
+    const holders = sweepRawServerEmitters(join(__dirname, 'fixtures', 'raw-server-emitter'));
+
+    // Les deux formes : l'import direct, et l'ALIAS — que la première rédaction
+    // de `rawServerAliases` laissait passer (un `exec` ne rend que le premier
+    // import du fichier). La fixture porte les deux pour cette raison.
+    expect(holders.map((h) => h.declaration)).toEqual([
+      'constructor(private io: Server) {}',
+      'private io: SocketIOServer | null = null;',
+    ]);
+  });
+
+  it('le balayage ne signale ni le CONSTRUCTEUR du serveur ni les portes dérivées', () => {
+    expect(sweepRawServerEmitters(join(__dirname, 'fixtures', 'derived-server-emitter'))).toEqual(
+      [],
+    );
   });
 });

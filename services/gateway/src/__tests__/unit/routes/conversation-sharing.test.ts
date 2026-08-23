@@ -3,8 +3,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 // ─── Module mocks (must be hoisted before imports) ────────────────────────────
 
 const mockResolveConversationId = jest.fn<any>();
-const mockGenerateInitialLinkId = jest.fn<any>().mockReturnValue('initial-link-id');
-const mockGenerateFinalLinkId = jest.fn<any>().mockReturnValue('final-link-id');
+const mockGenerateUniqueShareLinkId = jest.fn<any>().mockResolvedValue('mshy_TestLnk1');
 const mockEnsureUniqueShareLinkIdentifier = jest.fn<any>().mockResolvedValue('mshy_unique');
 
 const mockSendSuccess = jest.fn<any>((reply: any, data: any) => {
@@ -44,9 +43,12 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));
 
+// PROLONGER le module, jamais le REMPLACER (CLAUDE.md § « Un double PARTIEL
+// d'un module perd en silence tout ce que le module GAGNE ») : un double qui
+// énumère ses exports rend `undefined` au premier que le module gagne.
 jest.mock('../../../routes/conversations/utils/identifier-generator', () => ({
-  generateInitialLinkId: (...args: any[]) => mockGenerateInitialLinkId(...args),
-  generateFinalLinkId: (...args: any[]) => mockGenerateFinalLinkId(...args),
+  ...(jest.requireActual('../../../routes/conversations/utils/identifier-generator') as object),
+  generateUniqueShareLinkId: (...args: any[]) => mockGenerateUniqueShareLinkId(...args),
   ensureUniqueShareLinkIdentifier: (...args: any[]) => mockEnsureUniqueShareLinkIdentifier(...args),
 }));
 
@@ -279,8 +281,7 @@ function setup() {
 describe('POST /conversations/:id/new-link', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGenerateInitialLinkId.mockReturnValue('initial-link-id');
-    mockGenerateFinalLinkId.mockReturnValue('final-link-id');
+    mockGenerateUniqueShareLinkId.mockResolvedValue('mshy_TestLnk1');
     mockEnsureUniqueShareLinkIdentifier.mockResolvedValue('mshy_unique');
   });
 
@@ -381,7 +382,7 @@ describe('POST /conversations/:id/new-link', () => {
     const req = makeRequest({ params: { id: CONV_ID }, body: {} });
     await route.handler(req, reply);
     expect(mockSendSuccess).toHaveBeenCalled();
-    expect(reply._body?.data).toMatchObject({ code: 'final-link-id' });
+    expect(reply._body?.data).toMatchObject({ code: 'mshy_TestLnk1' });
   });
 
   it('creates link with name-based identifier', async () => {
@@ -408,15 +409,17 @@ describe('POST /conversations/:id/new-link', () => {
     expect(mockSendSuccess).toHaveBeenCalled();
   });
 
-  it('creates link with timestamp-based identifier when no name or description', async () => {
+  // 2026-08-23 — la route ne FABRIQUE plus d'identifiant horodaté quand elle
+  // n'a ni nom ni description : elle passe une base VIDE, et le repli compact
+  // et opaque est décidé par `ensureUniqueShareLinkIdentifier` (source unique).
+  // L'ancien témoin gravait `mshy_link-<Date.now()>-<Math.random()>` dans la
+  // route, c'est-à-dire à l'endroit exact où la règle ne doit pas vivre.
+  it('passes an EMPTY base when there is neither name nor description', async () => {
     const { prisma, reply, route } = getNewLinkRoute();
     stubSuccess(prisma);
     const req = makeRequest({ params: { id: CONV_ID }, body: {} });
     await route.handler(req, reply);
-    expect(mockEnsureUniqueShareLinkIdentifier).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.stringMatching(/^mshy_link-\d+-.+/)
-    );
+    expect(mockEnsureUniqueShareLinkIdentifier).toHaveBeenCalledWith(expect.anything(), '');
     expect(mockSendSuccess).toHaveBeenCalled();
   });
 
@@ -426,12 +429,12 @@ describe('POST /conversations/:id/new-link', () => {
     const req = makeRequest({ params: { id: CONV_ID }, body: { name: 'Test Link', maxUses: 10 } });
     await route.handler(req, reply);
     expect(reply._body?.data).toMatchObject({
-      code: 'final-link-id',
+      code: 'mshy_TestLnk1',
       // `/chat/:linkId` est l'URL canonique d'un lien de partage — `/join`
       // n'est plus qu'une redirection 308 : le lien FABRIQUÉ ne doit plus
       // jamais prendre le détour.
-      link: expect.stringContaining('/chat/final-link-id'),
-      shareLink: expect.objectContaining({ linkId: 'final-link-id' }),
+      link: expect.stringContaining('/chat/mshy_TestLnk1'),
+      shareLink: expect.objectContaining({ linkId: 'mshy_TestLnk1' }),
     });
   });
 

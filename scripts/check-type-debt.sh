@@ -127,7 +127,22 @@ NC='\033[0m'
 # écart d'environnement stable, vérifié deux fois à des états différents du
 # dépôt. Seul le DELTA est transportable d'une machine à l'autre ; l'absolu ne
 # l'est pas. Qui remesure ici et pose ce qu'il lit fera rougir la CI de 14.
-readonly WEB_BASELINE=1205
+#
+# 1205 → 1196 au Vague 166 (fusionné sur ce train, instruit en parallèle du
+# cycle 108 sur le même suivi cycle-107-bis, sans recouvrement de fichier avec
+# le fix BubbleMessage ci-dessus) : neuf erreurs restantes que le cycle 108
+# avait laissées vivre sur les MÊMES fichiers de la surface d'appel —
+# cinq listeners `CallManager.attachedListeners` passaient encore `data:
+# unknown` tel quel aux handlers typés (`data as CallXEvent` au point
+# d'écoute, où le contrat serveur garantit la forme), trois
+# `VideoCallInterface.handleParticipantLeft(event: unknown)` typé
+# `CallParticipantLeftEvent`, et un `(event as unknown).anonymousId` mort
+# dupliqué dans `CallManager` (déjà retiré côté `VideoCallInterface` au
+# Vague 133 — le champ n'existe pas sur `CallParticipantLeftEvent`).
+# DELTA mesuré en LOCAL sur cette même machine, jamais l'absolu (cf. écart de
+# 14 documenté ci-dessus) : 9 erreurs de moins entre l'arbre fusionné avec et
+# sans ce correctif, appliquées à la baseline ancrée CI (1205 → 1196).
+readonly WEB_BASELINE=1196
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #

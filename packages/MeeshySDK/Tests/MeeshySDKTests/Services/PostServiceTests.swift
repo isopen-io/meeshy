@@ -497,3 +497,66 @@ extension PostServiceTests {
         XCTAssertEqual(encoded?[1]["display"] as? String, "SILENT")
     }
 }
+
+// MARK: - create/update : allowSoundExtraction + mediaAlt
+
+/// Repêchage C7b : `allowSoundExtraction` était déclaré de bout en bout côté
+/// gateway (schéma, persistance, `mediaCaptureTracks`) mais AUCUN client ne
+/// l'envoyait jamais — un drapeau qui voyage sans être posé équivaut à
+/// l'absence du canal. `mediaAlt` est le canal manquant pour `PostMedia.alt`
+/// (le champ existe en base et se LIT déjà ; rien ne l'écrivait à
+/// l'ingestion). Ces tests épinglent le SEUL chemin qui les transporte
+/// réellement : la surcharge complète de `create`/`update`.
+extension PostServiceTests {
+    func test_create_withoutAllowSoundExtractionOrMediaAlt_omitsBothKeys() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "newPost1"), error: nil)
+        mock.stub("/posts", result: response)
+
+        _ = try await service.create(content: "Hello", type: "POST", visibility: "PUBLIC")
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["allowSoundExtraction"])
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["mediaAlt"])
+    }
+
+    func test_create_withAllowSoundExtractionAndMediaAlt_sendsBoth() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "newPost1"), error: nil)
+        mock.stub("/posts", result: response)
+
+        _ = try await service.create(
+            content: nil, type: "REEL", visibility: "PUBLIC", moodEmoji: nil,
+            mediaIds: ["media-1"], audioUrl: nil, audioDuration: nil, originalLanguage: nil,
+            mobileTranscription: nil, repostOfId: nil, location: nil, mentions: nil,
+            allowSoundExtraction: true, mediaAlt: ["media-1": "A cat on a windowsill"]
+        )
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["allowSoundExtraction"] as? Bool, true)
+        let alt = mock.lastRequest?.bodyJSON?["mediaAlt"] as? [String: String]
+        XCTAssertEqual(alt?["media-1"], "A cat on a windowsill")
+    }
+
+    func test_update_withAllowSoundExtractionAndMediaAlt_sendsBoth() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "p1"), error: nil)
+        mock.stub("/posts/p1", result: response)
+
+        _ = try await service.update(
+            postId: "p1", content: nil, visibility: nil, visibilityUserIds: nil,
+            moodEmoji: nil, originalLanguage: nil, type: nil, removeMediaIds: nil,
+            storyEffects: nil, mediaIds: ["new-m1"], location: nil, mentions: nil,
+            allowSoundExtraction: false, mediaAlt: ["new-m1": "A sunset over the bay"]
+        )
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["allowSoundExtraction"] as? Bool, false)
+        let alt = mock.lastRequest?.bodyJSON?["mediaAlt"] as? [String: String]
+        XCTAssertEqual(alt?["new-m1"], "A sunset over the bay")
+    }
+
+    func test_update_withoutAllowSoundExtractionOrMediaAlt_omitsBothKeys() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "p1"), error: nil)
+        mock.stub("/posts/p1", result: response)
+
+        _ = try await service.update(postId: "p1", content: "nouveau texte")
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["allowSoundExtraction"])
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["mediaAlt"])
+    }
+}

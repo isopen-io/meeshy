@@ -522,6 +522,24 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
   } as any;
 }
 
+/**
+ * Un id de conversation de la forme que Prisma accepte, mnémonique conservé.
+ *
+ * Les fixtures de rejeu hors ligne portaient `'conv-kept'`, `'conv-1'`… — des
+ * chaînes qu'aucun `conversationId` de production ne peut prendre, la colonne
+ * étant un ObjectId. Le double Prisma de ce harnais les acceptait sans rien
+ * dire, si bien que TOUTE la suite `_drainPendingMessages` attestait un drain
+ * dont la requête d'appartenance aurait levé chez le vrai client (mesuré sans
+ * base : `PrismaClientValidationError` pour un non-string, `Malformed ObjectID`
+ * pour une chaîne quelconque). C'est la leçon « un double permissif rend le
+ * témoin trivialement vert », appliquée à l'ARGUMENT plutôt qu'au RÉSULTAT.
+ *
+ * `convId('kept')` rend 24 hexadécimaux stables et distincts par nom, donc
+ * lisible au site d'appel et acceptable par la garde d'adressabilité.
+ */
+const convId = (name: string): string =>
+  Buffer.from(name).toString('hex').padEnd(24, '0').slice(0, 24);
+
 // ---------------------------------------------------------------------------
 // Suite setup
 // ---------------------------------------------------------------------------
@@ -1716,7 +1734,7 @@ describe('MeeshySocketIOManager', () => {
       it('never carries a delivery receipt on drain', async () => {
         const fakeQueue = {
           drain: jest.fn().mockResolvedValue([
-            { messageId: 'msg-txt-1', conversationId: 'conv-tr', payload: {}, eventType: 'translation' },
+            { messageId: 'msg-txt-1', conversationId: convId('tr'), payload: {}, eventType: 'translation' },
           ]),
         };
         manager.setDeliveryQueue(fakeQueue as any);
@@ -2786,24 +2804,24 @@ describe('MeeshySocketIOManager', () => {
     it('emits MESSAGE_NEW to the user room (all devices) for each pending message and PENDING_MESSAGES_DELIVERED', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { id: 'msg-p1', conversationId: 'conv-1' } },
-          { payload: { id: 'msg-p2', conversationId: 'conv-1' } },
+          { payload: { id: 'msg-p1', conversationId: convId('1') }, conversationId: convId('1'), messageId: 'msg-p1' },
+          { payload: { id: 'msg-p2', conversationId: convId('1') }, conversationId: convId('1'), messageId: 'msg-p2' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
       await (manager as any)._drainPendingMessages('user-drain', false);
       expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-drain'));
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p1', conversationId: 'conv-1' });
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p2', conversationId: 'conv-1' });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p1', conversationId: convId('1') });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p2', conversationId: convId('1') });
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, expect.objectContaining({ count: 2 }));
     });
 
     it('routes entries by eventType: edited → MESSAGE_EDITED, deleted → MESSAGE_DELETED, default → MESSAGE_NEW', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { id: 'msg-new' }, eventType: undefined },
-          { payload: { id: 'msg-edit' }, eventType: 'edited' },
-          { payload: { messageId: 'msg-del' }, eventType: 'deleted' },
+          { payload: { id: 'msg-new' }, conversationId: convId('1'), messageId: 'msg-new', eventType: undefined },
+          { payload: { id: 'msg-edit' }, conversationId: convId('1'), messageId: 'msg-edit', eventType: 'edited' },
+          { payload: { messageId: 'msg-del' }, conversationId: convId('1'), messageId: 'msg-del', eventType: 'deleted' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
@@ -2816,8 +2834,8 @@ describe('MeeshySocketIOManager', () => {
     it('routes reaction entries: reaction-added → REACTION_ADDED, reaction-removed → REACTION_REMOVED', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { messageId: 'msg-r', emoji: '👍' }, eventType: 'reaction-added' },
-          { payload: { messageId: 'msg-r', emoji: '👍' }, eventType: 'reaction-removed' },
+          { payload: { messageId: 'msg-r', emoji: '👍' }, conversationId: convId('1'), messageId: 'msg-r', eventType: 'reaction-added' },
+          { payload: { messageId: 'msg-r', emoji: '👍' }, conversationId: convId('1'), messageId: 'msg-r', eventType: 'reaction-removed' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
@@ -2829,8 +2847,8 @@ describe('MeeshySocketIOManager', () => {
     it('routes pin entries: pinned → MESSAGE_PINNED, unpinned → MESSAGE_UNPINNED', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { messageId: 'msg-pin', pinnedBy: 'u1' }, eventType: 'pinned' },
-          { payload: { messageId: 'msg-pin' }, eventType: 'unpinned' },
+          { payload: { messageId: 'msg-pin', pinnedBy: 'u1' }, conversationId: convId('1'), messageId: 'msg-pin', eventType: 'pinned' },
+          { payload: { messageId: 'msg-pin' }, conversationId: convId('1'), messageId: 'msg-pin', eventType: 'unpinned' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
@@ -2845,13 +2863,13 @@ describe('MeeshySocketIOManager', () => {
       // replay, a peer who was offline at that instant keeps the un-enriched
       // attachment for as long as their cache lives.
       const enriched = {
-        conversationId: 'conv-a',
+        conversationId: convId('a'),
         messageId: 'msg-audio',
         attachment: { id: 'att-1', transcription: { text: 'Bonjour' } },
       };
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: enriched, eventType: 'attachment-updated', dedupKey: 'att-1' },
+          { payload: enriched, conversationId: convId('a'), messageId: 'msg-audio', eventType: 'attachment-updated', dedupKey: 'att-1' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
@@ -2871,7 +2889,7 @@ describe('MeeshySocketIOManager', () => {
       };
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: translated, eventType: 'translation', dedupKey: 'msg-txt:fr' },
+          { payload: translated, conversationId: convId('1'), messageId: 'msg-txt', eventType: 'translation', dedupKey: 'msg-txt:fr' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
@@ -2889,35 +2907,90 @@ describe('MeeshySocketIOManager', () => {
     it('replays link-message entries under BOTH events, each in its own shape', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { message: { id: 'msg-link', conversationId: 'conv-link' } }, eventType: 'link-message' },
+          { payload: { message: { id: 'msg-link', conversationId: convId('link') } }, conversationId: convId('link'), messageId: 'msg-link', eventType: 'link-message' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
       await (manager as any)._drainPendingMessages('user-drain-link', false);
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, {
-        message: { id: 'msg-link', conversationId: 'conv-link' },
+        message: { id: 'msg-link', conversationId: convId('link') },
       });
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, {
         id: 'msg-link',
-        conversationId: 'conv-link',
+        conversationId: convId('link'),
       });
     });
 
-    // The envelope is what every writer of this eventType produces, but a drain
-    // must never blast `message:new` with `undefined` if one ever drifts: the
-    // recipient would take a message it cannot route for a real one.
-    it('replays a shapeless link-message entry under LINK_MESSAGE_NEW alone', async () => {
+    /**
+     * `'link-message'` est le SEUL `eventType` dont la charge se DÉPLIE, donc le
+     * seul dont l'échec puisse venir d'autre chose que de son nom — et il était
+     * le seul que le verdict d'indélivrabilité du drain ne pouvait pas atteindre.
+     *
+     * Le drain lit la longueur de la liste rendue par `_drainedEmissions` comme
+     * « sais-je diffuser ceci ? » (« une liste VIDE dit *je ne sais pas diffuser
+     * ceci* »). `linkMessageEmissions` gardait l'enveloppe même privée de son
+     * message : la liste faisait donc toujours au moins 1, et le verdict ne
+     * pouvait JAMAIS être négatif pour cette famille.
+     *
+     * Ce que l'enveloppe seule livre : rien. Son unique auditeur est le web, qui
+     * lit `data.message` ; iOS et Android n'écoutent que le `message:new`
+     * dérivé, celui-là même qu'on vient de refuser. Le témoin que ce test
+     * remplace gelait exactement ça — il assertait l'enveloppe émise seule.
+     */
+    it('ne diffuse RIEN d’une enveloppe de lien privée de son message', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { messageId: 'msg-shapeless' }, eventType: 'link-message' },
+          { payload: { messageId: 'msg-shapeless' }, conversationId: convId('link'), messageId: 'msg-shapeless', eventType: 'link-message' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
       await (manager as any)._drainPendingMessages('user-drain-shapeless', false);
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, {
-        messageId: 'msg-shapeless',
-      });
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, expect.anything());
       expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
+    });
+
+    /**
+     * Le coût RÉEL de la garde ci-dessus, et il ne se mesure pas sur les
+     * émissions : sur les trois signaux que le cycle 109 bis a rendus
+     * solidaires du LIVRÉ.
+     *
+     * `announcesMessageArrival('link-message')` est VRAI — un message envoyé par
+     * lien est une arrivée pleine et entière. Une enveloppe dégradée comptée
+     * comme livrée emportait donc l'accusé de remise avec elle : le curseur
+     * `lastDeliveredAt` de l'auteur avançait, et il est MONOTONE
+     * (`_advanceCursor` ne recule jamais). La coche de l'auteur passait à
+     * « remis » pour un message qu'aucun destinataire n'a reçu — sur le SEUL
+     * transport d'envoi dont dispose un participant anonyme.
+     *
+     * Et le troisième signal était retiré au moment où il servait le plus : la
+     * conversation n'était pas nommée dans `conversationIds`, donc rien
+     * n'envoyait le client rechercher le message, qui est pourtant toujours en
+     * base.
+     */
+    it('n’accuse pas la remise d’une enveloppe de lien vide, mais nomme sa conversation', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { message: { id: 'msg-ok', conversationId: convId('link-ok') } }, conversationId: convId('link-ok'), messageId: 'msg-ok', eventType: 'link-message' },
+          { payload: {}, conversationId: convId('link-empty'), messageId: 'msg-empty', eventType: 'link-message' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const receiptsSpy = jest
+        .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
+        .mockResolvedValue(undefined);
+      await (manager as any)._drainPendingMessages('user-link-receipt', false);
+
+      const call = ioState.toEmit.mock.calls.find(
+        (c: any[]) => c[0] === SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      expect(call?.[1].count).toBe(1);
+      expect(call?.[1].conversationIds).toEqual(
+        expect.arrayContaining([convId('link-ok'), convId('link-empty')])
+      );
+      // Le point du témoin : l'entrée vide n'est pas transmise à l'accusé, donc
+      // la coche de son auteur reste à « envoyé ».
+      const [, forwarded] = receiptsSpy.mock.calls[0] as [string, any[], boolean];
+      expect(forwarded.map((e: any) => e.messageId)).toEqual(['msg-ok']);
     });
 
     /**
@@ -2937,7 +3010,7 @@ describe('MeeshySocketIOManager', () => {
     it('emits delivery receipts for an anonymous identity (participant-id key)', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { id: 'msg-anon' }, conversationId: 'conv-1', messageId: 'msg-anon' },
+          { payload: { id: 'msg-anon' }, conversationId: convId('1'), messageId: 'msg-anon' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
@@ -2956,13 +3029,274 @@ describe('MeeshySocketIOManager', () => {
     it('still emits delivery receipts for a registered identity', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { id: 'msg-reg' }, conversationId: 'conv-1', messageId: 'msg-reg' },
+          { payload: { id: 'msg-reg' }, conversationId: convId('1'), messageId: 'msg-reg' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
       const receiptsSpy = jest.spyOn(manager as any, '_emitDeliveryForDrainedMessages').mockResolvedValue(undefined);
       await (manager as any)._drainPendingMessages('user-reg', false);
       expect(receiptsSpy).toHaveBeenCalledWith('user-reg', expect.any(Array), false);
+    });
+
+    /**
+     * Le drain est DESTRUCTIF : `drain()` retire les entrées de Redis ET de la
+     * file mémoire avant que la moindre émission n'ait lieu. Tout ce qui n'est
+     * pas émis pendant cette fenêtre est perdu SANS RECOURS — il n'y a pas de
+     * seconde chance, pas de relecture, pas de trace.
+     *
+     * Les trois témoins ci-dessous gardent la frontière de DÉSÉRIALISATION,
+     * celle que `_drainedEmissions` documente comme une AFFIRMATION : « que
+     * l'octet relu de Redis soit bien ce qu'on y a écrit ». Le typage borne ce
+     * qu'on ÉCRIT, jamais ce qu'on RELIT, et la fenêtre de relecture est de
+     * 48 h (`DELIVERY_QUEUE_TTL_SECONDS`) — largement de quoi enjamber un
+     * déploiement progressif où deux versions se partagent la même file Redis.
+     */
+    it('ne diffuse RIEN sous un nom d’événement que la table ne résout pas', async () => {
+      // `DRAINED_EVENT['reaction-add']` (une faute de frappe, ou un `eventType`
+      // d'une version voisine) rend `undefined` — et `emit(undefined, payload)`
+      // ne LÈVE PAS sur socket.io 4.8 : il diffuse un événement anonyme que nul
+      // ne peut écouter. Mesuré. C'est la forme exacte du défaut du cycle 104,
+      // où `broadcastCommentUnliked` émettait sous le nom `undefined`.
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-known', conversationId: convId('1') }, conversationId: convId('1'), messageId: 'msg-known' },
+          { payload: { id: 'msg-unnameable', conversationId: convId('1') }, conversationId: convId('1'), messageId: 'msg-unnameable', eventType: 'reaction-add' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-unnameable', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, {
+        id: 'msg-known',
+        conversationId: convId('1'),
+      });
+      // Le point du témoin : aucune émission ne porte un nom absent.
+      for (const call of ioState.toEmit.mock.calls) {
+        expect(typeof call[0]).toBe('string');
+      }
+    });
+
+    /**
+     * Le NOM est vérifié depuis le cycle 109 bis ; la CHARGE ne l'était pas.
+     * Les douze événements de `DRAINED_EVENT` portent tous un OBJET — c'est ce
+     * dont dépend le routage chez les trois clients, exactement comme
+     * `linkMessageEmissions` l'exige déjà du message qu'il DÉPLIE : « un payload
+     * sans `conversationId` au premier niveau — donc non routable, donc jeté ».
+     *
+     * L'asymétrie était là : la valeur DÉRIVÉE était inspectée
+     * (`typeof message === 'object' && !Array.isArray(message)`), la valeur dont
+     * elle est dérivée partait sans contrôle. Une chaîne, un tableau ou un `null`
+     * relu de Redis — `JSON.parse(…) as QueuedMessagePayload` ne vérifie RIEN —
+     * s'émettait donc sous un nom d'événement PARFAITEMENT valide, que chaque
+     * décodeur client jette en silence. Le drain étant destructif, le message est
+     * alors perdu sans recours et sans trace : la forme exacte du défaut que le
+     * cycle 109 bis a fermé pour le nom.
+     */
+    it('ne diffuse RIEN dont la charge ne soit pas un objet routable', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-object' }, conversationId: convId('1'), messageId: 'msg-object' },
+          { payload: 'not-an-object', conversationId: convId('1'), messageId: 'msg-string' },
+          { payload: [{ id: 'msg-array' }], conversationId: convId('1'), messageId: 'msg-array' },
+          { payload: null, conversationId: convId('1'), messageId: 'msg-null' },
+          {
+            payload: 'not-an-envelope',
+            conversationId: convId('1'),
+            messageId: 'msg-link',
+            eventType: 'link-message',
+          },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-shapeless', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, {
+        id: 'msg-object',
+      });
+      // Le point du témoin : aucune charge diffusée n'est autre chose qu'un objet.
+      const wireEmissions = ioState.toEmit.mock.calls.filter(
+        (c: any[]) => c[0] !== SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      for (const [, payload] of wireEmissions) {
+        expect(payload).toEqual(expect.any(Object));
+        expect(Array.isArray(payload)).toBe(false);
+      }
+      expect(wireEmissions).toHaveLength(1);
+    });
+
+    /**
+     * Le pendant du témoin précédent, sur les deux signaux que le cycle 109 bis
+     * a rendus solidaires du LIVRÉ : une entrée dont la charge est indélivrable
+     * ne compte pas dans `count`, et sa conversation est NOMMÉE quand même —
+     * c'est ce qui rend la perte récupérable plutôt que définitive.
+     */
+    it('n’accuse pas la remise d’une charge informe, mais nomme sa conversation', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-ok' }, conversationId: convId('delivered'), messageId: 'msg-ok' },
+          { payload: 'informe', conversationId: convId('shapeless'), messageId: 'msg-shapeless' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const receiptsSpy = jest
+        .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
+        .mockResolvedValue(undefined);
+      await (manager as any)._drainPendingMessages('user-shapeless-receipt', false);
+
+      const call = ioState.toEmit.mock.calls.find(
+        (c: any[]) => c[0] === SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      expect(call?.[1].count).toBe(1);
+      expect(call?.[1].conversationIds).toEqual(
+        expect.arrayContaining([convId('delivered'), convId('shapeless')])
+      );
+      const [, forwarded] = receiptsSpy.mock.calls[0] as [string, any[], boolean];
+      expect(forwarded.map((e: any) => e.messageId)).toEqual(['msg-ok']);
+    });
+
+    /**
+     * Un accusé de remise AFFIRME « ce message est arrivé chez son
+     * destinataire ». La règle est déjà écrite dans `_drainPendingMessages`,
+     * pour la garde d'appartenance : « l'affirmer d'un message qu'on vient de
+     * refuser de livrer mentirait à son auteur ». Elle ne couvrait pas
+     * l'entrée qu'on ne sait PAS NOMMER — qui n'est pas refusée, seulement
+     * indélivrable, et dont l'auteur voyait pourtant sa coche passer au double
+     * tic.
+     */
+    it('n’accuse pas la remise d’une entrée qu’il n’a pas su diffuser', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-ok' }, conversationId: convId('1'), messageId: 'msg-ok' },
+          {
+            payload: { id: 'msg-lost' },
+            conversationId: convId('1'),
+            messageId: 'msg-lost',
+            eventType: 'reaction-add',
+          },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const receiptsSpy = jest
+        .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
+        .mockResolvedValue(undefined);
+      await (manager as any)._drainPendingMessages('user-halflost', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.PENDING_MESSAGES_DELIVERED,
+        expect.objectContaining({ count: 1 })
+      );
+      const [, forwarded] = receiptsSpy.mock.calls[0] as [string, any[], boolean];
+      expect(forwarded.map((e: any) => e.messageId)).toEqual(['msg-ok']);
+    });
+
+    /**
+     * Le pendant du témoin précédent, et il tire dans l'autre sens : `count` se
+     * RESSERRE sur ce qui est parti, `conversationIds` NE SE RESSERRE PAS.
+     *
+     * C'est l'écart entre les deux qui rend une perte récupérable. Le message
+     * d'une entrée indélivrable est toujours en base — seul son rejeu a
+     * échoué — et le seul consommateur de cet événement invalide les messages
+     * des conversations nommées. Resserrer `conversationIds` sur les entrées
+     * livrées (le geste « symétrique » qu'une relecture pressée appelle) ferait
+     * d'un incident de transport un trou permanent dans le fil.
+     */
+    it('nomme la conversation d’une entrée PERDUE, pour que le client aille la relire', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-ok' }, conversationId: convId('delivered'), messageId: 'msg-ok' },
+          {
+            payload: { id: 'msg-lost' },
+            conversationId: convId('lost'),
+            eventType: 'reaction-add',
+          },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-recoverable', false);
+
+      const call = ioState.toEmit.mock.calls.find(
+        (c: any[]) => c[0] === SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      expect(call?.[1].count).toBe(1);
+      expect(call?.[1].conversationIds).toEqual(
+        expect.arrayContaining([convId('delivered'), convId('lost')])
+      );
+    });
+
+    /**
+     * L'exception à la règle du témoin précédent, et elle est de nature, pas de
+     * degré. `conversationIds` NOMME ce que le client doit aller relire ; une
+     * entrée refusée pour son `conversationId` n'a précisément rien à nommer.
+     * Publier son id enverrait le client invalider une conversation qui
+     * n'existe pas — un signal de récupération qui ne désigne rien vaut moins
+     * que le silence, et le journal par entrée reste la trace de la perte.
+     *
+     * Le reste du contrat est celui des deux témoins ci-dessus : `count` ne
+     * compte que ce qui est parti, et aucun accusé de remise n'est affirmé d'une
+     * entrée qu'on n'a pas livrée.
+     */
+    it('ne NOMME pas la conversation d’une entrée dont l’id n’en désigne aucune', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-ok' }, conversationId: convId('delivered'), messageId: 'msg-ok' },
+          { payload: { id: 'msg-broken' }, conversationId: 'conv-broken', messageId: 'msg-broken' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const receiptsSpy = jest
+        .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
+        .mockResolvedValue(undefined);
+      await (manager as any)._drainPendingMessages('user-unaddressable', false);
+
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-broken' });
+      const call = ioState.toEmit.mock.calls.find(
+        (c: any[]) => c[0] === SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      expect(call?.[1].count).toBe(1);
+      expect(call?.[1].conversationIds).toEqual([convId('delivered')]);
+      const [, forwarded] = receiptsSpy.mock.calls[0] as [string, any[], boolean];
+      expect(forwarded.map((e: any) => e.messageId)).toEqual(['msg-ok']);
+    });
+
+    /**
+     * `parseRawEntries` (`RedisDeliveryQueue`) isole DÉJÀ chaque entrée à la
+     * couche du dessous, et sa raison est écrite : « so one corrupt entry can
+     * never poison a whole drain/peek ». La couche qui la CONSOMME laissait
+     * tomber cette garantie — une seule émission qui lève emportait tout le
+     * reste d'un lot déjà retiré de la file, plus le signal
+     * `pending-messages:delivered` et TOUS les accusés de réception.
+     *
+     * `io.to(…).emit` lève réellement : la passerelle l'écrit elle-même
+     * (`NotificationService`, canal isolé par `emitBestEffort` pour cette
+     * raison exacte) et l'encodeur socket.io lève sur une charge non
+     * sérialisable — mesuré.
+     */
+    it('une émission qui lève n’emporte pas le reste du lot déjà drainé', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-a' }, conversationId: convId('1'), messageId: 'msg-a' },
+          { payload: { id: 'msg-boom' }, conversationId: convId('1'), messageId: 'msg-boom' },
+          { payload: { id: 'msg-c' }, conversationId: convId('1'), messageId: 'msg-c' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      ioState.toEmit.mockImplementation((_event: string, payload: any) => {
+        if (payload?.id === 'msg-boom') throw new Error('adapter down');
+      });
+
+      await (manager as any)._drainPendingMessages('user-boom', false);
+
+      const emitted = ioState.toEmit.mock.calls
+        .filter((c: any[]) => c[0] === SERVER_EVENTS.MESSAGE_NEW)
+        .map((c: any[]) => c[1]?.id);
+      // `msg-c` suit l'entrée fautive : sans isolation il n'est jamais émis, et
+      // il est déjà sorti de Redis.
+      expect(emitted).toContain('msg-a');
+      expect(emitted).toContain('msg-c');
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.PENDING_MESSAGES_DELIVERED,
+        expect.objectContaining({ count: 2 })
+      );
     });
   });
 
@@ -2997,11 +3331,106 @@ describe('MeeshySocketIOManager', () => {
       });
     }
 
-    it('replays the conversations still joined and drops the one left behind', async () => {
-      membership([{ conversationId: 'conv-kept' }]);
+    /**
+     * Le même double, mais qui REFUSE ce que le vrai client refuse.
+     *
+     * `Participant.conversationId` est une colonne ObjectId. Mesuré contre le
+     * client généré du dépôt, sans base : `undefined`/`null`/un nombre/un objet
+     * dans le `in` lèvent côté CLIENT (`PrismaClientValidationError`), et une
+     * chaîne qui n'est pas un ObjectId atteint le moteur et lève
+     * `Malformed ObjectID`. Les deux atterrissent dans le même `catch`.
+     *
+     * Le double permissif au-dessus ne pouvait donc pas voir le défaut que les
+     * témoins qui suivent gardent : il répondait poliment à une question que la
+     * production n'aurait jamais pu poser. Il reste en place pour les témoins
+     * qui portent sur l'appartenance elle-même ; celui-ci sert quand c'est
+     * l'ARGUMENT qui est en cause.
+     *
+     * `asked` enregistre tout ce que les DEUX lectures du drain demandent —
+     * celle de l'appartenance (`select.bannedAt`) et celle des accusés de remise
+     * (`select.id`) — parce qu'elles agrègent le lot exactement de la même
+     * façon, et sont donc empoisonnables de la même façon.
+     */
+    function strictMembership(rows: Array<{ conversationId: string; bannedAt?: Date | null }>) {
+      const asked: unknown[] = [];
+      prisma.participant.findMany.mockImplementation(async (args: any) => {
+        const ids: unknown[] = args?.where?.conversationId?.in ?? [];
+        asked.push(...ids);
+        for (const id of ids) {
+          if (typeof id !== 'string' || !/^[0-9a-fA-F]{24}$/.test(id)) {
+            throw new Error(`Invalid \`prisma.participant.findMany()\` invocation: Malformed ObjectID: ${String(id)}`);
+          }
+        }
+        if (!args?.select?.bannedAt) return [];
+        return rows
+          .filter((r) => ids.includes(r.conversationId))
+          .map((r) => ({ conversationId: r.conversationId, bannedAt: r.bannedAt ?? null }));
+      });
+      return asked;
+    }
+
+    /**
+     * LE témoin du lot. Une entrée dont le `conversationId` n'est pas
+     * interrogeable ne se perd pas seule : le gate d'autorisation AGRÈGE les ids
+     * du lot en un unique `conversationId: { in: [...] }`, donc elle fait lever
+     * la requête pour TOUT le monde — et l'échec tombe dans un `catch` qui, par
+     * décision documentée, rejoue l'arriéré SANS FILTRE.
+     *
+     * Le fail-open est juste pour ce qu'il vise (une base qui ne répond pas). Il
+     * ne peut simplement pas distinguer « la base n'a pas répondu » de « nous ne
+     * lui avons jamais posé de question valide » — et sur ce second cas il
+     * transforme une entrée corrompue en DÉSACTIVATION du gate : l'arriéré d'une
+     * conversation quittée, ou dont le lecteur a été banni, repart en entier.
+     *
+     * Rouge avant correction : `msg-gone` — la conversation que le lecteur a
+     * quittée — était diffusé.
+     */
+    it('une entrée dont la conversation n’est pas interrogeable ne désarme pas le gate des AUTRES', async () => {
+      strictMembership([{ conversationId: convId('kept') }]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-kept' }, conversationId: 'conv-kept', messageId: 'msg-kept' },
-        { payload: { id: 'msg-gone' }, conversationId: 'conv-left', messageId: 'msg-gone' },
+        { payload: { id: 'msg-kept' }, conversationId: convId('kept'), messageId: 'msg-kept' },
+        { payload: { id: 'msg-gone' }, conversationId: convId('left'), messageId: 'msg-gone' },
+        { payload: { id: 'msg-broken' }, conversationId: 'conv-broken', messageId: 'msg-broken' },
+      ]) as any);
+
+      await (manager as any)._drainPendingMessages('user-poisoned', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-kept' });
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-gone' });
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-broken' });
+    });
+
+    /**
+     * Le même défaut vu depuis la requête plutôt que depuis son effet, et il
+     * couvre la SECONDE victime : la lecture des participants qui porte les
+     * accusés de remise agrège les ids du lot exactement comme le gate, donc une
+     * entrée illisible y coûtait tous les accusés du lot.
+     *
+     * L'invariant est plus fort que « le gate a bien filtré » : aucune des deux
+     * lectures ne doit jamais recevoir un id que la colonne ne peut pas porter.
+     */
+    it('n’expose AUCUNE des deux lectures du drain à un id que la colonne ne peut pas porter', async () => {
+      const asked = strictMembership([{ conversationId: convId('kept') }]);
+      manager.setDeliveryQueue(queueOf([
+        { payload: { id: 'msg-kept' }, conversationId: convId('kept'), messageId: 'msg-kept' },
+        { payload: { id: 'msg-undated' }, conversationId: undefined, messageId: 'msg-undated' },
+        { payload: { id: 'msg-empty' }, conversationId: '', messageId: 'msg-empty' },
+      ]) as any);
+
+      await (manager as any)._drainPendingMessages('user-args', false);
+
+      expect(asked.length).toBeGreaterThan(0);
+      for (const id of asked) {
+        expect(typeof id).toBe('string');
+        expect(id).toMatch(/^[0-9a-fA-F]{24}$/);
+      }
+    });
+
+    it('replays the conversations still joined and drops the one left behind', async () => {
+      membership([{ conversationId: convId('kept') }]);
+      manager.setDeliveryQueue(queueOf([
+        { payload: { id: 'msg-kept' }, conversationId: convId('kept'), messageId: 'msg-kept' },
+        { payload: { id: 'msg-gone' }, conversationId: convId('left'), messageId: 'msg-gone' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-left', false);
@@ -3015,9 +3444,9 @@ describe('MeeshySocketIOManager', () => {
     // — ligne historique restée active, désynchronisation — parce que c'est la
     // seule lecture qui ne dépend pas d'un invariant d'écriture voisin.
     it('drops a conversation the reader is banned from even if the row stayed active', async () => {
-      membership([{ conversationId: 'conv-banned', bannedAt: new Date('2026-08-01T00:00:00Z') }]);
+      membership([{ conversationId: convId('banned'), bannedAt: new Date('2026-08-01T00:00:00Z') }]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-banned' }, conversationId: 'conv-banned', messageId: 'msg-banned' },
+        { payload: { id: 'msg-banned' }, conversationId: convId('banned'), messageId: 'msg-banned' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-banned', false);
@@ -3031,9 +3460,9 @@ describe('MeeshySocketIOManager', () => {
     it('drops mutations and translations of a conversation left behind, not just new messages', async () => {
       membership([]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-e' }, conversationId: 'conv-left', messageId: 'msg-e', eventType: 'edited' },
-        { payload: { messageId: 'msg-r' }, conversationId: 'conv-left', messageId: 'msg-r', eventType: 'reaction-added' },
-        { payload: { messageId: 'msg-t' }, conversationId: 'conv-left', messageId: 'msg-t', eventType: 'translation' },
+        { payload: { id: 'msg-e' }, conversationId: convId('left'), messageId: 'msg-e', eventType: 'edited' },
+        { payload: { messageId: 'msg-r' }, conversationId: convId('left'), messageId: 'msg-r', eventType: 'reaction-added' },
+        { payload: { messageId: 'msg-t' }, conversationId: convId('left'), messageId: 'msg-t', eventType: 'translation' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-left-all', false);
@@ -3047,7 +3476,7 @@ describe('MeeshySocketIOManager', () => {
     it('emits nothing at all — not even PENDING_MESSAGES_DELIVERED — when every entry is dropped', async () => {
       membership([]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-gone' }, conversationId: 'conv-left', messageId: 'msg-gone' },
+        { payload: { id: 'msg-gone' }, conversationId: convId('left'), messageId: 'msg-gone' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-all-gone', false);
@@ -3056,17 +3485,17 @@ describe('MeeshySocketIOManager', () => {
     });
 
     it('counts only the replayed entries in PENDING_MESSAGES_DELIVERED', async () => {
-      membership([{ conversationId: 'conv-kept' }]);
+      membership([{ conversationId: convId('kept') }]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-kept' }, conversationId: 'conv-kept', messageId: 'msg-kept' },
-        { payload: { id: 'msg-gone' }, conversationId: 'conv-left', messageId: 'msg-gone' },
+        { payload: { id: 'msg-kept' }, conversationId: convId('kept'), messageId: 'msg-kept' },
+        { payload: { id: 'msg-gone' }, conversationId: convId('left'), messageId: 'msg-gone' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-count', false);
 
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, {
         count: 1,
-        conversationIds: ['conv-kept'],
+        conversationIds: [convId('kept')],
       });
     });
 
@@ -3074,10 +3503,10 @@ describe('MeeshySocketIOManager', () => {
     // destinataire ». Il ne doit jamais être affirmé d'un message qu'on vient
     // justement de refuser de livrer.
     it('never claims a delivery receipt for a dropped entry', async () => {
-      membership([{ conversationId: 'conv-kept' }]);
+      membership([{ conversationId: convId('kept') }]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-kept' }, conversationId: 'conv-kept', messageId: 'msg-kept' },
-        { payload: { id: 'msg-gone' }, conversationId: 'conv-left', messageId: 'msg-gone' },
+        { payload: { id: 'msg-kept' }, conversationId: convId('kept'), messageId: 'msg-kept' },
+        { payload: { id: 'msg-gone' }, conversationId: convId('left'), messageId: 'msg-gone' },
       ]) as any);
       const receiptsSpy = jest
         .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
@@ -3086,14 +3515,14 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._drainPendingMessages('user-receipts', false);
 
       expect(receiptsSpy).toHaveBeenCalledWith('user-receipts', [
-        expect.objectContaining({ conversationId: 'conv-kept' }),
+        expect.objectContaining({ conversationId: convId('kept') }),
       ], false);
     });
 
     it('reads the membership of an anonymous identity by participant id', async () => {
-      membership([{ conversationId: 'conv-anon' }]);
+      membership([{ conversationId: convId('anon') }]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-anon' }, conversationId: 'conv-anon', messageId: 'msg-anon' },
+        { payload: { id: 'msg-anon' }, conversationId: convId('anon'), messageId: 'msg-anon' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('anon-part-9', true);
@@ -3107,11 +3536,11 @@ describe('MeeshySocketIOManager', () => {
     });
 
     it('scopes the membership read to the drained conversations only', async () => {
-      membership([{ conversationId: 'conv-a' }, { conversationId: 'conv-b' }]);
+      membership([{ conversationId: convId('a') }, { conversationId: convId('b') }]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'm1' }, conversationId: 'conv-a', messageId: 'm1' },
-        { payload: { id: 'm2' }, conversationId: 'conv-a', messageId: 'm2' },
-        { payload: { id: 'm3' }, conversationId: 'conv-b', messageId: 'm3' },
+        { payload: { id: 'm1' }, conversationId: convId('a'), messageId: 'm1' },
+        { payload: { id: 'm2' }, conversationId: convId('a'), messageId: 'm2' },
+        { payload: { id: 'm3' }, conversationId: convId('b'), messageId: 'm3' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-scope', false);
@@ -3121,7 +3550,7 @@ describe('MeeshySocketIOManager', () => {
           where: expect.objectContaining({
             userId: 'user-scope',
             isActive: true,
-            conversationId: { in: ['conv-a', 'conv-b'] },
+            conversationId: { in: [convId('a'), convId('b')] },
           }),
           select: { conversationId: true, bannedAt: true },
         })
@@ -3139,8 +3568,8 @@ describe('MeeshySocketIOManager', () => {
     it('replays everything when the membership read fails, rather than destroying the backlog', async () => {
       prisma.participant.findMany.mockRejectedValue(new Error('mongo unreachable'));
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-1' }, conversationId: 'conv-x', messageId: 'msg-1' },
-        { payload: { id: 'msg-2' }, conversationId: 'conv-y', messageId: 'msg-2' },
+        { payload: { id: 'msg-1' }, conversationId: convId('x'), messageId: 'msg-1' },
+        { payload: { id: 'msg-2' }, conversationId: convId('y'), messageId: 'msg-2' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-db-down', false);
@@ -6137,8 +6566,8 @@ describe('MeeshySocketIOManager', () => {
     it('emits each pending message payload and delivery confirmation to the user room', async () => {
       const mockQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { id: 'msg-p1', conversationId: '507f1f77bcf86cd799439200' } },
-          { payload: { id: 'msg-p2', conversationId: '507f1f77bcf86cd799439200' } },
+          { payload: { id: 'msg-p1', conversationId: '507f1f77bcf86cd799439200' }, conversationId: '507f1f77bcf86cd799439200', messageId: 'msg-p1' },
+          { payload: { id: 'msg-p2', conversationId: '507f1f77bcf86cd799439200' }, conversationId: '507f1f77bcf86cd799439200', messageId: 'msg-p2' },
         ]),
       };
       (manager as any).deliveryQueue = mockQueue;

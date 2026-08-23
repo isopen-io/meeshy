@@ -67,6 +67,25 @@ struct FeedView: View {
     @State var composerReferences: [ComposerReference] = []
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
+    /// Audience nommée de la publication en cours (EXCEPT/ONLY) et le
+    /// sélecteur de personnes qui la remplit. Vides tant que l'auteur reste
+    /// sur une visibilité qui n'en demande pas.
+    @State  var postVisibilityUserIds: [String] = []
+    @State  var audiencePickerMode: PostVisibility? = nil
+
+    /// La visibilité choisie, relue comme un mode du modèle — un `rawValue`
+    /// inconnu (état corrompu) retombe sur PUBLIC, le défaut produit.
+    var selectedPostVisibility: PostVisibility {
+        PostVisibility(rawValue: postVisibility) ?? .public
+    }
+
+    /// EXCEPT sans exclus = privé fantôme ; ONLY sans inclus = invisible pour
+    /// tous. Le gateway les REFUSE (`CreatePostSchema`) : mieux vaut retenir
+    /// l'envoi ici que le laisser échouer après coup.
+    var postAudienceIncomplete: Bool {
+        selectedPostVisibility.requiresUserSelection && postVisibilityUserIds.isEmpty
+    }
+
     /// A QUALIFYING composition (video || audio || >= 2 images —
     /// `ReelComposition.qualifiesAsReel`) defaults to a REEL; the author can
     /// force a plain POST via the composer's Réel⇄Post toggle. A non-qualifying
@@ -1417,24 +1436,36 @@ struct FeedView: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
 
+                        // Les SIX audiences du modèle, comme le composer story
+                        // et l'éditeur : trois d'entre elles (COMMUNITY,
+                        // EXCEPT, ONLY) étaient inatteignables à la création
+                        // d'un post — offertes ailleurs, refusées ici.
                         Menu {
-                            Button { postVisibility = "PUBLIC" } label: {
-                                Label(String(localized: "Public", defaultValue: "Public"), systemImage: "globe")
-                            }
-                            Button { postVisibility = "FRIENDS" } label: {
-                                Label(String(localized: "Amis", defaultValue: "Amis"), systemImage: "person.2")
-                            }
-                            Button { postVisibility = "PRIVATE" } label: {
-                                Label(String(localized: "Prive", defaultValue: "Priv\u{00E9}"), systemImage: "lock")
+                            ForEach(PostVisibility.allCases) { mode in
+                                Button {
+                                    postVisibility = mode.rawValue
+                                    if mode.requiresUserSelection {
+                                        audiencePickerMode = mode
+                                    } else {
+                                        postVisibilityUserIds = []
+                                    }
+                                } label: {
+                                    Label(mode.label, systemImage: mode.icon)
+                                }
                             }
                         } label: {
                             HStack(spacing: 4) {
-                                Image(systemName: postVisibility == "PUBLIC" ? "globe" : postVisibility == "FRIENDS" ? "person.2" : "lock")
-                                    .font(.caption2)
-                                Text(postVisibility == "PUBLIC" ? String(localized: "Public", defaultValue: "Public") : postVisibility == "FRIENDS" ? String(localized: "Amis", defaultValue: "Amis") : String(localized: "Prive", defaultValue: "Priv\u{00E9}"))
-                                    .font(.caption)
+                                Image(systemName: selectedPostVisibility.icon)
+                                    .font(MeeshyFont.relative(10))
+                                Text(selectedPostVisibility.label)
+                                    .font(MeeshyFont.relative(12))
                             }
                             .foregroundColor(theme.textMuted)
+                        }
+                        .sheet(item: $audiencePickerMode) { mode in
+                            AudienceUserPickerView(mode: mode, initialSelection: postVisibilityUserIds) { ids in
+                                postVisibilityUserIds = ids
+                            }
                         }
                     }
 
@@ -1682,9 +1713,11 @@ struct FeedView: View {
                     originalType: post.type,
                     media: post.media.map { EditablePostMedia($0) },
                     originalLocation: post.location,
+                    originalVisibility: post.visibility,
+                    originalVisibilityUserIds: post.visibilityUserIds ?? [],
                     isRepost: post.repost != nil,
                     onSave: { draft in
-                        await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                        await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds)
                     },
                     onDismiss: { editingPost = nil }
                 )

@@ -42,6 +42,59 @@ revu, **rien n'est écrit**.
       portent leur format).
 - [ ] **C4b** — Rupture cliente restante : `UpgradeGateView` (426) + porte iPad
       + porte de mise à jour
+- [ ] **C5** — Collage O12 (la surface décide) + « Mes stickers » LRU.
+      **PÉRIMÈTRE ÉLARGI par la directive produit du 2026-08-23** : *« on doit
+      pouvoir coller des images, des documents dont les stickers, et ça doit
+      être pris en compte et propagé — sous iOS ET iPadOS. »* Le plan d'origine
+      ne nommait que des IMAGES ; or le composer sert quatre formats, dont le
+      post, qui porte des documents. Un collage limité aux images les aurait
+      avalés EN SILENCE — le pire comportement, le presse-papier ne disant
+      jamais pourquoi rien ne s'est passé.
+      **Le pipeline n'est pas à écrire, il est à RÉUTILISER** : constat vérifié
+      le 2026-08-23 — `ComposerDropResolver` + `ComposerIngestRouter`
+      (`apps/ios/Meeshy/Features/Main/Components/`) résolvent DÉJÀ image avec ou
+      sans fichier sous-jacent, document, vidéo, audio, refus des dossiers,
+      autorisation sandbox et toast nommant le fichier en échec. Ils sont
+      branchés sur la barre de conversation (`UniversalComposerBar`) et
+      `PostDetailView`. **Le composer de story/post/réel, lui, n'a AUCUN chemin
+      de collage** — zéro occurrence de `Paste`/`pasteboard` dans tout
+      `packages/MeeshySDK/Sources/MeeshyUI/Story/`. En écrire un second serait
+      se condamner à corriger deux fois chaque cas limite du presse-papier iOS.
+      **La règle a donc DEUX axes indépendants**, et non une table croisée : la
+      SURFACE décide du budget et de la mémorisation (`.scene` ⇒ 2048 px, pas
+      d'écriture bibliothèque ; `.stickers` ⇒ 512 px, écriture), le TYPE COLLÉ
+      décide du produit (image ⇒ objet média ou sticker ; vidéo/audio ⇒ objet
+      média ; **document ⇒ pièce jointe**, jamais un rejet muet). Une surface ne
+      peut pas transformer la NATURE de ce qui est collé.
+      **iPadOS fait partie de la définition de terminé**, pas d'un lot ultérieur.
+- [ ] **C2-C3** — Portes de présentation consommant `ComposerIntent`
+      (tray iPhone/iPad ; *le feed reste la sheet v1*)
+- [x] **C4b** — Rupture cliente restante ✅ *(gate vert 2026-08-23)*
+      `AppVersionHeader` (SDK) miroite ligne à ligne le comparateur du gateway
+      (`services/gateway/src/utils/appVersion.ts`) ; `X-App-Version` +
+      `X-App-Platform: ios` posés dans `ClientInfoProvider.staticHeaders()`, au
+      même point unique que `X-Canvas-Caps` ; sur `426` le funnel poste
+      `meeshyUpgradeRequired` **avant** de jeter, `minVersion`/`storeUrl` lus À
+      LA RACINE. `UpgradeGateView` sans aucun bouton de fermeture, montée en
+      `fullScreenCover` par `RootView` **et** `iPadRootView`, pilotée par la
+      notification OU par le bootstrap `GET /app/min-version` (best-effort,
+      silencieux). 4 libellés au catalogue en 7 langues.
+      Gate : `meeshy.sh test` COMPLET — phase 0 (SDK) 3751 + 3405 tests, 0 échec ; phase 1 3282 tests, **8 échecs tous antérieurs** (3 crashes de contention, verts en isolation ; 5 gardes Lentille lisant des fichiers identiques sur `origin/main`, que cette branche ne touche pas) ; phase 2 4321 tests, 0 échec ; phase 3 sautée (DEMO_USER absent). Suites C4b : SDK 40/40, app UpgradeGateTests 14/14. Les deux gardes négatives sont **prouvées rouges par réintroduction**.
+      **Renseignements laissés** : (1) le catalogue `Localizable.xcstrings`
+      porte une clé EN DOUBLE — `reading_mode.bubbles.subtitle`, deux valeurs
+      `de` DIVERGENTES ; un `json.load`/`json.dump` ne perdrait pas seulement
+      une entrée, il **changerait une traduction allemande en silence** — toute
+      édition scriptée de ce fichier doit être TEXTUELLE. (2) `is_build_running`
+      de `meeshy.sh` cherche `xcodebuild.*-derivedDataPath.*Build`, or la
+      **phase 0 ne passe aucun `-derivedDataPath`** : elle est INVISIBLE au
+      détecteur en plus d'échapper à l'isolation, d'où deux gates qui démarrent
+      en parallèle sans se voir et ne se découvrent qu'en phase 1.
+      **Dette laissée** : `TusUploadManager` construit ses requêtes à la main
+      (lignes 316-319, 447-449, 480-481) et ne passe pas par
+      `ClientInfoProvider.buildHeaders()` — le chemin d'upload tus ne porte donc
+      ni `X-App-Version` ni `X-App-Platform`. Inoffensif tant que la porte
+      serveur ne juge que `POST /posts` ; à refermer le jour où une porte est
+      posée sur la route d'upload.
 - [ ] **C5** — Collage O12 (la surface décide) + « Mes stickers » LRU
 - [ ] **C6-C6b** — Capture appui long + AUTO-BROUILLON (fermeture & 426)
 - [ ] **C7-C7b** — Étagère 4 onglets + alt text + `allowSoundExtraction`
@@ -272,3 +325,167 @@ carte rendue). Figer la signature sans lui obligerait à la rouvrir aussitôt.
   demande ses propres tests plus un gate. À arbitrer — la question est de savoir
   si le funnel d'en-têtes doit être une garantie du CLIENT (un seul chemin
   sortant, garde de source à l'appui) ou une simple convention.
+
+- **SEPT gardes du chantier Lentille sont ROUGES sur `main`** *(mesuré le
+  2026-08-23 sur un worktree `main` PUR, sans aucun diff composer)* :
+  `LentilleRowBehaviourAnchorTests` 3 (L06 badge de non-lus comptés absent, L09
+  glyphe outbox encore rendu par le rang plat), `ScrollPillStateTests` 2,
+  `LentilleRowSourceGuardTests` 1 (le point du pont dimensionné par un littéral
+  au lieu de `LentilleMetrics.UnreadDot.size`), `LentilleChromeSourceGuardTests` 1.
+  Elles n'appartiennent à aucune tâche du composer et ne sont corrigées par
+  aucune — elles sont consignées ICI parce qu'un gate complet du lot C les
+  rencontre et qu'il faut savoir, en les voyant, qu'elles PRÉCÈDENT le diff.
+  Le message de `ScrollPillStateTests` mérite d'être lu en entier : « I-061
+  l'avait écrite et testée SANS LA MONTER : une vue juste, compilée,
+  invisible. » C'est le motif que cette session a rencontré quatre fois dans la
+  même journée — du code juste que rien n'exécute, et un vert qui ne veut plus
+  rien dire.
+  **À trancher** : soit le chantier Lentille les reprend, soit elles deviennent
+  du bruit permanent qui masquera la prochaine vraie régression.
+
+---
+
+## Piste ouverte — un réglage d'envoi dans les Paramètres *(porteur produit, 2026-08-23)*
+
+En tranchant L09 (« l'icône ⟳ doit-elle rester sur la rangée ? » → **NON**), le
+porteur produit a ouvert une piste : *« mettre dans les paramètres peut-être une
+configuration pour push »*.
+
+**Ce que le retrait de ⟳ laisse effectivement sans surface.** Le glyphe était la
+seule trace visible qu'un envoi attendait — l'outbox, elle, continue de renvoyer
+toute seule (`OfflineQueue`, flush FIFO à la reconnexion). Après retrait, un
+message en attente ne se voit plus *nulle part dans la liste*. Ce n'est pas une
+perte de mécanisme, c'est une perte d'INFORMATION — et c'était l'intention : une
+rangée disait l'état d'un envoi pour toutes les conversations à la fois, sans
+rien offrir à en faire.
+
+**Ce qu'il faut cadrer avant d'écrire une ligne** — la formulation « configuration
+pour push » recouvre au moins trois choses différentes, et elles n'ont ni le même
+écran, ni le même coût :
+
+1. **Un réglage de RENVOI** — quand l'outbox rejoue sa file : toujours, seulement
+   en Wi-Fi, à la demande. Touche `OfflineQueue` et la politique réseau.
+2. **Un état d'ENVOIS EN ATTENTE consultable** — un écran qui liste ce qui n'est
+   pas parti, avec « réessayer maintenant ». C'est l'affordance que ⟳ promettait
+   sans la tenir.
+3. **Les notifications PUSH** — préférences APNs par type d'événement. Rien à voir
+   avec l'outbox, mais le mot « push » les désigne aussi.
+
+**Question à trancher, une phrase :** *le réglage doit-il gouverner le RENVOI des
+messages en attente, offrir un ÉCRAN pour les consulter et les relancer, ou
+concerner les notifications push — ou plusieurs de ces trois ?*
+
+Hors périmètre du lot C tant que la réponse n'est pas connue : écrire un réglage
+avant de savoir ce qu'il gouverne produirait exactement l'affordance sans effet
+que le retrait de ⟳ vient de supprimer.
+
+---
+
+## Mesure plan ⇄ code du 2026-08-23 *(12 agents : 6 constats + 6 réfutations adverses)*
+
+Chaque ligne ci-dessous a été **mesurée**, puis **contredite** par un second agent.
+Ce qui suit est ce qui a survécu à la réfutation. Les numéros de ligne valent au
+commit `e2ac267b8`.
+
+### Le constat qui commande tous les autres : le meuble est INERTE
+
+`MeeshyComposerHost` (C2, 202 l.) **a ZÉRO appelant de production** — 0 occurrence
+de `MeeshyComposerHost(` dans tout `apps/ios`. Et il n'est pas seul :
+
+- `ComposerIntent(` n'est **construit nulle part** en production (3 sites, tous
+  dans `ComposerIntentTests`).
+- `ComposerProfile.profile(for:)` n'a que **2 appelants, tous deux DANS le host**
+  (`MeeshyComposerHost.swift:60` et `:200`). La table des 9 portes ne gouverne
+  RIEN à l'exécution.
+- `offeredFormats`, `initialFormat`, `opensWith`, `routesToLegacy` : **aucun
+  lecteur** hors `ComposerIntent.swift` et les tests. Zéro occurrence des trois
+  premiers dans le host lui-même — **il n'existe aucun sélecteur de format**.
+- Le contrat partagé V0 (`packages/shared/utils/composer-contract.ts`) **n'a
+  aucun importateur** hors son propre test.
+- Le bouton « Publier » du socle est **VIDE** : `MeeshyComposerHost.swift:177-187`,
+  le corps du `Button` ne contient que trois lignes de commentaire.
+- Le jeton caméra du plateau est de l'**UI morte** : `:97-100` peint l'icône sous
+  `if profile.allowsCapture`, mais le host **n'injecte pas** la caméra (0
+  occurrence de `storyCameraCaptureProvided` dans `Composer/`).
+
+**C1, C2 et V0 ont donc livré un modèle juste, testé, et que rien n'exécute.**
+C'est le motif que ce dépôt répète — du code juste, compilé, invisible — et il
+est ici à l'échelle d'un lot entier. **C3 n'est pas « une tâche parmi quatre » :
+c'est la clé de voûte.** Tant qu'elle n'est pas posée, aucune des autres n'a de
+surface où atterrir.
+
+### Ce que C3 doit RÉCUPÉRER, et que le host perd aujourd'hui
+
+Le montage actuel passe par `StoryComposerCover` (`StoryTrayActions.swift:153`),
+appliqué aux 2 racines (`RootView.swift:847`, `iPadRootView+Sheets.swift:148`).
+Il donne trois choses que le host **n'a pas** :
+
+1. **L'audience mémorisée** — `initialVisibility: viewModel.lastComposerVisibility`
+   (`StoryTrayActions.swift:177`). 0 occurrence des deux dans le host.
+   **Piège majeur** : `StoryComposerView.swift:291` donne à `initialVisibility` une
+   valeur par défaut (`PostVisibility.friends`). Monter le host tel quel ne
+   produit **aucune erreur de compilation** — la mémoire d'audience disparaît
+   EN SILENCE, et la loi 10 avec elle.
+2. **L'adoption de brouillon** — `makeComposerViewModel()` / `composer.adoptDraft(id:)`
+   (`:165-169`). 0 occurrence d'`adoptDraft`/`pendingDraftId` dans le host, qui
+   crée son VM en dur (`@StateObject … = StoryComposerViewModel()`, `:44`).
+3. **Les 3 fournisseurs d'environnement** — `storyLocationPickerProvided()`,
+   `storyCameraCaptureProvided()`, `storyRecentCameraRollProvided()`
+   (`:208-210`). 0 occurrence des trois dans `Composer/`.
+   **Garde à respecter** : `AppInitWireupTests.swift:148-184` exige
+   `injections == presentations` **fichier par fichier** — un nouveau site de
+   présentation fait rougir la garde s'il n'injecte pas.
+
+**Dette de chrome** : le socle du host (audience → œil → publier) se superpose au
+chrome que `StoryComposerView+TopBar` peint déjà. Le brancher sans trancher
+produit un DOUBLE chrome.
+
+### Lot C — taille du reste, mesurée
+
+| Tâche | Ampleur | Ce qui existe déjà et sert de socle | Ce qui manque vraiment |
+|---|---|---|---|
+| **C3** | moyenne | tray unique (`StoryTrayView.swift:82`, 3 hôtes), cover unique, garde d'unicité (`AppInitWireupTests:204`) | monter le host ; lui rendre audience + brouillon + 3 providers ; écrire le sélecteur de format ; trancher le double chrome |
+| **C5** | grosse | **tout le pipeline presse-papier existe et tourne** (`ComposerDropResolver`/`ComposerIngestRouter`, 6 sites de prod) ; `DiskCacheStore` fait déjà l'éviction LRU (`evictOverBudget:557`, tri mtime, `noteAccess`) | `StickerLibraryStore` + `PasteIntoComposer` (0 occurrence de `StickerLibrary` et de `PasteInto` dans tout le dépôt) ; l'injection dans `MeeshyUI/Story/` (**0 occurrence de `pasteboard` / `Paste`** — le composer n'a AUCUN chemin de collage) ; **`DiskCacheStore` n'énumère pas ses clés** (34 `public func`, aucune n'indexe) ⇒ l'index des stickers récents est à écrire à côté, sur le patron du sidecar `.pins.json` |
+| **C6/C6b** | moyenne | `CameraView` (734 l.) réutilisable ; `insertForegroundImage/Video` **extraits POUR un futur point d'entrée caméra** ; magasin de brouillons COMPLET (2 autosaves, `saveDraft`, `restoreDraft`, gate unique `mayOverwriteStoredDraft`) ; funnel 426 câblé | **0 occurrence de `onLongPress`/`LongPressGesture`** dans tout le composer ; l'accroche auto-brouillon au 426 ; **et le RETRAIT du `confirmationDialog` de sortie** (`StoryComposerView.swift:366-38x`) que **deux gardes de source verrouillent** — M10 exige zéro question |
+| **C7/C7b** | grosse | `MyStoriesTab` n'a que 2 cas (`published`, `drafts`) mais **la matière des 2 manquants existe déjà** : `activeUploads`, `failedItems`, `loadMyStoriesArchive()` — aujourd'hui entassés dans « Brouillons » | les 2 onglets + leurs clés (`story.mine.tab.queue`/`.archive` **absentes** du catalogue) ; le champ alt d'inspecteur ; `allowSoundExtraction` |
+
+**Deux repêchages, deux verdicts opposés** *(la réfutation a corrigé le constat)* :
+- **`alt` n'est PAS orphelin de bout en bout** : le champ existe en base
+  (`schema.prisma:3350` pour `PostMedia`, `:849-850` pour `MessageAttachment`) et
+  un **canal d'ingestion serveur existe**. Ce qui manque est le champ d'UI, pas la
+  porte.
+- **`allowSoundExtraction` est bien SANS consommateur** : les deux sites qu'on
+  croyait consommateurs (`SoundCaptureService.ts:72`, `mediaCaptureTracks.ts:41`)
+  sont des **commentaires**.
+
+### Chantier v2 — état réel
+
+- **V1** : `qualifiesAsReel` existe aux 3 domiciles et est consommé en production
+  (gateway, web, iOS) ; `offeredFormats` est gaté dans les deux tables. Mais les
+  **2 seuls sites de production passent `compositionQualifiesAsReel: false` EN
+  DUR** (`MeeshyComposerHost.swift:60` et `:200`). L'éventail est écrit et
+  débranché.
+- **V2** : `FeedComposerSheet` existe (`FeedView+Attachments.swift:765`) et porte
+  bien les 3 capacités que la spec nomme. Le host n'en a **rien** absorbé (0
+  `TextEditor`, 0 `photosPicker`, 0 `fileImporter`) ; `plateauTools` ne monte que
+  3 `Image(systemName:)` décoratifs. V2 = absorber cette sheet.
+- **V3** : `.feedComposer` route toujours vers le legacy (`ComposerIntent.swift:159`).
+  **Bloqué par V2**, comme la spec le pose.
+- **V4→V7** : rien d'écrit. Piège mesuré : **8 fichiers de tests épinglent les
+  composers legacy par chemin en dur ou par compte d'occurrences** — les retirer
+  fera rougir ces gardes, qui sont à migrer, pas à supprimer.
+
+### Ce que « fini » exige — et le trou dans la DoD
+
+DoD du lot C, mot pour mot (`execution-spec.md:417-418`) :
+> « **DoD** : `meeshy.sh test` vert ; les 4 gardes UI neuves du dépôt (catalogue
+> 7 langues, clés mortes, RTL, `==` manuel). »
+
+DoD globale (`spec:491-493`) : « Après le dernier merge : clean build depuis main
++ gate iOS complet + suites gateway/web. » Ordre de merge : `A → B → F → D → E`.
+
+**Trou mesuré, à connaître avant de déclarer vert** : `meeshy.sh:1743` — quand
+`DEMO_USER`/`DEMO_PASSWORD` manquent dans `fastlane/.env`, la **phase 3 se saute
+en silence par `XCTSkip` et le gate reste VERT**. Tous les gates récents de ce
+chantier ont sauté la phase 3. Ce n'est pas une régression, c'est un angle mort
+qu'il faut nommer chaque fois qu'on écrit « gate vert ».

@@ -147,7 +147,6 @@ public struct StoryComposerView: View {
     /// `.greatestFiniteMagnitude` = band repliée (réserve 0).
     @State var measuredBandTopY: CGFloat = .greatestFiniteMagnitude
 
-    @State var showDiscardAlert = false
     /// Visibilité du bandeau ET décision de reprise, séparées : ranger le
     /// bandeau ne rend pas le magasin écrivable (cf. `DraftResumeState`).
     @State var draftResume = DraftResumeState()
@@ -357,32 +356,16 @@ public struct StoryComposerView: View {
                 .zIndex(40)
             }
         }
-        // B5 (arbitrage S2) — feuille d'action contextuelle plutôt qu'alerte
-        // système à 3 boutons centrée : les leaders SOTA (Snapchat/Instagram/
-        // TikTok) présentent un choix de sortie au moment du geste via une
-        // sheet ancrée bas, jamais une alerte modale classique. Même binding,
-        // même titre, mêmes 3 actions/rôles/callbacks — SEULE la présentation
-        // change.
-        .confirmationDialog(
-            String(localized: "story.composer.quitWithoutPublishing", defaultValue: "Quitter sans publier ?", bundle: .module),
-            isPresented: $showDiscardAlert,
-            titleVisibility: .visible
-        ) {
-            // `.tint` explicite : le composer hérite de `.preferredColorScheme(.dark)`
-            // (StoryViewerView) qui traverse la présentation ; sur iOS 26 l'alerte est
-            // dessinée sur verre clair → sans teinte, le label des boutons sans rôle /
-            // .cancel devient quasi-blanc et illisible. L'indigo reste lisible partout.
-            // `exitPrompt.offersSave` est la SEULE condition (2026-08-02) :
-            // l'édition a droit à « Sauvegarder » elle aussi — son brouillon
-            // porte `editingPostId` et rouvre le mode édition à la reprise.
-            if exitPrompt.offersSave {
-                Button(String(localized: "story.composer.save", defaultValue: "Sauvegarder", bundle: .module)) { saveDraftAndDismiss() }
-                    .tint(MeeshyColors.indigo500)
-            }
-            Button(String(localized: "story.composer.quit", defaultValue: "Quitter", bundle: .module), role: .destructive) { cancelAndDismiss() }
-            Button(String(localized: "story.composer.cancelAction", defaultValue: "Annuler", bundle: .module), role: .cancel) { }
-                .tint(MeeshyColors.indigo500)
-        }
+        // M10 — zéro question à la sortie : AUCUNE feuille d'action de sortie
+        // ne se pose ici, et il ne doit plus jamais s'en poser. Fermer le
+        // composer ÉCRIT le brouillon, en silence (`handleDismiss` →
+        // `saveDraftAndDismiss`) ; la feuille « Sauvegarder / Quitter /
+        // Annuler » était la seule issue destructive que la croix pouvait
+        // produire, et elle redemandait à chaque fermeture ce que le magasin
+        // sait faire seul. Verrou : `StoryComposerExitDialogSourceGuardTests`.
+        // Les alertes qui suivent sont d'un autre ordre : elles RAPPORTENT un
+        // échec média, elles ne demandent rien.
+
         .alert(
             String(localized: "story.composer.mediaLostTitle", defaultValue: "Médias indisponibles", bundle: .module),
             isPresented: Binding(
@@ -455,7 +438,19 @@ public struct StoryComposerView: View {
         // draft au passage en BACKGROUND (jamais onDisappear — le discard
         // fire onDisappear et re-persisterait un draft explicitement jeté).
         .adaptiveOnChange(of: scenePhase) { _, newPhase in
-            if newPhase == .background { autoSaveDraftForBackground() }
+            if newPhase == .background { autoSaveDraftOnInterruption() }
+        }
+        // C6b — le binaire périmé ne coûte pas le travail en cours. Tout 426
+        // poste `.meeshyUpgradeRequired` (`UpgradeGateSignal`), et les deux
+        // racines recouvrent alors l'app d'une porte bloquante : sans cette
+        // ligne, la composition ouverte disparaît derrière elle sans avoir
+        // touché le disque. Le poste est ASYNCHRONE sur la file principale et
+        // la porte n'ouvre qu'au tour de boucle suivant (`Task { @MainActor }`
+        // d'`UpgradeGateController`) — l'écriture précède donc le
+        // recouvrement. MÊME chemin d'écriture silencieuse que D1, gate
+        // compris : une interruption n'est pas une commande utilisateur.
+        .onReceive(NotificationCenter.default.publisher(for: .meeshyUpgradeRequired)) { _ in
+            autoSaveDraftOnInterruption()
         }
         // E1 — le travail d'édition survit à un CRASH DUR : auto-save
         // débouncé ~2,5 s après la dernière mutation du ViewModel

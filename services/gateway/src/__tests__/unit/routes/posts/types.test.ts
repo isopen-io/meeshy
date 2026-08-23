@@ -196,6 +196,24 @@ describe('CreatePostSchema', () => {
     const result = CreatePostSchema.safeParse({ type: 'STORY', ...payload });
     expect(result.success).toBe(true);
   });
+
+  it('accepts mediaAlt as a map of media id to alt text', () => {
+    const result = CreatePostSchema.safeParse({
+      type: 'POST',
+      mediaIds: ['media-1'],
+      mediaAlt: { 'media-1': 'A cat on a windowsill' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a mediaAlt value beyond 1000 characters', () => {
+    const result = CreatePostSchema.safeParse({
+      type: 'POST',
+      mediaIds: ['media-1'],
+      mediaAlt: { 'media-1': 'x'.repeat(1001) },
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 // ─── UpdatePostSchema ─────────────────────────────────────────────────────────
@@ -246,6 +264,19 @@ describe('UpdatePostSchema', () => {
   it('rejects mediaIds beyond 10 entries', () => {
     const mediaIds = Array.from({ length: 11 }, (_, i) => `media-${i}`);
     const result = UpdatePostSchema.safeParse({ mediaIds });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts mediaAlt alongside newly attached mediaIds', () => {
+    const result = UpdatePostSchema.safeParse({
+      mediaIds: ['media-1'],
+      mediaAlt: { 'media-1': 'A sunset over the bay' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects a mediaAlt value beyond 1000 characters', () => {
+    const result = UpdatePostSchema.safeParse({ mediaAlt: { 'media-1': 'x'.repeat(1001) } });
     expect(result.success).toBe(false);
   });
 });
