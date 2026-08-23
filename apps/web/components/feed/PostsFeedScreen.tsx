@@ -174,9 +174,14 @@ export function PostsFeedScreen() {
    * Le `type` est transporté DÈS l'ouverture de la modale : la loi du miroir
    * exige le format de la source au moment d'envoyer, et le retrouver plus tard
    * demanderait de re-chercher le post dans le fil — qui a pu bouger entretemps.
+   *
+   * Il est REQUIS, et non optionnel : c'est précisément en le laissant absent de
+   * cet état que les deux gestes ont émis `undefined` puis rien, et que le fil a
+   * fabriqué des POST à partir de réels. Requis, la construction ne peut plus
+   * l'oublier — le compilateur tient la loi à la place de la relecture.
    */
   const [repostingPost, setRepostingPost] = useState<
-    { id: string; author?: string; content?: string; type?: PostType } | null
+    { id: string; author?: string; content?: string; type: PostType } | null
   >(null);
   const [audioComposerOpen, setAudioComposerOpen] = useState(false);
 
@@ -604,8 +609,9 @@ export function PostsFeedScreen() {
   const handleRepost = useCallback(() => {
     if (!repostingPost) return;
     repostMutation.mutate(
-      // Loi du miroir : le format suit la CARTE. Le fil ne sert que POST et
-      // REEL, donc rien d'observable ne change ici — la loi devient explicite.
+      // Loi du miroir : le format suit la CARTE. Le fil sert POST **et** REEL,
+      // donc le changement est bien observable — sans ce champ, reposter un réel
+      // depuis le fil fabriquait un POST et le sortait du fil des réels.
       { postId: repostingPost.id, data: { isQuote: false, targetType: repostingPost.type } },
       {
         onSuccess: () => {
@@ -621,6 +627,8 @@ export function PostsFeedScreen() {
     (content: string) => {
       if (!repostingPost) return;
       repostMutation.mutate(
+        // La citation publie autant que le repost sec : elle porte la même loi.
+        // Les sites réel et post l'envoient déjà sur leurs DEUX gestes.
         { postId: repostingPost.id, data: { content, isQuote: true, targetType: repostingPost.type } },
         {
           onSuccess: () => {
