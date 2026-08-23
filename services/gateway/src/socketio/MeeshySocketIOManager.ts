@@ -2261,22 +2261,6 @@ export class MeeshySocketIOManager {
     );
   }
 
-  private _findUsersForLanguage(targetLanguage: string): SocketUser[] {
-    const lang = targetLanguage.toLowerCase();
-    const targetUsers: SocketUser[] = [];
-
-    for (const [, user] of this.connectedUsers) {
-      const matches =
-        user.resolvedLanguages.includes(lang) ||
-        user.language.toLowerCase() === lang;
-      if (matches) {
-        targetUsers.push(user);
-      }
-    }
-
-    return targetUsers;
-  }
-
   /**
    * Phase B1 — emit `message:new` to a conversation room grouped by each
    * recipient's preferred language, sending a translation-trimmed payload once
