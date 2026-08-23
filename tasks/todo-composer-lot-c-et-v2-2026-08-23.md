@@ -80,8 +80,8 @@ aucune tâche C.
       `ComposerIntent.swift` devient le miroir du contrat, et cesse d'en être la
       source. **Bloquant pour C2-C3** : la session composer construit le
       sélecteur derrière une frontière étroite en l'attendant.
-- [ ] **V0 bis — Le repost miroite** *(aucune dépendance, livrable seul)*
-      - [ ] **iOS d'abord** — les six sites qui passent `targetType: nil`
+- [x] **V0 bis — Le repost miroite** ✅ *(les deux moitiés livrées, 2026-08-23)*
+      - [x] **iOS d'abord** — les six sites qui passent `targetType: nil`
             (`ReelsViewModel:430`, `FeedViewModel:881`, `PostDetailView:301`,
             `ProfileUserPostsList:969`, `RootViewComponents:329`,
             `FeedView:449`) passent le format de leur source. Les deux sites
@@ -89,9 +89,16 @@ aucune tâche C.
             l'option d'ancrage. Retirer au passage le commentaire périmé
             `nil = le serveur cree un POST (2026-08-19)`, qui énonce
             l'arbitrage renversé.
-      - [ ] **Web ensuite** — `RepostRequest` gagne `targetType` (le champ n'y
-            existe pas), chaque site passe le type de sa source, et le viewer
-            de story ajoute « reposter en post ».
+      - [x] **Web ensuite** ✅ — `RepostRequest` gagne `targetType`, les quatre
+            sites passent le type de leur source, et le viewer de story ajoute
+            l'ancrage « garder sur mon fil ». Gate : **749/749 suites,
+            13 969 tests verts**.
+            *Deux trous du WIP d'origine, trouvés au gate et refermés* :
+            `PostsFeedScreen.storyRepost.test.tsx` GRAVAIT le défaut (il
+            assertait `{ isQuote: false }` sans `targetType`), et le repost
+            **CITÉ** du fil ne miroitait pas — `repostingPost` ne transportait
+            même pas le type, ce que `tsc` a attrapé et qu'aucun test ne
+            couvrait (`PostsFeedScreen.repostMirror.test.tsx`, neuf).
 - [ ] **V1 — L'éventail** — `offeredFormats` gaté par `qualifiesAsReel`.
       *N'est pas une loi neuve* : c'est le raffinement de la **loi 9**. Contrainte
       de la **loi 4** : un format non offert est **ABSENT, jamais grisé**.
@@ -121,7 +128,14 @@ Directive du 2026-08-23 : **iOS et le web doivent fonctionner ISO.** Deux dettes
 du lot F, classées « lot futur » tant que la parité n'était pas l'objectif,
 deviennent des tâches. Audit croisé matrice ⇄ code, vérifié des deux côtés.
 
-- [ ] **W1 — les deux kinds muets du web** *(écart LIVE, priorité haute)*
+- [x] **W1 — les deux kinds muets du web** ✅ *(livrée 2026-08-23)*
+      `place` et `drawing` sont peints, en miroir des constantes du SDK
+      (`StoryLocationLayer` pour la pastille, `StoryStrokeRasterizer` +
+      `StrokeWidthMapping` pour les traits). 10 tests, oracle = le golden
+      PARTAGÉ. **Renseignement** : le plafond de `effectiveWidth` passe APRÈS
+      son plancher — un trait de base < 1 reste sous l'unité. Miroiter le CODE,
+      pas l'intention de son commentaire.
+      <details><summary>énoncé d'origine</summary>
       `CanvasV3Scene.tsx:591-599` ne dispatche que `text · media · audio ·
       sticker` ; `place` et `drawing` tombent sur un `return null` documenté
       « ignoré EN SILENCE ». Or iOS **émet les deux**
@@ -130,6 +144,7 @@ deviennent des tâches. Audit croisé matrice ⇄ code, vérifié des deux côt�
       **Symptôme** : une story composée sur iOS avec une épingle de lieu
       s'affiche sur le web **sans son lieu, sans rien signaler**.
       **Oracle** : `packages/shared/fixtures/canvas-v3/v1-legacy-full.v3.json`.
+      </details>
 - [ ] **W2 — enchaînement multi-scènes au web** *(écart LATENT, à caler AVANT
       le multi-diapositives du lot C)*
       Le web ne rend que `scenes[sceneIndex]` — le contrat en autorise 10.

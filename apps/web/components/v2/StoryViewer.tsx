@@ -952,6 +952,10 @@ function StoryViewer({
             muted={isBackgroundSoundMuted}
             playheadSec={playheadSec}
             videoGateHandlers={primaryVideoGateHandlers}
+            /* W1 — le repli du libellé d'un lieu sans nom ni adresse. La scène
+               est PURE et ne traduit pas ; l'hôte lui passe le mot de la locale
+               active, miroir du `story.location.here` d'iOS. */
+            hereLabel={t('storyLocationHere', 'Ici')}
             /* Constat 19 (corrigé rattrapage) — le voile doit peindre SOUS
                les objets posés/le texte, comme sur le chemin legacy
                ci-dessous (le média de fond principal SEUL est sous le voile,
