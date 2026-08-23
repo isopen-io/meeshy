@@ -329,6 +329,23 @@ export function CallManager() {
 
       // Toast métier désactivé - utiliser le système de notifications v2
     } else {
+      // Vague 163 (2026-08-23) — `call:check-active` replays the SAME
+      // ringing call:initiated on every socket reconnect during the 60s
+      // gateway ringing window (see CallEventsHandler.ts `call:check-active`
+      // comment: "the client dedups by callId") — but this branch never
+      // actually deduped: a replay for the callId already showing as
+      // `incomingCall` fell straight through to `setIncomingCall` +
+      // `startCallTimeout`, which RE-ARMS a fresh 45s window on every
+      // reconnect instead of leaving the original deadline alone. A callee
+      // on a flaky connection — the exact case this replay exists to cover —
+      // could see the ringing banner outlive the caller's own 45s no-answer
+      // timeout indefinitely, one reconnect at a time. A true duplicate
+      // replay for an unanswered call already showing is a no-op.
+      if (incomingCall && incomingCall.callId === event.callId) {
+        logger.debug('[CallManager]', 'Duplicate call:initiated replay for already-showing call ' + event.callId + ' — ignoring (no timer re-arm)');
+        return;
+      }
+
       // Busy-path parity (iOS CallManager busy-path, Android onIncomingOffer):
       // a second incoming call while already in a DIFFERENT active call must not
       // naively setIncomingCall. The render mounts CallNotification and
