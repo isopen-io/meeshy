@@ -1467,6 +1467,43 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onTextElementCycleOutline thickens the edited element and posts the default colour`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementCycleOutline(id)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.outline.width).isEqualTo(2f)
+        assertThat(element.outline.color).isEqualTo(StoryTextOutlineCycle.DEFAULT_COLOR)
+        assertThat(element.style).isEqualTo(StoryTextStyle.BOLD)
+    }
+
+    @Test
+    fun `onTextElementCycleOutline wraps past the thickest step back to no-stroke`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        repeat(5) { vm.onTextElementCycleOutline(id) }
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().outline.width)
+            .isEqualTo(StoryTextOutline.NONE_WIDTH)
+    }
+
+    @Test
+    fun `onTextElementCycleOutline on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementCycleOutline("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().outline.width)
+            .isEqualTo(StoryTextOutline.NONE_WIDTH)
+    }
+
+    @Test
     fun `onTextElementTransform pinch-scales and rotates the edited element`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()

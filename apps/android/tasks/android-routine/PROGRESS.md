@@ -2,6 +2,84 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-23 **story text elements get a stroke outline (borderColor / borderWidth)** (slice
+> `story-text-element-outline`, feature-parity §E — the `story-text-element-styling` backlog's `outline/stroke`
+> item, the pending follow-up the `story-text-element-background` entry named). iOS lets a text element carry a
+> discrete `.border` attribute cycled from the composer's high row (`StoryTextAttributeCycle.advance(.border)`);
+> Android's on-canvas text element carried style/colour/align/background but no stroke, so a caption could never
+> be outlined for legibility over busy media.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration. `list_pull_requests` → the open
+> PRs repo-wide are OTHER routines' work — #3381 (realtime-sync cycle 108, branch `claude/keen-hamilton-lmraqx`,
+> touches shared+gateway = production logic, NOT android-routine), #3375 (web it. 251), #3364 (iOS 238i). None is
+> a `claude/apps/android/*` android-routine slice, and none is in this routine's scope. Prior android iteration
+> (`story-text-element-background`, #3379) already merged into main. Branched off freshly-fetched `origin/main`
+> (`1e6837b6`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). This run the recipe that worked was the
+> **copy→patch** one (as the three 2026-08-23 entries used), NOT the pristine `android-37.0` one the 2026-08-21
+> NOTES recorded: install cmdline-tools + `platforms;android-37.0` via `--channel=3` + `build-tools;36.0.0`, then
+> `cp -r android-37.0 android-37` and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37`. The FIRST
+> `./gradlew` failed with **`Failed to find target with hash string 'android-37'`** on the pristine dir; after the
+> copy+patch, `assembleDebug testDebugUnitTest` ran locally, **BUILD SUCCESSFUL**. Local gate available this run.
+>
+> **Model reuse, not duplication**: the wire `StoryTextObject` already carried `borderColor`/`borderWidth` — this
+> slice adds only the **app-side** composer model that projects onto them. New pure `StoryTextOutline`
+> `(width: Float, color: String?)` in `:feature:stories` — held FLAT, not a sealed `None`/`Stroke`, precisely
+> because iOS keeps the chosen colour when the width returns to zero (so re-thickening never re-asks); a `None`
+> case would erase it. Plus `StoryTextOutlineCycle.advance` — a case-for-case port of iOS
+> `StoryTextAttributeCycle.advance(.border)`: steps `[2,4,8,12]` thin→thick, one tap advances to the first step
+> STRICTLY greater than the current width (a between-steps width jumps UP, a tap never thins), wraps past the
+> thickest back to no-stroke, and posts the default white (`FFFFFF`) the first time a stroke leaves zero
+> uncoloured. The colour is preserved across every other transition, the return to zero included.
+>
+> **`StoryTextElement`**: gained `outline: StoryTextOutline = StoryTextOutline()` (defaulted no-stroke — the one
+> non-copy construction site uses named args, verified); `toTextObject` sets `borderColor`/`borderWidth`, BOTH
+> omitted while width is 0 (a retained colour never leaks onto the wire without a width — the same "absent = no
+> styling, minimal payload" law the background slice set). **VM** `onTextElementCycleOutline(id)` advances one
+> tap via the pure cycle, inert on unknown id, selection/editing untouched — mirrors the style/colour/align/bg
+> wrappers. **Compose glue (exempt)**: a `BorderColor` toolbar button (tinted `primary` when a stroke is visible,
+> else `onSurfaceVariant`) drives the tap; the canvas paints a stroked underlay of the same glyphs
+> (`TextStyle(drawStyle = Stroke(width))`, outline colour) beneath the fill so the border hugs the letterforms
+> rather than boxing the element. 4 locales get `stories_composer_outline`.
+>
+> **Tests: +17** — 10 `StoryTextOutlineTest` (model visibility ×4; cycle: every-step-then-wrap, between-steps
+> jump-up, leaving-zero posts white, leaving-zero keeps chosen colour, return-to-zero keeps colour, the four
+> steps), 4 `StoryTextElementTest` (fresh element has no outline; `toTextObject` omits border when none, carries
+> both when stroked, keeps a retained colour off the wire at zero width), 3 `StoryComposerViewModelTest`
+> (`onTextElementCycleOutline` thickens+posts white / wraps / inert on unknown id). **Mutation RED-proof ×2**:
+> nulling `toTextObject`'s `borderWidth` failed EXACTLY `carries a stroked outline` (the omit tests stayed green);
+> dropping the white-post in `advance` failed EXACTLY `advance leaving zero posts the default white` + the VM
+> `thickens…posts the default colour` (wrap/inert stayed green) — 3 of 179 failed, genuine discrimination.
+> Restored via backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, **BUILD SUCCESSFUL** (4m49s, no test failures). Reviewer PASS.
+> Diff is `apps/android` only (1 new pure model file, 1 model field + wire wiring, 1 VM method, Compose glue in
+> the composer screen, strings ×4 locales, +17 tests across 3 files, tracking docs). Verdict: **PASS** — pure
+> app-side model projecting onto the existing wire fields + exempt Compose glue, behavioural tests through the
+> public API, no production logic outside apps/android.
+>
+> **PR #3384 — ⚠ BLOCKED ON BASE, NOT MERGED (2026-08-23).** The merge gate — the **Android** CI check —
+> is **GREEN** (`assembleDebug` + `testDebugUnitTest`, run 32633748096 conclusion success). The monorepo
+> `ci.yml` is RED, but **the only red job is `Test gateway`** (2 failed / 19214 passed): both failures are in
+> `services/gateway/src/socketio/handlers/__tests__/MessageHandlerEditDelete.test.ts` — the `message:edited`
+> payload/`senderId` cases whose fixture pins `createdAt = 2026-08-22T10:00:00Z`. `admitMessageEdit` refuses any
+> edit past a 24 h window, so those two turned RED for EVERY branch at 10:00 UTC today. This is red on `main`
+> itself (PR #3381's commit proved it on a clean `origin/main`) and touches ZERO lines of this apps/android-only
+> diff — `ci.yml` doesn't even compile the Kotlin this slice adds. It is the CI-red rule's "red on the base too,
+> not mine" case, and it is **unfixable within apps/android scope** (the fix lives in `services/gateway`; touching
+> it would violate the hard rule "diff is apps/android only"). Per the hard rule **never merge past red CI**, the
+> PR is left OPEN and WATCHED (subscribed to PR activity). **Next iteration's Step 0**: if `main`/base has
+> recovered (the gateway time-bomb fixed — e.g. PR #3381's gateway fix, or another, merged), merge base into this
+> branch, re-run CI, and squash-merge #3384 once `ci.yml` is green; then proceed to the next slice. Until then
+> this slice stays ⚠ blocked and no new slice starts on top of an unmerged one.
+>
+> **Next**: still §E (Stories). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) continue the text-element styling backlog — **size** (discrete font-size control; the wire
+> `StoryTextObject.fontSize` already exists, default 64) is the cleanest remaining thin slice, same shape as
+> this one; (2) RTL / fade timing (`fadeIn`/`fadeOut` on the wire); (3) the story-canvas **Effets** tiles
+> (filters/drawing/timeline). Prefer (1) — one wire field, mirrors this slice.
+
 > On 2026-08-23 **story text elements get a background (none / solid / glass)** (slice
 > `story-text-element-background`, feature-parity §E — "Text elements … background (none/solid/glass) …",
 > the `story-text-element-styling` slice's first named-pending item). iOS lets a text element carry a

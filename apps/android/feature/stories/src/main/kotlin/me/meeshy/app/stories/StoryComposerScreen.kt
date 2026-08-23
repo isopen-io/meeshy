@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.BorderColor
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.EmojiEmotions
@@ -87,6 +88,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -251,6 +253,7 @@ fun StoryComposerScreen(
                             onColor = { color -> viewModel.onTextElementColor(element.id, color) },
                             onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
                             onBackground = { bg -> viewModel.onTextElementBackground(element.id, bg) },
+                            onCycleOutline = { viewModel.onTextElementCycleOutline(element.id) },
                             onDuplicate = { viewModel.onDuplicateTextElement(element.id) },
                             onReorder = { op -> viewModel.onReorderTextElement(element.id, op) },
                         )
@@ -768,26 +771,41 @@ private fun TextElementLayer(
     ) {
         val typography = element.style.typography()
         val textColor = parseHexColor(element.color)
+        val displayText = element.text.ifBlank { stringResource(R.string.stories_composer_text_placeholder) }
+        val baseStyle = if (typography.glow) {
+            LocalTextStyle.current.copy(shadow = Shadow(color = textColor, blurRadius = 24f))
+        } else {
+            LocalTextStyle.current
+        }
         Box(
             modifier = Modifier
                 .storyTextBacking(element.background)
                 .padding(horizontal = 6.dp, vertical = 2.dp),
         ) {
+            val outline = element.outline
+            if (outline.isVisible) {
+                // Stroked underlay: the same glyphs painted as an outline beneath the fill,
+                // so the border hugs the letterforms rather than boxing the element.
+                Text(
+                    text = displayText,
+                    color = parseHexColor(outline.color!!),
+                    fontWeight = FontWeight(typography.fontWeight),
+                    fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
+                    fontFamily = typography.family.toFontFamily(),
+                    letterSpacing = typography.letterSpacingEm.em,
+                    textAlign = element.align.toTextAlign(),
+                    style = baseStyle.copy(drawStyle = Stroke(width = outline.width)),
+                )
+            }
             Text(
-                text = element.text.ifBlank { stringResource(R.string.stories_composer_text_placeholder) },
+                text = displayText,
                 color = textColor,
                 fontWeight = FontWeight(typography.fontWeight),
                 fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
                 fontFamily = typography.family.toFontFamily(),
                 letterSpacing = typography.letterSpacingEm.em,
                 textAlign = element.align.toTextAlign(),
-                style = if (typography.glow) {
-                    LocalTextStyle.current.copy(
-                        shadow = Shadow(color = textColor, blurRadius = 24f),
-                    )
-                } else {
-                    LocalTextStyle.current
-                },
+                style = baseStyle,
             )
         }
         if (selected) {
@@ -1019,6 +1037,7 @@ private fun TextStyleToolbar(
     onColor: (String) -> Unit,
     onAlign: (StoryTextAlign) -> Unit,
     onBackground: (StoryTextBackground) -> Unit,
+    onCycleOutline: () -> Unit,
     onDuplicate: () -> Unit,
     onReorder: (StoryZOrder) -> Unit,
     modifier: Modifier = Modifier,
@@ -1040,6 +1059,17 @@ private fun TextStyleToolbar(
             AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
             AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
             AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
+            IconButton(onClick = onCycleOutline) {
+                Icon(
+                    Icons.Filled.BorderColor,
+                    contentDescription = stringResource(R.string.stories_composer_outline),
+                    tint = if (element.outline.isVisible) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
             IconButton(onClick = onDuplicate) {
                 Icon(
                     Icons.Filled.ContentCopy,
