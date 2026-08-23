@@ -23,9 +23,11 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketStoryReactedData
 import me.meeshy.sdk.model.SocketStoryUnreactedData
 import me.meeshy.sdk.model.StoryAudioPlayerObject
+import me.meeshy.sdk.model.StoryClipTransition
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.StoryTransitionKind
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
@@ -550,6 +552,46 @@ class StoryViewerViewModelTest {
         // The keyframes are live, not dropped: the layer animates across its window.
         assertThat(fg.animated(atSeconds = 1f).x).isWithin(1e-9).of(0.2)
         assertThat(fg.animated(atSeconds = 3f).x).isWithin(1e-9).of(0.5)
+    }
+
+    @Test
+    fun `a foreground mediaObject carries the slide's clip transitions and fades on the ramp`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "fg", fileUrl = "http://cdn/fg.mp4", mimeType = "video/mp4"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "toClip",
+                        postMediaId = "fg",
+                        mediaURL = "http://cdn/fg.mp4",
+                        mediaType = "video",
+                        isBackground = false,
+                        startTime = 3.0,
+                        duration = 4.0,
+                    ),
+                ),
+                clipTransitions = listOf(
+                    StoryClipTransition(
+                        id = "t1",
+                        fromClipId = "fromClip",
+                        toClipId = "toClip",
+                        kind = StoryTransitionKind.CROSSFADE,
+                        duration = 2f,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val fg = vm.state.value.current?.foregroundMedia.orEmpty().first()
+        assertThat(fg.id).isEqualTo("toClip")
+        assertThat(fg.duration).isEqualTo(4.0)
+        assertThat(fg.clipTransitions).hasSize(1)
+        // The transition is live, not dropped: the incoming clip fades in across its window [3,5].
+        assertThat(fg.animated(atSeconds = 3f).opacity).isWithin(1e-4).of(0.0)
+        assertThat(fg.animated(atSeconds = 4f).opacity).isWithin(1e-4).of(0.5)
     }
 
     @Test
