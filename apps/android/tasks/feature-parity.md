@@ -3573,7 +3573,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       advancing only its own end) drive it; two toolbar buttons (Login/Logout icons, tinted when that end fades)
       sit in a now-horizontally-scrollable style row. +20 tests (10 model+cycle, 5 element defaults+wire, 5 VM);
       mutation-RED-proven (nulling the wire `fadeIn` / a no-op `advance` fail exactly the projection & cycle
-      tests, 10 total). Pending: RTL.
+      tests, 10 total).
+      **RTL / writing direction done** (`story-text-element-rtl-direction`): the last named text-element
+      attribute. iOS derives a text object's direction from its content at render time — the wire
+      `StoryTextObject` has NO direction field (confirmed: `textAlign` is the only alignment-ish field), so
+      every client re-derives it and it never rides the wire. Android now matches: a pure `StoryTextBidi`
+      `resolveBaseDirection(text) -> StoryTextDirection` (LTR/RTL) implementing the **Unicode Bidi Algorithm
+      P2/P3 "first strong character" rule** — scan for the first strong character (skipping neutrals,
+      whitespace, digits, punctuation, and the whole content of any directional isolate LRI/RLI/FSI…PDI) and
+      take RTL iff it is R or AL; no strong character defaults LTR. `Character.getDirectionality` (the JDK's
+      UBA table) is the classification SSOT, so Arabic/Hebrew/Adlam (incl. supplementary-plane, surrogate
+      pairs) and the strong marks LRM/RLM/ALM all resolve correctly. `StoryTextElement.baseDirection` is a
+      DERIVED property (no stored field, `toTextObject` untouched — honest parity, no dead wire field), and
+      the canvas glue sets `TextStyle.textDirection` from it on both the stroked underlay and the fill, so an
+      Arabic caption lays its paragraph out right-to-left instead of the previous forced LTR. No VM intent —
+      direction follows the text automatically, exactly as iOS derives it (no false manual override that
+      couldn't persist). +20 tests (17 `StoryTextDirectionTest`, 3 element `baseDirection`);
+      mutation-RED-proven twice (RTL branch→LTR fails exactly the 9 RTL-detection tests; removing the
+      isolate-skip guard fails exactly the 2 isolate tests). **§E text-element attribute parity now complete**
+      (style, colour, size, alignment, background, outline/stroke, fade, RTL).
 - [~] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
       **Floating style toolbar + keyboard-aware shift done** (`story-floating-toolbar`): while a text
       element is edited the `TextStyleToolbar` no longer sits in a fixed bottom band — it floats
