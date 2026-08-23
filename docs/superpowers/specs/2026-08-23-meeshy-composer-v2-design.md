@@ -29,6 +29,88 @@ Tout le reste de `F. Hors v1` **reste hors périmètre** et garde son opposabili
 
 ---
 
+## A bis. Conciliation avec l'existant documentaire *(2026-08-23)*
+
+Ce document n'est **pas** le premier sur le sujet, et il ne remplace rien. Trois
+artefacts le précèdent, avec des rôles distincts qu'il faut nommer avant d'y
+ajouter quoi que ce soit.
+
+| Artefact | Rôle | État |
+|---|---|---|
+| `2026-08-19-meeshy-composer-design.md` | la conception d'origine | figée |
+| `2026-08-20-meeshy-composer-execution-spec.md` | le **contrat gelé** inter-lots (A→H, « Hors v1 » opposable) | figée |
+| `2026-08-19-meeshy-composer-views.html` — *Planches MeeshyComposer*, 351 Ko | la **source vivante** : doctrine, inventaire, matrice maîtresse, **et le tableau de bord d'avancement** | rév. 10, 2026-08-22 — **77 %, 50/65 tâches** |
+| **ce document** | l'**extension** : promotion de « Hors v1 » + lois nouvelles | en revue |
+
+### La règle de maintenance que ce chantier hérite
+
+Les planches portent une contrainte explicite, et elle s'applique à nos lots :
+
+> « Chaque tâche dont le gate passe met à jour cette planche — camembert ET
+> matrice — dans le MÊME commit que son gate ; un P0 périmé est un défaut
+> bloquant au sens de §E de la spec, exactement comme une ligne d'inventaire
+> perdue. »
+
+Le tableau de bord compte déjà `carrierAspect` (`b82ebbc17`) comme l'une de ses
+65 tâches. **Nos lots en deviennent la suite, pas un compte parallèle** — un
+second décompte qui ignorerait le premier reproduirait exactement le défaut que
+cette règle combat.
+
+### Nos six lois face aux onze de la doctrine
+
+La doctrine des planches est **antérieure et souveraine** : « quand deux
+planches semblent se contredire, c'est la loi qui tranche ». Confrontation
+faite, une par une :
+
+| Loi de ce document | Statut face à la doctrine |
+|---|---|
+| 1 — contrat partagé mince | **neuve** — la doctrine est iOS ; rien n'y traite du contrat inter-plateformes |
+| 2 — hydratation à deux sources | **neuve** |
+| 3 — on n'écrit que ce qu'on sait complet et qu'on a su rendre | **neuve** |
+| 4 — la porte déclare un éventail | **RAFFINEMENT de la loi 9**, pas une loi neuve — voir ci-dessous |
+| 5 — le repost miroite ; changer de format est l'ancrage | **neuve**, mais bornée par la loi 10 |
+| 6 — la fiche de forward est le « où va ceci ? » universel | **neuve** |
+
+### Trois contraintes que la doctrine impose à ce chantier
+
+**Loi 9 — « La porte ne fixe que l'état initial ».** Notre loi 4 n'invente donc
+rien : elle **nomme la structure** de ce que la loi 9 énonce déjà (« les
+capacités visibles sont `f(format COURANT, seed)` »). `offeredFormats` est la
+forme donnée à ce `f`, plus le gate `qualifiesAsReel`. Elle se lit comme une
+précision de la loi 9, jamais comme une douzième loi.
+
+**Loi 4 — « Rien à l'écran sans raison ».** Conséquence directe et non
+négociable pour l'éventail : **un format non offert est ABSENT, jamais grisé.**
+Un réel non qualifiant ne se montre pas en gris avec une infobulle — il n'est
+pas là. La seule exception nommée par la doctrine est le sélecteur d'audience
+d'un repost, qui montre ses niveaux bornés verrouillés AVEC leur raison (P10).
+
+**Loi 10 — « L'audience se souvient PAR FORMAT ».** Elle borne notre loi 5 :
+quand un repost miroite le format de sa source, c'est la **mémoire d'audience
+de ce format-là** qui s'applique — puis la loi d'audience du repost la
+rétrécit encore (`StoryRepostAudience`, un repost ne peut jamais être plus large
+que sa source). Les deux se composent ; aucune ne prime.
+
+### Le lecteur : il EXISTE, et il est l'aperçu
+
+Vérification demandée avant d'ouvrir le chantier :
+
+- **`MeeshyComposerHost` n'existe pas.** `apps/ios/.../Composer/` ne contient
+  que `ComposerIntent.swift` (194 l.). Le host est à construire — c'est le
+  lot C2 de la session qui le prend.
+- **Le lecteur existe et il est éprouvé.** `MeeshyScenePlayer` (274 l.) +
+  `ScenePlayerMode` (37 l.), livrés au lot B4, couverts par **881 lignes de
+  tests SDK** (`ScenePlayerModeTests`, `ScenePlayerReaderContractTests`,
+  `ScenePlayerIdentityRootTests`) et **975 lignes de gardes app**
+  (`StoryViewerScenePlayerGuardTests`, `…DocumentGuardTests`,
+  `FeedPostCardScenePlayerGuardTests`).
+
+Et la **loi 6 — « Le lecteur EST l'aperçu »** en tire la conséquence qui nous
+concerne : composer et viewers partagent le MÊME registre de rendu. **Aucun lot
+de ce document ne construit d'aperçu.** L'aperçu du socle, la carte de feed et
+le viewer plein écran sont trois chromes d'un seul moteur — en ajouter un
+quatrième casserait le WYSIWYG par construction.
+
 ## B. Les six lois
 
 ### Loi 1 — Le contrat partagé porte la loi produit, jamais les affordances
