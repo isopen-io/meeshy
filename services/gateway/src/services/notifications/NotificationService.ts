@@ -71,6 +71,44 @@ export type MessagePrismSource = {
 const EMPTY_PRISM_SOURCE: MessagePrismSource = { translations: {}, originalLanguage: null };
 
 /**
+ * Ce qu'un message dit DE LUI-MÊME, et que la NSE iOS pré-enregistre à côté de
+ * son texte : l'horodatage SERVEUR qui l'ORDONNE dans le fil, et le type qui
+ * décide de son RENDU (bulle audio / image / vidéo, ou rectangle de texte).
+ *
+ * Ce n'est PAS du contenu, et cela ne se garde pas comme tel — cf.
+ * {@link NotificationService.prePersistedMessageFields}. Comme la source du
+ * Prisme, l'estampille ne dépend pas du destinataire : un même message se relit
+ * une fois pour tout un éventail.
+ *
+ * `null` sur les deux champs ⇒ ne rien poser sur le fil, et laisser l'extension
+ * retomber sur ses propres replis (`Date()`, `text`). Une estampille INVENTÉE
+ * ferait mentir l'ordre du fil, ce qui est pire qu'une absence.
+ */
+export type MessagePrePersistStamp = {
+  readonly createdAt: Date | null;
+  readonly messageType: string | null;
+};
+
+const EMPTY_PRE_PERSIST_STAMP: MessagePrePersistStamp = { createdAt: null, messageType: null };
+
+/**
+ * Tout ce qu'une bannière de message tient du MESSAGE lui-même, en UNE lecture :
+ * la source du Prisme (par quoi son aperçu se traduit) et son estampille de
+ * pré-enregistrement. Les deux sont indépendantes du destinataire, et venaient
+ * de la même ligne `Message` — les séparer en deux lectures serait payer deux
+ * fois la même requête.
+ */
+export type MessageNotificationSource = {
+  readonly prism: MessagePrismSource;
+  readonly stamp: MessagePrePersistStamp;
+};
+
+const EMPTY_MESSAGE_NOTIFICATION_SOURCE: MessageNotificationSource = {
+  prism: EMPTY_PRISM_SOURCE,
+  stamp: EMPTY_PRE_PERSIST_STAMP,
+};
+
+/**
  * Ce que l'aperçu composé par un éventail EST — donc ce qui le traduit.
  *
  * `Message.translations` ne traduit que `Message.content` : la question « peut-on
@@ -827,31 +865,44 @@ export class NotificationService {
   }
 
   /**
-   * Relire la source du Prisme d'un message pour les éventails dont la lecture
-   * n'est PAS un gate d'éligibilité — la mention et la réponse, qui tiennent
-   * leur échéance de l'appelant (`messageExpiresAt`).
+   * Relire du MESSAGE tout ce dont sa bannière a besoin et que le destinataire
+   * ne décide pas — pour les éventails dont la lecture n'est PAS un gate
+   * d'éligibilité : la mention et la réponse, qui tiennent leur échéance de
+   * l'appelant (`messageExpiresAt`).
+   *
+   * Deux choses, une requête : la source du Prisme (§ {@link MessagePrismSource})
+   * et l'estampille de pré-enregistrement (§ {@link MessagePrePersistStamp}).
+   * `createMessageNotification` n'appelle pas cette méthode — sa propre
+   * relecture est un GATE d'éligibilité et charge déjà les quatre colonnes.
    *
    * Fail-OPEN par décision : une lecture en échec rend une source vide, donc
-   * une bannière sans traduction, jamais une bannière supprimée. Même arbitrage
-   * que `loadNotificationPrefs` et `filterMutedRecipients` — la traduction est
-   * un confort, l'annonce du message une obligation de livraison.
+   * une bannière sans traduction et sans estampille, jamais une bannière
+   * supprimée. Même arbitrage que `loadNotificationPrefs` et
+   * `filterMutedRecipients` — la traduction est un confort, l'annonce du
+   * message une obligation de livraison.
    */
-  private async loadMessagePrismSource(messageId: string): Promise<MessagePrismSource> {
+  private async loadMessageNotificationSource(messageId: string): Promise<MessageNotificationSource> {
     try {
       const message = await this.prisma.message.findUnique({
         where: { id: messageId },
-        select: { translations: true, originalLanguage: true },
+        select: { translations: true, originalLanguage: true, createdAt: true, messageType: true },
       });
       return {
-        translations: this.pushableTranslations(message?.translations),
-        originalLanguage: message?.originalLanguage ?? null,
+        prism: {
+          translations: this.pushableTranslations(message?.translations),
+          originalLanguage: message?.originalLanguage ?? null,
+        },
+        stamp: {
+          createdAt: message?.createdAt instanceof Date ? message.createdAt : null,
+          messageType: message?.messageType ?? null,
+        },
       };
     } catch (error) {
-      notificationLogger.error('Relecture du Prisme en échec — bannière servie sans traduction', {
+      notificationLogger.error('Relecture du message en échec — bannière servie sans traduction ni estampille', {
         error,
         messageId,
       });
-      return EMPTY_PRISM_SOURCE;
+      return EMPTY_MESSAGE_NOTIFICATION_SOURCE;
     }
   }
 
@@ -888,8 +939,22 @@ export class NotificationService {
   }
 
   /**
-   * Le COUPLE que la NSE iOS pré-enregistre — le corps de la bulle et son
-   * étiquette de langue — ou RIEN.
+   * TOUT ce que la NSE iOS pré-enregistre — le corps de la bulle, son étiquette
+   * de langue, sa PLACE dans le fil et son RENDU.
+   *
+   * **Cycle 126 — ce helper n'en composait que la moitié.** `content` et
+   * `originalLanguage` venaient d'ici, partagés par les trois éventails depuis
+   * le cycle 124 ; `createdAt` et `messageType` étaient posés EN LIGNE, dans le
+   * seul `createMessageNotification`. Une réponse ou une mention pré-enregistrait
+   * donc une bulle horodatée à l'heure de RÉCEPTION du push — deux appareils du
+   * même compte n'ont aucune raison de l'ordonner pareil — et rendue en `text`
+   * pour un vocal, ces deux éventails ne poussant pas `attachmentMimeType` non
+   * plus (cycle 125 bis) : un rectangle vide jusqu'à la synchro REST.
+   *
+   * > Un helper PARTAGÉ peut ne composer qu'une PARTIE de ce que son nom
+   * > promet, et le partage de la partie fait passer le tout pour partagé.
+   * > Compter ses appelants ne dit rien de ce qu'il compose ; ce sont les champs
+   * > que le CONSOMMATEUR lit qu'il faut compter en face.
    *
    * Troisième projection de {@link PreviewPrismBasis}, après « qu'est-ce qui
    * TRADUIT cet aperçu ? » ({@link previewPrismSource}) et « que peut-on
@@ -925,13 +990,37 @@ export class NotificationService {
     basis: PreviewPrismBasis;
     preview: string;
     originalLanguage: string | null;
+    stamp: MessagePrePersistStamp;
     protectedByLocKey?: boolean;
-  }): { messageContent?: string; messageOriginalLanguage?: string } {
-    if (params.protectedByLocKey) return {};
-    if (params.basis.kind !== 'message-content') return {};
+  }): {
+    messageContent?: string;
+    messageOriginalLanguage?: string;
+    messageCreatedAt?: string;
+    messageType?: string;
+  } {
+    // L'ESTAMPILLE traverse les trois refus ci-dessous, et c'est la décision du
+    // cycle 126 : elle ne dit rien du contenu. Un horodatage ne révèle que
+    // l'instant d'un message que la bannière annonce de toute façon ; un type
+    // ne révèle que l'icône que `protectedPreview` compose déjà (« 👁️ 🎵 »).
+    // Les retirer avec le texte n'ajouterait aucune garde et laisserait la
+    // bulle d'un message protégé se ranger à l'heure du device.
+    //
+    // `instanceof Date` plutôt qu'un test de vérité : la valeur vient d'une
+    // COLONNE, et le seul repli honnête pour un horodatage qu'on ne sait pas
+    // lire est de n'en poser aucun.
+    const stamp = {
+      ...(params.stamp.createdAt instanceof Date
+        ? { messageCreatedAt: params.stamp.createdAt.toISOString() }
+        : {}),
+      ...(params.stamp.messageType ? { messageType: params.stamp.messageType } : {}),
+    };
+
+    if (params.protectedByLocKey) return stamp;
+    if (params.basis.kind !== 'message-content') return stamp;
     // Un aperçu VIDE ne dit rien de plus que son absence et coûte du budget APNs.
-    if (params.preview.trim() === '') return {};
+    if (params.preview.trim() === '') return stamp;
     return {
+      ...stamp,
       messageContent: params.preview,
       ...(params.originalLanguage ? { messageOriginalLanguage: params.originalLanguage } : {}),
     };
@@ -1965,13 +2054,16 @@ export class NotificationService {
     );
     const prismContext = this.servedTranslationFields(servedTranslation);
 
-    // Cycle 124 — le corps de la bulle que la NSE PRÉ-ENREGISTRE au démarrage à
-    // froid, et son étiquette de langue. Le prédicat vit dans
-    // `prePersistedMessageFields` — un SEUL site pour les trois éventails.
+    // Cycle 124 — la bulle que la NSE PRÉ-ENREGISTRE au démarrage à froid.
+    // Cycle 126 — les QUATRE champs, estampille comprise : le prédicat ET la
+    // projection vivent dans `prePersistedMessageFields`, un SEUL site pour les
+    // trois éventails. L'estampille sort de la relecture VIVANTE ci-dessus, qui
+    // charge déjà ces deux colonnes pour son gate d'éligibilité.
     const prePersisted = this.prePersistedMessageFields({
       basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
       preview: params.messagePreview,
       originalLanguage: liveMessage.originalLanguage,
+      stamp: { createdAt: liveMessage.createdAt, messageType: liveMessage.messageType },
       protectedByLocKey: !!params.notificationLocKey,
     });
 
@@ -2021,10 +2113,8 @@ export class NotificationService {
           : undefined,
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
-        // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
-        messageCreatedAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt.toISOString() : undefined,
-        messageType: liveMessage.messageType ?? undefined,
-        // Cycle 124 — le corps et la langue de la bulle pré-enregistrée.
+        // GW5 / cycles 124 & 126 — les quatre champs de la bulle pré-enregistrée
+        // par la NSE : son corps, sa langue, sa place dans le fil et son rendu.
         ...prePersisted,
         ...prismContext,
       },
@@ -2071,11 +2161,12 @@ export class NotificationService {
      */
     messageExpiresAt?: Date | null;
     /**
-     * Source du Prisme déjà relue — cf. `MessagePrismSource`. Elle ne dépend pas
-     * du destinataire, donc l'éventail la relit UNE fois plutôt qu'une par
-     * mentionné. Absente : relue ici (appel solo).
+     * Ce que la bannière tient du MESSAGE, déjà relu — cf.
+     * {@link MessageNotificationSource}. Rien là-dedans ne dépend du
+     * destinataire, donc l'éventail le relit UNE fois plutôt qu'une par
+     * mentionné. Absent : relu ici (appel solo).
      */
-    prismSource?: MessagePrismSource;
+    messageSource?: MessageNotificationSource;
     /** Cf. `createMessageNotification.previewBasis`. */
     previewBasis?: PreviewPrismBasis;
     /**
@@ -2098,7 +2189,7 @@ export class NotificationService {
       return null;
     }
 
-    const [mentioner, conversation, prism, prismSource] = await Promise.all([
+    const [mentioner, conversation, prism, messageSource] = await Promise.all([
       params.senderProfile
         ? Promise.resolve(params.senderProfile)
         : this.prisma.user.findUnique({
@@ -2110,9 +2201,9 @@ export class NotificationService {
         select: { title: true, type: true, avatar: true },
       }),
       this.resolveRecipientPrism(params.mentionedUserId),
-      params.prismSource
-        ? Promise.resolve(params.prismSource)
-        : this.loadMessagePrismSource(params.messageId),
+      params.messageSource
+        ? Promise.resolve(params.messageSource)
+        : this.loadMessageNotificationSource(params.messageId),
     ]);
 
     if (!mentioner) return null;
@@ -2122,7 +2213,7 @@ export class NotificationService {
     const servedTranslation = this.prismTranslation(
       this.previewPrismSource({
         basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
-        messageSource: prismSource,
+        messageSource: messageSource.prism,
       }),
       prism.ordered
     );
@@ -2170,11 +2261,14 @@ export class NotificationService {
         // d'un message simple. Sans ce couple, la bulle d'une MENTION restait
         // vide pendant que celle d'un message en avait une — le symptôme « deux
         // textes pour un même message » que les cycles 121 à 123 poursuivent.
-        // La langue vient de la source déjà relue : aucune lecture de plus.
+        // Cycle 126 — et son ESTAMPILLE, sans quoi cette même bulle se rangeait
+        // à l'heure du device et se rendait en texte. Tout vient de la source
+        // déjà relue : aucune lecture de plus.
         ...this.prePersistedMessageFields({
           basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
           preview: params.messagePreview,
-          originalLanguage: prismSource.originalLanguage,
+          originalLanguage: messageSource.prism.originalLanguage,
+          stamp: messageSource.stamp,
         }),
       },
 
@@ -2230,9 +2324,9 @@ export class NotificationService {
 
     if (eligibleUserIds.length === 0) return 0;
 
-    // La source du Prisme ne dépend pas du destinataire : une relecture pour
-    // tout l'éventail, la DESCENTE restant par lecteur.
-    const prismSource = await this.loadMessagePrismSource(commonData.messageId);
+    // Rien de ce que la bannière tient du MESSAGE ne dépend du destinataire :
+    // une relecture pour tout l'éventail, la DESCENTE restant par lecteur.
+    const messageSource = await this.loadMessageNotificationSource(commonData.messageId);
 
     const results = await Promise.all(
       eligibleUserIds.map(userId =>
@@ -2244,6 +2338,7 @@ export class NotificationService {
           messagePreview: commonData.messageContent,
           senderProfile: commonData.senderProfile,
           messageExpiresAt: commonData.messageExpiresAt,
+          messageSource,
           previewBasis: commonData.previewBasis,
           // Cycle 125 bis — le résumé de média voyage jusqu'au créateur, qui
           // seul compose le corps : il ne dépend pas du destinataire, donc il
@@ -2253,7 +2348,6 @@ export class NotificationService {
           firstAttachmentDuration: commonData.firstAttachmentDuration,
           firstAttachmentWidth: commonData.firstAttachmentWidth,
           firstAttachmentHeight: commonData.firstAttachmentHeight,
-          prismSource,
         })
       )
     );
@@ -3772,7 +3866,7 @@ export class NotificationService {
       return null;
     }
 
-    const [replier, conversation, prism, prismSource] = await Promise.all([
+    const [replier, conversation, prism, messageSource] = await Promise.all([
       params.senderProfile
         ? Promise.resolve(params.senderProfile)
         : this.prisma.user.findUnique({
@@ -3784,7 +3878,7 @@ export class NotificationService {
         select: { title: true, type: true },
       }),
       this.resolveRecipientPrism(params.recipientUserId),
-      this.loadMessagePrismSource(params.messageId),
+      this.loadMessageNotificationSource(params.messageId),
     ]);
 
     if (!replier) return null;
@@ -3794,7 +3888,7 @@ export class NotificationService {
     const servedTranslation = this.prismTranslation(
       this.previewPrismSource({
         basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
-        messageSource: prismSource,
+        messageSource: messageSource.prism,
       }),
       prism.ordered
     );
@@ -3834,11 +3928,14 @@ export class NotificationService {
         ...this.servedTranslationFields(servedTranslation),
         // Cycle 124 — cf. `createMentionNotification` : la bulle pré-enregistrée
         // est celle de la RÉPONSE, le message que cette bannière annonce et
-        // ouvre — jamais celle du message cité.
+        // ouvre — jamais celle du message cité. Cycle 126 : son estampille
+        // désigne donc la RÉPONSE elle aussi, et c'est ce qui la range au bon
+        // endroit du fil.
         ...this.prePersistedMessageFields({
           basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
           preview: params.messagePreview,
-          originalLanguage: prismSource.originalLanguage,
+          originalLanguage: messageSource.prism.originalLanguage,
+          stamp: messageSource.stamp,
         }),
       },
 

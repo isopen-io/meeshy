@@ -15195,3 +15195,86 @@ session auto-activée (`.playAndRecord`) risque en prime de bloquer le
 réveiller un défaut qui dormait DERRIÈRE lui** — le corriger dans le même lot,
 pas dans un suivi, parce que le premier correctif seul aurait été une
 régression (double sonnerie) dans le cas exact qu'il vise à réparer.
+
+## Leçon 279 — un helper PARTAGÉ peut ne composer qu'une PARTIE de ce que son nom promet (2026-08-24, cycle 126)
+
+Le cycle 125 bis a consolidé la composition du CORPS des trois bannières de
+`messageNotificationFanOut`, en nommant la bonne cause : « la composition vivait
+chez UN des trois ». Il n'a pas regardé le PRÉ-ENREGISTREMENT — la bulle que la
+NSE iOS écrit en base locale dès qu'un push porte un `messageId` — parce que
+celui-ci avait DÉJÀ son helper partagé, `prePersistedMessageFields`, appelé par
+les trois éventails depuis le cycle 124.
+
+Le partage était réel. Le helper ne composait que **deux des quatre** champs que
+la NSE lit :
+
+| champ NSE | composé par | ce qu'il décide |
+|---|---|---|
+| `content` | le helper partagé | le texte |
+| `originalLanguage` | le helper partagé | l'étiquette de langue, donc la descente du Prisme |
+| `createdAt` | **en ligne, chez UN des trois** | **la PLACE de la bulle dans le fil** |
+| `messageType` | **en ligne, chez UN des trois** | **le RENDU (audio / image vs texte)** |
+
+Coût mesuré : la bulle d'une RÉPONSE ou d'une MENTION était horodatée à l'heure
+de RÉCEPTION du push — deux appareils du même compte n'ont aucune raison de
+l'ordonner pareil — et rendue en `text`. Ces deux éventails ne poussant pas
+`attachmentMimeType` non plus (décision délibérée du cycle 125 bis), le repli
+`mediaMessageTypes` de l'extension ne rattrapait rien : **la bulle d'une réponse
+VOCALE était un rectangle de texte vide** jusqu'à la synchro REST, c'est-à-dire
+pendant toute la fenêtre où un pré-enregistrement a une raison d'être.
+
+> **Le partage d'une PARTIE fait passer le TOUT pour partagé.** Un helper nommé
+> d'après ce que le consommateur lit — ici « les champs pré-enregistrés » — est
+> une AFFIRMATION (cycles 86 bis, 93, 94 : un tri, un compte, un commentaire de
+> contrainte), et il faut la vérifier comme telle.
+
+### Ce n'est PAS la leçon 277 rejouée — c'est son retournement
+
+La 277 dit : « quand N sites appliquent une règle, compter les appelants du
+helper le plus BAS rassure à tort ; c'est le plus HAUT qu'il faut compter ».
+Ici le helper EST le plus haut, ses trois appelants sont bien les trois
+éventails, et **le compte est juste**. Ce qui manque n'est pas un appelant,
+c'est un CHAMP.
+
+> La question qui l'attrape ne se pose donc pas du côté des APPELANTS mais du
+> côté du CONSOMMATEUR : **quels champs le lecteur lit-il, et lesquels ce site
+> compose-t-il ?** Deux listes à confronter, jamais un compte à faire. Un
+> `grep` des appelants ne peut pas la poser ; ouvrir le consommateur, si.
+
+C'est la forme « complétude » de la famille ouverte au cycle 124 (§ Leçon 274,
+« un contrat entre deux langages dérive dans les DEUX sens ») : le diff s'y
+faisait entre ce que la passerelle ÉMET et ce que l'extension LIT. Le diff
+d'ici se fait entre ce que l'extension LIT et ce qu'UN SITE de la passerelle
+compose — même méthode, un cran plus bas.
+
+### Corollaire : tout ce qu'un site remet n'est pas du même GENRE
+
+En consolidant, il a fallu trancher : l'estampille (`createdAt`, `messageType`)
+doit-elle subir les trois refus que le helper oppose au TEXTE (placeholder de
+protection, transcription, aperçu vide) ?
+
+Non — et la raison est la symétrie exacte de la leçon 275 (« une garde de
+confidentialité qui ne garde qu'une chaîne ne garde rien »). Là, une garde
+écrite pour du texte laissait partir un FICHIER : elle était trop étroite. Ici,
+étendre une garde écrite pour du texte à des champs qui n'en sont pas la
+rendrait trop LARGE — un horodatage ne révèle que l'instant d'un message que la
+bannière annonce de toute façon, un type ne révèle que l'icône que
+`protectedPreview` compose déjà (« 👁️ 🎵 »). Les retirer avec le texte
+n'ajouterait **aucune** garde et laisserait la bulle d'un message protégé se
+ranger à l'heure du device.
+
+> **Une garde se mesure sur ce que la charge TRANSPORTE (275) ; son PÉRIMÈTRE se
+> mesure sur ce que chaque champ RÉVÈLE.** Les deux erreurs sont symétriques et
+> coûtent différemment : trop étroite, elle laisse fuir ; trop large, elle
+> dégrade un service sans rien protéger — et personne ne le signale jamais,
+> parce qu'une garde excessive ressemble à de la prudence.
+
+### Et un témoin VERT avant le correctif peut être le plus utile du lot
+
+Trois des huit témoins de ce cycle passaient déjà avant le fix, délibérément :
+la référence (l'éventail conforme), le fail-open, et « l'éventail de mentions
+relit le message UNE fois pour tout son lot ». Aucun ne conduit le correctif ;
+ils gardent ce qu'il ne doit pas casser. Le troisième en particulier — parce que
+**élargir un `select` est exactement le geste qui invite à ajouter une
+requête**, et qu'une requête par destinataire ne rougit nulle part : elle se
+paie en latence de fan-out, sur un chemin que personne ne mesure.
