@@ -343,6 +343,14 @@ final class MessageListViewController: UIViewController {
     /// change. Injecté dans chaque cellule par `environmentObject`.
     let timestampReveal = FocalTimestampRevealState()
 
+    /// Début du défilement en cours (ms), `nil` au repos — l'une des deux
+    /// portes de `FocalMagnificationLaw`.
+    private var focalScrollStartedAt: Double?
+    /// La magnificence est-elle armée ? Voir `FocalMagnificationLaw` : elle ne
+    /// s'arme pas au premier pixel, et une fois armée elle le reste jusqu'à ce
+    /// que la scène Focal reparte.
+    private var focalMagnificationArmed = false
+
     init(
         store: MessageStore,
         currentUserId: String,
@@ -701,6 +709,25 @@ final class MessageListViewController: UIViewController {
         // EXACTEMENT sur le tempo qu'avait la pilule, sans réimplémenter la
         // fenêtre.
         timestampReveal.note(.scrolled(at: now))
+
+        // Magnificence (directive 2026-08-24) : elle ne s'arme ni au premier
+        // pixel ni sur un rebond. La vitesse du geste ouvre la porte tout de
+        // suite ; un défilement lent mais SOUTENU l'ouvre passé le seuil de
+        // durée. Le début de session se pose ici, au premier événement d'une
+        // série — `scrollViewDidEndDecelerating` le remet à nil.
+        guard readingMode == .focal else { return }
+        if focalScrollStartedAt == nil { focalScrollStartedAt = now }
+        let velocity = collectionView.panGestureRecognizer.velocity(in: collectionView).y
+        let armed = FocalMagnificationLaw.isArmed(
+            alreadyArmed: focalMagnificationArmed,
+            scrollStartedAt: focalScrollStartedAt,
+            now: now,
+            velocity: velocity
+        )
+        if armed != focalMagnificationArmed {
+            focalMagnificationArmed = armed
+            applyFocalPerspectiveToVisibleCells()
+        }
     }
 
     private func topVisibleMessageDate() -> Date? {
@@ -2670,6 +2697,11 @@ extension MessageListViewController: UICollectionViewDelegate {
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        // La session de défilement se referme : la prochaine « durée soutenue »
+        // se mesurera depuis son propre début. L'armement DÉJÀ acquis, lui,
+        // survit — le désarmer ferait clignoter la carte à chaque pause, or
+        // c'est à l'arrêt qu'on lit le message élu.
+        focalScrollStartedAt = nil
         decelerationTargetOffsetY = nil
         settleAtRest()
     }
@@ -2873,6 +2905,9 @@ extension MessageListViewController {
         focalFlattenWork?.cancel()
         focalFlattenWork = nil
         focalSceneActive = false
+        // La scène repart de zéro : la magnificence devra se mériter à nouveau.
+        focalMagnificationArmed = false
+        focalScrollStartedAt = nil
         focalFocusedLocalId = nil
         guard isViewLoaded else { return }
         let cells = collectionView.visibleCells
@@ -2925,6 +2960,22 @@ extension MessageListViewController {
             guard let geometry = focalGeometry(of: cell) else { continue }
             geometries.append(geometry)
             cellById[geometry.id] = cell
+        }
+        // **Tant que la magnificence n'est pas armée, le fil défile comme en
+        // Script** (directive 2026-08-24 : « si la magnificence n'est pas
+        // activée, la réduction et l'effet loop non plus ; le scroll se fait
+        // naturellement en Script jusqu'à activation, où on considère TOUTES
+        // les fonctions du mode Focal »). J'avais d'abord retardé la seule
+        // élection en laissant le relief s'appliquer — c'était la moitié de la
+        // règle : la réduction et la compaction sont, elles aussi, des
+        // fonctions du mode, pas un décor neutre.
+        guard focalMagnificationArmed else {
+            for cell in cells { FocalScrollPerspective.reset(cell.contentView.layer) }
+            if focalFocusedLocalId != nil {
+                focalFocusedLocalId = nil
+                syncFocalFocusDetails()
+            }
+            return
         }
         let poses = FocalScrollPerspective.poses(cells: geometries, focusY: focusY, reduceMotion: reduceMotion)
         let focused = FocalScrollPerspective.focusedId(cells: geometries, focusY: focusY, currentId: focalFocusedLocalId)
