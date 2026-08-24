@@ -2603,6 +2603,13 @@ public enum ReplyContext {
         }
     }
 
+    /// `authorAvatarUrl` reste nil aux DEUX branches, et ce n'est pas un oubli :
+    /// `ReplyContext` porte bien un `authorId`, mais aucune URL d'avatar — son
+    /// producteur unique tient l'avatar (`StoryGroup.avatarURL`) sans le lui
+    /// passer. Consequence produit ASSUMEE : une citation de story ou d'humeur
+    /// n'expose PAS de porte vers le profil de l'auteur ; elle saute au post.
+    /// Le jour ou le produit voudra cette porte, la donnee est atteignable —
+    /// il faudra elargir `ReplyContext`, pas ce fichier seul.
     public var toReplyReference: ReplyReference {
         switch self {
         case .story(let storyId, _, let authorName, let preview, let publishedAt, let reactionCount, let commentCount, let thumbnailUrl):

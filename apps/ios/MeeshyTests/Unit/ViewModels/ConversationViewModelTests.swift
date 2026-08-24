@@ -748,6 +748,50 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(decoded.first?.fileUrl, "file:///tmp/photo.jpg")
     }
 
+    /// La citation OPTIMISTE doit porter l'avatar de l'auteur cité dès la
+    /// première frame. Le message cité est déjà en mémoire, son avatar avec :
+    /// sans ce report, la bulle optimiste s'affichait en initiales puis
+    /// « sautait » à la photo au premier refresh serveur.
+    func test_insertOptimisticMediaMessage_replyReference_carriesTheQuotedAuthorAvatar() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let quoted = Message(
+            id: "msg-quoted-001",
+            conversationId: testConversationId,
+            senderId: "000000000000000000000002",
+            content: "Salut",
+            createdAt: Date(timeIntervalSince1970: 0),
+            updatedAt: Date(timeIntervalSince1970: 0),
+            senderName: "Bob",
+            senderColor: "#31B6BA",
+            senderAvatarURL: "https://cdn.example/bob.jpg",
+            isMe: false
+        )
+        sut.messages = [quoted]
+
+        let tempId = "temp_\(UUID().uuidString)"
+        sut.insertOptimisticMediaMessage(
+            tempId: tempId,
+            content: "ma reponse",
+            attachments: [],
+            messageType: .text,
+            replyToId: "msg-quoted-001"
+        )
+
+        let record = await MessageStoreObservationHelper.awaitRecord(
+            localId: tempId,
+            from: pool
+        ) { $0.replyToJson != nil }
+
+        let json = try XCTUnwrap(record?.replyToJson,
+            "La bulle optimiste doit graver sa citation dans replyToJson")
+        let reference = try JSONDecoder().decode(ReplyReference.self, from: json)
+        XCTAssertEqual(reference.authorAvatarUrl, "https://cdn.example/bob.jpg",
+            "La citation optimiste doit porter l'avatar du message cité, déjà résolu en mémoire")
+    }
+
     // MARK: - Attachment Reactions (BUG2 A')
 
     private func makeImageMessage(id: String = "m1", attachmentId: String = "a1") -> Message {

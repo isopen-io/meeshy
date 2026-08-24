@@ -1686,6 +1686,9 @@ public actor MessagePersistenceActor {
                         let trimmed = story.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
                         // Réponse à un mood : rendu dédié (emoji + contenu + date).
                         if let emoji = story.moodEmoji {
+                            // `authorAvatarUrl` reste nil, DELIBEREMENT : le
+                            // snapshot `postReplyTo` ne porte pas d'avatar, et
+                            // ce nom est vide — aucun profil a ouvrir.
                             let ref = ReplyReference(
                                 messageId: story.id,
                                 authorName: "",
@@ -1697,6 +1700,7 @@ public actor MessagePersistenceActor {
                             )
                             return encoder.encodeOrLog(ref, field: "replyToJson(mood)", id: api.id)
                         }
+                        // Idem pour la story : snapshot sans avatar, nom vide.
                         let ref = ReplyReference(
                             messageId: story.id,
                             authorName: "",
@@ -1721,8 +1725,20 @@ public actor MessagePersistenceActor {
                             authorName: authorName,
                             previewText: reply.content ?? "",
                             isMe: isMe,
+                            // Jumeau CACHE de `MessageModels.uiReplyTo` : meme
+                            // avatar, meme cascade `resolvedAvatar`. C'est ce
+                            // blob qui alimente TOUT rechargement — l'oublier
+                            // ici ferait perdre l'avatar de la citation au
+                            // premier retour de cache, donc au scroll.
+                            authorAvatarUrl: reply.sender?.resolvedAvatar,
                             attachmentType: firstAtt?.mimeType,
-                            attachmentThumbnailUrl: firstAtt?.thumbnailUrl
+                            attachmentThumbnailUrl: firstAtt?.thumbnailUrl,
+                            // Jumeau CACHE de la protection gravée par
+                            // `MessageModels.uiReplyTo` : c'est ce blob qui
+                            // alimente TOUT rechargement, et l'oublier ici
+                            // ferait réapparaître au premier retour de cache la
+                            // vignette d'un média à vue unique.
+                            attachmentIsProtected: firstAtt?.declaredProtection
                         )
                         return encoder.encodeOrLog(ref, field: "replyToJson", id: api.id)
                     }

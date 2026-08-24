@@ -22,8 +22,17 @@ extension ConversationView {
             previewText: preview,
             isMe: msg.isMe,
             authorColor: msg.senderColor,
+            // Le message cite est sous le doigt de l'utilisateur : son avatar
+            // est deja resolu. On le grave pour que la citation nee de ce geste
+            // le porte de bout en bout, banniere du composeur comprise.
+            authorAvatarUrl: msg.senderAvatarURL,
             attachmentType: attType,
-            attachmentThumbnailUrl: attThumb
+            attachmentThumbnailUrl: attThumb,
+            // Le message cite est sous le doigt : sa protection est CONNUE.
+            // La banniere du composeur repond de la meme loi que la citation
+            // rendue dans le fil — un media a vue unique n'y montre pas plus sa
+            // vignette qu'ailleurs.
+            attachmentIsProtected: firstAttachment.map { $0.isViewOnce || $0.isBlurred }
         )
         isTyping = true
         HapticFeedback.medium()

@@ -1286,6 +1286,16 @@ final class MessageListViewController: UIViewController {
                         onReplyTap: scrollHandler,
                         onStoryReplyTap: storyReplyHandler,
                         onMediaTap: mediaTapHandler,
+                        // LOI DES ZONES (2026-08-24) — les MEMES deux
+                        // gestionnaires que la rangee plate, montes ici sur la
+                        // peau BULLE, celle que voit tout le monde tant que le
+                        // programme beta reste eteint (defaut OFF).
+                        onQuotedAuthorTap: { [weak self] ref in
+                            self?.openQuotedAuthorProfile(ref)
+                        },
+                        onQuotedMediaTap: { [weak self] ref in
+                            self?.openQuotedMedia(ref)
+                        },
                         onConsumeViewOnce: consumeViewOnceHandler,
                         onReactToAttachment: { attId, emoji in attachmentReactionHandler?(attId, messageId, emoji) },
                         onRequestTranslation: requestTranslationHandler,
@@ -1478,8 +1488,10 @@ final class MessageListViewController: UIViewController {
                 focalActions.audioQueueTailProvider = audioQueueTailProvider
                 focalActions.onTapConsentNotice = { [weak self] in self?.router.push(.settings) }
                 focalActions.onOpenProfile = openProfileHandler
-                // Citations riches (user 2026-08-18) : nom → profil de
-                // l'auteur CITÉ ; zone média → plein écran / lecture.
+                // Citations riches (user 2026-08-18), sous LOI DES ZONES
+                // depuis le 2026-08-24 : AVATAR → profil de l'auteur CITÉ
+                // (le NOM ne l'ouvre plus, il retombe sur le retour au
+                // message cité) ; zone média → plein écran / lecture.
                 focalActions.onQuotedAuthorTap = { [weak self] ref in
                     self?.openQuotedAuthorProfile(ref)
                 }
@@ -2232,10 +2244,17 @@ final class MessageListViewController: UIViewController {
         serverIdToLocalId[id] ?? id
     }
 
-    /// Tap sur le NOM de l'auteur cité — résout le message cité dans le
-    /// store local pour ouvrir le profil RÉEL (username/avatar) ; repli sur
-    /// une fiche nom-seul (la sheet profil résout par username) quand le
-    /// cité n'est plus dans la fenêtre locale.
+    /// ZONE 1 de la LOI DES ZONES (2026-08-24) — tap sur l'AVATAR de l'auteur
+    /// cité (le NOM ne l'ouvre plus). Résout le message cité dans le store
+    /// local pour ouvrir le profil RÉEL (username/avatar) ; repli sur une
+    /// fiche nom-seul (la sheet profil résout par username) quand le cité
+    /// n'est plus dans la fenêtre locale.
+    ///
+    /// L'avatar de la RÉFÉRENCE est le dernier recours des deux branches : il
+    /// voyage avec la citation depuis le 2026-08-24, là où la relecture du
+    /// store dépend, elle, de la position de défilement. Sans lui, la fiche
+    /// ouverte depuis un message sorti de la fenêtre chargée s'affichait sans
+    /// visage — le geste ouvrait bien la porte, mais la pièce était vide.
     private func openQuotedAuthorProfile(_ reference: ReplyReference) {
         let localId = resolveLocalId(reference.messageId)
         if let quoted = store.domainMessage(for: localId, currentUserId: currentUserId) {
@@ -2243,7 +2262,7 @@ final class MessageListViewController: UIViewController {
                 userId: quoted.senderId,
                 username: quoted.senderUsername ?? quoted.senderName ?? reference.authorName,
                 displayName: quoted.senderName ?? reference.authorName,
-                avatarURL: quoted.senderAvatarURL,
+                avatarURL: quoted.senderAvatarURL ?? reference.authorAvatarUrl,
                 accentColor: reference.authorColor
             )
             return
@@ -2252,7 +2271,7 @@ final class MessageListViewController: UIViewController {
             userId: nil,
             username: reference.authorName,
             displayName: reference.authorName,
-            avatarURL: nil,
+            avatarURL: reference.authorAvatarUrl,
             accentColor: reference.authorColor
         )
     }
@@ -2267,6 +2286,19 @@ final class MessageListViewController: UIViewController {
         guard let quoted = store.domainMessage(for: localId, currentUserId: currentUserId),
               let attachment = quoted.attachments.first(where: { $0.type != .location })
         else {
+            scrollToMessage(localId: localId)
+            return
+        }
+        // Miroir explicite de `BubbleGridCell.handleTap`
+        // (`BubbleStandardLayout+Media.swift`), qui refuse d'ouvrir un
+        // attachement protégé tant qu'il n'a pas été révélé. Ce verrou
+        // manquait ici, et la LOI DES ZONES vient d'ÉLARGIR la porte : une
+        // icône de lecture explicite invite là où un `waveform` inerte ne le
+        // faisait pas, et la peau BULLE — celle de tout le monde — vient
+        // d'acquérir la zone. Élargir une porte sans son verrou serait une
+        // régression d'exposition. Le repli est le saut à l'original, où le
+        // média garde son propre geste de révélation.
+        guard !(attachment.isViewOnce || attachment.isBlurred) else {
             scrollToMessage(localId: localId)
             return
         }

@@ -139,13 +139,15 @@ final class BubbleReplyEqualityTests: XCTestCase {
         storyThumbnailUrl: String? = nil,
         storyReactionCount: Int? = nil,
         storyCommentCount: Int? = nil,
-        storyShareCount: Int? = nil
+        storyShareCount: Int? = nil,
+        authorAvatarUrl: String? = nil
     ) -> BubbleContent.Reply {
         BubbleContent.Reply(
             reference: ReplyReference(
                 messageId: messageId,
                 authorName: "Alice",
                 previewText: previewText,
+                authorAvatarUrl: authorAvatarUrl,
                 attachmentThumbnailUrl: attachmentThumbnailUrl,
                 isStoryReply: isStory,
                 storyPublishedAt: storyPublishedAt,
@@ -193,6 +195,61 @@ final class BubbleReplyEqualityTests: XCTestCase {
         let a = makeReply(isStory: true, storyShareCount: nil)
         let b = makeReply(isStory: true, storyShareCount: 1)
         XCTAssertNotEqual(a, b)
+    }
+
+    /// L'avatar de l'auteur cite est une ZONE TACTILE de la citation (porte
+    /// vers le profil) : il influence le rendu, donc il DOIT entrer dans le
+    /// `==` manuel. `FocalQuotedReplyView.==` delegue entierement a ce
+    /// comparateur — sans cette ligne, un avatar arrive apres coup (premier
+    /// refresh serveur, hydratation du cache) ne redessinerait JAMAIS la
+    /// cellule, et la citation resterait en initiales pour toujours.
+    func test_authorAvatarUrlChange_notEqual() {
+        let a = makeReply(authorAvatarUrl: nil)
+        let b = makeReply(authorAvatarUrl: "https://cdn.meeshy.me/bob.jpg")
+        XCTAssertNotEqual(a, b)
+    }
+
+    /// Stabilite : meme avatar ⇒ toujours egal (zero re-render inutile).
+    func test_sameAuthorAvatarUrl_equal() {
+        let a = makeReply(authorAvatarUrl: "https://cdn.meeshy.me/bob.jpg")
+        let b = makeReply(authorAvatarUrl: "https://cdn.meeshy.me/bob.jpg")
+        XCTAssertEqual(a, b)
+    }
+
+    // MARK: - LOI DES ZONES : la peau BULLE compare sa PROPRE projection
+
+    private func makeQuote(authorAvatarUrl: String?) -> BubbleQuotedReply {
+        BubbleQuotedReply(
+            reply: makeReply(authorAvatarUrl: authorAvatarUrl).reference,
+            parentIsMe: false,
+            accentHex: "#4F46E5",
+            isDark: false,
+            mentionDisplayNames: [:]
+        )
+    }
+
+    /// `BubbleQuotedReply` ne compare PAS `BubbleContent.Reply` : il projette
+    /// les champs qu'il rend dans sa propre `ReplySlice`. La ligne ajoutee au
+    /// `==` de `BubbleContent.Reply` ne le couvre donc pas — deux `==`
+    /// manuels, deux inventaires a tenir, et celui-ci est le seul filtre
+    /// d'invalidation de la peau que voit tout le monde.
+    ///
+    /// Sans cette entree, l'avatar arrive APRES coup (premier refresh serveur,
+    /// hydratation du cache) ne redessinerait jamais la citation : la ZONE 1
+    /// resterait en initiales pour toujours, alors meme que la photo est la.
+    func test_bubbleQuotedReply_equality_seesTheQuotedAuthorAvatar() {
+        XCTAssertNotEqual(
+            makeQuote(authorAvatarUrl: nil),
+            makeQuote(authorAvatarUrl: "https://cdn.meeshy.me/bob.jpg")
+        )
+    }
+
+    /// Stabilite : meme avatar ⇒ toujours egal (zero re-render inutile).
+    func test_bubbleQuotedReply_equality_sameAvatar_stillEqual() {
+        XCTAssertEqual(
+            makeQuote(authorAvatarUrl: "https://cdn.meeshy.me/bob.jpg"),
+            makeQuote(authorAvatarUrl: "https://cdn.meeshy.me/bob.jpg")
+        )
     }
 }
 

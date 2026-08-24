@@ -1653,6 +1653,35 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(ref.storyReactionCount, 7)
     }
 
+    /// Le JUMEAU CACHE de `MessageModels.uiReplyTo` doit graver le MEME avatar
+    /// d'auteur cite. C'est lui qui alimente TOUT rechargement : sans le champ
+    /// ici, la citation perdait son avatar des le premier retour de cache, et
+    /// l'ecart ne se voyait qu'apres un scroll.
+    func test_upsertFromAPIMessages_cachedReplyReference_carriesTheQuotedAuthorAvatar() async throws {
+        let json = """
+        {
+          "id": "srv_av_1", "conversationId": "conv_av", "senderId": "sender_1",
+          "content": "ma reponse", "createdAt": "2026-08-24T10:00:00Z",
+          "replyTo": {
+            "id": "m9", "content": "Salut", "senderId": "u1",
+            "sender": { "id": "u1", "displayName": "Bob",
+                        "avatar": "https://cdn.example/bob.jpg" }
+          }
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let apiMsg = try decoder.decode(APIMessage.self, from: Data(json.utf8))
+
+        try await actor.upsertFromAPIMessages([apiMsg])
+
+        let rows = try actor.messages(for: "conv_av", limit: 10)
+        let replyJson = try XCTUnwrap(rows[0].replyToJson)
+        let ref = try JSONDecoder().decode(ReplyReference.self, from: replyJson)
+        XCTAssertEqual(ref.authorAvatarUrl, "https://cdn.example/bob.jpg",
+            "Le chemin CACHE doit porter le meme avatar que le chemin reseau.")
+    }
+
     // MARK: - applyAttachmentEnrichment (write-through of async attachment metadata)
 
     /// Regression for "audio bubble loses its transcription after a

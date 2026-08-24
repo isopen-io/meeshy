@@ -3151,8 +3151,17 @@ class ConversationViewModel: ObservableObject {
             previewText: previewText,
             isMe: quoted.isMe,
             authorColor: quoted.senderColor,
+            // Bulle OPTIMISTE : le message cite est deja en memoire, son avatar
+            // avec. Sans ce report, la citation optimiste s'affichait en
+            // initiales puis « sautait » a la photo au premier refresh serveur.
+            authorAvatarUrl: quoted.senderAvatarURL,
             attachmentType: quoted.attachments.first?.type.rawValue,
-            attachmentThumbnailUrl: quoted.attachments.first?.thumbnailUrl
+            attachmentThumbnailUrl: quoted.attachments.first?.thumbnailUrl,
+            // Le message cite est en memoire : sa protection est CONNUE, pas
+            // declaree par le fil. Sans ce report, la bulle optimiste d'une
+            // reponse a un media a vue unique en montrait la vignette le temps
+            // que le serveur accuse.
+            attachmentIsProtected: quoted.attachments.first.map { $0.isViewOnce || $0.isBlurred }
         )
     }
 

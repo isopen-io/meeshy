@@ -44,6 +44,24 @@ final class AudioMediaViewRenderTests: XCTestCase {
             "AudioMediaView Equatable doit détecter une édition du previewText de la reply")
     }
 
+    /// L'avatar de l'auteur cité est une donnée de la citation hébergée par le
+    /// widget audio (`audioHostsReply`). Ce `==` manuel est le seul filtre
+    /// d'invalidation de la cellule : un avatar arrivé après coup (refresh
+    /// serveur, hydratation du cache) doit y être vu, sinon la citation reste
+    /// figée sur son rendu initial.
+    func test_audioMediaView_equatable_detectsQuotedAuthorAvatarChange() {
+        let a = AudioMediaView.makeForTest(
+            replyReference: ReplyReference(messageId: "m-quote-1", authorName: "Bob", previewText: "Salut")
+        )
+        let b = AudioMediaView.makeForTest(
+            replyReference: ReplyReference(messageId: "m-quote-1", authorName: "Bob", previewText: "Salut",
+                                           authorAvatarUrl: "https://cdn.example/bob.jpg")
+        )
+
+        XCTAssertFalse(a == b,
+            "AudioMediaView Equatable doit détecter l'arrivée de l'avatar de l'auteur cité")
+    }
+
     /// Stabilité : deux instances avec exactement la même reply doivent rester égales.
     func test_audioMediaView_equatable_stableWhenReplyUnchanged() {
         let ref = ReplyReference(messageId: "m-quote-1", authorName: "Bob", previewText: "Salut")

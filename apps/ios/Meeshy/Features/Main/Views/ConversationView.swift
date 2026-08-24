@@ -1168,6 +1168,13 @@ struct ConversationView: View {
                     // transitions on app reopen.
                     if let replyId = draft.replyToId,
                        let authorName = draft.replyAuthorName {
+                        // `authorAvatarUrl` reste nil, et c'est SANS
+                        // CONSEQUENCE : `MessageDraft` aplatit la citation en
+                        // quatre champs, et cette reference n'alimente que la
+                        // BANNIERE du composeur, qui ne dessine aucun avatar.
+                        // A l'envoi, seul `messageId` survit — la citation
+                        // rendue est reconstruite par `makeReplyReference`
+                        // depuis le message cite en memoire, avatar compris.
                         composerState.pendingReplyReference = ReplyReference(
                             messageId: replyId,
                             authorName: authorName,

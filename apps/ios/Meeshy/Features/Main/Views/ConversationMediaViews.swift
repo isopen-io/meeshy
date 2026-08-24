@@ -577,6 +577,15 @@ struct AudioMediaView: View, Equatable {
     var parentIsMe: Bool = false
     var onReplyTap: ((String) -> Void)? = nil
     var onStoryReplyTap: ((String) -> Void)? = nil
+    /// LOI DES ZONES (2026-08-24) — ZONES 1 et 2 de la citation hebergee par
+    /// le widget audio : l'avatar de l'auteur cite ouvre son profil, la
+    /// miniature ou l'icone de lecture ouvre le media cite. Transmis tels
+    /// quels a `BubbleQuotedReply`, qui decide seul de les armer.
+    /// **Exclus d'Equatable** pour la meme raison que les autres rappels :
+    /// une fermeture change d'identite a chaque rendu sans jamais changer le
+    /// rendu.
+    var onQuotedAuthorTap: ((ReplyReference) -> Void)? = nil
+    var onQuotedMediaTap: ((ReplyReference) -> Void)? = nil
     /// Phase 5: a tap on the play button of this bubble routes here.
     /// Wired by `BubbleStandardLayout` -> `ThemedMessageBubble` ->
     /// `MessageListViewController.onPlayAudio` ->
@@ -640,6 +649,11 @@ struct AudioMediaView: View, Equatable {
             && lhs.replyReference?.messageId == rhs.replyReference?.messageId
             && lhs.replyReference?.previewText == rhs.replyReference?.previewText
             && lhs.replyReference?.attachmentThumbnailUrl == rhs.replyReference?.attachmentThumbnailUrl
+            // L'avatar de l'auteur cité arrive APRÈS coup (refresh serveur,
+            // hydratation du cache). Ce `==` est le seul filtre d'invalidation
+            // de la cellule : sans cette ligne, la citation hébergée par le
+            // widget audio resterait figée sur son rendu initial.
+            && lhs.replyReference?.authorAvatarUrl == rhs.replyReference?.authorAvatarUrl
             && lhs.replyIsStory == rhs.replyIsStory
             && lhs.parentIsMe == rhs.parentIsMe
             && lhs.embedsCaptionInWidget == rhs.embedsCaptionInWidget
@@ -947,7 +961,9 @@ struct AudioMediaView: View, Equatable {
                 parentIsMe: false,
                 accentHex: accentColor,
                 isDark: isDark,
-                mentionDisplayNames: mentionDisplayNames
+                mentionDisplayNames: mentionDisplayNames,
+                onQuotedAuthorTap: onQuotedAuthorTap,
+                onQuotedMediaTap: onQuotedMediaTap
             )
             .contentShape(Rectangle())
             .onTapGesture {

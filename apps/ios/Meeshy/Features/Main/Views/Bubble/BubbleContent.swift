@@ -119,10 +119,21 @@ nonisolated struct BubbleContent: Equatable {
         static func == (lhs: Reply, rhs: Reply) -> Bool {
             lhs.reference.messageId == rhs.reference.messageId
                 && lhs.reference.previewText == rhs.reference.previewText
+                // L'avatar de l'auteur cite est une ZONE TACTILE de la citation
+                // (porte vers le profil) : il influence le rendu. Arrivant apres
+                // coup (refresh serveur, hydratation du cache), son absence de
+                // ce comparateur figeait la citation en initiales pour toujours.
+                && lhs.reference.authorAvatarUrl == rhs.reference.authorAvatarUrl
                 && lhs.isStory == rhs.isStory
                 && lhs.reference.moodEmoji == rhs.reference.moodEmoji
                 && lhs.reference.storyPublishedAt == rhs.reference.storyPublishedAt
                 && lhs.reference.attachmentThumbnailUrl == rhs.reference.attachmentThumbnailUrl
+                // La protection DECIDE si cette vignette est rendue et si la
+                // zone 2 est armee : elle influence le rendu autant que l'URL
+                // au-dessus. Absente d'ici, une citation figee sur une
+                // premiere resolution silencieuse (blob de cache ancien) ne se
+                // redessinerait jamais quand la protection arrive enfin.
+                && lhs.reference.attachmentIsProtected == rhs.reference.attachmentIsProtected
                 && lhs.reference.storyThumbnailUrl == rhs.reference.storyThumbnailUrl
                 && lhs.reference.storyReactionCount == rhs.reference.storyReactionCount
                 && lhs.reference.storyCommentCount == rhs.reference.storyCommentCount

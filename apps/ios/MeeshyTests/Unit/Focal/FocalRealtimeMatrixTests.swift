@@ -286,13 +286,14 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         let body = code[start.lowerBound..<end.lowerBound]
         XCTAssertTrue(
             body.contains("onReplyTap?(reference.messageId)"),
-            "F09 : le tap du bloc citation (hors zones nom/média) doit déclencher `onReplyTap(reference.messageId)` — " +
+            "F09 : le tap du bloc citation (hors zones avatar/média) doit déclencher `onReplyTap(reference.messageId)` — " +
             "c'est ce callback que l'hôte fait atterrir via scrollToItem(.centeredVertically) — voir test_F12"
         )
         XCTAssertTrue(
             code.contains(".onTapGesture {\n            jumpToOriginal()"),
-            "F09 : le tap GLOBAL du bloc reste le saut à l'original — les zones nom (profil) et média (lecture) " +
-            "sont des enclaves, jamais un remplacement du saut"
+            "F09 : le tap GLOBAL du bloc reste le saut à l'original — les zones avatar (profil) et média (lecture) " +
+            "sont des enclaves, jamais un remplacement du saut. Depuis la LOI DES ZONES (2026-08-24) le NOM " +
+            "n'est plus une enclave : il retombe sous ce tap global"
         )
     }
 

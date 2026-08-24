@@ -207,7 +207,9 @@ extension BubbleStandardLayout {
                 parentIsMe: false,
                 accentHex: contactColor,
                 isDark: isDark,
-                mentionDisplayNames: mentionDisplayNames
+                mentionDisplayNames: mentionDisplayNames,
+                onQuotedAuthorTap: onQuotedAuthorTap,
+                onQuotedMediaTap: onQuotedMediaTap
             )
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(neutralBg)

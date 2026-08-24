@@ -1610,10 +1610,53 @@ public struct ReplyReference: Codable, Sendable {
     public let messageId: String
     public let authorName: String
     public let authorColor: String
+    /// Avatar de l'auteur cite, GRAVE dans la citation — jamais re-resolu au
+    /// rendu.
+    ///
+    /// La citation est une feuille `Equatable` a `==` MANUEL : une lecture de
+    /// store faite pendant le rendu serait invisible de cette comparaison, et
+    /// l'avatar qui arrive apres coup ne redessinerait jamais la cellule. La
+    /// donnee est deja sur le fil (`APIMessageReplyTo.sender`), elle etait
+    /// simplement jetee par les constructeurs.
+    ///
+    /// **Optionnel, et il doit le rester** : `MeeshyMessage.init(from:)` decode
+    /// `replyTo` par `decodeIfPresent`, qui PROPAGE l'echec d'un sous-decodage.
+    /// Un champ requis ferait donc disparaitre du cache L2 le message ENTIER
+    /// des que son blob `replyToJson` a ete grave avant ce champ — pas
+    /// seulement sa citation. Meme discipline que
+    /// `ForwardReference.conversationType`.
+    ///
+    /// `nil` ne ferme AUCUNE porte : `authorName` et `authorColor` sont
+    /// presents a tous les sites de construction, donc l'avatar se dessine
+    /// quand meme en initiales colorees. La porte vers le profil ne depend
+    /// jamais de la presence d'une photo.
+    public let authorAvatarUrl: String?
     public let previewText: String
     public let isMe: Bool
     public let attachmentType: String?
     public let attachmentThumbnailUrl: String?
+    /// La piece jointe citee est PROTEGEE — vue unique ou floutee — donc son
+    /// contenu ne doit ni s'afficher ni s'annoncer dans la citation.
+    ///
+    /// GRAVE au moment ou la citation est composee, exactement comme
+    /// `authorAvatarUrl`, et pour la meme raison : la citation est une feuille
+    /// `Equatable` a `==` MANUEL, une lecture de store faite au rendu serait
+    /// invisible de ce comparateur. Chaque constructeur le derive de la source
+    /// qu'il tient — `APIMessageAttachment` sur les chemins reseau et cache,
+    /// `MeeshyMessageAttachment` sur la bulle optimiste.
+    ///
+    /// **Optionnel, et il doit le rester** : `MeeshyMessage.init(from:)` decode
+    /// `replyTo` par `decodeIfPresent`, qui PROPAGE l'echec d'un sous-decodage.
+    /// Un champ requis ferait disparaitre du cache L2 le message ENTIER des que
+    /// son blob `replyToJson` a ete grave avant ce champ. Meme discipline que
+    /// `authorAvatarUrl` et `ForwardReference.conversationType`.
+    ///
+    /// `nil` = inconnu, traite comme NON protege : la vignette d'une citation
+    /// ordinaire ne doit pas disparaitre parce qu'un blob ancien se tait. La
+    /// porte reste FERMEE la ou elle compte, `MessageListViewController
+    /// .openQuotedMedia` refusant d'ouvrir un attachement protege apres
+    /// relecture du message REEL dans le store.
+    public let attachmentIsProtected: Bool?
     public let isStoryReply: Bool
     public var storyPublishedAt: Date?
     public var storyReactionCount: Int?
@@ -1626,15 +1669,61 @@ public struct ReplyReference: Codable, Sendable {
     /// `storyPublishedAt` porte alors la date de publication du mood.
     public var moodEmoji: String?
 
-    public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil, isStoryReply: Bool = false,
+    /// Le PREDICAT unique des deux peaux (`BubbleQuotedReply`,
+    /// `FocalQuotedReplyView`) : un media cite protege ne montre ni vignette ni
+    /// icone de lecture, et n'arme AUCUNE zone 2 — le tap retombe alors en zone
+    /// 3 (retour au message cite), ou le media garde son propre geste de
+    /// revelation. Miroir de `BubbleGridCell.attachmentIsProtected`
+    /// (`isViewOnce || isBlurred`), cote citation.
+    ///
+    /// Sans lui, une citation affichait la vignette NON FLOUTEE d'un media a
+    /// vue unique et posait par-dessus un bouton play que le verrou de l'hote
+    /// refusait d'honorer : une exposition, doublee d'un controle qui ment.
+    public var quotedMediaIsProtected: Bool { attachmentIsProtected == true }
+
+    /// ZONE 1 de la LOI DES ZONES, cote DONNEE : cette citation designe-t-elle
+    /// une PERSONNE dont la fiche peut s'ouvrir ?
+    ///
+    /// Une story ou une humeur citee porte `authorName == "Story"` (ou vide) et
+    /// aucun avatar : il n'y a pas de personne a ouvrir, l'hote fabriquerait
+    /// une fiche a ce nom.
+    ///
+    /// Ce que la donnee OFFRE, jamais ce qu'une peau CABLE : l'armement reste
+    /// la conjonction de ce fait et de la presence d'un gestionnaire.
+    public var offersAuthorGate: Bool { !isStoryReply }
+
+    /// ZONE 2 cote DONNEE : cette citation porte-t-elle un media que l'on peut
+    /// ouvrir ou jouer EN PLEIN ECRAN ?
+    ///
+    /// La story en est exclue : son chemin (zone 3 -> viewer) EST deja le plein
+    /// ecran demande, et le dedoubler serait un second point actionnable pour
+    /// une seule capacite. Un media PROTEGE en est exclu aussi — voir
+    /// `quotedMediaIsProtected`.
+    ///
+    /// Lu par la couche d'ACCESSIBILITE des deux hotes de rangee
+    /// (`BubbleStandardLayout`, `FocalRow`), qui doivent offrir cette zone en
+    /// action nommee : leur `.accessibilityElement(children: .combine)` fusionne
+    /// la rangee en UN element et leur `.accessibilityLabel` REMPLACE le
+    /// libelle, si bien qu'aucun geste pose dans la citation n'est atteignable
+    /// autrement. Les deux peaux ecrivent la meme loi dans leur propre
+    /// armement, sous des gardes de source qui epinglent leurs expressions.
+    public var offersMediaGate: Bool {
+        !isStoryReply
+            && !quotedMediaIsProtected
+            && (attachmentType != nil || attachmentThumbnailUrl?.isEmpty == false)
+    }
+
+    public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, authorAvatarUrl: String? = nil, attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil, attachmentIsProtected: Bool? = nil, isStoryReply: Bool = false,
                 storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyShareCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil) {
         self.messageId = messageId
         self.authorName = authorName
         self.previewText = previewText
         self.isMe = isMe
         self.authorColor = authorColor ?? DynamicColorGenerator.colorForName(authorName)
+        self.authorAvatarUrl = authorAvatarUrl
         self.attachmentType = attachmentType
         self.attachmentThumbnailUrl = attachmentThumbnailUrl
+        self.attachmentIsProtected = attachmentIsProtected
         self.isStoryReply = isStoryReply
         self.storyPublishedAt = storyPublishedAt
         self.storyReactionCount = storyReactionCount

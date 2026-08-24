@@ -57,6 +57,33 @@ final class ConversationReplyContextTests: XCTestCase {
         XCTAssertEqual(draftStore.load(for: "c1")?.text, "mon texte")
     }
 
+    // MARK: - L'avatar de l'auteur cité, gravé par le geste « Répondre »
+
+    /// `triggerReply` est une méthode d'extension de `ConversationView` : aucun
+    /// test d'exécution ne peut l'appeler sans monter la vue et son
+    /// environnement. Garde de SOURCE, donc — mais ANCRÉE : l'assertion
+    /// d'ancrage échoue bruyamment si le fichier est tronqué (accident du
+    /// dépouilleur de commentaires) ou la fonction renommée, de sorte que la
+    /// preuve ne peut jamais passer à vide.
+    func test_triggerReply_engravesTheQuotedAuthorAvatar() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/Views
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationView+MessageRow.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+
+        XCTAssertTrue(
+            code.contains("func triggerReply(for msg: Message)"),
+            "Ancrage perdu : ni fichier tronqué ni fonction renommée ne doit laisser cette garde passer à vide."
+        )
+        XCTAssertTrue(
+            code.contains("authorAvatarUrl: msg.senderAvatarURL"),
+            "Le geste « Répondre » doit graver l'avatar du message cité dans la citation — sinon l'avatar devrait être re-résolu au rendu, ce qu'aucun `==` manuel ne verrait."
+        )
+    }
+
     func test_appReopen_preservesReplyToIdWhenNoSendNorCancel() {
         // Simulate: user opened a conversation, replied to a story (replyToId
         // persisted in draft), then backgrounded the app. Re-open: the reply
