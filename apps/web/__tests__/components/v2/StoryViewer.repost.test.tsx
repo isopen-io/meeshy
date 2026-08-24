@@ -80,4 +80,38 @@ describe('StoryViewer — minimal repost action', () => {
     render(<StoryViewer stories={[makeStory('story-3')]} onClose={jest.fn()} />);
     expect(screen.queryByLabelText('Repost')).not.toBeInTheDocument();
   });
+
+  /**
+   * L'ANCRAGE — « garder ça pour de bon ». Le miroir laisse l'éphémère
+   * éphémère (20 h), l'ancrage le rend permanent : deux effets différents,
+   * donc DEUX contrôles distincts.
+   *
+   * Le bouton n'avait aucun témoin ici — les tests de page passent par un stub
+   * de StoryViewer, si bien que le supprimer laissait toute la suite verte.
+   */
+  it("montre l'ancrage, DISTINCT du miroir, quand onRepostAsPost est fourni", () => {
+    const onRepost = jest.fn();
+    const onRepostAsPost = jest.fn();
+    render(
+      <StoryViewer
+        stories={[makeStory('story-4')]}
+        onClose={jest.fn()}
+        onRepost={onRepost}
+        onRepostAsPost={onRepostAsPost}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Keep on my feed'));
+    expect(onRepostAsPost).toHaveBeenCalledWith('story-4');
+    expect(onRepost).not.toHaveBeenCalled();
+  });
+
+  it("n'affiche pas l'ancrage sans onRepostAsPost, même quand le miroir est offert", () => {
+    render(
+      <StoryViewer stories={[makeStory('story-5')]} onClose={jest.fn()} onRepost={jest.fn()} />,
+    );
+
+    expect(screen.getByLabelText('Repost')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Keep on my feed')).not.toBeInTheDocument();
+  });
 });

@@ -356,10 +356,41 @@ struct MeeshyComposerHost: View {
     /// **Elle ne porte pas non plus l'ÉVENTAIL**, qui vit dans le plateau. Ce
     /// n'est pas une impasse tant qu'aucune porte ne la monte : le seul appelant
     /// de production ouvre sur `.cameraReady`, que `ComposerSurfaceRouting`
-    /// route toujours vers la scène, quel que soit le format. Le jour où une
-    /// porte la monte (`.feedComposer`, `.moodChip`), il faudra y porter le
-    /// sélecteur — sans lui, basculer vers le document serait une porte à sens
-    /// unique.
+    /// route toujours vers la scène, quel que soit le format. Cela reste vrai
+    /// après le lot 3, et il faut le lire au mot près : la TABLE de C1 désigne
+    /// désormais le meuble pour `.feedComposer` (`routesToLegacy: nil`), mais
+    /// aucun site de présentation n'a bougé — le fil monte toujours sa feuille
+    /// et son composer inline depuis ses propres booléens. La porte la plus
+    /// utilisée ne passe donc pas encore ici.
+    ///
+    /// Le jour où elle passera, il faudra y porter le sélecteur — sans lui,
+    /// basculer vers le document serait une porte à sens unique. **Et ce jour
+    /// ne se décrète pas depuis ce fichier** : le porter AUJOURD'HUI serait
+    /// pire que ne pas le porter. Mesuré le 2026-08-24 sur les 14 fichiers
+    /// `StoryComposerViewModel*.swift` : ses écrivains publics sont l'adoption
+    /// de brouillon (`adoptDraft(id:)`, `detachFromAdoptedDraft()`,
+    /// `adoptDeclaredReferences(_:)`), la timeline (`loadCurrentSlideIntoTimeline()`,
+    /// `commitTimelineToCurrentSlide()`, `applyPersistedCommandHistory(_:)`,
+    /// `shutdownTimelineIfNeeded()`, et `timelineViewModel` qui rend une
+    /// référence écrivant à son tour) et deux inits de reprise
+    /// (`init(editing:)`, `init(reposting:authorHandle:)`) — **aucun n'écrit du
+    /// TEXTE** : `currentEffects` est `public internal(set)`, et rien dans
+    /// `+Elements.swift` n'expose publiquement la création d'un élément de
+    /// texte. La liste est plus large que le blocage, et c'est le blocage qui
+    /// compte : un `grep` de contrôle doit CONFIRMER cette phrase, jamais la
+    /// démentir — un inventaire faux présenté comme « déjà vérifié » coûte plus
+    /// cher que pas d'inventaire du tout. Un
+    /// auteur qui taperait son post ici puis choisirait « Story » verrait le
+    /// routage lui monter l'atelier, et `documentText` n'aurait aucun chemin
+    /// pour l'y suivre — la saisie disparaîtrait sans un mot, sur la surface de
+    /// création la plus fréquentée de l'app.
+    ///
+    /// Les deux branches sont donc des régressions — sans éventail une porte à
+    /// sens unique, avec éventail une perte de texte — et c'est ce couple qui
+    /// fait que recâbler `.feedComposer` demande plus qu'une ligne de table.
+    /// **Condition de levée, côté SDK** : un écrivain public de texte
+    /// atteignable par le meuble. L'éventail descend alors ici AVEC le
+    /// transfert de la saisie, jamais avant lui.
     ///
     /// **Sa SORTIE est celle du meuble.** `onDismiss` n'était atteignable que
     /// sous la scène, où l'atelier du SDK peint la croix ; le document n'a pas

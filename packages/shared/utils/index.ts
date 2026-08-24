@@ -8,6 +8,7 @@ export * from './errors.js';
 export * from './validation.js';
 export * from './conversation-helpers.js';
 export * from './repost-audience.js';
+export * from './repost-target.js';
 export * from './conversation-colors.js';
 export * from './attachment-validators.js';
 export * from './language-normalize.js';

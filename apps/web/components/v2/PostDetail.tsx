@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
 import { formatDuration } from '@/utils/audio-formatters';
-import { Download, Repeat2 } from 'lucide-react';
+import { ArrowDownToLine, Download, Repeat2 } from 'lucide-react';
 import { useI18n } from '@/hooks/use-i18n';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
@@ -169,6 +169,15 @@ export interface PostDetailProps {
   onUnbookmark?: () => void;
   onShare?: () => void;
   onRepost?: () => void;
+  /**
+   * L'ANCRAGE — « garder ça pour de bon » : republier la carte en POST
+   * permanent, à côté du repost qui, lui, miroite le format de la source.
+   * Jumeau de `StoryViewer.onRepostAsPost`.
+   *
+   * C'est l'HÔTE qui décide de le câbler ou non : la carte ne sait pas si le
+   * miroir mènerait à de l'éphémère sans recours.
+   */
+  onRepostAsPost?: () => void;
   onDelete?: () => void;
   onEdit?: () => void;
   onReport?: () => void;
@@ -220,6 +229,7 @@ function PostDetail({
   onUnbookmark,
   onShare,
   onRepost,
+  onRepostAsPost,
   onDelete,
   onEdit,
   onReport,
@@ -632,6 +642,19 @@ function PostDetail({
               >
                 <Repeat2 className="w-5 h-5" />
                 Repost
+              </button>
+            )}
+
+            {onRepostAsPost && (
+              <button
+                data-testid="post-detail-repost-as-post"
+                onClick={onRepostAsPost}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)] transition-colors"
+                aria-label={t('post.repostAsPost', 'Keep on my feed')}
+                title={t('post.repostAsPost', 'Keep on my feed')}
+              >
+                <ArrowDownToLine className="w-5 h-5" />
+                {t('post.repostAsPost', 'Keep on my feed')}
               </button>
             )}
 
