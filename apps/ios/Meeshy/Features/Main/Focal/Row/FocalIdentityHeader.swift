@@ -48,6 +48,25 @@ struct FocalIdentityHeader: View, Equatable {
     var agentStyle: AgentAuthoredStyle.Descriptor = .human
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
 
+    // MARK: - Gabarit (directive 2026-08-24 — le focus réemploie cet en-tête)
+
+    /// Diamètre de la pastille. Défaut : la cote de rangée. La bulle
+    /// magnifiée passe la sienne, plus grande.
+    var avatarDiameter: CGFloat = FocalMetrics.Avatar.size
+    /// Corps du nom. Même raison que `avatarDiameter`.
+    var nameSize: CGFloat = FocalMetrics.Name.size
+    /// L'en-tête occupe toute sa ligne (`Spacer` + hauteur réservée). La chip
+    /// du focus, elle, doit épouser son contenu — une capsule qui s'étirerait
+    /// jusqu'au bord traverserait la carte.
+    var fillsWidth: Bool = true
+    /// Destination du toucher, quand elle diffère de la fiche de l'auteur.
+    ///
+    /// La bulle magnifiée passe la sienne : les CONDITIONS de l'auteur dans
+    /// cette conversation (droits, lien d'entrée, coordonnées consenties),
+    /// jamais une page de profil — laquelle n'offre, depuis une conversation,
+    /// aucune action. Sans `onTap`, le comportement historique tient.
+    var onTap: (() -> Void)? = nil
+
     static func == (lhs: FocalIdentityHeader, rhs: FocalIdentityHeader) -> Bool {
         lhs.isMe == rhs.isMe
             && lhs.senderDisplayName == rhs.senderDisplayName
@@ -61,6 +80,9 @@ struct FocalIdentityHeader: View, Equatable {
             && lhs.senderIsAnonymous == rhs.senderIsAnonymous
             && lhs.isDark == rhs.isDark
             && lhs.agentStyle == rhs.agentStyle
+            && lhs.avatarDiameter == rhs.avatarDiameter
+            && lhs.nameSize == rhs.nameSize
+            && lhs.fillsWidth == rhs.fillsWidth
     }
 
     /// Nom affiché — clé `focal.row.you` pour « Toi » (contrat §7),
@@ -83,7 +105,7 @@ struct FocalIdentityHeader: View, Equatable {
             // `FocalNoBubbleSourceGuardTests`), et le présentateur a besoin du
             // `participantId` pour ouvrir la fiche d'un visiteur sans compte
             // plutôt qu'une page de profil vide.
-            onOpenProfile?(profileUser)
+            if let onTap { onTap() } else { onOpenProfile?(profileUser) }
         } label: {
             HStack(spacing: 7) {
                 MeeshyAvatar(
@@ -106,7 +128,7 @@ struct FocalIdentityHeader: View, Equatable {
                 // utile dans une conversation ouverte à tout venant.
                 if senderIsAnonymous {
                     Image(systemName: "theatermasks.fill")
-                        .font(MeeshyFont.relative(FocalMetrics.Name.size * 0.8, weight: .semibold))
+                        .font(MeeshyFont.relative(nameSize * 0.8, weight: .semibold))
                         .foregroundColor(.purple)
                         .accessibilityLabel(String(
                             localized: "focal.row.anonymousSender",
@@ -117,10 +139,7 @@ struct FocalIdentityHeader: View, Equatable {
                 }
 
                 Text(displayName)
-                    .font(MeeshyFont.relative(
-                        FocalMetrics.Name.size,
-                        weight: FocalMetrics.Name.weight
-                    ))
+                    .font(MeeshyFont.relative(nameSize, weight: FocalMetrics.Name.weight))
                     .foregroundColor(nameColor)
                     .lineLimit(1)
 
@@ -128,7 +147,9 @@ struct FocalIdentityHeader: View, Equatable {
                     AgentSparkGlyph()
                 }
 
-                Spacer(minLength: 0)
+                if fillsWidth {
+                    Spacer(minLength: 0)
+                }
             }
         }
         .buttonStyle(.plain)
@@ -137,10 +158,8 @@ struct FocalIdentityHeader: View, Equatable {
         // rangée ne dépend d'aucun état, la liste ne se réorganise jamais —
         // même invariant que le retrait constant `Focus.textIndent` (34 + 7)
         // de `FocalRow`, qui réserve la même largeur de pastille.
-        .frame(minHeight: FocalMetrics.Focus.avatarSize)
+        .frame(minHeight: fillsWidth ? FocalMetrics.Focus.avatarSize : nil)
     }
 
-    private var avatarSize: CGFloat {
-        FocalMetrics.Avatar.size
-    }
+    private var avatarSize: CGFloat { avatarDiameter }
 }
