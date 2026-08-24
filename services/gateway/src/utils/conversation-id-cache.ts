@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { BoundedTtlCache } from './bounded-cache.js';
 
 // Cache immutable identifier → ObjectId (populated on first lookup). Bounded to
@@ -10,13 +11,12 @@ import { BoundedTtlCache } from './bounded-cache.js';
 // caches in socket-helpers.ts and MeeshySocketIOManager.
 export const CONVERSATION_ID_CACHE_MAX = 2000;
 const cache = new BoundedTtlCache<string, string>({ maxSize: CONVERSATION_ID_CACHE_MAX });
-const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
 export async function resolveConversationId(
   prisma: PrismaClient,
   identifier: string
 ): Promise<string | null> {
-  if (OBJECT_ID_REGEX.test(identifier)) return identifier;
+  if (isValidMongoId(identifier)) return identifier;
   const cached = cache.get(identifier);
   if (cached) return cached;
   const conversation = await prisma.conversation.findFirst({

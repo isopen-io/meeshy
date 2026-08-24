@@ -12,6 +12,7 @@ import { PrismaClient, PostReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
 import { ConflictError } from '../errors/custom-errors';
+import { assertValidObjectId } from '../utils/object-id.js';
 
 export interface PostReactionAggregation {
   readonly emoji: string;
@@ -75,12 +76,8 @@ export interface GetPostReactionsOptions {
 }
 
 export class PostReactionService {
-  private static readonly OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
-
   private validatePostId(postId: string): void {
-    if (!postId || !PostReactionService.OBJECT_ID_REGEX.test(postId)) {
-      throw new Error(`Invalid post ID format: ${postId.substring(0, 20)}`);
-    }
+    assertValidObjectId(postId, 'post');
   }
 
   constructor(private readonly prisma: PrismaClient) {}
