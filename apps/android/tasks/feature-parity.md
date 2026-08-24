@@ -3898,6 +3898,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       viewmodel + reused inert case); RED-proof isolated each piece: merge (4), socket (2), subscription+merge
       (2 vm), and the emit re-projection alone reddened exactly the repaint test while the chip/inert tests
       stayed green. No wire/production logic outside `apps/android`.
+- [x] **Realtime story deletion** done (slice `story-deleted-realtime-viewer`, 2026-08-24): Android had **no**
+      handler for `story:deleted` — the gateway broadcasts `{ storyId, authorId }` to every friend's feed room
+      (`SocialEventsHandler.broadcastStoryDeleted`), iOS folds it out of the open viewer
+      (`StoryViewModel.storyDeleted` → `purgeDeadStories`), Android dropped it: a story deleted from another
+      device stayed on screen until the viewer was closed. Every client auto-joins its own `feed:{userId}` room
+      on auth, so the event reaches Android. New pure `StoryPlayback.removingSlide(storyId)` drops the matched
+      slide, drops an emptied author group, and re-anchors the cursor BY IDENTITY (current slide survives → stay;
+      current slide removed but group survives → advance to next / fall back to new last; current group emptied →
+      clamp onto the group now in the slot; nothing left → dismiss; unknown id → inert). New
+      `SocketStoryDeletedData` + `SocialSocketManager.storyDeleted` flow wired to `listen("story:deleted", …)`;
+      `StoryViewerViewModel.observeStoryDeletions` subscribes, purges the per-slide caches (`rawItems`,
+      `reactionStates`), and re-projects via `emit()`. +16 tests (10 pure engine, 5 viewmodel, 2 socket);
+      RED-proof isolated: stubbing `removingSlide` to `return this` reddened exactly the 9 structural engine
+      cases while the unknown-id case (correctly expecting `this`) stayed green. No wire/production logic outside
+      `apps/android`. Remaining STORY realtime gap: `story:updated` (engagement-reset + whole-story content swap,
+      needs a viewed-monotonicity rule) — a distinct future slice.
 - [ ] Per-clip inspector EDITOR (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)
