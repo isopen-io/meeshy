@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@langchain/core": "^0.3.80",
-    "@langchain/langgraph": "^0.2.74",
+    "@langchain/langgraph": "^1.4.12",
     "@meeshy/shared": "workspace:*",
     "@prisma/client": "^6.19.3",
     "dotenv": "^17.4.2",
