@@ -24,7 +24,7 @@ import {
 } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePostRoom } from '@/hooks/social/use-post-room';
-import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { usePreferredLanguage, usePreferredLanguages } from '@/hooks/use-post-translation';
 import { useCommentTarget } from '@/hooks/use-comment-target';
 import { postBackgroundSound } from '@/lib/story-transforms';
 import { PostDetail } from '@/components/v2/PostDetail';
@@ -62,6 +62,7 @@ export default function PostDetailPage() {
   const currentUser = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const userLanguage = usePreferredLanguage();
+  const preferredLanguages = usePreferredLanguages();
 
   // Notification → comment navigation: the link builder appends a
   // `#comment-<id>` anchor (plus `?parent=<id>` when the target is a reply, or
@@ -254,6 +255,7 @@ export default function PostDetailPage() {
             currentUserId={currentUser?.id}
             currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
             userLanguage={userLanguage}
+            preferredLanguages={preferredLanguages}
             isLiked={isHeartLikedByMe(post)}
             isBookmarked={!!post.bookmarkedAt}
             userReaction={post.currentUserReactions?.[0]}

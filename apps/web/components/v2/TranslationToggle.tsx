@@ -27,6 +27,16 @@ export interface TranslationToggleProps {
   originalLanguageName?: string;
   translations?: TranslationItem[];
   userLanguage?: string;
+  /**
+   * Liste ORDONNÉE des langues préférées du lecteur (Prisme : rangs 1→4 +
+   * fallback). Quand elle est fournie, l'auto-résolution DESCEND le prisme et
+   * sert la première langue disponible — par une traduction, ou parce que le
+   * contenu est déjà écrit dedans (la langue d'origine concourt à son rang).
+   * Parité avec iOS `APIPost.resolveTranslation` et Android
+   * `LanguageResolver.preferredTranslation`. Absente, on retombe sur le
+   * comportement historique à une seule langue (`userLanguage`).
+   */
+  preferredLanguages?: string[];
   variant?: 'inline' | 'block' | 'flags';
   /**
    * Inline variant only. When true (default) the resolved content is rendered
@@ -64,6 +74,7 @@ function TranslationToggle({
   originalLanguageName,
   translations = [],
   userLanguage,
+  preferredLanguages,
   variant = 'inline',
   showContent = true,
   onDisplayedChange,
@@ -84,12 +95,26 @@ function TranslationToggle({
   // Prisme: the preferred version is derived from the CURRENT props on every render so
   // translations pushed asynchronously (comment/post:translation-updated) surface as soon
   // as they land and a change of preferred language re-resolves live.
+  //
+  // On DESCEND le prisme ordonné (`preferredLanguages`) et on rend la première
+  // langue servie — par une traduction, ou parce que l'original est déjà écrit
+  // dedans (auquel cas la langue d'origine gagne À SON RANG, jamais en
+  // court-circuit). Sans `preferredLanguages`, comportement historique à une
+  // seule langue. Parité iOS `APIPost.resolveTranslation` / Android
+  // `LanguageResolver.preferredTranslation`.
   const autoResolved = useMemo(() => {
-    const matching = userLanguage
-      ? translations.find((t) => sameLanguage(t.languageCode, userLanguage))
-      : undefined;
-    return matching ? { ...matching, isOriginal: false as const } : originalVersion;
-  }, [userLanguage, translations, originalVersion]);
+    const order = preferredLanguages && preferredLanguages.length > 0
+      ? preferredLanguages
+      : userLanguage
+        ? [userLanguage]
+        : [];
+    for (const lang of order) {
+      if (sameLanguage(originalLanguage, lang)) return originalVersion;
+      const match = translations.find((t) => sameLanguage(t.languageCode, lang));
+      if (match) return { ...match, isOriginal: false as const };
+    }
+    return originalVersion;
+  }, [preferredLanguages, userLanguage, translations, originalVersion, originalLanguage]);
 
   // Only the user's explicit exploration is stored (language + original flag, never the
   // content) so a manually selected language stays fresh when its text is re-translated.

@@ -28,7 +28,7 @@ import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use
 import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useRepostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
 import { useCreateCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
-import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { usePreferredLanguage, usePreferredLanguages } from '@/hooks/use-post-translation';
 import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 
 import { useAuthStore } from '@/stores/auth-store';
@@ -129,6 +129,7 @@ export function PostsFeedScreen() {
   const currentUser = useAuthStore((s) => s.user);
   const currentUserId = currentUser?.id ?? '';
   const userLanguage = usePreferredLanguage();
+  const preferredLanguages = usePreferredLanguages();
   const { preferences: storyPrefs } = useStoryPreferences();
 
   // ─── Posts ────────────────────────────────────────────────────────────
@@ -886,6 +887,7 @@ export function PostsFeedScreen() {
                     content={post.content ?? ''}
                     translations={postToTranslations(post)}
                     userLanguage={userLanguage}
+                    preferredLanguages={preferredLanguages}
                     time={formatRelativeTime(post.createdAt, t)}
                     likes={post.likeCount}
                     comments={post.commentCount}
