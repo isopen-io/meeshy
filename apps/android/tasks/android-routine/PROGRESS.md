@@ -2,6 +2,66 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-24 **the feed folds a realtime REPOST pushed over `post:reposted`** (slice
+> `feed-post-reposted-realtime`, feature-parity Feed) — the ARRIVAL sibling of the `post:created` fold.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3487/#3481/#3475/#3474/#3470
+> (gateway/web/ios Prisme/validation cycles) and #3477 (`claude/upbeat-dirac-*`, the SEPARATE calls routine —
+> `tasks/calls-fonctionnel-todo.md`, left untouched): none is a `claude/apps/android/*` slice from THIS routine,
+> all touch production logic outside `apps/android`. Prior slice (`feed-post-updated-realtime-merge`) already
+> merged into main. Branched off freshly-fetched `origin/main` (`48b2fe41`).
+>
+> **The gap — the arrival twin of `post:created`.** The gateway broadcasts a repost as a COMPLETE new post
+> (`{ originalPostId, repost }`, the repost authored by the reposter, embedding the original under `repostOf`)
+> to every visibility-filtered feed room via `SocialEventsHandler.broadcastPostReposted`. iOS folds it via
+> `FeedSocketHandler` routing `postReposted` through `handlePostUpsert(data.repost)` — a repost is itself a new
+> feed post. On Android the event decoded nowhere: `SocialSocketManager` had no `postReposted` flow,
+> `SocketEvents.kt` no DTO, `FeedViewModel` no subscriber — a repost stayed invisible on the feed until a full
+> refetch, while `post:created` (its arrival twin) already prepended live.
+>
+> **Scout — why NOT the other Next candidates.** `post:reaction-added`/`-removed`: iOS folds the ABSOLUTE
+> per-emoji count into `reactionSummary`, but the Android feed card renders reactions as a HEART + count only
+> (no emoji summary; only STATUSES render `reactionSummary` chips), so folding it would be orphan/dead-end code
+> (routine forbids). `comment:reaction-sync`/`post:reaction-sync`: NOT broadcasts — iOS SDK documents them as
+> ACK-only responses to `*-request-sync` emits (`socket.on` explicitly absent), so not an "ignored broadcast"
+> slice. `post:reposted` was the clean one: an existing render surface (the `RepostEmbedBuilder` feed card),
+> an existing fold seam (`FeedRealtimeReducer.accept`), zero orphan risk.
+>
+> **The fix — a DTO + a socket flow + a VM subscriber reusing the `post:created` seam.** (1) New
+> `SocketPostRepostedData(originalPostId, repost: ApiPost)` in `:core:model` (mirror of iOS, nests the repost
+> under `repost`). (2) `SocialSocketManager.postReposted` flow + `listen("post:reposted", …)`. (3) `FeedViewModel`
+> subscribes and routes `payload.repost` through the SAME `FeedRealtimeReducer.accept(head, repost, cacheIds)`
+> path `post:created` uses — dedup against the cache-projected feed and the buffered head, prepend newest-first,
+> bump the "N new posts" banner. No new pure logic, no new render surface: the repost renders through the
+> existing repost embed cell.
+>
+> **Tests: +3** — 1 `SocialSocketManagerTest` (decodes the repost nested under `repost`, carrying author +
+> content), 2 `FeedViewModelTest` (a `post:reposted` arrives at the head and raises the banner; a repost already
+> visible in the cache feed is inert with no banner bump — the two arms of `accept`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200).** Pristine `android-37.0` auto-installed by AGP but the
+> first `./gradlew` hash-errored on `android-37` (no "inconsistent location" line); the four-edit copy→patch
+> (`source.properties` ApiLevel + `package.xml` `<api-level>` + `path=` + BOTH `build.prop` `sdk_full` fields),
+> keeping android-37.0 alongside, resolved it (per NOTES "THIRD mode").
+>
+> **Verified**: SDK bootstrapped via the four-edit copy→patch (both dirs);
+> `:sdk-core:testDebugUnitTest` (`SocialSocketManagerTest`) **BUILD SUCCESSFUL in 3m 14s**, then full
+> `assembleDebug testDebugUnitTest` (all modules, the CI-mirror gate, incl. `FeedViewModelTest`) **BUILD
+> SUCCESSFUL in 6m 39s (973 tasks)**. Reviewer PASS. Diff is `apps/android` only (3 prod files edited in
+> :core:model + :sdk-core + :feature:feed, +3 tests across 2 files, tracking docs). Verdict: **PASS** — a DTO
+> mirroring an existing type, a socket event mirroring the existing social events, and a VM subscriber reusing
+> the established `post:created` head-accept seam; behavioural tests through the public API; no production logic
+> outside `apps/android`.
+>
+> **Next**: Feed realtime arrivals/edits/deletes now honoured for POST (created / updated / reposted /
+> translation / liked / bookmarked / deleted), STORY overlay, and COMMENT (add / edit / delete / translation /
+> like / reaction-heart). Remaining iOS folds Android's `SocialSocketManager` still ignores are all currently
+> **orphan-blocked or ACK-only** (see Scout above): `post:reaction-*` and `comment:reaction-sync` need a post/
+> comment EMOJI-reaction render surface first (Android renders heart-only), and `comment:media-updated` needs a
+> comment-media model+render surface (Android's `ApiPostComment` has no `media` field). Next high-value area:
+> scout STORY realtime (`story:updated` engagement-reset, `story:deleted`) or move to the next feature-parity
+> Feed box. Scout read-only before committing.
+
 > On 2026-08-24 **the feed folds realtime post EDITS pushed over `post:updated`** (slice
 > `feed-post-updated-realtime-merge`, feature-parity Feed) — the WHOLE-POST sibling of the
 > `post-translation-updated` fold and the post analog of the `comment:updated` fold, both shipped the same day.

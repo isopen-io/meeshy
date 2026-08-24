@@ -191,6 +191,18 @@ class FeedViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            // post:reposted — someone reposted a post; the gateway broadcast the repost as a
+            // COMPLETE new post to every visibility-filtered feed room. A repost is itself a
+            // new feed post, so route it through the SAME head-accept path as post:created
+            // (dedup against the cache-projected feed and the buffered head, prepend
+            // newest-first, bump the banner). Mirror of iOS FeedSocketHandler routing
+            // post:reposted through handlePostUpsert.
+            socialSocket.postReposted.collect { payload ->
+                val cacheIds = latestCachePosts.mapTo(HashSet()) { it.id }
+                realtimeHead.update { FeedRealtimeReducer.accept(it, payload.repost, cacheIds) }
+            }
+        }
+        viewModelScope.launch {
             socialSocket.postDeleted.collect { payload ->
                 realtimeHead.update { FeedRealtimeReducer.remove(it, payload.postId) }
             }

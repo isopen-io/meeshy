@@ -5,6 +5,21 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-24 — before wiring an "ignored" realtime event, prove it is a BROADCAST with a RENDER surface (slice `feed-post-reposted-realtime`)
+The Next pointer listed four still-ignored social events. A read-only scout killed three and shipped one — the
+discriminator each time was NOT "does iOS fold it?" but **"is it broadcast, and does Android render what it
+carries?"**. `post:reaction-added`/`-removed`: iOS folds the ABSOLUTE per-emoji count into `reactionSummary`,
+but the Android FEED card renders reactions as a HEART + count only (only STATUSES render `reactionSummary`
+chips via `StatusBarPresentation`), so folding it = orphan/dead-end code the routine forbids. `comment:reaction-sync`
+/`post:reaction-sync`: NOT broadcasts at all — the iOS SDK `SocialSocketManager` has an explicit comment where
+`socket.on("…reaction-sync")` would be, saying the gateway never emits it; it is the ACK to a `*-request-sync`
+emit. Only `post:reposted` passed both gates: it IS broadcast (`SocialEventsHandler.broadcastPostReposted`) and
+a repost already renders as a normal feed card (`RepostEmbedBuilder`). **A repost is itself a new feed post**, so
+it needs no new fold logic — route `data.repost` through the SAME `FeedRealtimeReducer.accept` seam `post:created`
+uses (dedup vs cache + head, prepend, bump banner). Mirror of iOS `FeedSocketHandler` → `handlePostUpsert(data.repost)`.
+General rule: **a list of "events iOS folds that we don't" is a list of CANDIDATES, not work — verify each is a
+broadcast (not an ACK) landing on a surface Android already renders before spending a slice on it.**
+
 ## 2026-08-24 — a broadcast fold of a WHOLE entity must preserve the reader's OWN per-viewer fields (slice `feed-post-updated-realtime-merge`)
 `post:updated` rebroadcasts the COMPLETE edited post `{ post }` to every feed/post room — ONE object, shared
 by all recipients, so it cannot be personalized. Its viewer-owned fields (`isLikedByMe`, `isBookmarkedByMe`,

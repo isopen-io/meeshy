@@ -4061,6 +4061,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       + 1 socket decode + 1 vm routing = **+11**; RED-proof isolated: dropping the viewer-state preservation
       reddened exactly the 4 preservation/discrimination tests, the 2 preservation-independent tests stayed
       green. No wire/production logic outside `apps/android`.
+- [x] Realtime REPOST arrival **shipped** (slice `feed-post-reposted-realtime`, 2026-08-24 — the
+      arrival sibling of the `post:created` fold). Android had **no** handler for `post:reposted`; the
+      gateway broadcasts a repost as a COMPLETE new post (`{ originalPostId, repost }`) to every
+      visibility-filtered feed room via `SocialEventsHandler.broadcastPostReposted`, iOS folds it via
+      `FeedSocketHandler` routing `postReposted` through `handlePostUpsert(data.repost)`, Android left the
+      repost invisible until a full refetch. New `SocketPostRepostedData(originalPostId, repost: ApiPost)`
+      (mirror of iOS, nests the repost under `repost`) + `SocialSocketManager.postReposted` flow wired to
+      `listen("post:reposted", …)`. A repost is itself a new feed post, so `FeedViewModel` routes it through
+      the SAME `FeedRealtimeReducer.accept` head path `post:created` uses (dedup against the cache-projected
+      feed and the buffered head, prepend newest-first, bump the "N new posts" banner) — no new render
+      surface: the repost renders through the existing `RepostEmbedBuilder` feed card. +3 tests (1 socket
+      decode nesting the repost under `repost`; 1 vm — a repost arrives at the head and raises the banner;
+      1 vm — a repost already visible in the cache feed is inert). No wire/production logic outside
+      `apps/android`.
 - [x] Feed card stats row: like (filled when own) + comment count + repost count,
       mood emoji on the author line, pure `FeedPostPresentation` builder (8 builder
       tests + 1 model Prisme test + 3 repository optimistic/rollback tests, all green)
