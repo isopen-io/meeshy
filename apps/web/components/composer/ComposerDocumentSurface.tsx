@@ -1,49 +1,136 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
-import { Avatar } from './Avatar';
-import { Button } from './Button';
-import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
-import { MediaAccessibilityFields } from './MediaAccessibilityFields';
+import { Avatar } from '@/components/v2/Avatar';
+import { Button } from '@/components/v2/Button';
+import {
+  AudienceUserPicker,
+  AUDIENCE_VISIBILITIES,
+  isAudienceIncomplete,
+} from '@/components/v2/AudienceUserPicker';
+import { MediaAccessibilityFields } from '@/components/v2/MediaAccessibilityFields';
+import { PUBLICATION_VISIBILITY_OPTIONS } from '@/components/v2/publication-visibility';
 import { ReferencePicker } from '@/components/composer/ReferencePicker';
 import { ReferenceChipRow } from '@/components/composer/ReferenceChipRow';
+import { ComposerFormatFan } from '@/components/composer/ComposerFormatFan';
 import { useReferences } from '@/hooks/composer/useReferences';
 import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
 import { useAuthStore } from '@/stores/auth-store';
 import { AttachmentService } from '@/services/attachmentService';
+import { postTypeOf, webComposerOpening, type ComposerDoor, type ComposerFormat } from '@/lib/composer-door';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { removingHandle } from '@meeshy/shared/utils/composer-references';
 import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
-import { PUBLICATION_VISIBILITY_OPTIONS } from './publication-visibility';
 import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
 import type { PostReferenceDisplay } from '@meeshy/shared/types/post-reference';
 import type { ComposerDocumentPayload } from '@/components/composer/payload';
 
+/**
+ * La surface DOCUMENT — celle des formats POST et RÉEL.
+ *
+ * Elle porte, capacité par capacité, ce que `components/v2/PostComposer.tsx`
+ * (605 l.) sait faire : un plafond de 5 000 caractères, un pool UNIQUE de dix
+ * médias, un texte alternatif par média, l'opt-in son en tri-état, les
+ * références non-INLINE, les six audiences et l'écho optimiste des médias
+ * uploadés. `meeshy-composer-post.test.tsx` en est l'inventaire, cité à la
+ * ligne. Ce fichier ne décrit PAS l'état du composer hérité, qui vit sa vie
+ * dans son propre fichier.
+ *
+ * TROIS choses changent par rapport à ce port, et la troisième est un
+ * changement de PRODUIT, pas de forme :
+ *
+ *  1. **la bascule POST/RÉEL locale cède la place à l'éventail** de la porte.
+ *     Le composer hérité peignait deux boutons dès que la composition
+ *     qualifiait ; ici c'est `ComposerFormatFan` qui peint ce que la porte
+ *     offre, et il en offre parfois plus de deux ;
+ *  2. **les deux messages de plafond média passent par le catalogue.** Ils
+ *     étaient anglais en dur ; les recopier tels quels aurait gravé l'anglais
+ *     dans un fichier neuf, alors que le web est localisé en quatre langues ;
+ *  3. **la CLASSIFICATION PAR DÉFAUT d'une composition qualifiante passe de
+ *     RÉEL à POST, depuis le composer du fil.** Le composer hérité naît sur
+ *     RÉEL (`PostComposer.tsx`, `useState<PostType>('REEL')`) et ne dégrade
+ *     que si la composition ne qualifie pas (son `effectivePostType`) : joindre une vidéo de
+ *     5 s et publier sans rien toucher y donne un RÉEL. Ici le format naît de
+ *     la PORTE, et `feedComposer` ouvre sur `post`
+ *     (`composer-contract.ts`, `case 'feedComposer'`) : le même geste publie un POST, et la
+ *     publication n'entre plus dans le fil Réels. Passer en RÉEL devient un
+ *     geste explicite de l'auteur dans l'éventail.
+ *
+ *     Ce n'est pas un oubli de port, c'est ce que la table partagée dit : la
+ *     reproduire aurait demandé au web de re-semer un format initial contre le
+ *     contrat, c'est-à-dire d'en forker la table — et l'asymétrie voulue de
+ *     l'éventail (« re-qualifier ne rebascule PAS vers RÉEL ») interdit la
+ *     promotion automatique. La conséquence se dit noir sur blanc plutôt que
+ *     de se découvrir : **une vidéo publiée depuis le fil n'atterrit plus dans
+ *     Réels par défaut.**
+ *
+ *     Conséquence pour le RETRAIT du composer hérité : trois assertions de
+ *     `__tests__/components/v2/PostComposer.reelToggle.test.tsx` (les trois
+ *     nommées « defaults to REEL ») décrivent le geste inverse de
+ *     celui que cette surface tient. Elles ne se **reformulent** pas sur elle :
+ *     elles se remplacent par leur contrepartie assumée. Tant que ce n'est pas
+ *     fait, deux suites vertes décrivent le même geste avec des issues
+ *     opposées.
+ *
+ * ### Deux garde-fous distincts sur le format, et aucun ne remplace l'autre
+ *
+ * L'éventail tient la SÉLECTION dans ce que la porte offre — c'est son repli,
+ * et il vit dans `ComposerFormatFan`. La CHARGE, elle, dégrade en POST tout
+ * réel dont la composition ne qualifie pas. Ce second garde-fou n'est pas une
+ * ceinture de plus sur la même bretelle : la porte `reelTab` offre RÉEL avant
+ * même qu'une composition existe (`composer-contract.ts`, `case 'reelTab'` — sans passage
+ * par le gate de qualification), donc l'éventail n'a là rien à replier et
+ * laisserait partir un RÉEL que le serveur rétrograderait en silence. C'est
+ * exactement la fonction que `effectivePostType` remplit dans le composer
+ * hérité (`PostComposer.tsx`, `effectivePostType`).
+ */
+
 const REFERENCE_MODES: readonly Exclude<PostReferenceDisplay, 'INLINE'>[] = ['NOTE', 'SILENT'];
 
-/**
- * La charge de publication est déclarée UNE fois, dans
- * `components/composer/payload.ts` — la surface unifiée rend exactement la même
- * au même appelant, et deux déclarations jumelles auraient pu diverger sans
- * qu'aucun gate ne rougisse (aucun ne type-vérifie `apps/web`). Ce nom reste le
- * nom historique de la charge pour les appelants existants.
- */
-export type { ComposerDocumentPayload as PostPublishPayload };
+/** Format d'un document publiable par cette surface. */
+export type DocumentFormat = Extract<ComposerFormat, 'post' | 'reel'>;
 
-export interface PostComposerProps {
-  currentUser?: { username: string; avatar?: string | null } | null;
-  onPublish: (data: ComposerDocumentPayload) => void;
-  disabled?: boolean;
-  className?: string;
+/**
+ * Ce que la surface rend à son appelant. La forme vit dans
+ * `components/composer/payload.ts` et elle y est déclarée UNE SEULE fois : le
+ * composer hérité rend la même charge au même appelant, et deux déclarations
+ * jumelles auraient pu diverger sans qu'aucun gate ne rougisse. Le module
+ * porteur n'est ni cette surface ni le composer hérité, donc la suppression
+ * programmée du second n'emporte pas la déclaration.
+ * `meeshy-composer-post.test.tsx` épingle le jeu de clés effectivement émis.
+ */
+export type { ComposerDocumentPayload };
+
+export interface ComposerDocumentSurfaceProps {
+  readonly door: ComposerDoor;
+  readonly format: DocumentFormat;
+  readonly onFormatChange: (format: ComposerFormat) => void;
+  /**
+   * Les formats que l'HÔTE sait peindre. La porte dit ce qui est composable ;
+   * l'hôte dit ce qu'il sait rendre ; l'auteur se voit offrir l'intersection.
+   * Offrir davantage démonterait la surface au clic — donc l'éventail, qui vit
+   * dedans, donc tout retour — et le brouillon partirait avec.
+   */
+  readonly routableFormats: ReadonlyArray<ComposerFormat>;
+  readonly currentUser?: { username: string; avatar?: string | null } | null;
+  readonly onPublish: (payload: ComposerDocumentPayload) => void;
+  readonly disabled?: boolean;
+  readonly className?: string;
 }
 
-
-// W6 media — cap client aligné sur la limite serveur `mediaIds` (≤ 10,
-// `CreatePostSchema`). Un seul pool combiné photos+vidéos, contrairement à
-// StoryComposer qui répartit sur 3 catégories.
+/**
+ * Plafond client aligné sur la limite serveur de `mediaIds` (≤ 10,
+ * `CreatePostSchema`). UN SEUL pool photos+vidéos : `useAttachmentUpload`
+ * compte `selectedFiles` seul, qui reflète déjà tout fichier en attente ou
+ * téléversé — la somme `selectedFiles + uploadedAttachments` comptait double.
+ */
 const MEDIA_LIMIT = 10;
+
+const CHAR_LIMIT = 5000;
+const CHAR_COUNT_THRESHOLD = 4500;
+const CHAR_COUNT_ALERT = 4900;
 
 const MEDIA_ACCEPT = {
   image: 'image/*',
@@ -54,36 +141,32 @@ function isImageFile(file: File): boolean {
   return file.type.startsWith('image/');
 }
 
-function PostComposer({
+export function ComposerDocumentSurface({
+  door,
+  format,
+  onFormatChange,
+  routableFormats,
   currentUser,
   onPublish,
   disabled = false,
   className,
-}: PostComposerProps) {
+}: ComposerDocumentSurfaceProps) {
   const { t } = useI18n('common');
   const [content, setContent] = useState('');
   const [visibility, setVisibility] = useState<PostVisibility>(DEFAULT_PUBLICATION_VISIBILITY);
-  // W6 — audience explicite des visibilités EXCEPT/ONLY (fix : ces options
-  // partaient sans liste → visibilité cassée). Même picker/gate que stories.
   const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
-  // W7 — Reel ⇄ Post toggle (Task 5). Default REEL, as iOS; only meaningful
-  // while `compositionQualifies` is true — see below, `handlePublish` always
-  // sends 'POST' otherwise so this state can never leak a false promotion.
-  const [postType, setPostType] = useState<PostType>('REEL');
   const [isExpanded, setIsExpanded] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
-  // C7-UI — collecte du texte alternatif par média + de l'opt-in
-  // `allowSoundExtraction` (post entier, cf. `MediaPublishPayload` ci-dessus).
-  // `allowSoundExtractionTouched` distingue « jamais touché » (rien envoyé)
-  // de « explicitement désactivé » (envoie `false`) — même sémantique que
-  // `MediaAccessibilityStore.allowSoundExtractionPayload()` côté iOS.
   const [mediaAlt, setMediaAlt] = useState<Record<string, string>>({});
+  // `allowSoundExtractionTouched` distingue « jamais touché » (rien envoyé) de
+  // « explicitement désactivé » (envoie `false`) — c'est le tri-état, et il
+  // exige bien deux états locaux : le booléen seul ne sait pas dire qu'il n'a
+  // jamais été choisi.
   const [allowSoundExtraction, setAllowSoundExtraction] = useState(false);
   const [allowSoundExtractionTouched, setAllowSoundExtractionTouched] = useState(false);
   const { references, pick, drop, clear: clearReferences, payload: referencesPayload } = useReferences();
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -99,30 +182,30 @@ function PostComposer({
     clearAttachments,
   } = useAttachmentUpload({
     token: authToken ?? undefined,
-    // useAttachmentUpload now counts `selectedFiles` alone as the single
-    // source of truth for the cap check (Task 7, point 2 — it used to sum
-    // selectedFiles.length + uploadedAttachments.length, double-counting
-    // once uploads settled since selectedFiles is never trimmed on
-    // success). MEDIA_LIMIT can be passed as-is.
     maxAttachments: MEDIA_LIMIT,
   });
 
   const mediaLimitReached = selectedFiles.length >= MEDIA_LIMIT;
   const uploadPercentage = uploadProgress[0] ?? 0;
 
-  // W7 — same source-of-truth predicate the gateway degrades REEL→POST with
-  // (`@meeshy/shared/utils/reel-composition`). An attachment whose duration
-  // is not yet known client-side is treated as non-qualifying — never a
-  // false REEL promise the gateway would silently downgrade.
-  const compositionQualifies = qualifiesAsReel(
-    uploadedAttachments.map((att) => ({ mimeType: att.mimeType, duration: att.duration })),
+  // `uploadedAttachments` porte déjà la forme que le prédicat partagé attend
+  // (`ReelMediaLike`) : aucune normalisation intermédiaire, donc aucun second
+  // endroit où la règle du réel pourrait glisser.
+  const compositionQualifies = qualifiesAsReel(uploadedAttachments);
+  const { offeredFormats } = webComposerOpening(door, uploadedAttachments);
+  // L'éventail ne peint que ce que l'hôte sait peindre. La table partagée n'est
+  // pas rejouée ici — elle est INTERSECTÉE avec une capacité, et l'intersection
+  // ne peut pas être vide tant que la surface est montée : l'hôte ne la monte
+  // que sur un format qu'il route, et ce format appartient toujours à
+  // `offeredFormats` (invariant du contrat).
+  const selectableFormats = offeredFormats.filter((offered) => routableFormats.includes(offered));
+  const publishedType: PostType = postTypeOf(
+    format === 'reel' && compositionQualifies ? 'reel' : 'post',
   );
-  const effectivePostType: PostType = compositionQualifies ? postType : 'POST';
 
-  // Blob URLs for image previews, memoized per File identity so retyping the
-  // caption (re-render on every keystroke) never mints a new object URL —
-  // only revoked (in the effect below) once a file actually drops out of
-  // selectedFiles, on clear/publish, or on unmount.
+  // URLs blob mémoïsées par identité de File : retaper la légende re-rend à
+  // chaque frappe et ne doit pas fabriquer une nouvelle URL d'objet. Révoquées
+  // quand un fichier quitte la sélection, et au démontage.
   const objectUrlCacheRef = useRef<Map<File, string>>(new Map());
 
   const getPreviewUrl = (file: File): string => {
@@ -153,44 +236,49 @@ function PostComposer({
     };
   }, []);
 
-  const handleMediaSelect = useCallback((files: FileList | null) => {
-    if (!files || files.length === 0) return;
+  const handleMediaSelect = useCallback(
+    (files: FileList | null) => {
+      if (!files || files.length === 0) return;
 
-    const available = MEDIA_LIMIT - selectedFiles.length;
-    if (available <= 0) {
-      setMediaError(`You can attach up to ${MEDIA_LIMIT} media files.`);
-      return;
-    }
+      const available = MEDIA_LIMIT - selectedFiles.length;
+      if (available <= 0) {
+        setMediaError(t('composer.media.limitReached', { max: MEDIA_LIMIT }));
+        return;
+      }
 
-    const requested = Array.from(files);
-    const filesToAdd = requested.slice(0, available);
-    // Pré-validation avec le même service que le hook (taille/type), pour
-    // afficher le message spécifique DANS le composer plutôt que de laisser
-    // le hook émettre un toast générique.
-    const validation = AttachmentService.validateFiles(filesToAdd);
-    if (!validation.valid) {
-      setMediaError(validation.errors.join(' '));
-      return;
-    }
+      const requested = Array.from(files);
+      const filesToAdd = requested.slice(0, available);
+      // Pré-validation avec le même service que le hook (taille/type), pour
+      // afficher le message spécifique DANS la surface plutôt que de laisser
+      // le hook émettre un toast générique.
+      const validation = AttachmentService.validateFiles(filesToAdd);
+      if (!validation.valid) {
+        setMediaError(validation.errors.join(' '));
+        return;
+      }
 
-    setMediaError(
-      filesToAdd.length < requested.length
-        ? `You can attach up to ${MEDIA_LIMIT} media files. Only ${filesToAdd.length} added.`
-        : null,
-    );
-    handleFilesSelected(filesToAdd);
-  }, [selectedFiles.length, handleFilesSelected]);
+      setMediaError(
+        filesToAdd.length < requested.length
+          ? t('composer.media.limitPartial', { max: MEDIA_LIMIT, added: filesToAdd.length })
+          : null,
+      );
+      handleFilesSelected(filesToAdd);
+    },
+    [selectedFiles.length, handleFilesSelected, t],
+  );
 
-  const handleRemoveMedia = useCallback((index: number) => {
-    handleRemoveFile(index);
-    setMediaError(null);
-  }, [handleRemoveFile]);
+  const handleRemoveMedia = useCallback(
+    (index: number) => {
+      handleRemoveFile(index);
+      setMediaError(null);
+    },
+    [handleRemoveFile],
+  );
 
-  // Un média RETIRÉ (bouton x avant upload, ou upload en échec) ne doit pas
-  // laisser un id orphelin dans `mediaAlt` — même garde que
-  // `MediaAccessibilityStore.remove(mediaId:)` côté iOS. Pruning déclenché
-  // par `uploadedAttachments` (source des ids réels), pas `selectedFiles`
-  // (qui n'a pas encore d'id avant upload).
+  // Un média RETIRÉ (bouton ✕ avant téléversement, ou téléversement en échec)
+  // ne doit pas laisser un id orphelin dans `mediaAlt`. Le pruning suit
+  // `uploadedAttachments` (source des ids réels) et non `selectedFiles`, qui
+  // n'a pas encore d'id.
   useEffect(() => {
     const validIds = new Set(uploadedAttachments.map((att) => att.id));
     setMediaAlt((prev) => {
@@ -215,11 +303,10 @@ function PostComposer({
     setAllowSoundExtractionTouched(true);
   }, []);
 
-  // A person typed as `@handle` in the caption is INLINE server-side (the
-  // gateway derives it from the text — Task 1). Moving her to a declared
-  // mode from the picker only makes sense once her handle leaves the
-  // sentence, so any literal `@handle` still in the caption is stripped —
-  // a no-op when it was never there.
+  // Une personne écrite `@handle` dans la légende est INLINE côté serveur (le
+  // gateway la dérive du texte). La déplacer vers un mode déclaré n'a de sens
+  // qu'une fois son handle sorti de la phrase — le retrait est un no-op quand
+  // il n'y était pas.
   const handlePickReference = useCallback(
     (person: { username: string; userId?: string }, display: PostReferenceDisplay) => {
       pick(person, 'picker', display);
@@ -227,26 +314,26 @@ function PostComposer({
         setContent((c) => removingHandle(person.username, c));
       }
     },
-    [pick]
+    [pick],
   );
 
   const handlePublish = useCallback(() => {
     const trimmed = content.trim();
     const mediaIds = uploadedAttachments.map((att) => att.id);
-    const hasMedia = mediaIds.length > 0;
-    if ((!trimmed && !hasMedia) || disabled || isUploading) return;
-
+    const hasUploadedMedia = mediaIds.length > 0;
+    if ((!trimmed && !hasUploadedMedia) || disabled || isUploading) return;
+    if (trimmed.length > CHAR_LIMIT) return;
     if (isAudienceIncomplete(visibility, visibilityUserIds.length)) return;
 
     onPublish({
       content: trimmed,
-      type: effectivePostType,
+      type: publishedType,
       visibility,
       visibilityUserIds: (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility)
         ? visibilityUserIds
         : undefined,
-      mediaIds: hasMedia ? mediaIds : undefined,
-      optimisticMedia: hasMedia
+      mediaIds: hasUploadedMedia ? mediaIds : undefined,
+      optimisticMedia: hasUploadedMedia
         ? uploadedAttachments.map((att, order) => ({
             id: att.id,
             mimeType: att.mimeType,
@@ -256,11 +343,11 @@ function PostComposer({
             order,
           }))
         : undefined,
-      // Never `mentions: []` — absence means "not touched", `[]` erases the
-      // declared references server-side (tri-state, Non-régression table).
+      // Jamais `mentions: []` — l'absence dit « pas touché », `[]` effacerait
+      // les références déclarées côté serveur.
       ...(referencesPayload.length > 0 ? { mentions: referencesPayload } : {}),
-      // Only ids still present among `mediaIds` survive — a media removed
-      // after its alt was typed must not resurrect an orphaned key.
+      // Seuls les ids encore présents dans `mediaIds` survivent : un média
+      // retiré après la saisie de son alt ne ressuscite pas une clé orpheline.
       ...(() => {
         const prunedAlt = Object.fromEntries(
           Object.entries(mediaAlt).filter(([id]) => mediaIds.includes(id)),
@@ -274,13 +361,27 @@ function PostComposer({
     setVisibilityUserIds([]);
     setIsExpanded(false);
     setMediaError(null);
-    setPostType('REEL');
     setMediaAlt({});
     setAllowSoundExtraction(false);
     setAllowSoundExtractionTouched(false);
     clearAttachments();
     clearReferences();
-  }, [content, disabled, isUploading, onPublish, visibility, visibilityUserIds, uploadedAttachments, effectivePostType, clearAttachments, referencesPayload, clearReferences, mediaAlt, allowSoundExtraction, allowSoundExtractionTouched]);
+  }, [
+    content,
+    disabled,
+    isUploading,
+    onPublish,
+    visibility,
+    visibilityUserIds,
+    uploadedAttachments,
+    publishedType,
+    clearAttachments,
+    referencesPayload,
+    clearReferences,
+    mediaAlt,
+    allowSoundExtraction,
+    allowSoundExtractionTouched,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -294,7 +395,7 @@ function PostComposer({
 
   const trimmedContent = content.trim();
   const hasMedia = uploadedAttachments.length > 0;
-  const isValid = (trimmedContent.length > 0 || hasMedia) && trimmedContent.length <= 5000;
+  const isValid = (trimmedContent.length > 0 || hasMedia) && trimmedContent.length <= CHAR_LIMIT;
   const charCount = content.length;
   const selectedVisibility =
     PUBLICATION_VISIBILITY_OPTIONS.find((v) => v.id === visibility) ?? PUBLICATION_VISIBILITY_OPTIONS[0];
@@ -305,26 +406,21 @@ function PostComposer({
         'rounded-2xl border border-[var(--gp-border)] bg-[var(--gp-surface)] overflow-hidden transition-all',
         className,
       )}
-      data-testid="post-composer"
+      data-testid="composer-document-surface"
     >
       <div className="p-4">
         <div className="flex gap-3">
-          <Avatar
-            name={currentUser?.username ?? '?'}
-            src={currentUser?.avatar ?? undefined}
-            size="md"
-          />
+          <Avatar name={currentUser?.username ?? '?'} src={currentUser?.avatar ?? undefined} size="md" />
 
           <div className="flex-1 min-w-0">
             <textarea
-              ref={textareaRef}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
               onFocus={() => setIsExpanded(true)}
               placeholder={t('postPlaceholder')}
               rows={isExpanded ? 4 : 2}
-              maxLength={5000}
+              maxLength={CHAR_LIMIT}
               disabled={disabled}
               className={cn(
                 'w-full resize-none border-0 bg-transparent text-base outline-none',
@@ -335,21 +431,28 @@ function PostComposer({
             />
 
             {isExpanded && selectedFiles.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2" data-testid="post-composer-media-preview">
+              <div className="mt-3 flex flex-wrap gap-2" data-testid="composer-media-preview">
                 {selectedFiles.map((file, index) => (
                   <div
                     key={`${file.name}-${file.lastModified}-${index}`}
                     className="group relative rounded-lg overflow-hidden bg-[var(--gp-hover)]"
                   >
                     {isImageFile(file) ? (
-                      <img
-                        src={getPreviewUrl(file)}
-                        alt={file.name}
-                        className="h-16 w-16 object-cover"
-                      />
+                      <img src={getPreviewUrl(file)} alt={file.name} className="h-16 w-16 object-cover" />
                     ) : (
                       <div className="flex h-16 w-16 items-center justify-center text-[var(--gp-text-secondary)]">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
                           <polygon points="23 7 16 12 23 17 23 7" />
                           <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
                         </svg>
@@ -370,7 +473,7 @@ function PostComposer({
                       )}
                       aria-label={t('delete')}
                     >
-                      x
+                      ×
                     </button>
                   </div>
                 ))}
@@ -378,7 +481,7 @@ function PostComposer({
             )}
 
             {isExpanded && mediaError && (
-              <p className="mt-2 text-xs text-red-500" role="alert" data-testid="post-composer-media-error">
+              <p className="mt-2 text-xs text-red-500" role="alert" data-testid="composer-media-error">
                 {mediaError}
               </p>
             )}
@@ -396,7 +499,6 @@ function PostComposer({
             {isExpanded && (
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--gp-border)]">
                 <div className="flex items-center gap-2">
-                  {/* Media buttons */}
                   <button
                     type="button"
                     onClick={() => imageInputRef.current?.click()}
@@ -431,9 +533,9 @@ function PostComposer({
                     onOpenChange={setReferencePickerOpen}
                   />
 
-                  {/* Visibility picker */}
                   <div className="relative">
                     <button
+                      type="button"
                       onClick={() => setShowVisibilityPicker(!showVisibilityPicker)}
                       className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)] transition-colors"
                       aria-label={t('postComposer.changeVisibility')}
@@ -443,10 +545,14 @@ function PostComposer({
                     </button>
 
                     {showVisibilityPicker && (
-                      <div className="absolute bottom-full left-0 mb-1 bg-[var(--gp-surface)] border border-[var(--gp-border)] rounded-xl shadow-lg z-20 min-w-[160px]">
+                      <div
+                        data-testid="composer-visibility-options"
+                        className="absolute bottom-full left-0 mb-1 bg-[var(--gp-surface)] border border-[var(--gp-border)] rounded-xl shadow-lg z-20 min-w-[160px]"
+                      >
                         {PUBLICATION_VISIBILITY_OPTIONS.map((opt) => (
                           <button
                             key={opt.id}
+                            type="button"
                             onClick={() => {
                               setVisibility(opt.id);
                               if (!(AUDIENCE_VISIBILITIES as readonly string[]).includes(opt.id)) {
@@ -467,56 +573,21 @@ function PostComposer({
                     )}
                   </div>
 
-                  {/* W7 — Reel ⇄ Post toggle: only shown once the uploaded
-                      composition qualifies (mirrors the gateway's
-                      qualifiesAsReel degradation threshold client-side) */}
-                  {compositionQualifies && (
-                    <div
-                      className="flex items-center gap-0.5 rounded-lg border border-[var(--gp-border)] p-0.5"
-                      role="group"
-                      aria-label={t('postComposer.reelToggle.groupLabel')}
-                      data-testid="post-composer-type-toggle"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setPostType('REEL')}
-                        aria-pressed={postType === 'REEL'}
-                        aria-label={t('postComposer.reelToggle.reel')}
-                        data-testid="post-composer-type-reel"
-                        className={cn(
-                          'px-2 py-1 rounded-md text-xs transition-colors',
-                          postType === 'REEL'
-                            ? 'bg-[var(--gp-terracotta)] text-white'
-                            : 'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)]',
-                        )}
-                      >
-                        🎬 {t('postComposer.reelToggle.reel')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPostType('POST')}
-                        aria-pressed={postType === 'POST'}
-                        aria-label={t('postComposer.reelToggle.post')}
-                        data-testid="post-composer-type-post"
-                        className={cn(
-                          'px-2 py-1 rounded-md text-xs transition-colors',
-                          postType === 'POST'
-                            ? 'bg-[var(--gp-terracotta)] text-white'
-                            : 'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)]',
-                        )}
-                      >
-                        {t('postComposer.reelToggle.post')}
-                      </button>
-                    </div>
-                  )}
+                  <ComposerFormatFan
+                    offered={selectableFormats}
+                    selected={format}
+                    onSelect={onFormatChange}
+                  />
 
-                  {/* Character count */}
-                  {charCount > 4500 && (
-                    <span className={cn(
-                      'text-xs',
-                      charCount > 4900 ? 'text-red-500' : 'text-[var(--gp-text-muted)]',
-                    )}>
-                      {5000 - charCount}
+                  {charCount > CHAR_COUNT_THRESHOLD && (
+                    <span
+                      data-testid="composer-char-count"
+                      className={cn(
+                        'text-xs',
+                        charCount > CHAR_COUNT_ALERT ? 'text-red-500' : 'text-[var(--gp-text-muted)]',
+                      )}
+                    >
+                      {CHAR_LIMIT - charCount}
                     </span>
                   )}
                 </div>
@@ -525,14 +596,18 @@ function PostComposer({
                   variant="primary"
                   size="sm"
                   onClick={handlePublish}
-                  disabled={!isValid || disabled || isUploading || isAudienceIncomplete(visibility, visibilityUserIds.length)}
+                  disabled={
+                    !isValid ||
+                    disabled ||
+                    isUploading ||
+                    isAudienceIncomplete(visibility, visibilityUserIds.length)
+                  }
                 >
                   {isUploading ? t('uploading') : t('publish')}
                 </Button>
               </div>
             )}
 
-            {/* W6 — audience explicite pour EXCEPT/ONLY */}
             {isExpanded && (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility) && (
               <div className="mt-2">
                 <AudienceUserPicker
@@ -552,9 +627,9 @@ function PostComposer({
         </div>
       </div>
 
-      {/* Hidden file inputs */}
       <input
         ref={imageInputRef}
+        data-testid="composer-media-input-image"
         type="file"
         accept={MEDIA_ACCEPT.image}
         multiple
@@ -566,6 +641,7 @@ function PostComposer({
       />
       <input
         ref={videoInputRef}
+        data-testid="composer-media-input-video"
         type="file"
         accept={MEDIA_ACCEPT.video}
         multiple
@@ -579,5 +655,4 @@ function PostComposer({
   );
 }
 
-PostComposer.displayName = 'PostComposer';
-export { PostComposer };
+ComposerDocumentSurface.displayName = 'ComposerDocumentSurface';

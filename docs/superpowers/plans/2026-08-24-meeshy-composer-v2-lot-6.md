@@ -312,6 +312,29 @@ le produit est inchangé.
   8. **l'éventail W2 remplace la bascule locale** (`:495-533`) : même prédicat `qualifiesAsReel`
      sur `uploadedAttachments` (`:139-141`), et `effectivePostType` (`:142`) devient le **repli**
      du fan — un RÉEL non qualifiant ne peut pas fuir vers le fil.
+
+> **DIVERGENCE ASSUMÉE — arbitrage du 2026-08-24, tranché à l'exécution de W3.**
+> Ce point 8 s'écrivait comme un simple portage ; il n'en est pas un, et la revue
+> adversariale l'a attrapé. `PostComposer` **naît en RÉEL** (`useState<PostType>('REEL')`,
+> `:95`), ne **dégrade** que si la composition ne qualifie pas (`:142`), et **revient**
+> à `'REEL'` après publication (`:299`). La surface unifiée, elle, naît du format de
+> la PORTE : `feedComposer` ⇒ `post`, et le RÉEL n'arrive que par un geste explicite
+> dans l'éventail.
+>
+> **Conséquence produit, dite en clair** : une vidéo publiée depuis le fil sans
+> toucher l'éventail n'atterrit plus dans Réels par défaut. C'est un CHANGEMENT,
+> pas une parité.
+>
+> **Pourquoi on ne porte pas le quirk** : le porter exigerait de re-semer un format
+> initial *contre* `composerOpening` — précisément le fork de la table que la garde
+> de W1 existe pour empêcher — et il contredirait l'asymétrie voulue de l'éventail
+> (W2 point 3 : re-qualifier ne rebascule PAS vers RÉEL).
+>
+> **Ce que cela impose à W9 Step 3** : les trois assertions `defaults to REEL` de
+> `PostComposer.reelToggle.test.tsx` (`:131`, `:174`, `:188`) sont à **REMPLACER par
+> leur contre-partie assumée**, jamais à « reformuler » — elles décrivent le geste
+> inverse. Seule `:217` (« switch back ») est reformulable. Cette ligne corrige la
+> moitié « capacités » de la preuve de retrait, qui était invalide telle qu'écrite.
 - [ ] **Step 2: Rouge.** **Step 3: Implémenter.** **Step 4: Vert.**
 - [ ] **Step 5: Commit.**
 
