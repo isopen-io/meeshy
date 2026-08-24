@@ -27,6 +27,7 @@ import me.meeshy.sdk.model.StoryClipTransition
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.StoryTransitionKind
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -625,6 +626,37 @@ class StoryViewerViewModelTest {
         assertThat(fg.animated(atSeconds = 1f).opacity).isWithin(1e-4).of(0.5)
         assertThat(fg.animated(atSeconds = 5f).opacity).isWithin(1e-4).of(1.0)
         assertThat(fg.animated(atSeconds = 9f).opacity).isWithin(1e-4).of(0.5)
+    }
+
+    @Test
+    fun `a slide's text objects are projected into the view and animate their fade envelope`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(
+                    StoryTextObject(
+                        id = "txt",
+                        text = "Hello",
+                        x = 0.4,
+                        y = 0.6,
+                        startTime = 0.0,
+                        duration = 10.0,
+                        fadeIn = 2.0,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val texts = vm.state.value.current?.textObjects.orEmpty()
+        assertThat(texts).hasSize(1)
+        val text = texts.first()
+        assertThat(text.id).isEqualTo("txt")
+        assertThat(text.text).isEqualTo("Hello")
+        assertThat(text.x).isEqualTo(0.4)
+        assertThat(text.y).isEqualTo(0.6)
+        // The fade envelope is live, not dropped: the object ramps in over its window [0,2].
+        assertThat(text.animated(atSeconds = 1f).opacity).isWithin(1e-4).of(0.5)
+        assertThat(text.animated(atSeconds = 5f).opacity).isWithin(1e-4).of(1.0)
     }
 
     @Test
