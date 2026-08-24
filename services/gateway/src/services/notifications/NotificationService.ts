@@ -32,7 +32,11 @@ import {
 } from '@meeshy/shared/types/preferences';
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
-import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import {
+  resolveUserLanguage,
+  resolveUserLanguagesOrdered,
+  resolvePrismTranslation,
+} from '@meeshy/shared/utils/conversation-helpers';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
@@ -664,14 +668,41 @@ export class NotificationService {
     deviceLocale: true,
   } as const;
 
-  /** Langue de notification d'un destinataire (Prisme-first, fallback 'fr'). */
-  private async resolveRecipientLang(userId: string): Promise<string> {
+  /**
+   * Le PRISME d'un destinataire, sous ses DEUX formes — elles ne servent pas la
+   * même chose et les confondre coûte dans les deux sens :
+   *
+   * - `lang` est la langue de **CADRAGE** : l'interface. « Alice vous a envoyé
+   *   une photo » se dit dans la langue applicative du lecteur, et une seule.
+   *   C'est le rang le plus haut renseigné, ce que rend `resolveUserLanguage`.
+   * - `ordered` est la liste dans laquelle le **CONTENU** se résout. Le contenu
+   *   n'a pas de langue d'interface : il a des traductions, et le Prisme dit de
+   *   les chercher rang par rang (cf. `resolvePrismTranslation`).
+   *
+   * Les rendre ensemble depuis UNE lecture est ce qui empêche un appelant de
+   * réutiliser la langue de cadrage comme clé de contenu — le défaut du
+   * cycle 121, qui appariait la carte `Message.translations` au seul rang 1 et
+   * servait donc l'original chaque fois qu'une traduction n'existait qu'à un
+   * rang inférieur. La ligne de liste de la même application, elle, descendait.
+   */
+  private async resolveRecipientPrism(
+    userId: string
+  ): Promise<{ readonly lang: string; readonly ordered: readonly string[] }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: this.LANG_SELECT,
     });
-    if (!user) return 'fr';
-    return resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined });
+    if (!user) return { lang: 'fr', ordered: [] };
+    const opts = { deviceLocale: user.deviceLocale ?? undefined };
+    return {
+      lang: resolveUserLanguage(user, opts),
+      ordered: resolveUserLanguagesOrdered(user, opts),
+    };
+  }
+
+  /** Langue de CADRAGE d'un destinataire (Prisme-first, fallback 'fr'). */
+  private async resolveRecipientLang(userId: string): Promise<string> {
+    return (await this.resolveRecipientPrism(userId)).lang;
   }
 
   /** Variante batch : un seul findMany, retourne une Map userId → langue (fallback 'fr'). */
@@ -1469,7 +1500,7 @@ export class NotificationService {
     // pipeline at fan-out time (Message.translations JSON, keyed by language).
     const liveMessage = await this.prisma.message.findUnique({
       where: { id: params.messageId },
-      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true, createdAt: true, messageType: true, translations: true },
+      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true, createdAt: true, messageType: true, translations: true, originalLanguage: true },
     });
     if (!liveMessage) {
       notificationLogger.info('Skipping message notification (message vanished)', {
@@ -1517,20 +1548,32 @@ export class NotificationService {
       return null;
     }
 
-    const recipientLang = await this.resolveRecipientLang(params.recipientUserId);
+    const { lang: recipientLang, ordered: recipientPrism } =
+      await this.resolveRecipientPrism(params.recipientUserId);
 
-    // GW5 — Prisme : sélectionner la traduction qui matche EXACTEMENT la
-    // langue résolue du destinataire (même résolution que le framing). Pas de
-    // fallback translations.first : aucune correspondance = le contenu est
-    // déjà dans la langue du destinataire. Les traductions chiffrées ne sont
-    // jamais poussées (la NSE déchiffre encryptedContent, pas les traductions).
+    // Les traductions SERVABLES sur le canal push. Le filtre précède la
+    // descente et ne l'interrompt pas : une entrée chiffrée n'est pas une
+    // raison de priver le lecteur du rang suivant (la NSE déchiffre
+    // `encryptedContent`, jamais les traductions).
     const translationsJson = liveMessage.translations as Record<string, { text?: unknown; isEncrypted?: unknown }> | null | undefined;
-    const matchedTranslation = translationsJson
-      ? Object.entries(translationsJson).find(([lang, t]) =>
-          lang.toLowerCase() === recipientLang.toLowerCase()
-          && typeof t?.text === 'string'
-          && !t.isEncrypted)
-      : undefined;
+    const pushableTranslations = Object.fromEntries(
+      Object.entries(translationsJson ?? {})
+        .filter(([, t]) => typeof t?.text === 'string' && !t.isEncrypted)
+        .map(([lang, t]) => [lang, t.text as string])
+    );
+
+    // Cycle 121 — Prisme : DESCENDRE les langues du destinataire dans l'ordre,
+    // la première servie gagne. `recipientLang` est la langue de CADRAGE et ne
+    // convient PAS ici : appariée seule, elle ratait toute traduction d'un rang
+    // inférieur — cas nominal dès que la locale appareil (rang 4) diffère de la
+    // langue applicative. `null` ⇒ servir l'original, jamais une traduction
+    // quelconque (règle #1) ; la langue d'origine concourt à son propre rang
+    // (règle #3), d'où `originalLanguage` dans la relecture vivante.
+    const matchedTranslation = resolvePrismTranslation({
+      translations: pushableTranslations,
+      originalLanguage: liveMessage.originalLanguage,
+      preferredLanguages: recipientPrism,
+    });
 
     const content = buildMessageNotificationBodyI18n(recipientLang, {
       messagePreview: params.messagePreview,
@@ -1580,8 +1623,10 @@ export class NotificationService {
         messageCreatedAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt.toISOString() : undefined,
         messageType: liveMessage.messageType ?? undefined,
         ...(matchedTranslation ? {
-          translatedContent: (matchedTranslation[1].text as string).substring(0, 200),
-          translatedLanguage: matchedTranslation[0],
+          translatedContent: matchedTranslation.text.substring(0, 200),
+          // La clé TELLE QUE STOCKÉE, pas sa forme canonique : elle repart sur
+          // le fil APNs et le client la rapproche de sa propre carte.
+          translatedLanguage: matchedTranslation.language,
         } : {}),
       },
 
