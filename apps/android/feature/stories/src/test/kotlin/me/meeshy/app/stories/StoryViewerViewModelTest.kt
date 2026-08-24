@@ -1069,4 +1069,114 @@ class StoryViewerViewModelTest {
 
         coVerify(exactly = 1) { storyRepository.translateStory(any(), "en") }
     }
+
+    // --- The language bar descends the Prisme over ALL slide content (§Cohérence) ---
+    // A slide's translatable content is not just its caption: on-canvas text overlays
+    // carry their own per-language translations. The exploration bar must surface every
+    // language present across caption AND text objects, or a slide whose overlays are
+    // translated but whose caption is not offers the reader no way to reach them.
+
+    private fun storyWithTextObjectTranslations(
+        captionTranslations: Map<String, ApiPostTranslationEntry>? = null,
+        textObjectTranslations: Map<String, String>?,
+    ) = storyPost(id = "s1", authorId = "a1", hoursAgo = 1, translations = captionTranslations).copy(
+        storyEffects = StoryEffects(
+            textObjects = listOf(
+                StoryTextObject(id = "txt", text = "Hello", translations = textObjectTranslations),
+            ),
+        ),
+    )
+
+    @Test
+    fun `a text-object-only translation language surfaces as a present content chip`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "fr"),
+            posts = listOf(
+                storyWithTextObjectTranslations(
+                    textObjectTranslations = mapOf("es" to "Hola", "de" to "Hallo"),
+                ),
+            ),
+        )
+
+        val languages = vm.state.value.availableLanguages
+        assertThat(languages.map { it.code }).containsAtLeast("es", "de")
+        assertThat(languages.first { it.code == "es" }.isTranslatable).isFalse()
+        assertThat(languages.first { it.code == "de" }.isTranslatable).isFalse()
+    }
+
+    @Test
+    fun `caption and text-object languages are unioned with the caption first and no duplicates`() =
+        runTest {
+            val vm = viewModel(
+                startUserId = "a1",
+                user = viewer(systemLanguage = "fr"),
+                posts = listOf(
+                    storyWithTextObjectTranslations(
+                        captionTranslations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                        textObjectTranslations = mapOf("es" to "Hola", "de" to "Hallo"),
+                    ),
+                ),
+            )
+
+            val present = vm.state.value.availableLanguages.filter { !it.isTranslatable }
+            // es (caption + overlay) appears once, ahead of the overlay-only de.
+            assertThat(present.map { it.code }).containsExactly("es", "de").inOrder()
+        }
+
+    @Test
+    fun `a blank text-object translation value is not offered as a language`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "fr"),
+            posts = listOf(
+                storyWithTextObjectTranslations(
+                    textObjectTranslations = mapOf("de" to "   ", "es" to "Hola"),
+                ),
+            ),
+        )
+
+        val codes = vm.state.value.availableLanguages.map { it.code }
+        assertThat(codes).contains("es")
+        assertThat(codes).doesNotContain("de")
+    }
+
+    @Test
+    fun `an overlay-only translated story still offers a configured absent language as translatable`() =
+        runTest {
+            val vm = viewModel(
+                startUserId = "a1",
+                user = viewer(systemLanguage = "en"),
+                posts = listOf(
+                    storyWithTextObjectTranslations(
+                        textObjectTranslations = mapOf("es" to "Hola"),
+                    ),
+                ),
+            )
+
+            val languages = vm.state.value.availableLanguages
+            assertThat(languages.first { it.code == "es" }.isTranslatable).isFalse()
+            assertThat(languages.first { it.code == "en" }.isTranslatable).isTrue()
+        }
+
+    @Test
+    fun `tapping an overlay-only present language re-resolves the overlays into it`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "fr"),
+            posts = listOf(
+                storyWithTextObjectTranslations(
+                    textObjectTranslations = mapOf("de" to "Hallo"),
+                ),
+            ),
+        )
+        // The chip is offered even though no caption or fr translation exists…
+        assertThat(vm.state.value.availableLanguages.map { it.code }).contains("de")
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hello")
+
+        vm.toggleLanguageOverride("de")
+
+        // …and it is actionable: the overlay repaints in the tapped language.
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hallo")
+    }
 }
