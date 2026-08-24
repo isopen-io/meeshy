@@ -657,6 +657,55 @@ que l'exemplaire VIVANT avait de plus.** Le répertoire ignorait
 servi `memberCount: 0` partout. Les témoins qui PASSENT déjà avant la bascule
 valent autant que ceux qui échouent — on les écrit dans le même lot.
 
+## Une garde d'admission se pose sur CHAQUE chemin, pas sur le plus fréquenté
+
+Les trois éventails de `messageNotificationFanOut` poussent la même bannière pour
+le même message. **Un seul demandait si ce message est encore VIVANT.**
+
+`createMessageNotification` relit l'état juste avant de pousser et abandonne quand
+le message a été rappelé ou a expiré dans la fenêtre de l'éventail — sa raison est
+écrite sur place : « we MUST NOT leak the original content via the banner ». Ni la
+réponse ni la mention ne portaient cette garde (cycle 127), si bien qu'un message
+rappelé entre son commit et l'éventail poussait son texte ORIGINAL vers la personne
+VISÉE par la réponse et vers tous les mentionnés — dont la bannière perce jusqu'à
+la sourdine — pendant que les membres ordinaires du fil étaient protégés.
+
+> **Une garde qui protège la population la plus NOMBREUSE peut manquer la plus
+> EXPOSÉE.** Posée sur le chemin le plus fréquenté, elle se lit comme une garde
+> posée sur le SUJET ; elle ne l'est que sur son CHEMIN.
+
+Trois corollaires, tous mesurés dans ce lot :
+
+- **Une compensation en aval ne remplace pas une garde d'admission quand l'effet
+  qu'elle compense est IRRÉVERSIBLE.** Le balayage de rétraction de l'éventail
+  retire les lignes `Notification` d'un message rappelé, et son raisonnement de
+  fenêtre est juste — mais il ferme la BASE quand la bannière est déjà sur
+  l'ÉCRAN. Question à poser à tout nettoyage a-posteriori : *que reste-t-il de
+  fait que ce nettoyage ne défait pas ?*
+
+- **Un verdict de garde a TROIS états, pas deux.** `live`, `gone` (la lecture
+  PROUVE), `unknown` (elle n'a rien prouvé — elle a levé, ou n'a rien rendu). Les
+  deux derniers se ressemblent et s'arbitrent à l'OPPOSÉ : fail-CLOSED sur la
+  preuve, où c'est un secret qui est en jeu ; fail-OPEN sur l'absence de preuve,
+  où c'est une livraison. Sur `Message`, **une ligne ABSENTE est `unknown`** — le
+  dépôt le dit déjà dans le balayage de rétraction (« `deletedAt` non nul est la
+  SEULE preuve d'un rappel ; aucun chemin de la gateway ne supprime un message
+  physiquement »), et une lecture servie par un secondaire en retard sur le jeu de
+  réplicas rend `null` pour un message parfaitement vivant. Source unique :
+  `NotificationService.messageLiveness`.
+
+- **Un doc-comment qui EXEMPTE une unité d'une règle que sa voisine applique se
+  vérifie comme une affirmation.** Celui de `loadMessagePrismSource` disait « pour
+  les éventails dont la lecture n'est PAS un gate d'éligibilité » : vrai du code,
+  et rien de plus. Rien dans « ce n'est pas un gate » ne dit *pourquoi ça ne
+  devrait pas en être un* — mais posé en tête d'une unité, il se relit comme une
+  décision qu'on n'a pas à instruire. La question n'est pas « est-ce exact ? »
+  mais **« qu'est-ce qui justifie l'exemption ? »**.
+
+Et la garde était GRATUITE : les trois éventails relisent la MÊME ligne dans la
+MÊME fenêtre — deux colonnes de plus sur une lecture existante. **Avant de
+conclure qu'une garde coûterait une requête, regarder ce que le site lit déjà.**
+
 ## Cette entité a-t-elle une JUMELLE ?
 
 À poser au moment où l'on corrige, pas des cycles plus tard. Le dépôt est plein
