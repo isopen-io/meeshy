@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.model.SocketPostBookmarkedData
 import me.meeshy.sdk.model.SocketPostDeletedData
+import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentLikedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
@@ -42,6 +43,7 @@ class SocialSocketManager @Inject constructor(
     private val _postUnliked = buf<SocketPostUnlikedData>()
     private val _postBookmarked = buf<SocketPostBookmarkedData>()
     private val _postDeleted = buf<SocketPostDeletedData>()
+    private val _postTranslationUpdated = buf<SocketPostTranslationUpdatedData>()
     private val _commentAdded = buf<SocketCommentAddedData>()
     private val _commentLiked = buf<SocketCommentLikedData>()
     private val _commentUnliked = buf<SocketCommentLikedData>()
@@ -64,6 +66,15 @@ class SocialSocketManager @Inject constructor(
     val postUnliked: SharedFlow<SocketPostUnlikedData> = _postUnliked.asSharedFlow()
     val postBookmarked: SharedFlow<SocketPostBookmarkedData> = _postBookmarked.asSharedFlow()
     val postDeleted: SharedFlow<SocketPostDeletedData> = _postDeleted.asSharedFlow()
+
+    /**
+     * `post:translation-updated` — the gateway translated a post server-side and pushed
+     * the finished entry. The feed viewer folds it into the cache so an open card
+     * re-renders in the reader's preferred language the instant it lands (the caption
+     * sibling of [storyTranslationUpdated]).
+     */
+    val postTranslationUpdated: SharedFlow<SocketPostTranslationUpdatedData> =
+        _postTranslationUpdated.asSharedFlow()
     val commentAdded: SharedFlow<SocketCommentAddedData> = _commentAdded.asSharedFlow()
     val commentLiked: SharedFlow<SocketCommentLikedData> = _commentLiked.asSharedFlow()
 
@@ -96,6 +107,7 @@ class SocialSocketManager @Inject constructor(
         listen("post:unliked", _postUnliked)
         listen("post:bookmarked", _postBookmarked)
         listen("post:deleted", _postDeleted)
+        listen("post:translation-updated", _postTranslationUpdated)
         listen("comment:added", _commentAdded)
         listen("comment:liked", _commentLiked)
         listen("comment:unliked", _commentUnliked)

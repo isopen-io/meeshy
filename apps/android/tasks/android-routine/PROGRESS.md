@@ -2,6 +2,71 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-24 **the feed folds realtime post translations pushed over `post:translation-updated`**
+> (slice `post-translation-updated-realtime-merge`, feature-parity Feed/Prisme — the previous entry's `Next`
+> pointer named this exact candidate: "the caption sibling of THIS slice — iOS wires it too, Android's viewer
+> likely doesn't"). It IS the POST caption sibling of the STORY overlay realtime merge shipped the same day.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3458 (web Prisme cycle 123), #3426
+> (ios i18n 240i): neither is a `claude/apps/android/*` slice, both touch production logic outside
+> `apps/android`, none in this routine's scope, none touched. Prior slice
+> (`story-text-object-translation-realtime-merge`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`c65d44cd`).
+>
+> **The gap — a realtime Prisme channel Android never wired (a scout confirmed it before a line was written).**
+> The gateway's `PostTranslationService` translates a post server-side and broadcasts `post:translation-updated`
+> `{ postId, language, translation:{text, translationModel?, confidenceScore?, createdAt?} }` to the author's
+> feed room (`SocialEventsHandler.broadcastPostTranslationUpdated`). iOS folds it into the open feed
+> (`FeedViewModel.applyPostTranslation` + `SocketPostTranslationUpdatedData`). On Android the event decoded
+> nowhere: `SocialSocketManager` had no post-translation flow, `SocketEvents.kt` no DTO, no VM subscriber. A
+> post the reader could see translated on iOS stayed in its source language on Android until a full refetch.
+>
+> **The fix — reuse the entry type + a metadata-preserving merge + socket wiring + a cache fold.**
+> (1) New `SocketPostTranslationUpdatedData(postId, language, translation)` in `:core:model` whose
+> `translation` field IS an `ApiPostTranslationEntry` — the payload's `{text, model, confidence, createdAt}`
+> object matches that type exactly, so it decodes straight into one (no bespoke payload struct).
+> (2) New entry-preserving `PostTranslationMerge.mergeTranslation(post, lang, entry): ApiPost?` overload: the
+> existing string overload stored `ApiPostTranslationEntry(text=…)` only, dropping the model/confidence the
+> push carries; the new overload folds the whole entry. No-op on blank lang / blank text / the identical entry
+> already present (a metadata-only change is NOT a no-op — richer server data is never silently dropped).
+> (3) `SocialSocketManager.postTranslationUpdated` flow + `listen("post:translation-updated", …)`.
+> (4) `PostRepository.applyTranslationUpdate(postId, lang, entry): Boolean` folds the merge into `_feedCache`
+> (the push sibling of `requestOnDemandTranslation`, minus the translator call), so the projected card
+> re-renders in the reader's preferred language — **no override forced** (the reader's own chain decides,
+> parity with iOS `applyPostTranslation` which only sets `translatedContent` when the language is preferred,
+> and with the story slice). (5) `FeedViewModel` subscribes and routes the event to the repository.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200); pristine `android-37.0` via `--channel=3` WORKED alone**
+> (no copy→patch, no both-dirs). compileSdk 37; AGP 8.13.0 mapped it to `android-37.0` on the first
+> `./gradlew`. (NOTES' "try pristine first" held again.)
+>
+> **Tests: +18** — 9 `PostTranslationMergeTest` (entry overload: appends preserving model/confidence/timestamp;
+> appends order-preserving; replaces in place under a case-insensitively matched key; no-op on identical entry;
+> **stores a metadata-only change** so richer data is never dropped; no-op blank lang; no-op blank text; trims
+> the target), 2 `SocialSocketManagerTest` (decodes+emits the full entry; text-only payload → null metadata),
+> 5 `PostRepositoryTest` (`applyTranslationUpdate` folds into cache preserving metadata AND calls no translator;
+> inert on unknown post / blank target / blank text / identical entry), 1 `FeedViewModelTest` (a
+> `post:translation-updated` event routes to `repository.applyTranslationUpdate` with the payload). **RED-proof,
+> surgical**: neutering the entry `mergeTranslation` → `return null` reddened EXACTLY the 5 transformation
+> merge tests while the 3 no-op tests stayed green (and the 8 string-overload tests untouched) — genuine
+> discrimination, not assertion echo.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) locally
+> — **BUILD SUCCESSFUL in 4m 26s** (973 tasks). Reviewer PASS. Diff is `apps/android` only (4 prod files
+> edited in :core:model + :sdk-core + :feature:feed, +18 tests across 4 files, tracking docs). Verdict:
+> **PASS** — a DTO reusing an existing type, a metadata-preserving merge overload reusing the string overload's
+> upsert shape, a socket event mirroring the existing social events, and a cache fold mirroring the on-demand
+> path; behavioural tests through the public API; no production logic outside apps/android.
+>
+> **Next**: Feed/Prisme — the POST caption realtime merge is now honoured end to end. The adjacent sibling the
+> scout flagged is **`comment:translation-updated`** (gateway emits it, iOS wires it at
+> `FeedViewModel.commentTranslationUpdated`; Android's `PostTranslationMerge` already has the comment overload
+> but it is UNWIRED to any socket). That is the natural next slice — same shape, one rung over
+> (comment-keyed). Before building it, scout whether the comment thread surface (`PostCommentsSection` /
+> `PostDetailViewModel`) subscribes to a comment stream to route it into, or whether comments live in the feed
+> cache too. Else turn to the §E editor-side candidates (clip-inspector reducer / timeline transport) — both
+> still need a timeline/selection host surface first (orphan risk), so scout read-only before committing.
+
 > On 2026-08-24 **the story viewer merges realtime overlay translations pushed over `story:translation-updated`**
 > (slice `story-text-object-translation-realtime-merge`, feature-parity §E — the previous entry's `Next` pointer
 > flagged that `requestStoryTranslation` translates only the CAPTION and asked to scout iOS overlay parity
