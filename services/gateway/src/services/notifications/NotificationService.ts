@@ -68,7 +68,32 @@ export type MessagePrismSource = {
   readonly originalLanguage: string | null;
 };
 
-const EMPTY_PRISM_SOURCE: MessagePrismSource = { translations: {}, originalLanguage: null };
+/**
+ * Ce qu'UNE relecture de message rend aux éventails qui n'ont pas de gate
+ * d'éligibilité — la source du Prisme, et l'horloge de la bulle.
+ *
+ * Les deux ne se mélangent pas : la première dit ce qui TRADUIT l'aperçu, la
+ * seconde ce qui l'ORDONNE dans la conversation. Elles voyagent ensemble parce
+ * qu'elles viennent de la même lecture, pas parce qu'elles répondent à la même
+ * question — d'où deux types et non un.
+ *
+ * Cycle 126 : la NSE pré-enregistre une bulle pour tout éventail qui pousse un
+ * `messageId`. `createMessageNotification` datait la sienne depuis sa relecture
+ * VIVANTE (qui lui sert aussi de gate d'éligibilité) ; la réponse et la mention
+ * n'avaient que celle-ci, qui ne demandait pas ces deux colonnes — leur bulle
+ * était donc datée par l'horloge du DEVICE.
+ */
+export type MessageBannerSource = MessagePrismSource & {
+  readonly createdAt: Date | null;
+  readonly messageType: string | null;
+};
+
+const EMPTY_PRISM_SOURCE: MessageBannerSource = {
+  translations: {},
+  originalLanguage: null,
+  createdAt: null,
+  messageType: null,
+};
 
 /**
  * Ce que l'aperçu composé par un éventail EST — donc ce qui le traduit.
@@ -505,6 +530,43 @@ type NotificationAttachmentSummary = {
 };
 
 /**
+ * Ce qu'un message DONNE À VOIR d'un média dans une bannière — cycle 126.
+ *
+ * Un fait du MESSAGE, pas de l'éventail qui le sert : la photo est la même pour
+ * celui qu'on cite, celui qu'on mentionne et les autres membres. Ce jeu de
+ * champs n'existait qu'EN LIGNE dans la signature de
+ * {@link NotificationService.createMessageNotification} — donc dans un seul de
+ * ses trois consommateurs possibles. Les deux autres ne pouvaient pas le
+ * recevoir, et leur bannière repartait de `Message.content` : la chaîne VIDE
+ * pour un vocal, une photo, une vidéo ou un fichier sans légende.
+ *
+ * Le nommer une fois est ce qui rend la question « qui d'AUTRE aurait dû
+ * l'afficher ? » posable — un jeu de champs anonyme ne se partage pas, il se
+ * recopie.
+ */
+export type MessageBannerMedia = {
+  hasAttachments?: boolean;
+  attachmentCount?: number;
+  firstAttachmentType?: 'image' | 'video' | 'audio' | 'document' | 'text' | 'code';
+  firstAttachmentFilename?: string;
+  firstAttachmentFileSize?: number | null;
+  firstAttachmentDuration?: number | null;
+  firstAttachmentWidth?: number | null;
+  firstAttachmentHeight?: number | null;
+  /** Résumé léger de TOUS les attachments, dans l'ordre d'envoi. Le 1er est
+   *  affiché en média inline, les suivants sont agrégés en badges `+N` par
+   *  type dans le corps de la notification. */
+  attachments?: ReadonlyArray<NotificationAttachmentSummary>;
+  /** URL accessible publiquement pour le 1er attachment (image/audio/video).
+   *  L'extension iOS télécharge ce fichier et le rend en UNNotificationAttachment
+   *  natif (waveform pour audio, preview pour image, thumbnail pour video). */
+  firstAttachmentUrl?: string;
+  /** MIME type du 1er attachment, ex. `audio/m4a`, `image/jpeg`, `video/mp4`.
+   *  Utilisé par l'extension pour choisir le UTI typeHint correct. */
+  firstAttachmentMimeType?: string;
+};
+
+/**
  * Detailed label for a single attachment — used as the notification body base
  * when the message carries no text. Includes dimensions/duration/size.
  */
@@ -812,15 +874,17 @@ export class NotificationService {
    * que `loadNotificationPrefs` et `filterMutedRecipients` — la traduction est
    * un confort, l'annonce du message une obligation de livraison.
    */
-  private async loadMessagePrismSource(messageId: string): Promise<MessagePrismSource> {
+  private async loadMessagePrismSource(messageId: string): Promise<MessageBannerSource> {
     try {
       const message = await this.prisma.message.findUnique({
         where: { id: messageId },
-        select: { translations: true, originalLanguage: true },
+        select: { translations: true, originalLanguage: true, createdAt: true, messageType: true },
       });
       return {
         translations: this.pushableTranslations(message?.translations),
         originalLanguage: message?.originalLanguage ?? null,
+        createdAt: message?.createdAt instanceof Date ? message.createdAt : null,
+        messageType: message?.messageType ?? null,
       };
     } catch (error) {
       notificationLogger.error('Relecture du Prisme en échec — bannière servie sans traduction', {
@@ -956,6 +1020,98 @@ export class NotificationService {
       originalLanguage: source.originalLanguage,
       preferredLanguages,
     });
+  }
+
+  /**
+   * Le CORPS d'une bannière de message — cycle 126.
+   *
+   * Le texte servi par le Prisme, ou, quand ce texte est VIDE, l'étiquette
+   * détaillée du média qui le remplace (« 📷 Photo · 1024×768 »,
+   * « 🎤 Message vocal · 0:12 »), plus les badges `+N` des pièces suivantes. Le
+   * tout dans la langue de CADRAGE du destinataire.
+   *
+   * Il vivait EN LIGNE dans `createMessageNotification`, donc dans un seul des
+   * TROIS éventails qui annoncent un message. Les deux autres posaient
+   * `content: servedPreview(...)` nu : répondre à quelqu'un par une photo lui
+   * poussait une bannière au corps VIDE pendant que les autres membres de la
+   * conversation lisaient l'étiquette. Un site unique, trois consommateurs —
+   * même raison que {@link prePersistedMessageFields} (leçon 271).
+   */
+  private messageBannerBody(input: {
+    lang: string;
+    preview: string;
+    translation: { readonly text: string } | null;
+    media: MessageBannerMedia;
+  }): string {
+    return buildMessageNotificationBodyI18n(input.lang, {
+      messagePreview: this.servedPreview({
+        preview: input.preview,
+        translation: input.translation,
+      }),
+      attachments: input.media.attachments,
+      firstAttachmentFileSize: input.media.firstAttachmentFileSize,
+      firstAttachmentDuration: input.media.firstAttachmentDuration,
+      firstAttachmentWidth: input.media.firstAttachmentWidth,
+      firstAttachmentHeight: input.media.firstAttachmentHeight,
+    });
+  }
+
+  /**
+   * La projection CONTEXTE du média — ce que le fil push transporte pour que la
+   * NSE iOS attache le fichier en `UNNotificationAttachment` natif.
+   *
+   * Le second verrou de {@link createNotification} vide ces trois clés quand un
+   * `notificationLocKey` déclare une protection : cette projection n'a donc pas
+   * à la rejouer. Cf. cycle 125.
+   */
+  private bannerMediaContext(media: MessageBannerMedia): {
+    firstAttachmentUrl?: string;
+    firstAttachmentMimeType?: string;
+    firstAttachmentDurationMs?: number;
+  } {
+    return {
+      firstAttachmentUrl: media.firstAttachmentUrl,
+      firstAttachmentMimeType: media.firstAttachmentMimeType,
+      firstAttachmentDurationMs: media.firstAttachmentDuration != null
+        ? Math.round(media.firstAttachmentDuration * 1000)
+        : undefined,
+    };
+  }
+
+  /**
+   * L'horloge SERVEUR de la bulle pré-enregistrée par la NSE, et son type.
+   *
+   * Troisième projection partagée par les trois éventails (cycle 126) : la
+   * réponse et la mention poussent un `messageId`, donc font pré-enregistrer une
+   * bulle exactement comme le message simple — et la leur était datée par le
+   * device, ce qui la mal-ordonnait dans la conversation.
+   */
+  private messageClockFields(source: {
+    createdAt: Date | null;
+    messageType: string | null;
+  }): { messageCreatedAt?: string; messageType?: string } {
+    return {
+      messageCreatedAt: source.createdAt ? source.createdAt.toISOString() : undefined,
+      messageType: source.messageType ?? undefined,
+    };
+  }
+
+  /** La projection METADATA du média — la ligne `Notification` persistée. */
+  private bannerMediaMetadata(media: MessageBannerMedia): Record<string, unknown> {
+    if (!media.hasAttachments || !media.attachmentCount) return {};
+    return {
+      attachments: {
+        count: media.attachmentCount,
+        firstType: media.firstAttachmentType || 'document',
+        firstFilename: media.firstAttachmentFilename || 'file',
+        ...(media.firstAttachmentDuration != null
+          ? { firstDurationMs: Math.round(media.firstAttachmentDuration * 1000) }
+          : {}),
+        ...(media.firstAttachmentFileSize != null ? { firstFileSize: media.firstAttachmentFileSize } : {}),
+        ...(media.firstAttachmentWidth != null ? { firstWidth: media.firstAttachmentWidth } : {}),
+        ...(media.firstAttachmentHeight != null ? { firstHeight: media.firstAttachmentHeight } : {}),
+      },
+    };
   }
 
   /**
@@ -1783,28 +1939,6 @@ export class NotificationService {
     messageId: string;
     conversationId: string;
     messagePreview: string;
-    hasAttachments?: boolean;
-    attachmentCount?: number;
-    firstAttachmentType?: 'image' | 'video' | 'audio' | 'document' | 'text' | 'code';
-    firstAttachmentFilename?: string;
-    firstAttachmentFileSize?: number | null;
-    firstAttachmentDuration?: number | null;
-    firstAttachmentWidth?: number | null;
-    firstAttachmentHeight?: number | null;
-    /** Résumé léger de TOUS les attachments, dans l'ordre d'envoi. Le 1er est
-     *  affiché en média inline, les suivants sont agrégés en badges `+N` par
-     *  type dans le corps de la notification. */
-    attachments?: ReadonlyArray<{
-      type: 'image' | 'video' | 'audio' | 'document';
-      filename?: string | null;
-    }>;
-    /** URL accessible publiquement pour le 1er attachment (image/audio/video).
-     *  L'extension iOS télécharge ce fichier et le rend en UNNotificationAttachment
-     *  natif (waveform pour audio, preview pour image, thumbnail pour video). */
-    firstAttachmentUrl?: string;
-    /** MIME type du 1er attachment, ex. `audio/m4a`, `image/jpeg`, `video/mp4`.
-     *  Utilisé par l'extension pour choisir le UTI typeHint correct. */
-    firstAttachmentMimeType?: string;
     encryptedContent?: string;
     notificationLocKey?: string;
     /**
@@ -1815,7 +1949,7 @@ export class NotificationService {
     previewBasis?: PreviewPrismBasis;
     /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
     senderProfile?: NotificationActorProfile;
-  }): Promise<Notification | null> {
+  } & MessageBannerMedia): Promise<Notification | null> {
     // Race-condition guard: between `MessageProcessor.handleMessage` and the
     // moment the notification actually fans out (sender lookup + conversation
     // lookup + push enqueue + socket emit) there can be hundreds of
@@ -1914,16 +2048,13 @@ export class NotificationService {
 
     // Cycle 122 — le corps AFFICHÉ descend le Prisme, pas seulement les champs
     // de service ci-dessus : c'est lui que les trois plateformes rendent.
-    const content = buildMessageNotificationBodyI18n(recipientLang, {
-      messagePreview: this.servedPreview({
-        preview: params.messagePreview,
-        translation: servedTranslation,
-      }),
-      attachments: params.attachments,
-      firstAttachmentFileSize: params.firstAttachmentFileSize,
-      firstAttachmentDuration: params.firstAttachmentDuration,
-      firstAttachmentWidth: params.firstAttachmentWidth,
-      firstAttachmentHeight: params.firstAttachmentHeight,
+    // Cycle 126 — et la composition est partagée : les trois éventails annoncent
+    // le MÊME message, donc ils en montrent la même chose.
+    const content = this.messageBannerBody({
+      lang: recipientLang,
+      preview: params.messagePreview,
+      translation: servedTranslation,
+      media: params,
     });
 
     return this.createNotification({
@@ -1954,16 +2085,14 @@ export class NotificationService {
         conversationType: conversation?.type as any,
         messageId: params.messageId,
         // Phase A — propagation au payload APN pour rendu media inline iOS.
-        firstAttachmentUrl: params.firstAttachmentUrl,
-        firstAttachmentMimeType: params.firstAttachmentMimeType,
-        firstAttachmentDurationMs: params.firstAttachmentDuration != null
-          ? Math.round(params.firstAttachmentDuration * 1000)
-          : undefined,
+        ...this.bannerMediaContext(params),
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
         // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
-        messageCreatedAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt.toISOString() : undefined,
-        messageType: liveMessage.messageType ?? undefined,
+        ...this.messageClockFields({
+          createdAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt : null,
+          messageType: liveMessage.messageType ?? null,
+        }),
         // Cycle 124 — le corps et la langue de la bulle pré-enregistrée.
         ...prePersisted,
         ...prismContext,
@@ -1972,19 +2101,7 @@ export class NotificationService {
       metadata: {
         action: 'view_message',
         messagePreview: params.messagePreview,
-        ...(params.hasAttachments && params.attachmentCount && {
-          attachments: {
-            count: params.attachmentCount,
-            firstType: params.firstAttachmentType || 'document',
-            firstFilename: params.firstAttachmentFilename || 'file',
-            ...(params.firstAttachmentDuration != null
-              ? { firstDurationMs: Math.round(params.firstAttachmentDuration * 1000) }
-              : {}),
-            ...(params.firstAttachmentFileSize != null ? { firstFileSize: params.firstAttachmentFileSize } : {}),
-            ...(params.firstAttachmentWidth != null ? { firstWidth: params.firstAttachmentWidth } : {}),
-            ...(params.firstAttachmentHeight != null ? { firstHeight: params.firstAttachmentHeight } : {}),
-          },
-        }),
+        ...this.bannerMediaMetadata(params),
       } as any,
     });
   }
@@ -2015,10 +2132,12 @@ export class NotificationService {
      * du destinataire, donc l'éventail la relit UNE fois plutôt qu'une par
      * mentionné. Absente : relue ici (appel solo).
      */
-    prismSource?: MessagePrismSource;
+    prismSource?: MessageBannerSource;
     /** Cf. `createMessageNotification.previewBasis`. */
     previewBasis?: PreviewPrismBasis;
-  }): Promise<Notification | null> {
+    /** Cf. `createMessageNotification.notificationLocKey` — le verrou de protection. */
+    notificationLocKey?: string;
+  } & MessageBannerMedia): Promise<Notification | null> {
     // Anti-spam: rate limit des mentions par paire (sender → recipient)
     if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
       notificationLogger.info('Mention notification blocked (rate limit)', {
@@ -2053,6 +2172,7 @@ export class NotificationService {
       this.previewPrismSource({
         basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
         messageSource: prismSource,
+        protectedByLocKey: !!params.notificationLocKey,
       }),
       prism.ordered
     );
@@ -2063,9 +2183,13 @@ export class NotificationService {
       priority: 'high',
       // Cycle 122 — le corps AFFICHÉ porte le texte du Prisme : c'est lui que
       // les trois plateformes rendent, pas les champs de service du fil push.
-      content: this.servedPreview({
+      // Cycle 126 — et il se COMPOSE, comme celui d'un message simple : une
+      // mention dans une photo sans légende n'a que son étiquette à montrer.
+      content: this.messageBannerBody({
+        lang: prism.lang,
         preview: params.messagePreview,
         translation: servedTranslation,
+        media: params,
       }),
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
@@ -2101,12 +2225,19 @@ export class NotificationService {
           basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
           preview: params.messagePreview,
           originalLanguage: prismSource.originalLanguage,
+          protectedByLocKey: !!params.notificationLocKey,
         }),
+        // Cycle 126 — les trois projections partagées : le média que la NSE
+        // attache, le verrou qui le retient, et l'horloge de la bulle.
+        ...this.bannerMediaContext(params),
+        notificationLocKey: params.notificationLocKey,
+        ...this.messageClockFields(prismSource),
       },
 
       metadata: {
         action: 'view_message',
         messagePreview: params.messagePreview,
+        ...this.bannerMediaMetadata(params),
       } as any,
     });
   }
@@ -2132,7 +2263,9 @@ export class NotificationService {
       messageExpiresAt?: Date | null;
       /** Cf. `createMessageNotification.previewBasis`. */
       previewBasis?: PreviewPrismBasis;
-    },
+      /** Cf. `createMessageNotification.notificationLocKey`. */
+      notificationLocKey?: string;
+    } & MessageBannerMedia,
     memberIds: string[]
   ): Promise<number> {
     const eligibleUserIds = mentionedUserIds.filter(userId => {
@@ -2154,17 +2287,20 @@ export class NotificationService {
     // tout l'éventail, la DESCENTE restant par lecteur.
     const prismSource = await this.loadMessagePrismSource(commonData.messageId);
 
+    const { senderId, messageContent, ...banner } = commonData;
+
     const results = await Promise.all(
       eligibleUserIds.map(userId =>
         this.createMentionNotification({
+          // Cycle 126 — le média, le verrou et la base voyagent avec le reste :
+          // le lot de mentions annonce le MÊME message que les deux autres. Les
+          // deux seuls champs renommés sont extraits ; tout ce qui reste passe,
+          // de sorte qu'un champ de bannière ajouté demain n'ait pas à être
+          // recopié ici pour arriver à destination.
+          ...banner,
           mentionedUserId: userId,
-          mentionerUserId: commonData.senderId,
-          messageId: commonData.messageId,
-          conversationId: commonData.conversationId,
-          messagePreview: commonData.messageContent,
-          senderProfile: commonData.senderProfile,
-          messageExpiresAt: commonData.messageExpiresAt,
-          previewBasis: commonData.previewBasis,
+          mentionerUserId: senderId,
+          messagePreview: messageContent,
           prismSource,
         })
       )
@@ -3667,7 +3803,9 @@ export class NotificationService {
     messageExpiresAt?: Date | null;
     /** Cf. `createMessageNotification.previewBasis`. */
     previewBasis?: PreviewPrismBasis;
-  }): Promise<Notification | null> {
+    /** Cf. `createMessageNotification.notificationLocKey` — le verrou de protection. */
+    notificationLocKey?: string;
+  } & MessageBannerMedia): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
     if (await this.isConversationMutedFor(params.recipientUserId, params.conversationId, 'message_reply')) {
@@ -3697,6 +3835,7 @@ export class NotificationService {
       this.previewPrismSource({
         basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
         messageSource: prismSource,
+        protectedByLocKey: !!params.notificationLocKey,
       }),
       prism.ordered
     );
@@ -3707,9 +3846,15 @@ export class NotificationService {
       priority: 'normal',
       // Cycle 122 — cf. `createMentionNotification` : le corps servi descend le
       // Prisme, les champs du fil push ne suffisent pas.
-      content: this.servedPreview({
+      // Cycle 126 — et il se COMPOSE : répondre par un vocal ou une photo sans
+      // légende poussait au destinataire CITÉ — le plus directement concerné —
+      // une bannière au corps vide, pendant que les autres membres de la
+      // conversation lisaient la transcription ou l'étiquette du média.
+      content: this.messageBannerBody({
+        lang: prism.lang,
         preview: params.messagePreview,
         translation: servedTranslation,
+        media: params,
       }),
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
@@ -3738,12 +3883,19 @@ export class NotificationService {
           basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
           preview: params.messagePreview,
           originalLanguage: prismSource.originalLanguage,
+          protectedByLocKey: !!params.notificationLocKey,
         }),
+        // Cycle 126 — cf. `createMentionNotification` : les trois projections
+        // partagées du média, du verrou et de l'horloge.
+        ...this.bannerMediaContext(params),
+        notificationLocKey: params.notificationLocKey,
+        ...this.messageClockFields(prismSource),
       },
 
       metadata: {
         action: 'view_message',
         messagePreview: params.messagePreview,
+        ...this.bannerMediaMetadata(params),
       } as any,
     });
   }

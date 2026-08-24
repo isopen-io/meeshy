@@ -15078,3 +15078,77 @@ comportement, y compris ceux qui n'avaient pas le défaut. **Un lot qui répare 
 règle ne tranche pas, dans le même geste, une question qui n'en relève pas.**
 Exiger le repli à l'appel le rend visible au site plutôt que caché dans un
 défaut ; c'est ce qui permet à la prochaine passe de le trancher pour de bon.
+
+## Leçon 277 — une valeur COMPOSÉE lue par un seul de ses consommateurs possibles n'est pas partagée : elle est privée (2026-08-24, cycle 126)
+
+**Contexte.** `messageNotificationFanOut` compose, une fois par message, ce que
+sa bannière donne à voir : `notificationPreviewForPush` (la transcription d'un
+vocal, ou le contenu), `pushPreviewBasis` (ce que cet aperçu EST, donc ce qui le
+traduit), `attachmentInfo` (le média et ses étiquettes) et `notificationLocKey`
+(le verrou de protection du cycle 125). Un seul de ses TROIS lots le lisait.
+
+**Symptôme.** Répondre à quelqu'un par un vocal, une photo, une vidéo ou un
+fichier lui poussait une bannière au **corps VIDE** — pendant que tous les autres
+membres de la conversation recevaient « 🎤 Message vocal · 0:12 » ou la
+transcription entière. Le destinataire le plus directement concerné était le seul
+à ne rien lire. Pour un message SANS texte, la matière brute (`Message.content`)
+est la chaîne vide, et sans les étiquettes de média le corps n'a **rien** à
+montrer : `buildMessageNotificationBodyI18n` — la fonction qui rend un média
+lisible — n'était appelée que par `createMessageNotification`.
+
+**Ce que la mesure a donné**, pour un seul et même message :
+
+| valeur composée | `regular` | `reply` | `mentions` |
+|---|---|---|---|
+| aperçu (transcription ⊃ contenu) | ✅ | ❌ `Message.content` | ❌ |
+| base du Prisme (`transcript` / `protected-placeholder`) | ✅ | ❌ toujours `message-content` | ❌ |
+| média + étiquettes (rich-push, corps composé) | ✅ | ❌ jamais | ❌ |
+| `notificationLocKey` (verrou de protection) | ✅ | ❌ jamais | ❌ |
+| `messageCreatedAt` / `messageType` (bulle NSE) | ✅ | ❌ | ❌ |
+
+**La règle.** Les cycles 121–125 ont posé quatre questions à un résolveur de
+Prisme : élit-il le bon rang · qui AFFICHE ce qu'il élit · que transporte-t-il À
+CÔTÉ · le texte qu'il reçoit a-t-il le droit d'être là. La cinquième ne s'adresse
+pas au résolveur mais à la VALEUR qu'il rend :
+
+> **Qui d'AUTRE aurait dû l'afficher ?** Compter les consommateurs POSSIBLES
+> d'une valeur composée avant ses consommateurs RÉELS. Une valeur lue par un
+> seul d'entre eux n'est pas partagée — elle est PRIVÉE, et ses jumelles
+> recomposent la même chose à côté, moins bien.
+
+C'est la forme OUTILLÉE de la leçon 271 (« un helper à un appelant est un
+inventaire ») appliquée non à un helper mais à une VARIABLE LOCALE : elle n'a pas
+de nom exporté à compter, donc `grep` ne la trouve pas. Ce qui la rend
+comptable, c'est de la NOMMER — d'où `MessageBannerMedia`, un jeu de champs qui
+n'existait qu'en ligne dans une seule signature. **Un jeu de champs anonyme ne se
+partage pas : il se recopie.**
+
+**Pourquoi elle a survécu deux cycles.** Les cycles 124 et 125 l'ont MESURÉE et
+CLASSÉE : « le corriger change ce que ces bannières MONTRENT, pas la langue dans
+laquelle elles le montrent — décision produit, pas correction de Prisme ». Le
+classement était juste sur la taxonomie et faux sur la conclusion : **une
+bannière au corps vide n'est pas une décision produit.** Devant un suivi
+étiqueté « décision produit », la question à poser est : *quel produit
+choisirait ça ?* Si la réponse est « aucun », c'est un défaut qui porte une
+mauvaise étiquette.
+
+**Le correctif — un site de composition, trois consommateurs.**
+`MessageBannerMedia` (le jeu de champs, nommé), `messageBannerBody()` (le corps :
+texte du Prisme, ou étiquette du média quand ce texte est vide, plus les badges
+`+N`), `bannerMediaContext()` / `bannerMediaMetadata()` (les deux projections du
+média), `messageClockFields()` (l'horloge serveur de la bulle NSE). L'éventail
+sert le même `bannerPreview` + `bannerFields` aux trois lots ; le lot de mentions
+répand ce qui reste plutôt que de le recopier champ par champ, de sorte qu'un
+champ de bannière ajouté demain arrive aux trois sans qu'on ait à s'en souvenir.
+
+**Deux effets de bord, et les deux sont des durcissements.** Réponse et mention
+reçoivent désormais le `notificationLocKey` — donc le second verrou du cycle 125
+s'applique à leur charge, qui n'était jusque-là gardée par rien (elle ne portait
+simplement aucun média) — et leur `previewPrismSource` / `prePersistedMessageFields`
+gagnent le `protectedByLocKey` qui leur manquait.
+
+**Le témoin qui l'attrape** compare les TROIS lots sur le MÊME message
+(`replyMentionBannerMedia.test.ts`, 27 témoins) : c'est la seule forme où la
+divergence est visible. Un témoin par lot passe au vert sur chacun pris seul —
+exactement comme un côté de protocole est toujours cohérent avec lui-même
+(leçon de la quatrième famille, cycle 97).

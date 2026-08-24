@@ -483,6 +483,34 @@ export async function notifyMessageRecipients(params: {
         }
       : previewBasis;
 
+    // Cycle 126 — l'aperçu composé est un fait du MESSAGE, pas du lot qui le
+    // sert. Ce qui précède le calcule une fois ; UN SEUL des trois lots le
+    // lisait. La réponse et la mention repartaient de `notificationPreview` —
+    // donc de `Message.content`, la chaîne VIDE pour un vocal, une photo, une
+    // vidéo ou un fichier sans légende — et sans étiquette de média, leur corps
+    // n'avait RIEN à montrer. Répondre à quelqu'un par une photo lui poussait
+    // une bannière vide pendant que les autres membres lisaient
+    // « 📷 Photo · 1024×768 ».
+    //
+    // Les trois annoncent le MÊME message : ils en montrent donc la même chose,
+    // depuis le même objet. Ce qui les distingue est leur AUDIENCE, jamais leur
+    // contenu — et un champ de bannière ajouté demain arrive aux trois sans
+    // qu'on ait à s'en souvenir.
+    //
+    // Deux constantes plutôt qu'une seule : les trois créateurs nomment le TEXTE
+    // différemment (`messagePreview` / `messageContent`), quand tout le reste
+    // porte chez eux le même nom — donc se répand.
+    const bannerPreview = notificationPreviewForPush;
+    const bannerFields = {
+      // La transcription d'un vocal n'est PAS `Message.content` : ses
+      // traductions vivent sur `MessageAttachment.translations`. Le cycle 122
+      // s'en tenait à ne RIEN substituer ; le cycle 123 lui a donné sa propre
+      // source, et le cycle 126 la sert aux trois lots.
+      previewBasis: pushPreviewBasis,
+      notificationLocKey,
+      ...attachmentInfo,
+    };
+
     // Les trois valeurs ci-dessous disent ce qui est réellement PARTI, pas ce
     // qui était visé — même règle de compte rendu que
     // `createMemberJoinedNotificationsBatch`. Une préférence, un DND ou une
@@ -498,15 +526,15 @@ export async function notifyMessageRecipients(params: {
     const reply = owesReplyNotification
       ? await runLot('reply', onError, false, async () => {
           const created = await notificationService.createReplyNotification({
+            ...bannerFields,
             recipientUserId: originalMessageAuthorUserId,
             replierUserId: sender.actorId,
             messageId: message.id,
             conversationId,
-            messagePreview: notificationPreview,
+            messagePreview: bannerPreview,
             originalMessageId: message.replyToId!,
             senderProfile: sender.profile,
             messageExpiresAt: message.expiresAt ?? null,
-            previewBasis,
           });
           return created != null;
         })
@@ -517,9 +545,10 @@ export async function notifyMessageRecipients(params: {
           notificationService.createMentionNotificationsBatch(
             [...validatedMentionUserIds],
             {
+              ...bannerFields,
               senderId: sender.actorId,
               senderProfile: sender.profile,
-              messageContent: notificationPreview,
+              messageContent: bannerPreview,
               conversationId,
               messageId: message.id,
               // L'éventail tient déjà l'échéance du message : la transmettre
@@ -528,7 +557,6 @@ export async function notifyMessageRecipients(params: {
               // pas. Le chemin `new_message`, lui, la prend de sa propre
               // relecture vivante — il en fait une de toute façon.
               messageExpiresAt: message.expiresAt ?? null,
-              previewBasis,
             },
             memberIds
           )
@@ -563,15 +591,9 @@ export async function notifyMessageRecipients(params: {
           senderProfile: sender.profile,
           messageId: message.id,
           conversationId,
-          messagePreview: notificationPreviewForPush,
+          ...bannerFields,
+          messagePreview: bannerPreview,
           encryptedContent: message.encryptedContent || undefined,
-          notificationLocKey,
-          // La transcription d'un vocal n'est PAS `Message.content` : ses
-          // traductions vivent sur `MessageAttachment.translations`. Le cycle 122
-          // s'en tenait à ne RIEN substituer ; le cycle 123 lui donne sa propre
-          // source, et la bannière d'un vocal descend enfin le Prisme.
-          previewBasis: pushPreviewBasis,
-          ...attachmentInfo,
         })
       ));
 
