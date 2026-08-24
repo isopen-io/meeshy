@@ -38,6 +38,41 @@ import XCTest
 /// moindre montage.
 final class PasteIntoComposerTests: XCTestCase {
 
+    // MARK: - V3-5 — `.stickers` est atteignable en production, pas seulement en test
+
+    /// GARDE POSITIVE. `PasteSurface.stickers` existant dans l'énum ne prouve
+    /// rien : `test_theTwoSurfacesNeverConverge_forAnImage` ci-dessous le
+    /// prouvait déjà par la VALEUR, sans qu'aucun site de PRODUCTION ne
+    /// l'atteigne jamais. Sans un tel site, le panneau « Mes stickers » du
+    /// composer n'est joignable par aucun chemin réel, et `StickerLibraryStore`
+    /// (budget 64 Mo, index sidecar, éviction LRU — 126 lignes) ne reçoit
+    /// jamais rien à retenir. Une garde qui vérifiait l'ABSENCE de ce site
+    /// mourrait en silence en gagnant un site : c'est pourquoi elle affirme sa
+    /// PRÉSENCE.
+    func test_aProductionSite_reachesTheStickersSurface() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        guard let enumerateur = FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil) else {
+            return XCTFail("Arborescence app introuvable à \(racine.path)")
+        }
+        var found = false
+        for case let url as URL in enumerateur where url.pathExtension == "swift" {
+            let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            if source.contains("surface: .stickers") {
+                found = true
+                break
+            }
+        }
+        XCTAssertTrue(
+            found,
+            "Aucun site de PRODUCTION (sous apps/ios/Meeshy) ne passe `surface: .stickers` — le "
+                + "panneau « Mes stickers » reste inatteignable et StickerLibraryStore ne reçoit "
+                + "jamais rien à retenir."
+        )
+    }
+
     private func file(_ name: String, _ mime: String) -> ComposerIngest {
         .file(url: URL(fileURLWithPath: "/tmp/\(name)"), name: name, mime: mime)
     }

@@ -111,6 +111,29 @@ public protocol PostServiceProviding: Sendable {
     /// précédente : les protocoles Swift ne portent pas de valeur par défaut, et
     /// tout double de test aurait cessé de conformer d'un coup.
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?) async throws -> APIPost
+    /// Même publication, plus l'opt-in d'extraction de bande-son
+    /// (`Post.allowSoundExtraction`) et le texte alternatif par média
+    /// (`PostMedia.alt`, clé = un id de `mediaIds`). Requirement SÉPARÉE, même
+    /// patron que `create(… allowSoundExtraction: mediaAlt:)` : les protocoles
+    /// Swift ne portent pas de valeur par défaut, et tout double de test aurait
+    /// cessé de conformer d'un coup.
+    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost
+    /// Publication d'un CANEVAS dont le TYPE suit le format choisi dans le
+    /// composer — l'entrée par laquelle « changer de format change ce qui est
+    /// publié » (V3-3).
+    ///
+    /// Le canevas voyage avec le type, et c'est délibéré : `create(content:
+    /// type:…)` ne porte aucun `storyEffects`, si bien qu'y router un post
+    /// composé perdrait chaque objet texte, autocollant et dessin SANS erreur
+    /// de compilation — et l'aperçu du composer, qui rend ce même canevas
+    /// (loi 6), mentirait alors sur ce qui part. Le gateway modélise déjà la
+    /// forme retenue : `CreatePostSchema` accepte `storyEffects` pour les
+    /// quatre types, et `createPost` le persiste quel que soit le type.
+    ///
+    /// Requirement SÉPARÉE avec défaut ci-dessous, même patron que
+    /// `createStory(… mentions:)` : les protocoles Swift ne portent pas de
+    /// valeur par défaut, et tout double de test aurait cessé de conformer.
+    func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost
     func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
     func requestTranslation(postId: String, targetLanguage: String) async throws
     func pinPost(postId: String) async throws
@@ -156,6 +179,28 @@ public extension PostServiceProviding {
         try await createStory(content: content, storyEffects: storyEffects, visibility: visibility,
                               visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
                               mediaIds: mediaIds, repostOfId: repostOfId)
+    }
+
+    /// Défaut : un conformeur qui n'implémente que la signature SANS
+    /// `allowSoundExtraction`/`mediaAlt` (mocks existants) reste valide — les
+    /// deux champs sont simplement ignorés tant que le type ne surcharge pas
+    /// cette méthode. `PostService` la surcharge réellement.
+    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost {
+        try await createStory(content: content, storyEffects: storyEffects, visibility: visibility,
+                              visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
+                              mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions)
+    }
+
+    /// Défaut : un conformeur qui ne sait pas porter le format (doubles de
+    /// test) retombe sur la publication de story. Il perd alors le TYPE, et
+    /// c'est assumé — un double ne parle à aucun serveur. La garantie qui
+    /// compte porte sur le corps réellement remis à `POST /posts`, que
+    /// `PostService` surcharge plus bas et que `CanvasPostTypeTests` mesure.
+    func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost {
+        try await createStory(content: content, storyEffects: storyEffects, visibility: visibility,
+                              visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
+                              mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions,
+                              allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt)
     }
 
     /// Défaut : un conformeur qui n'implémente que la signature SANS mentions
@@ -578,12 +623,37 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?) async throws -> APIPost {
+        try await createStory(content: content, storyEffects: storyEffects, visibility: visibility,
+                              visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
+                              mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions,
+                              allowSoundExtraction: nil, mediaAlt: nil)
+    }
+
+    /// Seule surcharge qui envoie réellement `allowSoundExtraction` ET
+    /// `mediaAlt` — même patron que `create(… allowSoundExtraction: mediaAlt:)`.
+    ///
+    /// Depuis V3-3 elle n'écrit plus le corps elle-même : publier une story,
+    /// c'est publier un canevas de type `STORY`. Un second constructeur de
+    /// corps aurait été le point de divergence exact que ce lot vient de
+    /// fermer.
+    public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost {
+        try await createCanvasPost(type: .story, content: content, storyEffects: storyEffects,
+                                   visibility: visibility, visibilityUserIds: visibilityUserIds,
+                                   originalLanguage: originalLanguage, mediaIds: mediaIds,
+                                   repostOfId: repostOfId, mentions: mentions,
+                                   allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt)
+    }
+
+    /// Le SEUL constructeur du corps de création par canevas, tous formats
+    /// confondus — c'est ce qui garantit qu'un post composé emporte exactement
+    /// ce qu'une story emporte, moins le type.
+    public func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost {
         // Strip composer-local `file://` paths from mediaObjects before the
         // payload hits the wire — they only resolve in the author's sandbox
         // and break the canvas for every reader (cf. StoryEffects+Sanitization
         // and StoryMediaLayer.swift:132-134).
         let sanitizedEffects = storyEffects?.sanitizedForServerPublish()
-        let body = CreateStoryRequest(content: content, storyEffects: sanitizedEffects, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions)
+        let body = CreateStoryRequest(type: type.rawValue, content: content, storyEffects: sanitizedEffects, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions, allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }

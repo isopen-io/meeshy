@@ -62,11 +62,33 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// affichait la pastille et ne prévenait personne. Optionnel pour rester
     /// rétro-compatible avec les rows persistés avant lui (→ `nil`).
     public let mentionsPayload: [PostMentionInput]?
+    /// Le texte alternatif par média saisi par l'auteur, keyé par ID D'ÉLÉMENT
+    /// DU COMPOSER — les ids serveur n'existent qu'après l'upload, que le rejeu
+    /// refera lui-même. Persisté ici pour la même raison que
+    /// `mentionsPayload` : il ne vit nulle part ailleurs (le brouillon ne le
+    /// porte pas), donc un rejeu qui ne l'emporterait pas publierait une story
+    /// muette pour les lecteurs d'écran. Optionnel — rétro-compatible avec les
+    /// rows persistés avant lui (→ `nil`).
+    public let mediaAltPayload: [String: String]?
+    /// L'opt-in d'extraction de bande-son, tel que l'auteur l'a tranché. `nil`
+    /// = il n'a rien tranché (ou row antérieure au champ) : le défaut serveur
+    /// s'applique alors par silence.
+    public let allowSoundExtractionPayload: Bool?
+    /// Le FORMAT sous lequel l'auteur a demandé la publication (`PostType`
+    /// brut). Persisté pour la même raison que les deux champs ci-dessus : il
+    /// ne vit nulle part ailleurs — le brouillon ne le porte pas — donc un
+    /// rejeu au retour du réseau republierait une story là où l'auteur avait
+    /// choisi « Post ». Stocké en chaîne plutôt qu'en enum pour qu'une valeur
+    /// inconnue (row écrite par une version future) se relise en repli et non
+    /// en échec de décodage de toute la ligne. `nil` = row antérieure au champ
+    /// → story, ce qu'elle était.
+    public let targetTypePayload: String?
 
     enum CodingKeys: String, CodingKey {
         case id, tempStoryId, visibility, slidesPayload, repostOfId
         case mediaReferences, createdAt, retryCount, lastError, visibilityUserIds
         case originalLanguage, draftId, mentionsPayload
+        case mediaAltPayload, allowSoundExtractionPayload, targetTypePayload
     }
 
     public init(
@@ -78,7 +100,10 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         visibilityUserIds: [String]? = nil,
         originalLanguage: String? = nil,
         draftId: String? = nil,
-        mentionsPayload: [PostMentionInput]? = nil
+        mentionsPayload: [PostMentionInput]? = nil,
+        mediaAltPayload: [String: String]? = nil,
+        allowSoundExtractionPayload: Bool? = nil,
+        targetTypePayload: String? = nil
     ) {
         let queueId = UUID().uuidString
         self.id = queueId
@@ -94,6 +119,9 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.originalLanguage = originalLanguage
         self.draftId = draftId
         self.mentionsPayload = mentionsPayload
+        self.mediaAltPayload = mediaAltPayload
+        self.allowSoundExtractionPayload = allowSoundExtractionPayload
+        self.targetTypePayload = targetTypePayload
     }
 
     public init(from decoder: Decoder) throws {
@@ -111,6 +139,9 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.originalLanguage = try container.decodeIfPresent(String.self, forKey: .originalLanguage)
         self.draftId = try container.decodeIfPresent(String.self, forKey: .draftId)
         self.mentionsPayload = try container.decodeIfPresent([PostMentionInput].self, forKey: .mentionsPayload)
+        self.mediaAltPayload = try container.decodeIfPresent([String: String].self, forKey: .mediaAltPayload)
+        self.allowSoundExtractionPayload = try container.decodeIfPresent(Bool.self, forKey: .allowSoundExtractionPayload)
+        self.targetTypePayload = try container.decodeIfPresent(String.self, forKey: .targetTypePayload)
     }
 }
 

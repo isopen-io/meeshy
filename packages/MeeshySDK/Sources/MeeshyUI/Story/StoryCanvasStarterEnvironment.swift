@@ -199,3 +199,64 @@ extension EnvironmentValues {
         set { self[StoryPasteKey.self] = newValue }
     }
 }
+
+// MARK: - « Mes stickers » (V3-5) — bibliothèque personnelle, injectée par l'app
+
+/// Une vignette de la bibliothèque personnelle « Mes stickers ». Le SDK
+/// n'interprète pas `id` — il ne sert qu'à la stabilité de la grille
+/// (`ForEach(id:)`) ; le magasin qui lui donne un sens (budget, éviction,
+/// persistance) est app-side.
+public nonisolated struct StoryStickerLibraryItem: Identifiable, Equatable, @unchecked Sendable {
+    public let id: String
+    public let thumbnail: UIImage
+
+    public init(id: String, thumbnail: UIImage) {
+        self.id = id
+        self.thumbnail = thumbnail
+    }
+
+    public static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+}
+
+/// Accès à « Mes stickers », **injecté par l'app**. Même doctrine que
+/// `StoryPasteProvider` : la bibliothèque (budget, éviction LRU, persistance
+/// disque) est une dépendance app-side, le SDK ne fait que peindre ce qu'elle
+/// rend et lui remettre les `NSItemProvider` que `PasteButton` lui remet.
+///
+/// Le défaut `nil` est la règle produit, pas un détail : sans injection, la
+/// section « Mes stickers » n'est pas rendue — même doctrine que la capsule
+/// « Coller » des amorces de page blanche (loi 4 : un outil non offert est
+/// absent, jamais grisé).
+public nonisolated struct StoryStickerLibraryProvider {
+    public typealias Recents = @MainActor () async -> [StoryStickerLibraryItem]
+    public typealias Paste = @MainActor ([NSItemProvider]) async -> [StoryStickerLibraryItem]
+
+    private let recentsProvider: Recents
+    private let pasteProvider: Paste
+
+    public init(recents: @escaping Recents, paste: @escaping Paste) {
+        self.recentsProvider = recents
+        self.pasteProvider = paste
+    }
+
+    @MainActor
+    public func recents() async -> [StoryStickerLibraryItem] {
+        await recentsProvider()
+    }
+
+    @MainActor
+    public func paste(_ providers: [NSItemProvider]) async -> [StoryStickerLibraryItem] {
+        await pasteProvider(providers)
+    }
+}
+
+public struct StoryStickerLibraryKey: EnvironmentKey {
+    public static let defaultValue: StoryStickerLibraryProvider? = nil
+}
+
+extension EnvironmentValues {
+    public var storyStickerLibrary: StoryStickerLibraryProvider? {
+        get { self[StoryStickerLibraryKey.self] }
+        set { self[StoryStickerLibraryKey.self] = newValue }
+    }
+}

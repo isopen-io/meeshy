@@ -1639,7 +1639,7 @@ struct PostDetailView: View {
                     .foregroundColor(theme.accentText(repost.authorColor).opacity(0.7))
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
-                    .accessibilityValue("\(repost.likes)")
+                    .accessibilityValue(LocalizedNumber.exact(repost.likes))
                 }
                 Spacer()
             }
@@ -1769,7 +1769,7 @@ struct PostDetailView: View {
             .accessibilityLabel(detailIsLiked
                 ? String(localized: "a11y.post.unlike", defaultValue: "Je n'aime plus", bundle: .main)
                 : String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
-            .accessibilityValue("\(detailLikeCount)")
+            .accessibilityValue(LocalizedNumber.exact(detailLikeCount))
             .accessibilityHint(String(localized: "a11y.post.like.hint", defaultValue: "Aimer cette publication", bundle: .main))
 
             Spacer()
@@ -2261,7 +2261,7 @@ struct PostDetailView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isHeader)
         .accessibilityLabel(String(localized: "a11y.comment.section_header", defaultValue: "Commentaires", bundle: .main))
-        .accessibilityValue("\(displayPost?.commentCount ?? 0)")
+        .accessibilityValue(LocalizedNumber.exact(displayPost?.commentCount ?? 0))
     }
 
     // MARK: - Composer

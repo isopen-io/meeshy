@@ -971,10 +971,10 @@ private struct PreviewAudioPlayer: View {
                 )
                 .tint(accent)
                 .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Playback position", bundle: .main))
-                .accessibilityValue("\(player.percentInt) %")
+                .accessibilityValue(LocalizedNumber.percent(player.percentInt))
 
                 // Pourcentage d'avancement
-                Text("\(player.percentInt)%")
+                Text(LocalizedNumber.percent(player.percentInt))
                     .font(MeeshyFont.relative(11, weight: .heavy, design: .monospaced))
                     .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
                     .frame(minWidth: 36)
@@ -1073,7 +1073,7 @@ private struct PreviewVideoPlayer: View {
             )
             .tint(accent)
             .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Playback position", bundle: .main))
-            .accessibilityValue("\(player.percentInt) %")
+            .accessibilityValue(LocalizedNumber.percent(player.percentInt))
 
             HStack(spacing: 8) {
                 Button { player.toggle(url: attachment.fileUrl) } label: {
@@ -1101,7 +1101,7 @@ private struct PreviewVideoPlayer: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Skip back 5 seconds", bundle: .main))
 
-                Text("\(player.percentInt)%")
+                Text(LocalizedNumber.percent(player.percentInt))
                     .font(MeeshyFont.relative(10, weight: .heavy, design: .monospaced))
                     .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
                     .frame(minWidth: 32)

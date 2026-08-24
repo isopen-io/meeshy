@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import UIKit
 import os
 import PhotosUI
@@ -42,6 +43,95 @@ public nonisolated enum ComposerExitAction: Equatable, Sendable {
     case saveDraft
 }
 
+/// Ce que la collecte d'accessibilité du composer remet à la publication
+/// (V3-4) : le texte alternatif par média et l'opt-in d'extraction de son.
+///
+/// Les deux voyagent ENSEMBLE dans un seul paramètre de hand-off parce qu'ils
+/// se saisissent dans le même panneau et partent dans la même requête ; les
+/// séparer aurait porté la fermeture de publication à douze paramètres
+/// positionnels, où l'ordre devient la seule chose qui distingue deux
+/// dictionnaires.
+///
+/// `mediaAlt` est keyé par ID D'ÉLÉMENT DU COMPOSER, jamais par id de
+/// `PostMedia` : au moment du hand-off les médias ne sont pas encore uploadés.
+/// Le site qui connaît la correspondance la traduit avant l'envoi
+/// (`StoryMediaAltMapping.serverKeyed`), faute de quoi le gateway filtre les
+/// clés inconnues sans rien dire.
+public nonisolated struct ComposerMediaAccessibility: Equatable, Sendable {
+
+    public let mediaAlt: [String: String]?
+    public let allowSoundExtraction: Bool?
+
+    public init(mediaAlt: [String: String]?, allowSoundExtraction: Bool?) {
+        self.mediaAlt = mediaAlt
+        self.allowSoundExtraction = allowSoundExtraction
+    }
+
+    /// L'auteur n'a rien saisi ni rien basculé. Distinct d'un dictionnaire vide
+    /// et d'un `false` explicite : le gateway lit l'absence « n'y touche pas ».
+    public static let empty = ComposerMediaAccessibility(mediaAlt: nil, allowSoundExtraction: nil)
+}
+
+/// Le déclenchement de publication, rendu atteignable de l'EXTÉRIEUR (V3-1) —
+/// une télécommande, jamais un second chemin d'envoi.
+///
+/// Forme retenue parce qu'elle est la seule qui garde `publishAllSlides()` pour
+/// CORPS du déclenchement : l'atelier arme la télécommande avec sa propre
+/// méthode, le meuble ne fait que presser. Il n'a donc rien à recomposer — ni
+/// le rabattement des effets du canvas sur la diapositive courante, ni la
+/// visibilité, ni la langue, qui vivent dans l'état privé de la vue — et
+/// `isArmed` lui répond AVANT qu'il ne peigne sa commande, ce qu'un jeton
+/// observé ne saurait pas dire.
+///
+/// Le loquet anti-double-tap n'est PAS ici : il vit dans `publishAllSlides()`
+/// (`didHandOffPublish`), qui ne le pose que sur un hand-off ACCEPTÉ. Une
+/// télécommande à un coup condamnerait pour la session les surfaces qui
+/// refusent le hand-off (édition hors-ligne, surface qui ne ferme rien).
+public final class ComposerPublishTrigger: ObservableObject {
+
+    /// Ce que le meuble lit pour savoir s'il a le droit de peindre une commande
+    /// de publication — loi 4 : non offert = absent de l'interface.
+    @Published public private(set) var isArmed = false
+
+    /// Le format que la DERNIÈRE pression a apporté (V3-3). `nil` tant que
+    /// personne n'a pressé, ou après désarmement.
+    ///
+    /// Il vit ici, sur un objet de RÉFÉRENCE, parce que le corps armé est
+    /// capturé au montage de l'atelier : une propriété de la vue lue depuis ce
+    /// corps serait celle du montage, et le meuble publierait le format qu'il
+    /// offrait à l'ouverture. La télécommande, elle, est le même objet à
+    /// l'armement et à la pression.
+    public private(set) var requestedTargetType: PostType?
+
+    private var handler: (() -> Void)?
+
+    public init() {}
+
+    /// Armée par l'atelier, avec `publishAllSlides` et rien d'autre.
+    public func arm(_ handler: @escaping () -> Void) {
+        self.handler = handler
+        isArmed = true
+    }
+
+    /// Au démontage de l'atelier : une télécommande qui lui survit publierait
+    /// l'état d'un composer disparu.
+    public func disarm() {
+        handler = nil
+        isArmed = false
+        requestedTargetType = nil
+    }
+
+    /// Pressée par le meuble, qui apporte le format choisi AU MOMENT DU GESTE.
+    ///
+    /// `nil` (défaut) = le presseur n'a pas d'éventail à lui : l'atelier publie
+    /// alors sous son propre `publishTargetType`. Passer `nil` n'efface donc
+    /// rien d'utile — il rend la main au seul autre porteur du fait.
+    public func requestPublish(as targetType: PostType? = nil) {
+        requestedTargetType = targetType
+        handler?()
+    }
+}
+
 extension StoryComposerView {
     // MARK: - Pickers
 
@@ -81,6 +171,19 @@ extension StoryComposerView {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Ce que la publication emporte de la collecte d'accessibilité.
+    ///
+    /// Extrait en règle PURE parce que `StoryComposerView` n'est pas hostable
+    /// en XCTest : sans elle, « le texte que l'auteur a saisi atteint le
+    /// hand-off » ne se prouverait que par lecture de source — le même genre de
+    /// preuve qui laissait `mediaAltPayload()` sans aucun appelant.
+    static func accessibilityHandoff(from store: MediaAccessibilityStore) -> ComposerMediaAccessibility {
+        ComposerMediaAccessibility(
+            mediaAlt: store.mediaAltPayload(),
+            allowSoundExtraction: store.allowSoundExtractionPayload()
+        )
+    }
+
     /// C3 — le tap « Publier » est ENTIÈREMENT synchrone : plus aucun `await`
     /// entre le geste et la fermeture du composer. Les thumbHashes, qui
     /// bloquaient jusqu'ici la main pendant l'extraction des frames vidéo, sont
@@ -92,7 +195,7 @@ extension StoryComposerView {
     /// (directive 2026-08-02 : il survit, marqué `pendingPublishAt`) +
     /// suspension d'autosave (E1) + loquet.
     func publishAllSlides() {
-        guard !didHandOffPublish else { return }
+        guard Self.acceptsPublishRequest(didHandOffPublish: didHandOffPublish) else { return }
         // Publier avec la sheet timeline OUVERTE ne doit pas perdre les
         // édits en vol — même flush que l'autosave de draft.
         flushOpenTimelineIntoSlide()
@@ -119,7 +222,10 @@ extension StoryComposerView {
         let accepted = onPublishAllInBackground(
             slides, viewModel.slideImages, viewModel.loadedImages,
             viewModel.loadedVideoURLs, viewModel.loadedAudioURLs,
-            storyLanguage, visibility, ids, viewModel.draftId, viewModel.references
+            storyLanguage, visibility, ids, viewModel.draftId, viewModel.references,
+            Self.accessibilityHandoff(from: accessibilityStore),
+            Self.publishedType(requested: publishTrigger?.requestedTargetType,
+                               atelier: publishTargetType)
         )
         // Tout ce qui engage le brouillon attend de savoir si le hand-off a
         // été accepté. Un refus (édition hors-ligne, surface inerte) laisse le
@@ -305,6 +411,28 @@ extension StoryComposerView {
         hasContent || carriesAudio
     }
 
+    /// Le loquet anti-double-tap, en règle PURE. Depuis qu'un déclencheur
+    /// EXTERNE peut entrer dans `publishAllSlides()` (V3-1), « deux
+    /// déclenchements ne publient qu'une fois » doit pouvoir se prouver
+    /// autrement que par lecture de source : la vue n'est pas hostable en
+    /// XCTest, la règle, elle, l'est.
+    nonisolated static func acceptsPublishRequest(didHandOffPublish: Bool) -> Bool {
+        !didHandOffPublish
+    }
+
+    /// Sous quel type la publication part (V3-3), depuis les DEUX porteurs
+    /// possibles du même fait — et c'est le geste qui tranche.
+    ///
+    /// La pression du meuble apporte le format MESURÉ AU MOMENT DU GESTE ; la
+    /// propriété de l'atelier est celui avec lequel il a été construit, relu à
+    /// chaque rendu du corps. La pression prime parce que le corps armé est
+    /// capturé au montage : une propriété lue depuis lui serait celle du
+    /// montage. Sans pression (l'atelier publie par sa flèche), la propriété
+    /// est le seul porteur, et elle est fraîche.
+    nonisolated static func publishedType(requested: PostType?, atelier: PostType) -> PostType {
+        requested ?? atelier
+    }
+
     /// L'audio du composer vit à DEUX endroits, et le fond sonore à deux stades :
     /// `selectedAudioId` tant que la sélection est vivante (elle n'est rabattue
     /// sur `effects.backgroundAudioId` qu'au hand-off de publication), et les
@@ -342,8 +470,13 @@ extension StoryComposerView {
         )
     }
 
+    /// De la matière ET un publieur. Le second terme ne change rien pour
+    /// `.atelier`, dont la flèche existe toujours ; il n'existe que pour que le
+    /// chrome délégué SANS déclencheur armé se dise non publiable, au lieu de
+    /// rester silencieusement inerte.
     var canPublish: Bool {
         Self.canPublish(hasContent: composerHasContent, carriesAudio: composerCarriesAudio)
+            && chromeOwner.hasPublisher(triggerIsArmed: publishTrigger?.isArmed == true)
     }
 
     /// Protection de sortie — règle DÉDIÉE, distincte du gate du bouton Publier.

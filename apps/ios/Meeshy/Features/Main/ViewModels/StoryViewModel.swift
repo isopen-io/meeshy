@@ -274,7 +274,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             originalLanguage: item.originalLanguage,
             visibility: item.visibility,
             visibilityUserIds: item.visibilityUserIds ?? [],
-            declaredMentions: item.mentionsPayload ?? []
+            declaredMentions: item.mentionsPayload ?? [],
+            composerMediaAlt: item.mediaAltPayload ?? [:],
+            allowSoundExtraction: item.allowSoundExtractionPayload,
+            // Une valeur inconnue (row écrite par une version future) retombe
+            // sur la story plutôt que d'échouer : le rejeu publie, au pire sous
+            // le format historique.
+            targetType: item.targetTypePayload.flatMap(PostType.init(rawValue:)) ?? .story
         )
 
         let ids = try await runStoryUpload(
@@ -394,6 +400,18 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// texte. Vide = aucune référence hors texte ; le serveur relit le
         /// texte lui-même.
         var declaredMentions: [PostMentionInput] = []
+        /// Le texte alternatif saisi par l'auteur, keyé par ID D'ÉLÉMENT DU
+        /// COMPOSER. La traduction vers les ids `PostMedia` n'est possible
+        /// qu'après l'upload, qui les attribue — `runStoryUpload` la fait juste
+        /// avant l'envoi (`StoryMediaAltMapping.serverKeyed`).
+        var composerMediaAlt: [String: String] = [:]
+        /// L'opt-in d'extraction de bande-son du post. `nil` = l'auteur n'a rien
+        /// tranché : le défaut serveur s'applique par silence.
+        var allowSoundExtraction: Bool? = nil
+        /// Le FORMAT choisi dans le composer (V3-3), porté jusqu'à l'envoi.
+        /// `.story` par défaut : toute surface qui n'offre pas d'éventail
+        /// publie exactement ce qu'elle publiait.
+        var targetType: PostType = .story
         /// IDs of slide-Posts already created server-side. Tracked so that:
         /// (a) `retryUpload()` skips them (otherwise a partial-failure retry creates
         ///     duplicate slides — what was previously committed plus the same again),
@@ -1357,6 +1375,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     // MARK: - Background Publishing
 
     func publishStoryInBackground(
+        /// Le format que l'auteur a choisi dans l'éventail du composer. C'est
+        /// lui qui décide du `type` envoyé à `POST /posts` — sans quoi choisir
+        /// « Post » publierait une story, un choix qui a l'air de marcher.
+        targetType: PostType = .story,
         slides: [StorySlide],
         slideImages: [String: UIImage],
         loadedImages: [String: UIImage],
@@ -1377,7 +1399,14 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// Les personnes que l'auteur a choisi de nommer, avec leur mode. Seuls
         /// les modes que le TEXTE ne peut pas porter partent au serveur : les
         /// INLINE, il les relit lui-même du contenu.
-        references: [ComposerReference] = []
+        references: [ComposerReference] = [],
+        /// Le texte alternatif par média, keyé par ID D'ÉLÉMENT DU COMPOSER :
+        /// les ids serveur n'existent qu'après l'upload. `runStoryUpload`
+        /// traduit juste avant l'envoi.
+        composerMediaAlt: [String: String] = [:],
+        /// L'opt-in d'extraction de bande-son du post entier. `nil` = l'auteur
+        /// n'a rien tranché.
+        allowSoundExtraction: Bool? = nil
     ) {
         let declaredMentions = ComposerReferences.payload(references)
 
@@ -1394,6 +1423,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         if NetworkMonitor.shared.isOffline {
             Task { [weak self] in
                 await self?.enqueueStoryForOfflinePublish(
+                    targetType: targetType,
                     slides: slides,
                     slideImages: slideImages,
                     loadedImages: loadedImages,
@@ -1403,7 +1433,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     visibility: visibility,
                     visibilityUserIds: visibilityUserIds,
                     draftId: draftId,
-                    declaredMentions: declaredMentions
+                    declaredMentions: declaredMentions,
+                    composerMediaAlt: composerMediaAlt,
+                    allowSoundExtraction: allowSoundExtraction
                 )
             }
             showStoryComposer = false
@@ -1432,7 +1464,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             originalLanguage: originalLanguage,
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
-            declaredMentions: declaredMentions
+            declaredMentions: declaredMentions,
+            composerMediaAlt: composerMediaAlt,
+            allowSoundExtraction: allowSoundExtraction,
+            targetType: targetType
         )
         let uploadId = upload.id
         activeUploads.append(upload)
@@ -1454,6 +1489,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         Task { [weak self] in
             guard let self else { return }
             let intent = await self.persistPublishIntentToQueue(
+                targetType: targetType,
                 slides: slides,
                 slideImages: slideImages,
                 loadedImages: loadedImages,
@@ -1464,7 +1500,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 visibilityUserIds: visibilityUserIds,
                 draftId: draftId,
                 repostOfId: repostOfId,
-                declaredMentions: declaredMentions
+                declaredMentions: declaredMentions,
+                composerMediaAlt: composerMediaAlt,
+                allowSoundExtraction: allowSoundExtraction
             )
             // L'item vient d'être créé : personne d'autre ne peut le détenir,
             // la revendication est donc acquise d'office ici. On enregistre
@@ -1559,6 +1597,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// enqueue branch without having to mutate `NetworkMonitor.shared`
     /// (whose `isOffline` setter is `private(set)`).
     func enqueueStoryForOfflinePublish(
+        targetType: PostType = .story,
         slides: [StorySlide],
         slideImages: [String: UIImage],
         loadedImages: [String: UIImage],
@@ -1568,9 +1607,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         visibility: String = StoryVisibilityPreferenceStore.fallback,
         visibilityUserIds: [String] = [],
         draftId: String? = nil,
-        declaredMentions: [PostMentionInput] = []
+        declaredMentions: [PostMentionInput] = [],
+        composerMediaAlt: [String: String] = [:],
+        allowSoundExtraction: Bool? = nil
     ) async {
         guard let intent = await persistPublishIntentToQueue(
+            targetType: targetType,
             slides: slides,
             slideImages: slideImages,
             loadedImages: loadedImages,
@@ -1580,7 +1622,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
             draftId: draftId,
-            declaredMentions: declaredMentions
+            declaredMentions: declaredMentions,
+            composerMediaAlt: composerMediaAlt,
+            allowSoundExtraction: allowSoundExtraction
         ) else { return }
 
         insertOptimisticOfflineStories(
@@ -1621,6 +1665,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// l'item en queue, repris au drain de boot). Retourne les ids de l'item
     /// persisté, `nil` si l'encodage échoue.
     func persistPublishIntentToQueue(
+        /// Le format choisi. Persisté DANS l'item de file : il ne vit nulle
+        /// part ailleurs (le brouillon ne le porte pas), donc un rejeu qui ne
+        /// l'emporterait pas republierait une story là où l'auteur avait
+        /// choisi « Post ».
+        targetType: PostType = .story,
         slides: [StorySlide],
         slideImages: [String: UIImage],
         loadedImages: [String: UIImage],
@@ -1638,7 +1687,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// est exclu de la relecture serveur, une note comme un silence n'ont
         /// aucun texte), donc un rejeu qui ne les porterait pas publierait une
         /// story qui ne prévient personne.
-        declaredMentions: [PostMentionInput] = []
+        declaredMentions: [PostMentionInput] = [],
+        /// Accessibilité : ces deux champs ne vivent NULLE PART ailleurs (le
+        /// brouillon ne les porte pas), donc un rejeu qui ne les emporterait
+        /// pas publierait une story muette pour les lecteurs d'écran.
+        composerMediaAlt: [String: String] = [:],
+        allowSoundExtraction: Bool? = nil
     ) async -> (queueId: String, tempStoryId: String)? {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
@@ -1709,7 +1763,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             visibilityUserIds: visibilityUserIds,
             originalLanguage: originalLanguage,
             draftId: draftId,
-            mentionsPayload: declaredMentions.isEmpty ? nil : declaredMentions
+            mentionsPayload: declaredMentions.isEmpty ? nil : declaredMentions,
+            mediaAltPayload: composerMediaAlt.isEmpty ? nil : composerMediaAlt,
+            allowSoundExtractionPayload: allowSoundExtraction,
+            targetTypePayload: targetType.rawValue
         )
         _ = await StoryPublishQueue.shared.enqueue(item)
         return (queueId: item.id, tempStoryId: tempStoryId)
@@ -2242,7 +2299,22 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 declared: upload.declaredMentions, effects: updatedEffects
             )
 
-            let post = try await postService.createStory(
+            // Le texte alternatif est collecté sous les ids d'élément du
+            // composer ; le gateway ne retient que des ids de `mediaIds`
+            // (`PostService.applyMediaAlt` filtre le reste sans rien dire).
+            // L'upload vient d'attribuer les `postMediaId` : c'est ici, et
+            // nulle part plus tôt, que la traduction est possible.
+            let serverMediaAlt = StoryMediaAltMapping.serverKeyed(
+                composerKeyed: upload.composerMediaAlt,
+                mediaObjects: updatedEffects.mediaObjects ?? []
+            )
+
+            // V3-3 — le TYPE suit le format choisi dans le composer. Le canevas
+            // part avec lui : `create(content:type:…)` ne porte aucun
+            // `storyEffects`, et y router un post composé perdrait chaque objet
+            // texte, autocollant et dessin sans la moindre erreur.
+            let post = try await postService.createCanvasPost(
+                type: upload.targetType,
                 content: slide.content,
                 storyEffects: updatedEffects,
                 visibility: upload.visibility,
@@ -2250,7 +2322,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 originalLanguage: upload.originalLanguage,
                 mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
                 repostOfId: upload.repostOfId,
-                mentions: canvasMentions.isEmpty ? nil : canvasMentions
+                mentions: canvasMentions.isEmpty ? nil : canvasMentions,
+                allowSoundExtraction: upload.allowSoundExtraction,
+                mediaAlt: serverMediaAlt.isEmpty ? nil : serverMediaAlt
             )
 
             newPostIds.append(post.id)
@@ -2358,7 +2432,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// prouver : l'édition n'en parle pas, le serveur préserve. Envoyer
         /// `[]` depuis un ignorant révoquerait des références que l'auteur n'a
         /// jamais vues — et leur retirerait l'accès au contenu.
-        declaredReferencesAreKnown: Bool = false
+        declaredReferencesAreKnown: Bool = false,
+        /// Même contrat qu'à la création : keyé par id d'élément du composer,
+        /// traduit en ids serveur juste avant le PUT. Le gateway ne l'applique
+        /// qu'aux médias ATTACHÉS par cette édition (`mediaIdsToAttach`), donc
+        /// un texte saisi sur un média déjà en ligne n'a pas d'effet ici.
+        composerMediaAlt: [String: String] = [:],
+        allowSoundExtraction: Bool? = nil
     ) -> Bool {
         guard let slide = slides.first else { return false }
         if NetworkMonitor.shared.isOffline {
@@ -2375,7 +2455,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 visibility: visibility, visibilityUserIds: visibilityUserIds,
                 draftId: draftId,
                 references: references,
-                declaredReferencesAreKnown: declaredReferencesAreKnown
+                declaredReferencesAreKnown: declaredReferencesAreKnown,
+                composerMediaAlt: composerMediaAlt,
+                allowSoundExtraction: allowSoundExtraction
             )
         }
         return true
@@ -2397,7 +2479,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         visibilityUserIds: [String],
         draftId: String? = nil,
         references: [ComposerReference] = [],
-        declaredReferencesAreKnown: Bool = false
+        declaredReferencesAreKnown: Bool = false,
+        composerMediaAlt: [String: String] = [:],
+        allowSoundExtraction: Bool? = nil
     ) async {
         do {
             let serverOrigin = MeeshyConfig.shared.serverOrigin
@@ -2517,6 +2601,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             let declaredMentions: [PostMentionInput]? = declaredReferencesAreKnown
                 ? Self.declaredMentions(references: references, effects: updatedEffects)
                 : nil
+            let serverMediaAlt = StoryMediaAltMapping.serverKeyed(
+                composerKeyed: composerMediaAlt,
+                mediaObjects: updatedEffects.mediaObjects ?? []
+            )
             let post = try await postService.update(
                 postId: edit.postId,
                 content: slide.content,
@@ -2529,7 +2617,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 storyEffects: updatedEffects,
                 mediaIds: newMediaIds.isEmpty ? nil : newMediaIds,
                 location: nil,
-                mentions: declaredMentions
+                mentions: declaredMentions,
+                allowSoundExtraction: allowSoundExtraction,
+                mediaAlt: serverMediaAlt.isEmpty ? nil : serverMediaAlt
             )
 
             // 6. Réconciliation locale : cover local-first re-rendue (la

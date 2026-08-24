@@ -67,7 +67,14 @@ struct ReachMetricLabel: View {
     /// La `locale` est un paramètre plutôt qu'une valeur en dur, pour la même
     /// raison qu'en 234i/236i/237i/238i : sans elle, une suite jugerait la
     /// locale du SIMULATEUR — verte en local, rouge en CI.
+    ///
+    /// **241i — la règle a changé d'adresse, pas d'énoncé.** Neuf autres valeurs
+    /// d'accessibilité avaient le même défaut de chiffres ; les brancher sur
+    /// `ReachMetricLabel` aurait fait porter un « compteur de portée » à un score
+    /// de santé et à une position de lecture. La règle vit donc dans
+    /// `LocalizedNumber`, et ce point d'entrée la relaie pour les appelants de
+    /// 239i.
     nonisolated static func spokenCount(_ count: Int, locale: Locale = .current) -> String {
-        IntegerFormatStyle<Int>(locale: locale).format(count)
+        LocalizedNumber.exact(count, locale: locale)
     }
 }

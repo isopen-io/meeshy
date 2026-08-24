@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import MeeshyUI
 
 /// C7-UI — collecte de `allowSoundExtraction`.
@@ -193,6 +194,76 @@ final class SoundExtractionCollectionTests: XCTestCase {
         XCTAssertTrue(
             collapsed(initBody).contains("self.onAllowSoundExtractionChanged = onAllowSoundExtractionChanged"),
             "L'init doit CONSERVER le rappel reçu — le déclarer sans l'assigner le laisse nil.")
+    }
+
+    // MARK: - V3-4 — l'opt-in PART (transport, pas seulement collecte)
+
+    /// `test_accessibilityHandoff_carriesTheExplicitChoice` rougit si la charge
+    /// remise à la publication cesse de porter le choix de l'auteur. Première
+    /// assertion comportementale du transport : `allowSoundExtractionPayload()`
+    /// n'avait, avant ce lot, aucun appelant de production.
+    func test_accessibilityHandoff_carriesTheExplicitChoice() {
+        let store = MediaAccessibilityStore()
+        store.setAllowsSoundExtraction(true)
+
+        XCTAssertEqual(StoryComposerView.accessibilityHandoff(from: store).allowSoundExtraction, true)
+    }
+
+    /// `test_accessibilityHandoff_staysSilentOnAnUntouchedSwitch` rougit si un
+    /// interrupteur jamais touché se met à envoyer `false` : le défaut serveur
+    /// s'appliquerait alors par écrasement au lieu de s'appliquer par silence.
+    func test_accessibilityHandoff_staysSilentOnAnUntouchedSwitch() {
+        XCTAssertNil(
+            StoryComposerView.accessibilityHandoff(from: MediaAccessibilityStore()).allowSoundExtraction
+        )
+    }
+
+    /// `test_createStoryRequest_encodesAllowSoundExtraction` rougit si le champ
+    /// disparaît du corps de `POST /posts` : le gateway l'accepte depuis
+    /// `CreatePostSchema.allowSoundExtraction`, mais `CreateStoryRequest` ne le
+    /// portait pas — une story ne pouvait donc PAS l'autoriser.
+    func test_createStoryRequest_encodesAllowSoundExtraction() throws {
+        let body = CreateStoryRequest(allowSoundExtraction: true)
+
+        let json = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try JSONEncoder().encode(body)) as? [String: Any]
+        )
+
+        XCTAssertEqual(json["allowSoundExtraction"] as? Bool, true)
+    }
+
+    /// `test_createStoryRequest_omitsAllowSoundExtractionWhenUntouched` rougit
+    /// si l'absence de choix part en `false` explicite.
+    func test_createStoryRequest_omitsAllowSoundExtractionWhenUntouched() throws {
+        let body = CreateStoryRequest(content: "coucou")
+
+        let json = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try JSONEncoder().encode(body)) as? [String: Any]
+        )
+
+        XCTAssertNil(json["allowSoundExtraction"])
+    }
+
+    /// `test_allowSoundExtractionPayload_hasAtLeastOneProductionCaller` rougit
+    /// si le snapshot redevient orphelin.
+    ///
+    /// Formulée en POSITIF : une garde qui interdirait un motif resterait verte
+    /// le jour où ce motif change de nom, alors que l'état mesuré avant ce lot
+    /// était précisément « la fonction existe, elle est testée, personne ne
+    /// l'appelle ».
+    func test_allowSoundExtractionPayload_hasAtLeastOneProductionCaller() throws {
+        let callers = try ComposerSourceGuard.allStorySources()
+            .filter { $0.path != "Controls/MediaAccessibilityStore.swift" }
+            .filter { $0.code.contains("allowSoundExtractionPayload()") }
+            .map { $0.path }
+
+        XCTAssertFalse(
+            callers.isEmpty,
+            """
+            `allowSoundExtractionPayload()` n'a AUCUN appelant hors de sa propre \
+            déclaration : l'interrupteur se bascule et ne part nulle part.
+            """
+        )
     }
 
     /// `test_mediaAccessibilityPanel_hasNoPerMediaSoundToggle` rougit si un
