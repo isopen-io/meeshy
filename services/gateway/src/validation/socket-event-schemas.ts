@@ -12,6 +12,7 @@ import {
 } from './encryption-envelope.js';
 import { MENTIONED_USER_IDS_SHAPE } from './mention-list.js';
 import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
+import { MAX_CONTENT_BYTES } from './content-limits.js';
 
 const mongoId = z
   .string()
@@ -21,10 +22,9 @@ const clientMessageIdSchema = z
   .string()
   .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)');
 
-// Safety ceiling for message content. Runtime per-role validation (MAX_MESSAGE_LENGTH=4000)
-// is the precise limit for plaintext messages; encrypted payloads may be larger, so we
-// use a generous ceiling here that only blocks truly abusive payloads.
-const MAX_CONTENT_BYTES = 100_000;
+// Safety ceiling for message content — `MAX_CONTENT_BYTES` (`./content-limits.js`),
+// partagé avec le transport REST d'édition (`UpdateMessageBodySchema`) pour que
+// TOUS les chemins d'écriture de contenu appliquent la même borne.
 
 // Maximum attachment IDs per message — imported from `@meeshy/shared` so the
 // schema, `MessageValidator` and the REST body schema partagent UNE valeur.

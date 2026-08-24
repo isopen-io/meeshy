@@ -8,6 +8,7 @@ import {
   AttachmentStatusBodySchema,
   MarkReadBodySchema,
 } from '../../../validation/messages-schemas';
+import { MAX_CONTENT_BYTES } from '../../../validation/content-limits';
 
 const VALID_OID = '507f1f77bcf86cd799439011';
 
@@ -170,6 +171,24 @@ describe('UpdateMessageBodySchema', () => {
 
   it('rejects non-boolean isEdited', () => {
     expect(UpdateMessageBodySchema.safeParse({ isEdited: 'yes' }).success).toBe(false);
+  });
+
+  // Safety-ceiling parity with the SOCKET write transports
+  // (`SocketMessageSendSchema`, `SocketMessageEditSchema`): the REST edit
+  // transport `PUT /messages/:messageId` must reject a content payload that
+  // exceeds `MAX_CONTENT_BYTES`. Without the cap an oversized edit is persisted
+  // to Mongo and broadcast as `message:edited` to the whole conversation room —
+  // the downstream guard (`messageEditContent.ts`) only rejects EMPTY content.
+  it('rejects content beyond the shared safety ceiling', () => {
+    expect(
+      UpdateMessageBodySchema.safeParse({ content: 'x'.repeat(MAX_CONTENT_BYTES + 1) }).success
+    ).toBe(false);
+  });
+
+  it('accepts content exactly at the shared safety ceiling', () => {
+    expect(
+      UpdateMessageBodySchema.safeParse({ content: 'x'.repeat(MAX_CONTENT_BYTES) }).success
+    ).toBe(true);
   });
 });
 
