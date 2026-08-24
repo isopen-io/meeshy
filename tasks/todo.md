@@ -1,144 +1,113 @@
-# Cycle 123 — la protection gardait le CORPS, pas le FIL ; et le vocal n'avait pas de Prisme
+# Cycle 124 bis — le contrat de fil push, mesuré dans les DEUX sens
 
-## Point de départ — le suivi MESURÉ du cycle 122
+> **Ce lot a CONVERGÉ avec le cycle 124 (PR #3465), mergé sur `main` pendant qu'il était en CI.**
+> Les deux passes ont instruit le même suivi et trouvé le même défaut. Celle de #3465 a atterri
+> la première ; **sa conception est reprise EN ENTIER**. Ce journal ne consigne que ce que cette
+> passe ajoute par-dessus, et pourquoi son propre choix de conception a été abandonné.
 
-Deux suivis étaient laissés, tous deux mesurés (pas hérités) :
+## Point de départ — le suivi MESURÉ, laissé ouvert par les cycles 122 ET 123
 
-1. **La bannière d'un VOCAL reste dans la langue de l'expéditeur.** Sa transcription a ses
-   propres traductions (`MessageAttachment.translations`), qu'aucun éventail ne descend.
-   C'est la raison même du `previewIsMessageContent: false` du cycle 122 — une absence
-   ASSUMÉE, jamais comblée.
-2. `prePersistMessage` (NSE iOS) lit `userInfo["content"]`, clé absente du payload push.
-   Défaut DISTINCT du Prisme, hors de ce lot (Swift, non exerçable ici).
+> `prePersistMessage` (NSE iOS) lit `userInfo["content"]`, une clé que le payload push ne porte
+> pas — la bulle écrite au démarrage à froid a un corps VIDE jusqu'à la synchro REST.
 
-## Le défaut trouvé en instruisant (1) — la protection ne gardait qu'une moitié
+Deux fois nommé, deux fois différé (« Swift, non exerçable ici »). Le motif est réel et il ne
+couvre pas la moitié TypeScript du défaut.
 
-En cherchant OÙ brancher la source de Prisme d'une transcription, le point de branchement
-révèle un second défaut, plus grave que celui visé :
+## La mesure — clé par clé, dans les DEUX sens
 
-`prismTranslationContext(prismSource, …)` est appelé **INCONDITIONNELLEMENT** dans les trois
-éventails (`NotificationService:1723`, `:1896`, `:3483`), pendant que `servedPreview` — le
-corps — est, lui, gardé par `previewIsMessageContent`. Conséquence pour un message PROTÉGÉ
-(éphémère / vue unique / flouté) :
+C'est l'apport de MÉTHODE de cette passe, et il va au-delà du suivi. Le payload push est un
+contrat entre deux fichiers qu'aucun type ne relie ; le diff exhaustif rend **six** écarts :
 
-- le CORPS porte le placeholder (« ⏱️ 💬 24h ») — la protection tient ;
-- `data.translatedContent` porte **le texte en clair traduit**, poussé sur le fil APNs/FCM
-  (`NotificationService:1367`) et persisté dans la ligne `Notification`.
+| sens | clés | statut |
+|---|---|---|
+| lu par la NSE, jamais émis | `content`, `originalLanguage` | **clos par #3465** |
+| lu par la NSE, jamais émis | `senderName` (la passerelle émet `senderDisplayName`) | **clos ici** |
+| lu par la NSE, jamais émis | `isEncrypted` | ouvert, nommé |
+| **émis POUR la NSE, jamais lu** | `createdAt`, `messageType` (« GW5 — persistance NSE ») | **clos ici** |
 
-C'est la leçon 266 dans l'autre sens : le cycle 122 a corrigé un champ que personne ne lit en
-oubliant le corps ; ici la protection garde le corps et oublie le champ. **Le témoin du
-cycle 122 ne pouvait pas le voir** : il assertait sur `push.body` seul (« la traduction ne
-remplace pas le placeholder »), jamais sur ce que la charge TRANSPORTE à côté.
+> **Un helper à un appelant est un inventaire (leçon 271) ; un CHAMP à zéro lecteur est une
+> intention.** La moitié « émis, jamais lu » n'était nommée par aucun des deux suivis, ni par
+> #3465.
 
-## La cause commune, et le correctif
+## La conception : celle de #3465, et pourquoi la mienne a été abandonnée
 
-Deux résolutions parallèles sur la même méthode : une pour le TEXTE servi, une pour les CHAMPS
-du fil — gardées différemment. Le correctif les fond en UNE :
+Les deux passes ont buté sur la même question — **quel texte la NSE a-t-elle le droit
+d'enregistrer ?** — et y ont répondu différemment.
 
-- `PreviewPrismBasis` — un type somme qui dit ce que l'aperçu EST (`message-content`,
-  `protected-placeholder`, `transcript` + sa source), remplaçant le booléen
-  `previewIsMessageContent`. Un booléen et une source séparés pourraient se contredire ;
-- **une seule descente par destinataire**, dont le corps ET les champs du fil sont deux
-  projections. Ce que le fil transporte décrit désormais ce que la bannière affiche.
+| | #3465 (retenue) | cette passe (abandonnée) |
+|---|---|---|
+| ce qui voyage | `content` = l'**ORIGINAL**, `originalLanguage` son étiquette | le texte **SERVI** (déjà traduit) |
+| clé sur le fil | les noms que la NSE lit **déjà** | une clé neuve, dont la présence autorisait l'écriture |
+| changement client | **aucun** | réécriture de `prePersistMessage` |
+
+**#3465 a raison, et la raison est le modèle de données** : `MessageRecord.content` EST le champ
+d'origine. Écrire le texte servi dedans produit un enregistrement cohérent mais FAUX sur sa
+propre sémantique.
+
+Mon objection — « émettre `content` rouvre la fuite du cycle 123 » — **était fausse**, et #3465
+le démontre : le couple n'est posé que sous la même base `message-content` + verrou
+`notificationLocKey`, sous `showPreview`, et il est retiré à la seconde coupe du budget APNs.
+La bonne question n'était pas « ce champ peut-il fuir ? » mais « **sous quelle garde ?** », et
+la garde existait déjà.
 
 ## Plan
 
-- [x] `transcriptTranslationTexts()` dans `packages/shared/types/attachment-audio.ts` — la
-      SSOT du dépouillement `AttachmentTranslations` → `langue → texte` (soft-delete et
-      entrées vides écartées), pour qu'une cinquième famille ne réécrive pas la boucle.
-- [x] `PreviewPrismBasis` + descente unique dans les trois éventails de `NotificationService`.
-- [x] `messageNotificationFanOut` : lit `translations` sur l'attachment et compose la base
-      `transcript` quand l'aperçu poussé EST la transcription.
-- [x] Témoins RED d'abord, sur la charge REMISE (`push.body` ET `push.data`).
+- [x] Fusion MANUELLE de `origin/main`, conception de #3465 reprise en entier.
+- [x] `prePersistedMessageFields()` — le prédicat de #3465, posé EN LIGNE dans
+      `createMessageNotification`, devient un SITE partagé.
+- [x] **La JUMELLE** : les TROIS éventails poussent un `messageId`, donc les trois
+      pré-enregistrent une bulle. Réponse et mention émettent désormais le couple depuis
+      `MessagePrismSource.originalLanguage`, déjà relue — **aucune lecture de plus**.
+- [x] NSE : `senderDisplayName` (la clé réellement émise), horodatage SERVEUR, `messageType`
+      du fil ; N4 (le mime) reste prioritaire pour le rendu média.
+- [x] Témoins réécrits sur les noms de fil de #3465.
 
-## Résultat
+## Revue
 
-- **18 témoins neufs**, ROUGE mesuré par deux mutations : `previewPrismSource` neutralisée ⇒
-  **10 tombent** ; l'éventail privé de sa base transcription ⇒ **1 tombe**, celui qui garde le
-  câblage.
-- Gates : gateway **847/847 suites, 19397 témoins** · shared **108 fichiers, 2578 témoins** ·
-  `tsc --noEmit` 0 erreur.
-- Détail raisonné : `tasks/realtime-sync-audit-2026-08-24-cycle123.md`.
-- Leçon : `tasks/lessons.md` § 270.
+### Gates
 
-### Lot 2 (cycle 123 bis) — la JUMELLE, posée dans le MÊME lot
+| gate | résultat |
+|---|---|
+| répertoire `notifications/` + `messaging/` | **32 suites, 619 témoins** (dont les deux suites de #3465) |
+| suite gateway complète | **850/850 suites, 19439 témoins** |
+| `services/gateway` `tsc --noEmit` | 0 erreur |
+| `packages/shared` build (`tsc`) | 0 erreur |
+| mutation « câblage des jumelles retiré » | **6 témoins tombent** |
+| mutation « garde de `prePersistedMessageFields` retirée » | **7 témoins tombent** (3 des miens, 4 de #3465) |
+| Swift | non compilable ici — gardé par la CI (`Build app (app + cibles de test)`) |
 
-La règle de `services/gateway/CLAUDE.md` appliquée au correctif ci-dessus rend une mesure d'une
-ligne : **`protectedPreview()` n'avait qu'UN appelant de production dans tout le dépôt.** Trois
-autres sites copiaient le texte d'un message sans masque, dont DEUX vers des tiers.
+La seconde mutation est la mesure qui compte pour le refactor : **la garde de #3465, déplacée
+dans le helper partagé, fait toujours tomber SES témoins.** Un refactor qui déplace une règle
+doit prouver que la règle tombe encore depuis son nouveau site.
 
-- [x] `createReactionNotification` — les drapeaux entrent au `select` ; extrait OMIS si protégé.
-- [x] `notifyNewlyMentioned` (édition) — masque + `previewBasis` pour les ENTRANTS.
-- [x] `reproduceEditedMessageNotifications` — une édition ne DÉMASQUE plus les lignes déjà
-      notifiées (le placeholder ne dérive pas du contenu : rien à réécrire).
-- [x] Les deux relectures sont fail-CLOSED et se font CHEZ la garde, pas via ses paramètres.
-- [x] 8 témoins, **5 tombent** avant correctif ; le secret est cherché dans la charge ENTIÈRE.
+### Détail
+
+- `tasks/realtime-sync-audit-2026-08-24-cycle124-bis.md`
+- `tasks/lessons.md` § 274 (rédigée 272, renumérotée deux fois — cf. la note dans la leçon)
+
+### Un rouge HÉRITÉ, réparé en passant
+
+`Test web` échouait sur `lentille-tokens.parity` — **identiquement sur `origin/main`**, mesuré
+des deux côtés : le token `thread.row.padding.vertical` vaut `3` dans
+`packages/shared/design/lentille-tokens.json` et `5px` dans `apps/web/styles/lentille-tokens.css`.
+
+La direction du correctif n'est pas une interprétation : elle est écrite dans le commit qui a
+créé l'écart (`97a14dc2`), au mot près — « le token […] lu par iOS **ET** par les composants
+Focal du web […] passe à 3 avec lui, ce qui applique la directive aux DEUX plateformes ». Le
+JSON et iOS sont passés à 3 ; le CSS du web, la seconde plateforme que la phrase nomme, est
+resté à 5.
+
+Porté ici parce qu'il bloque la branche PARTAGÉE, pas ce seul lot. Une ligne, dans le sens que
+son auteur a énoncé.
+
+> **Un rouge hérité se MESURE avant d'être qualifié.** « Rouge sur la base aussi » est une
+> affirmation vérifiable en deux commandes (`git show origin/main:<fichier>`), et c'est elle qui
+> distingue « pas mon défaut » d'une supposition commode.
 
 ### Suivi MESURÉ (non hérité)
 
-- `prePersistMessage` (NSE iOS) — corps VIDE au démarrage à froid. Hérité du cycle 122, Swift,
-  non exerçable ici. Toujours ouvert.
-- La piste AUDIO traduite d'un vocal n'est pas attachée à la bannière (le fichier joint reste
-  l'original) — absence nommée, non instruite.
-- **Un message PROTÉGÉ est librement éditable** (mesuré : `messageEditAdmission` /
-  `messageEditContent` ne portent aucun de ces drapeaux). Ce lot en ferme les conséquences côté
-  notifications ; la question produit — « éditer un éphémère devrait-il être permis ? » — n'est
-  pas tranchée ici.
-
-
----
-
-# Cycle 123 — le Prisme ANNONCÉ sans être APPLIQUÉ (web)
-
-## Point de départ
-Suivi mesuré des cycles 120/122 : trois surfaces web restées au rang 1
-(commentaires, stories, status), qualifiées « CORRECTES, seulement pas encore
-rang-conscientes ». Solder ce suivi EN ENTIER (leçon 265).
-
-## Ce que le suivi décrivait mal
-Deux des trois l'étaient. La troisième — `StoryViewer` — ne l'était pas : son
-corps de story rendait `story.content` (l'ORIGINAL) pendant que la puce de
-`TranslationToggle` (montée `showContent={false}`) annonçait la langue résolue.
-Le relais prévu pour ce cas (`onDisplayedChange`) n'était branché nulle part.
-
-Chercher le motif — `showContent={false}` SANS `onDisplayedChange` — a rendu
-une QUATRIÈME surface : `PostCard`, le corps d'un post dans le FIL, rangé dans
-« fait » depuis le cycle 120. Défaut pire : la zone « traductions disponibles »
-y est cliquable, et cliquer ne changeait RIEN — contrôle inerte.
-
-## Lots
-1. `StoryViewer` corps legacy — relais `onDisplayedChange` + `preferredLanguages`
-2. `StoryViewer` overlays legacy — `resolvePrismeText` délègue à la SSOT
-   `resolvePrismTranslation` (rang 1 seul + préfixe sur-matchant → chaîne ordonnée)
-3. `PostCard` corps du fil — relais `onDisplayedChange`
-4. `CommentItem`/`CommentList`/`CommentReplies`/`CommentThread` + `StatusBar` —
-   prop `preferredLanguages`, câblée chez les 4 hôtes
-5. `TranslationToggle` — effet de notification sur les 3 PRIMITIVES servies
-   (une prop tableau non mémoïsée bouclait sans fin)
-
-## Témoins (9, tous mesurés)
-- 4 de RANG (rang 2 servi quand le rang 1 manque) — StoryViewer corps + overlay,
-  CommentItem, StatusBar
-- 3 anti-régression (original quand aucune langue du prisme n'est servie)
-- 1 de PIXEL (le corps du post sert la traduction, pas seulement la puce)
-- 1 d'INERTIE (cliquer une traduction change le texte lu)
-
-Le témoin StatusBar a été vérifié falsifiable par mutation (retrait de la prop
-→ il tombe), n'ayant jamais tourné proprement en RED.
-
-## Convergence avec l'itération 257 (merge manuel)
-
-L'itération 257 a câblé COMMENTAIRES et STATUS en parallèle, à l'identique ; son
-implémentation est celle retenue au merge (première mergée). Elle avait de plus
-IDENTIFIÉ le défaut du texte legacy de story et l'avait explicitement DIFFÉRÉ,
-en nommant la bonne raison — « il faut d'abord câbler `onDisplayedChange` ».
-Ce cycle l'a fait, sur `StoryViewer` ET sur `PostCard`, où le même motif restait
-invisible parce que la surface figurait déjà parmi les sites conformes.
-
-Numérotation des leçons : leur 266 (cycle 122, « un contenu RÉSOLU n'est pas un
-contenu SERVI ») a atterri la première et garde son numéro ; la nôtre devient
-267, avec un renvoi croisé — les deux passes ont trouvé la même forme de défaut
-le même jour, sur deux couches différentes.
-
-
----
+- `isEncrypted` reste lue et jamais émise — piège armé, pas panne.
+- Les éventails RÉPONSE et MENTION ne poussent ni `createdAt` ni `messageType` : leur bulle
+  reste ordonnée par l'horloge du device. Combler exige d'élargir `MessagePrismSource` — lot à
+  part.
+- La bannière d'un vocal joint toujours le fichier ORIGINAL (hérité du cycle 123).

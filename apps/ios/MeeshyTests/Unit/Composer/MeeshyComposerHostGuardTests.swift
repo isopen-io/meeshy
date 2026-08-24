@@ -198,24 +198,69 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Aucune UI morte : les capacités suivent le PROFIL
+    // MARK: - Aucune UI morte : rien à l'écran sans raison (loi 4)
 
     /// Spec §D du lot C. Une affordance montée puis désactivée est une promesse
-    /// non tenue (loi 4 — « rien à l'écran sans raison »). Le chemin de capture
-    /// n'est donc pas monté du tout quand le profil le refuse — pas grisé,
-    /// ABSENT.
+    /// non tenue. La capture suit donc le profil : une porte qui la refuse ne
+    /// voit pas l'outil grisé, elle ne le voit pas du tout.
+    ///
+    /// **Garde RE-VISÉE le 2026-08-24.** Elle cherchait `profile.allowsCapture`
+    /// dans le FICHIER, du temps où le plateau peignait un pictogramme de
+    /// caméra. Ce pictogramme n'était pas un `Button` — le tap ne faisait rien —
+    /// et il est parti. Laissée telle quelle, la garde serait restée VERTE sur
+    /// le seul lecteur survivant sans plus rien dire de la capture : le mode
+    /// d'extinction silencieuse que ce fichier se donne pour mission de fuir.
+    /// Elle nomme donc le bloc qui gouverne réellement la capture aujourd'hui,
+    /// la rangée d'outils de la surface document.
     func test_host_gatesCaptureOnTheProfile() throws {
-        let code = try hostCode()
+        guard let corps = declarationBody(startingAt: "private var documentSurface", in: try hostCode()) else {
+            return XCTFail("La surface document doit être une propriété nommée `documentSurface` — la garde s'ancre dessus")
+        }
+        let compacte = compact(corps)
+
+        XCTAssertTrue(compacte.contains(compact("ComposerDocumentSurface(")), "Le bloc lu n'est pas celui de la surface document.")
         XCTAssertTrue(
-            code.contains("profile.allowsCapture"),
-            "Le chemin capture doit être conditionné à `profile.allowsCapture`, pas monté puis désactivé"
+            compacte.contains(compact("allowsCapture: profile.allowsCapture")),
+            "La rangée d'outils doit tenir sa capacité de capture DU PROFIL — sinon la politique la déciderait seule, et la table de C1 ne gouvernerait plus la capture."
         )
     }
 
-    func test_host_gatesSlidesAndTimelineOnTheProfile() throws {
-        let code = try hostCode()
-        XCTAssertTrue(code.contains("profile.showsSlides"), "Les diapositives suivent le profil")
-        XCTAssertTrue(code.contains("profile.showsTimeline"), "La timeline suit le profil")
+    /// **Loi 4 sur le plateau.** Remplace `test_host_gatesSlidesAndTimelineOnTheProfile`,
+    /// dont l'objet a disparu le 2026-08-24.
+    ///
+    /// Le plateau peignait trois `Image(systemName:)` — caméra, diapositives,
+    /// timeline — gardées par `allowsCapture` / `showsSlides` / `showsTimeline`.
+    /// Aucune n'était un `Button` : le tap ne faisait rien. L'ancienne garde
+    /// vérifiait que ces trois pictogrammes suivaient le profil ; elle ne
+    /// pouvait pas dire qu'ils MENAIENT quelque part, et elle est restée verte
+    /// pendant que la porte de création montait le meuble en production.
+    ///
+    /// Les brancher aurait demandé une API neuve : `addSlide()`,
+    /// `isTimelineVisible` et l'écriture de `currentEffects` sont `internal` à
+    /// `MeeshyUI`, hors d'atteinte du meuble — et l'atelier offre déjà les
+    /// trois (bande de diapositives, menu ⋯ → Timeline, fournisseur de
+    /// capture). Elles sont donc ABSENTES, pas grisées.
+    ///
+    /// Ce que la garde mesure, et rien de plus : le plateau ne peint pas plus
+    /// d'icônes ni de libellés d'accessibilité qu'il n'a de boutons pour les
+    /// actionner. Elle rougirait si l'on recollait l'un des trois pictogrammes.
+    func test_host_lePlateau_neMonteAucuneAffordanceInerte() throws {
+        guard let corps = declarationBody(startingAt: "private var plateauTools", in: try hostCode()) else {
+            return XCTFail("Le plateau doit être une propriété nommée `plateauTools` — la garde s'ancre dessus")
+        }
+        let compacte = compact(corps)
+
+        XCTAssertTrue(compacte.contains(compact("ComposerFormatFan(")), "Le bloc lu n'est pas celui du plateau.")
+
+        let boutons = occurrences(of: "Button", in: compacte)
+        XCTAssertLessThanOrEqual(
+            occurrences(of: compact("Image("), in: compacte), boutons,
+            "Une icône du plateau sans bouton pour l'actionner est une affordance INERTE : loi 4 la veut absente, jamais peinte à vide."
+        )
+        XCTAssertLessThanOrEqual(
+            occurrences(of: compact(".accessibilityLabel("), in: compacte), boutons,
+            "Un libellé d'accessibilité hors bouton annonce à VoiceOver une commande que personne ne peut déclencher."
+        )
     }
 
     /// C1 a posé `routesToLegacy` : une porte qui route vers un composer
@@ -467,10 +512,11 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         )
     }
 
-    /// La surface document ne porte PAS le plateau d'outils : `plateauTools`
-    /// outille une scène (diapositives, timeline) et un document n'en a
-    /// aucune. Garde ancrée sur le BLOC, pas sur le fichier — le plateau vit
-    /// toujours dans la source, sous l'autre surface.
+    /// La surface document ne porte PAS le plateau. Ce que le plateau tient
+    /// depuis le 2026-08-24 est l'éventail des formats, et le mettre ici
+    /// offrirait de basculer vers un format que cette surface ne monte pas.
+    /// Garde ancrée sur le BLOC, pas sur le fichier — le plateau vit toujours
+    /// dans la source, sous l'autre surface.
     func test_host_lePlateauDOutils_neCoiffePasLeDocument() throws {
         guard let corps = declarationBody(startingAt: "private var documentSurface", in: try hostCode()) else {
             return XCTFail("La surface document doit être une propriété nommée `documentSurface` — la garde s'ancre dessus")

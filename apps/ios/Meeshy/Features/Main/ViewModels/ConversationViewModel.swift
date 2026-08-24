@@ -1857,7 +1857,12 @@ class ConversationViewModel: ObservableObject {
                                     senderId: msg.senderId,
                                     content: msg.content.isEmpty ? nil : msg.content,
                                     createdAt: msg.createdAt,
-                                    computedState: .delivered
+                                    computedState: .delivered,
+                                    // Le message vient du CACHE, il connaît sa
+                                    // source : la taire ferait naître un avis
+                                    // système comme une parole ordinaire.
+                                    messageSource: msg.messageSource.rawValue,
+                                    messageType: msg.messageType.rawValue
                                 )
                             }
                             await self.messagePersistence.bufferIncoming(incoming)

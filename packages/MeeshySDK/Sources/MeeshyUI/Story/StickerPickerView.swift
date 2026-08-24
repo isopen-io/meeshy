@@ -6,6 +6,11 @@ import MeeshySDK
 
 public struct StickerPickerView: View {
     public var onStickerSelected: (String) -> Void
+    /// Ce que fait un tap sur une vignette de « Mes stickers ». Requis, sans
+    /// défaut : une bibliothèque peinte dont les vignettes ne mènent nulle part
+    /// est une affordance inerte (loi 4). La section reste, elle, gouvernée par
+    /// la seule présence du magasin (`\.storyStickerLibrary`).
+    public var onLibraryStickerSelected: (StoryStickerLibraryItem) -> Void
 
     @State private var selectedCategory: StickerCategory = .smileys
     @State private var searchText = ""
@@ -17,8 +22,10 @@ public struct StickerPickerView: View {
     @Environment(\.storyStickerLibrary) private var stickerLibrary
     @State private var libraryItems: [StoryStickerLibraryItem] = []
 
-    public init(onStickerSelected: @escaping (String) -> Void) {
+    public init(onStickerSelected: @escaping (String) -> Void,
+                onLibraryStickerSelected: @escaping (StoryStickerLibraryItem) -> Void) {
         self.onStickerSelected = onStickerSelected
+        self.onLibraryStickerSelected = onLibraryStickerSelected
     }
 
     private var filteredEmojis: [String] {
@@ -60,10 +67,9 @@ public struct StickerPickerView: View {
 
     /// Le déclencheur naturel de C8 : coller une image PENDANT que ce panneau
     /// est ouvert la retient, plutôt que de laisser 126 lignes de magasin sans
-    /// aucun appelant. `StorySticker` ne porte qu'un emoji (`StoryModels.swift`)
-    /// — cette bibliothèque ne pose donc rien sur le canevas pour l'instant,
-    /// elle CONSTITUE la collection ; l'y poser reste une extension future,
-    /// hors du périmètre de ce lot.
+    /// aucun appelant. Depuis S1, `StorySticker` porte une image intégrée
+    /// (`postMediaId`) : taper une vignette la POSE sur le canevas, la
+    /// bibliothèque n'est plus une collection sans sortie.
     private var myStickersSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -92,11 +98,22 @@ public struct StickerPickerView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(libraryItems) { item in
-                            Image(uiImage: item.thumbnail)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 52, height: 52)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            Button {
+                                onLibraryStickerSelected(item)
+                                HapticFeedback.medium()
+                            } label: {
+                                Image(uiImage: item.thumbnail)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 52, height: 52)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                            .buttonStyle(.plain)  // cf. note des onglets
+                            .accessibilityLabel(String(
+                                localized: "story.sticker.library.a11y",
+                                defaultValue: "Autocollant de votre bibliothèque",
+                                bundle: .module
+                            ))
                         }
                     }
                 }

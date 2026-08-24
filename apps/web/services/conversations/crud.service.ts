@@ -126,17 +126,32 @@ export class ConversationsCrudService {
   }
 
   /**
-   * Mettre à jour une conversation
+   * Mettre à jour une conversation — titre, description, avatar, bannière et
+   * réglages du conteneur, en une seule route.
+   *
+   * `PUT` et `PATCH` atteignent le même handler côté gateway ; le premier est
+   * retenu ici pour que web et iOS nomment le même verbe. Ce que ce choix
+   * répare n'est PAS le verbe : c'est que le `PATCH` d'alors visait une SECONDE
+   * route, jumelle et divergente, qui n'acceptait ni `avatar` ni `banner` — elle
+   * les ignorait sous une réponse 200, si bien que l'appelant affichait
+   * « bannière mise à jour » sans qu'une seule ligne ait été écrite.
+   *
+   * `apiService` rend `{ success, data }` où `data` est le corps ENTIER de la
+   * réponse : la conversation vit donc sous `response.data.data`. Cette méthode
+   * rendait l'enveloppe, que ses appelants passaient telle quelle à
+   * `onConversationUpdate`.
    */
   async updateConversation(id: string, data: Partial<Conversation>): Promise<Conversation> {
-    const response = await apiService.patch<Conversation>(`/conversations/${id}`, data);
+    const response = await apiService.put<{ success: boolean; data: Conversation }>(
+      `/conversations/${id}`,
+      data
+    );
 
-    if (!response.data) {
+    if (!response.data?.data) {
       throw new Error('Erreur lors de la mise à jour de la conversation');
     }
 
-
-    return response.data;
+    return response.data.data;
   }
 
   /**

@@ -477,6 +477,9 @@ export function postToStoryData(post: Post): StoryData {
       url: m.fileUrl,
       mimeType: m.mimeType ?? '',
       ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+      // S4-web — `PostMedia.alt` est déjà clé par `postMediaId` côté gateway ;
+      // un sticker importé (S1) le sert tel quel, jamais un alt fabriqué ici.
+      ...(m.alt ? { alt: m.alt } : {}),
     });
   }
 

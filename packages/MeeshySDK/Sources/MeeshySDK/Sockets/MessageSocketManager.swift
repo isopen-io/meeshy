@@ -1105,9 +1105,32 @@ public struct ParticipantJoinedEvent: Decodable, Sendable {
 
 public struct ParticipantLeftEvent: Decodable, Sendable {
     public let conversationId: String
-    public let userId: String
+    /// L'identité TOUJOURS servie — la seule qu'un visiteur venu par un lien
+    /// partagé possède, n'ayant aucune ligne `User`. C'est sur elle qu'on retire
+    /// la bonne ligne, jamais sur `userId`.
+    ///
+    /// Optionnelle pour un gateway antérieur au contrat, pas parce qu'elle
+    /// manquerait : `names(_:)` compare alors au seul `userId`, ce qui reproduit
+    /// le comportement d'avant.
+    public let participantId: String?
+    /// `nil` quand la personne n'a PAS de compte. **Non-optionnel jusqu'ici** :
+    /// le premier visiteur sans compte expulsé aurait fait échouer le décodage
+    /// de l'événement ENTIER, en silence — `Decodable` refuse un `null` sur un
+    /// `String`, et l'événement n'aurait atteint aucun abonné.
+    public let userId: String?
     public let displayName: String
     public let leftAt: String
+
+    /// La personne nommée par cet événement est-elle `identity` ?
+    ///
+    /// Une identité iOS est un `User.id` pour un compte, un `Participant.id`
+    /// pour un visiteur de lien partagé (cf. `authContext.userId` côté gateway).
+    /// L'événement porte les DEUX faces, et il faut les essayer toutes les deux :
+    /// comparer au seul `userId` rate tout visiteur sans compte, comparer au seul
+    /// `participantId` rate tout compte.
+    public func names(_ identity: String) -> Bool {
+        !identity.isEmpty && (identity == userId || identity == participantId)
+    }
 
     /// Effectif ACTIF APRÈS le départ, absolu — à POSER, jamais à soustraire.
     /// Même raison que sur `ParticipantJoinedEvent` : un client qui décrémente
@@ -1123,9 +1146,26 @@ public struct ParticipantLeftEvent: Decodable, Sendable {
 
 public struct ParticipantBannedEvent: Decodable, Sendable {
     public let conversationId: String
-    public let userId: String
+    /// Voir `ParticipantLeftEvent.participantId`.
+    public let participantId: String?
+    /// `nil` sans compte — voir `ParticipantLeftEvent.userId`.
+    public let userId: String?
     public let bannedBy: SocketEventUser
     public let bannedAt: String
+    /// Le lien de partage que ce bannissement a FERMÉ. `nil` quand la personne
+    /// n'était pas entrée par un lien : il n'y avait pas de porte à fermer.
+    public let closedShareLinkId: String?
+
+    /// La personne nommée par cet événement est-elle `identity` ?
+    ///
+    /// Une identité iOS est un `User.id` pour un compte, un `Participant.id`
+    /// pour un visiteur de lien partagé (cf. `authContext.userId` côté gateway).
+    /// L'événement porte les DEUX faces, et il faut les essayer toutes les deux :
+    /// comparer au seul `userId` rate tout visiteur sans compte, comparer au seul
+    /// `participantId` rate tout compte.
+    public func names(_ identity: String) -> Bool {
+        !identity.isEmpty && (identity == userId || identity == participantId)
+    }
     /// `false` quand la cible avait DÉJÀ quitté la conversation : bannir un
     /// ancien membre reste possible — c'est ce qui l'empêche de revenir par un
     /// lien de partage — mais ce bannissement-là ne retire aucune appartenance.
@@ -1155,7 +1195,10 @@ public struct ParticipantBannedEvent: Decodable, Sendable {
 
 public struct ParticipantUnbannedEvent: Decodable, Sendable {
     public let conversationId: String
-    public let userId: String
+    /// Voir `ParticipantLeftEvent.participantId`.
+    public let participantId: String?
+    /// `nil` sans compte — voir `ParticipantLeftEvent.userId`.
+    public let userId: String?
     /// Le bannissement est levé dans tous les cas ; l'appartenance n'est rendue
     /// que si le bannissement l'avait prise. `false` quand la personne était
     /// partie d'elle-même AVANT d'être bannie.

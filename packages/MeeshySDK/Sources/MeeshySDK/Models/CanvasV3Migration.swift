@@ -419,7 +419,13 @@ public extension CanvasV3 {
 
     private static func stickerPayload(_ sticker: StorySticker,
                                        anchorPoint: String?) -> [String: CanvasJSONValue] {
-        var payload: [String: CanvasJSONValue] = ["emoji": .string(sticker.emoji)]
+        // `wireEmoji`, jamais `emoji` : un sticker image parti sans repli
+        // disparaît chez un lecteur qui ne rend que l'emoji.
+        var payload: [String: CanvasJSONValue] = ["emoji": .string(sticker.wireEmoji)]
+        if let postMediaId = nonEmpty(sticker.postMediaId) {
+            payload["postMediaId"] = .string(postMediaId)
+        }
+        if let provider = nonEmpty(sticker.provider) { payload["provider"] = .string(provider) }
         if sticker.baseSize != 140 { payload["baseSize"] = .number(sticker.baseSize) }
         // Le pivot NOMMÉ n'est jamais fabriqué : il est réémis quand le wire
         // le portait, sinon c'est le pivot LIBRE qui parle (clé `anchor`).
@@ -705,10 +711,14 @@ public extension StoryEffects {
     }
 
     private static func stickerObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StorySticker? {
-        guard let emoji = object.payload.string("emoji") else { return nil }
+        let postMediaId = object.payload.string("postMediaId") ?? ""
+        guard let emoji = stickerEmoji(object.payload.string("emoji"),
+                                       hasImage: !postMediaId.isEmpty) else { return nil }
         return StorySticker(
             id: object.id,
             emoji: emoji,
+            postMediaId: postMediaId,
+            provider: object.payload.string("provider"),
             x: position.x, y: position.y,
             scale: object.transform.scale, rotation: object.transform.rotation,
             zIndex: object.z,
@@ -718,6 +728,13 @@ public extension StoryEffects {
             duration: object.payload.double("duration"),
             fadeIn: object.payload.double("fadeIn"),
             fadeOut: object.payload.double("fadeOut"))
+    }
+
+    /// Un sticker image reste rendable même si l'écrivain d'en face n'a posé
+    /// aucun repli emoji ; sans image ni emoji, il n'y a rien à rendre.
+    private static func stickerEmoji(_ wire: String?, hasImage: Bool) -> String? {
+        guard hasImage else { return wire }
+        return nonEmpty(wire) ?? StorySticker.imageFallbackEmoji
     }
 
     private static func locationObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryLocationObject? {

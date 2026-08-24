@@ -118,4 +118,49 @@ class CanvasV3ProjectionTest {
         assertThat(legacy.textObjects).isNotEmpty()
         assertThat(legacy.background).isEqualTo("color:#1E1B4B")
     }
+
+    private fun effectsFromRaw(raw: String): StoryEffects =
+        json.decodeFromString(StoryEffectsWireSerializer, raw)
+
+    /**
+     * Un sticker image intégré (`postMediaId`) projette avec l'image
+     * disponible même sans `emoji` au fil — le payload v3 est permissif par
+     * contrat (`payload: JsonObject`), et un futur écrivain non conforme ne
+     * doit pas faire disparaître l'objet entier.
+     */
+    @Test
+    fun `un sticker image sans emoji au fil projette quand meme`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+                { "id": "st1", "kind": "sticker",
+                  "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                  "payload": { "postMediaId": "64f0a1b2c3d4e5f6a7b8c9d0", "provider": "genmoji" } }
+              ] } ] }
+            """.trimIndent(),
+        )
+        val sticker = projected.stickerObjects!!.single()
+
+        assertThat(sticker.postMediaId).isEqualTo("64f0a1b2c3d4e5f6a7b8c9d0")
+        assertThat(sticker.provider).isEqualTo("genmoji")
+        assertThat(sticker.hasImage).isTrue()
+    }
+
+    /** Une clé de payload inconnue au décodeur Android ne doit jamais faire échouer la scène. */
+    @Test
+    fun `un sticker avec des cles de payload inconnues traverse la projection`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "objects": [
+                { "id": "st1", "kind": "sticker",
+                  "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+                  "payload": { "emoji": "🎉", "champInconnuFutur": "ignore" } }
+              ] } ] }
+            """.trimIndent(),
+        )
+        val sticker = projected.stickerObjects!!.single()
+
+        assertThat(sticker.emoji).isEqualTo("🎉")
+        assertThat(sticker.hasImage).isFalse()
+    }
 }

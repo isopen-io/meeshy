@@ -165,9 +165,20 @@ export function ConversationParticipantsDrawer({
     }
   };
 
-  // Vérifier si l'utilisateur actuel est admin/moderator/creator
+  // Vérifier si l'utilisateur actuel est admin/moderator/creator.
+  //
+  // `participant.role` porte le rôle PLATEFORME ('USER'…), le rang dans la
+  // conversation vivant sous `conversationRole`. Lire le premier donnait 'USER'
+  // à tout créateur de groupe ordinaire — et c'est ce `isAdmin` qui gouverne
+  // l'AJOUT (lignes de recherche plateforme) comme le RETRAIT d'un membre :
+  // ni l'un ni l'autre ne lui était proposé dans son propre groupe.
   const currentUserParticipant = participants.find(p => p.userId === currentUser.id);
-  const currentRole = currentUserParticipant?.role;
+  // Ce composant ne reçoit qu'un `conversationId` : pas de `currentUserRole`
+  // servi à consulter ici, la liste chargée est en revanche COMPLÈTE
+  // (`getAllParticipants` pagine jusqu'au bout), donc le lecteur y figure.
+  const currentRole =
+    (currentUserParticipant as { conversationRole?: string } | undefined)?.conversationRole ||
+    currentUserParticipant?.role;
   const isAdmin = isParticipantModerator(currentRole || 'member');
 
   // Recherche backend des participants quand searchQuery change

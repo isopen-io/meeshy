@@ -18,9 +18,21 @@ export function useParticipantManagement(
   const { t } = useI18n('conversations');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Check if current user is admin/moderator
+  // Le rang du lecteur DANS la conversation. Deux défauts se cumulaient ici :
+  //
+  // 1. `conversation.participants` est TRONQUÉ à cinq par le gateway — dans un
+  //    groupe de six, le lecteur n'y figure pas et retombait sur 'member' ;
+  // 2. `participant.role` porte le rôle PLATEFORME, le rang du fil vivant sous
+  //    `conversationRole` (`serializeConversationParticipant`).
+  //
+  // `conversation.currentUserRole` est calculé serveur et tranche les deux.
+  const servedRole = (conversation as { currentUserRole?: string | null }).currentUserRole;
   const userMembership = conversation.participants?.find(p => p.userId === currentUser.id);
-  const memberRole = userMembership?.role || 'member';
+  const memberRole =
+    servedRole ||
+    (userMembership as { conversationRole?: string } | undefined)?.conversationRole ||
+    userMembership?.role ||
+    'member';
   const isAdmin = isGlobalAdmin(currentUser.role) ||
     hasMinimumMemberRole(memberRole.toLowerCase(), MemberRole.MODERATOR);
 

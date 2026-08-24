@@ -407,7 +407,9 @@ export function ConversationSettingsModal({
 
       if (uploadResult.success && uploadResult.attachments.length > 0) {
         const imageUrl = uploadResult.attachments[0].fileUrl;
-        const updatedData = { image: imageUrl, avatar: imageUrl };
+        // `image` n'existe pas côté conversation — seul `avatar` est écrit par
+        // le gateway ; l'envoyer entretenait l'illusion d'un second champ.
+        const updatedData = { avatar: imageUrl };
         await conversationsService.updateConversation(conversation.id, updatedData);
 
         onConversationUpdate?.(updatedData as unknown);

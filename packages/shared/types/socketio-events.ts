@@ -1782,9 +1782,22 @@ export interface MentionCreatedEventData {
 
 export interface ConversationParticipantBannedEventData {
   readonly conversationId: string;
-  readonly userId: string;
+  /** Toujours présent — voir `ConversationParticipantLeftEventData.participantId`. */
+  readonly participantId?: string;
+  /** `null` sans compte — voir `ConversationParticipantLeftEventData.userId`. */
+  readonly userId: string | null;
   readonly bannedBy: { readonly id: string };
   readonly bannedAt: string;
+  /**
+   * Le lien de partage que ce bannissement a FERMÉ, quand la personne était
+   * entrée par un lien. Bannir sort de la conversation ET invalide la porte
+   * empruntée : sortir quelqu'un en laissant son lien ouvert ne protège de rien,
+   * il suffit de le rouvrir pour revenir sous un autre pseudonyme.
+   *
+   * ABSENT quand il n'y avait pas de lien à fermer (créateur, membre ajouté à la
+   * main) — jamais `null` : l'absence dit « aucune porte n'a été fermée ».
+   */
+  readonly closedShareLinkId?: string;
   /**
    * Faux quand la cible avait DÉJÀ quitté la conversation — bannir un ancien
    * membre reste possible, c'est ce qui l'empêche de revenir par un lien de
@@ -1813,7 +1826,10 @@ export interface ConversationParticipantBannedEventData {
 
 export interface ConversationParticipantUnbannedEventData {
   readonly conversationId: string;
-  readonly userId: string;
+  /** Toujours présent — voir `ConversationParticipantLeftEventData.participantId`. */
+  readonly participantId?: string;
+  /** `null` sans compte — voir `ConversationParticipantLeftEventData.userId`. */
+  readonly userId: string | null;
   /**
    * Le bannissement est levé dans tous les cas ; l'appartenance n'est rendue
    * que si le bannissement l'avait prise. Faux quand la personne était partie
@@ -1865,7 +1881,22 @@ export interface ConversationParticipantJoinedEventData {
 
 export interface ConversationParticipantLeftEventData {
   readonly conversationId: string;
-  readonly userId: string;
+  /**
+   * L'identité TOUJOURS présente — la seule qu'un visiteur venu par un lien
+   * partagé possède, puisqu'il n'a aucune ligne `User`. C'est sur ce champ, et
+   * jamais sur `userId`, qu'un client retire la bonne ligne.
+   *
+   * Absent des serveurs antérieurs à ce contrat : un client le lit alors comme
+   * `undefined` et retombe sur `userId`, ce qui reproduit son comportement
+   * d'avant (les seuls départs qu'ils annonçaient étaient ceux de comptes).
+   */
+  readonly participantId?: string;
+  /**
+   * `null` quand la personne n'a PAS de compte. Ce champ déclare un `User.id` :
+   * y recopier un `Participant.id` ferait passer une clé de participant pour une
+   * clé d'utilisateur dans tout ce qui la consomme ensuite.
+   */
+  readonly userId: string | null;
   readonly displayName: string;
   readonly leftAt: string;
   /**
