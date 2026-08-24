@@ -99,5 +99,9 @@ La garde **se garde elle-même** (leçon 238i) : le balayage voit ≥ 400 fichie
 - [x] `PostStatAccessibilityTests` : 4 tests neufs pour `replies` (accord fr/en, singulier/pluriel/zero)
 - [x] `InterpolatedLocalizationSubstitutionTests` : le test qui référençait la clé retirée pointe maintenant sur le helper
 - [x] Garde `EngagementCountConsolidationGuardTests` (2 versants)
-- [ ] Contrôles déterministes hors Swift (pas de toolchain sous Linux) — la CI iOS Tests reste le gate réel
-- [ ] Analyse + pointeur `branch-tracking.md`
+- [x] Contrôles déterministes hors Swift (pas de toolchain sous Linux) — la CI iOS Tests reste le gate réel
+- [x] Analyse + pointeur `branch-tracking.md`
+- [x] **Verdict CI tête `6c82a63e`** : suite COMPLÈTE, **7762 passés / 1 échec / 5 sautés sur 7768**. L'unique rouge (`FrenchDefaultValueRatchetTests`, 5 clés `forward.publish-*`) était **rouge sur `main` lui-même** — signalé en commentaire PR avec patch, **sans élargir cette PR**.
+- [x] **Base réparée par une main tierce** (`622b5004`, catalogue + 8 clés `forward.publish*`)
+- [x] **Contrôles rejoués sur l'arbre fusionné** : 2090 fichiers, 0 contrevenant, 5/5 hôtes, 0 puce, catalogue 3318 clés, mes 2 clés plurielles intactes (7 locales, 6 formes arabes)
+- [ ] **Verdict CI sur l'arbre fusionné** — la fusion tierce est revenue `Build app (app + cibles de test)` = **compile seule, 0 test**. Re-poussée avec ` — run test` pour obtenir un verdict réel.
