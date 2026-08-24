@@ -123,6 +123,65 @@ check après CHAQUE poussée, y compris tierce).
 | `pbxproj` | non touché (globbing `project.yml` + `xcodegen` en CI) |
 | SDK (`packages/MeeshySDK`) | **non touché** — hors périmètre de la routine |
 
+## Ce que la CI a attrapé — et qu'il ne fallait pas faire taire
+
+Première tête `ab831bbe` : **7788 passés / 2 échecs sur 7790**. Les deux rouges
+sont à moi, dans `ConversationDashboardViewAccessibilityTests` :
+
+```
+test_healthArcGauge_isSingleVoiceOverElement_withScoreValue
+  — The health gauge must announce the score as its accessibility value.
+test_statRing_isSingleVoiceOverElement_withLabelAndValue
+  — StatRing must announce the raw (un-abbreviated) count as its accessibility value.
+```
+
+Ces gardes épinglaient l'**orthographe** `.accessibilityValue("\(health)")` et
+`.accessibilityValue("\(value)")`. C'est **la garde qui fonctionne**, pas la
+garde qui gêne : elle a détecté qu'un appelant de la règle avait changé — ce
+qu'on lui demande exactement (leçon 239i).
+
+Mais leur ÉNONCÉ n'a jamais été « interpole » : il est « annonce le score » et
+« annonce le compte **BRUT, non abrégé** ». `LocalizedNumber.exact` sert cet
+énoncé *mieux* que l'interpolation. Les assertions sont donc réécrites pour
+épingler **l'intention plutôt qu'une graphie** — et celle de `StatRing` gagne
+son versant négatif, qui manquait : la valeur ne doit **pas** être l'abrégé
+(`displayValue`). Un test qui pin une graphie rougit à chaque refactor légitime ;
+un test qui pin l'intention ne rougit que sur une vraie régression.
+
+### La borne `prefix(1400)` : un report que ce lot a rendu urgent
+
+La jauge de santé était découpée par un nombre de **caractères** depuis
+`ArcGauge(` — l'une des « 3 fenêtres `prefix(1400)` » que 239i puis 240i
+portaient en carry-over. En nommant sa source, le motif s'allonge : la marge
+résiduelle tombait à **138 caractères**.
+
+C'est précisément le piège que 238i a documenté (`prefix(2600)`, marge finale
+5 caractères) : un doc-comment pousse la fin du motif hors fenêtre et la garde
+**rougit sur du code qui la satisfait toujours** — pire qu'un faux vert, puisqu'elle
+envoie corriger ce qui n'est pas cassé.
+
+**Un report qu'on vient soi-même de rapprocher de la rupture cesse d'être un
+report.** La fenêtre est remplacée par `functionBody(named:in:)`, jumeau de
+`structBody(named:in:)` (238i) pour les vues rendues depuis un `private func`.
+Une borne sémantique n'a pas de marge à épuiser.
+
+Et comme 238i l'exige, **élargir une borne oblige à prouver qu'on ne fabrique pas
+un faux vert** : `test_heroHealthCardBody_isBoundedToItsOwnFunction` vérifie la
+borne dans les DEUX sens — elle contient la jauge, et elle s'arrête **avant**
+`StatRing`, qui porte le même `.accessibilityElement(children: .ignore)` et
+aurait fait passer la garde au vert pour le mauvais élément.
+
+| Contrôle rejoué hors Swift après réparation | Résultat |
+|---|---|
+| Les 4 assertions de la jauge de santé | **PASS** |
+| Les 4 assertions de `StatRing` (dont le versant négatif neuf) | **PASS** |
+| Borne — contient la jauge / n'avale pas `StatRing` | **PASS / PASS** |
+| `AccessibilityValueAttributionGuardTests` (239i) | intacte — son auto-garde s'exerce sur un extrait FABRIQUÉ, pas sur un compte du dépôt |
+
+**Restent 2 fenêtres `prefix(1400)`** dans ce fichier (`periodPicker`, libellés de
+période) : elles ancrent sur des `private var`, gardent leur marge d'origine, et
+`functionBody` leur donne désormais un précédent directement réutilisable.
+
 ## Bilan
 
 **7 fichiers prod** (dont 1 neuf, 1 délégation) · **1 suite neuve**
