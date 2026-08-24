@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
 import { sendSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError } from '../utils/response.js';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 
 const sendEmailInvitationSchema = z.object({
   email: z.email(),
@@ -28,7 +29,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
 
       const user = await fastify.prisma.user.findUnique({
         where: { id: userId },
-        select: { displayName: true, username: true, avatar: true, systemLanguage: true },
+        select: { displayName: true, username: true, avatar: true, ...RECIPIENT_LANG_SELECT },
       });
 
       if (!user) {
@@ -53,7 +54,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
           senderName,
           senderAvatar: user.avatar,
           downloadUrl: 'https://meeshy.me/download',
-          language: user.systemLanguage ?? 'fr',
+          language: recipientLanguage(user, 'fr'),
         });
       } else {
         fastify.log.warn('EmailService not available, invitation not sent');

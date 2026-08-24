@@ -39,6 +39,7 @@ import {
 } from '@meeshy/shared/utils/conversation-helpers';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
+import { recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { filterMutedRecipients } from './mutedRecipients';
@@ -1614,15 +1615,21 @@ export class NotificationService {
             if (canSend) {
               const user = await this.prisma.user.findUnique({
                 where: { id: params.userId },
-                select: { email: true, systemLanguage: true, username: true }
+                select: { email: true, username: true, ...this.LANG_SELECT }
               });
               if (user?.email) {
+                // Cycle 125 — le CADRAGE d'un e-mail immédiat descend le même
+                // Prisme que la bannière push du même destinataire. Les trois
+                // envois ci-dessous lisaient `systemLanguage` en direct, donc
+                // servaient le repli à tout lecteur dont le rang 1 est vide —
+                // et servaient un `'pt-BR'` non normalisé aux autres.
+                const emailLang = recipientLanguage(user, 'fr');
                 if (params.type === 'login_new_device' && (params as any)._loginAlertData) {
                   const alertData = (params as any)._loginAlertData;
                   this.emailService.sendLoginAlertEmail({
                     to: user.email,
                     name: user.username || 'User',
-                    language: user.systemLanguage || 'fr',
+                    language: emailLang,
                     ...alertData,
                   }).catch(err => {
                     notificationLogger.error('Login alert email failed', { error: err, userId: params.userId });
@@ -1631,7 +1638,7 @@ export class NotificationService {
                   this.emailService.sendSecurityAlertEmail({
                     to: user.email,
                     name: user.username || 'User',
-                    language: user.systemLanguage || 'fr',
+                    language: emailLang,
                     alertType: params.type,
                     details: params.content.substring(0, 500),
                   }).catch(err => {
@@ -1645,7 +1652,7 @@ export class NotificationService {
                   this.emailService.sendNotificationEmail({
                     to: user.email,
                     name: user.username || 'User',
-                    language: user.systemLanguage || 'fr',
+                    language: emailLang,
                     notificationType: params.type,
                     details: params.content.substring(0, 500),
                   }).catch(err => {
@@ -4573,10 +4580,14 @@ export class NotificationService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: params.recipientUserId },
-      select: { systemLanguage: true }
+      select: this.LANG_SELECT
     });
-    const lang = user?.systemLanguage ?? 'fr';
-    const locale = user?.systemLanguage === 'en' ? 'en-US' : 'fr-FR';
+    const lang = recipientLanguage(user, 'fr');
+    // Cycle 125 — l'horodatage se lit DANS la notification, donc dans la langue
+    // de la notification. `systemLanguage === 'en' ? 'en-US' : 'fr-FR'` était un
+    // binaire codé en dur : un lecteur allemand recevait « Neue Anmeldung
+    // erkannt » — `notificationString` normalise, lui — daté à la française.
+    const locale = recipientDateLocale(user, 'fr');
 
     const bodyParts: string[] = [];
     if (location) bodyParts.push(location);

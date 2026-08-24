@@ -1,7 +1,8 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { EmailService } from '../services/EmailService';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { buildBroadcastRecipientFilter, type BroadcastTargeting } from './broadcast-recipients';
+import { buildBroadcastRecipientFilter, localizedBroadcastText, type BroadcastTargeting } from './broadcast-recipients';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 
 const logger = enhancedLogger.child({ module: 'BroadcastSenderJob' });
 
@@ -61,7 +62,7 @@ export class BroadcastSenderJob {
             email: true,
             displayName: true,
             username: true,
-            systemLanguage: true,
+            ...RECIPIENT_LANG_SELECT,
           },
           skip,
           take: this.BATCH_SIZE,
@@ -85,9 +86,21 @@ export class BroadcastSenderJob {
             // If no preferences found, proceed with sending
           }
 
-          const lang = user.systemLanguage || 'en';
-          const subject = translatedSubjects[lang] || translatedSubjects[broadcast.sourceLanguage] || broadcast.subject;
-          const body = translatedBodies[lang] || translatedBodies[broadcast.sourceLanguage] || broadcast.body;
+          // Même descente et même repli de traduction que le canal IN-APP : les
+          // deux voix d'une diffusion ne peuvent pas élire des langues
+          // différentes pour un même destinataire. `localizedBroadcastText` est
+          // la SSOT du repli (langue du lecteur → langue source → original) ;
+          // ce site en portait une copie.
+          const lang = recipientLanguage(user, 'en');
+          const localized = (translated: Record<string, string>, original: string) =>
+            localizedBroadcastText({
+              translated,
+              sourceLanguage: broadcast.sourceLanguage,
+              original,
+              lang,
+            });
+          const subject = localized(translatedSubjects, broadcast.subject);
+          const body = localized(translatedBodies, broadcast.body);
           const recipientName = user.displayName || user.username || 'User';
           const unsubscribeUrl = `${frontendUrl}/settings/notifications`;
 
