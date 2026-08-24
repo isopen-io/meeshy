@@ -151,10 +151,30 @@ public enum SharedMapStyle: String, Codable, CaseIterable, Sendable {
 public struct LocationSharingPreferences: Codable, Equatable, Sendable {
     public var precision: LocationPrecision
     public var mapStyle: SharedMapStyle
+    /// Dernier grain de DÉCOUVRABILITÉ réellement utilisé pour publier — la
+    /// mémoire locale que la spec du 2026-08-02 §2 demande, « préférence
+    /// locale device, pas un réglage serveur ».
+    ///
+    /// Elle vit ici, et non dans un second magasin, parce que les deux grains
+    /// se lisent ENSEMBLE à chaque publication : `precision` borne ce que
+    /// celui-ci peut honnêtement revendiquer (`DiscoverabilityPrecision
+    /// .allowedTiers(under:)`). Deux magasins auraient fabriqué deux
+    /// lectures à garder synchronisées pour une seule décision.
+    ///
+    /// `nil` — le défaut — n'active RIEN. Ce champ ne dit pas « rends mes
+    /// publications trouvables » : il dit « voici le palier à PRÉ-SÉLECTIONNER
+    /// dans le sélecteur si l'utilisateur ouvre l'interrupteur ». L'opt-in
+    /// lui-même est par publication et repart fermé à chaque fois.
+    public var lastDiscoverabilityPrecision: DiscoverabilityPrecision?
 
-    public init(precision: LocationPrecision = .exact, mapStyle: SharedMapStyle = .standard) {
+    public init(
+        precision: LocationPrecision = .exact,
+        mapStyle: SharedMapStyle = .standard,
+        lastDiscoverabilityPrecision: DiscoverabilityPrecision? = nil
+    ) {
         self.precision = precision
         self.mapStyle = mapStyle
+        self.lastDiscoverabilityPrecision = lastDiscoverabilityPrecision
     }
 
     /// `exact` / `standard` : le comportement actuel. Changer silencieusement

@@ -47,6 +47,7 @@ extension Route {
         case .profile: return "Profile"
         case .contacts: return "Contacts"
         case .peopleDiscovery: return "PeopleDiscovery"
+        case .nearbyDiscovery: return "NearbyDiscovery"
         case .communityList: return "CommunityList"
         case .communityDetail: return "CommunityDetail"
         case .communityCreate: return "CommunityCreate"

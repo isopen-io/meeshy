@@ -42,6 +42,7 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         let type: String?
         let location: SharedPlace?
         let mentions: [PostMentionInput]?
+        let discoverabilityPrecision: DiscoverabilityPrecision?
     }
 
     var enqueuePostMediaCalls: [EnqueuePostMediaCall] = []
@@ -59,7 +60,8 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         originalLanguage: String?,
         type: String?,
         location: SharedPlace?,
-        mentions: [PostMentionInput]?
+        mentions: [PostMentionInput]?,
+        discoverabilityPrecision: DiscoverabilityPrecision?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         enqueuePostMediaCalls.append(EnqueuePostMediaCall(
             sourceMediaURLs: sourceMediaURLs,
@@ -70,7 +72,8 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
             originalLanguage: originalLanguage,
             type: type,
             location: location,
-            mentions: mentions
+            mentions: mentions,
+            discoverabilityPrecision: discoverabilityPrecision
         ))
         if let enqueuePostMediaError { throw enqueuePostMediaError }
         return OfflineQueue.EnqueueMediaResult(

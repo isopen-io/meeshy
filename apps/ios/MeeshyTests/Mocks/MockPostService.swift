@@ -68,6 +68,12 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// ce qui n'est PAS `[]` : le serveur relit alors le texte lui-même.
     var lastCreateMentions: [PostMentionInput]?
     var lastCreateLocation: SharedPlace?
+    /// Le SECOND opt-in de position (spec du 2026-08-02 §2). Observable ici
+    /// SEULEMENT si la surcharge complète est implémentée ci-dessous : le
+    /// défaut du protocole rabat sinon l'appel sur une signature plus pauvre
+    /// et laisse tomber le champ en silence — un test comptant les appels
+    /// resterait vert pendant que le consentement disparaît.
+    var lastCreateDiscoverabilityPrecision: DiscoverabilityPrecision?
 
     var deleteCallCount = 0
     var lastDeletePostId: String?
@@ -248,6 +254,27 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastCreateType = type
         lastCreateRepostOfId = repostOfId
         return try createResult.get()
+    }
+
+    /// Surcharge COMPLÈTE du terminal réel : c'est elle que `PostService`
+    /// implémente et que `FeedViewModel.createPost` appelle. Sans elle, le
+    /// défaut du protocole rabat l'appel sur la signature `visibilityUserIds`
+    /// et `discoverabilityPrecision` s'évapore — un test vert prouverait
+    /// l'inverse de ce qu'il croit.
+    func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?,
+                moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?,
+                originalLanguage: String?,
+                mobileTranscription: MobileTranscriptionPayload?,
+                repostOfId: String?, location: SharedPlace?,
+                mentions: [PostMentionInput]?,
+                allowSoundExtraction: Bool?, mediaAlt: [String: String]?,
+                discoverabilityPrecision: DiscoverabilityPrecision?) async throws -> APIPost {
+        lastCreateDiscoverabilityPrecision = discoverabilityPrecision
+        return try await create(content: content, type: type, visibility: visibility,
+                                visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji,
+                                mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration,
+                                originalLanguage: originalLanguage, mobileTranscription: mobileTranscription,
+                                repostOfId: repostOfId, location: location, mentions: mentions)
     }
 
     /// Surcharge de l'audience NOMMÉE : même raison que ci-dessous — sans

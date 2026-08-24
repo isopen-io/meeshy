@@ -424,6 +424,7 @@ struct ThemedFeedOverlay: View {
         HStack(spacing: 8) {
             reelsButton
             postsMapButton
+            nearbyButton
         }
         // Loi commune `ScrollMotion` : une vue en mouvement ne montre pas ses
         // boutons d'action. Même traitement que le chemin iPad (`FeedView`).
@@ -459,6 +460,26 @@ struct ThemedFeedOverlay: View {
         .accessibilityLabel(String(localized: "feed.map.open", defaultValue: "Posts sur la carte", bundle: .main))
         .accessibilityHint(String(localized: "feed.map.open.hint", defaultValue: "Affiche les posts géolocalisés sur un plan", bundle: .main))
         .accessibilityIdentifier("feed.header.map")
+    }
+
+    /// Troisième entrée du header, jumelle de celle du chemin iPad
+    /// (`FeedView.nearbyButton`) : la découverte par PROXIMITÉ. Elle
+    /// n'interroge pas le feed mais le serveur — tout ce qui est découvrable
+    /// autour, publié ou non dans le fil de cet utilisateur.
+    private var nearbyButton: some View {
+        Button {
+            HapticFeedback.light()
+            router.push(.nearbyDiscovery())
+        } label: {
+            Image(systemName: "dot.radiowaves.left.and.right")
+                .font(MeeshyFont.relative(17, weight: .semibold))
+                .foregroundColor(MeeshyColors.indigo500)
+                .frame(width: 40, height: 40)
+                .adaptiveGlass(in: Circle(), interactive: true)
+        }
+        .accessibilityLabel(String(localized: "feed.nearby.open", defaultValue: "Publications à proximité", bundle: .main))
+        .accessibilityHint(String(localized: "feed.nearby.open.hint", defaultValue: "Ouvre la carte des publications trouvables autour de vous", bundle: .main))
+        .accessibilityIdentifier("feed.header.nearby")
     }
 
     /// Posts du feed porteurs d'une position — même source unique que le chemin
@@ -550,6 +571,12 @@ struct ThemedFeedOverlay: View {
     private func standardFeedPostCardView(for post: FeedPost) -> FeedPostCard {
         FeedPostCard(
             post: post,
+            onSeeNearby: { place in
+                HapticFeedback.light()
+                router.push(.nearbyDiscovery(initialCoordinate: RouteCoordinate(
+                    latitude: place.latitude, longitude: place.longitude
+                )))
+            },
             isLiked: postLikedIds.contains(post.id),
             displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
             isHeartInFlight: postHeartInFlightIds.contains(post.id),

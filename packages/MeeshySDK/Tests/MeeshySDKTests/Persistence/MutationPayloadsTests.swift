@@ -390,6 +390,54 @@ final class MutationPayloadsTests: XCTestCase {
         XCTAssertNil(decoded.location)
     }
 
+    /// Spec 2026-08-02 §2 — le CONSENTEMENT de découvrabilité doit survivre au
+    /// flush exactement comme `location`.
+    ///
+    /// Un post TEXTE + lieu, le cas nominal de cette fonctionnalité, ne passe
+    /// PAS par `PostService.create` : `FeedViewModel.createPost` le range dans
+    /// la file durable (`isDurableTextOnly`). Sans cette clé, l'utilisateur
+    /// coche « trouvable à proximité », voit sa publication partir, et le
+    /// consentement disparaît au flush — silencieusement, même en ligne.
+    func test_outboxPayload_survivesAFlushWithItsDiscoverabilityPrecision() throws {
+        let payload = CreatePostPayload(
+            clientMutationId: ClientMutationId.generate(),
+            content: "ici",
+            attachmentIds: [],
+            visibility: "PUBLIC",
+            location: SharedPlace(latitude: 48.8583736, longitude: 2.2944813, name: "Tour Eiffel"),
+            discoverabilityPrecision: .neighborhood
+        )
+
+        let restored = try decoder.decode(CreatePostPayload.self, from: try encoder.encode(payload))
+
+        XCTAssertEqual(restored.discoverabilityPrecision, .neighborhood)
+        XCTAssertEqual(restored, payload)
+    }
+
+    /// L'ABSENCE vaut « non découvrable » : une charge sans consentement ne
+    /// doit pas fabriquer de palier par défaut au décodage.
+    func test_createPostPayload_withoutDiscoverabilityPrecision_staysNil() throws {
+        let payload = CreatePostPayload(
+            clientMutationId: ClientMutationId.generate(),
+            content: "hi",
+            attachmentIds: [],
+            visibility: "PUBLIC"
+        )
+
+        let restored = try decoder.decode(CreatePostPayload.self, from: try encoder.encode(payload))
+
+        XCTAssertNil(restored.discoverabilityPrecision)
+    }
+
+    /// Une ligne persistée avant ce champ décode toujours — aucune migration.
+    func test_createPostPayload_decodesLegacyRowWithoutDiscoverabilityPrecision() throws {
+        let legacyJSON = """
+        {"clientMutationId":"cmid_legacy4","content":"hi","attachmentIds":[],"visibility":"PUBLIC"}
+        """
+        let decoded = try decoder.decode(CreatePostPayload.self, from: Data(legacyJSON.utf8))
+        XCTAssertNil(decoded.discoverabilityPrecision)
+    }
+
     // MARK: - ToggleLikePostPayload (Phase C)
 
     func test_toggleLikePostPayload_encodes_likedBool() throws {

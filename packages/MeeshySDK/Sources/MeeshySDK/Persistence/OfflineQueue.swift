@@ -481,7 +481,16 @@ public protocol OfflineQueueing: Sendable {
         originalLanguage: String?,
         type: String?,
         location: SharedPlace?,
-        mentions: [PostMentionInput]?
+        mentions: [PostMentionInput]?,
+        /// Le SECOND opt-in de position (spec du 2026-08-02 §2). Il fait le
+        /// MÊME trajet que `location`, et pour la même raison : `location`
+        /// survivait déjà au flush pendant que le consentement se perdait
+        /// entre le composer et la file, si bien qu'un média posté hors ligne
+        /// avec « trouvable à proximité » coché arrivait non trouvable.
+        /// Sur la REQUIREMENT et non en défaut concret : un défaut sur
+        /// l'implémentation ne satisfait pas une exigence de protocole, et le
+        /// mock l'aurait jeté en silence.
+        discoverabilityPrecision: DiscoverabilityPrecision?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 
     /// Draft recovery — returns the most recent unsent `.createPost` row whose
@@ -1862,7 +1871,8 @@ public actor OfflineQueue {
         originalLanguage: String? = nil,
         type: String? = nil,
         location: SharedPlace? = nil,
-        mentions: [PostMentionInput]? = nil
+        mentions: [PostMentionInput]? = nil,
+        discoverabilityPrecision: DiscoverabilityPrecision? = nil
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -1880,7 +1890,8 @@ public actor OfflineQueue {
             type: type,
             visibilityUserIds: visibilityUserIds,
             location: location,
-            mentions: mentions
+            mentions: mentions,
+            discoverabilityPrecision: discoverabilityPrecision
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the

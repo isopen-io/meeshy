@@ -17,7 +17,11 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
         return try XCTUnwrap(object as? [String: Any])
     }
 
-    private func makeBody(mentions: [PostMentionInput]?) -> CreatePostBody {
+    private func makeBody(
+        mentions: [PostMentionInput]? = nil,
+        location: SharedPlace? = nil,
+        discoverabilityPrecision: DiscoverabilityPrecision? = nil
+    ) -> CreatePostBody {
         CreatePostBody(
             content: "Coucou",
             mediaIds: nil,
@@ -28,8 +32,9 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
             audioUrl: nil,
             audioDuration: nil,
             visibilityUserIds: nil,
-            location: nil,
-            mentions: mentions
+            location: location,
+            mentions: mentions,
+            discoverabilityPrecision: discoverabilityPrecision
         )
     }
 
@@ -60,5 +65,44 @@ final class OutboxDispatcherCreatePostEncodingTests: XCTestCase {
         let json = try encodeToJSON(makeBody(mentions: []))
 
         XCTAssertNil(json["mentions"])
+    }
+
+    // MARK: - Découvrabilité à proximité (spec 2026-08-02 §2)
+
+    /// Le consentement atteint le FIL, pas seulement la ligne persistée. Le
+    /// témoin lit le JSON réellement produit — c'est le dernier saut où
+    /// `location` avait autrefois disparu, et le consentement emprunte
+    /// exactement le même.
+    func test_createPostBody_carriesTheDiscoverabilityPrecision() throws {
+        let json = try encodeToJSON(makeBody(discoverabilityPrecision: .neighborhood))
+
+        XCTAssertEqual(json["discoverabilityPrecision"] as? String, "NEIGHBORHOOD")
+    }
+
+    /// Sans consentement, la clé est ABSENTE — pas `null`. Le schéma gateway
+    /// est un `z.enum().optional()`, qui rejette un `null` explicite : émettre
+    /// la clé vide ferait échouer la publication au lieu de la laisser
+    /// simplement non découvrable.
+    func test_createPostBody_withoutConsent_omitsTheKeyEntirely() throws {
+        let json = try encodeToJSON(makeBody())
+
+        XCTAssertNil(json["discoverabilityPrecision"])
+        XCTAssertFalse(json.keys.contains("discoverabilityPrecision"))
+    }
+
+    /// La règle de vie privée du §2 : le client n'arrondit JAMAIS. Quel que
+    /// soit le palier revendiqué, la coordonnée part au chiffre près — le
+    /// serveur seul quantifie.
+    func test_createPostBody_sendsTheExactCoordinateWhateverTheTierClaimed() throws {
+        for tier in DiscoverabilityPrecision.allCases {
+            let json = try encodeToJSON(makeBody(
+                location: SharedPlace(latitude: 48.8583736, longitude: 2.2944813, name: "Tour Eiffel"),
+                discoverabilityPrecision: tier
+            ))
+
+            let location = try XCTUnwrap(json["location"] as? [String: Any])
+            XCTAssertEqual(location["latitude"] as? Double, 48.8583736, "latitude arrondie sous \(tier.rawValue)")
+            XCTAssertEqual(location["longitude"] as? Double, 2.2944813, "longitude arrondie sous \(tier.rawValue)")
+        }
     }
 }

@@ -184,6 +184,7 @@ extension FeedView {
     func handleFeedLocationSelection(_ place: SharedPlace) {
         withAnimation {
             pendingPlace = place
+            nearbyDiscoverability = FeedNearbyDiscoverability.choiceForNewPlace()
         }
         HapticFeedback.light()
     }
@@ -277,6 +278,16 @@ extension FeedView {
         // sans ce cliché local, la Task async ci-dessous lirait toujours nil,
         // exactement comme text/attachments/mediaFiles le sont pour la même raison.
         let pendingPlace = pendingPlace
+        // Même raison que `pendingPlace` : le nettoyage referme l'opt-in, et
+        // une lecture tardive ne trouverait plus le consentement. La mémoire
+        // locale du palier est écrite ICI, au moment où il SERT — la spec
+        // parle du dernier choix « utilisé », pas du dernier survolé.
+        let nearbyPrecision = feedOffersNearbyDiscoverability
+            ? nearbyDiscoverability.precisionToSend
+            : nil
+        if feedOffersNearbyDiscoverability {
+            FeedNearbyDiscoverability.remember(nearbyDiscoverability)
+        }
         let hasFiles = audioURL != nil || !mediaFiles.isEmpty
 
         if !hasFiles || attachments.isEmpty {
@@ -289,7 +300,7 @@ extension FeedView {
             HapticFeedback.success()
             if !text.isEmpty || pendingPlace != nil {
                 let lang = composerLanguage
-                Task { await viewModel.createPost(content: text, visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds, originalLanguage: lang, location: pendingPlace, mentions: declaredReferences) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds, originalLanguage: lang, location: pendingPlace, mentions: declaredReferences, discoverabilityPrecision: nearbyPrecision) }
             }
             return
         }
@@ -327,7 +338,8 @@ extension FeedView {
                     originalLanguage: lang,
                     type: postType,
                     location: pendingPlace,
-                    mentions: declaredReferences
+                    mentions: declaredReferences,
+                    discoverabilityPrecision: nearbyPrecision
                 )
             }
             return
@@ -387,7 +399,13 @@ extension FeedView {
                     ).rawValue,
                     mediaIds: uploadedIds.isEmpty ? nil : uploadedIds,
                     originalLanguage: composerLanguage,
-                    mentions: declaredReferences
+                    // Le lieu ne se perdait QUE sur ce chemin — le jumeau hors
+                    // ligne le transportait déjà. Un post média publié en ligne
+                    // avec une position attachée arrivait donc sans elle, et le
+                    // second opt-in n'avait rien à quantifier.
+                    location: pendingPlace,
+                    mentions: declaredReferences,
+                    discoverabilityPrecision: nearbyPrecision
                 )
 
                 guard viewModel.publishError == nil else {
@@ -516,6 +534,10 @@ extension FeedView {
         composerReferences = []
         pendingAttachments.removeAll()
         pendingPlace = nil
+        // Le consentement porte sur UNE publication : sans cette remise à
+        // zéro, l'interrupteur ouvert pour un lieu resterait ouvert pour le
+        // suivant, que personne n'aurait examiné.
+        nearbyDiscoverability = .disabled
         pendingAudioURL = nil
         pendingMediaFiles.removeAll()
         pendingThumbnails.removeAll()
@@ -550,7 +572,30 @@ extension FeedView {
                 .padding(.vertical, 10)
             }
             .frame(height: 100)
+
+            if feedOffersNearbyDiscoverability {
+                NearbyDiscoverabilityControl(
+                    choice: $nearbyDiscoverability,
+                    accentColor: MeeshyColors.brandPrimaryHex
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+            }
         }
+    }
+
+    /// Le second opt-in n'est offert que si le lieu lui-même part, ET que
+    /// l'audience permet à quiconque de le trouver.
+    ///
+    /// La règle vit dans `FeedNearbyDiscoverability.offers` — un seul site,
+    /// testable sans monter de vue, partagé avec le jumeau de la feuille.
+    /// Un média n'exclut plus rien : les quatre chemins de publication
+    /// transportent désormais `location` ET la précision.
+    var feedOffersNearbyDiscoverability: Bool {
+        FeedNearbyDiscoverability.offers(
+            hasPlace: pendingPlace != nil,
+            visibility: selectedPostVisibility
+        )
     }
 
     // MARK: - Attachment Tile
@@ -784,6 +829,11 @@ struct FeedComposerSheet: View {
     /// 2026-07-29) — `SharedPlace` porte le nom, `MessageAttachment.location`
     /// ne le portait pas et n'est plus le véhicule.
     @State private var pendingPlace: SharedPlace? = nil
+    /// Le SECOND opt-in de position (spec du 2026-08-02 §2), jumeau de celui
+    /// du composer en ligne de `FeedView` — même règle, même composant, deux
+    /// hôtes. La feuille étant démontée à la publication, il n'y a rien à
+    /// remettre à zéro ici : l'état repart `.disabled` à chaque ouverture.
+    @State private var nearbyDiscoverability: NearbyDiscoverabilityChoice = .disabled
     @State private var pendingMediaFiles: [String: URL] = [:]
     @State private var pendingThumbnails: [String: UIImage] = [:]
     @State private var pendingAudioURL: URL?
@@ -932,6 +982,16 @@ struct FeedComposerSheet: View {
                             ForEach(PostVisibility.allCases) { mode in
                                 Button {
                                     postVisibility = mode.rawValue
+                                    // Un consentement de découvrabilité ne
+                                    // survit pas à un resserrement d'audience
+                                    // qu'il ne couvrait pas : le contrôle
+                                    // disparaît hors PUBLIC, et un opt-in
+                                    // resté ouvert derrière lui repartirait
+                                    // au prochain élargissement sans que
+                                    // personne ne l'ait réexaminé.
+                                    if mode != .public {
+                                        nearbyDiscoverability.reset()
+                                    }
                                     if mode.requiresUserSelection {
                                         audiencePickerMode = mode
                                     } else {
@@ -1041,6 +1101,15 @@ struct FeedComposerSheet: View {
                 // Pending attachments
                 if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia || pendingPlace != nil {
                     sheetAttachmentsRow
+                }
+
+                if offersNearbyDiscoverability {
+                    NearbyDiscoverabilityControl(
+                        choice: $nearbyDiscoverability,
+                        accentColor: MeeshyColors.brandPrimaryHex
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
                 }
 
                 // Upload progress
@@ -1578,8 +1647,19 @@ struct FeedComposerSheet: View {
     /// Le picker émet désormais un `SharedPlace` complet — `MessageAttachment.location`
     /// ne portait ni le nom ni l'adresse et n'est plus le véhicule (Task 11/12).
     private func handleLocationSelection(_ place: SharedPlace) {
-        withAnimation { pendingPlace = place }
+        withAnimation {
+            pendingPlace = place
+            nearbyDiscoverability = FeedNearbyDiscoverability.choiceForNewPlace()
+        }
         HapticFeedback.light()
+    }
+
+    /// Jumeau de `feedOffersNearbyDiscoverability`, même règle, même site.
+    private var offersNearbyDiscoverability: Bool {
+        FeedNearbyDiscoverability.offers(
+            hasPlace: pendingPlace != nil,
+            visibility: selectedPostVisibility
+        )
     }
 
     // MARK: - Publish
@@ -1611,13 +1691,26 @@ struct FeedComposerSheet: View {
         // Capturé avant `onDismiss()` : la feuille est démontée aussitôt, et
         // relire son `@State` depuis la Task ne déclarerait plus personne.
         let declared = declaredReferences
+        // Même capture, même raison — et la mémoire locale du palier s'écrit
+        // ICI, au moment où il SERT : la spec parle du dernier choix
+        // « utilisé », pas du dernier survolé.
+        let nearbyPrecision = offersNearbyDiscoverability
+            ? nearbyDiscoverability.precisionToSend
+            : nil
+        // Le lieu, capturé pour la même raison que `declared` : la feuille est
+        // démontée par `onDismiss()`, et une lecture tardive depuis la Task
+        // d'envoi ne trouverait plus rien.
+        let capturedPlace = pendingPlace
+        if offersNearbyDiscoverability {
+            FeedNearbyDiscoverability.remember(nearbyDiscoverability)
+        }
 
         if !hasFiles || attachments.isEmpty {
             onDismiss()
             HapticFeedback.success()
             if !text.isEmpty || pendingPlace != nil {
                 let lang = composerLanguage
-                Task { await viewModel.createPost(content: text, visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds, originalLanguage: lang, location: pendingPlace, mentions: declared) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds, originalLanguage: lang, location: pendingPlace, mentions: declared, discoverabilityPrecision: nearbyPrecision) }
             }
             return
         }
@@ -1649,7 +1742,8 @@ struct FeedComposerSheet: View {
                     originalLanguage: lang,
                     type: postType,
                     location: pendingPlace,
-                    mentions: declared
+                    mentions: declared,
+                    discoverabilityPrecision: nearbyPrecision
                 )
             }
             return
@@ -1687,7 +1781,7 @@ struct FeedComposerSheet: View {
                 }
                 progressCancellable?.cancel()
 
-                await viewModel.createPost(content: text, type: ReelComposition.defaultType(mimeTypes: attachments.map(\.mimeType), durationsMs: attachments.map(\.duration), forcePlainPost: forcePlainPost).rawValue, visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage, mentions: declared)
+                await viewModel.createPost(content: text, type: ReelComposition.defaultType(mimeTypes: attachments.map(\.mimeType), durationsMs: attachments.map(\.duration), forcePlainPost: forcePlainPost).rawValue, visibility: postVisibility, visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage, location: capturedPlace, mentions: declared, discoverabilityPrecision: nearbyPrecision)
 
                 guard viewModel.publishError == nil else {
                     await MainActor.run {

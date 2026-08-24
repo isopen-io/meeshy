@@ -323,6 +323,25 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// cette file. Une déclaration absente du payload persisté serait perdue au
     /// premier redémarrage — et silencieusement, même en ligne.
     public let mentions: [PostMentionInput]?
+    /// Le SECOND opt-in de position (spec du 2026-08-02 §2) : le grain de
+    /// découvrabilité géographique DEMANDÉ au serveur, indépendant du badge
+    /// gouverné par `location` ci-dessus.
+    ///
+    /// Porté ici pour la même raison que `location` et `mentions`, et c'est ici
+    /// que cela compte le plus : un post TEXTE + lieu — le cas nominal de
+    /// cette fonctionnalité — n'emprunte JAMAIS `PostService.create`, il part
+    /// par cette file (`FeedViewModel.isDurableTextOnly`). Sans ce champ,
+    /// l'utilisateur coche « trouvable à proximité », voit sa publication
+    /// partir, et son consentement disparaît au flush — silencieusement, même
+    /// en ligne.
+    ///
+    /// `nil` — le défaut — vaut « non découvrable » : le gateway laisse alors
+    /// `geoPoint`/`geoPrecision` nuls. Optionnel aussi pour que toute ligne
+    /// persistée avant ce champ continue de décoder.
+    ///
+    /// Rien ici n'arrondit `location` : la coordonnée est persistée puis
+    /// envoyée telle qu'elle a été reçue, le serveur seul quantifie.
+    public let discoverabilityPrecision: DiscoverabilityPrecision?
 
     public init(
         clientMutationId: String,
@@ -337,7 +356,8 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         audioDuration: Int? = nil,
         visibilityUserIds: [String]? = nil,
         location: SharedPlace? = nil,
-        mentions: [PostMentionInput]? = nil
+        mentions: [PostMentionInput]? = nil,
+        discoverabilityPrecision: DiscoverabilityPrecision? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -352,6 +372,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.visibilityUserIds = visibilityUserIds
         self.location = location
         self.mentions = mentions
+        self.discoverabilityPrecision = discoverabilityPrecision
     }
 }
 

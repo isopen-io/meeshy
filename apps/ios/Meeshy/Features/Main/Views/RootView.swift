@@ -343,6 +343,9 @@ struct RootView: View {
                     case .peopleDiscovery(let initialTab):
                         PeopleDiscoveryView(initialTab: initialTab)
                             .navigationBarHidden(true)
+                    case .nearbyDiscovery(let initialCoordinate):
+                        NearbyDiscoveryView(initialCoordinate: initialCoordinate?.coordinate)
+                            .navigationBarHidden(true)
                     case .communityList:
                         CommunityListView(
                             onSelectCommunity: { community in

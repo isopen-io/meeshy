@@ -102,6 +102,75 @@ final class FeedPostsMapSourceGuardTests: XCTestCase {
         return nil
     }
 
+    /// **Troisième entrée du même slot : la découverte par PROXIMITÉ**
+    /// (spec du 2026-08-02 §4 — « icône persistante dans la toolbar du Feed,
+    /// entrée principale »).
+    ///
+    /// Elle est posée sur les DEUX chemins, pour la raison qui a motivé cette
+    /// garde : la paire Réels/carte avait divergé exactement ainsi, un bouton
+    /// sur iPhone, l'autre sur iPad, jamais les deux.
+    ///
+    /// Distincte de la carte juste à sa gauche : celle-ci montre les posts DU
+    /// FEED qui portent un lieu, celle-là interroge `/posts/nearby` pour tout
+    /// ce qui est découvrable autour.
+    func test_feedHeader_carriesNearbyDiscoveryEntryPoint() throws {
+        for file in ["FeedView.swift", "RootViewComponents.swift"] {
+            let feed = try source(file)
+            XCTAssertTrue(
+                feed.contains("accessibilityIdentifier(\"feed.header.nearby\")"),
+                "\(file) : l'entrée « à proximité » doit rester identifiable."
+            )
+            XCTAssertTrue(
+                feed.contains("router.push(.nearbyDiscovery())"),
+                "\(file) : l'entrée de toolbar pousse la route SANS coordonnée — " +
+                "elle part de la position de l'appareil, pas d'un lieu affiché."
+            )
+
+            let actions = try XCTUnwrap(
+                block(after: "private var feedHeaderActions: some View", in: feed),
+                "\(file) : les actions du header ont disparu."
+            )
+            let map = try XCTUnwrap(
+                actions.range(of: "postsMapButton"),
+                "\(file) : le bouton carte doit rester dans les actions du header."
+            )
+            let nearby = try XCTUnwrap(
+                actions.range(of: "nearbyButton"),
+                "\(file) : la découverte à proximité vit dans le MÊME slot que les " +
+                "deux autres lectures — pas dans un menu, pas derrière un appui long."
+            )
+            XCTAssertTrue(
+                map.lowerBound < nearby.lowerBound,
+                "\(file) : la découverte à proximité se pose À DROITE de la carte des posts."
+            )
+        }
+    }
+
+    /// L'action contextuelle « Voir près d'ici » sur un badge de position déjà
+    /// affiché (spec §4, deuxième point d'entrée), et le fait qu'elle porte
+    /// bien la COORDONNÉE du lieu touché — sans quoi elle rouvrirait l'écran
+    /// centré sur l'utilisateur, ce qui n'est pas ce qu'on a demandé.
+    func test_postLocationBadge_offersTheSeeNearbyAction() throws {
+        let card = try source("FeedPostCard.swift")
+        XCTAssertTrue(
+            card.contains("SeeNearbyContextMenu(place: place, onSeeNearby: onSeeNearby)"),
+            "FeedPostCard : le badge de position doit porter l'action « Voir près d'ici »."
+        )
+        XCTAssertFalse(
+            card.contains("@EnvironmentObject private var router"),
+            "FeedPostCard reste une feuille sans @EnvironmentObject : l'action passe " +
+            "par une fermeture optionnelle fournie par l'hôte."
+        )
+        for file in ["FeedView.swift", "RootViewComponents.swift"] {
+            let feed = try source(file)
+            XCTAssertTrue(
+                feed.contains("router.push(.nearbyDiscovery(initialCoordinate: RouteCoordinate("),
+                "\(file) : « Voir près d'ici » doit pousser la route PRÉ-CENTRÉE sur le " +
+                "lieu touché — une route sans coordonnée rouvrirait la carte ailleurs."
+            )
+        }
+    }
+
     func test_mapView_clustersAndFitsAnnotations() throws {
         let map = try source("FeedPostsMapView.swift")
         XCTAssertTrue(

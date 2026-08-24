@@ -107,8 +107,23 @@ public struct CreatePostRequest: Encodable {
     /// id de `mediaIds` ci-dessus, ignoré côté gateway pour tout id qui n'y
     /// figure pas (miroir de `CreatePostSchema.mediaAlt`).
     public let mediaAlt: [String: String]?
+    /// Grain de découvrabilité géographique DEMANDÉ — le second opt-in de la
+    /// spec du 2026-08-02, INDÉPENDANT de `location` ci-dessus : afficher un
+    /// lieu sur un contenu et rendre ce contenu trouvable à proximité sont
+    /// deux choix séparés, l'un n'impliquant jamais l'autre.
+    ///
+    /// Ce champ ne transporte QUE le niveau d'arrondi souhaité. La
+    /// coordonnée part EXACTE dans `location` et le serveur seul la quantifie
+    /// avant d'écrire `Post.geoPoint` et `Post.geoPrecision`.
+    ///
+    /// `nil` OMET la clé, et son absence vaut « non découvrable » côté
+    /// gateway. Ce n'est pas un détail d'encodage : le schéma est un
+    /// `z.enum().optional()`, qui REJETTE un `null` explicite — et un défaut
+    /// non nul rendrait trouvable un contenu que personne n'a choisi de
+    /// rendre trouvable.
+    public let discoverabilityPrecision: DiscoverabilityPrecision?
 
-    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil, mediaAlt: [String: String]? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil, mediaAlt: [String: String]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
@@ -120,6 +135,7 @@ public struct CreatePostRequest: Encodable {
         self.allowSoundExtraction = allowSoundExtraction
         self.mentions = mentions
         self.mediaAlt = mediaAlt
+        self.discoverabilityPrecision = discoverabilityPrecision
     }
 }
 

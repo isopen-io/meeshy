@@ -543,7 +543,14 @@ class FeedViewModel: ObservableObject {
     ///   écrire — note sous le contenu, métadonnée silencieuse. `nil` quand il
     ///   n'en a déclaré aucune : le serveur relit alors les `@handle` du texte
     ///   lui-même, et déclarer `[]` lui ferait entendre un effacement.
-    func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil) async {
+    /// - Parameter discoverabilityPrecision: le SECOND opt-in de position
+    ///   (spec du 2026-08-02 §2), indépendant du badge gouverné par
+    ///   `location`. `nil` — le défaut — laisse le contenu non trouvable ;
+    ///   aucun appelant ne doit poser une valeur que l'utilisateur n'a pas
+    ///   choisie. Il voyage sur les DEUX branches ci-dessous : la file durable
+    ///   emporte le cas nominal (un post texte + lieu), le chemin direct celui
+    ///   d'une position SEULE, sans texte.
+    func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil) async {
         publishError = nil
         publishSuccess = false
 
@@ -564,7 +571,7 @@ class FeedViewModel: ObservableObject {
         if isDurableTextOnly,
            let text = content,
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            await enqueueDurableTextPost(content: text, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, location: location, mentions: mentions)
+            await enqueueDurableTextPost(content: text, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, location: location, mentions: mentions, discoverabilityPrecision: discoverabilityPrecision)
             return
         }
 
@@ -582,7 +589,10 @@ class FeedViewModel: ObservableObject {
                 mobileTranscription: mobileTranscription,
                 repostOfId: nil,
                 location: location,
-                mentions: mentions
+                mentions: mentions,
+                allowSoundExtraction: nil,
+                mediaAlt: nil,
+                discoverabilityPrecision: discoverabilityPrecision
             )
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             posts.insert(feedPost, at: 0)
@@ -649,7 +659,7 @@ class FeedViewModel: ObservableObject {
     /// echoes the cmid on `post:created`, where FeedViewModel reconciles the
     /// optimistic post in place (cmid -> server id). Rolls back if the outbox
     /// refuses the row synchronously, or later exhausts its retry budget.
-    private func enqueueDurableTextPost(content: String, visibility: String, visibilityUserIds: [String]? = nil, originalLanguage: String?, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil) async {
+    private func enqueueDurableTextPost(content: String, visibility: String, visibilityUserIds: [String]? = nil, originalLanguage: String?, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil) async {
         let cmid = ClientMutationId.generate()
         let currentUser = AuthManager.shared.currentUser
         var optimistic = FeedPost(
@@ -677,7 +687,12 @@ class FeedViewModel: ObservableObject {
             location: location,
             // `nil` et non `[]` quand rien n'est déclaré : le payload persisté
             // porte un VERDICT, et « je n'en parle pas » n'est pas « efface ».
-            mentions: (mentions?.isEmpty ?? true) ? nil : mentions
+            mentions: (mentions?.isEmpty ?? true) ? nil : mentions,
+            // Le consentement de découvrabilité survit au flush pour la même
+            // raison que `location` : sans lui ici, cocher « trouvable à
+            // proximité » sur un post TEXTE — le cas nominal, qui n'emprunte
+            // que cette file — n'aurait aucun effet, et rien ne le dirait.
+            discoverabilityPrecision: discoverabilityPrecision
         )
         do {
             try await offlineQueue.enqueue(.createPost, payload: payload, conversationId: nil)
@@ -748,6 +763,10 @@ class FeedViewModel: ObservableObject {
     /// call sites can pass `pendingPlace` — Task 17 a donné à `CreatePostPayload`
     /// / `enqueuePostMedia` un champ `location`, donc un média posté hors-ligne
     /// avec une position attachée la conserve désormais jusqu'au flush.
+    ///
+    /// `discoverabilityPrecision` fait le même trajet, et devait le faire :
+    /// sans lui, la position d'un REEL hors ligne survivait au flush pendant
+    /// que le consentement, lui, se perdait entre le composer et la file.
     func createOfflineMediaPost(
         localMediaURLs: [URL],
         content: String?,
@@ -756,7 +775,8 @@ class FeedViewModel: ObservableObject {
         originalLanguage: String? = nil,
         type: String = "POST",
         location: SharedPlace? = nil,
-        mentions: [PostMentionInput]? = nil
+        mentions: [PostMentionInput]? = nil,
+        discoverabilityPrecision: DiscoverabilityPrecision? = nil
     ) async {
         publishError = nil
         publishSuccess = false
@@ -766,7 +786,8 @@ class FeedViewModel: ObservableObject {
                 visibility: visibility,
                 originalLanguage: originalLanguage,
                 location: location,
-                mentions: mentions
+                mentions: mentions,
+                discoverabilityPrecision: discoverabilityPrecision
             )
             return
         }
@@ -798,7 +819,12 @@ class FeedViewModel: ObservableObject {
                 originalLanguage: originalLanguage,
                 type: type,
                 location: location,
-                mentions: (mentions?.isEmpty ?? true) ? nil : mentions
+                mentions: (mentions?.isEmpty ?? true) ? nil : mentions,
+                // Voyage avec `location`, et pour la même raison : un REEL
+                // composé hors ligne emportait sa position mais jamais son
+                // consentement, donc le gateway laissait `geoPoint` nul et la
+                // case cochée par l'utilisateur n'avait aucun effet.
+                discoverabilityPrecision: discoverabilityPrecision
             )
             publishSuccess = true
             observeOutcome(cmid: cmid, rollback: { [weak self] in

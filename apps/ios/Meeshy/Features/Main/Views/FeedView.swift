@@ -137,6 +137,16 @@ struct FeedView: View {
     /// nom et l'adresse ; `MessageAttachment.location` ne les portait pas et
     /// n'est plus le véhicule (Task 11/12, 2026-07-29).
     @State var pendingPlace: SharedPlace? = nil
+    /// Le SECOND opt-in de position (spec du 2026-08-02 §2) : « rendre ce
+    /// contenu trouvable à proximité ». INDÉPENDANT de `pendingPlace`, qui
+    /// gouverne le badge affiché et ne bouge pas — on peut afficher un lieu
+    /// sans être trouvable, et l'inverse.
+    ///
+    /// `.disabled` à l'ouverture, et reconstruit à chaque choix de lieu :
+    /// l'état porte la mémoire PRÉ-SÉLECTIONNÉE et les paliers offerts, tous
+    /// deux lus au moment où le lieu entre. L'interrupteur, lui, repart fermé
+    /// à chaque publication — le consentement porte sur UNE publication.
+    @State var nearbyDiscoverability: NearbyDiscoverabilityChoice = .disabled
     @State var pendingMediaFiles: [String: URL] = [:]
     @State var pendingThumbnails: [String: UIImage] = [:]
     @State var pendingAudioURL: URL?
@@ -645,6 +655,7 @@ struct FeedView: View {
         HStack(spacing: 8) {
             reelsButton
             postsMapButton
+            nearbyButton
         }
         // La marge droite vient du header (`CollapsibleHeaderMetrics.trailingActionsInset`),
         // pas d'un padding local : posée ici, elle divergeait de celle de la
@@ -686,6 +697,27 @@ struct FeedView: View {
         .accessibilityLabel(String(localized: "feed.map.open", defaultValue: "Posts sur la carte", bundle: .main))
         .accessibilityHint(String(localized: "feed.map.open.hint", defaultValue: "Affiche les posts géolocalisés sur un plan", bundle: .main))
         .accessibilityIdentifier("feed.header.map")
+    }
+
+    /// Troisième entrée du header : la découverte par PROXIMITÉ. Distincte de
+    /// la carte des posts juste à sa gauche, et il faut le dire — celle-ci
+    /// montre les posts DU FEED qui portent un lieu, celle-là interroge le
+    /// serveur pour tout ce qui est découvrable AUTOUR, feed ou pas.
+    private var nearbyButton: some View {
+        Button {
+            HapticFeedback.light()
+            router.push(.nearbyDiscovery())
+        } label: {
+            Image(systemName: "dot.radiowaves.left.and.right")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(MeeshyColors.indigo500)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "feed.nearby.open", defaultValue: "Publications à proximité", bundle: .main))
+        .accessibilityHint(String(localized: "feed.nearby.open.hint", defaultValue: "Ouvre la carte des publications trouvables autour de vous", bundle: .main))
+        .accessibilityIdentifier("feed.header.nearby")
     }
 
     // MARK: - Composer Placeholder
@@ -932,6 +964,12 @@ struct FeedView: View {
         let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
         return FeedPostCard(
             post: post,
+            onSeeNearby: { place in
+                HapticFeedback.light()
+                router.push(.nearbyDiscovery(initialCoordinate: RouteCoordinate(
+                    latitude: place.latitude, longitude: place.longitude
+                )))
+            },
             isCommentsExpanded: expandedComments.contains(post.id),
             isLiked: postLikedIds.contains(post.id),
             displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
@@ -1449,6 +1487,16 @@ struct FeedView: View {
                             ForEach(PostVisibility.allCases) { mode in
                                 Button {
                                     postVisibility = mode.rawValue
+                                    // Un consentement de découvrabilité ne
+                                    // survit pas à un resserrement d'audience
+                                    // qu'il ne couvrait pas : le contrôle
+                                    // disparaît hors PUBLIC, et un opt-in
+                                    // resté ouvert derrière lui repartirait
+                                    // au prochain élargissement sans que
+                                    // personne ne l'ait réexaminé.
+                                    if mode != .public {
+                                        nearbyDiscoverability.reset()
+                                    }
                                     if mode.requiresUserSelection {
                                         audiencePickerMode = mode
                                     } else {

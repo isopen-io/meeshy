@@ -49,6 +49,17 @@ public protocol PostServiceProviding: Sendable {
     func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost
     /// Création porteuse d'une AUDIENCE NOMMÉE (`EXCEPT`/`ONLY`).
     func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost
+    /// Création complète — audience nommée, extraction de son, texte
+    /// alternatif ET grain de découvrabilité géographique. Requirement
+    /// SÉPARÉE, même patron que `create(… mentions:)` : les protocoles Swift
+    /// ne portent pas de valeur par défaut, et tout double de test aurait
+    /// cessé de conformer d'un coup.
+    ///
+    /// `discoverabilityPrecision` est le SECOND opt-in de position, distinct
+    /// du badge gouverné par `location` : `nil` (le défaut partout ailleurs)
+    /// laisse le contenu non trouvable. Aucun appelant ne doit poser une
+    /// valeur que l'utilisateur n'a pas choisie.
+    func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?, discoverabilityPrecision: DiscoverabilityPrecision?) async throws -> APIPost
     /// Même création, plus l'opt-in d'extraction de bande-son vidéo
     /// (`Post.allowSoundExtraction`) et le texte alternatif par média
     /// (`PostMedia.alt`, accessibilité — clé = un id de `mediaIds`).
@@ -249,6 +260,20 @@ public extension PostServiceProviding {
         try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location)
     }
 
+    /// Défaut : un conformeur qui n'implémente pas la signature complète
+    /// (doubles de test existants) reste valide — l'extraction de son, le
+    /// texte alternatif et le grain de découvrabilité sont alors ignorés,
+    /// l'audience nommée étant conservée. `PostService` la surcharge
+    /// réellement, et c'est là — sur le corps remis à `POST /posts` — que la
+    /// garantie qui compte est mesurée : un double ne parle à aucun serveur.
+    ///
+    /// Ignorer `discoverabilityPrecision` va toujours dans le sens
+    /// PROTECTEUR : un conformeur muet publie du non-découvrable, jamais du
+    /// découvrable par accident.
+    func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?, discoverabilityPrecision: DiscoverabilityPrecision?) async throws -> APIPost {
+        try await create(content: content, type: type, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions)
+    }
+
     /// Défaut : un conformeur qui ne sait pas porter d'audience nommée
     /// (mocks) retombe sur la signature sans liste — la visibilité part,
     /// la liste est ignorée. `PostService` la surcharge réellement.
@@ -360,14 +385,12 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions, allowSoundExtraction: nil, mediaAlt: nil)
     }
 
-    /// Seule surcharge qui envoie réellement `allowSoundExtraction` ET
-    /// `mediaAlt` au gateway — le composer vidéo (opt-in extraction de son) et
-    /// l'inspecteur d'accessibilité (texte alternatif par média) passent par
-    /// ici.
+    /// Surcharge porteuse de `allowSoundExtraction` ET `mediaAlt` — le
+    /// composer vidéo (opt-in extraction de son) et l'inspecteur
+    /// d'accessibilité (texte alternatif par média) passent par ici. Elle
+    /// n'assemble plus rien elle-même : elle délègue au terminal unique.
     public func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost {
-        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, allowSoundExtraction: allowSoundExtraction, mentions: mentions, mediaAlt: mediaAlt)
-        let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
-        return response.data
+        try await create(content: content, type: type, visibility: visibility, visibilityUserIds: nil, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions, allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt, discoverabilityPrecision: nil)
     }
 
     /// Création porteuse d'une AUDIENCE NOMMÉE (`EXCEPT`/`ONLY`).
@@ -378,8 +401,32 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     /// au composer story et hors d'atteinte du composer post, sans que rien
     /// ne le dise. Le gateway, lui, les valide depuis toujours
     /// (`CreatePostSchema` rejette un EXCEPT/ONLY sans destinataire).
+    ///
+    /// C'est LA surcharge que `FeedViewModel.createPost` appelle : tout champ
+    /// neuf qui n'arrive pas jusqu'ici n'arrive nulle part en production.
     public func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost {
-        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, visibilityUserIds: visibilityUserIds, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions)
+        try await create(content: content, type: type, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions, allowSoundExtraction: nil, mediaAlt: nil, discoverabilityPrecision: nil)
+    }
+
+    /// TERMINAL UNIQUE de la création de post — le seul site qui assemble un
+    /// `CreatePostRequest` et le remet à `POST /posts`.
+    ///
+    /// Il y en avait DEUX, qui ne se déléguaient pas l'un à l'autre : celui
+    /// porteur de `allowSoundExtraction`/`mediaAlt` et celui porteur de
+    /// `visibilityUserIds`. Ils avaient déjà commencé à diverger — le second
+    /// ne transportait ni l'opt-in d'extraction ni le texte alternatif — et
+    /// tout champ ajouté au « plus large » des deux manquait le seul chemin
+    /// que l'application emprunte réellement. Les deux délèguent désormais
+    /// ici : un champ neuf ne peut plus arriver à moitié.
+    ///
+    /// - Parameter discoverabilityPrecision: le grain de découvrabilité
+    ///   géographique DEMANDÉ, indépendant du badge de position affiché.
+    ///   `nil` — le défaut de toutes les surcharges ci-dessus — omet la clé,
+    ///   et le gateway laisse alors `geoPoint`/`geoPrecision` nuls. Rien ici
+    ///   n'arrondit `location` : la coordonnée part telle qu'elle a été
+    ///   remise, le serveur seul quantifie.
+    public func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?, discoverabilityPrecision: DiscoverabilityPrecision?) async throws -> APIPost {
+        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, visibilityUserIds: visibilityUserIds, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, allowSoundExtraction: allowSoundExtraction, mentions: mentions, mediaAlt: mediaAlt, discoverabilityPrecision: discoverabilityPrecision)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }

@@ -8,6 +8,17 @@ import MeeshyUI
 // MARK: - Feed Post Card
 struct FeedPostCard: View {
     let post: FeedPost
+    /// « Voir près d'ici » sur le badge de position du post (spec du
+    /// 2026-08-02 §4 — points d'entrée). Fermeture OPTIONNELLE, jamais un
+    /// `@EnvironmentObject` : cette carte est une feuille `.equatable()` et
+    /// n'observe rien. Les hôtes qui ont un routeur la branchent ; les autres
+    /// (aperçus, listes de profil) restent valides sans rien changer, et le
+    /// menu ne s'affiche simplement pas.
+    ///
+    /// L'action est INDÉPENDANTE de l'opt-in de découvrabilité : c'est un
+    /// raccourci vers une coordonnée DÉJÀ affichée publiquement, pas une
+    /// autorisation.
+    var onSeeNearby: ((SharedPlace) -> Void)? = nil
     var isCommentsExpanded: Bool = false
     /// Socket-driven liked state. When nil, falls back to post.isLiked (legacy path).
     var isLiked: Bool? = nil
@@ -569,17 +580,20 @@ struct FeedPostCard: View {
                 // largeur + texte en overlay quand la position est le seul
                 // contenu visuel, sinon sticker compact — cliquables tous deux.
                 if let place = post.location {
-                    if isLocationOnlyPost {
-                        FeedPostLocationMapCard(
-                            place: place,
-                            overlayText: effectiveContent.isEmpty ? nil : effectiveContent,
-                            onOpen: { fullscreenPlace = BubbleFullscreenPlace(place: place) }
-                        )
-                    } else {
-                        FeedPostLocationSticker(place: place) {
-                            fullscreenPlace = BubbleFullscreenPlace(place: place)
+                    Group {
+                        if isLocationOnlyPost {
+                            FeedPostLocationMapCard(
+                                place: place,
+                                overlayText: effectiveContent.isEmpty ? nil : effectiveContent,
+                                onOpen: { fullscreenPlace = BubbleFullscreenPlace(place: place) }
+                            )
+                        } else {
+                            FeedPostLocationSticker(place: place) {
+                                fullscreenPlace = BubbleFullscreenPlace(place: place)
+                            }
                         }
                     }
+                    .modifier(SeeNearbyContextMenu(place: place, onSeeNearby: onSeeNearby))
                 }
 
                 // Actions bar (not inside the tap target)

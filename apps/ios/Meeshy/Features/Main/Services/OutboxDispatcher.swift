@@ -489,7 +489,8 @@ struct OutboxDispatcher: OutboxDispatching {
             audioDuration: payload.audioDuration,
             visibilityUserIds: payload.visibilityUserIds,
             location: payload.location,
-            mentions: payload.mentions
+            mentions: payload.mentions,
+            discoverabilityPrecision: payload.discoverabilityPrecision
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/posts",
@@ -1325,6 +1326,13 @@ nonisolated struct CreatePostBody: Encodable {
     /// courant de l'app, ne produirait rien : ces posts-là n'empruntent que
     /// ce chemin.
     let mentions: [PostMentionInput]?
+    /// Le SECOND opt-in de position — même clé top-level `discoverabilityPrecision`
+    /// que le chemin direct (`CreatePostRequest`). Sans elle ICI, le
+    /// consentement survivrait jusqu'au décodage de `CreatePostPayload` puis
+    /// serait jeté en silence à l'ultime saut réseau : exactement le défaut
+    /// que `location` a payé avant lui, et sur le chemin que prend le cas
+    /// nominal (post TEXTE + lieu).
+    let discoverabilityPrecision: DiscoverabilityPrecision?
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -1341,10 +1349,17 @@ nonisolated struct CreatePostBody: Encodable {
         // Vide vaut absent à la CRÉATION : il n'existe encore aucune ligne à
         // effacer, et le `[]` du tri-état n'a de sens qu'à l'édition.
         if let mentions, !mentions.isEmpty { try container.encode(mentions, forKey: .mentions) }
+        // Encodé seulement quand il existe : le schéma gateway est un
+        // `z.enum().optional()`, qui REJETTE un `null` explicite — et
+        // l'ABSENCE de la clé vaut « non découvrable ».
+        if let discoverabilityPrecision {
+            try container.encode(discoverabilityPrecision, forKey: .discoverabilityPrecision)
+        }
     }
 
     enum CodingKeys: String, CodingKey {
         case content, mediaIds, visibility, originalLanguage, type
         case moodEmoji, audioUrl, audioDuration, visibilityUserIds, location, mentions
+        case discoverabilityPrecision
     }
 }
