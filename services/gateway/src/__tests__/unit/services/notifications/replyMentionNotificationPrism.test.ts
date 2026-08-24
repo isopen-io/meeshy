@@ -1,19 +1,18 @@
 /**
- * Cycle 122 — les éventails RÉPONSE et MENTION n'appliquaient AUCUN Prisme.
+ * Cycle 122 — les DEUX autres éventails de `messageNotificationFanOut`
+ * n'appliquaient AUCUN Prisme.
  *
- * Suivi MESURÉ du cycle 121, qui l'avait relevé en ouvrant les deux méthodes :
- * `createReplyNotification` et `createMentionNotification` posaient
- * `content: params.messagePreview` — l'ORIGINAL — et ne poussaient ni
- * `translatedContent` ni `translatedLanguage`. Défaut DISTINCT de celui du
- * cycle 121 : absence du Prisme, pas un mauvais rang.
+ * Suivi MESURÉ du cycle 121 (leçon 264), pas hérité : `createReplyNotification`
+ * et `createMentionNotification` posaient `content: params.messagePreview` —
+ * l'original — et ne poussaient ni `translatedContent` ni `translatedLanguage`.
+ * Défaut DISTINCT de celui du cycle 121, qui était un mauvais RANG : ici c'est
+ * l'ABSENCE de la descente. Une bannière de réponse ou de mention arrivait donc
+ * toujours dans la langue de l'expéditeur, pendant que la bannière de message
+ * simple — même conversation, même seconde, même destinataire — servait la
+ * traduction depuis le cycle 121.
  *
- * Conséquence produit : une bannière de réponse ou de mention arrivait toujours
- * dans la langue de l'expéditeur, pendant que la ligne de liste de la même
- * conversation — servie par `resolveLastMessagePreview`, qui descend depuis le
- * cycle 118 — était traduite.
- *
- * Les témoins assertent sur la charge REMISE à APNs, jamais sur un calcul
- * intermédiaire : c'est la valeur SERVIE.
+ * Les témoins assertent sur la charge REMISE à APNs (`pushService.sendToUser`),
+ * jamais sur un calcul intermédiaire : c'est la valeur SERVIE.
  *
  * @jest-environment node
  */
@@ -26,7 +25,6 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 
 const SENDER_ID = 'sender_id';
 const RECIPIENT_ID = 'recipient_id';
-const SECOND_RECIPIENT_ID = 'recipient_2_id';
 const MESSAGE_ID = 'msg_xyz';
 const CONVERSATION_ID = 'conv_x';
 
@@ -37,19 +35,26 @@ type LangPrefs = {
   deviceLocale?: string | null;
 };
 
-/**
- * Le double `user.findUnique` répond selon l'id DEMANDÉ : l'acteur et le
- * destinataire sont deux lectures distinctes, et un double qui rend le même
- * profil aux deux ferait résoudre le prisme du LECTEUR depuis les préférences
- * de l'expéditeur.
- */
-const makePrismaMock = (opts: {
-  recipients: Readonly<Record<string, LangPrefs>>;
+type Scenario = {
+  recipient: LangPrefs;
   translations: unknown;
   originalLanguage: string | null;
-}) => ({
+};
+
+/**
+ * Le double `user.findUnique` répond selon l'id DEMANDÉ — cf. le harnais du
+ * cycle 121 : un double qui rend le même profil aux deux résoudrait le prisme
+ * du destinataire depuis les préférences de l'expéditeur.
+ */
+const makePrismaMock = (opts: Scenario) => ({
   message: {
     findUnique: jest.fn().mockResolvedValue({
+      deletedAt: null,
+      expiresAt: null,
+      isViewOnce: false,
+      viewOnceCount: 0,
+      createdAt: new Date('2026-08-24T10:00:00Z'),
+      messageType: 'text',
       translations: opts.translations,
       originalLanguage: opts.originalLanguage,
     }),
@@ -65,21 +70,20 @@ const makePrismaMock = (opts: {
     count: jest.fn().mockResolvedValue(0),
   },
   user: {
-    findUnique: jest.fn().mockImplementation(({ where }: any) => {
-      const prefs = where?.id ? opts.recipients[where.id] : undefined;
-      return Promise.resolve(
-        prefs
-          ? { id: where.id, ...prefs }
+    findUnique: jest.fn().mockImplementation(({ where }: any) =>
+      Promise.resolve(
+        where?.id === RECIPIENT_ID
+          ? { id: RECIPIENT_ID, ...opts.recipient }
           : { id: SENDER_ID, username: 'alice', displayName: 'Alice', avatar: null }
-      );
-    }),
+      )
+    ),
     findMany: jest.fn().mockResolvedValue([]),
   },
   conversation: {
     findUnique: jest.fn().mockResolvedValue({ id: CONVERSATION_ID, title: 'Test Conv', type: 'group', avatar: null }),
   },
-  userConversationPreferences: { findMany: jest.fn().mockResolvedValue([]) },
   userPreferences: { findUnique: jest.fn().mockResolvedValue(null) },
+  userConversationPreferences: { findMany: jest.fn().mockResolvedValue([]) },
 }) as any;
 
 const makeIO = () => ({
@@ -89,94 +93,403 @@ const makeIO = () => ({
   emit: jest.fn(),
 }) as any;
 
-const makeService = (prisma: any) => {
+/** La charge réellement remise à APNs, ou `undefined` si rien n'est parti. */
+const servedPush = (sendToUser: jest.Mock): Record<string, any> | undefined =>
+  sendToUser.mock.calls[0]?.[0]?.payload;
+
+const servedPushData = (sendToUser: jest.Mock): Record<string, unknown> | undefined =>
+  servedPush(sendToUser)?.data;
+
+const makeService = (opts: Scenario) => {
+  const prisma = makePrismaMock(opts);
   const sendToUser = jest.fn().mockResolvedValue(undefined);
   const service = new NotificationService(prisma);
   service.setSocketIO(makeIO());
   service.setPushNotificationService({ sendToUser } as any);
-  return { service, sendToUser };
+  return { prisma, sendToUser, service };
 };
 
-/** Ce qui a été remis à APNs pour un destinataire donné. */
-const pushFor = (sendToUser: jest.Mock, userId: string) => {
-  const call = sendToUser.mock.calls.find(c => c[0]?.userId === userId);
-  return { body: call?.[0]?.payload?.body as string | undefined, data: call?.[0]?.payload?.data };
+const runReply = async (opts: Scenario) => {
+  const { service, sendToUser, prisma } = makeService(opts);
+  const notification = await service.createReplyNotification({
+    recipientUserId: RECIPIENT_ID,
+    replierUserId: SENDER_ID,
+    messageId: MESSAGE_ID,
+    conversationId: CONVERSATION_ID,
+    messagePreview: 'Hello',
+  });
+  return { notification, data: servedPushData(sendToUser), push: servedPush(sendToUser), prisma };
 };
 
-describe('createReplyNotification — la bannière de RÉPONSE descend le Prisme', () => {
-  const runReply = async (opts: {
-    recipient: LangPrefs;
-    translations: unknown;
-    originalLanguage: string | null;
-    previewIsMessageContent?: boolean;
-    messagePreview?: string;
-  }) => {
-    const prisma = makePrismaMock({
-      recipients: { [RECIPIENT_ID]: opts.recipient },
-      translations: opts.translations,
-      originalLanguage: opts.originalLanguage,
-    });
-    const { service, sendToUser } = makeService(prisma);
-    const notification = await service.createReplyNotification({
-      recipientUserId: RECIPIENT_ID,
-      replierUserId: SENDER_ID,
-      messageId: MESSAGE_ID,
-      conversationId: CONVERSATION_ID,
-      messagePreview: opts.messagePreview ?? 'Hello',
-      originalMessageId: 'msg_original',
-      ...(opts.previewIsMessageContent === undefined
-        ? {}
-        : { previewIsMessageContent: opts.previewIsMessageContent }),
-    });
-    return { notification, ...pushFor(sendToUser, RECIPIENT_ID), prisma };
-  };
+const runMention = async (opts: Scenario) => {
+  const { service, sendToUser, prisma } = makeService(opts);
+  const notification = await service.createMentionNotification({
+    mentionedUserId: RECIPIENT_ID,
+    mentionerUserId: SENDER_ID,
+    messageId: MESSAGE_ID,
+    conversationId: CONVERSATION_ID,
+    messagePreview: 'Hello',
+  });
+  return { notification, data: servedPushData(sendToUser), push: servedPush(sendToUser), prisma };
+};
 
-  it('sert la traduction du rang 1', async () => {
-    const { body, data } = await runReply({
-      recipient: { systemLanguage: 'fr' },
-      translations: { fr: { text: 'Bonjour' } },
+describe.each([
+  ['createReplyNotification', runReply],
+  ['createMentionNotification', runMention],
+] as const)('%s — le Prisme de la bannière DESCEND les rangs', (_name, run) => {
+  it('pousse la traduction du rang 1 quand elle existe', async () => {
+    const { data } = await run({
+      recipient: { systemLanguage: 'fr', regionalLanguage: 'es' },
+      translations: { fr: { text: 'Bonjour' }, es: { text: 'Hola' } },
       originalLanguage: 'en',
     });
 
-    expect(body).toBe('Bonjour');
+    expect(data?.translatedContent).toBe('Bonjour');
     expect(data?.translatedLanguage).toBe('fr');
   });
 
-  it('DESCEND jusqu\'à la locale appareil — le rang 4', async () => {
-    const { body, data } = await runReply({
+  it('DESCEND au rang 2 quand le rang 1 n\'a pas de traduction', async () => {
+    const { data } = await run({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+    });
+
+    expect(data?.translatedContent).toBe('Hola');
+    expect(data?.translatedLanguage).toBe('es');
+  });
+
+  it('DESCEND jusqu\'à la locale appareil — le rang 4 du Prisme', async () => {
+    // Cas NOMINAL depuis l'extension du Prisme (2026-05-26).
+    const { data } = await run({
       recipient: { systemLanguage: 'de', deviceLocale: 'pt-BR' },
       translations: { pt: { text: 'Olá' } },
       originalLanguage: 'en',
     });
 
-    expect(body).toBe('Olá');
     expect(data?.translatedContent).toBe('Olá');
+    expect(data?.translatedLanguage).toBe('pt');
   });
 
-  it('garde le CADRAGE au rang 1 pendant que le contenu descend', async () => {
-    const { body, notification } = await runReply({
-      recipient: { systemLanguage: 'de', deviceLocale: 'pt-BR' },
-      translations: { pt: { text: 'Olá' } },
-      originalLanguage: 'en',
-    });
-
-    expect(body).toBe('Olá');
-    expect((notification as any)?.lang ?? 'de').toBe('de');
-  });
-
-  it('ne sert AUCUNE traduction quand la langue d\'origine gagne à son rang (règle #3)', async () => {
-    const { body, data } = await runReply({
+  it('ne pousse AUCUNE traduction quand la langue d\'origine gagne avant elle', async () => {
+    // Règle critique #3 — garde le mode d'échec du CORRECTIF : une descente
+    // naïve servirait « Bonjour » là où le message est déjà écrit dans la
+    // langue de rang 2 du lecteur.
+    const { data } = await run({
       recipient: { systemLanguage: 'de', regionalLanguage: 'en', customDestinationLanguage: 'fr' },
       translations: { fr: { text: 'Bonjour' } },
       originalLanguage: 'en',
     });
 
-    expect(body).toBe('Hello');
+    expect(data?.translatedContent).toBeUndefined();
+    expect(data?.translatedLanguage).toBeUndefined();
+  });
+
+  it('ne retombe sur AUCUNE traduction quand rien ne matche le prisme (règle #1)', async () => {
+    const { data } = await run({
+      recipient: { systemLanguage: 'de' },
+      translations: { es: { text: 'Hola' }, it: { text: 'Ciao' } },
+      originalLanguage: 'en',
+    });
+
     expect(data?.translatedContent).toBeUndefined();
   });
 
-  it('ne substitue PAS dans un aperçu protégé', async () => {
-    const { body } = await runReply({
+  it('ne pousse jamais une traduction CHIFFRÉE, et descend au rang suivant', async () => {
+    const { data } = await run({
+      recipient: { systemLanguage: 'fr', regionalLanguage: 'es' },
+      translations: { fr: { text: 'U2FsdGVk…', isEncrypted: true }, es: { text: 'Hola' } },
+      originalLanguage: 'en',
+    });
+
+    expect(data?.translatedContent).toBe('Hola');
+    expect(data?.translatedLanguage).toBe('es');
+  });
+
+  it('RÉÉCRIT le corps servi : c\'est le seul texte qu\'un lecteur voit', async () => {
+    // Ce témoin a d'abord gelé l'inverse (« le corps original reste le corps »)
+    // sur deux prémisses, mesurées depuis :
+    //
+    //  1. « `translatedContent` voyage à côté ; le client choisit. » — AUCUN
+    //     client ne le lit : ni la NSE iOS, ni l'application, ni Android, ni le
+    //     service worker web. Personne ne choisit ; tout le monde affiche
+    //     `payload.body`.
+    //  2. « écraser le corps priverait la NSE du repli quand la charge est
+    //     dégradée pour le budget APNs. » — la dégradation coupe d'ABORD
+    //     `translatedContent`, et garde le corps. Porter la traduction dans le
+    //     corps est donc ce qui la fait SURVIVRE à la dégradation, pas ce qui
+    //     l'expose.
+    //
+    // Les deux champs de service restent poussés : ils ne coûtent rien et
+    // deviendront lisibles le jour où un client s'en saisira.
+    const { data, push } = await run({
+      recipient: { systemLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+    });
+
+    expect(data?.translatedContent).toBe('Hola');
+    expect(push?.body).toBe('Hola');
+  });
+
+  it('tronque la traduction poussée à 200 caractères, quel que soit son rang', async () => {
+    const { data } = await run({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'á'.repeat(400) } },
+      originalLanguage: 'en',
+    });
+
+    expect((data?.translatedContent as string)?.length).toBe(200);
+  });
+
+  it('survit à un message VOLATILISÉ : la bannière part, sans traduction', async () => {
+    // La relecture des traductions n'est PAS un gate d'éligibilité pour ces
+    // deux éventails — leur échéance vient de l'appelant (`messageExpiresAt`).
+    // Un message introuvable ne doit donc pas SUPPRIMER la notification, juste
+    // la priver de sa traduction.
+    const { service, sendToUser, prisma } = makeService({
+      recipient: { systemLanguage: 'fr' },
+      translations: { fr: { text: 'Bonjour' } },
+      originalLanguage: 'en',
+    });
+    prisma.message.findUnique.mockResolvedValue(null);
+
+    const notification = _name === 'createReplyNotification'
+      ? await service.createReplyNotification({
+          recipientUserId: RECIPIENT_ID,
+          replierUserId: SENDER_ID,
+          messageId: MESSAGE_ID,
+          conversationId: CONVERSATION_ID,
+          messagePreview: 'Hello',
+        })
+      : await service.createMentionNotification({
+          mentionedUserId: RECIPIENT_ID,
+          mentionerUserId: SENDER_ID,
+          messageId: MESSAGE_ID,
+          conversationId: CONVERSATION_ID,
+          messagePreview: 'Hello',
+        });
+
+    expect(notification).not.toBeNull();
+    expect(servedPushData(sendToUser)?.translatedContent).toBeUndefined();
+  });
+
+  it('fail-OPEN quand la relecture LÈVE : la bannière part quand même', async () => {
+    // La traduction est un confort, l'annonce du message une obligation de
+    // livraison. Même arbitrage que `loadNotificationPrefs` et
+    // `filterMutedRecipients` — un incident Mongo transitoire ne doit pas
+    // taire un éventail entier.
+    const { service, sendToUser, prisma } = makeService({
+      recipient: { systemLanguage: 'fr' },
+      translations: { fr: { text: 'Bonjour' } },
+      originalLanguage: 'en',
+    });
+    prisma.message.findUnique.mockRejectedValue(new Error('mongo down'));
+
+    const notification = _name === 'createReplyNotification'
+      ? await service.createReplyNotification({
+          recipientUserId: RECIPIENT_ID,
+          replierUserId: SENDER_ID,
+          messageId: MESSAGE_ID,
+          conversationId: CONVERSATION_ID,
+          messagePreview: 'Hello',
+        })
+      : await service.createMentionNotification({
+          mentionedUserId: RECIPIENT_ID,
+          mentionerUserId: SENDER_ID,
+          messageId: MESSAGE_ID,
+          conversationId: CONVERSATION_ID,
+          messagePreview: 'Hello',
+        });
+
+    expect(notification).not.toBeNull();
+    expect(servedPushData(sendToUser)?.translatedContent).toBeUndefined();
+  });
+});
+
+describe('createMentionNotification — CADRAGE et CONTENU sont deux résolutions', () => {
+  it('cadre au rang 1 pendant que le contenu est servi au rang 4', async () => {
+    // Le défaut symétrique de celui du lot : confondre les deux résolutions
+    // localiserait la bannière en espagnol pour un lecteur dont l'application
+    // est en allemand. Le témoin porte sur le SOUS-TITRE réellement remis à
+    // APNs — « te mencionó » si les deux fusionnaient.
+    const { push, data } = await runMention({
+      recipient: { systemLanguage: 'de', deviceLocale: 'es-ES' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+    });
+
+    expect(data?.translatedContent).toBe('Hola');
+    expect(push?.subtitle).toBe('hat dich erwähnt');
+  });
+
+  it('ne résout le destinataire QU\'UNE fois', async () => {
+    // Le cadrage était auparavant résolu paresseusement DANS `createNotification`,
+    // ce qui rouvrait une seconde lecture `User` par mentionné — le titre du
+    // type `user_mentioned` étant localisé, la branche paresseuse tombait
+    // toujours. Une seule lecture sert désormais les deux résolutions.
+    const { prisma } = await runMention({
+      recipient: { systemLanguage: 'de', deviceLocale: 'es-ES' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+    });
+
+    const recipientReads = prisma.user.findUnique.mock.calls
+      .filter((call: any) => call[0]?.where?.id === RECIPIENT_ID);
+    expect(recipientReads).toHaveLength(1);
+  });
+});
+
+describe('createMentionNotificationsBatch — une seule relecture pour tout l\'éventail', () => {
+  it('sert la traduction du prisme de CHAQUE destinataire', async () => {
+    // Deux lecteurs, deux prismes, un seul message : la descente est par
+    // LECTEUR même quand la source est partagée.
+    const OTHER_ID = 'other_id';
+    const prisma = makePrismaMock({
+      recipient: {},
+      translations: { es: { text: 'Hola' }, pt: { text: 'Olá' } },
+      originalLanguage: 'en',
+    });
+    prisma.user.findUnique.mockImplementation(({ where }: any) => {
+      if (where?.id === RECIPIENT_ID) return Promise.resolve({ id: RECIPIENT_ID, systemLanguage: 'de', regionalLanguage: 'es' });
+      if (where?.id === OTHER_ID) return Promise.resolve({ id: OTHER_ID, systemLanguage: 'nl', deviceLocale: 'pt-BR' });
+      return Promise.resolve({ id: SENDER_ID, username: 'alice', displayName: 'Alice', avatar: null });
+    });
+
+    const sendToUser = jest.fn().mockResolvedValue(undefined);
+    const service = new NotificationService(prisma);
+    service.setSocketIO(makeIO());
+    service.setPushNotificationService({ sendToUser } as any);
+
+    const count = await service.createMentionNotificationsBatch(
+      [RECIPIENT_ID, OTHER_ID],
+      {
+        senderId: SENDER_ID,
+        messageContent: 'Hello',
+        conversationId: CONVERSATION_ID,
+        messageId: MESSAGE_ID,
+      },
+      [RECIPIENT_ID, OTHER_ID]
+    );
+
+    expect(count).toBe(2);
+    const served = new Map(
+      sendToUser.mock.calls.map((call: any) => [call[0]?.userId, call[0]?.payload?.data])
+    );
+    expect(served.get(RECIPIENT_ID)?.translatedContent).toBe('Hola');
+    expect(served.get(OTHER_ID)?.translatedContent).toBe('Olá');
+  });
+
+  it('ne relit le message QU\'UNE fois pour tout l\'éventail', async () => {
+    // La source du Prisme est la MÊME pour tous les destinataires : la relire
+    // par destinataire multiplie une lecture identique par la taille de
+    // l'éventail, sur le chemin le plus chaud de la passerelle.
+    const OTHER_ID = 'other_id';
+    const prisma = makePrismaMock({
+      recipient: { systemLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+    });
+    const sendToUser = jest.fn().mockResolvedValue(undefined);
+    const service = new NotificationService(prisma);
+    service.setSocketIO(makeIO());
+    service.setPushNotificationService({ sendToUser } as any);
+
+    await service.createMentionNotificationsBatch(
+      [RECIPIENT_ID, OTHER_ID],
+      {
+        senderId: SENDER_ID,
+        messageContent: 'Hello',
+        conversationId: CONVERSATION_ID,
+        messageId: MESSAGE_ID,
+      },
+      [RECIPIENT_ID, OTHER_ID]
+    );
+
+    expect(prisma.message.findUnique).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Cycle 122 — le CORPS servi, et non les seuls champs de service.
+ *
+ * `translatedContent` / `translatedLanguage` voyagent sur le fil push et aucun
+ * client ne les lit. Le seul texte que les trois plateformes rendent est
+ * `payload.body` : tant qu'il porte l'aperçu original, la descente ci-dessus
+ * n'atteint aucun lecteur.
+ */
+describe.each([
+  ['createReplyNotification', (s: NotificationService, p: any) => s.createReplyNotification(p)],
+  ['createMentionNotification', (s: NotificationService, p: any) =>
+    s.createMentionNotification({
+      mentionedUserId: p.recipientUserId,
+      mentionerUserId: p.replierUserId,
+      messageId: p.messageId,
+      conversationId: p.conversationId,
+      messagePreview: p.messagePreview,
+      ...(p.previewIsMessageContent === undefined
+        ? {}
+        : { previewIsMessageContent: p.previewIsMessageContent }),
+    })],
+] as const)('%s — le CORPS servi descend le Prisme', (_name, invoke) => {
+  const runServed = async (opts: Scenario & { messagePreview?: string; previewIsMessageContent?: boolean }) => {
+    const { service, sendToUser } = makeService(opts);
+    const notification = await invoke(service, {
+      recipientUserId: RECIPIENT_ID,
+      replierUserId: SENDER_ID,
+      messageId: MESSAGE_ID,
+      conversationId: CONVERSATION_ID,
+      messagePreview: opts.messagePreview ?? 'Hello',
+      ...(opts.previewIsMessageContent === undefined
+        ? {}
+        : { previewIsMessageContent: opts.previewIsMessageContent }),
+    });
+    return { notification, push: servedPush(sendToUser) };
+  };
+
+  it('compose la bannière avec la traduction du rang atteint', async () => {
+    const { push } = await runServed({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+    });
+
+    expect(push?.body).toBe('Hola');
+  });
+
+  it('DESCEND jusqu\'à la locale appareil — le rang 4', async () => {
+    const { push } = await runServed({
+      recipient: { systemLanguage: 'de', deviceLocale: 'pt-BR' },
+      translations: { pt: { text: 'Olá' } },
+      originalLanguage: 'en',
+    });
+
+    expect(push?.body).toBe('Olá');
+  });
+
+  it('persiste dans la ligne in-app le MÊME texte que la bannière', async () => {
+    const { push, notification } = await runServed({
+      recipient: { systemLanguage: 'fr' },
+      translations: { fr: { text: 'Bonjour' } },
+      originalLanguage: 'en',
+    });
+
+    expect((notification as any)?.content).toBe('Bonjour');
+    expect(push?.body).toBe('Bonjour');
+  });
+
+  it('sert l\'ORIGINAL quand la langue d\'origine gagne à son rang (règle #3)', async () => {
+    const { push } = await runServed({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'en', customDestinationLanguage: 'fr' },
+      translations: { fr: { text: 'Bonjour' } },
+      originalLanguage: 'en',
+    });
+
+    expect(push?.body).toBe('Hello');
+  });
+
+  it('ne substitue JAMAIS dans un aperçu PROTÉGÉ', async () => {
+    const { push } = await runServed({
       recipient: { systemLanguage: 'fr' },
       translations: { fr: { text: 'Bonjour, mon secret' } },
       originalLanguage: 'en',
@@ -184,133 +497,6 @@ describe('createReplyNotification — la bannière de RÉPONSE descend le Prisme
       previewIsMessageContent: false,
     });
 
-    expect(body).toBe('👁️ 💬');
-  });
-
-  it('ne sert jamais une traduction CHIFFRÉE, et descend au rang suivant', async () => {
-    const { body } = await runReply({
-      recipient: { systemLanguage: 'fr', regionalLanguage: 'es' },
-      translations: { fr: { text: 'U2FsdGVk…', isEncrypted: true }, es: { text: 'Hola' } },
-      originalLanguage: 'en',
-    });
-
-    expect(body).toBe('Hola');
-  });
-});
-
-describe('createMentionNotificationsBatch — la bannière de MENTION descend le Prisme', () => {
-  const runBatch = async (opts: {
-    recipients: Readonly<Record<string, LangPrefs>>;
-    translations: unknown;
-    originalLanguage: string | null;
-  }) => {
-    const prisma = makePrismaMock(opts);
-    const { service, sendToUser } = makeService(prisma);
-    const mentionedIds = Object.keys(opts.recipients);
-    const count = await service.createMentionNotificationsBatch(
-      mentionedIds,
-      {
-        senderId: SENDER_ID,
-        messageContent: 'Hello',
-        conversationId: CONVERSATION_ID,
-        messageId: MESSAGE_ID,
-        previewIsMessageContent: true,
-      },
-      [...mentionedIds, SENDER_ID]
-    );
-    return { count, sendToUser, prisma };
-  };
-
-  it('sert à CHAQUE mentionné la traduction de SON propre rang', async () => {
-    // Le prisme est par LECTEUR : deux mentionnés d'un même message reçoivent
-    // deux textes différents. Une résolution partagée servirait le même à tous.
-    const { sendToUser } = await runBatch({
-      recipients: {
-        [RECIPIENT_ID]: { systemLanguage: 'de', regionalLanguage: 'es' },
-        [SECOND_RECIPIENT_ID]: { systemLanguage: 'fr' },
-      },
-      translations: { es: { text: 'Hola' }, fr: { text: 'Bonjour' } },
-      originalLanguage: 'en',
-    });
-
-    expect(pushFor(sendToUser, RECIPIENT_ID).body).toBe('Hola');
-    expect(pushFor(sendToUser, SECOND_RECIPIENT_ID).body).toBe('Bonjour');
-  });
-
-  it('ne relit le message QU\'UNE fois pour N mentionnés', async () => {
-    // La carte de traductions est la même pour tous : seule la descente varie.
-    // Une relecture par mentionné est un N+1 sur le chemin d'envoi.
-    const { prisma } = await runBatch({
-      recipients: {
-        [RECIPIENT_ID]: { systemLanguage: 'es' },
-        [SECOND_RECIPIENT_ID]: { systemLanguage: 'fr' },
-      },
-      translations: { es: { text: 'Hola' }, fr: { text: 'Bonjour' } },
-      originalLanguage: 'en',
-    });
-
-    expect(prisma.message.findUnique).toHaveBeenCalledTimes(1);
-  });
-
-  it('sert l\'ORIGINAL au mentionné dont le prisme n\'a aucune traduction', async () => {
-    const { sendToUser } = await runBatch({
-      recipients: { [RECIPIENT_ID]: { systemLanguage: 'de' } },
-      translations: { it: { text: 'Ciao' } },
-      originalLanguage: 'en',
-    });
-
-    const { body, data } = pushFor(sendToUser, RECIPIENT_ID);
-    expect(body).toBe('Hello');
-    expect(data?.translatedContent).toBeUndefined();
-  });
-});
-
-describe('la descente échoue OUVERT — une annonce vaut mieux qu\'une traduction', () => {
-  it('sert l\'ORIGINAL quand la carte de traductions est illisible, sans perdre la notification', async () => {
-    // Même arbitrage que `loadNotificationPrefs` et `filterMutedRecipients` :
-    // la traduction est un confort, l'annonce du message une obligation de
-    // livraison. Une lecture qui lève ne doit pas emporter la bannière.
-    const prisma = makePrismaMock({
-      recipients: { [RECIPIENT_ID]: { systemLanguage: 'fr' } },
-      translations: { fr: { text: 'Bonjour' } },
-      originalLanguage: 'en',
-    });
-    prisma.message.findUnique.mockRejectedValue(new Error('mongo down'));
-    const { service, sendToUser } = makeService(prisma);
-
-    const notification = await service.createReplyNotification({
-      recipientUserId: RECIPIENT_ID,
-      replierUserId: SENDER_ID,
-      messageId: MESSAGE_ID,
-      conversationId: CONVERSATION_ID,
-      messagePreview: 'Hello',
-    });
-
-    expect(notification).not.toBeNull();
-    expect(pushFor(sendToUser, RECIPIENT_ID).body).toBe('Hello');
-  });
-});
-
-describe('createMentionNotification — le Prisme s\'applique SANS câblage de l\'appelant', () => {
-  it('relit le message quand la source n\'est pas fournie', async () => {
-    // La correction ne dépend pas du câblage : un appelant qui ne passe pas
-    // `prismSource` perd une requête, pas le Prisme.
-    const prisma = makePrismaMock({
-      recipients: { [RECIPIENT_ID]: { systemLanguage: 'de', regionalLanguage: 'es' } },
-      translations: { es: { text: 'Hola' } },
-      originalLanguage: 'en',
-    });
-    const { service, sendToUser } = makeService(prisma);
-
-    await service.createMentionNotification({
-      mentionedUserId: RECIPIENT_ID,
-      mentionerUserId: SENDER_ID,
-      messageId: MESSAGE_ID,
-      conversationId: CONVERSATION_ID,
-      messagePreview: 'Hello',
-    });
-
-    expect(pushFor(sendToUser, RECIPIENT_ID).body).toBe('Hola');
-    expect(prisma.message.findUnique).toHaveBeenCalledTimes(1);
+    expect(push?.body).toBe('👁️ 💬');
   });
 });

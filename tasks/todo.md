@@ -43,6 +43,29 @@ Deux défauts empilés sur la même surface (les notifications poussées) :
   (`PushNotificationService:785` pose `{...payload.data}`) ⇒ corps VIDE au démarrage à froid
   jusqu'à la synchro REST. Défaut DISTINCT du Prisme.
 
+## Merge manuel avec le cycle 122 parallèle (PR #3444)
+
+Une session parallèle a soldé le MÊME suivi (Prisme réponse/mention) et atterri sur `main`
+pendant ce lot — jusqu'au même nom de fichier de témoins. Résolu à la main, en union :
+
+- **Leur base est prise** pour `NotificationService` (`pushableTranslations` /
+  `loadMessagePrismSource` / `prismTranslationContext`) ; ma descente est ré-appliquée par-dessus
+  sous forme de `prismTranslation` (la descente NUE) + `servedPreview` (le corps).
+- **Leur correction d'un témoin du cycle 121 qui ne pouvait pas tomber est CONSERVÉE** —
+  `notification.lang ?? 'de'` lisait `undefined` puis assertait son propre repli. Elle
+  s'appliquait aussi à mes propres témoins de cadrage, qui reprenaient ce patron.
+- **Leur témoin de cadrage a trouvé un vrai bug dans mon correctif** : un aperçu VIDE
+  (message sans texte, porteur d'une pièce jointe) n'a rien à substituer — le corps se compose
+  alors des badges localisés. `servedPreview` refuse désormais un aperçu vide.
+- **Deux de leurs témoins gelaient l'inverse de ce lot** (« le corps original reste le corps »),
+  sur deux prémisses mesurées fausses depuis : aucun client ne lit `translatedContent`, et la
+  dégradation APNs coupe ce champ AVANT le corps — porter la traduction dans le corps la fait
+  survivre à la dégradation. Les témoins sont INVERSÉS, avec les deux prémisses écrites en clair,
+  jamais supprimés.
+- Leurs deux lots de témoins de fail-open couvrent les miens : les miens sont retirés au profit
+  des leurs, plus complets (message volatilisé ET relecture qui lève, sur les deux éventails).
+
 ## Leçon
 
-`tasks/lessons.md` § Leçon 265 — un contenu RÉSOLU n'est pas un contenu SERVI.
+`tasks/lessons.md` § Leçon 266 — un contenu RÉSOLU n'est pas un contenu SERVI.
+(§ Leçon 265 est celle du cycle 122 parallèle, conservée telle quelle.)
