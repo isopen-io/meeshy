@@ -809,15 +809,31 @@ input[type="button"] {
   position: relative;
   border-radius: 1rem;
 }
+/* Aurore — miroir web du `RainbowEffect` iOS (directive 2026-08-24).
+   Le rendu précédent était le même défaut des deux côtés : rouge/vert/bleu
+   saturés, trait de 2px, et un `hue-rotate` de 360° qui traversait tout le
+   cercle chromatique en 3 s. Il clignotait, et il DÉNATURAIT les couleurs
+   quand elles viennent de l'auteur.
+   Ici : un spectre de clarté homogène ancré sur l'indigo de la marque, un
+   liseré fin doublé d'un halo (`drop-shadow`), et une rotation du DÉGRADÉ
+   — via `--msg-fx-angle`, qu'il faut déclarer en `@property` pour qu'un
+   angle soit interpolable. */
+@property --msg-fx-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
 .msg-fx-rainbow::after,
 .msg-fx-rainbow-static::after {
   content: '';
   position: absolute;
-  inset: -2px;
+  inset: -1px;
   border-radius: inherit;
-  padding: 2px;
-  background: conic-gradient(#ef4444, #f97316, #eab308, #22c55e, #3b82f6, #a855f7, #ef4444);
-  opacity: 0.6;
+  padding: 1px;
+  background: conic-gradient(from var(--msg-fx-angle),
+    #818cf8, #e879f9, #fb7185, #fbbf24, #34d399, #38bdf8, #818cf8);
+  opacity: 0.75;
+  filter: drop-shadow(0 0 6px rgb(129 140 248 / 0.45));
   pointer-events: none;
   /* Ne peint que la bordure : le dégradé est masqué au centre. */
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -825,10 +841,10 @@ input[type="button"] {
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
 }
-.msg-fx-rainbow::after { animation: msg-fx-rainbow-kf 3s linear infinite; }
+.msg-fx-rainbow::after { animation: msg-fx-rainbow-kf 6s linear infinite; }
 @keyframes msg-fx-rainbow-kf {
-  from { filter: hue-rotate(0deg); }
-  to { filter: hue-rotate(360deg); }
+  from { --msg-fx-angle: 0deg; }
+  to { --msg-fx-angle: 360deg; }
 }
 
 .msg-fx-sparkle { position: relative; }

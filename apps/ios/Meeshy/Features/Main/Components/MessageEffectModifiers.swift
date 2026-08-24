@@ -356,29 +356,81 @@ struct PulseEffect: ViewModifier {
     }
 }
 
+/// **Aurore** — le successeur du cadre arc-en-ciel (directive 2026-08-24 :
+/// « quelque chose de visuellement plus esthétique »).
+///
+/// Ce que faisait l'ancien rendu, et pourquoi il avait l'air d'un autocollant :
+/// un trait dur de 2 pt en rouge/vert/bleu saturés, étranger à la charte ; un
+/// `cornerRadius` de 16 EN DUR, donc un cadre qui flottait autour d'un média
+/// arrondi autrement ; un `AngularGradient` dont la dernière couleur retombait
+/// sur la première en laissant une COUTURE ; et un `hueRotation` de 360° en 3 s
+/// qui traversait tout le cercle chromatique — un clignotement, et surtout la
+/// DÉNATURATION des couleurs choisies par l'auteur (`rainbowColors`, décodé et
+/// testé depuis toujours, mais que le rendu n'a jamais lu : une lecture morte).
+///
+/// Ce qui le remplace :
+/// - **deux couches** — un halo flouté large qui pose la lueur, un liseré fin
+///   qui la définit. Une aurore enveloppe ; un cadre encercle.
+/// - **un spectre de MÊME clarté**, ancré sur l'indigo de la marque et passant
+///   par `success` et `warning` : les teintes se succèdent sans qu'aucune ne
+///   crie plus fort que les autres.
+/// - **une rotation du DÉGRADÉ**, pas de la teinte : le spectre glisse autour
+///   de la forme, et le bleu que l'auteur a demandé reste bleu.
+/// - **le rayon en paramètre**, pour que le liseré épouse ce qu'il entoure.
+///
+/// `animated == false` (Réduire les animations) : le dégradé se fige. C'est ce
+/// que veut la règle 6 — le message perd son mouvement, pas son intention.
 struct RainbowEffect: ViewModifier {
     let active: Bool
     let animated: Bool
-    @State private var hueRotation: Double = 0
+    /// Couleurs choisies par l'auteur (`MessageEffects.rainbowColors`).
+    var colors: [String]? = nil
+    /// Rayon de la forme entourée. Défaut aligné sur la bulle et son média.
+    var cornerRadius: CGFloat = 18
+
+    @State private var rotation: Double = 0
+
+    /// Le spectre de la maison — sept arrêts de clarté homogène, refermés sur
+    /// leur première couleur. Trois d'entre eux sont déjà des tokens nommés
+    /// (`indigo400`, `success`, `warning`) : l'effet n'invente pas sa palette,
+    /// il étend celle de la charte.
+    static let houseSpectrum = ["#818CF8", "#E879F9", "#FB7185", "#FBBF24", "#34D399", "#38BDF8", "#818CF8"]
+
+    /// Spectre effectivement peint. Boucle TOUJOURS sur sa première couleur :
+    /// un `AngularGradient` ouvert montre la couture de son raccord.
+    nonisolated static func spectrum(from custom: [String]?) -> [String] {
+        guard let custom, !custom.isEmpty else { return houseSpectrum }
+        return custom + [custom[0]]
+    }
+
+    private var gradient: AngularGradient {
+        AngularGradient(
+            colors: Self.spectrum(from: colors).map { Color(hex: $0) },
+            center: .center,
+            angle: .degrees(rotation)
+        )
+    }
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    }
 
     func body(content: Content) -> some View {
         content
             .overlay {
                 if active {
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(
-                            AngularGradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .red], center: .center),
-                            lineWidth: 2
-                        )
-                        .hueRotation(.degrees(hueRotation))
-                        .opacity(0.6)
-                        .allowsHitTesting(false)
+                    ZStack {
+                        shape.stroke(gradient, lineWidth: 5).blur(radius: 6).opacity(0.35)
+                        shape.stroke(gradient, lineWidth: 1).opacity(0.75)
+                    }
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
                 }
             }
             .onAppear {
                 guard active, animated else { return }
-                withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
-                    hueRotation = 360
+                withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
+                    rotation = 360
                 }
             }
     }
@@ -455,7 +507,8 @@ struct MessageEffectsModifier: ViewModifier {
                                      animated: plan.animatesPersistent))
                 .modifier(PulseEffect(active: plan.persistent.contains(.pulse)))
                 .modifier(RainbowEffect(active: plan.persistent.contains(.rainbow),
-                                        animated: plan.animatesPersistent))
+                                        animated: plan.animatesPersistent,
+                                        colors: effects.rainbowColors))
                 .modifier(SparkleEffect(active: plan.persistent.contains(.sparkle)))
                 .overlay {
                     if plan.appearance.contains(.confetti) { ConfettiOverlay() }
