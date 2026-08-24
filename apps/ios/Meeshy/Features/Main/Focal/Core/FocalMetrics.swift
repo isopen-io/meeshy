@@ -230,8 +230,19 @@ nonisolated public enum FocalMetrics {
         /// carte : la carte (fond SwiftUI de la rangée, même repère que les
         /// chips) dépasse le bloc de contenu de `focusCardInnerMargin`.
         public static let overhang: CGFloat = chipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin
-        public static let identityAvatarSize: CGFloat = 18
-        public static let identityOverhang: CGFloat = overhang
+        /// L'identité du message magnifié est la SEULE chip à dépasser le
+        /// gabarit commun — « en plus agrandi simplement » (directive
+        /// 2026-08-24). Elle porte désormais tout ce que porte l'en-tête de
+        /// rangée (présence, mood, anneau de story, fantôme d'un visiteur sans
+        /// compte) : au gabarit `chipHeight` de 24, rien de tout cela n'était
+        /// lisible.
+        public static let identityAvatarSize: CGFloat = 26
+        public static let identityChipHeight: CGFloat = 34
+        public static let identityNameSize: CGFloat = 13.5
+        /// Débord de la chip d'identité — calculé sur SA hauteur, pas sur
+        /// celle des autres : son centre doit tomber sur la ligne de la carte
+        /// comme le leur, et elle est plus haute qu'elles.
+        public static let identityOverhang: CGFloat = identityChipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin
     }
 
     nonisolated public enum HiddenChrome {

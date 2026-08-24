@@ -642,11 +642,16 @@ struct FocalRow: View {
     /// SANS contour (directive 2026-08-24). L'état se lit désormais au fond
     /// seul : dense pour le drapeau affiché (`isActive`), plein pour une
     /// réaction qui est la mienne (`filled`).
-    private func focusChip<Content: View>(isActive: Bool = false, filled: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
+    private func focusChip<Content: View>(
+        isActive: Bool = false,
+        filled: Bool = false,
+        height: CGFloat = FocalMetrics.FocusStrip.chipHeight,
+        @ViewBuilder _ content: () -> Content
+    ) -> some View {
         content()
             .padding(.horizontal, 7)
             .frame(minWidth: FocalMetrics.FocusStrip.chipMinWidth)
-            .frame(height: FocalMetrics.FocusStrip.chipHeight)
+            .frame(height: height)
             .background(
                 Capsule(style: .continuous)
                     .fill(filled ? focusAccent : MeeshyColors.backgroundSecondary(isDark: input.isDark))
@@ -751,46 +756,47 @@ struct FocalRow: View {
             .padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)
     }
 
-    /// HAUT-GAUCHE : avatar + auteur, sur la ligne du haut de la carte —
-    /// pour TOUTES les bulles en focus (2026-08-22). Toucher = profil.
+    /// HAUT-GAUCHE : l'auteur, sur la ligne du haut de la carte — pour TOUTES
+    /// les bulles en focus.
+    ///
+    /// **Directive 2026-08-24.** Cette chip recomposait une identité PAUVRE :
+    /// un avatar et un nom, rien d'autre. La présence, le mood, l'anneau de
+    /// story et le fantôme d'un visiteur sans compte — tout ce que
+    /// `FocalIdentityHeader` sait déjà porter — s'évaporaient au moment
+    /// précis où le message est le plus regardé. Elle réemploie donc l'en-tête,
+    /// à un gabarit plus grand, au lieu d'en réécrire une version amputée.
+    ///
+    /// Le toucher mène aux CONDITIONS de l'auteur DANS CETTE CONVERSATION
+    /// (`ParticipantProfileSheet` : droits, lien d'entrée, coordonnées
+    /// consenties). Il ouvrait `onOpenProfile`, qui ne route vers cette fiche
+    /// que pour un visiteur SANS compte ; pour tous les autres il présentait
+    /// une page de profil, sans la moindre action possible depuis le fil.
     private var focusIdentityChip: some View {
-        Button {
-            // **Identité DÉJÀ RÉSOLUE, jamais recomposée ici.** Cette puce est
-            // arrivée d'une branche partie d'un tronc ANTÉRIEUR à deux
-            // correctifs (« la rangée Focal transmet une identité déjà
-            // résolue » puis « un visiteur sans compte ouvre sa fiche, non une
-            // page de profil vide ») : elle rebâtissait un `ProfileSheetUser`
-            // à la main, SANS `participantId`, SANS `isAnonymous`, SANS
-            // `accentColor`. La fusion n'a rien signalé — l'autre point
-            // d'entrée était en conflit, celui-ci non.
-            //
-            // Conséquence mesurée : `openProfileHandler` route sur
-            // `isAnonymous && participantId != nil` ; sans ces deux champs, le
-            // message d'un visiteur SANS COMPTE en focus tombait dans la
-            // branche « compte » avec `userId == nil` et ouvrait une fiche
-            // vide. Et la garde §5.1 restait VERTE par OMISSION (la puce ne
-            // nomme aucun des jetons qu'elle surveille) : rien ne l'aurait dit.
-            actions.onOpenProfile?(input.profileSheetUser)
-        } label: {
-            focusChip {
-                HStack(spacing: 5) {
-                    MeeshyAvatar(
-                        name: input.senderDisplayName,
-                        context: .postReaction,
-                        accentColor: input.senderColorHex,
-                        avatarURL: input.senderAvatarURL,
-                        isDark: input.isDark
-                    )
-                    Text(input.senderDisplayName)
-                        .font(MeeshyFont.relative(11.5, weight: .bold))
-                        .foregroundColor(MeeshyColors.textPrimary(isDark: input.isDark))
-                        .lineLimit(1)
-                }
-                .padding(.leading, -3)
-            }
+        focusChip(height: FocalMetrics.FocusStrip.identityChipHeight) {
+            FocalIdentityHeader(
+                isMe: content.isMe,
+                senderDisplayName: input.senderDisplayName,
+                senderUsername: input.senderUsername,
+                senderAvatarURL: input.senderAvatarURL,
+                senderThumbHash: input.senderThumbHash,
+                senderColorHex: input.senderColorHex,
+                senderPresence: input.senderPresence,
+                senderStoryRing: input.senderStoryRing,
+                senderMoodEmoji: input.senderMoodEmoji,
+                senderIsAnonymous: input.senderIsAnonymous,
+                profileUser: input.profileSheetUser,
+                isDark: input.isDark,
+                agentStyle: AgentAuthoredStyle.resolve(
+                    isAgentAuthored: input.isAgentAuthored,
+                    isAgentGrammarEnabled: input.showsAgentGrammar
+                ),
+                avatarDiameter: FocalMetrics.FocusStrip.identityAvatarSize,
+                nameSize: FocalMetrics.FocusStrip.identityNameSize,
+                fillsWidth: false,
+                onTap: { actions.onOpenParticipantProfile?(input.senderId) }
+            )
+            .padding(.leading, -3)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(input.senderDisplayName)
     }
 
     /// BAS-DROITE : date complète (pré-calculée) + coche d'état de réception

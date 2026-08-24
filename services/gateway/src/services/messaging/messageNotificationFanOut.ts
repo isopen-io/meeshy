@@ -1,5 +1,10 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { protectedPreview, type NotificationActorProfile } from '../notifications/NotificationService';
+import {
+  protectedPreview,
+  type NotificationActorProfile,
+  type PreviewPrismBasis,
+} from '../notifications/NotificationService';
+import { transcriptTranslationTexts } from '@meeshy/shared/types/attachment-audio';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import {
   retractMessageNotifications,
@@ -93,6 +98,23 @@ export function extractTranscriptionText(att: { transcription?: unknown } | null
     if (joined.length > 0) return joined;
   }
   return undefined;
+}
+
+/**
+ * La langue dans laquelle le vocal a été PARLÉ, telle que Whisper l'a rendue.
+ *
+ * Elle concourt à son RANG dans le Prisme du lecteur (règle #3), et n'est
+ * jamais un court-circuit : un prisme `['fr','es']` sur un vocal espagnol
+ * traduit en français sert le FRANÇAIS. `null` quand la transcription ne la
+ * porte pas — la descente traite alors toutes les langues du lecteur comme
+ * servables par traduction, ce qui est le comportement sûr : au pire elle sert
+ * une traduction vers une langue où le vocal était déjà, jamais une langue que
+ * le lecteur ne lit pas.
+ */
+export function transcriptionLanguage(att: { transcription?: unknown } | null | undefined): string | null {
+  if (!att?.transcription || typeof att.transcription !== 'object') return null;
+  const language = (att.transcription as Record<string, unknown>).language;
+  return typeof language === 'string' && language.trim() !== '' ? language.trim() : null;
 }
 
 /**
@@ -311,7 +333,7 @@ export async function notifyMessageRecipients(params: {
     // pas : y substituer la traduction relâcherait le texte que la protection
     // masque. `Message.translations` ne traduisant que `Message.content`, c'est
     // ici — où l'on sait ce que l'aperçu montre — que la question se tranche.
-    const previewIsMessageContent = protectedOverride === null;
+    const previewIsProtectedPlaceholder = protectedOverride !== null;
 
     const sender = await resolveNotificationSender({ prisma, senderParticipantId });
     if (!sender) return;
@@ -357,6 +379,9 @@ export async function notifyMessageRecipients(params: {
       select: {
         mimeType: true, fileName: true, fileSize: true, duration: true,
         width: true, height: true, fileUrl: true, transcription: true,
+        // Cycle 123 — les traductions de la TRANSCRIPTION, que la bannière d'un
+        // vocal sert : elles vivent ici, jamais sur `Message.translations`.
+        translations: true,
       },
     });
 
@@ -386,6 +411,25 @@ export async function notifyMessageRecipients(params: {
         : undefined;
     const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
 
+    // Cycle 123 — ce que l'aperçu EST décide de ce qui le traduit. Un
+    // placeholder de protection n'a pas de source (et sa traduction ne doit pas
+    // partir sur le fil non plus) ; une transcription a la SIENNE, sur
+    // l'attachment. Le message reste le cas nominal.
+    const previewBasis: PreviewPrismBasis = previewIsProtectedPlaceholder
+      ? { kind: 'protected-placeholder' }
+      : { kind: 'message-content' };
+    const pushPreviewBasis: PreviewPrismBasis = firstAttachmentTranscript !== undefined
+      ? {
+          kind: 'transcript',
+          source: {
+            translations: transcriptTranslationTexts(
+              (first as { translations?: unknown } | undefined)?.translations
+            ),
+            originalLanguage: transcriptionLanguage(first as { transcription?: unknown }),
+          },
+        }
+      : previewBasis;
+
     // Les trois valeurs ci-dessous disent ce qui est réellement PARTI, pas ce
     // qui était visé — même règle de compte rendu que
     // `createMemberJoinedNotificationsBatch`. Une préférence, un DND ou une
@@ -409,7 +453,7 @@ export async function notifyMessageRecipients(params: {
             originalMessageId: message.replyToId!,
             senderProfile: sender.profile,
             messageExpiresAt: message.expiresAt ?? null,
-            previewIsMessageContent,
+            previewBasis,
           });
           return created != null;
         })
@@ -431,7 +475,7 @@ export async function notifyMessageRecipients(params: {
               // pas. Le chemin `new_message`, lui, la prend de sa propre
               // relecture vivante — il en fait une de toute façon.
               messageExpiresAt: message.expiresAt ?? null,
-              previewIsMessageContent,
+              previewBasis,
             },
             memberIds
           )
@@ -470,10 +514,10 @@ export async function notifyMessageRecipients(params: {
           encryptedContent: message.encryptedContent || undefined,
           notificationLocKey,
           // La transcription d'un vocal n'est PAS `Message.content` : ses
-          // traductions vivent sur `MessageAttachment.translations`, et une
-          // entrée de `Message.translations` substituée ici afficherait un
-          // texte sans rapport.
-          previewIsMessageContent: previewIsMessageContent && firstAttachmentTranscript === undefined,
+          // traductions vivent sur `MessageAttachment.translations`. Le cycle 122
+          // s'en tenait à ne RIEN substituer ; le cycle 123 lui donne sa propre
+          // source, et la bannière d'un vocal descend enfin le Prisme.
+          previewBasis: pushPreviewBasis,
           ...attachmentInfo,
         })
       ));
