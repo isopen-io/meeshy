@@ -75,6 +75,67 @@ class StoryTextObjectProjectionTest {
     }
 
     @Test
+    fun `resolveText tries the exploration override FIRST, ahead of the preferred chain`() {
+        val obj = textObject(translations = mapOf("es" to "Hola", "fr" to "Bonjour"))
+        // Reader prefers fr, but has tapped "es" in the language bar: es wins outright.
+        assertThat(
+            StoryTextObjectProjection.resolveText(obj, preferredLanguages = listOf("fr"), overrideLanguage = "es"),
+        ).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `resolveText falls back to the preferred chain when the override has no matching translation`() {
+        val obj = textObject(translations = mapOf("fr" to "Bonjour"))
+        // Override "de" has no translation, so the normal Prisme chain (fr) still resolves.
+        assertThat(
+            StoryTextObjectProjection.resolveText(obj, preferredLanguages = listOf("fr"), overrideLanguage = "de"),
+        ).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `resolveText matches the override case- and region-insensitively`() {
+        val obj = textObject(translations = mapOf("es" to "Hola"))
+        assertThat(
+            StoryTextObjectProjection.resolveText(obj, preferredLanguages = emptyList(), overrideLanguage = "ES-MX"),
+        ).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `resolveText resolves the override even when no preferred language is configured`() {
+        val obj = textObject(translations = mapOf("es" to "Hola"))
+        assertThat(
+            StoryTextObjectProjection.resolveText(obj, preferredLanguages = emptyList(), overrideLanguage = "es"),
+        ).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `resolveText with a blank override behaves exactly like no override`() {
+        val obj = textObject(translations = mapOf("fr" to "Bonjour"))
+        assertThat(
+            StoryTextObjectProjection.resolveText(obj, preferredLanguages = listOf("fr"), overrideLanguage = ""),
+        ).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `resolveText returns the original when neither the override nor the chain matches`() {
+        val obj = textObject(translations = mapOf("de" to "Hallo"))
+        assertThat(
+            StoryTextObjectProjection.resolveText(obj, preferredLanguages = listOf("fr"), overrideLanguage = "es"),
+        ).isEqualTo("Hello")
+    }
+
+    @Test
+    fun `project resolves the displayed text through the exploration override`() {
+        val wire = StoryTextObject(
+            id = "t",
+            text = "Hello",
+            translations = mapOf("es" to "Hola", "fr" to "Bonjour"),
+        )
+        val view = StoryTextObjectProjection.project(wire, preferredLanguages = listOf("fr"), overrideLanguage = "es")
+        assertThat(view.text).isEqualTo("Hola")
+    }
+
+    @Test
     fun `project carries the transform, timing and keyframe fields into the view`() {
         val wire = StoryTextObject(
             id = "t1",
