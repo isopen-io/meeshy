@@ -2107,6 +2107,9 @@ describe('GET /conversations/:id/messages/search', () => {
 
   it('hasMore when merged results exceed searchLimit', async () => {
     const limit = 5;
+    // Search delegates its page size to validatePagination (mocked here); make
+    // the SSOT report the page size this scenario needs.
+    mockValidatePagination.mockReturnValue({ offset: 0, limit });
     // Build limit+1 content matches to trigger hasMore
     const msgs = Array.from({ length: limit + 1 }, (_, i) => ({
       id: `msg-${i}`,
@@ -2127,6 +2130,34 @@ describe('GET /conversations/:id/messages/search', () => {
     const body = reply._body;
     expect(body.cursorPagination.hasMore).toBe(true);
     expect(body.data.length).toBeLessThanOrEqual(limit);
+  });
+
+  // Regression: the search page size used to be parsed inline as
+  // `Math.min(parseInt(limitStr) || 20, 50)`, which reintroduced the exact bug
+  // `validatePagination` was written to kill — `limit=0` falsy-coerced to a full
+  // page (20 instead of the floor of 1), and `limit=-5` flowed through as a
+  // NEGATIVE Prisma `take`. The querystring schema declares `limit` as a bare
+  // string (no numeric min/max), so nothing upstream clamps it. Route the page
+  // size through the SSOT helper instead.
+  it('routes the search page size through validatePagination (maxLimit 50)', async () => {
+    prisma.message.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const reply = makeReply();
+    await getHandler_()(makeSearchReq('hello', { limit: '0' }), reply);
+    expect(mockValidatePagination).toHaveBeenCalledWith('0', '0', { maxLimit: 50 });
+  });
+
+  it('uses the limit validatePagination returns for take, hasMore and cursorPagination', async () => {
+    mockValidatePagination.mockReturnValue({ offset: 0, limit: 7 });
+    prisma.message.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const reply = makeReply();
+    await getHandler_()(makeSearchReq('hello', { limit: '999' }), reply);
+    // Content search reads one extra row (limit + 1) to measure hasMore.
+    expect(prisma.message.findMany.mock.calls[0][0].take).toBe(8);
+    expect(reply._body.cursorPagination.limit).toBe(7);
   });
 
   it('error path → 500', async () => {

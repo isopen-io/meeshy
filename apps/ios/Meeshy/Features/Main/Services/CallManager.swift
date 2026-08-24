@@ -1795,6 +1795,19 @@ final class CallManager: ObservableObject {
         applyNegotiationRole()
         configureAudioSession()
         startReliabilityMonitor()
+        // Audit fix (calling-stack audit 2026-08-24) — arm the background
+        // observer HERE, at ring time, not only from transitionToConnected().
+        // promoteRingingCallToCallKitIfNeeded() is only ever invoked by the
+        // observer startBackgroundMonitoring() registers; gating that
+        // registration on the call already being connected made the whole
+        // promotion path permanently unreachable for the exact case it exists
+        // to cover — a call ringing in-app (CallKit skipped because the app
+        // was foreground) that backgrounds before being answered. Without a
+        // live observer, iOS can suspend the app mid-ring with no lock-screen
+        // call card, silently dropping the inbound call. Safe to call twice
+        // per call (once here, once at connect): startBackgroundMonitoring()
+        // starts with stopBackgroundMonitoring() to stay idempotent.
+        startBackgroundMonitoring()
 
         // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY so the caller receives
         // PARTICIPANT_JOINED while we initialize media in parallel. See
@@ -3554,6 +3567,12 @@ final class CallManager: ObservableObject {
                     self.callUsesCallKit = false
                     self.ringbackPlayer.shouldSelfActivateSession = true
                 } else {
+                    // CallKit now owns ringing (its own `config.ringtoneSound`,
+                    // same "Ringtone.caf" asset). Stop the in-app loop or it
+                    // plays doubled on top of CallKit's, and the self-activated
+                    // AVAudioSession it was holding (`shouldSelfActivateSession`,
+                    // just cleared above) risks blocking CallKit's `didActivate`.
+                    self.ringbackPlayer.stopRingtone()
                     Logger.calls.info("Promoted ringing call to CallKit on background entry")
                 }
             }

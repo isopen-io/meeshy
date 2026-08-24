@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { isMsRangeStrictlyOrdered } from '@meeshy/shared/utils/time-range';
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 
 const mongoId = z
   .string()
-  .regex(/^[0-9a-fA-F]{24}$/, 'Invalid MongoDB ObjectId format');
+  .regex(OBJECT_ID_REGEX, 'Invalid MongoDB ObjectId format');
 
 /**
  * Code de langue tel qu'il arrive du fil, AVANT normalisation serveur.

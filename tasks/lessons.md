@@ -15079,76 +15079,182 @@ règle ne tranche pas, dans le même geste, une question qui n'en relève pas.**
 Exiger le repli à l'appel le rend visible au site plutôt que caché dans un
 défaut ; c'est ce qui permet à la prochaine passe de le trancher pour de bon.
 
-## Leçon 277 — une valeur COMPOSÉE lue par un seul de ses consommateurs possibles n'est pas partagée : elle est privée (2026-08-24, cycle 126)
+---
 
-**Contexte.** `messageNotificationFanOut` compose, une fois par message, ce que
-sa bannière donne à voir : `notificationPreviewForPush` (la transcription d'un
-vocal, ou le contenu), `pushPreviewBasis` (ce que cet aperçu EST, donc ce qui le
-traduit), `attachmentInfo` (le média et ses étiquettes) et `notificationLocKey`
-(le verrou de protection du cycle 125). Un seul de ses TROIS lots le lisait.
+---
 
-**Symptôme.** Répondre à quelqu'un par un vocal, une photo, une vidéo ou un
-fichier lui poussait une bannière au **corps VIDE** — pendant que tous les autres
-membres de la conversation recevaient « 🎤 Message vocal · 0:12 » ou la
-transcription entière. Le destinataire le plus directement concerné était le seul
-à ne rien lire. Pour un message SANS texte, la matière brute (`Message.content`)
-est la chaîne vide, et sans les étiquettes de média le corps n'a **rien** à
-montrer : `buildMessageNotificationBodyI18n` — la fonction qui rend un média
-lisible — n'était appelée que par `createMessageNotification`.
+## Leçon 277 — quand N sites appliquent une règle, celui qu'on ajoute EN DERNIER n'est pas le seul à manquer : c'est le PREMIER qui l'avait (2026-08-24, cycle 125 bis)
 
-**Ce que la mesure a donné**, pour un seul et même message :
+Le suivi disait, depuis deux cycles :
 
-| valeur composée | `regular` | `reply` | `mentions` |
-|---|---|---|---|
-| aperçu (transcription ⊃ contenu) | ✅ | ❌ `Message.content` | ❌ |
-| base du Prisme (`transcript` / `protected-placeholder`) | ✅ | ❌ toujours `message-content` | ❌ |
-| média + étiquettes (rich-push, corps composé) | ✅ | ❌ jamais | ❌ |
-| `notificationLocKey` (verrou de protection) | ✅ | ❌ jamais | ❌ |
-| `messageCreatedAt` / `messageType` (bulle NSE) | ✅ | ❌ | ❌ |
+> Les éventails RÉPONSE et MENTION composent depuis `notificationPreview` (jamais
+> `…ForPush`) et ne reçoivent aucun `attachmentInfo` — la bannière d'une réponse à un vocal
+> affiche `Message.content`, vide pour un vocal pur.
 
-**La règle.** Les cycles 121–125 ont posé quatre questions à un résolveur de
-Prisme : élit-il le bon rang · qui AFFICHE ce qu'il élit · que transporte-t-il À
-CÔTÉ · le texte qu'il reçoit a-t-il le droit d'être là. La cinquième ne s'adresse
-pas au résolveur mais à la VALEUR qu'il rend :
+Deux fois qualifié de « décision produit, pas correction de Prisme ». La formule était juste sur
+un point — la langue ne change pas — et fausse sur ce qui compte :
 
-> **Qui d'AUTRE aurait dû l'afficher ?** Compter les consommateurs POSSIBLES
-> d'une valeur composée avant ses consommateurs RÉELS. Une valeur lue par un
-> seul d'entre eux n'est pas partagée — elle est PRIVÉE, et ses jumelles
-> recomposent la même chose à côté, moins bien.
+| destinataire du MÊME message | ce qu'il voyait |
+|---|---|
+| les membres du fil | la transcription, ou « 📷 Photo · 1024×768 » |
+| **celui à qui on répond** | **rien** |
+| **celui qu'on mentionne** | **rien** |
 
-C'est la forme OUTILLÉE de la leçon 271 (« un helper à un appelant est un
-inventaire ») appliquée non à un helper mais à une VARIABLE LOCALE : elle n'a pas
-de nom exporté à compter, donc `grep` ne la trouve pas. Ce qui la rend
-comptable, c'est de la NOMMER — d'où `MessageBannerMedia`, un jeu de champs qui
-n'existait qu'en ligne dans une seule signature. **Un jeu de champs anonyme ne se
-partage pas : il se recopie.**
+> **Un corps VIDE n'est pas « un autre choix de produit », c'est l'absence de la bannière sous
+> la bannière.** La question « est-ce une décision produit ? » se pose sur ce que l'utilisateur
+> VOIT, pas sur la nature du champ manquant. Aucun produit ne préfère un corps vide.
 
-**Pourquoi elle a survécu deux cycles.** Les cycles 124 et 125 l'ont MESURÉE et
-CLASSÉE : « le corriger change ce que ces bannières MONTRENT, pas la langue dans
-laquelle elles le montrent — décision produit, pas correction de Prisme ». Le
-classement était juste sur la taxonomie et faux sur la conclusion : **une
-bannière au corps vide n'est pas une décision produit.** Devant un suivi
-étiqueté « décision produit », la question à poser est : *quel produit
-choisirait ça ?* Si la réponse est « aucun », c'est un défaut qui porte une
-mauvaise étiquette.
+### Le vrai motif — la composition vivait chez UN des trois
 
-**Le correctif — un site de composition, trois consommateurs.**
-`MessageBannerMedia` (le jeu de champs, nommé), `messageBannerBody()` (le corps :
-texte du Prisme, ou étiquette du média quand ce texte est vide, plus les badges
-`+N`), `bannerMediaContext()` / `bannerMediaMetadata()` (les deux projections du
-média), `messageClockFields()` (l'horloge serveur de la bulle NSE). L'éventail
-sert le même `bannerPreview` + `bannerFields` aux trois lots ; le lot de mentions
-répand ce qui reste plutôt que de le recopier champ par champ, de sorte qu'un
-champ de bannière ajouté demain arrive aux trois sans qu'on ait à s'en souvenir.
+`buildMessageNotificationBodyI18n` — le compositeur qui remplace un texte absent par le libellé
+du premier média — n'était appelé que par `createMessageNotification`. Les deux autres posaient
+`content: this.servedPreview(...)`, une projection plus PAUVRE, et rien ne le signalait :
+`servedPreview` est un helper juste, partagé, testé, et les trois éventails l'appellent.
 
-**Deux effets de bord, et les deux sont des durcissements.** Réponse et mention
-reçoivent désormais le `notificationLocKey` — donc le second verrou du cycle 125
-s'applique à leur charge, qui n'était jusque-là gardée par rien (elle ne portait
-simplement aucun média) — et leur `previewPrismSource` / `prePersistedMessageFields`
-gagnent le `protectedByLocKey` qui leur manquait.
+> **Deux sites qui partagent le sous-helper d'une règle ont l'air de partager la règle.** La
+> divergence ne se voit pas dans « qui appelle quoi » mais dans « qui appelle la COMPOSITION
+> COMPLÈTE ». Compter les appelants du helper le plus BAS de la chaîne rassure à tort — c'est
+> le plus HAUT qu'il faut compter.
 
-**Le témoin qui l'attrape** compare les TROIS lots sur le MÊME message
-(`replyMentionBannerMedia.test.ts`, 27 témoins) : c'est la seule forme où la
-divergence est visible. Un témoin par lot passe au vert sur chacun pris seul —
-exactement comme un côté de protocole est toujours cohérent avec lui-même
-(leçon de la quatrième famille, cycle 97).
+### Corollaire — séparer une charge par ce qu'elle FAIT, pas par sa provenance
+
+`attachmentInfo` était un objet unique de douze champs, tous issus de la même lecture Prisma.
+Les trois éventails n'en veulent pas la même chose :
+
+- `attachments`, `firstAttachmentFileSize/Duration/Width/Height` **composent un TEXTE** — les
+  trois en ont besoin ;
+- `firstAttachmentUrl`, `firstAttachmentMimeType`, `hasAttachments`, `firstAttachmentFilename`
+  **transportent un fichier** ou alimentent un inventaire persisté — le message simple seul.
+
+C'est exactement la séparation du cycle 125, vue de l'autre côté : là, confondre les deux a fait
+partir un fichier sous une garde écrite pour une chaîne ; ici, les confondre a fait manquer une
+chaîne à deux éventails qui n'avaient pas besoin du fichier. **Une charge se découpe par l'USAGE
+de ses champs, jamais par la requête qui les a produits** — la requête est un fait d'origine, et
+l'origine commune est précisément ce qui rend le mélange invisible.
+
+### Corollaire — un témoin de fan-out a besoin d'un destinataire ORDINAIRE
+
+Le premier jet du harnais posait trois membres : l'expéditeur, celui à qui on répond, celui
+qu'on mentionne. `createMessageNotification` n'a jamais été appelé — `alreadyNotified` les
+absorbe tous les trois, l'éventail régulier n'avait aucun candidat, et l'assertion de RÉFÉRENCE
+(« la réponse reçoit ce que reçoit le message simple ») comparait à rien.
+
+> Quand un témoin compare une branche à une autre, la branche de RÉFÉRENCE doit avoir de quoi
+> exister. Trois rôles dans une conversation à trois membres n'en laissent aucun au quatrième
+> rôle — celui qui n'en a aucun.
+
+## Leçon 278 — un garde-fou câblé au mauvais MOMENT du cycle de vie est du code mort que la forme du test ne peut pas voir (2026-08-24, routine appels)
+
+`promoteRingingCallToCallKitIfNeeded()` (iOS `CallManager.swift`) existe pour
+un cas précis : un appel entrant qui sonne EN APP (CallKit volontairement
+sauté parce que l'app était au premier plan) doit être promu à CallKit s'il
+passe en arrière-plan avant d'être décroché — sinon iOS peut suspendre l'app
+en plein sonnage, sans carte d'appel verrouillée, et l'appel se perd
+silencieusement. La fonction est correcte, testée, bien gardée. Le seul
+endroit qui l'appelle est l'observateur `didEnterBackgroundNotification`, et
+cet observateur n'était armé QUE par `startBackgroundMonitoring()`, appelée
+depuis un SEUL site : `transitionToConnected()`.
+
+Or la fonction ne fait quelque chose QUE quand l'appel sonne encore
+(`callState == .ringing(isOutgoing: false)`) — c'est-à-dire précisément AVANT
+que `transitionToConnected()` n'ait jamais pu s'exécuter. Les deux conditions
+sont mutuellement exclusives par construction : le garde-fou entier était
+inatteignable, une fenêtre de panne qui existait depuis l'introduction de la
+fonction, en production, sans qu'aucun test ne rougisse.
+
+### Pourquoi trois tests corrects n'ont rien vu
+
+Les trois tests existants (`test_backgroundObserver_promotesStillRingingCallToCallKit`,
+`test_promoteRingingCallToCallKitIfNeeded_guardsOnRingingIncomingNotYetOnCallKit`,
+`test_promoteRingingCallToCallKitIfNeeded_neverPromotesInChina_evenWhileRinging`)
+vérifient tous la FORME du code : « l'observateur appelle bien la fonction »,
+« la fonction a bien les bons guards », « le guard régional est bien câblé ».
+Aucun ne vérifie que l'observateur lui-même est un jour ARMÉ pendant que
+l'appel sonne. La fonction et son appelant étaient chacun individuellement
+irréprochables ; c'est la RELATION temporelle entre le moment où on les monte
+et le moment où ils doivent agir qui était rompue — et aucun des trois tests
+ne pose cette question-là.
+
+> **Un test qui vérifie qu'un handler CONTIENT le bon appel ne vérifie pas
+> que le handler est un jour MONTÉ au bon moment.** Pour un garde-fou dont
+> l'utilité dépend d'une fenêtre temporelle (« pendant que X, avant que Y »),
+> le test à écrire n'est pas seulement « la fonction fait-elle le bon geste ? »
+> mais **« le site qui l'arme est-il vivant PENDANT la fenêtre qu'elle
+> couvre ? »** — ici, l'armement au CONNECT ne peut pas couvrir une fenêtre
+> qui se ferme avant le connect.
+
+### Le correctif expose un second défaut latent
+
+Rendre la promotion atteignable a immédiatement révélé un second bug resté
+invisible tant que le premier chemin était mort : `startRingtone()` (jouée en
+app quand CallKit est sauté) ne s'arrêtait jamais au moment de la promotion
+réussie — CallKit joue alors SON PROPRE `ringtoneSound` (même asset
+`Ringtone.caf`) par-dessus la boucle `AVAudioPlayer` encore active, dont la
+session auto-activée (`.playAndRecord`) risque en prime de bloquer le
+`didActivate` de CallKit. **Rendre un chemin mort à nouveau vivant peut
+réveiller un défaut qui dormait DERRIÈRE lui** — le corriger dans le même lot,
+pas dans un suivi, parce que le premier correctif seul aurait été une
+régression (double sonnerie) dans le cas exact qu'il vise à réparer.
+
+## Leçon 279 — un lot qui fait CONVERGER une chaîne laisse derrière tout ce qui la QUALIFIE (2026-08-24, cycle 126)
+
+**Contexte.** Le cycle 125 bis a fait converger le CORPS des trois bannières de
+`messageNotificationFanOut` : réponse et mention reçoivent enfin
+`notificationPreviewForPush`, `pushPreviewBasis` et le résumé de média qui
+compose le texte. Le correctif est juste, testé, et sa leçon (§ 277) nomme
+exactement le motif — « la composition vivait chez UN des trois ».
+
+Deux champs de l'éventail ne l'ont pas suivi, et pour une raison qu'il faut dire
+à voix haute : **ils ne composent aucune chaîne.**
+
+| champ resté derrière | ce qu'il fait | ce que son absence coûtait |
+|---|---|---|
+| `notificationLocKey` | QUALIFIE le placeholder (la NSE le rend depuis sa propre table) et sert de SECOND VERROU à `createNotification` | placeholder non localisé ; le verrou du cycle 125 inapplicable sur ces deux éventails |
+| `messageCreatedAt` / `messageType` | l'horloge SERVEUR de la bulle que la NSE PRÉ-ENREGISTRE | la bulle d'une réponse datée par l'horloge du DEVICE, donc mal rangée dans le fil |
+
+**La règle.**
+
+> **Un lot qui partage une valeur composée doit énumérer ce qui voyage AVEC
+> elle, pas seulement ce qui la compose.** Un champ qui QUALIFIE un texte —
+> une clé de localisation, une horloge, un type, une base — ne se trouve pas en
+> cherchant « qui compose ce texte ? » : par construction, il n'apparaît dans
+> aucune composition.
+
+C'est la forme du cycle 125 (§ 275) rejouée un cran plus haut. Là, quatre gardes
+tenaient une CHAÎNE pendant que le fichier partait dans l'objet voisin ; ici, un
+lot fait converger une CHAÎNE pendant que ce qui la qualifie reste derrière. Le
+même angle mort, la même cause : **le niveau d'abstraction du correctif rend
+invisible ce qui ne participe pas à sa phrase.** La question se pose AU MOMENT du
+correctif, et se répond en lisant l'objet remis LIGNE À LIGNE — pas en relisant le
+code qui le construit.
+
+**Le motif de structure qui l'a rendu possible.** `createMentionNotificationsBatch`
+relayait `commonData` vers `createMentionNotification` **champ par champ** : neuf
+lignes de recopie. Un relais de cette forme retient silencieusement tout ce qu'on
+ajoute en amont — il ne rougit jamais, il ne perd rien de visible, il oublie. Le
+correctif extrait les deux seuls champs RENOMMÉS (`senderId` → `mentionerUserId`,
+`messageContent` → `messagePreview`) et répand le reste :
+
+```ts
+const { senderId, messageContent, ...banner } = commonData;
+… this.createMentionNotification({ ...banner, mentionedUserId, mentionerUserId: senderId, messagePreview: messageContent, prismSource })
+```
+
+> **Un relais qui recopie est un inventaire à tenir à jour ; un relais qui répand
+> n'en est pas un.** Ne recopier que ce qui change de NOM — le reste passe, et un
+> champ ajouté demain arrive à destination sans qu'on ait à s'en souvenir.
+
+**Ce qui n'a PAS été repris, et pourquoi.** Le cycle 125 bis a délibérément gardé
+le rich-push (`firstAttachmentUrl` / `firstAttachmentMimeType` /
+`metadata.attachments`) hors de ces deux éventails : « leur bannière compose
+désormais le bon TEXTE ; y attacher le média inline rouvrirait une surface que le
+cycle 125 vient de resserrer ». Cette décision est CONSERVÉE. Une convergence de
+lots ne se résout pas en prenant l'union des deux : la décision explicite et
+raisonnée du lot mergé en premier l'emporte sur l'argument de cohérence du second
+(§ Note de convergence, `CLAUDE.md`).
+
+**Le témoin qui l'attrape** n'assert ni sur le texte ni sur le rang, mais sur ce
+qui l'accompagne : `replyMentionBannerClock.test.ts` — l'horloge servie, le
+`select` qui la charge (une requête, pas deux), le silence quand la relecture
+fail-open tombe, et les trois choses que le verrou retient (traduction du fil,
+corps pré-enregistré, média).

@@ -13,6 +13,7 @@ import type { AuthenticatedRequest, UserIdParams, SearchQuery } from './types';
 import { validatePagination } from '../../utils/pagination';
 import { viewerFromRequest } from './presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
 
@@ -381,7 +382,7 @@ export async function getUserStats(fastify: FastifyInstance) {
 
       const { userId: userIdOrUsername } = request.params;
 
-      const isMongoId = /^[a-f\d]{24}$/i.test(userIdOrUsername);
+      const isMongoId = isValidObjectId(userIdOrUsername);
 
       const user = await fastify.prisma.user.findFirst({
         where: isMongoId

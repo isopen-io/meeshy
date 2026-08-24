@@ -1,73 +1,58 @@
-# Cycle 126 — l'aperçu composé avait TROIS consommateurs et UN seul câblage
+# Cycle 126 — ce qui QUALIFIE l'aperçu était resté derrière le lot qui l'a fait converger
 
-## Le symptôme
+## Note de convergence
 
-Répondre à quelqu'un par un vocal, une photo, une vidéo ou un fichier lui pousse
-une bannière au **corps VIDE** — pendant que tous les autres membres de la
-conversation reçoivent « 🎤 Message vocal · 0:12 » ou la transcription entière.
-Le destinataire le plus directement concerné est le seul à ne rien lire.
+Ce cycle a démarré sur le même défaut que le **cycle 125 bis** (PR #3478) :
+« répondre par un vocal ou une photo poussait une bannière au corps VIDE ». Les
+deux passes l'ont diagnostiqué et corrigé en parallèle ; le cycle 125 bis a mergé
+le premier, **son implémentation est retenue intégralement**, y compris sa
+décision explicite de ne PAS étendre le rich-push aux éventails réponse et
+mention. Cette passe-ci avait pris la décision inverse par argument de cohérence :
+une convergence ne se résout pas en prenant l'union des deux lots.
 
-## La mesure
+Ce qui suit est ce que cette passe apportait EN PLUS, et que le cycle 125 bis ne
+couvre pas.
 
-`messageNotificationFanOut` COMPOSE un aperçu — un fait du MESSAGE, calculé une
-fois :
+## Le défaut restant
 
-| valeur composée | `regular` | `reply` | `mentions` |
-|---|---|---|---|
-| `notificationPreviewForPush` (transcription ⊃ contenu) | ✅ | ❌ `notificationPreview` | ❌ |
-| `pushPreviewBasis` (base du Prisme) | ✅ | ❌ `previewBasis` | ❌ |
-| `attachmentInfo` (média + étiquettes) | ✅ | ❌ jamais | ❌ |
-| `notificationLocKey` (verrou de protection) | ✅ | ❌ jamais | ❌ |
-| corps via `buildMessageNotificationBodyI18n` | ✅ | ❌ `content` nu | ❌ |
-| `messageCreatedAt` / `messageType` (bulle NSE) | ✅ | ❌ | ❌ |
+Le cycle 125 bis a fait converger le CORPS des trois bannières. Deux champs de
+l'éventail ne l'ont pas suivi, **parce qu'ils ne composent aucune chaîne** :
 
-Un seul des trois consommateurs lit ce que l'éventail a composé. Les deux autres
-repartent de la matière brute — et pour un message SANS texte, la matière brute
-est la chaîne vide.
+| champ | ce qu'il fait | ce que son absence coûtait |
+|---|---|---|
+| `notificationLocKey` | QUALIFIE le placeholder d'un message protégé (la NSE le rend depuis sa propre table) et sert de SECOND VERROU à `createNotification` | placeholder non localisé ; verrou du cycle 125 inapplicable ; `protectedByLocKey` absent de `previewPrismSource` et `prePersistedMessageFields` |
+| `messageCreatedAt` / `messageType` | horloge SERVEUR de la bulle que la NSE PRÉ-ENREGISTRE | bulle d'une réponse ou d'une mention datée par l'horloge du DEVICE |
 
-## La leçon
+## La leçon (§ 279)
 
-Les cycles 121–125 ont posé quatre questions à un résolveur de Prisme :
-élit-il le bon rang · qui AFFICHE ce qu'il élit · que transporte-t-il À CÔTÉ ·
-le texte reçu a-t-il le droit d'être là. La cinquième :
+> **Un lot qui partage une valeur composée doit énumérer ce qui voyage AVEC elle,
+> pas seulement ce qui la compose.** Un champ qui QUALIFIE un texte ne se trouve
+> pas en cherchant « qui compose ce texte ? » : par construction, il n'apparaît
+> dans aucune composition.
 
-> **Qui d'AUTRE aurait dû l'afficher ?** Une valeur composée à un endroit et lue
-> par un seul de ses consommateurs possibles n'est pas partagée — elle est
-> PRIVÉE, et ses jumelles recomposent (mal) la même chose à côté.
-
-Elle ne se pose pas au résolveur mais à la valeur qu'il rend : compter ses
-consommateurs POSSIBLES avant ses consommateurs RÉELS.
+Forme du cycle 125 rejouée un cran plus haut. Corollaire de structure : **un
+relais qui RECOPIE champ par champ est un inventaire à tenir à jour** —
+`createMentionNotificationsBatch` en recopiait neuf.
 
 ## Le correctif
 
-Un site de composition, trois consommateurs.
-
-1. `MessageBannerMedia` — le jeu de champs média, nommé une fois, partagé par
-   les trois signatures (il n'existait qu'en ligne dans `createMessageNotification`).
-2. `messageBannerBody()` — le corps d'une bannière de message (texte servi par
-   le Prisme, ou l'étiquette du média quand ce texte est vide, plus les badges
-   `+N`). Extrait de `createMessageNotification`, appelé par les trois.
-3. `bannerMediaContext()` / `bannerMediaMetadata()` — les projections contexte et
-   metadata du média, idem.
-4. L'éventail sert le MÊME aperçu composé aux trois lots.
-5. `loadMessagePrismSource` rend aussi `createdAt` / `messageType` : la bulle
-   pré-enregistrée d'une réponse cesse d'être ordonnée par l'horloge du device.
+1. `MessageBannerSource` — la source du Prisme ET l'horloge, deux types car deux
+   questions distinctes venues d'une même lecture.
+2. `loadMessagePrismSource` élargit son `select` (aucune requête de plus).
+3. `messageClockFields()` — la projection, partagée par les trois éventails.
+4. `notificationLocKey` déclaré et servi aux trois lots ; `protectedByLocKey`
+   posé sur leurs deux gardes.
+5. Le relais du batch RÉPAND au lieu de recopier.
 
 ## Gates
 
-- [x] témoins RED d'abord (`replyMentionBannerMedia.test.ts`) — **19 rouges / 27 verts après**
-- [x] suite gateway complète verte — **858/858 suites, 19536 témoins**, exit 0
-- [x] `tsc --noEmit` gateway — 0 erreur
-- [x] mutation « réponse + mention reviennent à l'aperçu privé » — **9 témoins tombent**
-- [x] mutation « le corps de la réponse cesse de se composer » — **3 témoins tombent**
-- [x] non-régression : les 15 témoins du cycle 125 + le Prisme du cycle 122 — verts
+- [x] témoins RED d'abord (`replyMentionBannerClock.test.ts`) — **14 rouges contre `origin/main` / 19 verts après**
+- [x] `tsc --noEmit` gateway et shared — 0 erreur (code de retour lu SANS pipe)
+- [x] suites voisines — 36 suites, 709 témoins
+- [x] non-régression du cycle 125 bis (`replyMentionMediaPreview.test.ts`) — verte
+- [x] suite gateway complète — voir le rapport
 
 ## Revue
 
 Rapport complet : `tasks/realtime-sync-audit-2026-08-24-cycle126.md`.
-Leçon : `tasks/lessons.md` § 277. Règle produit : `CLAUDE.md` § Prisme, cycle 126.
-
-Deux durcissements en effet de bord, non visés mais acquis : réponse et mention
-reçoivent enfin `notificationLocKey` (donc le second verrou du cycle 125
-s'applique à leur charge) et le `protectedByLocKey` qui manquait à leur
-`previewPrismSource` / `prePersistedMessageFields`.
+Leçon : `tasks/lessons.md` § 279. Règle produit : `CLAUDE.md` § Prisme, cycles 125 bis et 126.

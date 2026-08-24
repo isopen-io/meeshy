@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 
-const mongoId = z.string().regex(/^[0-9a-fA-F]{24}$/);
+const mongoId = z.string().regex(OBJECT_ID_REGEX);
 
 export const ConversationIdParamSchema = z.object({
   conversationId: mongoId,

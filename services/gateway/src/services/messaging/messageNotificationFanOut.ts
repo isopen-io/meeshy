@@ -412,24 +412,42 @@ export async function notifyMessageRecipients(params: {
     // (`contentTypeIcon`), si bien que le corps ne perd rien à ce silence.
     const mediaMayTravel = protectedOverride === null && !maskedAttachment(first);
 
-    const attachmentInfo = mediaMayTravel
+    // Cycle 125 bis — ce que le média donne au CORPS d'une bannière, et que les
+    // TROIS éventails doivent recevoir : `buildMessageNotificationBodyI18n`
+    // remplace un texte ABSENT par le libellé détaillé de la première pièce
+    // jointe (« 🎵 Audio · 0:07 ») et suffixe les badges des suivantes. Sans
+    // ces champs, répondre par un vocal ou mentionner quelqu'un sous une photo
+    // sans légende poussait une bannière au corps VIDE, pendant que les autres
+    // membres du fil recevaient la transcription.
+    const bannerMedia = mediaMayTravel
       ? {
-          hasAttachments: attachments.length > 0,
-          attachmentCount: attachments.length,
-          firstAttachmentType: attachmentTypeOf(first?.mimeType),
           attachments: attachments.map(att => ({
             type: attachmentTypeOf(att.mimeType),
             filename: att.fileName,
           })),
-          firstAttachmentFilename: first?.fileName,
           firstAttachmentFileSize: first?.fileSize,
           firstAttachmentDuration: first?.duration,
           firstAttachmentWidth: first?.width,
           firstAttachmentHeight: first?.height,
+        }
+      : {};
+
+    // Ce que seule la bannière d'un message SIMPLE porte : l'inventaire
+    // dénormalisé dans `metadata.attachments` et le média inline du rich-push
+    // (que la NSE télécharge et attache). Ni la réponse ni la mention n'en ont
+    // d'usage aujourd'hui — cf. le suivi du lot.
+    const richPushMedia = mediaMayTravel
+      ? {
+          hasAttachments: attachments.length > 0,
+          attachmentCount: attachments.length,
+          firstAttachmentType: attachmentTypeOf(first?.mimeType),
+          firstAttachmentFilename: first?.fileName,
           firstAttachmentUrl: first?.fileUrl || undefined,
           firstAttachmentMimeType: first?.mimeType || undefined,
         }
       : {};
+
+    const attachmentInfo = { ...bannerMedia, ...richPushMedia };
 
     // Phase A — un vocal déjà transcrit affiche son texte sur l'écran verrouillé ;
     // le fichier reste attaché pour la lecture inline.
@@ -483,34 +501,6 @@ export async function notifyMessageRecipients(params: {
         }
       : previewBasis;
 
-    // Cycle 126 — l'aperçu composé est un fait du MESSAGE, pas du lot qui le
-    // sert. Ce qui précède le calcule une fois ; UN SEUL des trois lots le
-    // lisait. La réponse et la mention repartaient de `notificationPreview` —
-    // donc de `Message.content`, la chaîne VIDE pour un vocal, une photo, une
-    // vidéo ou un fichier sans légende — et sans étiquette de média, leur corps
-    // n'avait RIEN à montrer. Répondre à quelqu'un par une photo lui poussait
-    // une bannière vide pendant que les autres membres lisaient
-    // « 📷 Photo · 1024×768 ».
-    //
-    // Les trois annoncent le MÊME message : ils en montrent donc la même chose,
-    // depuis le même objet. Ce qui les distingue est leur AUDIENCE, jamais leur
-    // contenu — et un champ de bannière ajouté demain arrive aux trois sans
-    // qu'on ait à s'en souvenir.
-    //
-    // Deux constantes plutôt qu'une seule : les trois créateurs nomment le TEXTE
-    // différemment (`messagePreview` / `messageContent`), quand tout le reste
-    // porte chez eux le même nom — donc se répand.
-    const bannerPreview = notificationPreviewForPush;
-    const bannerFields = {
-      // La transcription d'un vocal n'est PAS `Message.content` : ses
-      // traductions vivent sur `MessageAttachment.translations`. Le cycle 122
-      // s'en tenait à ne RIEN substituer ; le cycle 123 lui a donné sa propre
-      // source, et le cycle 126 la sert aux trois lots.
-      previewBasis: pushPreviewBasis,
-      notificationLocKey,
-      ...attachmentInfo,
-    };
-
     // Les trois valeurs ci-dessous disent ce qui est réellement PARTI, pas ce
     // qui était visé — même règle de compte rendu que
     // `createMemberJoinedNotificationsBatch`. Une préférence, un DND ou une
@@ -526,15 +516,29 @@ export async function notifyMessageRecipients(params: {
     const reply = owesReplyNotification
       ? await runLot('reply', onError, false, async () => {
           const created = await notificationService.createReplyNotification({
-            ...bannerFields,
             recipientUserId: originalMessageAuthorUserId,
             replierUserId: sender.actorId,
             messageId: message.id,
             conversationId,
-            messagePreview: bannerPreview,
+            // Cycle 125 bis — le MÊME aperçu et la MÊME base que la bannière
+            // d'un message simple. `notificationPreview` (l'original) laissait
+            // le corps d'une réponse VIDE dès que le message n'avait pas de
+            // texte : un vocal, une photo sans légende. Les deux valeurs sont
+            // déjà gardées par `mediaMayTravel` — un message protégé retombe
+            // sur son placeholder, ici comme là.
+            messagePreview: notificationPreviewForPush,
             originalMessageId: message.replyToId!,
             senderProfile: sender.profile,
             messageExpiresAt: message.expiresAt ?? null,
+            previewBasis: pushPreviewBasis,
+            ...bannerMedia,
+            // Cycle 126 — la clé de PROTECTION, que seul le lot regular
+            // recevait. Le cycle 125 bis a fait converger le TEXTE des trois
+            // bannières ; celle-ci ne compose aucun texte, elle le QUALIFIE —
+            // et c'est ce qui l'a laissée hors du lot. Elle vaut ici la
+            // localisation cliente du placeholder et le second verrou de
+            // `createNotification`.
+            notificationLocKey,
           });
           return created != null;
         })
@@ -545,10 +549,14 @@ export async function notifyMessageRecipients(params: {
           notificationService.createMentionNotificationsBatch(
             [...validatedMentionUserIds],
             {
-              ...bannerFields,
               senderId: sender.actorId,
               senderProfile: sender.profile,
-              messageContent: bannerPreview,
+              // Cycle 125 bis — cf. `createReplyNotification` : le même aperçu,
+              // la même base et le même résumé de média que la bannière d'un
+              // message simple. Un mentionné sous une photo sans légende
+              // recevait un corps vide.
+              messageContent: notificationPreviewForPush,
+              ...bannerMedia,
               conversationId,
               messageId: message.id,
               // L'éventail tient déjà l'échéance du message : la transmettre
@@ -557,6 +565,10 @@ export async function notifyMessageRecipients(params: {
               // pas. Le chemin `new_message`, lui, la prend de sa propre
               // relecture vivante — il en fait une de toute façon.
               messageExpiresAt: message.expiresAt ?? null,
+              previewBasis: pushPreviewBasis,
+              // Cycle 126 — cf. `createReplyNotification` : la clé de protection
+              // qualifie l'aperçu que ce lot vient de recevoir.
+              notificationLocKey,
             },
             memberIds
           )
@@ -591,9 +603,15 @@ export async function notifyMessageRecipients(params: {
           senderProfile: sender.profile,
           messageId: message.id,
           conversationId,
-          ...bannerFields,
-          messagePreview: bannerPreview,
+          messagePreview: notificationPreviewForPush,
           encryptedContent: message.encryptedContent || undefined,
+          notificationLocKey,
+          // La transcription d'un vocal n'est PAS `Message.content` : ses
+          // traductions vivent sur `MessageAttachment.translations`. Le cycle 122
+          // s'en tenait à ne RIEN substituer ; le cycle 123 lui donne sa propre
+          // source, et la bannière d'un vocal descend enfin le Prisme.
+          previewBasis: pushPreviewBasis,
+          ...attachmentInfo,
         })
       ));
 
