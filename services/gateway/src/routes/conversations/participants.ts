@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { resolveParticipantAvatar, serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
+import { resolveTargetParticipant, identifyTarget } from './utils/target-participant';
 import {
   ACTIVE_MEMBER_LISTING_LIMIT,
   canViewExactMemberCount,
@@ -1194,29 +1195,42 @@ export function registerParticipantsRoutes(
         return sendBadRequest(reply, 'Vous ne pouvez pas vous supprimer de la conversation');
       }
 
-      // Capture the removed participant's displayName before flipping inactive,
-      // for the real-time broadcast payload (R6-2). leftAt is shared by the DB
-      // write and the emit so they agree.
-      const removedParticipant = await prisma.participant.findFirst({
-        where: { conversationId, userId, isActive: true },
-        select: { id: true, displayName: true }
-      });
+      // La cible se résout sous les DEUX colonnes : `:userId` porte un `User.id`
+      // pour un membre inscrit, un `Participant.id` pour un visiteur venu par un
+      // lien partagé — qui n'a aucune ligne `User`. Le `findFirst` sur la seule
+      // colonne `userId` ne le trouvait jamais.
+      const removedParticipant = await resolveTargetParticipant(prisma, conversationId, userId);
+
+      if (!removedParticipant) {
+        return sendNotFound(reply, 'Participant introuvable dans cette conversation');
+      }
+
+      // Se retirer soi-même passe par `POST …/leave`. La garde plus haut compare
+      // le segment d'URL ; celle-ci compare l'identité RÉSOLUE, ce qui couvre
+      // aussi l'admin qui se désignerait par son `Participant.id`.
+      if (removedParticipant.userId === currentUserId || removedParticipant.id === currentUserId) {
+        return sendBadRequest(reply, 'Vous ne pouvez pas vous supprimer de la conversation');
+      }
+
+      if (!removedParticipant.isActive) {
+        return sendBadRequest(reply, 'Ce participant ne fait plus partie de la conversation');
+      }
+
       const leftAt = new Date();
 
-      await prisma.participant.updateMany({
-        where: {
-          conversationId: conversationId,
-          userId: userId,
-          isActive: true
-        },
+      // `update` sur la ligne RÉSOLUE, plus `updateMany`. La différence n'est
+      // pas cosmétique : `updateMany` ne trouvant rien n'échoue pas, et c'est
+      // exactement ce qui faisait répondre **200 sans avoir rien fait** dès que
+      // la cible n'était pas adressable par `userId`. Une écriture qui ne trouve
+      // pas sa ligne doit échouer.
+      await prisma.participant.update({
+        where: { id: removedParticipant.id },
         data: {
           isActive: false,
           leftAt
         }
       });
-      if (removedParticipant) {
-        invalidateParticipantLookup(removedParticipant.id, conversationId);
-      }
+      invalidateParticipantLookup(removedParticipant.id, conversationId);
 
       // R6-2 — broadcast so other members' devices drop the removed user from
       // the list + decrement the member count in real time (the DELETE
@@ -1247,9 +1261,10 @@ export function registerParticipantsRoutes(
           // l'appartenance s'arrête. Ils gardaient une ligne que
           // `GET /conversations` ne sert plus, persistée, jusqu'au prochain
           // delta (tombstone `leftAt`).
-          const audience = removedParticipant
-            ? [...remaining, { id: removedParticipant.id, userId }]
-            : remaining;
+          const audience = [
+            ...remaining,
+            { id: removedParticipant.id, userId: removedParticipant.userId },
+          ];
           // Compte ABSOLU — `remaining` est déjà chargé pour nommer les rooms,
           // et un delta ne rattrape jamais un événement manqué. Deux chaînes
           // disjointes, comme le fanout d'arrivée : « 199+ » pour la room,
@@ -1261,8 +1276,12 @@ export function registerParticipantsRoutes(
             event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT,
             payload: {
               conversationId,
-              userId,
-              displayName: removedParticipant?.displayName ?? '',
+              // `participantId` TOUJOURS, `userId` NUL pour un visiteur sans
+              // compte : ce champ déclare un `User.id`, et y recopier un
+              // `Participant.id` est précisément ce que le CLAUDE.md du gateway
+              // interdit. Les clients retirent la ligne sur `participantId`.
+              ...identifyTarget(removedParticipant),
+              displayName: removedParticipant.displayName ?? '',
               leftAt: leftAt.toISOString()
             },
             memberCount: remaining.length
@@ -1273,11 +1292,16 @@ export function registerParticipantsRoutes(
           // de sortir ses sockets de la room, parce que c'est par cette room que
           // son propre appareil apprend qu'il doit couper le GPS. Voir l'unité
           // pour l'ordre des trois et pourquoi il compte.
+          // Room personnelle : `userId ?? id` — un participant sans ligne `User`
+          // a bien une room, nommée d'après son `Participant.id` (cf. § Room
+          // Organization). L'adresser par son seul `userId` sauterait une room
+          // qui existe, et son propre appareil n'apprendrait jamais qu'il doit
+          // couper le partage de position.
           await endConversationMembership({
             io,
             manager: socketManager,
             conversationId,
-            userId,
+            userId: removedParticipant.userId ?? removedParticipant.id,
           });
         }
       } catch (socketError) {
@@ -1286,11 +1310,17 @@ export function registerParticipantsRoutes(
 
       const notificationService = fastify.notificationService;
       if (notificationService) {
-        notificationService.createRemovedFromConversationNotification({
-          recipientUserId: userId,
-          removedByUserId: currentUserId,
-          conversationId,
-        }).catch((err: unknown) => logger.error('Notification error removed', err as Error));
+        // Une notification se dépose sur un COMPTE. Un visiteur sans compte n'en
+        // a pas : lui en poster une contre son `Participant.id` fabriquerait une
+        // ligne adressée à un `User` qui n'existe pas. Son appareil apprend le
+        // retrait par l'événement temps réel ci-dessus, qui le nomme.
+        if (removedParticipant.userId) {
+          notificationService.createRemovedFromConversationNotification({
+            recipientUserId: removedParticipant.userId,
+            removedByUserId: currentUserId,
+            conversationId,
+          }).catch((err: unknown) => logger.error('Notification error removed', err as Error));
+        }
 
         const adminParticipants = await prisma.participant.findMany({
           where: {

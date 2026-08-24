@@ -1047,11 +1047,17 @@ export const conversationParticipantSchema = {
       enum: ['USER', 'ADMIN', 'MODERATOR', 'BIGBOSS', 'AUDIT', 'ANALYST'],
       description: 'Participant global role (aligned with Prisma enum UserRole)'
     },
+    // Minuscules — c'est ainsi que `Participant.role` est stocké, comparé
+    // (`role: { in: ['creator','admin','moderator'] }`) et écrit
+    // (`role.toLowerCase()`). L'enum annonçait des MAJUSCULES : rien ne cassait,
+    // `fast-json-stringify` ne validant pas les enums, mais l'inventaire OpenAPI
+    // décrivait un format que le serveur n'émet jamais — et un client qui s'y
+    // fierait comparerait sur la mauvaise casse.
     conversationRole: {
       type: 'string',
-      enum: ['CREATOR', 'ADMIN', 'MODERATOR', 'MEMBER'],
+      enum: ['creator', 'admin', 'moderator', 'member'],
       nullable: true,
-      description: 'Role in this specific conversation'
+      description: 'Role in this specific conversation (lowercase, as stored)'
     },
     isOnline: { type: 'boolean', description: 'User is currently online' },
     lastActiveAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last activity timestamp' },
@@ -1333,7 +1339,24 @@ export const conversationSchema = {
 
     // Creator
     createdBy: { type: 'string', nullable: true, description: 'Creator user ID' },
-    createdByUser: { ...userMinimalSchema, nullable: true, description: 'Creator user info' }
+    createdByUser: { ...userMinimalSchema, nullable: true, description: 'Creator user info' },
+
+    // Appartenance de l'APPELANT — jumeau des mêmes clés dans
+    // `conversationMinimalSchema`, où le commentaire complet explique pourquoi
+    // leur absence rendait les conversations non modifiables. `GET
+    // /conversations/:id` résolvait déjà le rang (`callerConversationRole`) pour
+    // décider du plafond d'effectif, et le jetait faute d'être déclaré ici.
+    currentUserRole: {
+      type: 'string',
+      nullable: true,
+      description: "Rang de l'appelant DANS cette conversation (creator/admin/moderator/member), null s'il n'en est pas membre"
+    },
+    currentUserJoinedAt: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      description: "Date d'adhésion de l'appelant à cette conversation"
+    }
   }
 } as const;
 
@@ -1415,6 +1438,7 @@ export const conversationMinimalSchema = {
     id: { type: 'string', description: 'Conversation ID' },
     identifier: { type: 'string', nullable: true, description: 'Human-readable identifier' },
     title: { type: 'string', nullable: true, description: 'Conversation title' },
+    description: { type: 'string', nullable: true, description: 'Conversation description' },
     type: { type: 'string', description: 'Conversation type' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
     banner: { type: 'string', nullable: true, description: 'Banner URL' },
@@ -1513,6 +1537,58 @@ export const conversationMinimalSchema = {
       type: 'boolean',
       description: "L'appelant est un participant actif de cette conversation (ABSENT sur les routes qui ne le calculent pas)"
     },
+    // Le RANG de l'appelant dans cette conversation, calculé serveur
+    // (`currentUserRoleMap`, routes/conversations/core.ts). Troisième victime du
+    // même piège que `cursorPagination` et `isMember` ci-dessus, et la plus
+    // coûteuse : non déclaré ici, `fast-json-stringify` le retirait du fil, si
+    // bien qu'AUCUN client n'a jamais connu son rang. Tout ce qui en dépend
+    // retombait sur `member` — l'entrée « Réglages » iOS
+    // (`ConversationInfoSheet.canManageMembers`), la section de permissions, le
+    // bouton d'ajout de membre, les actions de rang — et le créateur d'un groupe
+    // ne pouvait donc rien y modifier. Garde : `conversation-wire-fields.test.ts`,
+    // qui sérialise au lieu de lire le schéma.
+    //
+    // Minuscules, comme la colonne `Participant.role` en base ('creator',
+    // 'admin', 'moderator', 'member') — pas d'`enum` ici : le rang voyage tel
+    // que la base le stocke, et un enum ne servirait que la documentation.
+    currentUserRole: {
+      type: 'string',
+      nullable: true,
+      description: "Rang de l'appelant DANS cette conversation (creator/admin/moderator/member), null s'il n'en est pas membre"
+    },
+    // Borne l'historique visible d'un membre arrivé en cours de route — iOS le
+    // passe en `memberJoinedAt` au ConversationViewModel.
+    currentUserJoinedAt: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      description: "Date d'adhésion de l'appelant à cette conversation"
+    },
+    // Réglages du conteneur. L'écran de réglages iOS construit ses valeurs
+    // « originales » depuis la conversation de la LISTE : absents du fil, ils y
+    // arrivaient à leur valeur par défaut, et l'écran affichait « tout le monde
+    // peut écrire » sur un canal d'annonces.
+    defaultWriteRole: {
+      type: 'string',
+      enum: ['everyone', 'member', 'moderator', 'admin', 'creator'],
+      nullable: true,
+      description: 'Minimum role required to send messages'
+    },
+    isAnnouncementChannel: {
+      type: 'boolean',
+      nullable: true,
+      description: 'Announcement-only mode (only creator/admins can write)'
+    },
+    slowModeSeconds: {
+      type: 'number',
+      nullable: true,
+      description: 'Minimum seconds between messages per user (0 = disabled)'
+    },
+    autoTranslateEnabled: {
+      type: 'boolean',
+      nullable: true,
+      description: 'Auto-translation enabled (disabled for E2EE conversations)'
+    },
     userPreferences: {
       type: 'array',
       items: {
@@ -1610,21 +1686,47 @@ export const updateConversationRequestSchema = {
       maxLength: 500,
       description: 'New description'
     },
-    type: {
-      type: 'string',
-      enum: ['direct', 'group', 'public', 'global'],
-      description: 'New conversation type'
-    },
     avatar: {
       type: 'string',
       nullable: true,
-      description: 'Conversation avatar URL'
+      description: 'Conversation avatar URL (null clears it)'
     },
     banner: {
       type: 'string',
       nullable: true,
-      description: 'Conversation banner URL'
+      description: 'Conversation banner URL (null clears it)'
+    },
+    // Les quatre réglages du conteneur. Le handler les lisait depuis toujours ;
+    // le contrat, lui, n'en déclarait aucun — ils ne passaient que parce que
+    // rien ne ferme cet objet, c'est-à-dire par accident. Un contrat incomplet
+    // qui fonctionne est un contrat dont personne ne saura qu'il a cessé de
+    // fonctionner.
+    //
+    // Aucun `default` ici, délibérément : dans un schéma de REQUÊTE un `default`
+    // ÉCRIT dans `request.body` avant le handler, et celui-ci distingue
+    // précisément l'absence (« ne touche pas à ce réglage ») de la valeur.
+    defaultWriteRole: {
+      type: 'string',
+      enum: ['everyone', 'member', 'moderator', 'admin', 'creator'],
+      description: 'Minimum role required to send messages (creator/admin only)'
+    },
+    isAnnouncementChannel: {
+      type: 'boolean',
+      description: 'Announcement-only mode (creator/admin only)'
+    },
+    slowModeSeconds: {
+      type: 'number',
+      minimum: 0,
+      description: 'Minimum seconds between messages per user, 0 disables (creator/admin only)'
+    },
+    autoTranslateEnabled: {
+      type: 'boolean',
+      description: 'Auto-translation for this conversation (creator/admin only)'
     }
+    // `type` a été RETIRÉ : il n'était accepté que par la route jumelle
+    // supprimée de `sharing.ts`, aucun client ne l'envoie, et muter le type
+    // d'une conversation déplace ses invariants d'admission d'écriture sans que
+    // rien ne les recalcule.
   }
 } as const;
 

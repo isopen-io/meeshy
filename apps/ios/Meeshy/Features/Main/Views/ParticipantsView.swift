@@ -646,7 +646,7 @@ struct ParticipantsView: View {
         do {
             try await ConversationService.shared.removeParticipant(
                 conversationId: conversationId,
-                participantId: userId
+                key: userId
             )
             HapticFeedback.success()
             participants.removeAll { $0.id == userId || $0.userId == userId }
@@ -665,7 +665,7 @@ struct ParticipantsView: View {
         do {
             try await ConversationService.shared.updateParticipantRole(
                 conversationId: conversationId,
-                participantId: userId,
+                userId: userId,
                 role: newRole
             )
             HapticFeedback.success()
@@ -687,7 +687,7 @@ struct ParticipantsView: View {
         do {
             try await ConversationService.shared.removeParticipant(
                 conversationId: conversationId,
-                participantId: currentUserId
+                key: currentUserId
             )
             HapticFeedback.success()
             dismiss()

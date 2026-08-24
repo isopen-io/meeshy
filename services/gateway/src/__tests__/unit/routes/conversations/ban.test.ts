@@ -84,7 +84,7 @@ function makePrisma(opts: {
         )
         .mockResolvedValueOnce(
           targetExists
-            ? { id: 'part-tgt', role: targetRole, bannedAt: targetBannedAt, displayName: 'Bob' }
+            ? { id: 'part-tgt', userId: TARGET_ID, role: targetRole, bannedAt: targetBannedAt, displayName: 'Bob' }
             : null
         ),
       update: jest.fn<any>().mockResolvedValue({}),
@@ -281,7 +281,7 @@ describe('PATCH unban — insufficient rank', () => {
       participant: {
         findFirst: jest.fn<any>()
           .mockResolvedValueOnce({ id: 'part-curr', role: 'member' })
-          .mockResolvedValueOnce({ id: 'part-tgt' }),
+          .mockResolvedValueOnce({ id: 'part-tgt', userId: TARGET_ID , bannedAt: new Date('2026-08-01T00:00:00.000Z') }),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     };
@@ -314,7 +314,7 @@ function makeUnbanPrisma() {
     participant: {
       findFirst: jest.fn<any>()
         .mockResolvedValueOnce({ id: 'part-curr', role: 'admin' })
-        .mockResolvedValueOnce({ id: 'part-tgt' }),
+        .mockResolvedValueOnce({ id: 'part-tgt', userId: TARGET_ID , bannedAt: new Date('2026-08-01T00:00:00.000Z') }),
       update: jest.fn<any>().mockResolvedValue({}),
       // Membres actifs APRÈS la levée : la cible réintégrée en fait partie,
       // c'est ce qui lui vaut d'être adressée sur sa room personnelle.

@@ -7,6 +7,7 @@ jest.mock('../../services/api.service', () => ({
   apiService: {
     get: jest.fn(),
     post: jest.fn(),
+    put: jest.fn(),
     patch: jest.fn(),
     delete: jest.fn(),
   },
@@ -311,15 +312,17 @@ describe('ConversationsService', () => {
         unreadCount: 0,
       };
 
-      mockApiService.patch.mockResolvedValue({
-        data: mockUpdatedConversation,
+      // Forme RÉELLE : `apiService` rend `{ success, data }` où `data` est le
+      // corps entier, enveloppe du gateway comprise.
+      mockApiService.put.mockResolvedValue({
+        data: { success: true, data: mockUpdatedConversation },
         success: true,
         message: 'Updated',
       });
 
       const result = await conversationsService.updateConversation('1', updateData);
 
-      expect(mockApiService.patch).toHaveBeenCalledWith('/conversations/1', updateData);
+      expect(mockApiService.put).toHaveBeenCalledWith('/conversations/1', updateData);
       expect(result.id).toBe('1');
     });
   });

@@ -127,13 +127,35 @@ export function useParticipantInfo(
     };
   }, [conversation, conversationParticipants, currentUser?.id]);
 
+  /**
+   * Le RANG du lecteur DANS cette conversation — celui qui gouverne l'onglet de
+   * configuration et la modification de l'image de groupe.
+   *
+   * L'ordre importe, et il a été la cause du blocage : ce hook lisait
+   * `participant.role`, qui porte le rôle **PLATEFORME** ('USER', 'ADMIN'…), le
+   * rang dans le fil vivant sous `conversationRole`
+   * (`serializeConversationParticipant`, `packages/shared/utils/participant-helpers.ts`).
+   * Un créateur de groupe ordinaire obtenait donc 'USER', et
+   * `hasMinimumMemberRole('user', MODERATOR)` est faux : il ne pouvait modifier
+   * ni le titre, ni la description, ni l'image de son propre groupe. Seul le
+   * staff plateforme passait, par coïncidence de taxonomie.
+   *
+   * 1. `conversation.currentUserRole` — autorité serveur. La liste de
+   *    participants est tronquée à cinq par le gateway : dans un groupe de six,
+   *    le lecteur n'y figure pas, et aucune heuristique cliente ne peut trancher.
+   * 2. `conversationRole` du participant — quand le serveur ne l'a pas dit.
+   * 3. Le rôle plateforme — dernier recours, pour ne pas dégrader un lecteur
+   *    face à un gateway antérieur qui ne calcule pas encore le rang.
+   */
   const getCurrentUserRole = useCallback((): UserRoleEnum => {
-    if (!conversation || !currentUser?.id || !conversationParticipants.length) {
-      return currentUser?.role as UserRoleEnum || UserRoleEnum.USER;
-    }
+    const servedRole = (conversation as { currentUserRole?: string | null } | undefined)?.currentUserRole;
+    if (servedRole) return servedRole as UserRoleEnum;
 
-    const currentUserParticipant = conversationParticipants.find(p => p.userId === currentUser.id);
-    return currentUserParticipant?.role as UserRoleEnum || currentUser?.role as UserRoleEnum || UserRoleEnum.USER;
+    const currentUserParticipant = conversationParticipants.find(p => p.userId === currentUser?.id);
+    const conversationRole = (currentUserParticipant as { conversationRole?: string } | undefined)?.conversationRole;
+    if (conversationRole) return conversationRole as UserRoleEnum;
+
+    return currentUser?.role as UserRoleEnum || UserRoleEnum.USER;
   }, [conversation, currentUser?.id, currentUser?.role, conversationParticipants]);
 
   const { otherUserId, presenceFallback } = getOtherParticipantPresence();

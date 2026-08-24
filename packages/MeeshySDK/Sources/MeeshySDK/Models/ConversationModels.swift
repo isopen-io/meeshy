@@ -271,6 +271,37 @@ public struct UpdateConversationResponse: Decodable, Sendable {
     }
 }
 
+extension MeeshyConversation {
+    /// Reporte sur une conversation connue les seules métadonnées qu'une
+    /// réponse de mise à jour affirme.
+    ///
+    /// `PUT/PATCH /conversations/:id` rend le CONTENEUR : titre, description,
+    /// visuels, réglages. Il ne rend ni le rang du lecteur, ni l'effectif, ni
+    /// les participants, ni l'aperçu du dernier message — et
+    /// `UpdateConversationResponse.toAPIConversation()` comble ces trous par
+    /// `nil`. Reconstruire la conversation à partir de cette réponse rendait
+    /// donc à l'appelant un objet amputé : le créateur perdait son propre rang
+    /// et l'effectif retombait à zéro juste après une sauvegarde RÉUSSIE.
+    ///
+    /// La règle est celle du tri-état déjà en vigueur sur le fil : on n'écrit
+    /// que ce que le serveur a dit. Un champ absent de la réponse laisse la
+    /// valeur locale intacte — il ne l'efface pas.
+    public func mergingMetadata(from updated: APIConversation) -> MeeshyConversation {
+        var merged = self
+        merged.title = updated.title ?? title
+        merged.description = updated.description ?? description
+        merged.avatar = updated.avatar ?? avatar
+        merged.banner = updated.banner ?? banner
+        merged.isActive = updated.isActive ?? isActive
+        merged.isAnnouncementChannel = updated.isAnnouncementChannel ?? isAnnouncementChannel
+        merged.defaultWriteRole = updated.defaultWriteRole ?? defaultWriteRole
+        merged.slowModeSeconds = updated.slowModeSeconds ?? slowModeSeconds
+        merged.autoTranslateEnabled = updated.autoTranslateEnabled ?? autoTranslateEnabled
+        merged.updatedAt = updated.updatedAt ?? updatedAt
+        return merged
+    }
+}
+
 extension APIConversation {
     public func toConversation(currentUserId: String) -> MeeshyConversation {
         let otherParticipant = participants?.first { $0.userId != currentUserId }

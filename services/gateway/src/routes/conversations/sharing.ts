@@ -7,7 +7,6 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationSchema,
   conversationParticipantSchema,
-  conversationResponseSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
@@ -16,7 +15,7 @@ import {
   generateUniqueShareLinkId,
   ensureUniqueShareLinkIdentifier
 } from './utils/identifier-generator';
-import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendConflict, sendInternalError, sendError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import {
@@ -283,167 +282,17 @@ export function registerSharingRoutes(
     }
   });
 
-  // Route pour mettre à jour une conversation
-  fastify.patch<{
-    Params: { id: string };
-    Body: {
-      title?: string;
-      description?: string;
-      type?: 'direct' | 'group' | 'public' | 'global' | 'broadcast';
-    };
-  }>('/conversations/:id', {
-    schema: {
-      description: 'Partially update conversation properties (alternative to PUT) - requires admin/moderator role',
-      tags: ['conversations'],
-      summary: 'Partially update conversation',
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: {
-          id: { type: 'string', description: 'Conversation ID or identifier' }
-        }
-      },
-      body: {
-        type: 'object',
-        properties: {
-          title: { type: 'string', description: 'New conversation title', minLength: 1, maxLength: 100 },
-          description: { type: 'string', description: 'New conversation description', maxLength: 500 },
-          type: { type: 'string', enum: ['direct', 'group', 'public', 'global'], description: 'Conversation type' }
-        }
-      },
-      response: {
-        200: conversationResponseSchema,
-        400: errorResponseSchema,
-        401: errorResponseSchema,
-        403: errorResponseSchema,
-        404: errorResponseSchema,
-        500: errorResponseSchema
-      }
-    },
-    preValidation: [optionalAuth]
-  }, async (request, reply) => {
-    const { id } = request.params;
-    const { title, description, type } = request.body;
-    const authRequest = request as UnifiedAuthRequest;
-    
-    try {
-      // Vérifier que l'utilisateur est authentifié
-      if (!authRequest.authContext.isAuthenticated) {
-        return sendUnauthorized(reply, 'Authentification requise');
-      }
-      
-      const currentUserId = authRequest.authContext.userId;
-
-
-      // Résoudre l'ID de conversation réel
-      const conversationId = await resolveConversationId(prisma, id);
-      if (!conversationId) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      // Vérifier que l'utilisateur a accès à cette conversation
-      const membership = await prisma.participant.findFirst({
-        where: {
-          conversationId: conversationId,
-          userId: currentUserId,
-          isActive: true
-        },
-        include: {
-          user: true
-        }
-      });
-
-      if (!membership) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-
-      // Pour la modification du nom, permettre à tous les membres de la conversation
-      // Seuls les admins ou créateurs peuvent modifier le type de conversation
-      if (type !== undefined) {
-        const isAdmin = membership.user.role === 'ADMIN' || membership.user.role === 'BIGBOSS';
-        const isCreator = membership.role === 'creator';
-        
-        if (!isAdmin && !isCreator) {
-          return sendForbidden(reply, 'Seuls les administrateurs peuvent modifier le type de conversation');
-        }
-      }
-
-      // Préparer les données de mise à jour
-      const updateData: any = {};
-      if (title !== undefined) updateData.title = title;
-      if (description !== undefined) updateData.description = description;
-      if (type !== undefined) updateData.type = type;
-
-      // Mettre à jour la conversation
-      const updatedConversation = await prisma.conversation.update({
-        where: { id: conversationId },
-        data: updateData,
-        include: {
-          participants: {
-            where: { isActive: true },
-            select: {
-              id: true,
-              userId: true,
-              displayName: true,
-              avatar: true,
-              type: true,
-              role: true,
-              language: true,
-              isOnline: true,
-              lastActiveAt: true
-            }
-          }
-        }
-      });
-
-      // Gate de présence des co-participants. `conversationParticipantSchema`
-      // déclare `isOnline`/`lastActiveAt` : ces deux champs atteignent le fil,
-      // et rien ne les filtrait — quand la liste de participants
-      // (`routes/conversations/participants.ts`) applique le gate depuis
-      // longtemps sur exactement les mêmes lignes.
-      //
-      // Régime `resolvePrefsOnly` : la co-participation est un contexte d'accès
-      // garanti des DEUX côtés, seules les préférences s'appliquent. Un id
-      // ABSENT de la carte vaut MONTRABLE — à l'inverse du critère strict :
-      // un participant anonyme n'a pas de `userId`, donc pas de préférences,
-      // et il reste visible.
-      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
-        updatedConversation.participants
-          .map((p: { userId: string | null }) => p.userId)
-          .filter((uid: string | null): uid is string => !!uid),
-      );
-
-      return sendSuccess(reply, {
-        ...updatedConversation,
-        participants: updatedConversation.participants.map((p: {
-          userId: string | null;
-          isOnline: boolean | null;
-          lastActiveAt: Date | null;
-        }) => ({
-          ...p,
-          isOnline: presenceVis.get(p.userId ?? '')?.showOnline === false ? false : p.isOnline,
-          lastActiveAt: presenceVis.get(p.userId ?? '')?.showLastSeenTimestamp === false ? null : p.lastActiveAt,
-        })),
-      });
-
-    } catch (error) {
-      logger.error('Error updating conversation', error as Error);
-
-      if (error.code === 'P2002') {
-        return sendConflict(reply, 'Une conversation avec ce nom existe déjà');
-      } else if (error.code === 'P2025') {
-        return sendNotFound(reply, 'Conversation non trouvée');
-      } else if (error.code === 'P2003') {
-        return sendBadRequest(reply, 'Erreur de référence - conversation invalide');
-      } else if (error.name === 'ValidationError') {
-        return sendBadRequest(reply, 'Données de mise à jour invalides');
-      }
-
-      return sendInternalError(reply, 'Erreur lors de la mise à jour de la conversation');
-    }
-  });
-
+  // `PATCH /conversations/:id` VIVAIT ICI, en jumeau du `PUT` de `core.ts`.
+  // Les deux ont dérivé comme dérivent deux exemplaires d'un même geste : celui-ci
+  // n'acceptait que `title`/`description`/`type`, laissait n'importe quel membre
+  // actif renommer le groupe, et n'émettait AUCUN `conversation:updated`. Le web lui
+  // postait `avatar` et `banner` — non déclarés, donc ignorés en silence sous une
+  // réponse 200 : l'interface annonçait « bannière mise à jour » et rien n'était
+  // écrit (mesuré en production le 2026-08-24).
+  //
+  // Le handler de `core.ts` sert désormais les DEUX verbes. Ne pas réintroduire de
+  // route de modification ici : les métadonnées d'une conversation ont un seul point
+  // d'écriture, et `conversation-update-route.test.ts` le garde sur PUT comme sur PATCH.
   // Récupérer les liens de partage d'une conversation (pour les admins)
   fastify.get('/conversations/:conversationId/links', {
     schema: {

@@ -465,31 +465,47 @@ public struct ConversationSettingsView: View {
         }
     }
 
+    /// Les trois routes de gestion (`…/role`, `DELETE …/participants/:userId`,
+    /// `…/ban`) filtrent sur la colonne `userId`. Ce menu passait
+    /// `participant.id` — un `Participant.id` — aux deux premières : promouvoir
+    /// répondait 404, retirer répondait 200 **sans rien faire**.
+    ///
+    /// Un visiteur SANS COMPTE n'a pas de `User.id` : aucune des trois ne peut
+    /// l'atteindre, donc aucune ne lui est proposée. Ses droits se pilotent par
+    /// `/participants/:participantId/rights`, qui attend l'AUTRE identifiant.
     @ViewBuilder
     private func memberActions(for participant: APIParticipant, targetRole: MemberRole) -> some View {
-        let participantId = participant.id
-        let userId = participant.userId ?? participant.id
-
-        if viewModel.currentUserRole == .creator && targetRole < .admin {
-            Button { Task { await viewModel.updateRole(participantId: participantId, newRole: "ADMIN") } } label: {
-                Label(String(localized: "conversation.settings.member.promoteAdmin", defaultValue: "Promouvoir Admin", bundle: .module), systemImage: "shield.fill")
+        // Expulser et bannir visent une CLÉ : `User.id` pour un compte,
+        // `Participant.id` pour un visiteur venu par un lien partagé. Le gateway
+        // résout la cible sous les deux colonnes, donc les deux gestes sont
+        // offerts à tout le monde.
+        //
+        // Changer un RANG, non : cette route-là n'est adressée que par `User.id`,
+        // et promouvoir un visiteur de passage n'a pas de sens produit — ses
+        // droits d'écriture se pilotent par `…/participants/:participantId/rights`.
+        let targetKey = participant.userId ?? participant.id
+        if let accountId = participant.userId {
+            if viewModel.currentUserRole == .creator && targetRole < .admin {
+                Button { Task { await viewModel.updateRole(userId: accountId, newRole: "ADMIN") } } label: {
+                    Label(String(localized: "conversation.settings.member.promoteAdmin", defaultValue: "Promouvoir Admin", bundle: .module), systemImage: "shield.fill")
+                }
+            }
+            if viewModel.currentUserRole.hasMinimumRole(.admin) && targetRole == .member {
+                Button { Task { await viewModel.updateRole(userId: accountId, newRole: "MODERATOR") } } label: {
+                    Label(String(localized: "conversation.settings.member.promoteModerator", defaultValue: "Promouvoir Moderateur", bundle: .module), systemImage: "checkmark.shield.fill")
+                }
+            }
+            if viewModel.currentUserRole > targetRole && targetRole > .member {
+                Button { Task { await viewModel.updateRole(userId: accountId, newRole: "MEMBER") } } label: {
+                    Label(String(localized: "conversation.settings.member.demoteMember", defaultValue: "Retrograder Membre", bundle: .module), systemImage: "person.fill")
+                }
             }
         }
-        if viewModel.currentUserRole.hasMinimumRole(.admin) && targetRole == .member {
-            Button { Task { await viewModel.updateRole(participantId: participantId, newRole: "MODERATOR") } } label: {
-                Label(String(localized: "conversation.settings.member.promoteModerator", defaultValue: "Promouvoir Moderateur", bundle: .module), systemImage: "checkmark.shield.fill")
-            }
-        }
-        if viewModel.currentUserRole > targetRole && targetRole > .member {
-            Button { Task { await viewModel.updateRole(participantId: participantId, newRole: "MEMBER") } } label: {
-                Label(String(localized: "conversation.settings.member.demoteMember", defaultValue: "Retrograder Membre", bundle: .module), systemImage: "person.fill")
-            }
-        }
-        Button(role: .destructive) { Task { await viewModel.expelParticipant(participantId: participantId) } } label: {
+        Button(role: .destructive) { Task { await viewModel.expelParticipant(key: targetKey) } } label: {
             Label(String(localized: "conversation.settings.member.expel", defaultValue: "Expulser", bundle: .module), systemImage: "person.fill.xmark")
         }
         if viewModel.currentUserRole.hasMinimumRole(.admin) {
-            Button(role: .destructive) { Task { await viewModel.banParticipant(userId: userId) } } label: {
+            Button(role: .destructive) { Task { await viewModel.banParticipant(key: targetKey) } } label: {
                 Label(String(localized: "conversation.settings.member.ban", defaultValue: "Bannir", bundle: .module), systemImage: "hand.raised.fill")
             }
         }
@@ -600,6 +616,14 @@ public final class ConversationSettingsViewModel: ObservableObject {
     @Published public var memberSearchText: String = ""
     @Published public var totalMemberCount: Int = 0
 
+    /// La conversation telle qu'elle est entrée dans cet écran. Le `PUT` ne rend
+    /// que les métadonnées du conteneur — ni rang du lecteur, ni effectif, ni
+    /// participants — et `toAPIConversation()` comble ces trous par `nil`.
+    /// Rendre cet objet amputé à l'appelant lui ferait perdre son propre rang
+    /// juste après une sauvegarde réussie. On repart donc de l'original et on
+    /// n'y remplace que ce que le serveur vient de confirmer.
+    private let originalConversation: MeeshyConversation
+
     public let conversationId: String
     let conversationName: String
     public let accentColor: String
@@ -626,6 +650,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
     }
 
     init(conversation: MeeshyConversation, currentUserRole: MemberRole = .member) {
+        self.originalConversation = conversation
         self.conversationId = conversation.id
         self.conversationName = conversation.name
         self.accentColor = conversation.accentColor
@@ -689,7 +714,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
             )
 
             postToast(message: String(localized: "conversation.settings.toast.updated", defaultValue: "Conversation mise a jour", bundle: .module), isSuccess: true)
-            return apiConversation.toConversation(currentUserId: AuthManager.shared.currentUser?.id ?? "")
+            return originalConversation.mergingMetadata(from: apiConversation)
         } catch {
             errorMessage = error.localizedDescription
             showError = true
@@ -759,11 +784,14 @@ public final class ConversationSettingsViewModel: ObservableObject {
         }
     }
 
-    public func updateRole(participantId: String, newRole: String) async {
+    /// `userId`, jamais un `Participant.id` : la route filtre sur la colonne
+    /// `userId` et répond 404 pour un identifiant de participant. Le nom du
+    /// paramètre EST la garde — la route voisine des droits attend l'autre.
+    public func updateRole(userId: String, newRole: String) async {
         do {
             try await ConversationService.shared.updateParticipantRole(
                 conversationId: conversationId,
-                participantId: participantId,
+                userId: userId,
                 role: newRole
             )
             postToast(message: String(localized: "conversation.settings.toast.roleUpdated", defaultValue: "Role mis a jour", bundle: .module), isSuccess: true)
@@ -774,11 +802,14 @@ public final class ConversationSettingsViewModel: ObservableObject {
         }
     }
 
-    public func expelParticipant(participantId: String) async {
+    /// `key` — un `User.id` pour un compte, un `Participant.id` pour un visiteur
+    /// venu par un lien partagé. Le gateway résout la cible sous les DEUX
+    /// colonnes ; c'est ce qui rend un visiteur sans compte expulsable.
+    public func expelParticipant(key: String) async {
         do {
             try await ConversationService.shared.removeParticipant(
                 conversationId: conversationId,
-                participantId: participantId
+                key: key
             )
             postToast(message: String(localized: "conversation.settings.toast.memberExpelled", defaultValue: "Membre expulse", bundle: .module), isSuccess: true)
             await loadMembers()
@@ -788,11 +819,13 @@ public final class ConversationSettingsViewModel: ObservableObject {
         }
     }
 
-    public func banParticipant(userId: String) async {
+    /// Bannir sort de la conversation ET ferme le lien de partage emprunté —
+    /// le gateway invalide `Participant.shareLinkId`. Même clé que l'expulsion.
+    public func banParticipant(key: String) async {
         do {
             try await ConversationService.shared.banParticipant(
                 conversationId: conversationId,
-                userId: userId
+                key: key
             )
             postToast(message: String(localized: "conversation.settings.toast.memberBanned", defaultValue: "Membre banni", bundle: .module), isSuccess: true)
             await loadMembers()
