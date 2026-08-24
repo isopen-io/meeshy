@@ -34,6 +34,7 @@ import me.meeshy.sdk.model.SocketPostBookmarkedData
 import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
+import me.meeshy.sdk.model.SocketPostRepostedData
 import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.model.SocketPostUpdatedData
@@ -78,6 +79,7 @@ class FeedViewModelTest {
     private val postTranslationUpdated =
         MutableSharedFlow<SocketPostTranslationUpdatedData>(extraBufferCapacity = 64)
     private val postUpdated = MutableSharedFlow<SocketPostUpdatedData>(extraBufferCapacity = 64)
+    private val postReposted = MutableSharedFlow<SocketPostRepostedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun post(id: String) = ApiPost(id = id, content = "Post $id")
@@ -94,6 +96,7 @@ class FeedViewModelTest {
         every { socialSocket.commentDeleted } returns commentDeleted
         every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
+        every { socialSocket.postReposted } returns postReposted
         return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
     }
 
@@ -422,6 +425,7 @@ class FeedViewModelTest {
         every { socialSocket.commentDeleted } returns commentDeleted
         every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
+        every { socialSocket.postReposted } returns postReposted
         return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
     }
 
@@ -560,6 +564,30 @@ class FeedViewModelTest {
         val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1"), post("2")), 0L)))
 
         postCreated.emit(SocketPostCreatedData(post("2")))
+
+        val s = vm.state.value
+        assertThat(s.posts.map { it.id }).containsExactly("1", "2").inOrder()
+        assertThat(s.newPostsCount).isEqualTo(0)
+    }
+
+    // --- Realtime repost arrival (post:reposted) ---
+
+    @Test
+    fun `a realtime repost arrives at the head and raises the new-posts banner`() = runTest {
+        val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1"), post("2")), 0L)))
+
+        postReposted.emit(SocketPostRepostedData(originalPostId = "1", repost = post("r1")))
+
+        val s = vm.state.value
+        assertThat(s.posts.map { it.id }).containsExactly("r1", "1", "2").inOrder()
+        assertThat(s.newPostsCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a repost already visible in the cache feed is ignored`() = runTest {
+        val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1"), post("2")), 0L)))
+
+        postReposted.emit(SocketPostRepostedData(originalPostId = "9", repost = post("2")))
 
         val s = vm.state.value
         assertThat(s.posts.map { it.id }).containsExactly("1", "2").inOrder()

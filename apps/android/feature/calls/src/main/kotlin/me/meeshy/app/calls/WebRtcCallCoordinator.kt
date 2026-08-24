@@ -253,6 +253,11 @@ class WebRtcCallCoordinator @Inject constructor(
 
     private suspend fun onRemoteSignal(envelope: CallSignalEnvelope) {
         val signal = envelope.signal
+        // §3.5 (mirrors iOS `CallManager.acceptIncomingNegotiation`) — drop a signal
+        // from an older negotiation epoch before touching the engine. Checked first,
+        // exactly like iOS's ordering, so a stale offer/answer/candidate cannot even
+        // adopt its sender's `peerId` on its way to being ignored.
+        if (!acceptIncomingNegotiation(signal.negotiationId)) return
         when (signal.type) {
             "offer" -> {
                 val sdp = signal.sdp ?: return
@@ -261,7 +266,6 @@ class WebRtcCallCoordinator @Inject constructor(
                 // answer + ICE candidates would otherwise be sent with a blank `to`
                 // and the gateway rejects the whole signal ("to field is required").
                 signal.from?.takeIf { it.isNotBlank() }?.let { peerId = it }
-                signal.negotiationId?.let { negotiationId = it }
                 engine.setRemoteDescription(SessionDescription(SessionDescription.Type.OFFER, sdp))
                 val answer = engine.createAnswer()
                 engine.setLocalDescription(answer)
@@ -276,6 +280,29 @@ class WebRtcCallCoordinator @Inject constructor(
                 engine.addIceCandidate(IceCandidate(signal.sdpMid, signal.sdpMLineIndex ?: 0, candidate))
             }
         }
+    }
+
+    /**
+     * §3.5 — accept an incoming signal's generation unless it is STALE (older than
+     * the highest generation this coordinator has sent or seen). Advances the
+     * high-water mark on accept, exactly mirroring iOS's
+     * `CallManager.acceptIncomingNegotiation`/`isStaleNegotiation`. A missing
+     * generation (`null` — a legacy or malformed signal) is treated as `0`, same as
+     * iOS's `event.signal.negotiationId ?? 0` at the decode boundary: never stale,
+     * always accepted.
+     *
+     * Without this guard, `onRemoteSignal` adopted every incoming `negotiationId`
+     * (offer branch) or applied a remote answer/candidate unconditionally (answer/
+     * ice-candidate branches) regardless of arrival order — the gateway's §4.6
+     * buffered-offer replay and an overlapping ICE-restart racing a peer's in-flight
+     * answer could both deliver a signal from an OLDER negotiation after a newer one
+     * was already sent, corrupting the SDP state with no error surfaced.
+     */
+    private fun acceptIncomingNegotiation(generation: Int?): Boolean {
+        val incoming = generation ?: 0
+        if (incoming < negotiationId) return false
+        negotiationId = maxOf(negotiationId, incoming)
+        return true
     }
 
     private fun routeAudioToCall() {

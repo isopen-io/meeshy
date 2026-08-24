@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioManager
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -15,6 +16,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.model.call.CallSignalEnvelope
+import me.meeshy.sdk.model.call.CallSignalPayload
 import me.meeshy.sdk.socket.CallSignalManager
 import org.junit.Before
 import org.junit.Test
@@ -49,6 +51,7 @@ class WebRtcCallCoordinatorTest {
         every { iceConnectionState } returns iceState
         every { localIceCandidates } returns localCandidates
         coEvery { createOffer() } returns SessionDescription(SessionDescription.Type.OFFER, "v=0-restart")
+        coEvery { createAnswer() } returns SessionDescription(SessionDescription.Type.ANSWER, "v=0-answer")
         coEvery { setLocalDescription(any()) } returns Unit
     }
 
@@ -81,6 +84,25 @@ class WebRtcCallCoordinatorTest {
         this, "call-9", emptyList(), peerId = "peer", selfId = "me", isVideo = false,
         onMediaConnected = { connectedCount += 1 },
         onMediaStalled = { stalledCount += 1 },
+    )
+
+    private fun remoteSignal(
+        type: String,
+        negotiationId: Int? = null,
+        sdp: String? = null,
+        candidate: String? = null,
+    ) = CallSignalEnvelope(
+        callId = "call-9",
+        signal = CallSignalPayload(
+            type = type,
+            sdp = sdp,
+            candidate = candidate,
+            sdpMLineIndex = if (candidate != null) 0 else null,
+            sdpMid = if (candidate != null) "0" else null,
+            from = "peer",
+            to = "me",
+            negotiationId = negotiationId,
+        ),
     )
 
     @Test
@@ -234,6 +256,63 @@ class WebRtcCallCoordinatorTest {
             verify(exactly = 1) { signals.emitReconnecting("call-9", "me", attempt = 9) }
             verify(exactly = 2) { signals.emitReconnecting("call-9", "me", attempt = 10) }
             verify(exactly = 0) { signals.emitReconnecting("call-9", "me", attempt = 11) }
+            coordinator.end()
+        }
+
+    // MARK: - §3.5 negotiation-epoch staleness (mirrors iOS CallManager)
+    //
+    // The gateway's buffered-offer replay (§4.6) and an ICE-restart racing a peer's
+    // in-flight answer can both deliver a signal from an OLDER negotiation after a
+    // newer one was already sent/seen. Every branch of onRemoteSignal must drop it.
+
+    @Test
+    fun `a stale offer arriving after a newer one is dropped`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCallee()
+
+        incomingSignals.emit(remoteSignal("offer", negotiationId = 2, sdp = "v=0-fresh"))
+        incomingSignals.emit(remoteSignal("offer", negotiationId = 1, sdp = "v=0-stale"))
+
+        coVerify(exactly = 1) { engine.setRemoteDescription(match { it.description == "v=0-fresh" }) }
+        coVerify(exactly = 0) { engine.setRemoteDescription(match { it.description == "v=0-stale" }) }
+        coordinator.end()
+    }
+
+    @Test
+    fun `a stale answer from before an ICE restart is dropped, the fresh one is applied`() =
+        runTest(UnconfinedTestDispatcher()) {
+            startAsCaller()
+            iceState.value = IceConnectionState.CONNECTED
+            iceState.value = IceConnectionState.FAILED // restarts: negotiationId 0 -> 1, fresh offer sent
+
+            incomingSignals.emit(remoteSignal("answer", negotiationId = 0, sdp = "v=0-stale-answer"))
+            incomingSignals.emit(remoteSignal("answer", negotiationId = 1, sdp = "v=0-fresh-answer"))
+
+            coVerify(exactly = 0) { engine.setRemoteDescription(match { it.description == "v=0-stale-answer" }) }
+            coVerify(exactly = 1) { engine.setRemoteDescription(match { it.description == "v=0-fresh-answer" }) }
+            coordinator.end()
+        }
+
+    @Test
+    fun `an ICE candidate from a superseded negotiation is dropped`() = runTest(UnconfinedTestDispatcher()) {
+        startAsCallee()
+        incomingSignals.emit(remoteSignal("offer", negotiationId = 3, sdp = "v=0-offer"))
+
+        incomingSignals.emit(remoteSignal("ice-candidate", negotiationId = 2, candidate = "candidate:stale"))
+        incomingSignals.emit(remoteSignal("ice-candidate", negotiationId = 3, candidate = "candidate:fresh"))
+
+        verify(exactly = 0) { engine.addIceCandidate(match { it.sdp == "candidate:stale" }) }
+        verify(exactly = 1) { engine.addIceCandidate(match { it.sdp == "candidate:fresh" }) }
+        coordinator.end()
+    }
+
+    @Test
+    fun `a signal with no negotiationId is treated as generation 0 and accepted`() =
+        runTest(UnconfinedTestDispatcher()) {
+            startAsCallee()
+
+            incomingSignals.emit(remoteSignal("offer", negotiationId = null, sdp = "v=0-legacy"))
+
+            coVerify(exactly = 1) { engine.setRemoteDescription(match { it.description == "v=0-legacy" }) }
             coordinator.end()
         }
 }

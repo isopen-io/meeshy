@@ -59,7 +59,7 @@ Source de verite iOS : `ConversationViewModel.preferredLanguages` + `preferredTr
 
    > **La question à poser à un correctif de Prisme n'est pas seulement « sert-il le bon texte ? » mais « qu'est-ce qui part À CÔTÉ du texte qu'il vient de corriger ? »** — c'est la leçon 275 (une protection se mesure sur tout ce que la charge TRANSPORTE) portée d'une garde de confidentialité à un correctif de résolution.
 
-   Et **la piste est élue par la langue du TEXTE SERVI, jamais par une descente indépendante** : deux descentes parallèles serviraient « la réunion est déplacée » au-dessus d'une piste espagnole — un défaut PIRE que celui qu'on corrige, parce qu'il a l'air d'une traduction ratée plutôt que d'une traduction absente. Détail : `tasks/lessons.md` § 282.
+   Et **la piste est élue par la langue du TEXTE SERVI, jamais par une descente indépendante** : deux descentes parallèles serviraient « la réunion est déplacée » au-dessus d'une piste espagnole — un défaut PIRE que celui qu'on corrige, parce qu'il a l'air d'une traduction ratée plutôt que d'une traduction absente. Détail : `tasks/lessons.md` § 283.
 
    **La descente elle-même est UNE fonction** : `resolvePrismTranslation()` (`packages/shared/utils/conversation-helpers.ts`), qui rend `{ language, text } | null` — `null` ⇒ servir l'original. `resolveLastMessagePreview()` en est désormais une projection. Tout consommateur TS qui doit DIRE dans quelle langue il sert (et pas seulement afficher un texte) l'appelle plutôt que de réécrire la boucle : c'est la réécriture qui a produit trois familles divergentes en trois cycles.
 
