@@ -375,3 +375,65 @@ describe.each(runners)('%s — le VERROU de protection', (_name, run) => {
     expect(data?.content).toBe('Regarde ça');
   });
 });
+
+// ── L'éventail de MENTIONS relit une fois pour tout son lot ────────────────
+
+/**
+ * Les témoins ci-dessus exercent `createMentionNotification` en SOLO. Le chemin
+ * de production est le BATCH, et c'est lui qui porte le risque que le correctif
+ * introduit : élargir un `select` est exactement le geste qui invite à ouvrir
+ * une seconde lecture, et une lecture PAR DESTINATAIRE ne rougit nulle part —
+ * elle se paie en latence de fan-out, sur un chemin que personne ne mesure.
+ *
+ * Le témoin exige donc N > 1 : à un seul mentionné, « une lecture » et « une
+ * lecture par destinataire » rendent le même compte, et l'assertion ne peut pas
+ * tomber (§ Leçon 276 — un témoin de rang s'écrit sur un rang autre que le
+ * premier ; ici, sur un lot autre que le singleton).
+ */
+describe('createMentionNotificationsBatch — une seule relecture pour N mentionnés', () => {
+  const batchPrisma = () => {
+    const prisma = makeServicePrisma({ systemLanguage: 'fr' });
+    prisma.user.findUnique.mockImplementation(({ where }: any) =>
+      Promise.resolve(
+        where?.id === SENDER_USER_ID
+          ? { id: SENDER_USER_ID, username: 'alice', displayName: 'Alice', avatar: null }
+          : { id: where?.id, username: 'bob', displayName: 'Bob', avatar: null, systemLanguage: 'fr' }
+      )
+    );
+    return prisma;
+  };
+
+  it('deux mentionnés ⇒ UNE lecture du message, et la même horloge pour les deux', async () => {
+    const prisma = batchPrisma();
+    const sendToUser = jest.fn<any>().mockResolvedValue(undefined);
+    const service = new NotificationService(prisma);
+    service.setSocketIO({
+      to: jest.fn<any>().mockReturnThis(),
+      in: jest.fn<any>().mockReturnThis(),
+      fetchSockets: jest.fn<any>().mockResolvedValue([]),
+      emit: jest.fn<any>(),
+    } as any);
+    service.setPushNotificationService({ sendToUser } as any);
+
+    await service.createMentionNotificationsBatch(
+      [RECIPIENT_ID, THIRD_USER_ID],
+      {
+        senderId: SENDER_USER_ID,
+        messageContent: 'Coucou vous deux',
+        conversationId: CONV_ID,
+        messageId: MSG_ID,
+      } as any,
+      [RECIPIENT_ID, THIRD_USER_ID, SENDER_USER_ID]
+    );
+
+    expect(prisma.message.findUnique).toHaveBeenCalledTimes(1);
+
+    // Et l'estampille ne dépend pas du lecteur : les deux bannières portent la
+    // MÊME, celle du message.
+    expect(sendToUser).toHaveBeenCalledTimes(2);
+    for (const call of sendToUser.mock.calls) {
+      expect(call[0]?.payload?.data?.createdAt).toBe(SERVER_CLOCK.toISOString());
+      expect(call[0]?.payload?.data?.messageType).toBe('image');
+    }
+  });
+});
