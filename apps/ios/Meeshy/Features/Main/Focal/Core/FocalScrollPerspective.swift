@@ -176,7 +176,16 @@ nonisolated enum FocalScrollPerspective {
     /// carte l'englobe : elle paraît aérée en haut. Une rangée de SUITE n'a
     /// pas cet en-tête, son contenu commence au bord. Élargir la marge donne
     /// à toutes la respiration que seule la tête de groupe avait par accident.
-    static let focusCardInnerMargin: CGFloat = 9
+    ///
+    /// **Plafonnée par `Row.paddingVertical`.** La carte dépasse le bloc de
+    /// cette marge ; au-delà du rembourrage que la rangée porte, elle mordrait
+    /// sur ses voisines — et `focusCardInsets` produirait des valeurs
+    /// négatives, que le `max(0, …)` masque sans les rendre justes.
+    /// Portée à 9 le 2026-08-24 pour aérer la carte, ramenée le même jour :
+    /// la CI a montré le conflit. Aérer DAVANTAGE demande d'écarter le contenu
+    /// à l'intérieur de la carte, pas d'agrandir la carte — ce qui touche la
+    /// hauteur de rangée et sort du périmètre.
+    static let focusCardInnerMargin: CGFloat = FocalMetrics.Row.paddingVertical
     /// Teintes de la carte et de ses chips (fond SwiftUI de la rangée en
     /// focus) — nommées ici, dans `Core/`, parce que le garde des littéraux
     /// de loi (`scripts/check-law-literals.sh`) interdit `0.45`/`0.40`/`0.35`

@@ -2,6 +2,67 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-24 **the comment thread folds realtime translations pushed over `comment:translation-updated`**
+> (slice `comment-translation-updated-realtime-merge`, feature-parity Feed/Prisme — the previous entry's `Next`
+> pointer named this exact candidate: "the adjacent sibling the scout flagged is `comment:translation-updated`…
+> same shape, one rung over (comment-keyed)"). It IS the COMMENT sibling of the POST caption realtime merge
+> shipped the same day.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3465 (gateway/ios cycle 124), #3464
+> (ios i18n 241i), #3463 (gateway search pagination): none is a `claude/apps/android/*` slice, all touch
+> production logic outside `apps/android`, none in this routine's scope, none touched. Prior slice
+> (`post-translation-updated-realtime-merge`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`edaec937`).
+>
+> **The gap — the comment-keyed twin of the post channel Android never wired.** The gateway's
+> `PostTranslationService` translates a comment server-side and broadcasts `comment:translation-updated`
+> `{ postId, commentId, language, translation:{text, translationModel?, confidenceScore?, createdAt?} }` via
+> `SocialEventsHandler.broadcastCommentTranslationUpdated`. iOS folds it into the open thread
+> (`PostDetailViewModel`/`FeedViewModel.applyCommentTranslation` + `SocketCommentTranslationUpdatedData`). On
+> Android the event decoded nowhere: `SocialSocketManager` had no comment-translation flow, `SocketEvents.kt`
+> no DTO, and `PostCommentsViewModel` no subscriber — a comment the reader could see translated on iOS stayed
+> in its source language on Android until a full refetch. (`PostTranslationMerge` had a comment STRING overload
+> from the on-demand slice, but no entry-preserving one, and it was unwired to any socket.)
+>
+> **The fix — reuse the entry upsert + a metadata-preserving comment overload + socket wiring + a thread fold.**
+> (1) New `SocketCommentTranslationUpdatedData(postId, commentId, language, translation)` in `:core:model` whose
+> `translation` field IS an `ApiPostTranslationEntry` (the comment-keyed sibling of
+> `SocketPostTranslationUpdatedData`, one rung over) — decodes straight into one, no bespoke payload struct.
+> (2) New entry-preserving comment overload `PostTranslationMerge.mergeTranslation(comment, lang, entry): ApiPostComment?`
+> reusing the existing private entry `upsert` (the string comment overload stored `ApiPostTranslationEntry(text=…)`
+> only, dropping the model/confidence the push carries; metadata-only change is NOT a no-op). (3)
+> `SocialSocketManager.commentTranslationUpdated` flow + `listen("comment:translation-updated", …)`. (4)
+> `PostCommentsViewModel.onCommentTranslationUpdated` subscribes, filters by `postId`, finds the comment (top-level
+> or a loaded reply), merges the entry, and folds via the existing `thread.retranslated`/`replies.retranslated`
+> reducers — **no `activeLanguages` override forced** (the reader did not tap; their own Prisme chain decides, parity
+> with iOS `applyCommentTranslationUpdate` and with the post slice).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200); pristine `android-37.0` via `--channel=3` WORKED alone.**
+>
+> **Tests: +13** — 7 `PostTranslationMergeTest` (comment entry overload: appends preserving model/confidence/timestamp;
+> appends order-preserving; replaces in place under a case-insensitively matched key; stores a metadata-only change;
+> no-op identical entry; no-op blank lang; no-op blank text), 2 `SocialSocketManagerTest` (decodes+emits the full
+> entry; text-only payload → null metadata), 4 `PostCommentsViewModelTest` (an es reader on a fr/en-only comment sees
+> the pushed `es` translation repaint the row with NO tap; the same repaints a loaded REPLY; an event for another post
+> is ignored; an unknown comment is inert). **RED-proof, surgical per piece**: neutering the comment entry
+> `mergeTranslation`→`return null` reddened EXACTLY the 4 transformation merge tests (3 no-op tests green); commenting
+> the socket `listen` reddened the 2 socket tests; neutering the VM fold reddened EXACTLY the 2 repaint tests while
+> the 2 inert tests stayed green — genuine discrimination, not assertion echo.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) locally —
+> **BUILD SUCCESSFUL in 6m 17s** (973 tasks). Reviewer PASS. Diff is `apps/android` only (4 prod files edited in
+> :core:model + :sdk-core + :feature:feed, +13 tests across 3 files, tracking docs). Verdict: **PASS** — a DTO reusing
+> an existing type, a metadata-preserving merge overload reusing the entry upsert, a socket event mirroring the
+> existing social events, and a thread fold reusing the on-demand reducers; behavioural tests through the public API;
+> no production logic outside apps/android.
+>
+> **Next**: Feed/Prisme realtime is now honoured end to end for POST caption, STORY overlay, and COMMENT. The
+> remaining realtime social channel Android may not fold is **`comment:media-updated`** (gateway emits it, iOS wires it
+> at `PostDetailViewModel.commentMediaUpdated`/`FeedCommentsSheet` — a comment's audio transcription/translations
+> landing) — scout whether Android's `SocialSocketManager` decodes it and whether `PostCommentsViewModel` routes it into
+> the thread. Else turn to the §E editor-side candidates (clip-inspector reducer / timeline transport) — both still need
+> a timeline/selection host surface first (orphan risk), so scout read-only before committing.
+
 > On 2026-08-24 **the feed folds realtime post translations pushed over `post:translation-updated`**
 > (slice `post-translation-updated-realtime-merge`, feature-parity Feed/Prisme — the previous entry's `Next`
 > pointer named this exact candidate: "the caption sibling of THIS slice — iOS wires it too, Android's viewer
