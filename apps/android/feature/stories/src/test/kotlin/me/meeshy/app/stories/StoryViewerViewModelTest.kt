@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.SocketStoryDeletedData
 import me.meeshy.sdk.model.SocketStoryReactedData
 import me.meeshy.sdk.model.SocketStoryTranslationUpdatedData
 import me.meeshy.sdk.model.SocketStoryUnreactedData
@@ -58,10 +59,12 @@ class StoryViewerViewModelTest {
     private val unreactedFlow = MutableSharedFlow<SocketStoryUnreactedData>(extraBufferCapacity = 8)
     private val translationUpdatedFlow =
         MutableSharedFlow<SocketStoryTranslationUpdatedData>(extraBufferCapacity = 8)
+    private val deletedFlow = MutableSharedFlow<SocketStoryDeletedData>(extraBufferCapacity = 8)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true) {
         every { storyReacted } returns reactedFlow
         every { storyUnreacted } returns unreactedFlow
         every { storyTranslationUpdated } returns translationUpdatedFlow
+        every { storyDeleted } returns deletedFlow
     }
     private val config = MeeshyConfig()
 
@@ -1017,6 +1020,62 @@ class StoryViewerViewModelTest {
         )
 
         assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hello")
+    }
+
+    // --- Realtime story deletion (story:deleted) ---
+
+    @Test
+    fun `a realtime story deletion drops a later slide from the open viewer`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors()) // at b1, group b = [b1, b2]
+
+        deletedFlow.emit(SocketStoryDeletedData(storyId = "b2", authorId = "b"))
+
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b1")
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+        assertThat(vm.state.value.isDismissed).isFalse()
+    }
+
+    @Test
+    fun `deleting the current slide advances to the next slide in the group`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors()) // at b1, group b = [b1, b2]
+
+        deletedFlow.emit(SocketStoryDeletedData(storyId = "b1", authorId = "b"))
+
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b2")
+        assertThat(vm.state.value.current?.id).isEqualTo("b2")
+    }
+
+    @Test
+    fun `deleting the only slide of the current group rolls onto the next group`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors()) // at a1, group a = [a1]
+
+        deletedFlow.emit(SocketStoryDeletedData(storyId = "a1", authorId = "a"))
+
+        assertThat(vm.state.value.authorName).isEqualTo("name-b")
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+        assertThat(vm.state.value.isDismissed).isFalse()
+    }
+
+    @Test
+    fun `deleting the last remaining slide dismisses the viewer`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1)),
+        )
+
+        deletedFlow.emit(SocketStoryDeletedData(storyId = "a1", authorId = "a"))
+
+        assertThat(vm.state.value.isDismissed).isTrue()
+    }
+
+    @Test
+    fun `a deletion for a story not in the viewer is inert`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+
+        deletedFlow.emit(SocketStoryDeletedData(storyId = "ghost", authorId = "z"))
+
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b1", "b2").inOrder()
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
     }
 
     // --- On-demand story translation (the flag strip's request arm) ---

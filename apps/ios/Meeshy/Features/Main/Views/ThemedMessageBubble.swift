@@ -347,7 +347,15 @@ struct ThemedMessageBubble: View {
             onTapConsentNotice: onTapConsentNotice,
             standalone: standalone
         )
-        .messageEffects(message.effects)
+        // Pas de `.messageEffects` ici : monté à ce niveau, il s'appliquait au
+        // `HStack` de rangée de `BubbleStandardLayout` — avatar, bulle,
+        // réactions et tout l'espace vide jusqu'au bord de l'écran. Le liseré
+        // arc-en-ciel encadrait donc du vide. Les effets sont désormais posés
+        // sur la bulle elle-même, dans `BubbleStandardLayout`.
+        //
+        // Conséquence assumée : les chemins `.deleted` et `.burned`, qui ne
+        // passent pas par `BubbleStandardLayout`, ne portent plus d'effets. Un
+        // tombstone « message supprimé » n'a ni arc-en-ciel ni confettis.
         .opacity(isEphemeralExpired ? 0 : 1)
         .scaleEffect(isEphemeralExpired ? 0.8 : 1)
         .onAppear {

@@ -89,6 +89,34 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `story deleted payload carries the story and author ids`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyDeleted.test {
+            handlers.getValue("story:deleted").invoke(
+                arrayOf(JSONObject("""{"storyId":"s7","authorId":"u4"}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.storyId).isEqualTo("s7")
+            assertThat(event.authorId).isEqualTo("u4")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `story deleted payload decodes with a defaulted author id when absent`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyDeleted.test {
+            handlers.getValue("story:deleted").invoke(
+                arrayOf(JSONObject("""{"storyId":"s8"}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.storyId).isEqualTo("s8")
+            assertThat(event.authorId).isEmpty()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `post bookmarked payload is decoded and emitted`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.postBookmarked.test {
@@ -173,6 +201,27 @@ class SocialSocketManagerTest {
             assertThat(event.post.content).isEqualTo("Bonjour (edited)")
             assertThat(event.post.likeCount).isEqualTo(9)
             assertThat(event.post.isEdited).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `post reposted payload nests the complete repost under repost`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.postReposted.test {
+            handlers.getValue("post:reposted").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"originalPostId":"p0","repost":{"id":"r1","content":"Repartagé",""" +
+                            """"repostOf":{"id":"p0"},"author":{"id":"u9","username":"bob"}}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.originalPostId).isEqualTo("p0")
+            assertThat(event.repost.id).isEqualTo("r1")
+            assertThat(event.repost.content).isEqualTo("Repartagé")
+            assertThat(event.repost.author?.id).isEqualTo("u9")
             cancelAndIgnoreRemainingEvents()
         }
     }

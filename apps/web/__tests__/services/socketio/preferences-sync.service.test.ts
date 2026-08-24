@@ -3,19 +3,21 @@
  * Covers socket event forwarding and listener lifecycle.
  */
 
-jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  SERVER_EVENTS: {
-    USER_PREFERENCES_UPDATED: 'user:preferences-updated',
-    USER_PREFERENCES_REORDERED: 'user:preferences-reordered',
-    CATEGORY_CREATED: 'category:created',
-    CATEGORY_UPDATED: 'category:updated',
-    CATEGORY_DELETED: 'category:deleted',
-    CATEGORIES_REORDERED: 'categories:reordered',
-  },
-  CLIENT_EVENTS: {},
-}));
-
+/**
+ * Ce fichier portait une fabrique `jest.mock('@meeshy/shared/types/socketio-events')`
+ * énumérant six constantes de `SERVER_EVENTS`. Elle était INERTE — le
+ * `moduleNameMapper` réécrit `@meeshy/shared/*` vers `packages/shared/dist`,
+ * donc le service recevait déjà les vraies valeurs (cf. `apps/web/CLAUDE.md`).
+ *
+ * Retirée plutôt que complétée : un double PARTIEL d'un module de constantes
+ * PURES n'a aucune raison d'exister, et son énumération se lit comme une source
+ * de vérité qui dérive du contrat en silence. Le jour où la fabrique
+ * redeviendrait vivante, la septième constante — celle que ce lot ajoute —
+ * sortirait à `undefined` sur ses DEUX adresses sans qu'un témoin d'écoute le
+ * voie, puisqu'ils assertent le NOM depuis la même constante.
+ */
 import { PreferencesSyncService } from '@/services/socketio/preferences-sync.service';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 function makeSocket() {
   const handlers: Record<string, (...args: unknown[]) => void> = {};
@@ -219,6 +221,100 @@ describe('PreferencesSyncService', () => {
       service.cleanup();
       socket._trigger('user:preferences-reordered', { userId: 'u1', updates: [] });
       expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * `user:preferences-community-reordered` — le même geste sur l'autre table,
+   * et un SEAU à part.
+   *
+   * Le nom vient de la constante partagée, jamais d'un littéral : c'est la seule
+   * façon qu'un témoin d'écoute a de tomber si l'émetteur et le récepteur
+   * cessent de nommer la même chose.
+   */
+  describe('onCommunityPreferencesReordered', () => {
+    const COMMUNITY_REORDERED = SERVER_EVENTS.USER_PREFERENCES_COMMUNITY_REORDERED;
+
+    it('registers the community reorder event on the socket', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      expect(socket.on).toHaveBeenCalledWith(COMMUNITY_REORDERED, expect.any(Function));
+    });
+
+    it('forwards the updates payload verbatim to every listener', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const first = jest.fn();
+      const second = jest.fn();
+      service.onCommunityPreferencesReordered(first);
+      service.onCommunityPreferencesReordered(second);
+
+      const payload = {
+        userId: 'u1',
+        updates: [
+          { communityId: 'comm-a', orderInCategory: 2 },
+          { communityId: 'comm-b', orderInCategory: 5 },
+        ],
+      };
+      socket._trigger(COMMUNITY_REORDERED, payload);
+
+      expect(first).toHaveBeenCalledWith(payload);
+      expect(second).toHaveBeenCalledWith(payload);
+    });
+
+    /**
+     * Les deux seaux sont DISJOINTS dans les deux sens. C'est la garde qui
+     * porte la décision de contrat : les deux charges ne sont pas
+     * interchangeables, et un décodeur qui reçoit l'autre ne le dit pas — il
+     * échoue en silence (iOS) ou filtre (le magasin web).
+     */
+    it('keeps the two reorder buckets disjoint', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const conversationListener = jest.fn();
+      const communityListener = jest.fn();
+      service.onPreferencesReordered(conversationListener);
+      service.onCommunityPreferencesReordered(communityListener);
+
+      socket._trigger(COMMUNITY_REORDERED, {
+        userId: 'u1',
+        updates: [{ communityId: 'comm-a', orderInCategory: 0 }],
+      });
+      expect(conversationListener).not.toHaveBeenCalled();
+      expect(communityListener).toHaveBeenCalledTimes(1);
+
+      socket._trigger(SERVER_EVENTS.USER_PREFERENCES_REORDERED, {
+        userId: 'u1',
+        updates: [{ conversationId: 'conv-a', orderInCategory: 0 }],
+      });
+      expect(communityListener).toHaveBeenCalledTimes(1);
+      expect(conversationListener).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not route the community reorder to the payload-less category bucket', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onCategoryChanged(listener);
+      socket._trigger(COMMUNITY_REORDERED, { userId: 'u1', updates: [] });
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('unsubscribe and cleanup both stop the community reorder listener', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+
+      const unsubscribed = jest.fn();
+      const unsub = service.onCommunityPreferencesReordered(unsubscribed);
+      unsub();
+      socket._trigger(COMMUNITY_REORDERED, { userId: 'u1', updates: [] });
+      expect(unsubscribed).not.toHaveBeenCalled();
+
+      const cleaned = jest.fn();
+      service.onCommunityPreferencesReordered(cleaned);
+      service.cleanup();
+      socket._trigger(COMMUNITY_REORDERED, { userId: 'u1', updates: [] });
+      expect(cleaned).not.toHaveBeenCalled();
     });
   });
 

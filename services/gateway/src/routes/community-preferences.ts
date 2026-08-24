@@ -19,6 +19,7 @@ import { UnifiedAuthRequest } from '../middleware/auth';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   CommunityPreferencesPayload,
+  UserPreferencesCommunityReorderedEventData,
   UserPreferencesCommunityUpdatedEventData,
 } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../utils/socket-broadcast';
@@ -503,33 +504,65 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
         // Déduplication dernier-gagnant, comme le jumeau : deux upserts
         // concurrents sur la même clé unique se courent après.
         const deduped = [...new Map(updates.map((u) => [u.communityId, u])).values()];
-        if (deduped.length > 0) {
-          const memberships = await fastify.prisma.communityMember.findMany({
-            where: {
-              userId,
-              communityId: { in: deduped.map((u) => u.communityId) },
-              isActive: true,
-            },
-            select: { communityId: true },
-          });
-          const joined = new Set(memberships.map((m: { communityId: string }) => m.communityId));
+        const memberships = deduped.length > 0
+          ? await fastify.prisma.communityMember.findMany({
+              where: {
+                userId,
+                communityId: { in: deduped.map((u) => u.communityId) },
+                isActive: true,
+              },
+              select: { communityId: true },
+            })
+          : [];
+        const joined = new Set(memberships.map((m: { communityId: string }) => m.communityId));
+        const applicable = deduped.filter((update) => joined.has(update.communityId));
 
+        if (applicable.length > 0) {
           await Promise.all(
-            deduped
-              .filter((update) => joined.has(update.communityId))
-              .map((update) =>
-                fastify.prisma.userCommunityPreferences.upsert({
-                  where: {
-                    userId_communityId: { userId, communityId: update.communityId }
-                  },
-                  create: {
-                    userId,
-                    communityId: update.communityId,
-                    orderInCategory: update.orderInCategory
-                  },
-                  update: { orderInCategory: update.orderInCategory }
-                })
-              )
+            applicable.map((update) =>
+              fastify.prisma.userCommunityPreferences.upsert({
+                where: {
+                  userId_communityId: { userId, communityId: update.communityId }
+                },
+                create: {
+                  userId,
+                  communityId: update.communityId,
+                  orderInCategory: update.orderInCategory
+                },
+                update: { orderInCategory: update.orderInCategory }
+              })
+            )
+          );
+
+          // La ligne `UserCommunityPreferences` est par UTILISATEUR, pas par
+          // appareil : sans cette diffusion, un glisser-déposer fait sur un
+          // appareil n'atteint jamais les onglets ouverts ailleurs, qui tiennent
+          // leur liste en `staleTime: Infinity` avec le socket pour source
+          // primaire. C'est la moitié du jumeau que ce handler n'avait pas
+          // reprise — il lui avait emprunté le filtre d'appartenance ci-dessus,
+          // pas la diffusion qui le suit.
+          //
+          // Un nom d'événement à part, et non un élargissement de
+          // `USER_PREFERENCES_REORDERED` : le décodeur iOS de ce dernier déclare
+          // `conversationId` NON optionnel, si bien qu'un item de communauté y
+          // ferait échouer le décodage de l'événement entier. Raison complète
+          // sur `UserPreferencesCommunityReorderedEventData`.
+          //
+          // La charge nomme ce qui a été ÉCRIT, jamais ce qui a été DEMANDÉ :
+          // `applicable` borne les deux ensemble, donc aucun autre appareil ne
+          // se voit ordonner d'appliquer un ordre que la base ne porte pas.
+          const eventPayload: UserPreferencesCommunityReorderedEventData = {
+            userId,
+            updates: applicable.map((u) => ({
+              communityId: u.communityId,
+              orderInCategory: u.orderInCategory,
+            })),
+          };
+          broadcastToUser(
+            fastify,
+            userId,
+            SERVER_EVENTS.USER_PREFERENCES_COMMUNITY_REORDERED,
+            eventPayload
           );
         }
 

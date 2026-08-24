@@ -31316,6 +31316,100 @@
         }
       }
     },
+    "bubble.call.join.a11y.hint.doubleTap": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انقر مرتين للانضمام إلى المكالمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zum Beitreten des Anrufs doppeltippen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double-tap to join the call"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca dos veces para unirte a la llamada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez deux fois pour rejoindre l'appel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocca due volte per partecipare alla chiamata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque duas vezes para entrar na chamada"
+          }
+        }
+      }
+    },
+    "bubble.call.join.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الانضمام إلى المكالمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anruf beitreten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Join the call"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unirse a la llamada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rejoindre l'appel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partecipa alla chiamata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrar na chamada"
+          }
+        }
+      }
+    },
     "bubble.call.join.ended": {
       "extractionState": "manual",
       "localizations": {
@@ -31359,53 +31453,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "A chamada terminou"
-          }
-        }
-      }
-    },
-    "bubble.call.join.a11y.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اضغط مرتين للانضمام إلى المكالمة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zweimal tippen, um dem Anruf beizutreten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Double-tap to join the call"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toca dos veces para unirte a la llamada"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Double-tapez pour rejoindre l'appel"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tocca due volte per partecipare alla chiamata"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toque duas vezes para entrar na chamada"
           }
         }
       }
@@ -31457,6 +31504,53 @@
         }
       }
     },
+    "bubble.call.callback.hint.doubleTap": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انقر مرتين لمعاودة الاتصال"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zum Zurückrufen doppeltippen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double-tap to call back"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca dos veces para devolver la llamada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez deux fois pour rappeler"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocca due volte per richiamare"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque duas vezes para ligar de volta"
+          }
+        }
+      }
+    },
     "bubble.call.cancelled": {
       "extractionState": "manual",
       "localizations": {
@@ -31504,49 +31598,49 @@
         }
       }
     },
-    "bubble.call.callback.hint": {
+    "bubble.call.callback.action": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اضغط مرتين لإعادة الاتصال"
+            "value": "معاودة الاتصال"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zweimal tippen, um zurückzurufen"
+            "value": "Zurückrufen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Double-tap to call back"
+            "value": "Call back"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca dos veces para devolver la llamada"
+            "value": "Devolver la llamada"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Double-tapez pour rappeler"
+            "value": "Rappeler"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca due volte per richiamare"
+            "value": "Richiama"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque duas vezes para retornar a chamada"
+            "value": "Ligar de volta"
           }
         }
       }
@@ -151417,6 +151511,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ver ficha"
+          }
+        }
+      }
+    },
+    "bubble.joinNotice.openProfile.hint.doubleTap": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انقر مرتين لعرض البطاقة وشروط الانضمام"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zum Anzeigen des Profils und der Beitrittsbedingungen doppeltippen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double-tap to see the profile and join conditions"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca dos veces para ver la ficha y las condiciones de entrada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez deux fois pour voir la fiche et les conditions d'entrée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocca due volte per vedere la scheda e le condizioni di ingresso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque duas vezes para ver o perfil e as condições de entrada"
           }
         }
       }

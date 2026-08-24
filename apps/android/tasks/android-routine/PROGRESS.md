@@ -2,6 +2,129 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-24 **the open story viewer folds a realtime `story:deleted`** (slice
+> `story-deleted-realtime-viewer`, feature-parity Story realtime) — the removal sibling of the story socket
+> events the viewer already consumes (`story:reacted`/`-unreacted`/`-translation-updated`), and the third of
+> the STORY realtime folds the "Next" pointer flagged (`story:updated`/`story:deleted`).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3493/#3492/#3491/#3474/#3470
+> (gateway/web/ios Prisme/validation/calls cycles): none is a `claude/apps/android/*` slice from THIS routine,
+> all touch production logic outside `apps/android`. Prior slice (`feed-post-reposted-realtime`) already merged
+> into main. Branched off freshly-fetched `origin/main` (`0432cd41`).
+>
+> **The gap — the removal twin of the story events the viewer already folds.** The gateway broadcasts
+> `story:deleted` (`{ storyId, authorId }`) to every friend's feed room via `SocialEventsHandler.broadcastStoryDeleted`
+> (over-broadcast is safe; a recipient who never had the story ignores it). Every client auto-joins its own
+> `feed:{userId}` room on auth (`AuthHandler`), so the event reaches Android — but `SocialSocketManager` had no
+> `storyDeleted` flow, `SocketEvents.kt` no DTO, and `StoryViewerViewModel` no subscriber, so a story deleted
+> from another device stayed on screen in the open viewer until it was closed. iOS folds it via
+> `StoryViewModel.storyDeleted` → `purgeDeadStories`.
+>
+> **Scout — why the VIEWER, not the tray.** The story TRAY (`StoriesViewModel`) is Room-cache-driven (no
+> in-memory fold seam like the feed's `_feedCache`); folding a delete there means a DB-cache removal — a larger
+> slice. The VIEWER already consumes story socket events into an in-memory `StoryPlayback` via a pure engine
+> (`StoryReactionState`, `StoryTextObjectTranslationMerge`), giving a clean, orphan-free fold seam and render
+> surface. `story:updated` (engagement-reset + whole-story content swap with viewed-monotonicity) is deferred:
+> a distinct, larger slice (its own viewed-state preservation rule).
+>
+> **The fix — a DTO + a socket flow + a PURE slide-removal engine method + a VM subscriber.** (1) New
+> `SocketStoryDeletedData(storyId, authorId="")` in `:core:model` (mirror of iOS, defaulted authorId for
+> forward-compatible decoding). (2) `SocialSocketManager.storyDeleted` flow + `listen("story:deleted", …)`.
+> (3) New pure `StoryPlayback.removingSlide(storyId): StoryPlayback` — drops the matched slide, drops an emptied
+> author group, and re-anchors the cursor BY IDENTITY (so a dropped earlier group shifts the index correctly):
+> current slide survives → stay on it; current slide removed but group survives → reuse the slot (advance to
+> next / fall back to new last); current group emptied → clamp onto the group now in the slot at its first slide;
+> nothing left → dismiss; unknown id → inert. (4) `StoryViewerViewModel.observeStoryDeletions` subscribes,
+> applies `removingSlide`, purges the per-slide caches (`rawItems`, `reactionStates`), and re-projects via `emit()`.
+>
+> **Tests: +16** — 10 `StoryPlaybackTest` (`removingSlide`: unknown-id inert, later/earlier slide in current
+> group, current-slide advance, current-last fallback, only-slide-of-group drop+clamp forward/back, earlier-group
+> shift, later-group untouched, last-remaining dismiss), 5 `StoryViewerViewModelTest` (drop a later slide, delete
+> current advances, delete only slide rolls to next group, delete last remaining dismisses, unknown-id inert),
+> 2 `SocialSocketManagerTest` (decodes storyId+authorId; decodes with defaulted authorId). **RED-proof isolated**:
+> stubbing `removingSlide` to `return this` reddened EXACTLY the 9 structural `StoryPlaybackTest` cases (31
+> completed, 9 failed) while the unknown-id case (correctly expecting `this`) stayed green — genuine
+> discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200).** Pristine `android-37.0` auto-installed by AGP but the
+> first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch (`source.properties` ApiLevel +
+> `package.xml` `<api-level>` + `path=` + BOTH `build.prop` `sdk_full` fields), keeping android-37.0 alongside,
+> resolved it (per NOTES "THIRD mode").
+>
+> **Verified**: targeted `:core:model`/`:sdk-core`/`:feature:stories` unit tests **BUILD SUCCESSFUL**; full
+> `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) — **BUILD SUCCESSFUL in 3m
+> 45s (973 tasks)**. Reviewer PASS. Diff is `apps/android` only (3 prod files edited in :core:model + :sdk-core +
+> :feature:stories, 1 pure engine method, +16 tests across 3 files, tracking docs). Verdict: **PASS** — a DTO
+> mirroring an existing type, a socket event mirroring the existing story events, a pure identity-anchored
+> slide-removal engine method, and a VM subscriber reusing the established socket-fold + `emit()` seam;
+> behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: STORY realtime folds now cover reactions, overlay translations, and DELETION in the viewer. Remaining
+> STORY realtime gap: `story:updated` (engagement-reset + whole-story content swap) — a distinct slice needing a
+> viewed-monotonicity rule (iOS `shouldKeepLocalViewed`), and it lands in the TRAY on iOS (`storyGroups`), so
+> scout whether Android should fold it into the viewer, the Room cache, or both. Alternatively move to the next
+> feature-parity box. Scout read-only before committing.
+
+> On 2026-08-24 **the feed folds a realtime REPOST pushed over `post:reposted`** (slice
+> `feed-post-reposted-realtime`, feature-parity Feed) — the ARRIVAL sibling of the `post:created` fold.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3487/#3481/#3475/#3474/#3470
+> (gateway/web/ios Prisme/validation cycles) and #3477 (`claude/upbeat-dirac-*`, the SEPARATE calls routine —
+> `tasks/calls-fonctionnel-todo.md`, left untouched): none is a `claude/apps/android/*` slice from THIS routine,
+> all touch production logic outside `apps/android`. Prior slice (`feed-post-updated-realtime-merge`) already
+> merged into main. Branched off freshly-fetched `origin/main` (`48b2fe41`).
+>
+> **The gap — the arrival twin of `post:created`.** The gateway broadcasts a repost as a COMPLETE new post
+> (`{ originalPostId, repost }`, the repost authored by the reposter, embedding the original under `repostOf`)
+> to every visibility-filtered feed room via `SocialEventsHandler.broadcastPostReposted`. iOS folds it via
+> `FeedSocketHandler` routing `postReposted` through `handlePostUpsert(data.repost)` — a repost is itself a new
+> feed post. On Android the event decoded nowhere: `SocialSocketManager` had no `postReposted` flow,
+> `SocketEvents.kt` no DTO, `FeedViewModel` no subscriber — a repost stayed invisible on the feed until a full
+> refetch, while `post:created` (its arrival twin) already prepended live.
+>
+> **Scout — why NOT the other Next candidates.** `post:reaction-added`/`-removed`: iOS folds the ABSOLUTE
+> per-emoji count into `reactionSummary`, but the Android feed card renders reactions as a HEART + count only
+> (no emoji summary; only STATUSES render `reactionSummary` chips), so folding it would be orphan/dead-end code
+> (routine forbids). `comment:reaction-sync`/`post:reaction-sync`: NOT broadcasts — iOS SDK documents them as
+> ACK-only responses to `*-request-sync` emits (`socket.on` explicitly absent), so not an "ignored broadcast"
+> slice. `post:reposted` was the clean one: an existing render surface (the `RepostEmbedBuilder` feed card),
+> an existing fold seam (`FeedRealtimeReducer.accept`), zero orphan risk.
+>
+> **The fix — a DTO + a socket flow + a VM subscriber reusing the `post:created` seam.** (1) New
+> `SocketPostRepostedData(originalPostId, repost: ApiPost)` in `:core:model` (mirror of iOS, nests the repost
+> under `repost`). (2) `SocialSocketManager.postReposted` flow + `listen("post:reposted", …)`. (3) `FeedViewModel`
+> subscribes and routes `payload.repost` through the SAME `FeedRealtimeReducer.accept(head, repost, cacheIds)`
+> path `post:created` uses — dedup against the cache-projected feed and the buffered head, prepend newest-first,
+> bump the "N new posts" banner. No new pure logic, no new render surface: the repost renders through the
+> existing repost embed cell.
+>
+> **Tests: +3** — 1 `SocialSocketManagerTest` (decodes the repost nested under `repost`, carrying author +
+> content), 2 `FeedViewModelTest` (a `post:reposted` arrives at the head and raises the banner; a repost already
+> visible in the cache feed is inert with no banner bump — the two arms of `accept`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200).** Pristine `android-37.0` auto-installed by AGP but the
+> first `./gradlew` hash-errored on `android-37` (no "inconsistent location" line); the four-edit copy→patch
+> (`source.properties` ApiLevel + `package.xml` `<api-level>` + `path=` + BOTH `build.prop` `sdk_full` fields),
+> keeping android-37.0 alongside, resolved it (per NOTES "THIRD mode").
+>
+> **Verified**: SDK bootstrapped via the four-edit copy→patch (both dirs);
+> `:sdk-core:testDebugUnitTest` (`SocialSocketManagerTest`) **BUILD SUCCESSFUL in 3m 14s**, then full
+> `assembleDebug testDebugUnitTest` (all modules, the CI-mirror gate, incl. `FeedViewModelTest`) **BUILD
+> SUCCESSFUL in 6m 39s (973 tasks)**. Reviewer PASS. Diff is `apps/android` only (3 prod files edited in
+> :core:model + :sdk-core + :feature:feed, +3 tests across 2 files, tracking docs). Verdict: **PASS** — a DTO
+> mirroring an existing type, a socket event mirroring the existing social events, and a VM subscriber reusing
+> the established `post:created` head-accept seam; behavioural tests through the public API; no production logic
+> outside `apps/android`.
+>
+> **Next**: Feed realtime arrivals/edits/deletes now honoured for POST (created / updated / reposted /
+> translation / liked / bookmarked / deleted), STORY overlay, and COMMENT (add / edit / delete / translation /
+> like / reaction-heart). Remaining iOS folds Android's `SocialSocketManager` still ignores are all currently
+> **orphan-blocked or ACK-only** (see Scout above): `post:reaction-*` and `comment:reaction-sync` need a post/
+> comment EMOJI-reaction render surface first (Android renders heart-only), and `comment:media-updated` needs a
+> comment-media model+render surface (Android's `ApiPostComment` has no `media` field). Next high-value area:
+> scout STORY realtime (`story:updated` engagement-reset, `story:deleted`) or move to the next feature-parity
+> Feed box. Scout read-only before committing.
+
 > On 2026-08-24 **the feed folds realtime post EDITS pushed over `post:updated`** (slice
 > `feed-post-updated-realtime-merge`, feature-parity Feed) — the WHOLE-POST sibling of the
 > `post-translation-updated` fold and the post analog of the `comment:updated` fold, both shipped the same day.

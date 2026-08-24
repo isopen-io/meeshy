@@ -3898,6 +3898,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       viewmodel + reused inert case); RED-proof isolated each piece: merge (4), socket (2), subscription+merge
       (2 vm), and the emit re-projection alone reddened exactly the repaint test while the chip/inert tests
       stayed green. No wire/production logic outside `apps/android`.
+- [x] **Realtime story deletion** done (slice `story-deleted-realtime-viewer`, 2026-08-24): Android had **no**
+      handler for `story:deleted` — the gateway broadcasts `{ storyId, authorId }` to every friend's feed room
+      (`SocialEventsHandler.broadcastStoryDeleted`), iOS folds it out of the open viewer
+      (`StoryViewModel.storyDeleted` → `purgeDeadStories`), Android dropped it: a story deleted from another
+      device stayed on screen until the viewer was closed. Every client auto-joins its own `feed:{userId}` room
+      on auth, so the event reaches Android. New pure `StoryPlayback.removingSlide(storyId)` drops the matched
+      slide, drops an emptied author group, and re-anchors the cursor BY IDENTITY (current slide survives → stay;
+      current slide removed but group survives → advance to next / fall back to new last; current group emptied →
+      clamp onto the group now in the slot; nothing left → dismiss; unknown id → inert). New
+      `SocketStoryDeletedData` + `SocialSocketManager.storyDeleted` flow wired to `listen("story:deleted", …)`;
+      `StoryViewerViewModel.observeStoryDeletions` subscribes, purges the per-slide caches (`rawItems`,
+      `reactionStates`), and re-projects via `emit()`. +16 tests (10 pure engine, 5 viewmodel, 2 socket);
+      RED-proof isolated: stubbing `removingSlide` to `return this` reddened exactly the 9 structural engine
+      cases while the unknown-id case (correctly expecting `this`) stayed green. No wire/production logic outside
+      `apps/android`. Remaining STORY realtime gap: `story:updated` (engagement-reset + whole-story content swap,
+      needs a viewed-monotonicity rule) — a distinct future slice.
 - [ ] Per-clip inspector EDITOR (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)
@@ -4061,6 +4077,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       + 1 socket decode + 1 vm routing = **+11**; RED-proof isolated: dropping the viewer-state preservation
       reddened exactly the 4 preservation/discrimination tests, the 2 preservation-independent tests stayed
       green. No wire/production logic outside `apps/android`.
+- [x] Realtime REPOST arrival **shipped** (slice `feed-post-reposted-realtime`, 2026-08-24 — the
+      arrival sibling of the `post:created` fold). Android had **no** handler for `post:reposted`; the
+      gateway broadcasts a repost as a COMPLETE new post (`{ originalPostId, repost }`) to every
+      visibility-filtered feed room via `SocialEventsHandler.broadcastPostReposted`, iOS folds it via
+      `FeedSocketHandler` routing `postReposted` through `handlePostUpsert(data.repost)`, Android left the
+      repost invisible until a full refetch. New `SocketPostRepostedData(originalPostId, repost: ApiPost)`
+      (mirror of iOS, nests the repost under `repost`) + `SocialSocketManager.postReposted` flow wired to
+      `listen("post:reposted", …)`. A repost is itself a new feed post, so `FeedViewModel` routes it through
+      the SAME `FeedRealtimeReducer.accept` head path `post:created` uses (dedup against the cache-projected
+      feed and the buffered head, prepend newest-first, bump the "N new posts" banner) — no new render
+      surface: the repost renders through the existing `RepostEmbedBuilder` feed card. +3 tests (1 socket
+      decode nesting the repost under `repost`; 1 vm — a repost arrives at the head and raises the banner;
+      1 vm — a repost already visible in the cache feed is inert). No wire/production logic outside
+      `apps/android`.
 - [x] Feed card stats row: like (filled when own) + comment count + repost count,
       mood emoji on the author line, pure `FeedPostPresentation` builder (8 builder
       tests + 1 model Prisme test + 3 repository optimistic/rollback tests, all green)

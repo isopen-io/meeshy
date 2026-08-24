@@ -15258,3 +15258,326 @@ qui l'accompagne : `replyMentionBannerClock.test.ts` — l'horloge servie, le
 `select` qui la charge (une requête, pas deux), le silence quand la relecture
 fail-open tombe, et les trois choses que le verrou retient (traduction du fil,
 corps pré-enregistré, média).
+
+---
+
+## Leçon 280 — une garde qui protège la population la plus NOMBREUSE peut manquer la plus EXPOSÉE (2026-08-24, cycle 127)
+
+`createMessageNotification` relit l'état du message juste avant de pousser, et
+abandonne quand il a été rappelé ou a expiré dans la fenêtre de l'éventail. Son
+commentaire dit exactement pourquoi, depuis toujours :
+
+```ts
+// If the sender soft-deletes / … / lets the message expire in that window we
+// MUST NOT leak the original content via the banner.
+```
+
+Cette phrase vaut mot pour mot pour les deux autres éventails. Ni
+`createReplyNotification` ni `createMentionNotification` ne portaient la moindre
+garde : un message rappelé entre son commit et l'éventail poussait son texte
+ORIGINAL sur l'écran verrouillé de la personne à qui l'on répond et de tous les
+mentionnés, pendant que les membres ordinaires du fil — protégés — ne voyaient
+rien.
+
+> **Le lot `regular` sert la population la plus NOMBREUSE ; la réponse sert la
+> personne VISÉE, et la mention perce jusqu'à la sourdine.** Une garde posée sur
+> le chemin le plus fréquenté se lit comme une garde posée sur le sujet. Elle ne
+> l'est que sur son chemin.
+
+### La relecture était DÉJÀ LÀ, et c'est ce qui rend le défaut invisible
+
+Les trois éventails relisent la MÊME ligne, dans la MÊME fenêtre. Le lot
+`regular` le fait par `prisma.message.findUnique` ; les deux autres par
+`loadMessagePrismSource`, dont le `select` demandait `translations`,
+`originalLanguage`, `createdAt`, `messageType` — et passait à côté de `deletedAt`
+et `expiresAt`, les deux colonnes qui disent la vie du message.
+
+La garde ne coûtait donc pas une requête : **deux colonnes sur une lecture qui se
+faisait déjà.** Même forme qu'au cycle 126, une question plus loin.
+
+Ce qui a tenu le défaut hors de vue est une phrase de doc-comment, écrite comme
+un contrat alors qu'elle DÉCRIVAIT un défaut :
+
+```ts
+// … pour les éventails dont la lecture n'est PAS un gate d'éligibilité
+```
+
+Elle est vraie du code, et c'est tout ce qu'elle est. Rien dans « ce n'est pas un
+gate » ne dit *pourquoi ça ne devrait pas en être un* — mais posée en tête d'une
+unité, elle se relit comme une décision qu'on n'a pas à instruire. Même famille
+que le commentaire du cycle 91 bis qui scellait la 2FA en l'annonçant.
+
+> Devant un doc-comment qui EXEMPTE une unité d'une règle que sa voisine
+> applique, la question n'est pas « est-ce exact ? » mais **« qu'est-ce qui
+> justifie l'exemption ? »**. Ici : rien.
+
+### Le balayage de rétraction ne rattrape pas ce cas — il ferme la BASE, pas l'ÉCRAN
+
+L'éventail relit le message APRÈS ses trois lots et retire les lignes
+`Notification` d'un message rappelé. Sa démonstration est juste et son raisonnement
+de fenêtre est exact — pour ce qu'il vise. Il retire une LIGNE ; la bannière, elle,
+est déjà sur l'écran verrouillé, et rien ne la rappelle.
+
+> **Une compensation en aval ne remplace pas une garde d'admission quand l'effet
+> qu'elle compense est IRRÉVERSIBLE.** La question à poser à tout nettoyage
+> a-posteriori : *que reste-t-il de fait que ce nettoyage ne défait pas ?*
+
+### Ce qui a été mesuré et NON corrigé, et pourquoi c'est la moitié la plus utile
+
+Le premier correctif traitait une ligne ABSENTE comme une preuve de rappel. Deux
+témoins existants sont tombés — dont un, explicite, qui asserte que la bannière
+d'un message VOLATILISÉ part quand même. Il avait raison, et le dépôt disait déjà
+pourquoi, dans le balayage de rétraction du même éventail :
+
+> `deletedAt` non nul est la SEULE preuve d'un rappel. Une ligne absente ne prouve
+> rien, et aucun chemin de la gateway ne supprime un message physiquement.
+
+Le mécanisme est réel : le message vient d'être committé, et une lecture servie
+par un secondaire en retard sur le jeu de réplicas rend `null` pour un message
+parfaitement vivant. En faire une preuve ferait perdre des annonces qu'aucun
+réessai ne rattrape.
+
+> **Un verdict de garde a trois états, pas deux** : `live`, `gone` (la lecture
+> PROUVE), `unknown` (elle n'a rien prouvé — elle a levé, ou n'a rien rendu). Les
+> deux derniers se ressemblent et s'arbitrent à l'opposé : fail-CLOSED sur la
+> preuve, où c'est un secret qui est en jeu ; fail-OPEN sur l'absence de preuve,
+> où c'est une livraison. C'est la leçon 112 (« un `catch` fail-open couvre aussi
+> la question qu'on a mal posée ») lue dans l'autre sens.
+
+**Et un témoin qui tombe n'a pas forcément tort.** Deux tests rouges ont fait
+CHANGER LA CONCEPTION, pas la fixture : ils portaient une décision antérieure,
+raisonnée et écrite. Le réflexe d'ajuster le double pour retrouver le vert aurait
+retiré une garantie de livraison sans que rien ne le dise. La décision est
+désormais gardée en POSITIF, des deux côtés — les lots qui annoncent quand même,
+et celui qui se tait — pour qu'elle cesse de dépendre de la mémoire d'un cycle.
+
+### Un select mort nommait une garde qui n'a jamais existé
+
+Le commentaire du lot `regular` énumérait TROIS causes d'abandon — rappelé, brûlé,
+expiré — et `isViewOnce` / `viewOnceCount` étaient SÉLECTIONNÉS pour la deuxième.
+Aucune ligne ne les lisait : `NotificationService` était le seul site du dépôt à
+demander `Message.viewOnceCount`, et il n'en faisait rien.
+
+Le correctif est de RETIRER le select, pas d'ajouter la garde, et la raison se
+mesure : `viewOnceCount > 0` dit que QUELQU'UN a consommé, jamais que CE
+destinataire l'a fait — s'y fier ferait taire l'annonce pour tous les autres. Et
+le contenu d'un message à vue unique est de toute façon masqué en amont par
+`protectedPreview`.
+
+> **Une garde ANNONCÉE par un commentaire et PROVISIONNÉE par un `select` se lit
+> comme une garde en place.** C'est la forme du cycle 124 (« annoncée par deux
+> champs, appliquée par aucun ») dans sa variante la plus discrète : ici, le
+> champ provisionné donne au lecteur la preuve matérielle que quelqu'un y a
+> pensé. Vérifier que le champ est LU, pas qu'il est demandé.
+
+## Leçon 281 — un correctif câblé sur UN point d'entrée laisse son JUMEAU exactement où il était (2026-08-24, routine appels)
+
+**Contexte.** La leçon 278 (même jour) a armé `startBackgroundMonitoring()` dans
+`handleIncomingCallNotification()` — le chemin socket d'un appel entrant — parce
+que l'observateur `didEnterBackground` n'était armé qu'à `transitionToConnected()`,
+rendant `promoteRingingCallToCallKitIfNeeded()` inatteignable pendant toute la
+fenêtre de sonnage. Le correctif a été posé au SEUL site inspecté.
+
+**Le défaut.** `reportIncomingVoIPCall()` (`CallManager.swift`) est le JUMEAU exact
+de `handleIncomingCallNotification()` — même forme (`.ringing(isOutgoing: false)`,
+`configureAudioSession()` + `startReliabilityMonitor()` au même endroit), même
+raison d'exister (l'entrée d'un appel entrant via push VoIP plutôt que socket) —
+et n'appelait PAS `startBackgroundMonitoring()`. `promoteRingingCallToCallKitIfNeeded()`
+y est un no-op (`callUsesCallKit = true` inconditionnellement pour ce chemin,
+Apple l'exige), mais l'observateur porte DEUX autres effets, tous les deux vivants
+pour un appel encore sonnant : `applyCameraSuspension(false, cause: "foreground")`
+— le filet de sécurité documenté pour le cas où le signal de fin d'interruption
+caméra n'arrive jamais tant que l'app est en arrière-plan — et l'émission
+`call:backgrounded`/`call:foregrounded` vers le pair. Sans observateur armé, un
+appel vidéo reçu par push VoIP qui se met en arrière-plan avant d'être décroché
+peut entrer en appel connecté avec la caméra restée suspendue, et le pair
+n'apprend jamais que l'appelé est passé en arrière-plan puis revenu.
+
+**Pourquoi ça a survécu au correctif du jour même.** La leçon 278 nommait déjà le
+motif — « l'armement au CONNECT ne peut pas couvrir une fenêtre qui se ferme avant
+le connect » — mais l'a vérifié sur UN SEUL des deux points d'entrée d'appel
+entrant. Le test qui l'a fixé (`test_handleIncomingCallNotification_armsBackgroundMonitoring_...`)
+n'inspecte que le corps de cette fonction ; rien n'énumérait « quels autres sites
+ont la même forme et ont donc besoin du même correctif ».
+
+> **Un correctif vérifié par un test qui n'inspecte QUE le site corrigé ne peut
+> pas voir son jumeau.** Avant de clore un correctif de lifecycle/timing, chercher
+> les AUTRES points d'entrée qui partagent la même forme (`grep` la fonction
+> voisine appelée juste avant/après dans le site corrigé — ici `configureAudioSession()`
+> + `startReliabilityMonitor()`) et vérifier qu'ils reçoivent le même geste. C'est
+> la forme de la leçon 279 (« un lot qui converge une chaîne laisse derrière ce qui
+> la qualifie ») rejouée sur un armement au lieu d'un champ de charge.
+
+**Le correctif.** `startBackgroundMonitoring()` ajouté dans `reportIncomingVoIPCall()`,
+au même point relatif que dans `handleIncomingCallNotification()` (après
+`startReliabilityMonitor()`, avant `joinCallRoomReliably()`). Témoin :
+`test_reportIncomingVoIPCall_armsBackgroundMonitoring_soAStillRingingCallCanRecoverFromBackgrounding`
+(`CallManagerAudioSessionTests.swift`), même forme d'assertion source-string que
+son jumeau.
+
+---
+
+## Leçon 282 — une SSOT de descente n'a de valeur que si on GREPPE ses réécritures ; `.toLowerCase()` n'est pas `normalizeLanguageForDedup` (2026-08-24, itération 262)
+
+Le cycle 118→124 a construit `resolvePrismTranslation()` comme SSOT de la descente du
+Prisme, et `CLAUDE.md` a inscrit la règle : « tout consommateur TS qui doit DIRE dans
+quelle langue il sert l'appelle plutôt que de réécrire la boucle ». La règle était
+écrite ; deux résolveurs de `apps/web` la violaient encore — `findTranslation`
+(posts/commentaires) et `focalServedLanguage` (libellé de langue du fil Focal), tous
+deux en `.trim().toLowerCase()`.
+
+Deux enseignements :
+
+1. **Une règle « appelez la SSOT » ne s'applique pas toute seule — elle se GREPPE.** Le
+   témoin qui attrape une réécriture n'est pas « la SSOT existe-t-elle ? » mais
+   « quelqu'un compare-t-il encore des codes de langue à la main ? » (`grep -rn
+   "toLowerCase" apps/web/hooks apps/web/components | grep -i lang`). L'énumération des
+   sites conformes ne prouve pas l'absence de sites non conformes.
+
+2. **`.toLowerCase()` et `normalizeLanguageForDedup` se ressemblent et divergent sur la
+   région.** Le premier replie la casse ; le second replie la casse ET strippe la région
+   (`'en-US'` → `'en'`). Sur des codes déjà canoniques ils rendent le même verdict — donc
+   un témoin écrit sur `'en'`/`'fr'` ne peut pas les distinguer. Le témoin qui sépare les
+   deux s'écrit sur un code **région-tagué** (`'en-US'` en langue d'origine, `'pt-BR'` en
+   clé de carte), exactement là où le pipeline de traduction et les messages hérités
+   produisent leurs codes. C'est la forme « un témoin de rang s'écrit sur un rang autre
+   que le premier » (leçon 261), transposée à la NORMALISATION : un témoin de région
+   s'écrit sur un code tagué région.
+
+**Corollaire de scope.** La même boucle vivait dans `use-audio-translation.ts`, laissée
+HORS périmètre : y strripper la région **change une sémantique** (une préférence `fr-CA`
+matcherait une piste vocale `fr-FR`), pas seulement un cas d'échec. Router une descente
+de TEXTE vers la SSOT est un refactor ; router une sélection de PISTE l'est moins — la
+région y porte une information (la voix). Distinguer « même défaut de forme » de « même
+décision produit » avant de généraliser un correctif.
+
+---
+
+## Leçon 283 — on reprend le correctif d'une jumelle en cherchant la réponse à SA PROPRE question, et on laisse tout le reste (2026-08-24, cycle 128)
+
+Le corollaire du cycle 85 dit déjà **« quand on reprend le correctif d'une
+jumelle, on le prend en entier »**. Ce cycle mesure le MÉCANISME par lequel on ne
+le fait pas — et il n'a rien d'une inattention.
+
+`POST /user-preferences/communities/reorder` persistait `orderInCategory` et
+n'émettait rien, quand son jumeau `reorderConversationPreferences` diffuse
+`USER_PREFERENCES_REORDERED` sur la room personnelle. La ligne étant par
+UTILISATEUR et non par appareil, un glisser-déposer fait sur l'iPhone n'atteignait
+jamais l'onglet web ouvert — qui tient sa liste en `staleTime: Infinity` avec le
+socket pour source primaire.
+
+**Et le handler fautif CITE le jumeau**, sur dix lignes de commentaire :
+
+```ts
+// L'`upsert` corrige cela et EXIGE en retour le filtre d'appartenance —
+// c'est la raison que porte le jumeau conversation
+// (`reorderConversationPreferences`) …
+```
+
+La jumelle a donc été ouverte, lue, et à moitié reprise. La question qu'on se
+posait ce jour-là était « comment borner cet upsert ? », et la réponse trouvée y
+répondait exactement. La diffusion, elle, ne répondait à aucune question qu'on se
+posait.
+
+> **La question juste n'est pas *« que fait la jumelle pour mon problème ? »*
+> mais *« que fait la jumelle, tout court, APRÈS cette écriture ? »***. Elle se
+> répond en lisant sa suite ligne à ligne — jamais en cherchant un mot-clé, qui
+> par construction ne rend que ce qu'on savait déjà chercher.
+
+C'est la forme du cycle 125 (« la charge que ce site remet contient-elle autre
+chose que ce que je viens de garder ? ») transposée du CORRECTIF au MODÈLE : ce
+qui rend invisible n'est pas la distance, c'est le niveau d'abstraction de la
+question posée.
+
+### Le corollaire d'inventaire : un lot ferme une CLASSE dans SA langue
+
+Le lot F71 avait précisément fermé cette classe de défaut, et son en-tête de test
+le dit : « PUT/DELETE on community preferences didn't emit anything, so a second
+tab/device for the same user never learned … ». Il a énuméré les verbes qui
+**changent une préférence**. Le réordonnancement n'en est pas un dans cette
+langue-là : c'est un geste d'ORDRE. Il écrit pourtant la même ligne, dans le même
+fichier, avec le même coût.
+
+> **L'énumération d'un lot est bornée par la PHRASE qui le décrit**, pas par
+> l'ensemble qu'il croit couvrir (leçon 261). Devant un inventaire de sites,
+> demander : *ce que je viens de nommer est-il la propriété, ou seulement le mot
+> par lequel je l'ai trouvée ?*
+
+### Et la leçon était DÉJÀ ÉCRITE, avec le bon fichier et la bonne règle
+
+C'est le point le plus cher de ce cycle, découvert en résolvant le conflit de ce
+fichier même. **La leçon 28** (itération 104, 2026-07-05) s'intitule :
+
+> F71 soldé : `community-preferences.ts` était une copie figée de
+> `conversation-preferences.ts`, sans la diffusion socket ajoutée après-coup au
+> sibling
+
+Elle nomme la bonne PAIRE de fichiers, diagnostique le bon MÉCANISME (« une copie
+de code initiale figée avant le fix ne le reçoit jamais automatiquement, et rien
+ne le signale »), et prescrit une règle réutilisable. Le réordonnancement est
+passé au travers **treize mois plus tard, dans le fichier qu'elle nomme**.
+
+La raison tient dans la règle prescrite, mot pour mot :
+
+> grep immédiatement les routes SŒURS qui partagent la même forme
+> (`grep -rn "PUT.*preferences" routes/`…)
+
+`POST /user-preferences/communities/reorder` est un **POST**. La commande
+prescrite ne pouvait pas le rendre, et elle a été suivie correctement.
+
+> **Une règle de méthode outillée par un exemple de commande hérite des bornes
+> de cette commande.** L'exemple est ce qu'on relit et ce qu'on exécute ; la
+> phrase générale au-dessus (« les routes sœurs qui partagent la même forme »)
+> est juste et n'est pas ce qui s'exécute. Quand on écrit une règle de balayage,
+> le verbe HTTP, le nom de méthode ou le mot-clé qu'on met dans l'exemple
+> DEVIENT la définition de la famille pour tous ceux qui la reprendront.
+
+C'est pourquoi ce cycle livre un CLIQUET plutôt qu'une règle de plus. Un balayage
+qui part du MODÈLE Prisma (`userConversationPreferences`, `userCommunityPreferences`)
+et non du verbe de la route n'a pas de borne à hériter : il trouve l'écrivain
+quel que soit le geste qui l'amène. **Devant une famille de défauts déjà nommée
+deux fois, la réponse n'est pas de la nommer une troisième — c'est de l'exécuter.**
+
+Les deux fois — `user-deletions.ts` côté conversation, le réordonnancement côté
+communauté — le site fautif n'était pas caché. Il était VOISIN, et il
+n'appartenait simplement pas à la phrase du lot qui a fermé les autres.
+
+### Relever les consommateurs sert à décider s'il faut changer la forme DU TOUT
+
+La règle du cycle 105 dit : avant de changer la forme d'un événement DIFFUSÉ,
+relever ses consommateurs sur les trois clients. Sa suite n'était pas écrite.
+
+Ici la forme naturelle était d'admettre `communityId` dans
+`UserPreferencesReorderedEventData` — même geste, même charge, un discriminant de
+plus, exactement ce que fait `USER_PREFERENCES_UPDATED` avec ses trois scopes.
+Le relevé l'a interdit :
+
+| décodeur | face à un item `{communityId, orderInCategory}` |
+|---|---|
+| iOS — `Update.conversationId: String`, **non optionnel** | décodage de l'ÉVÉNEMENT ENTIER en échec ; les réordonnancements de conversation du même lot partent avec |
+| web — `preferencesMap.has(update.conversationId)` | filtré en silence |
+
+> **Un décodeur STRICT rend l'élargissement plus cher que le nom neuf**, et c'est
+> une mesure, pas un goût. Un événement multi-scope l'est parce qu'il a été CONÇU
+> ainsi, avec des décodeurs qui discriminent ; il ne le devient pas
+> rétroactivement sans casser le cas nominal — et il le casse par le mécanisme le
+> plus discret qui soit, un `catch` de décodage côté client (cycle 92 bis).
+
+`user:preferences-community-reordered` est INERTE pour les deux consommateurs
+existants par construction.
+
+### Et la charge nomme ce qui a été ÉCRIT, jamais ce qui a été DEMANDÉ
+
+Le filtre d'appartenance borne les DEUX ensemble. Diffuser la demande enverrait
+les autres appareils appliquer un ordre que la base ne porte pas — et
+confirmerait au passage l'existence d'une communauté que l'appelant n'a pas le
+droit de nommer. Rien d'écrit ⇒ rien d'émis.
+
+Cliquet : `services/gateway/src/__tests__/preference-writer-sweep.ts`. Il fige les
+SITES D'ÉCRITURE, pas les diffusions — il ne peut pas prouver qu'un site diffuse.
+**Sa valeur est de forcer la question au lot suivant** : une entrée en trop
+signifie « un écrivain neuf est apparu, et celui-là, il diffuse ? ». Son
+collecteur est exercé sur une arborescence FABRIQUÉE, parce qu'un cliquet dont le
+collecteur ne trouve jamais rien reste vert quoi qu'on écrive.
+
+Détail : `tasks/realtime-sync-audit-2026-08-24-cycle128.md`.

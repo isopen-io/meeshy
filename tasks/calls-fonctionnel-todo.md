@@ -12143,3 +12143,148 @@ exécutables localement (pas de toolchain Xcode dans cet environnement) —
 validation finale via CI (« iOS Tests »).
 
 Détail : `tasks/lessons.md` § Leçon 277.
+
+## Vague 178 — Android `WebRtcCallCoordinator` appliquait tout signal WebRTC entrant sans garde d'époque de négociation (2026-08-24)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Branche
+redémarrée depuis `origin/main` (Vague 177 déjà mergée, PR #3472, aucune branche
+`claude/upbeat-dirac-*` antérieure en avance). Audit délégué (lecture seule), cadré sur les
+familles déjà closes (state machine, asymétrie join/leave, rejoin/reconnect gateway) pour en
+trouver une nouvelle : le layer de signalisation WebRTC Android, comparativement moins audité
+que `CallManager.swift` (iOS) ou `CallEventsHandler.ts`/`CallService.ts` (gateway).
+
+### Root cause
+
+`WebRtcCallCoordinator.onRemoteSignal()` (`apps/android/feature/calls/.../WebRtcCallCoordinator.kt`)
+traitait tout signal WebRTC entrant (`offer`/`answer`/`ice-candidate`) SANS vérifier son
+`negotiationId` : la branche `offer` adoptait `signal.negotiationId` inconditionnellement
+(`signal.negotiationId?.let { negotiationId = it }`), et les branches `answer`/`ice-candidate`
+appliquaient le signal sans même le lire. `negotiationId` n'était utilisé qu'en écriture — un
+compteur SORTANT bumpé sur les propres offres du coordinateur (`begin`,
+`restartIceAndRenegotiate`), jamais en lecture pour REJETER un signal ENTRANT périmé.
+
+iOS implémente exactement cette garde comme un protocole documenté « §3.5 » :
+`CallManager.acceptIncomingNegotiation(generation)` (`CallManager.swift:5142-5149`) rejette tout
+signal dont la génération est strictement inférieure au plus haut niveau déjà vu/envoyé
+(`isStaleNegotiation`, `:5154-5156`), sur les trois branches offer/answer/ICE (`:1877`, `:3043`,
+`:3082`). Le commentaire du gateway lui-même **suppose que ce garde existe côté client** :
+```
+services/gateway/src/socketio/CallEventsHandler.ts:141-150
+// §4.6 — last-offer buffer per call ... Replaying an out-of-date offer is
+// harmless because the receiver drops stale epochs via `negotiationId` (§3.5).
+```
+Cette hypothèse était fausse pour Android — `CallSignalManager.listen()` (SDK) transmet tout
+`call:signal` sans filtrage de fraîcheur, et rien en aval ne le faisait non plus.
+
+### Impact
+
+Pendant un stall réseau, `onIceStalled(restart = true)` peut se déclencher plusieurs fois
+(rebond ICE DISCONNECTED↔FAILED, ou course avec l'escalade indépendante du VM
+`retryIceRestart()`) — chaque appel relance `restartIceAndRenegotiate()` sans garde de
+réentrance, créant une nouvelle offre et bumpant `negotiationId`. Si la réponse du pair à une
+offre PLUS ANCIENNE arrive après qu'une offre plus récente a déjà été envoyée (latence,
+mise en arrière-plan, ou le buffer de replay §4.6 du gateway au rejoin, TTL 150s), Android
+l'appliquait via un `setRemoteDescription(ANSWER, ...)` sans condition — corrompant l'état de
+négociation SDP. Symptôme : l'appel reste silencieusement bloqué avec un média corrompu
+(audio/vidéo figé ou unidirectionnel) après une reconnexion, sans erreur visible, sans capacité
+d'auto-guérison en dehors de raccrocher.
+
+### Fix
+
+Port de la garde d'époque iOS (§3.5) vers Android : `acceptIncomingNegotiation(generation: Int?)`
+rejette un signal entrant dont la génération est strictement inférieure au plus haut niveau
+déjà vu/envoyé (`negotiationId`), avance la marque haute sur acceptation, et traite une
+génération absente (`null` — signal legacy/malformé) comme `0` — jamais périmée, toujours
+acceptée, exactement comme le `?? 0` d'iOS à la frontière de décodage. Appelée en tout premier
+dans `onRemoteSignal`, avant même le dispatch sur `signal.type`, pour qu'un signal périmé ne
+puisse pas adopter le `peerId` de son émetteur avant d'être ignoré. Purement additive : la
+sémantique inchangée pour le cas nominal (générations croissantes ou égales) reste
+byte-for-byte identique.
+
+### Tests (TDD — build Gradle indisponible dans ce conteneur, cf. note ci-dessous)
+
+Quatre tests ajoutés à `WebRtcCallCoordinatorTest.kt` :
+1. « a stale offer arriving after a newer one is dropped » — offre `negotiationId=2` acceptée,
+   offre `negotiationId=1` suivante rejetée (`engine.setRemoteDescription` jamais appelé avec
+   son SDP).
+2. « a stale answer from before an ICE restart is dropped, the fresh one is applied » — un
+   restart ICE fait passer `negotiationId` de 0 à 1 ; une réponse `negotiationId=0` (pré-restart)
+   est rejetée, la réponse `negotiationId=1` est appliquée.
+3. « an ICE candidate from a superseded negotiation is dropped » — même garde sur la troisième
+   branche (`ice-candidate`).
+4. « a signal with no negotiationId is treated as generation 0 and accepted » — non-régression :
+   un signal legacy sans `negotiationId` (compat rétroactive) reste accepté au premier échange.
+
+**CI reality (documentée depuis les Vagues 173-176)** : `dl.google.com` est refusé par la
+politique réseau de ce conteneur, donc ni le SDK Android ni Gradle n'y tournent — confirmé à
+nouveau ici (`./gradlew :feature:calls:testDebugUnitTest --dry-run` timeout/hang). Le correctif
+et les quatre tests ont été vérifiés par lecture directe : signatures `CallSignalPayload`
+(`negotiationId: Int?`) et `IceCandidate`/`SessionDescription` (org.webrtc) confirmées ; ordre
+des gardes calqué exactement sur `CallManager.swift:1870-1878` (epoch check avant tout autre
+traitement) ; les 12 tests préexistants de la suite non touchés par la nouvelle garde (aucun
+n'exerce `incomingSignals`, donc aucun effet de bord possible). La preuve réelle de compilation +
+exécution vient du job GitHub Actions `Android` (runner `ubuntu-latest`, accès réel à
+`dl.google.com`) sur la PR — gate effective, pas cette session.
+
+### Risk assessment
+
+Faible-à-modéré — un garde ajouté en tête d'un handler existant, purement additif (aucune
+branche existante retirée, seule l'adoption inconditionnelle de `negotiationId` sur la branche
+offer est remplacée par l'appel à la même fonction de garde). Le seul comportement qui change :
+un signal WebRTC entrant dont la génération est strictement antérieure à la plus haute déjà
+vue/envoyée est désormais ignoré au lieu d'être appliqué aveuglément. Le chemin nominal
+(générations croissantes, l'écrasante majorité des appels) est inchangé.
+
+### Non fait volontairement / reste ouvert
+
+Repéré mais non traité (candidat plus faible, hors périmètre de cette Vague) :
+`restartIceAndRenegotiate()` n'a aucune garde de réentrance — des transitions FAILED qui se
+chevauchent (ou une FAILED qui course `retryIceRestart()` du VM) peuvent lancer des coroutines
+`createOffer()`/`setLocalDescription()` concurrentes sur la même `PeerConnection`. La garde
+d'époque ajoutée ici réduit l'impact d'un tel chevauchement côté RÉCEPTION (un signal périmé est
+désormais rejeté), mais ne l'empêche pas côté ÉMISSION. `TelecomCallReporter` reste un stub
+explicitement documenté « interim » (pas de vrai hold/préemption GSM) — non un défaut caché.
+Reconduits (inchangés) : `CallManager.swift` god-object (~6372 lignes) ; ADR `actor
+CallEventQueue` non implémenté ; iOS single-peer group calls ; gap de rôle
+`conversations/participants.ts` (hors périmètre calling) ; `redirect=` vs `returnUrl=` sur
+`app/links/tracked/[token]/page.tsx` (hors périmètre calling) ; `bun run lint` documenté cassé
+dans ce conteneur (pré-existant, hors périmètre).
+
+## Vague 179 — main était rouge sur `feature:chat` au moment du push de la Vague 178 ; merge-forward pour rebrancher le PR #3477 sur un CI vert (2026-08-24)
+
+Point d'entrée : reprise de routine (`claude/upbeat-dirac-wuf3dx`), consigne « te baser sur le
+précédent développement de ta routine avant d'en démarrer un nouveau ». PR #3477 (Vague 178)
+était ouverte, restée non mergée : son check Android était rouge. Diagnostic avant tout nouveau
+développement (cf. règle « CI red » du babysitting — écarter un échec qui n'est pas celui du PR
+avant de le traiter comme un vrai signal).
+
+### Root cause du rouge
+
+L'échec Android sur la PR #3477 (run `32744086265`) était `:feature:chat:compileDebugKotlin
+FAILED` — `ConversationMembersViewModel.kt:279:72` / `:285:72`, « Argument type mismatch: actual
+type is 'kotlin.String?', but 'kotlin.String' was expected ». Ce fichier n'appartient PAS au
+diff de la Vague 178 (`feature:calls`, 3 fichiers). Vérifié par lecture directe : le run Android
+sur `main` lui-même, au commit `11f0c31e` (celui dont la PR #3477 dérive), est ROUGE avec le
+MÊME symptôme (`git log --oneline main` confirme que `c59a8ac` — base de la PR — descend de
+`11f0c31e`). `main` a depuis été réparé par PR #3479 (`a604d477`), postérieure à la base de la
+PR #3477 — donc absente de sa branche. Le rouge de la Vague 178 était donc un rouge de BASE
+hérité, pas une régression introduite par le garde d'époque de négociation.
+
+### Fix
+
+Merge-forward de `origin/main` (qui contient `a604d477`) dans `claude/upbeat-dirac-3rqtap`
+(branche de la PR #3477), sans toucher au diff calling lui-même. Un seul conflit, purement
+additif : les deux entrées `tasks/calls-fonctionnel-todo.md` (Vague 178 côté PR, « Mise à jour
+2026-08-24 CallKit tardif » côté main) — résolu en conservant les deux, dans l'ordre
+chronologique de merge sur `main`.
+
+### Tests
+
+Le merge ne modifie aucun code de calling — seule la base de compilation change (récupère le
+fix `a604d477`). La preuve réelle reste le job CI Android sur le nouveau head de la PR #3477.
+
+### Risk assessment
+
+Nul sur le diff calling (merge-forward pur, zéro ligne de `WebRtcCallCoordinator.kt` touchée).
+Le seul changement de comportement possible vient de `a604d477` lui-même (déjà validé par son
+propre merge sur `main`).

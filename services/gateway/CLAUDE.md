@@ -657,6 +657,55 @@ que l'exemplaire VIVANT avait de plus.** Le répertoire ignorait
 servi `memberCount: 0` partout. Les témoins qui PASSENT déjà avant la bascule
 valent autant que ceux qui échouent — on les écrit dans le même lot.
 
+## Une garde d'admission se pose sur CHAQUE chemin, pas sur le plus fréquenté
+
+Les trois éventails de `messageNotificationFanOut` poussent la même bannière pour
+le même message. **Un seul demandait si ce message est encore VIVANT.**
+
+`createMessageNotification` relit l'état juste avant de pousser et abandonne quand
+le message a été rappelé ou a expiré dans la fenêtre de l'éventail — sa raison est
+écrite sur place : « we MUST NOT leak the original content via the banner ». Ni la
+réponse ni la mention ne portaient cette garde (cycle 127), si bien qu'un message
+rappelé entre son commit et l'éventail poussait son texte ORIGINAL vers la personne
+VISÉE par la réponse et vers tous les mentionnés — dont la bannière perce jusqu'à
+la sourdine — pendant que les membres ordinaires du fil étaient protégés.
+
+> **Une garde qui protège la population la plus NOMBREUSE peut manquer la plus
+> EXPOSÉE.** Posée sur le chemin le plus fréquenté, elle se lit comme une garde
+> posée sur le SUJET ; elle ne l'est que sur son CHEMIN.
+
+Trois corollaires, tous mesurés dans ce lot :
+
+- **Une compensation en aval ne remplace pas une garde d'admission quand l'effet
+  qu'elle compense est IRRÉVERSIBLE.** Le balayage de rétraction de l'éventail
+  retire les lignes `Notification` d'un message rappelé, et son raisonnement de
+  fenêtre est juste — mais il ferme la BASE quand la bannière est déjà sur
+  l'ÉCRAN. Question à poser à tout nettoyage a-posteriori : *que reste-t-il de
+  fait que ce nettoyage ne défait pas ?*
+
+- **Un verdict de garde a TROIS états, pas deux.** `live`, `gone` (la lecture
+  PROUVE), `unknown` (elle n'a rien prouvé — elle a levé, ou n'a rien rendu). Les
+  deux derniers se ressemblent et s'arbitrent à l'OPPOSÉ : fail-CLOSED sur la
+  preuve, où c'est un secret qui est en jeu ; fail-OPEN sur l'absence de preuve,
+  où c'est une livraison. Sur `Message`, **une ligne ABSENTE est `unknown`** — le
+  dépôt le dit déjà dans le balayage de rétraction (« `deletedAt` non nul est la
+  SEULE preuve d'un rappel ; aucun chemin de la gateway ne supprime un message
+  physiquement »), et une lecture servie par un secondaire en retard sur le jeu de
+  réplicas rend `null` pour un message parfaitement vivant. Source unique :
+  `NotificationService.messageLiveness`.
+
+- **Un doc-comment qui EXEMPTE une unité d'une règle que sa voisine applique se
+  vérifie comme une affirmation.** Celui de `loadMessagePrismSource` disait « pour
+  les éventails dont la lecture n'est PAS un gate d'éligibilité » : vrai du code,
+  et rien de plus. Rien dans « ce n'est pas un gate » ne dit *pourquoi ça ne
+  devrait pas en être un* — mais posé en tête d'une unité, il se relit comme une
+  décision qu'on n'a pas à instruire. La question n'est pas « est-ce exact ? »
+  mais **« qu'est-ce qui justifie l'exemption ? »**.
+
+Et la garde était GRATUITE : les trois éventails relisent la MÊME ligne dans la
+MÊME fenêtre — deux colonnes de plus sur une lecture existante. **Avant de
+conclure qu'une garde coûterait une requête, regarder ce que le site lit déjà.**
+
 ## Cette entité a-t-elle une JUMELLE ?
 
 À poser au moment où l'on corrige, pas des cycles plus tard. Le dépôt est plein
@@ -671,6 +720,69 @@ Corollaire quand on reprend le correctif d'une jumelle : **on le prend en
 entier.** Passer d'`updateMany` à `upsert` EXIGE le filtre d'appartenance —
 `updateMany` empêchait par accident qu'un appelant fabrique des lignes contre
 des ids arbitraires, l'upsert seul retire cette protection.
+
+### On reprend une jumelle en cherchant la réponse à SA PROPRE question
+
+Le corollaire ci-dessus (« on le prend en entier ») dit quoi faire. Le cycle 128
+mesure pourquoi on ne le fait pas, et ce n'est pas une inattention.
+
+`POST /user-preferences/communities/reorder` persistait `orderInCategory` sans
+rien émettre, quand `reorderConversationPreferences` diffuse
+`USER_PREFERENCES_REORDERED` sur la room personnelle — la ligne étant par
+UTILISATEUR, un glisser-déposer fait sur un appareil n'atteignait aucun autre.
+**Et le handler fautif CITAIT le jumeau**, sur dix lignes, pour lui emprunter son
+filtre d'appartenance. La jumelle avait donc été ouverte, lue, et à moitié
+reprise : la question du jour était « comment borner cet upsert ? », et la
+réponse trouvée y répondait exactement.
+
+> La question juste n'est pas *« que fait la jumelle pour mon problème ? »* mais
+> **« que fait la jumelle, tout court, APRÈS cette écriture ? »** — et elle se
+> répond en lisant sa suite ligne à ligne, jamais par un mot-clé, qui ne rend
+> par construction que ce qu'on savait déjà chercher.
+
+**Toute écriture d'une ligne de préférences PAR UTILISATEUR doit trois choses**
+(le doc-comment de `conversationPreferencesSync.ts` les énonce) : persister,
+incrémenter `version` quand la table en a une, et DIFFUSER sur `user:{id}`.
+Cliquet d'inventaire des écrivains des deux tables :
+`src/__tests__/preference-writer-sweep.ts` — il fige les sites d'ÉCRITURE, pas
+les diffusions, et sa valeur est de forcer la question « celui-là, il
+diffuse ? » au lot qui en ajoute un.
+
+Corollaire d'inventaire, et c'est la leçon 261 vue d'un autre côté : **un lot
+ferme une classe dans SA langue.** Le lot F71 avait fermé « les verbes qui
+CHANGENT une préférence de communauté » ; le réordonnancement n'en est pas un
+dans cette langue-là — c'est un geste d'ORDRE — et il écrit pourtant la même
+ligne, dans le même fichier. Devant un inventaire de sites, demander : *ce que je
+viens de nommer est-il la propriété, ou seulement le mot par lequel je l'ai
+trouvée ?*
+
+### Relever les consommateurs sert à décider s'il faut changer la forme DU TOUT
+
+La règle « avant de changer la forme d'un événement DIFFUSÉ, relever ses
+consommateurs sur les trois clients » (cycle 105) a une suite. Le relevé ne sert
+pas seulement à mettre les clients à jour : il sert à décider s'il faut toucher
+à la forme.
+
+Cycle 128 — admettre `communityId` dans `UserPreferencesReorderedEventData`
+était la forme naturelle (même geste, un discriminant de plus, exactement ce que
+fait `USER_PREFERENCES_UPDATED` avec ses trois scopes). Le relevé l'a interdit :
+le décodeur iOS déclare `Update.conversationId` NON optionnel, si bien qu'un
+item de communauté fait échouer le décodage de l'ÉVÉNEMENT ENTIER — emportant
+les réordonnancements de conversation qui voyagent avec lui — pendant que le web
+les filtre en silence.
+
+> **Un décodeur STRICT rend l'élargissement plus cher que le nom neuf**, et
+> c'est une mesure, pas un goût. Un événement multi-scope l'est parce qu'il a
+> été CONÇU ainsi ; il ne le devient pas rétroactivement sans casser son cas
+> nominal, et il le casse par le mécanisme le plus discret qui soit — un `catch`
+> de décodage côté client (cycle 92 bis).
+
+`USER_PREFERENCES_COMMUNITY_REORDERED` est INERTE pour les deux consommateurs
+existants par construction. Et sa charge **nomme ce qui a été ÉCRIT, jamais ce
+qui a été DEMANDÉ** : le filtre d'appartenance borne les deux ensemble, sans quoi
+la diffusion enverrait les autres appareils appliquer un ordre que la base ne
+porte pas — en confirmant au passage l'existence d'une communauté que l'appelant
+n'a pas le droit de nommer.
 
 ### La forme OUTILLÉE de la question : compter les appelants du helper
 

@@ -244,6 +244,29 @@ class StoryViewerViewModel @Inject constructor(
         load()
         observeReactionDeltas()
         observeTranslationUpdates()
+        observeStoryDeletions()
+    }
+
+    /**
+     * Fold a realtime `story:deleted` out of the open viewer. The pure
+     * [StoryPlayback.removingSlide] drops the matched slide (and an emptied author
+     * group), re-anchoring the cursor so the reader keeps watching surviving content;
+     * [emit] re-projects and dismisses when nothing remains. An event for a story not
+     * in this playback changes nothing. The per-slide caches keyed by story id
+     * ([rawItems], [reactionStates]) are purged so a deleted id leaves no stale
+     * projection behind. Mirror of iOS `storyDeleted` (`purgeDeadStories`).
+     */
+    private fun observeStoryDeletions() {
+        viewModelScope.launch {
+            socialSocket.storyDeleted.collect { event ->
+                val next = playback.removingSlide(event.storyId)
+                if (next == playback) return@collect
+                playback = next
+                rawItems.remove(event.storyId)
+                reactionStates.remove(event.storyId)
+                emit()
+            }
+        }
     }
 
     /**

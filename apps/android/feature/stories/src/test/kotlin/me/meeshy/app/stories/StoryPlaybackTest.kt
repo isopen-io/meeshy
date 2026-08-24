@@ -186,6 +186,94 @@ class StoryPlaybackTest {
         assertThat(dismissed.dismissed()).isEqualTo(dismissed)
     }
 
+    // ---- removingSlide (realtime story:deleted) -----------------------------
+
+    @Test
+    fun `removingSlide for an unknown story id leaves the playback untouched`() {
+        val pb = playback(group("a", "a1"), group("b", "b1", "b2"), startUserId = "b")
+        assertThat(pb.removingSlide("ghost")).isEqualTo(pb)
+    }
+
+    @Test
+    fun `removing a later slide in the current group keeps the current position`() {
+        val pb = playback(group("b", "b1", "b2", "b3"), startUserId = "b") // at b1
+        val after = pb.removingSlide("b3")
+        assertThat(after.slides.map { it.id }).containsExactly("b1", "b2").inOrder()
+        assertThat(after.currentSlide?.id).isEqualTo("b1")
+        assertThat(after.isDismissed).isFalse()
+    }
+
+    @Test
+    fun `removing an earlier slide in the current group keeps the same slide visible`() {
+        val pb = playback(group("b", "b1", "b2", "b3"), startUserId = "b").advance().advance() // at b3
+        assertThat(pb.currentSlide?.id).isEqualTo("b3")
+        val after = pb.removingSlide("b1")
+        assertThat(after.slides.map { it.id }).containsExactly("b2", "b3").inOrder()
+        assertThat(after.currentSlide?.id).isEqualTo("b3")
+    }
+
+    @Test
+    fun `removing the current slide advances to the next slide in the group`() {
+        val pb = playback(group("b", "b1", "b2", "b3"), startUserId = "b").advance() // at b2
+        val after = pb.removingSlide("b2")
+        assertThat(after.slides.map { it.id }).containsExactly("b1", "b3").inOrder()
+        assertThat(after.currentSlide?.id).isEqualTo("b3")
+    }
+
+    @Test
+    fun `removing the current last slide of a group falls back to the new last slide`() {
+        val pb = playback(group("b", "b1", "b2"), startUserId = "b").advance() // at b2 (last)
+        val after = pb.removingSlide("b2")
+        assertThat(after.slides.map { it.id }).containsExactly("b1")
+        assertThat(after.currentSlide?.id).isEqualTo("b1")
+    }
+
+    @Test
+    fun `removing the only slide of the current group drops the group and clamps forward`() {
+        val pb = playback(group("a", "a1"), group("b", "b1"), startUserId = "a") // at a1
+        val after = pb.removingSlide("a1")
+        assertThat(after.groups.map { it.userId }).containsExactly("b")
+        assertThat(after.currentGroup?.userId).isEqualTo("b")
+        assertThat(after.currentSlide?.id).isEqualTo("b1")
+        assertThat(after.isDismissed).isFalse()
+    }
+
+    @Test
+    fun `removing the only slide of the current last group clamps back onto the previous group`() {
+        val pb = playback(group("a", "a1"), group("b", "b1"), startUserId = "b") // at b1
+        val after = pb.removingSlide("b1")
+        assertThat(after.groups.map { it.userId }).containsExactly("a")
+        assertThat(after.currentGroup?.userId).isEqualTo("a")
+        assertThat(after.currentSlide?.id).isEqualTo("a1")
+    }
+
+    @Test
+    fun `removing a slide in an earlier group shifts the current group index down`() {
+        val pb = playback(group("a", "a1"), group("b", "b1", "b2"), startUserId = "b") // group 1, b1
+        val after = pb.removingSlide("a1")
+        assertThat(after.groups.map { it.userId }).containsExactly("b")
+        assertThat(after.groupIndex).isEqualTo(0)
+        assertThat(after.currentSlide?.id).isEqualTo("b1")
+    }
+
+    @Test
+    fun `removing a slide in a later group leaves the current group and slide untouched`() {
+        val pb = playback(group("a", "a1"), group("b", "b1", "b2"), startUserId = "a") // group 0, a1
+        val after = pb.removingSlide("b1")
+        assertThat(after.currentGroup?.userId).isEqualTo("a")
+        assertThat(after.currentSlide?.id).isEqualTo("a1")
+        assertThat(after.groups[1].slides.map { it.id }).containsExactly("b2")
+    }
+
+    @Test
+    fun `removing the last remaining slide dismisses the emptied playback`() {
+        val pb = playback(group("a", "a1"), startUserId = "a")
+        val after = pb.removingSlide("a1")
+        assertThat(after.groups).isEmpty()
+        assertThat(after.isDismissed).isTrue()
+        assertThat(after.currentSlide).isNull()
+    }
+
     // ---- derived accessors --------------------------------------------------
 
     @Test
