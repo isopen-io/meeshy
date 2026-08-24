@@ -11,6 +11,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { EmailService, NotificationDigestEmailData } from '../services/EmailService';
 import { MagicLinkService } from '../services/MagicLinkService';
 import { visibleNotificationsWhere } from '../services/notifications/visibleNotificationsWhere';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'NotificationDigestJob' });
@@ -193,7 +194,7 @@ export class NotificationDigestJob {
     // Get user info
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true, displayName: true, username: true, systemLanguage: true, isActive: true },
+      select: { email: true, displayName: true, username: true, isActive: true, ...RECIPIENT_LANG_SELECT },
     });
 
     // Never re-engage a deactivated/banned account (don't email it, don't mint a token).
@@ -211,7 +212,7 @@ export class NotificationDigestJob {
     if (pending.length === 0) return false;
 
     const frontendUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
-    const lang = user.systemLanguage || 'en';
+    const lang = recipientLanguage(user, 'en');
 
     // Deep-link target: most-recent notification's conversation (notifications
     // are ordered desc), else the conversations list.

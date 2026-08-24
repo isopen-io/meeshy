@@ -9,6 +9,11 @@ import { AttachmentService } from './attachments';
 import { EmailService } from './EmailService';
 import { recomputeConversationLastMessageAt } from './messaging/messageRemovalEffects';
 import { conversationMessageStatsService } from './ConversationMessageStatsService';
+import {
+  RECIPIENT_LANG_SELECT,
+  recipientDateLocale,
+  recipientLanguage,
+} from '../utils/recipient-language';
 
 export class MaintenanceService {
   private prisma: PrismaClient;
@@ -668,7 +673,7 @@ export class MaintenanceService {
         },
         include: {
           user: {
-            select: { email: true, displayName: true, firstName: true, systemLanguage: true }
+            select: { email: true, displayName: true, firstName: true, ...RECIPIENT_LANG_SELECT }
           }
         }
       });
@@ -705,8 +710,15 @@ export class MaintenanceService {
 
             const deleteNowLink = `${baseUrl}/api/v1/me/delete-account/delete-now?token=${newConfirmToken}`;
             const cancelLink = `${baseUrl}/api/v1/me/delete-account/cancel?token=${newCancelToken}`;
+            // La date se lit DANS l'e-mail, donc dans la langue de l'e-mail :
+            // un `'fr-FR'` en dur datait « à la française » un courrier
+            // allemand ou espagnol.
+            const lang = recipientLanguage(user, 'en');
             const gracePeriodEndDate = req.gracePeriodEndsAt
-              ? req.gracePeriodEndsAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+              ? req.gracePeriodEndsAt.toLocaleDateString(
+                  recipientDateLocale(user, 'en'),
+                  { day: 'numeric', month: 'long', year: 'numeric' },
+                )
               : 'N/A';
 
             await this.emailService.sendAccountDeletionReminderEmail({
@@ -715,7 +727,7 @@ export class MaintenanceService {
               deleteNowLink,
               cancelLink,
               gracePeriodEndDate,
-              language: user.systemLanguage || 'en',
+              language: lang,
             });
 
             logger.info(`📧 [DELETION] Reminder sent to user=${req.userId} (reminder #${req.reminderCount + 1})`);

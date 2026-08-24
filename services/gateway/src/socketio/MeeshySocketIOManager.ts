@@ -3103,7 +3103,7 @@ export class MeeshySocketIOManager {
   public refreshUserResolvedLanguages(
     userId: string,
     prefs: {
-      systemLanguage: string;
+      systemLanguage?: string | null;
       regionalLanguage?: string | null;
       customDestinationLanguage?: string | null;
       deviceLocale?: string | null;

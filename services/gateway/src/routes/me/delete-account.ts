@@ -7,6 +7,7 @@ import { validateBody, validateQuery } from '../../validation/helpers.js';
 import { DeleteAccountBodySchema, TokenQuerySchema } from '../../validation/delete-account-schemas.js';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendConflict, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 
 const logger = enhancedLogger.child({ module: 'DeleteAccount' });
 
@@ -118,7 +119,7 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
 
         const user = await fastify.prisma.user.findUnique({
           where: { id: userId },
-          select: { email: true, displayName: true, firstName: true, systemLanguage: true }
+          select: { email: true, displayName: true, firstName: true, ...RECIPIENT_LANG_SELECT }
         });
 
         if (user?.email) {
@@ -132,7 +133,7 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
             name,
             confirmLink,
             cancelLink,
-            language: user.systemLanguage || 'en',
+            language: recipientLanguage(user, 'en'),
           });
 
           logger.info(`[DeleteAccount] Confirmation email sent to user=${userId}`);

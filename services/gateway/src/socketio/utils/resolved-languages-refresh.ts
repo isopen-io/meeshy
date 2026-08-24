@@ -15,7 +15,10 @@ export function applyResolvedLanguagesRefresh<
   connectedUsers: Map<string, T>,
   userId: string,
   prefs: {
-    systemLanguage: string;
+    // La colonne est NULLABLE, et le déclarer `string` ne l'a jamais rendue non
+    // nulle : la valeur venait d'un `select` Prisma, donc `null` traversait le
+    // typage jusque dans `entry.language`, typé `string`.
+    systemLanguage?: string | null;
     regionalLanguage?: string | null;
     customDestinationLanguage?: string | null;
     deviceLocale?: string | null;
@@ -26,6 +29,19 @@ export function applyResolvedLanguagesRefresh<
   const resolvedLanguages = resolveUserLanguagesOrdered(prefs, {
     deviceLocale: prefs.deviceLocale ?? undefined,
   });
-  connectedUsers.set(userId, { ...entry, resolvedLanguages, language: prefs.systemLanguage });
+  // Cycle 124 — la langue de CADRAGE est la TÊTE de la liste qu'on vient de
+  // calculer, pas une seconde lecture de `systemLanguage`. Les deux divergeaient
+  // dans la MÊME instruction dès que le rang 1 est vide (`language: null` dans
+  // un champ typé `string`) ou seulement dénormalisé (`'pt-BR'` là où la liste
+  // porte déjà `'pt'`).
+  //
+  // Un rafraîchissement qui ne résout RIEN ne détruit pas la langue connue : il
+  // n'apporte aucune information nouvelle, et écraser par un défaut ferait
+  // régresser un lecteur dont la langue était établie à la connexion.
+  connectedUsers.set(userId, {
+    ...entry,
+    resolvedLanguages,
+    language: resolvedLanguages[0] ?? entry.language,
+  });
   return true;
 }

@@ -1189,6 +1189,32 @@ describe('AuthHandler', () => {
       expect(connectedUsers.get('user-123')?.language).toBe('en');
     });
 
+    // Cycle 124 — le témoin ci-dessus ne pouvait pas tomber. Son commentaire
+    // AFFIRME « systemLanguage is the highest-priority source in
+    // resolveUserLanguage », mais le site lisait `user.systemLanguage || 'en'`
+    // en direct : au rang 1, la lecture directe et la descente rendent le même
+    // verdict, donc rien ne les distingue. Un témoin de RANG s'écrit sur un
+    // rang AUTRE que le premier — ici le rang 2, où `resolvedLanguages` (calculé
+    // deux lignes plus bas, dans le MÊME objet) et `language` divergeaient.
+    it('résout la langue au rang 2 quand le rang 1 est vide', async () => {
+      const mockSocket = createMockSocket();
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123',
+        systemLanguage: null,
+        regionalLanguage: 'es',
+        customDestinationLanguage: null,
+        deviceLocale: null
+      } as any);
+
+      await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' } as any);
+
+      const registered = connectedUsers.get('user-123');
+      expect(registered?.language).toBe('es');
+      // La langue de cadrage est la TÊTE du prisme ordonné, jamais une seconde
+      // lecture qui pourrait en diverger.
+      expect(registered?.language).toBe(registered?.resolvedLanguages[0]);
+    });
+
     it('should invoke emitPresenceSnapshot after registering user', async () => {
       const mockEmitPresenceSnapshot = jest.fn().mockResolvedValue(undefined);
       const handlerWithSnapshot = new AuthHandler({
