@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { attachmentMediaSelect } from '../../../services/attachments/attachmentIncludes';
 
 const senderInclude = {
@@ -88,7 +89,7 @@ export async function findShareLinkByIdentifier(
   prisma: PrismaClient,
   identifier: string
 ): Promise<any> {
-  const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
+  const isObjectId = isValidMongoId(identifier);
 
   if (isObjectId) {
     return prisma.conversationShareLink.findUnique({

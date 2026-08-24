@@ -306,6 +306,12 @@ export async function notifyMessageRecipients(params: {
     });
     const notificationPreview = protectedOverride?.preview ?? processedContent;
     const notificationLocKey = protectedOverride?.locKey;
+    // Cycle 122 — l'aperçu est-il le CONTENU du message, donc substituable par
+    // sa traduction dans la bannière ? Un placeholder de protection ne l'est
+    // pas : y substituer la traduction relâcherait le texte que la protection
+    // masque. `Message.translations` ne traduisant que `Message.content`, c'est
+    // ici — où l'on sait ce que l'aperçu montre — que la question se tranche.
+    const previewIsMessageContent = protectedOverride === null;
 
     const sender = await resolveNotificationSender({ prisma, senderParticipantId });
     if (!sender) return;
@@ -403,6 +409,7 @@ export async function notifyMessageRecipients(params: {
             originalMessageId: message.replyToId!,
             senderProfile: sender.profile,
             messageExpiresAt: message.expiresAt ?? null,
+            previewIsMessageContent,
           });
           return created != null;
         })
@@ -424,6 +431,7 @@ export async function notifyMessageRecipients(params: {
               // pas. Le chemin `new_message`, lui, la prend de sa propre
               // relecture vivante — il en fait une de toute façon.
               messageExpiresAt: message.expiresAt ?? null,
+              previewIsMessageContent,
             },
             memberIds
           )
@@ -461,6 +469,11 @@ export async function notifyMessageRecipients(params: {
           messagePreview: notificationPreviewForPush,
           encryptedContent: message.encryptedContent || undefined,
           notificationLocKey,
+          // La transcription d'un vocal n'est PAS `Message.content` : ses
+          // traductions vivent sur `MessageAttachment.translations`, et une
+          // entrée de `Message.translations` substituée ici afficherait un
+          // texte sans rapport.
+          previewIsMessageContent: previewIsMessageContent && firstAttachmentTranscript === undefined,
           ...attachmentInfo,
         })
       ));

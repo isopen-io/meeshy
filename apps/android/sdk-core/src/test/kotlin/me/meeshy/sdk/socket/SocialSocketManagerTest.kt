@@ -254,6 +254,40 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `story translation-updated payload is decoded and emitted`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyTranslationUpdated.test {
+            handlers.getValue("story:translation-updated").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"postId":"p1","textObjectIndex":2,"translations":{"fr":"Bonjour","es":"Hola"}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.textObjectIndex).isEqualTo(2)
+            assertThat(event.translations["fr"]).isEqualTo("Bonjour")
+            assertThat(event.translations["es"]).isEqualTo("Hola")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a story translation-updated payload without translations decodes to an empty map`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyTranslationUpdated.test {
+            handlers.getValue("story:translation-updated").invoke(
+                arrayOf(JSONObject("""{"postId":"p1","textObjectIndex":0,"translations":{}}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.translations).isEmpty()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `comment reaction-removed payload is decoded and emitted`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.commentReactionRemoved.test {

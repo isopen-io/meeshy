@@ -32,7 +32,11 @@ import {
 } from '@meeshy/shared/types/preferences';
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
-import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import {
+  resolveUserLanguage,
+  resolveUserLanguagesOrdered,
+  resolvePrismTranslation,
+} from '@meeshy/shared/utils/conversation-helpers';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
@@ -49,6 +53,24 @@ import { loadPostAcl, canUserConsumePost } from '../posts/postVisibility';
 function formatDuration(ms: number): string {
   return formatClock(Math.round(ms / 1000));
 }
+
+/**
+ * La SOURCE du Prisme d'un message : ses traductions SERVABLES sur le canal
+ * push, plus sa langue d'origine — qui concourt à son propre rang (règle #3) et
+ * n'est donc jamais un court-circuit.
+ *
+ * Elle ne dépend PAS du destinataire : un même message se relit une fois pour
+ * tout un éventail, et c'est la DESCENTE qui est par lecteur.
+ */
+export type MessagePrismSource = {
+  readonly translations: Readonly<Record<string, string>>;
+  readonly originalLanguage: string | null;
+};
+
+const EMPTY_PRISM_SOURCE: MessagePrismSource = { translations: {}, originalLanguage: null };
+
+/** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
+const PUSHED_TRANSLATION_MAX_CHARS = 200;
 
 /**
  * Lit une clé de metadata comme chaîne non vide pour le payload push (les
@@ -664,14 +686,172 @@ export class NotificationService {
     deviceLocale: true,
   } as const;
 
-  /** Langue de notification d'un destinataire (Prisme-first, fallback 'fr'). */
-  private async resolveRecipientLang(userId: string): Promise<string> {
+  /**
+   * Le PRISME d'un destinataire, sous ses DEUX formes — elles ne servent pas la
+   * même chose et les confondre coûte dans les deux sens :
+   *
+   * - `lang` est la langue de **CADRAGE** : l'interface. « Alice vous a envoyé
+   *   une photo » se dit dans la langue applicative du lecteur, et une seule.
+   *   C'est le rang le plus haut renseigné, ce que rend `resolveUserLanguage`.
+   * - `ordered` est la liste dans laquelle le **CONTENU** se résout. Le contenu
+   *   n'a pas de langue d'interface : il a des traductions, et le Prisme dit de
+   *   les chercher rang par rang (cf. `resolvePrismTranslation`).
+   *
+   * Les rendre ensemble depuis UNE lecture est ce qui empêche un appelant de
+   * réutiliser la langue de cadrage comme clé de contenu — le défaut du
+   * cycle 121, qui appariait la carte `Message.translations` au seul rang 1 et
+   * servait donc l'original chaque fois qu'une traduction n'existait qu'à un
+   * rang inférieur. La ligne de liste de la même application, elle, descendait.
+   */
+  private async resolveRecipientPrism(
+    userId: string
+  ): Promise<{ readonly lang: string; readonly ordered: readonly string[] }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: this.LANG_SELECT,
     });
-    if (!user) return 'fr';
-    return resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined });
+    if (!user) return { lang: 'fr', ordered: [] };
+    const opts = { deviceLocale: user.deviceLocale ?? undefined };
+    return {
+      lang: resolveUserLanguage(user, opts),
+      ordered: resolveUserLanguagesOrdered(user, opts),
+    };
+  }
+
+  /** Langue de CADRAGE d'un destinataire (Prisme-first, fallback 'fr'). */
+  private async resolveRecipientLang(userId: string): Promise<string> {
+    return (await this.resolveRecipientPrism(userId)).lang;
+  }
+
+  /**
+   * Les traductions d'un message SERVABLES sur le canal push, débarrassées de
+   * leur enveloppe de stockage.
+   *
+   * Le filtre de servabilité précède la descente et ne l'INTERROMPT pas : une
+   * entrée chiffrée n'est pas une raison de priver le lecteur du rang suivant
+   * (la NSE déchiffre `encryptedContent`, jamais les traductions). Filtrer la
+   * CARTE plutôt que l'élue est ce qui évite de transformer un refus en abandon
+   * de la recherche.
+   */
+  private pushableTranslations(raw: unknown): Readonly<Record<string, string>> {
+    if (!raw || typeof raw !== 'object') return {};
+    const entries = raw as Record<string, { text?: unknown; isEncrypted?: unknown } | null>;
+    return Object.fromEntries(
+      Object.entries(entries)
+        .filter(([, t]) => typeof t?.text === 'string' && !t.isEncrypted)
+        .map(([lang, t]) => [lang, t!.text as string])
+    );
+  }
+
+  /**
+   * Relire la source du Prisme d'un message pour les éventails dont la lecture
+   * n'est PAS un gate d'éligibilité — la mention et la réponse, qui tiennent
+   * leur échéance de l'appelant (`messageExpiresAt`).
+   *
+   * Fail-OPEN par décision : une lecture en échec rend une source vide, donc
+   * une bannière sans traduction, jamais une bannière supprimée. Même arbitrage
+   * que `loadNotificationPrefs` et `filterMutedRecipients` — la traduction est
+   * un confort, l'annonce du message une obligation de livraison.
+   */
+  private async loadMessagePrismSource(messageId: string): Promise<MessagePrismSource> {
+    try {
+      const message = await this.prisma.message.findUnique({
+        where: { id: messageId },
+        select: { translations: true, originalLanguage: true },
+      });
+      return {
+        translations: this.pushableTranslations(message?.translations),
+        originalLanguage: message?.originalLanguage ?? null,
+      };
+    } catch (error) {
+      notificationLogger.error('Relecture du Prisme en échec — bannière servie sans traduction', {
+        error,
+        messageId,
+      });
+      return EMPTY_PRISM_SOURCE;
+    }
+  }
+
+  /**
+   * La DESCENTE du Prisme, sous la forme que le contexte de notification
+   * attend : `translatedContent` et `translatedLanguage` côte à côte, ou RIEN.
+   *
+   * Site UNIQUE de la descente pour les trois éventails de
+   * `messageNotificationFanOut`. La leçon 264 en donne la raison : quand un
+   * nouveau consommateur a besoin d'un peu plus que ce que rend le résolveur
+   * existant, l'issue par défaut est de réécrire la boucle — et c'est ainsi que
+   * naissent les familles divergentes que les cycles 118 à 122 ont payées.
+   *
+   * Un contexte VIDE ⇒ servir l'original (règle #1), jamais une traduction
+   * quelconque.
+   */
+  private prismTranslationContext(
+    source: MessagePrismSource,
+    preferredLanguages: readonly string[]
+  ): { translatedContent?: string; translatedLanguage?: string } {
+    const matched = this.prismTranslation(source, preferredLanguages);
+    if (!matched) return {};
+    return {
+      translatedContent: matched.text.substring(0, PUSHED_TRANSLATION_MAX_CHARS),
+      // La clé TELLE QUE STOCKÉE, pas sa forme canonique : elle repart sur le
+      // fil APNs et le client la rapproche de sa propre carte.
+      translatedLanguage: matched.language,
+    };
+  }
+
+  /**
+   * La descente NUE — le couple `{ language, text }` élu, ou `null` ⇒ servir
+   * l'original. `prismTranslationContext` en est la projection sur les champs
+   * du fil push ; ce qui suit en a besoin sous sa forme brute, parce que le
+   * TEXTE doit aussi devenir le corps de la bannière (cycle 122).
+   */
+  private prismTranslation(
+    source: MessagePrismSource,
+    preferredLanguages: readonly string[]
+  ): { readonly language: string; readonly text: string } | null {
+    return resolvePrismTranslation({
+      translations: source.translations,
+      originalLanguage: source.originalLanguage,
+      preferredLanguages,
+    });
+  }
+
+  /**
+   * Le texte que la bannière AFFICHE — cycle 122.
+   *
+   * Le Prisme ne s'arrête pas aux champs `translatedContent` /
+   * `translatedLanguage` du fil push : ils voyagent depuis le cycle 121 et
+   * AUCUN client ne les lit — ni la NSE iOS, ni l'application, ni Android, ni
+   * le service worker web. Le seul texte que les trois plateformes rendent est
+   * `payload.body`, composé depuis ce `content` : tant qu'il portait l'aperçu
+   * ORIGINAL, la bannière restait dans la langue de l'expéditeur pendant que la
+   * ligne de liste de la même application servait la traduction. Un contenu
+   * RÉSOLU n'est pas un contenu SERVI.
+   *
+   * `previewIsMessageContent` est la condition de substitution, et elle n'est
+   * pas décorative : `Message.translations` ne traduit QUE `Message.content`.
+   *  - aperçu PROTÉGÉ (éphémère / vue unique / flouté / chiffré) → un
+   *    placeholder ; y substituer la traduction relâcherait le texte que la
+   *    protection masque ;
+   *  - transcription d'un vocal → un AUTRE texte, dont les traductions vivent
+   *    sur `MessageAttachment.translations` ; la substituer afficherait un
+   *    contenu sans rapport.
+   *
+   * Seul l'éventail, qui a COMPOSÉ l'aperçu, sait laquelle des trois formes il
+   * porte — d'où un paramètre explicite plutôt qu'une devinette ici.
+   */
+  private servedPreview(params: {
+    preview: string;
+    translation: { readonly text: string } | null;
+    previewIsMessageContent: boolean;
+  }): string {
+    if (!params.translation || !params.previewIsMessageContent) return params.preview;
+    // Un aperçu VIDE n'a rien à substituer : le corps se compose alors
+    // entièrement des badges de pièce jointe, localisés dans la langue de
+    // CADRAGE. Y injecter la traduction remplacerait « 📷 Foto » par un texte
+    // dont `Message.content` — vide — n'est pas la source.
+    if (params.preview.trim() === '') return params.preview;
+    return params.translation.text;
   }
 
   /** Variante batch : un seul findMany, retourne une Map userId → langue (fallback 'fr'). */
@@ -1454,6 +1634,16 @@ export class NotificationService {
     firstAttachmentMimeType?: string;
     encryptedContent?: string;
     notificationLocKey?: string;
+    /**
+     * `messagePreview` est-il le rendu du CONTENU du message ?
+     * `Message.translations` ne traduit que `Message.content` : un aperçu qui
+     * est autre chose — un placeholder de protection, la transcription d'un
+     * vocal — ne peut pas être remplacé par une de ses entrées sans afficher
+     * un texte SANS RAPPORT, ou relâcher ce que la protection masque. Défaut
+     * `true` (cas nominal) ; l'éventail, qui a COMPOSÉ l'aperçu, est le seul à
+     * savoir le dire.
+     */
+    previewIsMessageContent?: boolean;
     /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
     senderProfile?: NotificationActorProfile;
   }): Promise<Notification | null> {
@@ -1469,7 +1659,7 @@ export class NotificationService {
     // pipeline at fan-out time (Message.translations JSON, keyed by language).
     const liveMessage = await this.prisma.message.findUnique({
       where: { id: params.messageId },
-      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true, createdAt: true, messageType: true, translations: true },
+      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true, createdAt: true, messageType: true, translations: true, originalLanguage: true },
     });
     if (!liveMessage) {
       notificationLogger.info('Skipping message notification (message vanished)', {
@@ -1517,23 +1707,32 @@ export class NotificationService {
       return null;
     }
 
-    const recipientLang = await this.resolveRecipientLang(params.recipientUserId);
+    const { lang: recipientLang, ordered: recipientPrism } =
+      await this.resolveRecipientPrism(params.recipientUserId);
 
-    // GW5 — Prisme : sélectionner la traduction qui matche EXACTEMENT la
-    // langue résolue du destinataire (même résolution que le framing). Pas de
-    // fallback translations.first : aucune correspondance = le contenu est
-    // déjà dans la langue du destinataire. Les traductions chiffrées ne sont
-    // jamais poussées (la NSE déchiffre encryptedContent, pas les traductions).
-    const translationsJson = liveMessage.translations as Record<string, { text?: unknown; isEncrypted?: unknown }> | null | undefined;
-    const matchedTranslation = translationsJson
-      ? Object.entries(translationsJson).find(([lang, t]) =>
-          lang.toLowerCase() === recipientLang.toLowerCase()
-          && typeof t?.text === 'string'
-          && !t.isEncrypted)
-      : undefined;
+    // Cycle 121 — Prisme : DESCENDRE les langues du destinataire dans l'ordre,
+    // la première servie gagne. `recipientLang` est la langue de CADRAGE et ne
+    // convient PAS ici : appariée seule, elle ratait toute traduction d'un rang
+    // inférieur — cas nominal dès que la locale appareil (rang 4) diffère de la
+    // langue applicative. La source vient de la relecture VIVANTE ci-dessus,
+    // qui sert déjà de gate d'éligibilité : aucune lecture de plus.
+    const prismSource: MessagePrismSource = {
+      translations: this.pushableTranslations(liveMessage.translations),
+      originalLanguage: liveMessage.originalLanguage,
+    };
+    const prismContext = this.prismTranslationContext(prismSource, recipientPrism);
 
+    // Cycle 122 — le corps AFFICHÉ descend le Prisme, pas seulement les champs
+    // de service ci-dessus : c'est lui que les trois plateformes rendent.
+    // `notificationLocKey` est présent exactement quand l'aperçu est un
+    // placeholder de protection — jamais substituable.
     const content = buildMessageNotificationBodyI18n(recipientLang, {
-      messagePreview: params.messagePreview,
+      messagePreview: this.servedPreview({
+        preview: params.messagePreview,
+        translation: this.prismTranslation(prismSource, recipientPrism),
+        previewIsMessageContent:
+          params.previewIsMessageContent !== false && !params.notificationLocKey,
+      }),
       attachments: params.attachments,
       firstAttachmentFileSize: params.firstAttachmentFileSize,
       firstAttachmentDuration: params.firstAttachmentDuration,
@@ -1579,10 +1778,7 @@ export class NotificationService {
         // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
         messageCreatedAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt.toISOString() : undefined,
         messageType: liveMessage.messageType ?? undefined,
-        ...(matchedTranslation ? {
-          translatedContent: (matchedTranslation[1].text as string).substring(0, 200),
-          translatedLanguage: matchedTranslation[0],
-        } : {}),
+        ...prismContext,
       },
 
       metadata: {
@@ -1626,6 +1822,14 @@ export class NotificationService {
      * comportement de toujours.
      */
     messageExpiresAt?: Date | null;
+    /**
+     * Source du Prisme déjà relue — cf. `MessagePrismSource`. Elle ne dépend pas
+     * du destinataire, donc l'éventail la relit UNE fois plutôt qu'une par
+     * mentionné. Absente : relue ici (appel solo).
+     */
+    prismSource?: MessagePrismSource;
+    /** Cf. `createMessageNotification.previewIsMessageContent`. */
+    previewIsMessageContent?: boolean;
   }): Promise<Notification | null> {
     // Anti-spam: rate limit des mentions par paire (sender → recipient)
     if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
@@ -1636,7 +1840,7 @@ export class NotificationService {
       return null;
     }
 
-    const [mentioner, conversation] = await Promise.all([
+    const [mentioner, conversation, prism, prismSource] = await Promise.all([
       params.senderProfile
         ? Promise.resolve(params.senderProfile)
         : this.prisma.user.findUnique({
@@ -1647,6 +1851,10 @@ export class NotificationService {
         where: { id: params.conversationId },
         select: { title: true, type: true, avatar: true },
       }),
+      this.resolveRecipientPrism(params.mentionedUserId),
+      params.prismSource
+        ? Promise.resolve(params.prismSource)
+        : this.loadMessagePrismSource(params.messageId),
     ]);
 
     if (!mentioner) return null;
@@ -1655,8 +1863,15 @@ export class NotificationService {
       userId: params.mentionedUserId,
       type: 'user_mentioned',
       priority: 'high',
-      content: params.messagePreview,
+      // Cycle 122 — le corps AFFICHÉ porte le texte du Prisme : c'est lui que
+      // les trois plateformes rendent, pas les champs de service du fil push.
+      content: this.servedPreview({
+        preview: params.messagePreview,
+        translation: this.prismTranslation(prismSource, prism.ordered),
+        previewIsMessageContent: params.previewIsMessageContent !== false,
+      }),
       collapseId: `conv-${params.conversationId}`,
+      lang: prism.lang,
       expiresAt: params.messageExpiresAt ?? undefined,
 
       actor: {
@@ -1674,6 +1889,11 @@ export class NotificationService {
         conversationAvatar: conversation?.avatar ?? undefined,
         conversationType: conversation?.type as any,
         messageId: params.messageId,
+        // Cycle 122 — le Prisme s'applique à TOUT le contenu poussé vers un
+        // destinataire NOMMÉ, pas au seul `new_message` : sans cette descente,
+        // la bannière d'une mention restait dans la langue de l'expéditeur
+        // pendant que celle d'un message simple servait la traduction.
+        ...this.prismTranslationContext(prismSource, prism.ordered),
       },
 
       metadata: {
@@ -1702,6 +1922,8 @@ export class NotificationService {
       messageId: string;
       /** Échéance du message mentionnant — cf. `createMentionNotification`. */
       messageExpiresAt?: Date | null;
+      /** Cf. `createMessageNotification.previewIsMessageContent`. */
+      previewIsMessageContent?: boolean;
     },
     memberIds: string[]
   ): Promise<number> {
@@ -1718,6 +1940,12 @@ export class NotificationService {
       return true;
     });
 
+    if (eligibleUserIds.length === 0) return 0;
+
+    // La source du Prisme ne dépend pas du destinataire : une relecture pour
+    // tout l'éventail, la DESCENTE restant par lecteur.
+    const prismSource = await this.loadMessagePrismSource(commonData.messageId);
+
     const results = await Promise.all(
       eligibleUserIds.map(userId =>
         this.createMentionNotification({
@@ -1728,6 +1956,8 @@ export class NotificationService {
           messagePreview: commonData.messageContent,
           senderProfile: commonData.senderProfile,
           messageExpiresAt: commonData.messageExpiresAt,
+          previewIsMessageContent: commonData.previewIsMessageContent,
+          prismSource,
         })
       )
     );
@@ -3194,6 +3424,8 @@ export class NotificationService {
      * `createMentionNotification.messageExpiresAt`.
      */
     messageExpiresAt?: Date | null;
+    /** Cf. `createMessageNotification.previewIsMessageContent`. */
+    previewIsMessageContent?: boolean;
   }): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
@@ -3201,7 +3433,7 @@ export class NotificationService {
       return null;
     }
 
-    const [replier, conversation] = await Promise.all([
+    const [replier, conversation, prism, prismSource] = await Promise.all([
       params.senderProfile
         ? Promise.resolve(params.senderProfile)
         : this.prisma.user.findUnique({
@@ -3212,6 +3444,8 @@ export class NotificationService {
         where: { id: params.conversationId },
         select: { title: true, type: true },
       }),
+      this.resolveRecipientPrism(params.recipientUserId),
+      this.loadMessagePrismSource(params.messageId),
     ]);
 
     if (!replier) return null;
@@ -3220,8 +3454,15 @@ export class NotificationService {
       userId: params.recipientUserId,
       type: 'message_reply',
       priority: 'normal',
-      content: params.messagePreview,
+      // Cycle 122 — cf. `createMentionNotification` : le corps servi descend le
+      // Prisme, les champs du fil push ne suffisent pas.
+      content: this.servedPreview({
+        preview: params.messagePreview,
+        translation: this.prismTranslation(prismSource, prism.ordered),
+        previewIsMessageContent: params.previewIsMessageContent !== false,
+      }),
       collapseId: `conv-${params.conversationId}`,
+      lang: prism.lang,
       expiresAt: params.messageExpiresAt ?? undefined,
 
       actor: {
@@ -3237,6 +3478,9 @@ export class NotificationService {
         conversationType: conversation?.type as any,
         messageId: params.messageId,
         originalMessageId: params.originalMessageId,
+        // Cycle 122 — le Prisme de la RÉPONSE, celle que cette bannière annonce
+        // et ouvre : jamais celle du message cité.
+        ...this.prismTranslationContext(prismSource, prism.ordered),
       },
 
       metadata: {

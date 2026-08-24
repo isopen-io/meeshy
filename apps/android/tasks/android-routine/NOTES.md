@@ -5,6 +5,30 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-24 — a Prisme resolver lives SERVER-SIDE too: realtime pushed translations, not just on-demand pulls (slice `story-text-object-translation-realtime-merge`)
+When a §E "Next" pointer says "X translates only the caption on demand — scout iOS parity before building an
+N-call overlay pull", the scout's real question is **"where does the OTHER content get its translation from?"**
+For story text overlays the answer was NOT an on-demand pull at all: the **gateway** translates the overlay
+server-side and BROADCASTS it via `story:translation-updated` (`{postId, textObjectIndex, translations}`). iOS
+merges it into the open viewer; Android had no handler — a whole realtime Prisme channel on the floor. Lesson:
+before assuming a missing feature is an on-demand-pull gap, grep the gateway for a `*:translation-updated`
+broadcast for that content type — the pull may not exist because a PUSH already covers it. Caption has the
+same shape (`post:translation-updated`), a likely next Android viewer gap.
+
+Mechanics that recurred and are worth reusing verbatim: (a) a realtime merge into `rawItems` only repaints if
+`emit()` re-projects the current slide **unconditionally** — the viewer had gated re-projection behind an
+active exploration override, so a no-override realtime merge never reached the view; generalising it is safe
+because the override=null path reproduces `toSlideView`'s own resolver calls exactly. (b) Kotlin `copy` on the
+`StoryItem`/`StoryEffects`/`StoryTextObject` data classes makes the iOS "preserve every field" regression pin
+trivially true — no memberwise-init field-drop hazard to guard, though a field-preservation test is still cheap
+insurance. (c) RED-proof a multi-part slice PER PIECE: neuter the pure fn (`return item`) for the logic tests,
+comment the socket `listen` for the wiring tests, and revert ONLY the emit change to isolate that the chip test
+(reads `rawItems` directly) does NOT depend on it while the repaint test does.
+
+SDK bootstrap THIS run: `dl.google.com` **200**; `platforms;android-37` is not downloadable; `sdkmanager
+--channel=3 "platforms;android-37.0"` installed the preview and AGP mapped compileSdk 37 → android-37.0 on the
+first `./gradlew` — **pristine alone, no copy→patch, no both-dirs** (matches the 2026-08-23 entry below).
+
 ## 2026-08-23 — this container: `dl.google.com` REACHABLE, pristine `android-37.0` alone worked (slice `story-media-fade-envelope`)
 Egress to `dl.google.com` returned **200** this run (unlike the containers the CI-reality note describes,
 where it's 403), so the local gate WAS available. Full bootstrap ran clean: `commandlinetools`, then
@@ -1754,3 +1778,52 @@ language, tries an exact map key then a normalized-key match. Port `base(code)` 
 ?: code.split('-','_').first().lowercase()` (the shared normalizer IS the Android mirror of `MeeshyUser.normalizeLanguageCode`),
 and apply it to BOTH the preferred code and the map key so `"fr-FR"`/`"FR"`/`"fra"` collapse onto `"fr"`. Exact-key-before-normalized
 preserves a `"pt-BR"` override over its `"pt"` sibling.
+
+## 2026-08-24 — SDK recipe flipped AGAIN: pristine `android-37.0` hash-errored, copy→patch `android-37` + keep-both worked (slice `story-text-object-exploration-override`)
+`dl.google.com` **200** again this run, so the local gate was available. But the cheapest path (pristine
+`android-37.0` alone) HASH-ERRORED here: `sdkmanager "platforms;android-35" "build-tools;35.0.0"
+"platform-tools"` installed fine, then `:feature:stories:testDebugUnitTest` died `Failed to find target
+with hash string 'android-37'` (AGP even re-materialised `android-37.0` on that first run, then still
+failed). The four-edit copy→patch fixed it: `cp -r android-37.0 android-37`, then patch
+`source.properties` `AndroidVersion.ApiLevel=37`, `package.xml` `<api-level>37</api-level>` + `path=
+"platforms;android-37"`, `build.prop` both `ro.build.version.sdk_full=37` and
+`ro.system.build.version.sdk_full=37`; KEEP the pristine `android-37.0` alongside the patched `android-37`
+(both dirs present). `./gradlew --stop` then re-run → BUILD SUCCESSFUL (973 tasks). Net: the "recipe is
+image-dependent and flips between runs" rule holds — try pristine first (cost one failed run here), fall
+back to copy→patch+keep-both when it hash-errors.
+
+## 2026-08-24 — the exploration override is a PREPEND, not a new resolver (slice `story-text-object-exploration-override`)
+When a reader-side view already resolves content through an ordered preferred-language chain, the ephemeral
+"Exploration" language pick is NOT a separate code path — it is the chain with the override prepended
+(`listOf(override) + preferredLanguages`). This mirrors `StoryContentResolver`'s documented contract
+("tried FIRST, without removing the preference chain") and gives the override, for free, whatever matching
+the base resolver already does (here the text-object resolver's exact-then-normalized per-language walk),
+plus automatic fall-through to normal Prisme resolution when the override has no matching translation. Keep
+the empty-guard on the EFFECTIVE list (`languages.isEmpty()`), not `preferredLanguages.isEmpty()`, so an
+override still resolves for a reader with no configured chain (e.g. anonymous). A blank/null override must
+be inert. Wire it by threading an optional `overrideLanguage` param (default `null`) so 2-arg call sites
+stay byte-identical, and re-project from the RAW item in `emit()`'s override branch — the projected view
+was built once with default prefs.
+
+## 2026-08-24 — a Prisme gap can live one rung EARLIER than the resolver: the OFFER surface (slice `story-language-bar-text-object-translations`)
+
+Cycles 118-120 (and the two prior Android story slices) all fixed *resolvers* — the code that RENDERS
+content in the reader's language. This slice's gap was upstream of any resolver: the story language bar
+(`StoryViewerViewModel.availableLanguagesFor`) derived its "present" chips from the CAPTION
+(`item.translations`) alone, so an overlay translation the caption lacked was fully resolvable
+(`StoryTextObjectProjection` already honoured the override, wired the prior slice) but **the strip never
+offered a chip to trigger it**. The rendering was correct; the *affordance to reach it* was missing.
+Net rule: when a §Cohérence "Prisme applies to ALL content" audit turns up a resolver family, also ask
+**"what OFFERS the languages, and does the offer enumerate the same content set the resolver can render?"**
+A resolver that can render N languages behind a strip that only lists M<N of them is a silent gap — the
+missing languages look like "not translated" when they are translated-but-unoffered. Fix: union caption +
+`storyEffects.textObjects[].translations` keys (blank-filtered, case-insensitive dedup), caption-first.
+
+## 2026-08-24 — SDK recipe: pristine `android-37.0` auto-installed by gradle STILL hash-errors; four-edit copy→patch + keep-both worked again (same slice)
+
+Confirms the immediately-prior slice on this image family. First `./gradlew` (after only `platforms;android-35`)
+died `Failed to find target with hash string 'android-37'` and gradle auto-installed pristine `android-37.0`
+(channel 3) on the way — which by itself still hash-errored. The fix that worked: `cp -r android-37.0 android-37`
+then patch all four (`source.properties` ApiLevel=37, `package.xml` `<api-level>`, `package.xml` `path=`,
+`build.prop` `ro.build.version.sdk_full=37`), keep BOTH dirs. Green on the next run. Try the copy→patch first
+on this image family rather than betting on pristine.

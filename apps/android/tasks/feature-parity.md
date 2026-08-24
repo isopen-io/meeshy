@@ -3821,9 +3821,48 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       fields into the view. `StorySlideView` gains `textObjects`; the VM projects them with
       `LanguageResolver.preferredContentLanguages(prefs)`. Compose `StoryTextObjectLayer` renders each at
       its center anchor with `.alpha(animated.opacity)`, `fontSize × scale` mapped from the 1080-referential
-      design space onto the canvas width, and a `graphicsLayer` rotation. Pending: the exploration
-      language-override re-resolving text objects (caption re-resolves today, text objects use default
-      prefs); authored background/outline/RTL styling on the overlay; text-object keyframe **editing**.
+      design space onto the canvas width, and a `graphicsLayer` rotation. Pending: authored
+      background/outline/RTL styling on the overlay; text-object keyframe **editing**.
+- [x] **Text-object exploration language override** done (slice `story-text-object-exploration-override`,
+      2026-08-24): the caption re-resolved when the reader taps a language chip but text overlays stayed in
+      the default-chain language — a tapped "es" translated the caption yet left every overlay unchanged.
+      `StoryTextObjectProjection.resolveText`/`project` gain an optional `overrideLanguage` (default `null`,
+      2-arg call sites unchanged) tried FIRST without removing the preference chain — mirroring
+      `StoryContentResolver`'s own override contract — by prepending it to the exact-then-normalised
+      language loop, so it inherits the resolver's case/region-insensitive matching and falls through to
+      the normal Prisme resolution when no translation matches. `emit()`'s override branch now re-projects
+      the current slide's text objects from the raw item alongside the caption; the Compose layer already
+      reads `slide.textObjects`, so caption and overlays repaint together in the chosen language. +9 tests
+      (7 projection, 2 viewmodel); mutation RED-proof isolated exactly the 5 override-dependent tests.
+- [x] **Language bar descends the Prisme over ALL slide content** done (slice
+      `story-language-bar-text-object-translations`, 2026-08-24): `availableLanguagesFor` built its "present"
+      content chips from the CAPTION (`item.translations`) alone, so a slide whose text overlays carried a
+      translation the caption lacked (nominal once the device locale, rank 4, differs from the app language)
+      offered the reader no chip to reach it — the overlay's translation existed but was unreachable, the same
+      caption/overlay disagreement the two prior cycles fixed, one rung earlier (the strip that OFFERS the
+      languages, not the resolver that renders them). Now unions caption languages (in caption order) with
+      every language key across `storyEffects.textObjects[].translations` (blank values filtered, mirroring
+      the caption's `content.isNotBlank()`), deduped case-insensitively; the empty-gate and the
+      translatable-request arm both account for overlay languages. Consumer path unchanged (tap sets the
+      ephemeral override, `emit()` re-projects overlays). +5 viewmodel tests; RED proven against unmodified
+      production (exactly these 5 failed, the other 56 stayed green). One pure method; no wire/model change.
+- [x] **Realtime overlay translation merge** done (slice `story-text-object-translation-realtime-merge`,
+      2026-08-24): Android had **no** handler for `story:translation-updated` — the gateway broadcasts a
+      story's freshly-translated on-canvas text overlay (`{ postId, textObjectIndex, translations }`), iOS
+      merges it into the open viewer (`StoryItem.mergingTextObjectTranslations`), Android dropped it on the
+      floor: an overlay the reader had just asked to have translated never repainted until a full refetch.
+      New pure `StoryTextObjectTranslationMerge.merge(item, textObjectIndex, translations)` (canvas sibling of
+      `StoryTranslationMerge`) upserts the languages into the targeted text object (existing overwritten, new
+      added; out-of-range / no-effects / empty-map → unchanged) via immutable `copy`. New
+      `SocketStoryTranslationUpdatedData` + `SocialSocketManager.storyTranslationUpdated` flow wired to
+      `listen("story:translation-updated", …)`. The VM subscribes, merges into `rawItems`, and `emit()` now
+      re-projects the current slide from `rawItems` **unconditionally** (was gated on an active override), so a
+      reader whose preferred language just landed reads it at once — no tap, no refetch (parity with iOS,
+      which forces no override either). The unconditional re-projection reproduces `toSlideView` when nothing
+      changed, so non-current slides and no-merge emits are untouched. +12 tests (8 pure merge, 2 socket, 2
+      viewmodel + reused inert case); RED-proof isolated each piece: merge (4), socket (2), subscription+merge
+      (2 vm), and the emit re-projection alone reddened exactly the repaint test while the chip/inert tests
+      stayed green. No wire/production logic outside `apps/android`.
 - [ ] Per-clip inspector EDITOR (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)

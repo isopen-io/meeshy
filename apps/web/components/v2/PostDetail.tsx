@@ -142,6 +142,8 @@ export interface PostDetailProps {
   currentUserId?: string | null;
   currentUser?: { username: string; avatar?: string | null } | null;
   userLanguage?: string;
+  /** Prisme ordonné (rangs 1→4) pour l'auto-résolution de `TranslationToggle`. */
+  preferredLanguages?: string[];
   /**
    * L'annonce du fond + bouton 🔇 (B3.3-6) — n'existe (n'est rendue) QUE si
    * une piste `sound` v3 existe (B3.5). Mêmes props que `PostCard` (constat 2,
@@ -199,6 +201,7 @@ function PostDetail({
   currentUserId,
   currentUser,
   userLanguage,
+  preferredLanguages,
   backgroundSound,
   backgroundSoundMeta,
   backgroundSoundMuted = true,
@@ -390,6 +393,7 @@ function PostDetail({
                     originalLanguageName={post.originalLanguage ? getLanguageName(post.originalLanguage) : undefined}
                     translations={translationItems}
                     userLanguage={userLanguage}
+                    preferredLanguages={preferredLanguages}
                     variant="flags"
                     showContent={false}
                     onDisplayedChange={handleDisplayedChange}
@@ -493,6 +497,7 @@ function PostDetail({
                       originalLanguageName={repostOf.originalLanguage ? getLanguageName(repostOf.originalLanguage) : undefined}
                       translations={repostTranslationItems}
                       userLanguage={userLanguage}
+                      preferredLanguages={preferredLanguages}
                       variant="inline"
                     />
                   </div>
@@ -660,6 +665,7 @@ function PostDetail({
           currentUserId={currentUserId}
           currentUser={currentUser}
           userLanguage={userLanguage}
+          preferredLanguages={preferredLanguages}
           likedCommentIds={likedCommentIds}
           isLoading={commentsLoading}
           hasMore={commentsHasMore}

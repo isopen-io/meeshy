@@ -86,16 +86,31 @@ object StoryTextObjectProjection {
 
     /**
      * The displayable text for [textObject] under the reader's [preferredLanguages]
-     * (ordered, highest priority first). Each preferred language tries an exact key,
-     * then a normalised (case/region-insensitive) match, BEFORE moving to the next —
-     * so chain priority is preserved and an exact key wins over a normalised sibling.
+     * (ordered, highest priority first). Each language tries an exact key, then a
+     * normalised (case/region-insensitive) match, BEFORE moving to the next — so
+     * chain priority is preserved and an exact key wins over a normalised sibling.
      * Falls back to the object's original [StoryTextObject.text] when no translation
      * matches (Prisme rule 1: absent target ⇒ show the original).
+     *
+     * [overrideLanguage] is the ephemeral "Exploration" pick from the language bar
+     * (iOS `sessionLanguageOverride` parity, mirroring [StoryContentResolver]): it is
+     * tried FIRST, without removing the preference chain — an override with no matching
+     * translation falls back to the normal Prisme resolution. A blank/null override is
+     * inert, resolving exactly as [preferredLanguages] alone would.
      */
-    fun resolveText(textObject: StoryTextObject, preferredLanguages: List<String>): String {
+    fun resolveText(
+        textObject: StoryTextObject,
+        preferredLanguages: List<String>,
+        overrideLanguage: String? = null,
+    ): String {
         val translations = textObject.translations
-        if (translations.isNullOrEmpty() || preferredLanguages.isEmpty()) return textObject.text
-        for (lang in preferredLanguages) {
+        val languages = if (overrideLanguage.isNullOrBlank()) {
+            preferredLanguages
+        } else {
+            listOf(overrideLanguage) + preferredLanguages
+        }
+        if (translations.isNullOrEmpty() || languages.isEmpty()) return textObject.text
+        for (lang in languages) {
             translations[lang]?.let { return it }
             val target = base(lang)
             translations.entries.firstOrNull { base(it.key) == target }?.let { return it.value }
@@ -108,11 +123,16 @@ object StoryTextObjectProjection {
      * [resolveText] and carrying its transform, timing and keyframe fields so the
      * canvas can animate it. Absent timing fields default to `0` (a non-timed
      * object is always visible), and absent keyframes to an empty list.
+     * [overrideLanguage] threads the "Exploration" pick through to [resolveText].
      */
-    fun project(textObject: StoryTextObject, preferredLanguages: List<String>): StoryTextObjectView =
+    fun project(
+        textObject: StoryTextObject,
+        preferredLanguages: List<String>,
+        overrideLanguage: String? = null,
+    ): StoryTextObjectView =
         StoryTextObjectView(
             id = textObject.id,
-            text = resolveText(textObject, preferredLanguages),
+            text = resolveText(textObject, preferredLanguages, overrideLanguage),
             x = textObject.x,
             y = textObject.y,
             scale = textObject.scale,

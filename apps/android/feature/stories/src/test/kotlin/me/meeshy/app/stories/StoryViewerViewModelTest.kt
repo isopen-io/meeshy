@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketStoryReactedData
+import me.meeshy.sdk.model.SocketStoryTranslationUpdatedData
 import me.meeshy.sdk.model.SocketStoryUnreactedData
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryClipTransition
@@ -55,9 +56,12 @@ class StoryViewerViewModelTest {
     private val session: SessionRepository = mockk(relaxed = true)
     private val reactedFlow = MutableSharedFlow<SocketStoryReactedData>(extraBufferCapacity = 8)
     private val unreactedFlow = MutableSharedFlow<SocketStoryUnreactedData>(extraBufferCapacity = 8)
+    private val translationUpdatedFlow =
+        MutableSharedFlow<SocketStoryTranslationUpdatedData>(extraBufferCapacity = 8)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true) {
         every { storyReacted } returns reactedFlow
         every { storyUnreacted } returns unreactedFlow
+        every { storyTranslationUpdated } returns translationUpdatedFlow
     }
     private val config = MeeshyConfig()
 
@@ -902,6 +906,119 @@ class StoryViewerViewModelTest {
         assertThat(vm.state.value.current?.text).isEqualTo("text-s1")
     }
 
+    @Test
+    fun `toggling a language override re-resolves the current slide's text objects`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(
+                    StoryTextObject(
+                        id = "txt",
+                        text = "Hello",
+                        translations = mapOf("fr" to "Bonjour", "es" to "Hola"),
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "fr"), posts = listOf(post))
+
+        // Default projection follows the reader's chain (fr).
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Bonjour")
+
+        vm.toggleLanguageOverride("es")
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hola")
+
+        // Re-tapping clears the override, returning the object to the automatic resolution.
+        vm.toggleLanguageOverride("es")
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `a language override with no matching text-object translation falls back to the preferred chain`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(
+                    StoryTextObject(id = "txt", text = "Hello", translations = mapOf("fr" to "Bonjour")),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "fr"), posts = listOf(post))
+
+        vm.toggleLanguageOverride("de")
+        // No "de" text-object translation exists, so the reader's fr chain still resolves.
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Bonjour")
+    }
+
+    // --- Realtime overlay translation merge (story:translation-updated) ---
+
+    @Test
+    fun `a realtime overlay translation merges and repaints in the reader's language without a tap`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(StoryTextObject(id = "txt", text = "Hello")),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "fr"), posts = listOf(post))
+
+        // No fr translation yet: the overlay shows its original text.
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hello")
+
+        translationUpdatedFlow.emit(
+            SocketStoryTranslationUpdatedData(
+                postId = "s1",
+                textObjectIndex = 0,
+                translations = mapOf("fr" to "Bonjour"),
+            ),
+        )
+
+        // The reader prefers fr, so the freshly-merged overlay translation repaints — no tap.
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `a realtime overlay translation surfaces as a present content chip`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(StoryTextObject(id = "txt", text = "Hello")),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "en"), posts = listOf(post))
+
+        // No translations anywhere → no language strip.
+        assertThat(vm.state.value.availableLanguages).isEmpty()
+
+        translationUpdatedFlow.emit(
+            SocketStoryTranslationUpdatedData(
+                postId = "s1",
+                textObjectIndex = 0,
+                translations = mapOf("es" to "Hola"),
+            ),
+        )
+
+        val languages = vm.state.value.availableLanguages
+        assertThat(languages.map { it.code }).contains("es")
+        assertThat(languages.first { it.code == "es" }.isTranslatable).isFalse()
+    }
+
+    @Test
+    fun `a realtime overlay translation for an unknown story is inert`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(StoryTextObject(id = "txt", text = "Hello")),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "fr"), posts = listOf(post))
+
+        translationUpdatedFlow.emit(
+            SocketStoryTranslationUpdatedData(
+                postId = "does-not-exist",
+                textObjectIndex = 0,
+                translations = mapOf("fr" to "Bonjour"),
+            ),
+        )
+
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hello")
+    }
+
     // --- On-demand story translation (the flag strip's request arm) ---
 
     private fun viewer(systemLanguage: String) =
@@ -1026,5 +1143,115 @@ class StoryViewerViewModelTest {
         gate.complete(null)
 
         coVerify(exactly = 1) { storyRepository.translateStory(any(), "en") }
+    }
+
+    // --- The language bar descends the Prisme over ALL slide content (§Cohérence) ---
+    // A slide's translatable content is not just its caption: on-canvas text overlays
+    // carry their own per-language translations. The exploration bar must surface every
+    // language present across caption AND text objects, or a slide whose overlays are
+    // translated but whose caption is not offers the reader no way to reach them.
+
+    private fun storyWithTextObjectTranslations(
+        captionTranslations: Map<String, ApiPostTranslationEntry>? = null,
+        textObjectTranslations: Map<String, String>?,
+    ) = storyPost(id = "s1", authorId = "a1", hoursAgo = 1, translations = captionTranslations).copy(
+        storyEffects = StoryEffects(
+            textObjects = listOf(
+                StoryTextObject(id = "txt", text = "Hello", translations = textObjectTranslations),
+            ),
+        ),
+    )
+
+    @Test
+    fun `a text-object-only translation language surfaces as a present content chip`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "fr"),
+            posts = listOf(
+                storyWithTextObjectTranslations(
+                    textObjectTranslations = mapOf("es" to "Hola", "de" to "Hallo"),
+                ),
+            ),
+        )
+
+        val languages = vm.state.value.availableLanguages
+        assertThat(languages.map { it.code }).containsAtLeast("es", "de")
+        assertThat(languages.first { it.code == "es" }.isTranslatable).isFalse()
+        assertThat(languages.first { it.code == "de" }.isTranslatable).isFalse()
+    }
+
+    @Test
+    fun `caption and text-object languages are unioned with the caption first and no duplicates`() =
+        runTest {
+            val vm = viewModel(
+                startUserId = "a1",
+                user = viewer(systemLanguage = "fr"),
+                posts = listOf(
+                    storyWithTextObjectTranslations(
+                        captionTranslations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                        textObjectTranslations = mapOf("es" to "Hola", "de" to "Hallo"),
+                    ),
+                ),
+            )
+
+            val present = vm.state.value.availableLanguages.filter { !it.isTranslatable }
+            // es (caption + overlay) appears once, ahead of the overlay-only de.
+            assertThat(present.map { it.code }).containsExactly("es", "de").inOrder()
+        }
+
+    @Test
+    fun `a blank text-object translation value is not offered as a language`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "fr"),
+            posts = listOf(
+                storyWithTextObjectTranslations(
+                    textObjectTranslations = mapOf("de" to "   ", "es" to "Hola"),
+                ),
+            ),
+        )
+
+        val codes = vm.state.value.availableLanguages.map { it.code }
+        assertThat(codes).contains("es")
+        assertThat(codes).doesNotContain("de")
+    }
+
+    @Test
+    fun `an overlay-only translated story still offers a configured absent language as translatable`() =
+        runTest {
+            val vm = viewModel(
+                startUserId = "a1",
+                user = viewer(systemLanguage = "en"),
+                posts = listOf(
+                    storyWithTextObjectTranslations(
+                        textObjectTranslations = mapOf("es" to "Hola"),
+                    ),
+                ),
+            )
+
+            val languages = vm.state.value.availableLanguages
+            assertThat(languages.first { it.code == "es" }.isTranslatable).isFalse()
+            assertThat(languages.first { it.code == "en" }.isTranslatable).isTrue()
+        }
+
+    @Test
+    fun `tapping an overlay-only present language re-resolves the overlays into it`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "fr"),
+            posts = listOf(
+                storyWithTextObjectTranslations(
+                    textObjectTranslations = mapOf("de" to "Hallo"),
+                ),
+            ),
+        )
+        // The chip is offered even though no caption or fr translation exists…
+        assertThat(vm.state.value.availableLanguages.map { it.code }).contains("de")
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hello")
+
+        vm.toggleLanguageOverride("de")
+
+        // …and it is actionable: the overlay repaints in the tapped language.
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hallo")
     }
 }

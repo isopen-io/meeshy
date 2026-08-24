@@ -25,7 +25,7 @@ import {
 } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePostRoom } from '@/hooks/social/use-post-room';
-import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { usePreferredLanguage, usePreferredLanguages } from '@/hooks/use-post-translation';
 import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/use-i18n';
 import { useAuthStore } from '@/stores/auth-store';
@@ -53,6 +53,7 @@ export function ReelsFeedScreen() {
   const router = useRouter();
   const { t } = useI18n('reel');
   const userLanguage = usePreferredLanguage();
+  const preferredLanguages = usePreferredLanguages();
   const toastCtx = useToast();
 
   usePostSocketCacheSync();
@@ -316,6 +317,7 @@ export function ReelsFeedScreen() {
                   currentUserId={authUser?.id ?? null}
                   currentUser={authUser ? { username: authUser.username, avatar: authUser.avatar } : null}
                   userLanguage={userLanguage}
+                  preferredLanguages={preferredLanguages}
                   isLoading={commentsQuery.isLoading}
                   hasMore={commentsQuery.hasNextPage}
                   onLoadMore={() => commentsQuery.fetchNextPage()}

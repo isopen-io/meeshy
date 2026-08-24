@@ -175,7 +175,7 @@ jest.mock('@/hooks/queries/use-post-socket-cache-sync', () => ({
 }));
 
 jest.mock('@/hooks/use-post-translation', () => ({
-  usePreferredLanguage: () => 'fr',
+  usePreferredLanguage: () => 'fr', usePreferredLanguages: () => ['fr'],
 }));
 
 jest.mock('@/hooks/use-impression-tracking', () => ({
