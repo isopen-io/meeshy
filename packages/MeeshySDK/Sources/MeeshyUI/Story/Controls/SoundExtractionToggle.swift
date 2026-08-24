@@ -18,7 +18,7 @@ struct SoundExtractionToggle: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Toggle(isOn: Binding(get: { isOn }, set: onChange)) {
+            Toggle(isOn: Binding(get: { isOn }, set: { onChange($0) })) {
                 Text(String(localized: "story.media.soundExtraction.label", defaultValue: "Autoriser la reprise du son", bundle: .module))
                     .font(.system(size: 12, weight: .medium))
             }
