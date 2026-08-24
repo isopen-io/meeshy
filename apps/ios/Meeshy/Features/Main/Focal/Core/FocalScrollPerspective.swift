@@ -251,3 +251,57 @@ nonisolated enum FocalScrollPerspective {
         layer.opacity = 1
     }
 }
+
+// MARK: - Quand la magnificence s'arme (directive user 2026-08-24)
+
+/// **La magnificence ne s'arme pas au premier pixel défilé.**
+///
+/// Le mode Focal élisait un message dès que la liste bougeait : un pouce qui
+/// ripe, un rebond, un ajustement de deux points suffisaient à poser la carte
+/// et à faire apparaître les chips. La magnificence est une mise en avant —
+/// elle doit répondre à une intention de PARCOURIR, pas à un frôlement.
+///
+/// Deux portes, l'une ou l'autre :
+/// - **la vitesse** : un défilement franc, dès le premier événement, dit déjà
+///   qu'on cherche quelque chose ;
+/// - **la durée** : un défilement lent mais SOUTENU finit par dire la même
+///   chose, passé `sustainedMs`.
+///
+/// **Une fois armée, elle le reste.** Le désarmement au moindre repos ferait
+/// clignoter la carte à chaque pause de lecture — or c'est précisément à
+/// l'arrêt qu'on lit le message élu. L'état repart à zéro quand la scène
+/// Focal elle-même repart (changement de mode, retour à l'écran).
+///
+/// Les deux seuils passeront aux préférences utilisateur ; ils sont nommés ici
+/// pour n'avoir qu'un endroit à brancher le jour venu.
+///
+/// Loi PURE — aucune horloge murale, aucun `Date()` : la peau injecte
+/// l'instant, comme pour [`ScrollTimePillLaw`].
+nonisolated enum FocalMagnificationLaw {
+
+    /// Défilement soutenu au-delà duquel la magnificence s'arme, en ms.
+    static let sustainedScrollMs: Double = 4000
+
+    /// Vitesse (points/seconde, valeur absolue) au-delà de laquelle elle
+    /// s'arme immédiatement.
+    static let highVelocityThreshold: CGFloat = 1200
+
+    /// - Parameters:
+    ///   - alreadyArmed: l'état courant — armé, on le reste.
+    ///   - scrollStartedAt: début du défilement en cours (ms), `nil` au repos.
+    ///   - now: instant de l'événement (ms).
+    ///   - velocity: vitesse verticale du geste, points/seconde, signe libre.
+    static func isArmed(
+        alreadyArmed: Bool,
+        scrollStartedAt: Double?,
+        now: Double,
+        velocity: CGFloat,
+        sustainedMs: Double = sustainedScrollMs,
+        velocityThreshold: CGFloat = highVelocityThreshold
+    ) -> Bool {
+        if alreadyArmed { return true }
+        if abs(velocity) >= velocityThreshold { return true }
+        guard let scrollStartedAt else { return false }
+        return now - scrollStartedAt >= sustainedMs
+    }
+}

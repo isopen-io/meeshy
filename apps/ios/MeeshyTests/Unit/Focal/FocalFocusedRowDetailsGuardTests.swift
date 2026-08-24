@@ -232,33 +232,44 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         XCTAssertTrue(body.contains("senderIsAnonymous: input.senderIsAnonymous"), "le fantôme d'un compte anonyme")
     }
 
-    /// **Le toucher mène aux CONDITIONS de l'auteur dans CETTE conversation.**
-    /// Il ouvrait `onOpenProfile`, qui ne route vers la fiche de participation
-    /// que pour un visiteur SANS compte ; pour tous les autres il présentait
-    /// une page de profil — sans droits, sans lien d'entrée, sans la moindre
-    /// action possible depuis la conversation.
-    func test_theMagnifiedIdentity_opensTheAuthorsStandingHere_neverAProfilePage() throws {
+    /// **Le toucher mène au PROFIL** (directive 2026-08-24), par le routage
+    /// que l'hôte tient déjà : feuille de profil pour un compte, fiche de
+    /// participation pour un visiteur qui n'en a pas — lui n'a pas d'autre
+    /// identité que celle-là.
+    func test_theMagnifiedIdentity_opensTheProfile_throughTheHostsExistingRouting() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         let chip = try XCTUnwrap(row.range(of: "private var focusIdentityChip: some View {"))
         let body = String(row[chip.lowerBound...].prefix(1400))
-        XCTAssertTrue(body.contains("actions.onOpenParticipantProfile?(input.senderId)"), "la fiche de participation")
-        XCTAssertFalse(body.contains("actions.onOpenProfile?"), "plus de page de profil depuis la bulle magnifiée")
+        XCTAssertTrue(body.contains("onOpenProfile: actions.onOpenProfile"), "le routage de l'hôte, pas un second")
     }
 
-    func test_theGuardAbove_wouldCatchTheProfilePageComingBack() {
-        XCTAssertTrue("actions.onOpenProfile?(input.profileSheetUser)".contains("actions.onOpenProfile?"))
-    }
-
-    /// « En plus agrandi simplement » : l'identité du message magnifié est la
-    /// seule chip à dépasser le gabarit commun.
-    func test_theMagnifiedIdentity_isLargerThanEveryOtherChip() {
-        XCTAssertGreaterThan(FocalMetrics.FocusStrip.identityChipHeight, FocalMetrics.FocusStrip.chipHeight)
-        XCTAssertGreaterThan(FocalMetrics.FocusStrip.identityAvatarSize, FocalMetrics.Avatar.size)
-        XCTAssertEqual(
+    /// **Ni fond ni capsule** : l'auteur se pose HORS de la carte, juste
+    /// au-dessus, comme la rangée Script affiche le sien. Seule la taille
+    /// reste agrandie.
+    @MainActor
+    func test_theMagnifiedIdentity_wearsNoCapsule_andSitsAboveTheCard() throws {
+        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let chip = try XCTUnwrap(row.range(of: "private var focusIdentityChip: some View {"))
+        let body = String(row[chip.lowerBound...].prefix(1400))
+        XCTAssertFalse(body.contains("focusChip("), "l'identité n'est plus une chip — pas de fond, pas de capsule")
+        XCTAssertTrue(body.contains("FocalIdentityHeader("), "l'en-tête nu, comme en Script")
+        XCTAssertGreaterThanOrEqual(
             FocalMetrics.FocusStrip.identityOverhang,
-            FocalMetrics.FocusStrip.identityChipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin,
-            "le centre de la chip tombe sur la ligne de la carte — sinon elle flotte"
+            FocalMetrics.FocusStrip.identityAvatarSize + FocalScrollPerspective.focusCardInnerMargin,
+            "posée ENTIÈREMENT au-dessus de la carte, jamais à cheval sur sa ligne"
         )
+    }
+
+    func test_theGuardAbove_wouldCatchTheCapsuleComingBack() {
+        XCTAssertTrue("focusChip(height: 34) { FocalIdentityHeader(".contains("focusChip("))
+    }
+
+    /// « Juste la taille qui est maintenue » : l'auteur du message magnifié
+    /// reste plus grand que celui d'une rangée ordinaire.
+    @MainActor
+    func test_theMagnifiedIdentity_keepsItsLargerSize() {
+        XCTAssertGreaterThan(FocalMetrics.FocusStrip.identityAvatarSize, FocalMetrics.Avatar.size)
+        XCTAssertGreaterThan(FocalMetrics.FocusStrip.identityNameSize, FocalMetrics.Name.size)
     }
 
     /// L'en-tête reste utilisable là où il vivait : hors focus, il remplit sa
@@ -267,6 +278,92 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         let header = try normalized("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
         XCTAssertTrue(header.contains("var fillsWidth: Bool = true"), "par défaut il remplit sa ligne")
         XCTAssertTrue(header.contains("if let onTap { onTap() } else { onOpenProfile?(profileUser) }"),
-                      "sans destination explicite, le comportement historique tient")
+                      "sans destination explicite, le routage de l'hôte tient")
+    }
+
+    // MARK: - Quand la magnificence s'arme (directive 2026-08-24)
+
+    /// Le premier pixel défilé ne magnifie plus rien : un pouce qui ripe, un
+    /// rebond, un ajustement de deux points posaient la carte et faisaient
+    /// apparaître les chips.
+    func test_magnification_doesNotArmOnTheFirstPixelScrolled() {
+        XCTAssertFalse(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: 1_000, now: 1_050, velocity: 40)
+        )
+    }
+
+    /// Première porte : un défilement franc dit dès le premier événement qu'on
+    /// cherche quelque chose.
+    func test_magnification_armsImmediately_onHighVelocity() {
+        XCTAssertTrue(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: 1_000, now: 1_000,
+                velocity: FocalMagnificationLaw.highVelocityThreshold)
+        )
+        XCTAssertTrue(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: nil, now: 1_000,
+                velocity: -FocalMagnificationLaw.highVelocityThreshold),
+            "le sens du geste n'entre pas en compte — seule la vitesse"
+        )
+    }
+
+    /// Seconde porte : lent, mais SOUTENU. La borne est inclusive à
+    /// `sustainedMs` pile, et pas une milliseconde avant.
+    func test_magnification_armsOnSustainedScroll_atTheBoundaryAndNotBefore() {
+        let start = 10_000.0
+        let ms = FocalMagnificationLaw.sustainedScrollMs
+        XCTAssertFalse(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: start, now: start + ms - 1, velocity: 10)
+        )
+        XCTAssertTrue(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: start, now: start + ms, velocity: 10)
+        )
+    }
+
+    /// **Une fois armée, elle le reste** : désarmer au moindre repos ferait
+    /// clignoter la carte à chaque pause — or c'est à l'arrêt qu'on lit le
+    /// message élu.
+    func test_magnification_staysArmed_onceItHasBeen() {
+        XCTAssertTrue(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: true, scrollStartedAt: nil, now: 99_999, velocity: 0)
+        )
+    }
+
+    /// Au repos, sans geste et sans historique, rien ne s'arme.
+    func test_magnification_staysQuiet_whenNothingIsScrolling() {
+        XCTAssertFalse(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: nil, now: 5_000, velocity: 0)
+        )
+    }
+
+    /// Les deux seuils sont NOMMÉS — ils passeront aux préférences
+    /// utilisateur, et il ne doit y avoir qu'un endroit à brancher.
+    func test_magnificationThresholds_areNamed_forTheComingPreference() {
+        XCTAssertEqual(FocalMagnificationLaw.sustainedScrollMs, 4000)
+        XCTAssertGreaterThan(FocalMagnificationLaw.highVelocityThreshold, 0)
+        XCTAssertTrue(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: 0, now: 900, velocity: 0,
+                sustainedMs: 800, velocityThreshold: 5_000),
+            "les seuils s'injectent — c'est par là que la préférence entrera"
+        )
+    }
+
+    /// La peau doit CONSULTER la loi, pas la réimplémenter : sans élection,
+    /// pas de carte ni de chips.
+    func test_theController_asksTheLaw_beforeElecting() throws {
+        let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        XCTAssertTrue(controller.contains("FocalMagnificationLaw.isArmed("), "la loi est consultée")
+        XCTAssertTrue(controller.contains("focalMagnificationArmed"), "son verdict est retenu")
+        XCTAssertTrue(
+            controller.contains("let focused = focalMagnificationArmed"),
+            "l'élection est gardée par l'armement — sinon la carte reparaît au premier pixel"
+        )
     }
 }

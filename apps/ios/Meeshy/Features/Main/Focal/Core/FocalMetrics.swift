@@ -237,12 +237,14 @@ nonisolated public enum FocalMetrics {
         /// compte) : au gabarit `chipHeight` de 24, rien de tout cela n'était
         /// lisible.
         public static let identityAvatarSize: CGFloat = 26
-        public static let identityChipHeight: CGFloat = 34
         public static let identityNameSize: CGFloat = 13.5
-        /// Débord de la chip d'identité — calculé sur SA hauteur, pas sur
-        /// celle des autres : son centre doit tomber sur la ligne de la carte
-        /// comme le leur, et elle est plus haute qu'elles.
-        public static let identityOverhang: CGFloat = identityChipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin
+        /// Débord de l'identité — elle se pose ENTIÈREMENT au-dessus de la
+        /// carte (directive 2026-08-24 : « en dehors de la bordure de la
+        /// bulle, juste au-dessus »), et non plus à cheval sur sa ligne comme
+        /// les chips. Sa hauteur est celle de sa pastille ; la carte dépasse
+        /// déjà le bloc de `focusCardInnerMargin`, et 2 pt de jour achèvent de
+        /// la détacher.
+        public static let identityOverhang: CGFloat = identityAvatarSize + FocalScrollPerspective.focusCardInnerMargin + 2
     }
 
     nonisolated public enum HiddenChrome {
