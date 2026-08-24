@@ -2025,6 +2025,35 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             "app with no lock-screen call card, silently dropping the inbound call")
     }
 
+    /// `reportIncomingVoIPCall` is the VoIP-push twin of
+    /// `handleIncomingCallNotification` (both deliver an incoming call while
+    /// still `.ringing`), but only the latter was armed with
+    /// `startBackgroundMonitoring()` above. Left unarmed here, a VoIP-push
+    /// call that backgrounds mid-ring has no observer to run the
+    /// `applyCameraSuspension(false, cause: "foreground")` safety net
+    /// documented in `startBackgroundMonitoring()` — if a capture
+    /// interruption's end signal never arrives while backgrounded (Apple's
+    /// own documented risk), the peer stays stuck on the frozen frame straight
+    /// into the connected call, and the peer never learns the call was
+    /// backgrounded/foregrounded while ringing.
+    func test_reportIncomingVoIPCall_armsBackgroundMonitoring_soAStillRingingCallCanRecoverFromBackgrounding() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "func reportIncomingVoIPCall(callId:") else {
+            XCTFail("reportIncomingVoIPCall not found in CallManager.swift"); return
+        }
+        let afterFn = String(source[fnRange.upperBound...])
+        guard let fnEnd = afterFn.range(of: "// MARK: - VoIP Push Freshness Check")?.lowerBound else {
+            XCTFail("Could not find reportIncomingVoIPCall boundary"); return
+        }
+        let fnBody = String(afterFn[..<fnEnd])
+        XCTAssertTrue(
+            fnBody.contains("startBackgroundMonitoring()"),
+            "reportIncomingVoIPCall must call startBackgroundMonitoring() while the call is still " +
+            "ringing, exactly like handleIncomingCallNotification does — otherwise a VoIP-push call " +
+            "that backgrounds mid-ring has no observer armed to recover camera suspension or notify " +
+            "the peer of the background/foreground transition")
+    }
+
     /// Once `promoteRingingCallToCallKitIfNeeded()` is actually reachable (see
     /// the test above), its success path exposes a second, previously-latent
     /// bug: `startRingtone()` (played by `handleIncomingCallNotification` when
