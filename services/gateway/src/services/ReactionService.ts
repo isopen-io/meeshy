@@ -16,6 +16,7 @@ import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
 import { ConflictError } from '../errors/custom-errors.js';
+import { assertValidObjectId } from '../utils/object-id.js';
 
 /**
  * Le motif « le conteneur est terminé », sous forme de CONSTANTE et non de
@@ -61,12 +62,8 @@ export interface AddReactionResult {
 }
 
 export class ReactionService {
-  private static readonly OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
-
   private validateMessageId(messageId: string): void {
-    if (!messageId || !ReactionService.OBJECT_ID_REGEX.test(messageId)) {
-      throw new Error(`Invalid message ID format: ${messageId.substring(0, 20)}`);
-    }
+    assertValidObjectId(messageId, 'message');
   }
 
   constructor(private readonly prisma: PrismaClient) {}

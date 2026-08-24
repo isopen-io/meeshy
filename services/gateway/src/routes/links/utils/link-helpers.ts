@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { generateConversationIdentifier as sharedGenerateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
+import { generateConversationIdentifier as sharedGenerateConversationIdentifier, isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { generateShortToken } from '../../../services/TrackingLinkService';
 import {
   generatePublicIdentifier,
@@ -53,7 +53,7 @@ export function createLegacyHybridRequest(request: UnifiedAuthRequest): any {
  * Résout l'ID de ConversationShareLink réel à partir d'un identifiant
  */
 export async function resolveShareLinkId(prisma: PrismaClient, identifier: string): Promise<string | null> {
-  if (/^[0-9a-fA-F]{24}$/.test(identifier)) {
+  if (isValidMongoId(identifier)) {
     return identifier;
   }
 
