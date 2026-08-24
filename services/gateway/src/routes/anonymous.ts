@@ -3,6 +3,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { logError } from '../utils/logger';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
+import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { SecuritySanitizer } from '../utils/sanitize';
 import { generateNickname } from '../utils/anonymous-nickname';
 import { isConversationClosed } from '../services/messaging/conversationWriteAdmission';
@@ -88,7 +89,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
    */
   async function resolveShareLinkId(identifier: string): Promise<string | null> {
     // Si c'est deja un ObjectID valide (24 caracteres hexadecimaux), le retourner directement
-    if (/^[0-9a-fA-F]{24}$/.test(identifier)) {
+    if (isValidMongoId(identifier)) {
       return identifier;
     }
 

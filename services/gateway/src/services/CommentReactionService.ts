@@ -10,6 +10,7 @@ import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import type { CommentReactionAggregation } from '@meeshy/shared/types/post';
 import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
 import { ConflictError } from '../errors/custom-errors';
+import { assertValidObjectId } from '../utils/object-id.js';
 
 export interface CommentReactionData {
   readonly id: string;
@@ -74,12 +75,8 @@ export interface GetCommentReactionsOptions {
 }
 
 export class CommentReactionService {
-  private static readonly OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
-
   private validateCommentId(commentId: string): void {
-    if (!commentId || !CommentReactionService.OBJECT_ID_REGEX.test(commentId)) {
-      throw new Error(`Invalid comment ID format: ${commentId.substring(0, 20)}`);
-    }
+    assertValidObjectId(commentId, 'comment');
   }
 
   constructor(private readonly prisma: PrismaClient) {}
