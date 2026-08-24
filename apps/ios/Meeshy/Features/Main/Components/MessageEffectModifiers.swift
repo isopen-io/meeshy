@@ -359,27 +359,39 @@ struct PulseEffect: ViewModifier {
 /// **Aurore** — le successeur du cadre arc-en-ciel (directive 2026-08-24 :
 /// « quelque chose de visuellement plus esthétique »).
 ///
-/// Ce que faisait l'ancien rendu, et pourquoi il avait l'air d'un autocollant :
-/// un trait dur de 2 pt en rouge/vert/bleu saturés, étranger à la charte ; un
-/// `cornerRadius` de 16 EN DUR, donc un cadre qui flottait autour d'un média
-/// arrondi autrement ; un `AngularGradient` dont la dernière couleur retombait
-/// sur la première en laissant une COUTURE ; et un `hueRotation` de 360° en 3 s
-/// qui traversait tout le cercle chromatique — un clignotement, et surtout la
-/// DÉNATURATION des couleurs choisies par l'auteur (`rainbowColors`, décodé et
-/// testé depuis toujours, mais que le rendu n'a jamais lu : une lecture morte).
+/// Ce que faisait le tout premier rendu, et pourquoi il avait l'air d'un
+/// autocollant : un trait dur de 2 pt en rouge/vert/bleu saturés, étranger à la
+/// charte ; un `cornerRadius` de 16 EN DUR, donc un cadre qui flottait autour
+/// d'un média arrondi autrement ; un `AngularGradient` dont la dernière couleur
+/// retombait sur la première en laissant une COUTURE ; et un `hueRotation` de
+/// 360° en 3 s qui traversait tout le cercle chromatique — un clignotement, et
+/// surtout la DÉNATURATION des couleurs choisies par l'auteur (`rainbowColors`,
+/// décodé et testé depuis toujours, mais que le rendu n'a jamais lu : une
+/// lecture morte).
 ///
-/// Ce qui le remplace :
-/// - **deux couches** — un halo flouté large qui pose la lueur, un liseré fin
-///   qui la définit. Une aurore enveloppe ; un cadre encercle.
+/// **Le spectre ne tourne plus (directive 2026-08-24, seconde passe).** Faire
+/// tourner le dégradé en continu, c'était encore un mouvement sans intention :
+/// ça tourne, voilà tout, et l'œil finit par le subir. Désormais les couleurs
+/// sont POSÉES et une comète les parcourt, puis se repose — le repos domine le
+/// cycle, le mouvement le ponctue.
+///
+/// La composition, de l'extérieur vers l'intérieur :
+/// - **un halo flouté** large qui pose la lueur, et **un liseré fin** qui la
+///   définit. Une aurore enveloppe ; un cadre encercle. Tous deux FIXES.
 /// - **un spectre de MÊME clarté**, ancré sur l'indigo de la marque et passant
 ///   par `success` et `warning` : les teintes se succèdent sans qu'aucune ne
 ///   crie plus fort que les autres.
-/// - **une rotation du DÉGRADÉ**, pas de la teinte : le spectre glisse autour
-///   de la forme, et le bleu que l'auteur a demandé reste bleu.
+/// - **une comète** qui court le long du PÉRIMÈTRE — pas un balayage
+///   angulaire, qui filerait vite sur les côtés courts d'une bulle et
+///   lentement sur les longs. Sa géométrie est `RainbowSweep`, une règle pure
+///   du SDK ; sa cadence passe par `animatableData` et non par une valeur
+///   dérivée, sans quoi le plateau de repos serait écrasé par une
+///   interpolation plate (même piège que `ShakeGeometryEffect`).
 /// - **le rayon en paramètre**, pour que le liseré épouse ce qu'il entoure.
 ///
-/// `animated == false` (Réduire les animations) : le dégradé se fige. C'est ce
-/// que veut la règle 6 — le message perd son mouvement, pas son intention.
+/// `animated == false` (Réduire les animations) : la comète ne naît pas, le
+/// spectre posé reste. C'est ce que veut la règle 6 — le message perd son
+/// mouvement, pas son intention.
 struct RainbowEffect: ViewModifier {
     let active: Bool
     let animated: Bool
@@ -388,7 +400,7 @@ struct RainbowEffect: ViewModifier {
     /// Rayon de la forme entourée. Défaut aligné sur la bulle et son média.
     var cornerRadius: CGFloat = 18
 
-    @State private var rotation: Double = 0
+    @State private var cometPhase: CGFloat = 0
 
     /// Le spectre de la maison — sept arrêts de clarté homogène, refermés sur
     /// leur première couleur. Trois d'entre eux sont déjà des tokens nommés
@@ -406,12 +418,13 @@ struct RainbowEffect: ViewModifier {
         return custom + [custom[0]]
     }
 
+    private var spectrumColors: [Color] {
+        Self.spectrum(from: colors).map { Color(hex: $0) }
+    }
+
+    /// Angle FIXE : le spectre est posé sur la forme, il ne tourne plus.
     private var gradient: AngularGradient {
-        AngularGradient(
-            colors: Self.spectrum(from: colors).map { Color(hex: $0) },
-            center: .center,
-            angle: .degrees(rotation)
-        )
+        AngularGradient(colors: spectrumColors, center: .center)
     }
 
     private var shape: RoundedRectangle {
@@ -425,6 +438,11 @@ struct RainbowEffect: ViewModifier {
                     ZStack {
                         shape.stroke(gradient, lineWidth: 5).blur(radius: 6).opacity(0.35)
                         shape.stroke(gradient, lineWidth: 1).opacity(0.75)
+                        if animated {
+                            RainbowCometLayer(phase: cometPhase,
+                                              cornerRadius: cornerRadius,
+                                              spectrum: spectrumColors)
+                        }
                     }
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
@@ -432,10 +450,72 @@ struct RainbowEffect: ViewModifier {
             }
             .onAppear {
                 guard active, animated else { return }
-                withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
-                    rotation = 360
+                cometPhase = 0
+                // Même délai d'une frame que les effets d'apparition, et pour
+                // la même raison : une cellule conservée en mémoire retrouve
+                // `cometPhase` à sa valeur cible, et la remettre à 0 puis
+                // l'animer dans le MÊME tour synchrone ne produit rien —
+                // SwiftUI ne voit qu'un état net inchangé, sans frame de
+                // départ à interpoler.
+                Task { @MainActor in
+                    try? await Task.sleep(for: appearanceFrameDelay)
+                    withAnimation(.linear(duration: RainbowSweep.cycle).repeatForever(autoreverses: false)) {
+                        cometPhase = 1
+                    }
                 }
             }
+    }
+}
+
+/// Le point chaud qui court le long du contour.
+///
+/// `Animatable` est ce qui rend l'effet possible : SwiftUI interpole
+/// `animatableData` lui-même et rappelle `body` à chaque pas, donc la courbe de
+/// `RainbowSweep` est réellement PARCOURUE. Dériver la même géométrie d'un
+/// `@State` animé sans cette conformance produirait une interpolation plate
+/// entre l'état initial et l'état final — la comète glisserait à vitesse
+/// constante et ne se reposerait jamais.
+///
+/// Deux traits superposés : un renflement du spectre lui-même, qui porte
+/// l'effet en clair comme en sombre, et un cœur blanc fin qui lui donne son
+/// éclat. Un reflet purement blanc disparaîtrait sur fond clair.
+///
+/// Le nom évite délibérément le suffixe `Overlay` : `EffectOverlayMountingSourceGuardTests`
+/// balaie les `*Overlay: View` pour exiger leur montage derrière un drapeau
+/// d'apparition à particules, ce que cette couche n'est pas.
+private struct RainbowCometLayer: View, Animatable {
+    var phase: CGFloat
+    let cornerRadius: CGFloat
+    let spectrum: [Color]
+
+    var animatableData: CGFloat {
+        get { phase }
+        set { phase = newValue }
+    }
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    }
+
+    private var gradient: AngularGradient {
+        AngularGradient(colors: spectrum, center: .center)
+    }
+
+    var body: some View {
+        let sweep = RainbowSweep.state(at: phase)
+
+        ZStack {
+            ForEach(Array(sweep.segments.enumerated()), id: \.offset) { _, segment in
+                let arc = shape.trim(from: segment.lowerBound, to: segment.upperBound)
+
+                arc.stroke(gradient, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .blur(radius: 4)
+                arc.stroke(.white, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .blur(radius: 0.5)
+                    .opacity(0.9)
+            }
+        }
+        .opacity(sweep.opacity)
     }
 }
 

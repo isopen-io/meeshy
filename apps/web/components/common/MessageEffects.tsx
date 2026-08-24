@@ -1,12 +1,21 @@
 'use client';
 
-import { memo, useMemo, useRef, useState, useEffect, type ReactNode } from 'react';
+import {
+  memo,
+  useMemo,
+  useRef,
+  useState,
+  useEffect,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { cn } from '@/lib/utils';
 import {
   resolveMessageEffectPlan,
   messageEffectClassNames,
   messageEffectOverlays,
 } from '@/lib/message-effects';
+import { rainbowCometStyle } from '@/lib/rainbow-sweep';
 
 /**
  * Applique les effets d'un message sur le web.
@@ -162,6 +171,38 @@ const FireworksOverlay = memo(function FireworksOverlay() {
   );
 });
 
+/**
+ * Le point chaud qui court le long du contour d'une bulle `rainbow`.
+ *
+ * Un SVG plutôt qu'un `conic-gradient` étroit, pour la même raison que le
+ * pendant iOS trace sa comète avec `Shape.trim` plutôt qu'avec un
+ * `AngularGradient` : un balayage angulaire file vite sur les côtés courts
+ * d'une bulle et lentement sur les longs, donc sa vitesse apparente
+ * dépendrait de la longueur du message.
+ *
+ * `pathLength={1}` est la clé : il renormalise le périmètre du tracé à 1, ce
+ * qui rend `stroke-dasharray` et `stroke-dashoffset` directement exprimés en
+ * FRACTIONS du contour — les mêmes que celles de `RainbowSweep` côté Swift. Le
+ * raccord se reboucle tout seul, sans le découpage en deux segments que
+ * `Shape.trim` impose là-bas.
+ *
+ * `overflow: visible` laisse le halo déborder du cadre, comme le halo flouté
+ * d'iOS déborde de la bulle.
+ */
+function RainbowComet() {
+  return (
+    <svg
+      className="msg-fx-rainbow-comet"
+      style={rainbowCometStyle() as CSSProperties}
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect className="msg-fx-comet-halo" x="0" y="0" width="100%" height="100%" rx="16" pathLength={1} />
+      <rect className="msg-fx-comet-core" x="0" y="0" width="100%" height="100%" rx="16" pathLength={1} />
+    </svg>
+  );
+}
+
 export interface MessageEffectsProps {
   /** Bitfield persisté par le gateway (`Message.effectFlags`). */
   effectFlags?: number | null;
@@ -189,6 +230,12 @@ export const MessageEffects = memo(function MessageEffects({
   const persistentClasses = messageEffectClassNames({ ...plan, appearance: [] });
   const appearanceClasses = messageEffectClassNames({ ...plan, persistent: [] });
   const overlays = messageEffectOverlays(plan);
+  // La comète est un effet PERSISTANT, pas une apparition : elle ne passe donc
+  // pas par `messageEffectOverlays`, qui ne sert que les particules one-shot,
+  // et elle n'est pas armée par l'IntersectionObserver. Sous `reduceMotion` le
+  // plan retire `animatesPersistent` : le spectre posé reste, la comète ne naît
+  // pas — le message perd son mouvement, pas son intention.
+  const hasComet = plan.persistent.includes('rainbow') && plan.animatesPersistent;
 
   return (
     <div
@@ -196,6 +243,7 @@ export const MessageEffects = memo(function MessageEffects({
       className={cn('relative', persistentClasses, armed && appearanceClasses, className)}
     >
       {children}
+      {hasComet && <RainbowComet />}
       {armed &&
         overlays.map((kind) =>
           kind === 'confetti' ? (

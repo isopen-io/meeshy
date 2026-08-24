@@ -61,6 +61,36 @@ ne répondait à aucune question qu'on se posait ce jour-là.
 > écriture ? »** — et elle se répond en lisant sa suite ligne à ligne, pas en
 > cherchant un mot-clé.
 
+## 2 bis. La leçon était DÉJÀ ÉCRITE — avec le bon fichier, et une règle qui ne pouvait pas l'attraper
+
+Découvert en résolvant le conflit de `tasks/lessons.md` : **la leçon 28**
+(itération 104, 2026-07-05) s'intitule « F71 soldé : `community-preferences.ts`
+était une copie figée de `conversation-preferences.ts`, sans la diffusion socket
+ajoutée après-coup au sibling ».
+
+Elle nomme la bonne PAIRE, diagnostique le bon mécanisme — « une copie de code
+initiale figée avant le fix ne le reçoit jamais automatiquement, et rien ne le
+signale » — et prescrit une règle réutilisable. Le réordonnancement est passé au
+travers **treize mois plus tard, dans le fichier qu'elle nomme.**
+
+La raison tient dans l'exemple de commande de la règle prescrite :
+
+> grep immédiatement les routes SŒURS qui partagent la même forme
+> (`grep -rn "PUT.*preferences" routes/`…)
+
+`POST /user-preferences/communities/reorder` est un **POST**. La commande ne
+pouvait pas le rendre, et elle a été suivie correctement.
+
+> **Une règle de méthode outillée par un exemple de commande hérite des bornes
+> de cette commande.** L'exemple est ce qu'on relit et ce qu'on exécute ; la
+> phrase générale au-dessus est juste, et n'est pas ce qui s'exécute.
+
+C'est ce qui justifie de livrer un CLIQUET plutôt qu'une règle de plus. Le
+balayage part du MODÈLE Prisma, jamais du verbe de la route : il n'a pas de borne
+à hériter, et trouve l'écrivain quel que soit le geste qui l'amène. **Devant une
+famille de défauts déjà nommée deux fois, la réponse n'est pas de la nommer une
+troisième — c'est de l'exécuter.**
+
 ## 3. La décision de contrat, et pourquoi elle a été mesurée avant d'être prise
 
 La forme naturelle était d'élargir `UserPreferencesReorderedEventData` en y

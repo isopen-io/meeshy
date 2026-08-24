@@ -1507,6 +1507,15 @@ final class CallManager: ObservableObject {
         Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin")
         configureAudioSession()
         startReliabilityMonitor()
+        // Audit fix (calling-stack audit 2026-08-24) — arm the background
+        // observer HERE too, at ring time, mirroring handleIncomingCallNotification
+        // (same fix, other incoming-call entry point). Without it, a VoIP-push
+        // call that backgrounds before being answered has no observer to run
+        // the applyCameraSuspension(false, cause: "foreground") safety net or
+        // notify the peer of the background/foreground transition while still
+        // ringing. Safe to call twice per call: startBackgroundMonitoring()
+        // starts with stopBackgroundMonitoring() to stay idempotent.
+        startBackgroundMonitoring()
 
         // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY (before awaiting
         // startLocalMedia) so the caller receives PARTICIPANT_JOINED without
