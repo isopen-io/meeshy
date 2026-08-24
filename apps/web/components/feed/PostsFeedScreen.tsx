@@ -779,6 +779,7 @@ export function PostsFeedScreen() {
             onStatusPress={handleStatusPress}
             onAddStatus={() => setStatusComposerOpen(true)}
             userLanguage={userLanguage}
+            preferredLanguages={preferredLanguages}
             isLoading={statusesQuery.isLoading}
             className="mb-6"
           />

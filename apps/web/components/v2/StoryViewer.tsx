@@ -1423,6 +1423,7 @@ function StoryViewer({
                   currentUserId={authUser?.id ?? null}
                   currentUser={authUser ? { username: authUser.username, avatar: authUser.avatar } : null}
                   userLanguage={userLanguage}
+                  preferredLanguages={preferredLanguages}
                   isLoading={commentsQuery.isLoading}
                   hasMore={commentsQuery.hasNextPage}
                   onLoadMore={() => commentsQuery.fetchNextPage()}
