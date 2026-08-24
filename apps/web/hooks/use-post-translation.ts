@@ -5,6 +5,7 @@ import { useLanguageStore } from '@/stores/language-store';
 import {
   resolveUserLanguage,
   resolveUserLanguagesOrdered,
+  resolvePrismTranslation,
 } from '@meeshy/shared/utils/conversation-helpers';
 import { getDeviceLocale } from '@/lib/device-locale';
 
@@ -59,28 +60,37 @@ function resolvePreferredLanguage(config: {
  * appareil au rang 4 — voyait donc les posts espagnols en espagnol alors qu'une
  * traduction anglaise existait, tandis qu'iOS et Android la servaient.
  *
- * La comparaison est insensible à la casse des DEUX côtés : les langues du
- * lecteur sortent minusculées de `resolveUserLanguagesOrdered`, mais les clés de
- * la carte viennent du pipeline de traduction et ne sont pas normalisées à
- * l'écriture.
+ * La DESCENTE elle-même n'est plus réécrite ici : elle délègue à
+ * `resolvePrismTranslation` (`@meeshy/shared`), la SSOT du Prisme de contenu
+ * (CLAUDE.md § « La descente elle-même est UNE fonction »). Adapter la seule
+ * FORME — la carte des posts est un `Record<string, { text }>`, quand le
+ * résolveur attend `Record<string, string>` — suffit ; on n'y recopie ni
+ * l'ordre, ni la règle « la langue d'origine gagne à son rang », ni la
+ * normalisation. Cette dernière est le gain mesuré : `resolvePrismTranslation`
+ * canonicalise les trois sources (langues du lecteur, langue d'origine, clés de
+ * la carte) via `normalizeLanguageForDedup` — casse repliée ET région strippée
+ * (`'en-US'`/`'pt-BR'` → `'en'`/`'pt'`). L'ancien `.trim().toLowerCase()`
+ * rapprochait `'en-us'` de `'en'` par l'échec : un post dont la langue d'origine
+ * ou la clé de traduction était région-taguée ratait son rang et servait une
+ * traduction d'un rang inférieur — la violation exacte du Prisme #3 que ce hook
+ * était censé combattre.
  */
 function findTranslation(
   translations: unknown,
   orderedLanguages: readonly string[],
   originalLanguage: string | null,
-): TranslationEntry | null {
+): string | null {
   if (!translations || typeof translations !== 'object') return null;
-  const entries = Object.entries(translations as TranslationsMap);
-  const original = originalLanguage?.trim().toLowerCase();
-
-  for (const language of orderedLanguages) {
-    if (original && original === language) return null;
-    const match = entries.find(
-      ([code, entry]) => code.trim().toLowerCase() === language && entry?.text,
-    );
-    if (match) return match[1];
+  const record: Record<string, string> = {};
+  for (const [code, entry] of Object.entries(translations as TranslationsMap)) {
+    if (entry && typeof entry.text === 'string') record[code] = entry.text;
   }
-  return null;
+  const resolved = resolvePrismTranslation({
+    translations: record,
+    originalLanguage,
+    preferredLanguages: orderedLanguages,
+  });
+  return resolved ? resolved.text : null;
 }
 
 export function usePostTranslation(
@@ -105,10 +115,10 @@ export function usePostTranslation(
 
     const match = findTranslation(translations, orderedLanguages, origLang);
 
-    if (match) {
+    if (match !== null) {
       return {
         preferredLanguage,
-        displayContent: match.text,
+        displayContent: match,
         isTranslated: true,
         originalLanguage: origLang,
       };

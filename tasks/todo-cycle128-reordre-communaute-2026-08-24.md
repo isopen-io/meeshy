@@ -72,7 +72,7 @@ INERTE pour les deux consommateurs existants par construction.
 ## Revue
 
 Rapport complet : `tasks/realtime-sync-audit-2026-08-24-cycle128.md`.
-Leçon : `tasks/lessons.md` § 281. Règles : `services/gateway/CLAUDE.md`.
+Leçon : `tasks/lessons.md` § 283. Règles : `services/gateway/CLAUDE.md`.
 Décision : `packages/shared/decisions.md`.
 
 Suivi laissé ouvert et NON instruit : iOS et Android ne décodent pas le nouvel

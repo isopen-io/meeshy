@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { logError } from '../utils/logger';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
+import { isIpInRange } from '../utils/ip-range';
 import { SecuritySanitizer } from '../utils/sanitize';
 import { generateNickname } from '../utils/anonymous-nickname';
 import { isConversationClosed } from '../services/messaging/conversationWriteAdmission';
@@ -62,25 +63,6 @@ function extractCountryFromIP(ipAddress: string): string | null {
   if (ipNum >= 151 && ipNum <= 200) return 'DE';
 
   return 'FR'; // Defaut France
-}
-
-// Helper pour verifier si une IP est dans une plage
-function isIpInRange(ip: string, range: string): boolean {
-  // Implementation basique pour les CIDR et plages d'IP
-  if (range.includes('/')) {
-    // Format CIDR (ex: 192.168.1.0/24)
-    const [networkIp, prefixLength] = range.split('/');
-    // Implementation simplifiee - en production utiliser une librairie dediee
-    return ip.startsWith(networkIp.split('.').slice(0, Math.floor(parseInt(prefixLength) / 8)).join('.'));
-  } else if (range.includes('-')) {
-    // Format plage (ex: 192.168.1.1-192.168.1.100)
-    const [startIp, endIp] = range.split('-');
-    // Implementation simplifiee
-    return ip >= startIp && ip <= endIp;
-  } else {
-    // IP exacte
-    return ip === range;
-  }
 }
 
 export async function anonymousRoutes(fastify: FastifyInstance) {
