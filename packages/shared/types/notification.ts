@@ -256,6 +256,24 @@ export interface NotificationContext {
   readonly translatedContent?: string;
   /** GW5 — Langue de `translatedContent` (code du Prisme, ex. `en`). */
   readonly translatedLanguage?: string;
+  /**
+   * Cycle 124 — la langue d'ORIGINE du message notifié, et le DROIT, pour la
+   * NSE iOS, d'enregistrer localement le corps qu'elle s'apprête à afficher.
+   *
+   * Sa PRÉSENCE est le discriminant : elle n'est émise que lorsque le corps
+   * servi EST le contenu du message — jamais sous un placeholder de protection,
+   * jamais sous une transcription (qui appartient à la pièce jointe, pas au
+   * message), jamais en mode privé. Sous ces trois formes, la bulle
+   * pré-enregistrée reste sans corps plutôt que de porter un texte qui n'est pas
+   * le message.
+   *
+   * Elle dit la langue du message, pas celle du texte SERVI : quand une
+   * traduction a gagné, c'est `translatedLanguage` qui décrit le texte affiché,
+   * et les deux voyagent alors ensemble.
+   *
+   * @see schema.prisma Message.originalLanguage
+   */
+  readonly messageOriginalLanguage?: string;
 }
 
 /**

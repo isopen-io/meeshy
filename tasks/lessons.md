@@ -14540,3 +14540,86 @@ vers un fichier et d'y écrire le code soi-même (`; echo "JEST_EXIT=$?" >> log`
 > **Une règle écrite dans le dépôt n'est pas une règle appliquée.** Celle-ci l'était depuis vingt
 > cycles, dans le fichier que ce lot édite. Un gate ne se lit pas au statut d'un pipeline, et la
 > seule défense qui tienne est de ne jamais construire le pipeline.
+
+## Leçon 272 — un contrat entre deux langages dérive dans les DEUX sens, et personne ne le lit jamais en entier (2026-08-24, cycle 124)
+
+**Le constat.** Deux cycles de suite ont clos leur lot sur la même ligne, mot pour mot :
+`prePersistMessage` (NSE iOS) lit `userInfo["content"]`, une clé que le payload push ne porte
+pas. Deux fois nommé, deux fois différé au motif « Swift, non exerçable ici ».
+
+Le motif était réel — et il ne couvrait que la moitié Swift. La moitié TypeScript n'avait
+jamais été regardée, et la regarder prend une commande : lister les clés que la NSE LIT, lister
+les clés que la passerelle ÉMET, et faire le diff.
+
+> **Quatre clés lues jamais émises, deux clés émises jamais lues.**
+
+Les deux plus instructives ne sont pas celles du suivi :
+
+- `senderName` était lu par `prePersistMessage` alors que la passerelle émet
+  `senderDisplayName` — que **la ligne 563 du MÊME fichier** lit correctement, pour le cadrage
+  Communication. Deux lecteurs de la même donnée, dans le même fichier, dont un seul connaît le
+  nom réel de la clé.
+- `createdAt` et `messageType` sont émis depuis GW5 avec le commentaire « persistance NSE »,
+  c'est-à-dire pour ce consommateur précis, et **il ne les a jamais lus**. La bulle était
+  ordonnée par l'horloge du device.
+
+> **Un helper à un appelant est un inventaire (leçon 271) ; un CHAMP à zéro lecteur est une
+> intention.** La mesure du cycle 122 — « `translatedContent` n'est lu par aucun client » —
+> passait pour l'anomalie d'un lot. C'est la forme NORMALE d'un contrat dont les deux moitiés
+> vivent dans deux langages qu'aucun type ne relie : chaque côté est relu par des gens qui
+> lisent ce côté-là.
+
+### Corollaire — le correctif évident était le mauvais, et le cycle précédent disait pourquoi
+
+Émettre `content` clôt le suivi en une ligne, et rouvre exactement la fuite que le cycle 123
+venait de fermer : le texte NU d'un message protégé repartirait sur le canal push pendant que
+la bannière affiche son placeholder. La passerelle a RAISON de ne pas l'émettre.
+
+Ce qui débloque n'est pas d'ajouter la donnée manquante mais de remarquer qu'elle est **déjà
+là** : le corps de la bannière EST le texte servi — descendu dans le Prisme, masqué s'il le
+faut. Il ne manquait que sa LANGUE, et le DROIT de le prendre pour le message.
+
+> **Devant un consommateur qui lit une clé absente, la question n'est pas « comment la lui
+> envoyer ? » mais « qu'a-t-il déjà en main qui réponde à son besoin ? ».** La première mène à
+> élargir la charge — donc à rouvrir ce que les gardes de confidentialité viennent de fermer ;
+> la seconde mène à un discriminant.
+
+### Corollaire — la PRÉSENCE d'un champ peut être le discriminant
+
+`messageOriginalLanguage` n'est émise que quand le corps servi EST le contenu du message. Sa
+présence autorise l'enregistrement local ; son absence l'interdit. Aucune énumération sur le
+fil, aucun booléen à contredire, et le consommateur ne peut pas se tromper de branche : il n'a
+pas de branche à choisir.
+
+C'est la troisième projection de `PreviewPrismBasis` — le type du cycle 123 qui dit ce que
+l'aperçu EST — après « qu'est-ce qui le TRADUIT ? » et « que transporte-t-on à CÔTÉ ? ». Un type
+somme bien posé répond à plus de questions que celle pour laquelle on l'a écrit ; le chercher
+avant d'ajouter un drapeau.
+
+### Corollaire — écrire un placeholder dans une base locale n'est pas écrire un texte
+
+Le corps servi peut être « ⏱️ 💬 24h », « 🎵 Audio · 0:34 » ou « Nouveau message ». Affiché
+dans une bannière, chacun est correct ; **écrit dans la ligne `MessageRecord.content`, chacun
+affirme que le message DIT cela** — et la bannière disparaît en trois secondes quand
+l'enregistrement, lui, reste jusqu'à une synchro REST qui peut ne jamais venir.
+
+> **Une bulle sans texte vaut mieux qu'une bulle qui ment.** Le repli d'un cache n'est pas le
+> repli d'un affichage : le second est vu puis oublié, le premier est relu.
+
+Même règle sur la LANGUE : l'ancien code écrivait `"en"` en repli sur un champ que le Prisme du
+lecteur consulte ensuite. Un texte espagnol déclaré anglais n'est pas un défaut d'affichage,
+c'est une fausse déclaration dans une source de vérité.
+
+### La méthode, réutilisable telle quelle
+
+Pour toute frontière entre deux langages (push, deep link, App Group, fichier partagé) :
+
+```
+clés LUES par le consommateur   \
+                                 >  diff, dans les DEUX sens
+clés ÉMISES par le producteur   /
+```
+
+Les deux listes s'obtiennent par `grep`. Le diff est la mesure — et **les deux directions
+comptent** : les clés lues jamais émises sont des pannes, les clés émises jamais lues sont des
+intentions perdues, et rien dans le code ne signale ni les unes ni les autres.

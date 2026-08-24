@@ -61,7 +61,12 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         updateSharedUnreadCount(from: bestAttemptContent.userInfo)
         prefetchMessageData(from: bestAttemptContent.userInfo)
         prefetchSocialData(from: bestAttemptContent.userInfo)
-        prePersistMessage(from: bestAttemptContent.userInfo)
+        // Cycle 124 — le corps est passé EXPRÈS : c'est le texte que la
+        // passerelle a déjà descendu dans le Prisme et masqué s'il fallait
+        // (cycles 121-123), et il n'existe nulle part ailleurs dans la charge.
+        // Appelé AVANT le déchiffrement E2EE ci-dessous, qui réécrit ce corps —
+        // sans effet ici, `prePersistMessage` renonçant sur un push chiffré.
+        prePersistMessage(from: bestAttemptContent.userInfo, notificationBody: bestAttemptContent.body)
         postDeliveryReceipt(from: bestAttemptContent.userInfo)
 
         let userInfo = bestAttemptContent.userInfo
@@ -394,7 +399,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         } catch { return nil }
     }()
 
-    private func prePersistMessage(from userInfo: [AnyHashable: Any]) {
+    private func prePersistMessage(from userInfo: [AnyHashable: Any], notificationBody: String) {
         guard let messageId = userInfo["messageId"] as? String,
               let conversationId = userInfo["conversationId"] as? String,
               let senderId = userInfo["senderId"] as? String,
@@ -419,27 +424,42 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         let isEncryptedPush = (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } ?? false
         if isEncryptedPush { return }
 
-        let content = userInfo["content"] as? String ?? ""
+        // Cycle 124 — `userInfo["content"]` n'a JAMAIS été une clé du payload
+        // push : la bulle écrite ici avait un corps VIDE depuis toujours, et
+        // « `content` est absent » se lit exactement comme « le message est
+        // vide ». Le texte enregistrable est celui que la bannière AFFICHE —
+        // déjà descendu dans le Prisme, déjà masqué s'il est protégé — et le
+        // fil dit par `messageOriginalLanguage` s'il a le droit de l'être.
+        //
+        // Émettre `content` aurait été le correctif évident et le mauvais : le
+        // texte NU d'un message éphémère / à vue unique / flouté repartirait
+        // sur le canal push, soit la fuite que le cycle 123 vient de fermer.
+        let now = Date()
+        let fields = NotificationPayloadHelpers.prePersistedMessageFields(
+            userInfo: userInfo,
+            notificationBody: notificationBody,
+            fallbackNow: now
+        )
 
         // N4 — derive the media kind from the attachment mime so the
         // pre-persisted bubble renders as audio/image/video instead of an
         // empty text bubble until the canonical REST fetch overwrites it.
-        let media = NotificationPayloadHelpers.mediaMessageTypes(
-            forAttachmentMimeType: userInfo["attachmentMimeType"] as? String
-        )
+        // Cycle 124 — hors pièce jointe, le `messageType` du fil est plus fin
+        // que le repli `text` (la passerelle l'émet pour cet usage précis).
+        let media = NotificationPayloadHelpers.prePersistedMessageTypes(userInfo: userInfo)
 
         do {
-            let now = Date()
             let record = MessageRecord(
                 localId: messageId, serverId: messageId,
                 conversationId: conversationId, senderId: senderId,
-                // Don't hardcode "fr" — read from push payload if present, else
-                // default to "en" (the safer fake for an unknown language than
-                // the previous "fr" which guaranteed wrong Prisme Linguistique
-                // resolution for non-French speakers). The NSEDataSync API
-                // fetch will overwrite with the canonical value seconds later.
-                content: content,
-                originalLanguage: (userInfo["originalLanguage"] as? String) ?? "en",
+                // Cycle 124 — le texte SERVI et SA langue, pris ensemble : un
+                // enregistrement qui dirait « ce message est en <langue> » sur
+                // un texte écrit dans une autre ferait résoudre le Prisme du
+                // lecteur contre une fausse déclaration. `originalLanguage` (le
+                // nom lu ici auparavant) n'a jamais été sur le fil non plus, et
+                // son repli « en » réétiquetait donc TOUT message.
+                content: fields.content,
+                originalLanguage: fields.language,
                 messageType: media.messageType, messageSource: "user",
                 contentType: media.contentType,
                 // Incoming messages are .delivered (received by us), not
@@ -455,11 +475,15 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 maxViewOnceCount: nil, viewOnceCount: 0,
                 isEdited: false, editedAt: nil, deletedAt: nil,
                 pinnedAt: nil, pinnedBy: nil,
-                senderName: userInfo["senderName"] as? String,
+                senderName: fields.senderName,
                 senderUsername: nil, senderColor: nil, senderAvatarURL: nil,
                 deliveredCount: 0, readCount: 0,
                 deliveredToAllAt: nil, readByAllAt: nil,
-                createdAt: now, sentAt: nil,
+                // Cycle 124 — l'horodatage SERVEUR, que la passerelle émet
+                // depuis GW5 « pour la persistance NSE » et que personne ne
+                // lisait : l'horloge du device ordonnait la bulle, et deux
+                // appareils n'ont aucune raison de l'ordonner pareil.
+                createdAt: fields.createdAt, sentAt: nil,
                 deliveredAt: nil, readAt: nil, updatedAt: now,
                 attachmentsJson: nil, reactionsJson: nil,
                 reactionCount: 0, currentUserReactionsJson: nil,

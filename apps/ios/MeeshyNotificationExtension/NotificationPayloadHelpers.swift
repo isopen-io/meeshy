@@ -368,4 +368,130 @@ nonisolated enum NotificationPayloadHelpers {
         }
         return CommunicationFraming(usesGroupFraming: true, groupName: action, intentKey: key)
     }
+
+    // MARK: - Cycle 124 — le message PRÉ-ENREGISTRÉ au démarrage à froid
+
+    /// Les champs que `prePersistMessage` écrit dans la bulle locale, dérivés
+    /// du fil RÉEL — c'est-à-dire des clés que la passerelle émet vraiment.
+    ///
+    /// Trois d'entre eux étaient lus sous des noms que le payload push n'a
+    /// jamais portés (`content`, `senderName`, `originalLanguage`), et deux
+    /// autres étaient recalculés localement alors que la passerelle les émet
+    /// pour ce seul usage (`createdAt`, `messageType`).
+    struct PrePersistedMessageFields: Equatable {
+        /// Le texte à écrire dans la bulle. VIDE quand rien de ce que le fil
+        /// porte n'est le contenu du message (mode privé, placeholder de
+        /// protection, transcription) — une bulle sans texte vaut mieux qu'une
+        /// bulle qui MENT et que la synchro REST pourrait ne jamais corriger.
+        let content: String
+        /// La langue du texte ci-dessus : celle de la traduction quand une
+        /// traduction a été servie, celle du message sinon.
+        let language: String
+        /// L'horodatage SERVEUR du message, qui ordonne la bulle dans le fil.
+        let createdAt: Date
+        /// Le nom d'affichage de l'expéditeur, sous la clé que la passerelle émet.
+        let senderName: String?
+    }
+
+    /// Compose ces quatre champs.
+    ///
+    /// La règle de contenu tient en une question : **le fil dit-il que le corps
+    /// affiché EST le contenu du message ?** La passerelle y répond par la
+    /// PRÉSENCE de `messageOriginalLanguage`, qu'elle n'émet que sous cette
+    /// condition (cf. `NotificationService.storableMessageLanguage`). Sans
+    /// cette clé, on n'écrit aucun corps.
+    ///
+    /// Le texte lui-même vient, dans l'ordre :
+    ///  1. `translatedContent` — le texte servi NU, sans cadrage de pièce
+    ///     jointe, quand une traduction a gagné le Prisme ;
+    ///  2. le corps de la bannière, mais SEULEMENT en l'absence de pièce
+    ///     jointe : sinon le corps porte un cadrage composé par la passerelle
+    ///     (« 🎵 Audio · 0:34 », badges `+2📷`) qui n'est pas le texte du
+    ///     message.
+    ///
+    /// `fallbackNow` est l'horloge du device, conservée en repli — mais elle
+    /// n'est plus le cas nominal : deux appareils qui reçoivent le même message
+    /// n'ont aucune raison de l'ordonner pareil.
+    nonisolated static func prePersistedMessageFields(
+        userInfo: [AnyHashable: Any],
+        notificationBody: String,
+        fallbackNow: Date
+    ) -> PrePersistedMessageFields {
+        let storableLanguage = nonEmptyString(userInfo["messageOriginalLanguage"])
+        let translated = nonEmptyString(userInfo["translatedContent"])
+        let hasAttachment = nonEmptyString(userInfo["attachmentMimeType"]) != nil
+
+        let content: String
+        let language: String
+        if let storableLanguage {
+            if let translated {
+                content = translated
+                language = nonEmptyString(userInfo["translatedLanguage"]) ?? storableLanguage
+            } else if hasAttachment {
+                content = ""
+                language = storableLanguage
+            } else {
+                content = notificationBody
+                language = storableLanguage
+            }
+        } else {
+            content = ""
+            // Repli historique : « en » est un faux moins nuisible que « fr »
+            // pour la résolution du Prisme d'un lecteur non francophone. Il ne
+            // vaut que le temps que la synchro REST écrase l'enregistrement.
+            language = "en"
+        }
+
+        return PrePersistedMessageFields(
+            content: content,
+            language: language,
+            createdAt: pushDate(userInfo["createdAt"]) ?? fallbackNow,
+            // `senderName` n'a JAMAIS été une clé du payload : la passerelle
+            // émet `senderDisplayName`, que le cadrage Communication de ce
+            // même fichier lit correctement depuis toujours.
+            senderName: nonEmptyString(userInfo["senderDisplayName"])
+                ?? nonEmptyString(userInfo["senderUsername"])
+        )
+    }
+
+    /// Le `messageType` / `contentType` de la bulle pré-enregistrée.
+    ///
+    /// Le mime de la pièce jointe reste PRIORITAIRE : c'est lui qui décide du
+    /// rendu média (N4), et `Message.messageType` vaut `text` pour un vocal
+    /// légendé. Le type du fil ne sert donc qu'en l'absence de pièce jointe,
+    /// où il est plus fin que le repli `text`.
+    nonisolated static func prePersistedMessageTypes(
+        userInfo: [AnyHashable: Any]
+    ) -> (messageType: String, contentType: String) {
+        let mime = userInfo["attachmentMimeType"] as? String
+        let fromMime = mediaMessageTypes(forAttachmentMimeType: mime)
+        guard fromMime.messageType == "text",
+              let wireType = nonEmptyString(userInfo["messageType"])?.lowercased(),
+              wireType != "text"
+        else { return fromMime }
+        return (wireType, wireType)
+    }
+
+    /// Une valeur de payload lue comme chaîne NON VIDE. Les `data` APNs/FCM ne
+    /// transportent que des chaînes, et la passerelle y pose `''` là où elle
+    /// n'a rien à dire — les deux formes veulent dire « absent ».
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let string = value as? String else { return nil }
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Un horodatage ISO 8601 du fil, avec ou sans fraction de seconde — la
+    /// passerelle émet `toISOString()`, qui en porte toujours une, mais un
+    /// parseur qui n'accepte qu'une seule forme rendrait `nil` au premier
+    /// producteur qui l'omet.
+    private static func pushDate(_ value: Any?) -> Date? {
+        guard let raw = nonEmptyString(value) else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFraction.date(from: raw) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: raw)
+    }
 }

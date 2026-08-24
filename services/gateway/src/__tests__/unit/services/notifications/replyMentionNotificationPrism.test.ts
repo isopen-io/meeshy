@@ -518,3 +518,85 @@ describe.each([
     expect(push?.data?.translatedLanguage).toBeUndefined();
   });
 });
+
+/**
+ * Cycle 124 — la JUMELLE, posée dans le MÊME lot.
+ *
+ * `messageOriginalLanguage` — le droit, pour la NSE iOS, d'enregistrer
+ * localement le corps qu'elle affiche — est né sur `createMessageNotification`.
+ * La règle de `services/gateway/CLAUDE.md` (« cette entité a-t-elle une
+ * JUMELLE ? à poser au moment où l'on corrige ») rend ici la même réponse qu'au
+ * cycle 122 pour le Prisme lui-même : les TROIS éventails poussent un
+ * `messageId`, donc les trois font pré-enregistrer une bulle. Deux d'entre eux
+ * l'auraient laissée sans corps.
+ *
+ * Les deux méthodes tiennent déjà la langue d'origine — `MessagePrismSource`
+ * la porte, relue une fois pour tout l'éventail. Aucune lecture de plus.
+ */
+describe.each([
+  ['createReplyNotification', runReply],
+  ['createMentionNotification', runMention],
+] as const)('%s — ce que la NSE a le droit d\'ENREGISTRER', (_name, run) => {
+  it('émet la langue du contenu quand le corps servi EST le contenu du message', async () => {
+    const { data } = await run({
+      recipient: { systemLanguage: 'fr' },
+      translations: null,
+      originalLanguage: 'es',
+    });
+
+    expect(data?.messageOriginalLanguage).toBe('es');
+  });
+
+  it('dit la langue d\'ORIGINE, pas celle servie', async () => {
+    const { data } = await run({
+      recipient: { systemLanguage: 'fr' },
+      translations: { fr: { text: 'Bonjour' } },
+      originalLanguage: 'es',
+    });
+
+    expect(data?.translatedLanguage).toBe('fr');
+    expect(data?.messageOriginalLanguage).toBe('es');
+  });
+
+  it('n\'émet rien quand la langue d\'origine est inconnue', async () => {
+    const { data } = await run({
+      recipient: { systemLanguage: 'fr' },
+      translations: null,
+      originalLanguage: null,
+    });
+
+    expect(data).not.toHaveProperty('messageOriginalLanguage');
+  });
+});
+
+describe.each([
+  ['createReplyNotification', (s: NotificationService, p: any) => s.createReplyNotification(p)],
+  ['createMentionNotification', (s: NotificationService, p: any) =>
+    s.createMentionNotification({
+      mentionedUserId: p.recipientUserId,
+      mentionerUserId: p.replierUserId,
+      messageId: p.messageId,
+      conversationId: p.conversationId,
+      messagePreview: p.messagePreview,
+      previewBasis: p.previewBasis,
+    })],
+] as const)('%s — un placeholder de PROTECTION n\'est pas enregistrable', (_name, invoke) => {
+  it('n\'émet pas la langue du contenu sous une base protégée', async () => {
+    const { service, sendToUser } = makeService({
+      recipient: { systemLanguage: 'fr' },
+      translations: null,
+      originalLanguage: 'es',
+    });
+
+    await invoke(service, {
+      recipientUserId: RECIPIENT_ID,
+      replierUserId: SENDER_ID,
+      messageId: MESSAGE_ID,
+      conversationId: CONVERSATION_ID,
+      messagePreview: '⏱️ 💬 24h',
+      previewBasis: { kind: 'protected-placeholder' },
+    });
+
+    expect(servedPushData(sendToUser)).not.toHaveProperty('messageOriginalLanguage');
+  });
+});

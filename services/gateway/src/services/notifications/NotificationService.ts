@@ -830,6 +830,44 @@ export class NotificationService {
   }
 
   /**
+   * La langue du CONTENU du message — et, par sa seule présence, le DROIT pour
+   * la NSE iOS d'enregistrer localement le corps qu'elle s'apprête à afficher.
+   *
+   * Troisième projection de {@link PreviewPrismBasis}, après « qu'est-ce qui
+   * TRADUIT cet aperçu ? » ({@link previewPrismSource}) et « que peut-on
+   * transporter à côté ? » (la garde de {@link servedTranslationFields}) : ce
+   * type dit ce que l'aperçu EST, donc il est aussi le seul à pouvoir dire s'il
+   * peut être pris pour le message.
+   *
+   * Elle répond `undefined` — donc « n'enregistre rien » — sur les trois formes
+   * où le corps servi n'est pas `Message.content` :
+   *
+   *  - `protected-placeholder` — l'écrire planterait « ⏱️ 💬 24h » dans la base
+   *    locale, où il survivrait à la bannière si la synchro REST n'arrive pas ;
+   *  - `transcript` — la parole d'un vocal appartient à la pièce jointe, pas au
+   *    message qui la porte ;
+   *  - `protectedByLocKey` — second verrou, comme pour la descente : un appelant
+   *    qui compose un placeholder sans déclarer sa base perd un enregistrement
+   *    local, jamais le secret.
+   *
+   * La quatrième — le mode privé — est tenue une couche plus haut, par la garde
+   * `showPreview` qui retire TOUT champ porteur de contenu de `data`.
+   *
+   * Ce n'est PAS `translatedLanguage` : celle-ci décrit le texte SUBSTITUÉ,
+   * celle-ci décrit le message. Quand une traduction gagne, les deux voyagent
+   * ensemble et disent deux choses différentes.
+   */
+  private storableMessageLanguage(params: {
+    basis: PreviewPrismBasis;
+    originalLanguage: string | null;
+    protectedByLocKey?: boolean;
+  }): string | undefined {
+    if (params.protectedByLocKey) return undefined;
+    if (params.basis.kind !== 'message-content') return undefined;
+    return params.originalLanguage ?? undefined;
+  }
+
+  /**
    * La DESCENTE du Prisme, sous la forme que le contexte de notification
    * attend : `translatedContent` et `translatedLanguage` côte à côte, ou RIEN.
    *
@@ -1418,6 +1456,15 @@ export class NotificationService {
                     translatedContent: params.context.translatedContent,
                     translatedLanguage: params.context.translatedLanguage || '',
                   } : {}),
+                  // Cycle 124 — la NSE pré-enregistre la bulle au démarrage à
+                  // froid : la PRÉSENCE de cette clé lui dit que le corps
+                  // qu'elle affiche est bien le contenu du message, donc
+                  // enregistrable ; sa valeur lui donne la langue à écrire
+                  // quand aucune traduction n'a été substituée. Elle vit sous
+                  // la garde `showPreview` comme tout ce qui décrit le contenu.
+                  ...(params.context.messageOriginalLanguage
+                    ? { messageOriginalLanguage: params.context.messageOriginalLanguage }
+                    : {}),
                 } : {}),
               },
             };
@@ -1831,6 +1878,13 @@ export class NotificationService {
         // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
         messageCreatedAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt.toISOString() : undefined,
         messageType: liveMessage.messageType ?? undefined,
+        // Cycle 124 — le DROIT d'enregistrer, et la langue du message. Même
+        // base, même verrou et même relecture vivante que la descente ci-dessus.
+        messageOriginalLanguage: this.storableMessageLanguage({
+          basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+          originalLanguage: liveMessage.originalLanguage,
+          protectedByLocKey: !!params.notificationLocKey,
+        }),
         ...prismContext,
       },
 
@@ -1956,6 +2010,14 @@ export class NotificationService {
         // la bannière d'une mention restait dans la langue de l'expéditeur
         // pendant que celle d'un message simple servait la traduction.
         ...this.servedTranslationFields(servedTranslation),
+        // Cycle 124 — la JUMELLE : cette bannière pousse un `messageId`, donc
+        // elle fait pré-enregistrer une bulle côté NSE. Sans cette clé, celle
+        // d'une mention serait restée sans corps pendant que celle d'un message
+        // simple en aurait un. La langue vient de la source déjà relue.
+        messageOriginalLanguage: this.storableMessageLanguage({
+          basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+          originalLanguage: prismSource.originalLanguage,
+        }),
       },
 
       metadata: {
@@ -3585,6 +3647,12 @@ export class NotificationService {
         // Cycle 122 — le Prisme de la RÉPONSE, celle que cette bannière annonce
         // et ouvre : jamais celle du message cité.
         ...this.servedTranslationFields(servedTranslation),
+        // Cycle 124 — cf. `createMentionNotification` : la RÉPONSE est le
+        // message que la NSE pré-enregistre, donc c'est SA langue d'origine.
+        messageOriginalLanguage: this.storableMessageLanguage({
+          basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+          originalLanguage: prismSource.originalLanguage,
+        }),
       },
 
       metadata: {
