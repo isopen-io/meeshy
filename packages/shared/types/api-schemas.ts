@@ -761,7 +761,19 @@ export const messageSchema = {
               thumbnailUrl: { type: 'string', nullable: true },
               width: { type: 'number', nullable: true },
               height: { type: 'number', nullable: true },
-              duration: { type: 'number', nullable: true }
+              duration: { type: 'number', nullable: true },
+              // La protection du média cité, DÉCLARÉE ici sous peine d'être
+              // retirée. `attachmentFullSelect` la rend depuis toujours, mais
+              // cette copie inline est plus pauvre que `messageAttachmentSchema`
+              // (qui, lui, les déclare) : fast-json-stringify les strippait du
+              // seul chemin REST. Côté client l'absence n'est pas un champ
+              // manquant mais une INVERSION — `declaredProtection` rend `nil`
+              // quand les deux sont absents, un silence que la citation lit
+              // comme « rien à protéger », et la vignette d'un média à vue
+              // unique s'affichait entière après un rechargement pendant que
+              // le même message reçu par socket restait masqué.
+              isViewOnce: { type: 'boolean' },
+              isBlurred: { type: 'boolean' }
             }
           }
         },
