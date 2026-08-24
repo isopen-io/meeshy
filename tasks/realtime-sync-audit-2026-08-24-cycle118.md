@@ -135,12 +135,21 @@ elle-même par message) gardent mot pour mot leur comportement.
       tomber n'atteste rien.
 - [x] Aucune construction positionnelle d'`ApiConversation` dans le dépôt (toutes
       nommées) : insérer deux champs au milieu du constructeur ne casse aucun appelant.
-- [ ] **Kotlin non compilé** : `dl.google.com` est refusé par la politique de sortie de
-      ce conteneur (mesuré : `CONNECT tunnel failed, response 403`), donc `sdkmanager` ne
-      peut pas s'amorcer et aucune tâche Gradle ne tourne. C'est exactement la situation
-      que l'en-tête de `.github/workflows/android.yml` décrit et que ce workflow existe
-      pour couvrir. **Le verdict vient d'`android.yml` (`assembleDebug` +
-      `testDebugUnitTest`), pas d'ici.**
+- [ ] **Kotlin non compilé ICI** : `dl.google.com` est refusé par la politique de sortie
+      de ce conteneur (mesuré : `CONNECT tunnel failed, response 403`), donc `sdkmanager`
+      ne peut pas s'amorcer et aucune tâche Gradle ne tourne. C'est exactement la
+      situation que l'en-tête de `.github/workflows/android.yml` décrit et que ce workflow
+      existe pour couvrir. **Le verdict vient d'`android.yml`, pas d'ici.**
+- [x] **Et le verdict est TOMBÉ, utilement.** Premier passage `android.yml` :
+      `assembleDebug` ✅ (la source de PRODUCTION compile), `testDebugUnitTest` ❌ sur
+      `ConversationPrismePairWireTest.kt:66` — `json.encodeToString(once)` sans
+      `import kotlinx.serialization.encodeToString`. `encodeToString` est une extension de
+      `StringFormat`, pas un membre de `Json` ; `decodeFromString` se résout sans import
+      (voisin `ConversationDraftTest`), `encodeToString` non (voisin
+      `NotificationPreferenceSyncBodyTest`, qui l'importe). Corrigé (`ed74bb04`).
+      **Leçon incidente : le seul témoin qui exerçait la SÉRIALISATION est celui qui n'a
+      pas compilé — c'est le prix de ne pas avoir de chaîne d'outils Kotlin en local, et
+      la raison pour laquelle `android.yml` est le gate, pas une formalité.**
 
 ---
 
