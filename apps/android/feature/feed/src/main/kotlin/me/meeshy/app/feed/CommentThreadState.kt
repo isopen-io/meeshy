@@ -103,6 +103,21 @@ data class CommentThreadState(
     }
 
     /**
+     * Replace a top-level comment edited elsewhere (a live `comment:updated` for the open post):
+     * swap the whole row for the server-authoritative [comment] in place, preserving its position.
+     * Unlike [retranslated] (which touches only `translations`) this adopts every field — content,
+     * effects, translations, counts — because the payload carries the COMPLETE new comment (mirror
+     * of iOS `applyCommentEdit`, which replaces the row wholesale). The heart state lives in a
+     * separate [CommentLikeState] keyed by id, so a full-row swap never disturbs the viewer's like.
+     * Inert (same instance) when no top-level comment matches (it may be a reply, handled by
+     * [CommentRepliesState.replacedReply], or on an unloaded page).
+     */
+    fun replaced(comment: ApiPostComment): CommentThreadState {
+        if (comments.none { it.id == comment.id }) return this
+        return copy(comments = comments.map { if (it.id == comment.id) comment else it })
+    }
+
+    /**
      * Optimistically shift the [parentId] comment's `replyCount` by [delta] (a null count reads
      * as zero, clamped ≥ 0) so the "View N replies" affordance tracks a just-sent reply. Inert
      * when no comment matches [parentId].

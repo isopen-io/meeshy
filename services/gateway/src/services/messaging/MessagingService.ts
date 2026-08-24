@@ -28,6 +28,7 @@ import {
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -592,7 +593,7 @@ export class MessagingService {
     try {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true, systemLanguage: true }
+        select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true, ...RECIPIENT_LANG_SELECT }
       });
       if (!user) return null;
 
@@ -626,7 +627,7 @@ export class MessagingService {
           displayName: user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
           avatar: user.avatar,
           role: roleMap[memberDoc.role] || 'member',
-          language: user.systemLanguage || 'fr',
+          language: recipientLanguage(user, 'fr'),
           permissions: {
             canSendMessages: memberDoc.canSendMessage ?? true,
             canSendFiles: memberDoc.canSendFiles ?? true,

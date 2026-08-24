@@ -39,6 +39,7 @@ import {
 } from '@meeshy/shared/utils/conversation-helpers';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
+import { recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { filterMutedRecipients } from './mutedRecipients';
@@ -93,6 +94,30 @@ export type PreviewPrismBasis =
   | { readonly kind: 'transcript'; readonly source: MessagePrismSource };
 
 const MESSAGE_CONTENT_BASIS: PreviewPrismBasis = { kind: 'message-content' };
+
+/**
+ * Ce qu'il faut d'un média pour COMPOSER le corps d'une bannière — cycle 125 bis.
+ *
+ * `buildMessageNotificationBodyI18n` remplace un texte ABSENT par le libellé
+ * détaillé de la première pièce jointe (« 🎵 Audio · 0:07 », « 📷 Photo ·
+ * 1024×768 ») et suffixe les badges des suivantes. Les TROIS éventails de
+ * `messageNotificationFanOut` en ont besoin : sans ces champs, la bannière
+ * d'une RÉPONSE ou d'une MENTION portant un vocal ou une photo sans légende a
+ * un corps VIDE, pendant que celle d'un message simple porte le libellé.
+ *
+ * Distinct des champs de RICH-PUSH (`firstAttachmentUrl`, `firstAttachmentMimeType`)
+ * et de l'inventaire persisté (`hasAttachments`, `firstAttachmentFilename`),
+ * que seule la bannière d'un message simple porte : ceux-ci composent un TEXTE,
+ * ceux-là transportent un fichier. La séparation est celle du cycle 125 — une
+ * charge ne se garde pas comme une chaîne.
+ */
+export type NotificationBannerMedia = {
+  readonly attachments?: ReadonlyArray<NotificationAttachmentSummary>;
+  readonly firstAttachmentFileSize?: number | null;
+  readonly firstAttachmentDuration?: number | null;
+  readonly firstAttachmentWidth?: number | null;
+  readonly firstAttachmentHeight?: number | null;
+};
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -987,6 +1012,45 @@ export class NotificationService {
     return params.translation.text;
   }
 
+  /**
+   * Le corps AFFICHÉ d'une bannière de message — cycle 125 bis.
+   *
+   * Deux compositions en une, et c'est leur ORDRE qui compte : le texte servi
+   * par le Prisme ({@link servedPreview}), puis le passage par
+   * `buildMessageNotificationBodyI18n`, qui remplace un texte ABSENT par le
+   * libellé de la première pièce jointe et suffixe les badges des suivantes.
+   *
+   * **Site UNIQUE pour les trois éventails**, et la raison est mesurée :
+   * `createMessageNotification` était le seul des trois à composer, si bien que
+   * la bannière d'une RÉPONSE ou d'une MENTION portant un vocal ou une photo
+   * sans légende arrivait avec un corps VIDE — le symptôme « deux textes pour
+   * un même message » (cycles 121-124) dans sa forme extrême, le second étant
+   * vide. C'est la leçon 271 : une règle écrite une fois par site finit par
+   * manquer à l'un d'eux.
+   *
+   * Sans média (`media` absent ou vide), le résultat est exactement le texte
+   * servi — les deux éventails qui n'en portaient pas gardent leur corps au
+   * caractère près.
+   */
+  private servedBannerBody(params: {
+    lang: string;
+    preview: string;
+    translation: { readonly text: string } | null;
+    media?: NotificationBannerMedia;
+  }): string {
+    return buildMessageNotificationBodyI18n(params.lang, {
+      messagePreview: this.servedPreview({
+        preview: params.preview,
+        translation: params.translation,
+      }),
+      attachments: params.media?.attachments,
+      firstAttachmentFileSize: params.media?.firstAttachmentFileSize,
+      firstAttachmentDuration: params.media?.firstAttachmentDuration,
+      firstAttachmentWidth: params.media?.firstAttachmentWidth,
+      firstAttachmentHeight: params.media?.firstAttachmentHeight,
+    });
+  }
+
   /** Variante batch : un seul findMany, retourne une Map userId → langue (fallback 'fr'). */
   private async resolveRecipientLangs(userIds: readonly string[]): Promise<Map<string, string>> {
     const out = new Map<string, string>();
@@ -1614,15 +1678,21 @@ export class NotificationService {
             if (canSend) {
               const user = await this.prisma.user.findUnique({
                 where: { id: params.userId },
-                select: { email: true, systemLanguage: true, username: true }
+                select: { email: true, username: true, ...this.LANG_SELECT }
               });
               if (user?.email) {
+                // Cycle 125 — le CADRAGE d'un e-mail immédiat descend le même
+                // Prisme que la bannière push du même destinataire. Les trois
+                // envois ci-dessous lisaient `systemLanguage` en direct, donc
+                // servaient le repli à tout lecteur dont le rang 1 est vide —
+                // et servaient un `'pt-BR'` non normalisé aux autres.
+                const emailLang = recipientLanguage(user, 'fr');
                 if (params.type === 'login_new_device' && (params as any)._loginAlertData) {
                   const alertData = (params as any)._loginAlertData;
                   this.emailService.sendLoginAlertEmail({
                     to: user.email,
                     name: user.username || 'User',
-                    language: user.systemLanguage || 'fr',
+                    language: emailLang,
                     ...alertData,
                   }).catch(err => {
                     notificationLogger.error('Login alert email failed', { error: err, userId: params.userId });
@@ -1631,7 +1701,7 @@ export class NotificationService {
                   this.emailService.sendSecurityAlertEmail({
                     to: user.email,
                     name: user.username || 'User',
-                    language: user.systemLanguage || 'fr',
+                    language: emailLang,
                     alertType: params.type,
                     details: params.content.substring(0, 500),
                   }).catch(err => {
@@ -1645,7 +1715,7 @@ export class NotificationService {
                   this.emailService.sendNotificationEmail({
                     to: user.email,
                     name: user.username || 'User',
-                    language: user.systemLanguage || 'fr',
+                    language: emailLang,
                     notificationType: params.type,
                     details: params.content.substring(0, 500),
                   }).catch(err => {
@@ -1907,16 +1977,13 @@ export class NotificationService {
 
     // Cycle 122 — le corps AFFICHÉ descend le Prisme, pas seulement les champs
     // de service ci-dessus : c'est lui que les trois plateformes rendent.
-    const content = buildMessageNotificationBodyI18n(recipientLang, {
-      messagePreview: this.servedPreview({
-        preview: params.messagePreview,
-        translation: servedTranslation,
-      }),
-      attachments: params.attachments,
-      firstAttachmentFileSize: params.firstAttachmentFileSize,
-      firstAttachmentDuration: params.firstAttachmentDuration,
-      firstAttachmentWidth: params.firstAttachmentWidth,
-      firstAttachmentHeight: params.firstAttachmentHeight,
+    // Cycle 125 bis — et la composition vit dans `servedBannerBody`, que les
+    // TROIS éventails partagent désormais.
+    const content = this.servedBannerBody({
+      lang: recipientLang,
+      preview: params.messagePreview,
+      translation: servedTranslation,
+      media: params,
     });
 
     return this.createNotification({
@@ -2011,6 +2078,16 @@ export class NotificationService {
     prismSource?: MessagePrismSource;
     /** Cf. `createMessageNotification.previewBasis`. */
     previewBasis?: PreviewPrismBasis;
+    /**
+     * Le média qui COMPOSE le corps quand l'aperçu est vide — cf.
+     * {@link NotificationBannerMedia}. Sans lui, mentionner quelqu'un sous une
+     * photo sans légende poussait une bannière au corps VIDE.
+     */
+    attachments?: NotificationBannerMedia['attachments'];
+    firstAttachmentFileSize?: number | null;
+    firstAttachmentDuration?: number | null;
+    firstAttachmentWidth?: number | null;
+    firstAttachmentHeight?: number | null;
   }): Promise<Notification | null> {
     // Anti-spam: rate limit des mentions par paire (sender → recipient)
     if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
@@ -2056,9 +2133,13 @@ export class NotificationService {
       priority: 'high',
       // Cycle 122 — le corps AFFICHÉ porte le texte du Prisme : c'est lui que
       // les trois plateformes rendent, pas les champs de service du fil push.
-      content: this.servedPreview({
+      // Cycle 125 bis — et il se compose comme celui d'un message simple : le
+      // libellé de la pièce jointe prend la place d'un texte absent.
+      content: this.servedBannerBody({
+        lang: prism.lang,
         preview: params.messagePreview,
         translation: servedTranslation,
+        media: params,
       }),
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
@@ -2125,6 +2206,12 @@ export class NotificationService {
       messageExpiresAt?: Date | null;
       /** Cf. `createMessageNotification.previewBasis`. */
       previewBasis?: PreviewPrismBasis;
+      /** Cf. `createMentionNotification.attachments` — cycle 125 bis. */
+      attachments?: NotificationBannerMedia['attachments'];
+      firstAttachmentFileSize?: number | null;
+      firstAttachmentDuration?: number | null;
+      firstAttachmentWidth?: number | null;
+      firstAttachmentHeight?: number | null;
     },
     memberIds: string[]
   ): Promise<number> {
@@ -2158,6 +2245,14 @@ export class NotificationService {
           senderProfile: commonData.senderProfile,
           messageExpiresAt: commonData.messageExpiresAt,
           previewBasis: commonData.previewBasis,
+          // Cycle 125 bis — le résumé de média voyage jusqu'au créateur, qui
+          // seul compose le corps : il ne dépend pas du destinataire, donc il
+          // est relayé tel quel pour tout l'éventail.
+          attachments: commonData.attachments,
+          firstAttachmentFileSize: commonData.firstAttachmentFileSize,
+          firstAttachmentDuration: commonData.firstAttachmentDuration,
+          firstAttachmentWidth: commonData.firstAttachmentWidth,
+          firstAttachmentHeight: commonData.firstAttachmentHeight,
           prismSource,
         })
       )
@@ -3660,6 +3755,16 @@ export class NotificationService {
     messageExpiresAt?: Date | null;
     /** Cf. `createMessageNotification.previewBasis`. */
     previewBasis?: PreviewPrismBasis;
+    /**
+     * Le média qui COMPOSE le corps quand l'aperçu est vide — cf.
+     * {@link NotificationBannerMedia}. Sans lui, répondre par un vocal poussait
+     * une bannière au corps VIDE.
+     */
+    attachments?: NotificationBannerMedia['attachments'];
+    firstAttachmentFileSize?: number | null;
+    firstAttachmentDuration?: number | null;
+    firstAttachmentWidth?: number | null;
+    firstAttachmentHeight?: number | null;
   }): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
@@ -3700,9 +3805,12 @@ export class NotificationService {
       priority: 'normal',
       // Cycle 122 — cf. `createMentionNotification` : le corps servi descend le
       // Prisme, les champs du fil push ne suffisent pas.
-      content: this.servedPreview({
+      // Cycle 125 bis — et il se compose comme celui d'un message simple.
+      content: this.servedBannerBody({
+        lang: prism.lang,
         preview: params.messagePreview,
         translation: servedTranslation,
+        media: params,
       }),
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
@@ -4573,10 +4681,14 @@ export class NotificationService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: params.recipientUserId },
-      select: { systemLanguage: true }
+      select: this.LANG_SELECT
     });
-    const lang = user?.systemLanguage ?? 'fr';
-    const locale = user?.systemLanguage === 'en' ? 'en-US' : 'fr-FR';
+    const lang = recipientLanguage(user, 'fr');
+    // Cycle 125 — l'horodatage se lit DANS la notification, donc dans la langue
+    // de la notification. `systemLanguage === 'en' ? 'en-US' : 'fr-FR'` était un
+    // binaire codé en dur : un lecteur allemand recevait « Neue Anmeldung
+    // erkannt » — `notificationString` normalise, lui — daté à la française.
+    const locale = recipientDateLocale(user, 'fr');
 
     const bodyParts: string[] = [];
     if (location) bodyParts.push(location);

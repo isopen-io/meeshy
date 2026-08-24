@@ -12106,3 +12106,40 @@ CallEventQueue` non implémenté ; iOS single-peer côté groupe ; gap de hiéra
 `clearRingingTimeout`/`clearHeartbeats` (close, non ré-auditée cette Vague — aucun signal
 nouveau) ; `bun run lint` documenté cassé dans ce conteneur (pré-existant, hors périmètre).
 Aucun nouveau suivi ouvert par cette Vague.
+
+## Mise à jour 2026-08-24 — le garde-fou de promotion CallKit tardive était du code mort
+
+Routine de suivi continu de la feature d'appel (audit iOS ciblé). Trouvé par
+lecture directe du code, pas par un rapport terrain.
+
+**Défaut** : `promoteRingingCallToCallKitIfNeeded()` (`CallManager.swift`)
+promeut à CallKit un appel entrant qui sonne encore EN APP (CallKit sauté
+car l'app était au premier plan à l'arrivée) et qui passe en arrière-plan
+avant d'être décroché — sans quoi iOS peut suspendre l'app en plein sonnage,
+sans carte d'appel verrouillée, et l'appel se perd silencieusement (retombe
+au timeout serveur 60s = manqué). La fonction elle-même est correcte et
+testée, mais son SEUL déclencheur — l'observateur `didEnterBackgroundNotification`
+armé par `startBackgroundMonitoring()` — n'était appelé QUE depuis
+`transitionToConnected()`. Les deux conditions (fonction active seulement si
+`.ringing`, observateur vivant seulement après `.connected`) sont mutuellement
+exclusives : le garde-fou entier était inatteignable en production.
+
+**Correctifs** (`CallManager.swift`) :
+1. `startBackgroundMonitoring()` est désormais aussi armée dans
+   `handleIncomingCallNotification`, au moment où l'appel se met à sonner —
+   pas seulement à la connexion. Idempotent (`startBackgroundMonitoring`
+   commence par `stopBackgroundMonitoring()`).
+2. Défaut latent exposé par le correctif #1 : la promotion réussie ne
+   stoppait pas la boucle `ringbackPlayer` jouée en app, qui aurait sonné
+   par-dessus le `ringtoneSound` de CallKit (même asset) — corrigé en
+   ajoutant `ringbackPlayer.stopRingtone()` dans la branche succès.
+
+**Tests** : `CallManagerAudioSessionTests.swift` — 2 nouveaux tests source-string
+(même idiome que les 3 tests existants sur cette fonction) :
+`test_handleIncomingCallNotification_armsBackgroundMonitoring_soAStillRingingCallCanBePromoted`,
+`test_promoteRingingCallToCallKitIfNeeded_stopsInAppRingtoneOnSuccessfulPromotion`.
+Vérifiés ROUGE avant le correctif (grep direct sur le code source), non
+exécutables localement (pas de toolchain Xcode dans cet environnement) —
+validation finale via CI (« iOS Tests »).
+
+Détail : `tasks/lessons.md` § Leçon 277.

@@ -14986,3 +14986,212 @@ la fabrique est un **inventaire figé** de ce que le module exportait le jour o�
 Ajouter un export au module ne la met pas à jour, et l'appelant obtient `undefined`. La forme
 `jest.requireActual` + surcharge ciblée n'a pas ce défaut ; la fabrique littérale, si — et c'est
 exactement la leçon 271 (« un helper à un appelant est un inventaire ») dans le harnais de test.
+
+## Leçon 276 — au rang 1, un court-circuit et la règle juste rendent le MÊME verdict : c'est ce qui rend un résolveur faux indétectable (2026-08-24, cycle 125)
+
+Le cycle 121 a posé la règle : **un témoin de RANG s'écrit sur un rang AUTRE que
+le premier**, parce qu'au rang 1 la règle juste et le raccourci fautif
+s'accordent. Elle était écrite pour le Prisme du CONTENU. Le cycle 124 l'a
+retrouvée sur le Prisme du **CADRAGE** — la langue dans laquelle on ADRESSE un
+lecteur — et cette fois avec la preuve que la règle protège aussi ceux qui la
+connaissent : `AuthHandler.test.ts` portait un témoin dont le commentaire
+AFFIRME que le site appelle `resolveUserLanguage`. Il ne l'appelait pas.
+
+```ts
+// systemLanguage is the highest-priority source in resolveUserLanguage, so
+// the resolved language is 'en' (the user's systemLanguage) …
+expect(connectedUsers.get('user-123')?.language).toBe('en');   // fixture: systemLanguage: 'en'
+```
+
+La fixture posait le rang 1. Le site lisait `user.systemLanguage || 'en'`. Les
+deux lectures coïncident exactement là où le témoin regardait, et **son auteur a
+écrit dans le commentaire le code qu'il croyait tester**. Quatre témoins de
+`resolved-languages-refresh.test.ts` avaient le même défaut, sur le jumeau de ce
+site.
+
+### La conséquence de méthode
+
+> **Un commentaire de témoin qui NOMME la fonction censée être appelée est une
+> affirmation, pas une description** — même famille que « un commentaire qui
+> ÉNONCE une contrainte de schéma est une AFFIRMATION » (cycle 94). Il se vérifie
+> en cherchant l'appel, pas en le relisant.
+
+Et le corollaire opérationnel : **devant une suite dont toutes les fixtures
+posent le rang 1, la question n'est pas « ces témoins passent-ils ? » mais
+« pourraient-ils tomber ? »**. Ici, aucun ne le pouvait.
+
+## Ce que le rang 1 cachait, en trois défauts disjoints
+
+Le même raccourci — `user.systemLanguage || 'xx'` — produit trois pannes qui ne
+se ressemblent pas, et n'en corriger qu'une laisse les deux autres :
+
+1. **RANG.** Un rang 1 vide ne fait pas tomber au rang 2 : il fait tomber au
+   **repli**. Un lecteur qui n'a renseigné que `regionalLanguage: 'es'` reçoit
+   ses e-mails en anglais.
+2. **NORMALISATION.** Les prefs sont persistées verbatim. Quand la langue sert
+   ensuite de **CLÉ** dans une carte de traductions, `'pt-BR'` ne matche rien et
+   le contenu retombe sur la langue de l'AUTEUR — alors qu'une traduction `pt`
+   existe, deux clés plus loin.
+3. **FORMAT.** Une langue résolue ne suffit pas si l'horodatage qui l'accompagne
+   est formaté par un binaire codé en dur
+   (`systemLanguage === 'en' ? 'en-US' : 'fr-FR'`). Un lecteur allemand recevait
+   un titre allemand — `notificationString` normalise, lui — **daté à la
+   française**.
+
+## Le SELECT est le seul des trois qu'aucun témoin de rang ne peut voir
+
+C'est le point à retenir pour la prochaine passe. Un mock Prisma rend ce qu'on
+lui dit **quel que soit le `select`** : un témoin de rang passe donc au vert sur
+un site dont la requête ne ramène pas les colonnes du Prisme, et la descente est
+morte en production sans que rien ne rougisse. Le résolveur reçoit un objet dont
+les rangs 2 à 4 sont `undefined` et rend un rang 1 parfaitement plausible.
+
+> **Quand une règle dépend d'une PROJECTION, la garder exige un témoin qui
+> regarde la REQUÊTE — pas seulement le rendu.** C'est la seule famille de ce lot
+> qui assert sur un appel plutôt que sur une valeur, et c'est justifié : le
+> défaut vit dans l'espace exact que le double de test efface.
+
+## Et la cause de forme : une cérémonie que rien ne tient ensemble
+
+Six sites conformes recopiaient le même passe-plat — la forme du `select`, PUIS
+`resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined })`.
+Deux choses à ne pas rater, aucune qui rappelle l'autre. Dix-sept sites en ont
+sauté au moins une.
+
+`services/gateway/src/utils/recipient-language.ts` met la forme de la requête et
+la descente dans le MÊME module, pour qu'un appelant qui importe l'une trouve
+l'autre. Généralisation de la leçon 264 : **quand un résolveur exige une
+cérémonie à son site d'appel, la cérémonie finira par être sautée — et le module
+qui la porte doit exposer TOUT ce qu'elle demande, y compris la forme de la
+requête qui l'alimente.**
+
+## Le repli terminal est un PARAMÈTRE, pas un défaut partagé
+
+`resolveUserLanguage` retombe sur `'fr'` ; plusieurs de ces sites retombent
+historiquement sur `'en'`. Le correctif **ajoute la descente sans toucher au
+repli** : le comportement ne change QUE lorsqu'un rang inférieur est renseigné.
+
+Trancher « quelle langue pour un compte sans AUCUNE préférence » est un arbitrage
+PRODUIT. Le mêler à un correctif de Prisme rendrait les deux illisibles — et
+surtout rendrait la mesure invérifiable, puisque tout site changerait de
+comportement, y compris ceux qui n'avaient pas le défaut. **Un lot qui répare une
+règle ne tranche pas, dans le même geste, une question qui n'en relève pas.**
+Exiger le repli à l'appel le rend visible au site plutôt que caché dans un
+défaut ; c'est ce qui permet à la prochaine passe de le trancher pour de bon.
+
+---
+
+---
+
+## Leçon 277 — quand N sites appliquent une règle, celui qu'on ajoute EN DERNIER n'est pas le seul à manquer : c'est le PREMIER qui l'avait (2026-08-24, cycle 125 bis)
+
+Le suivi disait, depuis deux cycles :
+
+> Les éventails RÉPONSE et MENTION composent depuis `notificationPreview` (jamais
+> `…ForPush`) et ne reçoivent aucun `attachmentInfo` — la bannière d'une réponse à un vocal
+> affiche `Message.content`, vide pour un vocal pur.
+
+Deux fois qualifié de « décision produit, pas correction de Prisme ». La formule était juste sur
+un point — la langue ne change pas — et fausse sur ce qui compte :
+
+| destinataire du MÊME message | ce qu'il voyait |
+|---|---|
+| les membres du fil | la transcription, ou « 📷 Photo · 1024×768 » |
+| **celui à qui on répond** | **rien** |
+| **celui qu'on mentionne** | **rien** |
+
+> **Un corps VIDE n'est pas « un autre choix de produit », c'est l'absence de la bannière sous
+> la bannière.** La question « est-ce une décision produit ? » se pose sur ce que l'utilisateur
+> VOIT, pas sur la nature du champ manquant. Aucun produit ne préfère un corps vide.
+
+### Le vrai motif — la composition vivait chez UN des trois
+
+`buildMessageNotificationBodyI18n` — le compositeur qui remplace un texte absent par le libellé
+du premier média — n'était appelé que par `createMessageNotification`. Les deux autres posaient
+`content: this.servedPreview(...)`, une projection plus PAUVRE, et rien ne le signalait :
+`servedPreview` est un helper juste, partagé, testé, et les trois éventails l'appellent.
+
+> **Deux sites qui partagent le sous-helper d'une règle ont l'air de partager la règle.** La
+> divergence ne se voit pas dans « qui appelle quoi » mais dans « qui appelle la COMPOSITION
+> COMPLÈTE ». Compter les appelants du helper le plus BAS de la chaîne rassure à tort — c'est
+> le plus HAUT qu'il faut compter.
+
+### Corollaire — séparer une charge par ce qu'elle FAIT, pas par sa provenance
+
+`attachmentInfo` était un objet unique de douze champs, tous issus de la même lecture Prisma.
+Les trois éventails n'en veulent pas la même chose :
+
+- `attachments`, `firstAttachmentFileSize/Duration/Width/Height` **composent un TEXTE** — les
+  trois en ont besoin ;
+- `firstAttachmentUrl`, `firstAttachmentMimeType`, `hasAttachments`, `firstAttachmentFilename`
+  **transportent un fichier** ou alimentent un inventaire persisté — le message simple seul.
+
+C'est exactement la séparation du cycle 125, vue de l'autre côté : là, confondre les deux a fait
+partir un fichier sous une garde écrite pour une chaîne ; ici, les confondre a fait manquer une
+chaîne à deux éventails qui n'avaient pas besoin du fichier. **Une charge se découpe par l'USAGE
+de ses champs, jamais par la requête qui les a produits** — la requête est un fait d'origine, et
+l'origine commune est précisément ce qui rend le mélange invisible.
+
+### Corollaire — un témoin de fan-out a besoin d'un destinataire ORDINAIRE
+
+Le premier jet du harnais posait trois membres : l'expéditeur, celui à qui on répond, celui
+qu'on mentionne. `createMessageNotification` n'a jamais été appelé — `alreadyNotified` les
+absorbe tous les trois, l'éventail régulier n'avait aucun candidat, et l'assertion de RÉFÉRENCE
+(« la réponse reçoit ce que reçoit le message simple ») comparait à rien.
+
+> Quand un témoin compare une branche à une autre, la branche de RÉFÉRENCE doit avoir de quoi
+> exister. Trois rôles dans une conversation à trois membres n'en laissent aucun au quatrième
+> rôle — celui qui n'en a aucun.
+
+## Leçon 278 — un garde-fou câblé au mauvais MOMENT du cycle de vie est du code mort que la forme du test ne peut pas voir (2026-08-24, routine appels)
+
+`promoteRingingCallToCallKitIfNeeded()` (iOS `CallManager.swift`) existe pour
+un cas précis : un appel entrant qui sonne EN APP (CallKit volontairement
+sauté parce que l'app était au premier plan) doit être promu à CallKit s'il
+passe en arrière-plan avant d'être décroché — sinon iOS peut suspendre l'app
+en plein sonnage, sans carte d'appel verrouillée, et l'appel se perd
+silencieusement. La fonction est correcte, testée, bien gardée. Le seul
+endroit qui l'appelle est l'observateur `didEnterBackgroundNotification`, et
+cet observateur n'était armé QUE par `startBackgroundMonitoring()`, appelée
+depuis un SEUL site : `transitionToConnected()`.
+
+Or la fonction ne fait quelque chose QUE quand l'appel sonne encore
+(`callState == .ringing(isOutgoing: false)`) — c'est-à-dire précisément AVANT
+que `transitionToConnected()` n'ait jamais pu s'exécuter. Les deux conditions
+sont mutuellement exclusives par construction : le garde-fou entier était
+inatteignable, une fenêtre de panne qui existait depuis l'introduction de la
+fonction, en production, sans qu'aucun test ne rougisse.
+
+### Pourquoi trois tests corrects n'ont rien vu
+
+Les trois tests existants (`test_backgroundObserver_promotesStillRingingCallToCallKit`,
+`test_promoteRingingCallToCallKitIfNeeded_guardsOnRingingIncomingNotYetOnCallKit`,
+`test_promoteRingingCallToCallKitIfNeeded_neverPromotesInChina_evenWhileRinging`)
+vérifient tous la FORME du code : « l'observateur appelle bien la fonction »,
+« la fonction a bien les bons guards », « le guard régional est bien câblé ».
+Aucun ne vérifie que l'observateur lui-même est un jour ARMÉ pendant que
+l'appel sonne. La fonction et son appelant étaient chacun individuellement
+irréprochables ; c'est la RELATION temporelle entre le moment où on les monte
+et le moment où ils doivent agir qui était rompue — et aucun des trois tests
+ne pose cette question-là.
+
+> **Un test qui vérifie qu'un handler CONTIENT le bon appel ne vérifie pas
+> que le handler est un jour MONTÉ au bon moment.** Pour un garde-fou dont
+> l'utilité dépend d'une fenêtre temporelle (« pendant que X, avant que Y »),
+> le test à écrire n'est pas seulement « la fonction fait-elle le bon geste ? »
+> mais **« le site qui l'arme est-il vivant PENDANT la fenêtre qu'elle
+> couvre ? »** — ici, l'armement au CONNECT ne peut pas couvrir une fenêtre
+> qui se ferme avant le connect.
+
+### Le correctif expose un second défaut latent
+
+Rendre la promotion atteignable a immédiatement révélé un second bug resté
+invisible tant que le premier chemin était mort : `startRingtone()` (jouée en
+app quand CallKit est sauté) ne s'arrêtait jamais au moment de la promotion
+réussie — CallKit joue alors SON PROPRE `ringtoneSound` (même asset
+`Ringtone.caf`) par-dessus la boucle `AVAudioPlayer` encore active, dont la
+session auto-activée (`.playAndRecord`) risque en prime de bloquer le
+`didActivate` de CallKit. **Rendre un chemin mort à nouveau vivant peut
+réveiller un défaut qui dormait DERRIÈRE lui** — le corriger dans le même lot,
+pas dans un suivi, parce que le premier correctif seul aurait été une
+régression (double sonnerie) dans le cas exact qu'il vise à réparer.
