@@ -61,15 +61,17 @@ Aucune. La borne n'ajoute aucun type inféré (`z.infer` inchangé).
 - [x] Jumeaux SOCKET + edit-content inchangés (43/43).
 - [x] `validation` + routes message (427/427, 14 suites).
 - [x] `tsc --noEmit` gateway (0 erreur).
-- [ ] Full gateway suite (background) : baseline.
-- [ ] Commit + push + PR.
+- [x] Full gateway suite : 859/859 suites, 19541/19541 tests, exit 0.
+- [x] Commit + push.
+- [ ] PR ouverte.
 
 ## Completion status
 - [x] Refactor SSOT posé.
 - [x] RED écrit et prouvé.
 - [x] GREEN posé.
-- [x] Validations locales exécutées.
-- [ ] Full suite background + commit + push + PR.
+- [x] Validations locales exécutées (full suite 859/859).
+- [x] Commit + push.
+- [ ] PR ouverte + CI verte.
 
 ## Future improvements
 - **`assertReactionAllowed(count)`** — consolider le garde de limite de réactions
