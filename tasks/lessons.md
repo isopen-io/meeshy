@@ -14290,3 +14290,89 @@ Note d'outillage : ces témoins ont exigé d'ancrer l'assertion sur le CORPS
 disponibles » liste légitimement l'original en tant qu'autre version consultable — un
 `queryByText('Hello')).toBeNull()` global y tombe pour la mauvaise raison. **Un témoin qui
 distingue deux rendus du même texte doit nommer LEQUEL il regarde.**
+
+---
+
+## Leçon 268 — deux gardes JUSTES peuvent garder une opération que la couche du dessus a déjà rendue sans objet (2026-08-24, cycle 124)
+
+Le cycle 122 avait posé deux champs pour empêcher la traduction d'un message
+PROTÉGÉ d'atteindre l'écran verrouillé : `notificationLocKey` (le repli localisé
+de la NSE) et `previewIsMessageContent: false` (l'interdiction de SUBSTITUER).
+Les deux étaient posés, les deux étaient justes, les deux étaient testés.
+
+Et un vocal éphémère / à vue unique / flouté / chiffré poussait **son texte
+transcrit entier** sur l'écran verrouillé, parce qu'une ligne plus haut :
+
+```ts
+const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
+```
+
+`notificationPreview` était le placeholder que `protectedPreview` venait de
+composer. La transcription gagnait INCONDITIONNELLEMENT. Les deux gardes
+interdisaient donc de REMPLACER un texte que la couche du dessus avait déjà
+remplacé — elles gouvernaient une opération devenue sans objet.
+
+> **Un champ de service qui DÉCLARE une restriction ne la fait pas respecter.**
+> La question à poser à toute garde n'est pas « est-elle posée ? » mais **« le
+> texte qu'elle gouverne est-il bien celui qui part ? »**.
+
+C'est la forme du cycle 123 (« le Prisme était ANNONCÉ sans être APPLIQUÉ »)
+avec l'inversion qui la rend pire : là, l'hôte rendait MOINS que ce que le
+résolveur annonçait — un texte non traduit, un désagrément. Ici l'hôte rend
+**PLUS** que ce que le résolveur autorise, et ce plus est précisément ce qu'une
+protection existe pour cacher. **Chercher les deux sens** : un écart entre ce
+qu'un résolveur conclut et ce qu'un hôte rend n'est pas toujours une perte, et
+c'est quand c'est un gain qu'il faut s'inquiéter.
+
+Le défaut n'a pas été trouvé en le cherchant. Il a été trouvé en OUVRANT le site
+que le suivi d'un cycle précédent désignait pour une autre raison.
+
+### La bonne CONDITION, la mauvaise conclusion
+
+Le même cycle 122 avait écrit la raison exacte de son `previewIsMessageContent:
+false` : « la transcription d'un vocal est un AUTRE texte, dont les traductions
+vivent sur `MessageAttachment.translations` ». Vrai, précis, et il en avait tiré
+« donc ne pas la traduire ».
+
+La règle juste était **« donc ne pas la traduire avec la MAUVAISE source »**. La
+bannière d'un vocal est restée deux cycles la seule surface du produit à ne pas
+descendre le Prisme sur ce contenu — pendant que la bulle audio de la même
+application le descend depuis le cycle 119.
+
+> Quand une garde s'énonce « X n'est pas traduisible PAR Y », la suite n'est pas
+> « X n'est pas traduisible » : c'est **« qui traduit X ? »**. Une condition
+> juste ne dicte pas sa conclusion, et la conclusion la plus courte est
+> l'abstention.
+
+Le correctif ajoute une SOURCE (`previewPrismSource`), jamais une descente : la
+descente reste `resolvePrismTranslation`, le site unique nommé par la leçon 264.
+La projection du stockage vers la forme qu'elle consomme, elle, est bien
+DOUBLE — `pushableTranslations` lit `{ lang: { text } }`,
+`transcriptPrismSource` lit `{ lang: { transcription, deletedAt? } }` — et c'est
+légitime : ce qui diverge est la forme du STOCKAGE, pas la règle.
+
+### Un défaut « distinct » peut être plus grand que ce que le suivi en disait
+
+Le second suivi du cycle 122 nommait un corps VIDE : `prePersistMessage` lit
+`userInfo["content"]`, que le payload push ne porte pas. Exact. En le
+ré-instruisant, la ligne suivante du même constructeur portait la même absence :
+
+```swift
+originalLanguage: (userInfo["originalLanguage"] as? String) ?? "en"
+```
+
+Ni l'une ni l'autre clé n'existe sur le fil. La bulle pré-enregistrée était donc
+vide **et** étiquetée « en » pour tout le monde — et c'est la seconde moitié qui
+fausse la résolution du Prisme sur cette bulle, celle que le suivi ne nommait
+pas.
+
+> **Un suivi hérité se re-mesure avant d'être traité** (leçon 107), et pas
+> seulement pour savoir s'il est encore vrai : pour savoir s'il est COMPLET. Un
+> cycle qui note un défaut en passant note ce qu'il a vu, pas ce qu'il y avait.
+
+Corollaire de contenu, tranché dans le même lot : ce qui voyage sous `content`
+est l'**ORIGINAL**, jamais la traduction servie dans la bannière.
+`MessageRecord.content` est le champ d'origine et `originalLanguage` son
+étiquette ; y poser le texte traduit ferait mentir le couple, et la traduction a
+déjà son champ et son rang. **Deux champs qui s'étiquettent l'un l'autre se
+remplissent ensemble ou pas du tout.**
