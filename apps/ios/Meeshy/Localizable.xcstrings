@@ -31316,49 +31316,49 @@
         }
       }
     },
-    "bubble.call.join.a11y.hint.longPress": {
+    "bubble.call.join.a11y.hint.doubleTap": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اضغط مطولاً للانضمام إلى المكالمة"
+            "value": "انقر مرتين للانضمام إلى المكالمة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gedrückt halten, um dem Anruf beizutreten"
+            "value": "Zum Beitreten des Anrufs doppeltippen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Press and hold to join the call"
+            "value": "Double-tap to join the call"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mantén pulsado para unirte a la llamada"
+            "value": "Toca dos veces para unirte a la llamada"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Maintenez pour rejoindre l'appel"
+            "value": "Touchez deux fois pour rejoindre l'appel"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tieni premuto per partecipare alla chiamata"
+            "value": "Tocca due volte per partecipare alla chiamata"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mantenha pressionado para entrar na chamada"
+            "value": "Toque duas vezes para entrar na chamada"
           }
         }
       }
@@ -31504,49 +31504,49 @@
         }
       }
     },
-    "bubble.call.callback.hint.longPress": {
+    "bubble.call.callback.hint.doubleTap": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اضغط مطولاً لمعاودة الاتصال"
+            "value": "انقر مرتين لمعاودة الاتصال"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gedrückt halten, um zurückzurufen"
+            "value": "Zum Zurückrufen doppeltippen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Press and hold to call back"
+            "value": "Double-tap to call back"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mantén pulsado para devolver la llamada"
+            "value": "Toca dos veces para devolver la llamada"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Maintenez pour rappeler"
+            "value": "Touchez deux fois pour rappeler"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tieni premuto per richiamare"
+            "value": "Tocca due volte per richiamare"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mantenha pressionado para ligar de volta"
+            "value": "Toque duas vezes para ligar de volta"
           }
         }
       }
@@ -151558,6 +151558,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ver ficha"
+          }
+        }
+      }
+    },
+    "bubble.joinNotice.openProfile.hint.doubleTap": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انقر مرتين لعرض البطاقة وشروط الانضمام"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zum Anzeigen des Profils und der Beitrittsbedingungen doppeltippen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double-tap to see the profile and join conditions"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca dos veces para ver la ficha y las condiciones de entrada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez deux fois pour voir la fiche et les conditions d'entrée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocca due volte per vedere la scheda e le condizioni di ingresso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toque duas vezes para ver o perfil e as condições de entrada"
           }
         }
       }

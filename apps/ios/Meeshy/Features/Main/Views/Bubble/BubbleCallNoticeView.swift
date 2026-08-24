@@ -51,36 +51,40 @@ struct BubbleCallNoticeView: View, Equatable {
         // edge. The side + the glyph's direction chip encode the direction.
         HStack(spacing: 0) {
             if isOutgoing { Spacer(minLength: 48) }
-            // **Rappeler demande un APPUI LONG** (directive 2026-08-24 :
-            // « dans les messages système d'appel, transformer le tap pour
-            // relancer en longpress pour relancer »).
+            // **Rappeler demande un DOUBLE TAP** (directive 2026-08-24,
+            // second passage : « pour les messages système mettre plutôt le
+            // double tap et pas le tap long ; le longpress doit afficher les
+            // options habituelles »).
             //
-            // Un tap posait l'appel. C'est l'action la plus lourde du fil —
-            // elle sonne chez quelqu'un — et elle était la plus facile à
-            // déclencher par mégarde, sur une carte large posée dans une liste
-            // qui défile. L'audit du 2026-07-03 avait déjà dû protéger ce
-            // bouton d'un « pocket-dial » venu du long-press ; la conclusion
-            // était que le geste bref ne convient pas à cette action.
+            // Un tap SIMPLE posait l'appel — l'action la plus lourde du fil,
+            // celle qui sonne chez quelqu'un, sur une carte large posée dans
+            // une liste qui défile. L'audit du 2026-07-03 avait déjà dû la
+            // protéger d'un « pocket-dial ». Le premier correctif du
+            // 2026-08-24 l'a donc déplacée sur l'appui long ; juste sur
+            // l'intention, faux sur le moyen — l'appui long n'était pas
+            // libre. C'est le geste qui ouvre, PARTOUT ailleurs dans le fil,
+            // les options d'un message ; une carte système qui se
+            // l'approprie ne gagne pas un geste, elle en VOLE un.
             //
-            // Le geste est donc INVERSÉ : l'appui long rappelle, le tap ne
-            // fait plus rien. Les détails, qui vivaient sur l'appui long,
-            // restent atteignables — par l'appui long de la RANGÉE, hors de
-            // la carte, qui ouvre le menu du message, et par l'action
-            // VoiceOver dédiée ci-dessous (VoiceOver n'a pas d'appui long :
-            // les DEUX actions doivent lui être offertes explicitement).
+            // Le double tap n'appartient à personne : deux contacts, donc
+            // aucun déclenchement au défilement, et rien de confisqué.
+            // L'appui long retourne au menu du message — d'où les détails
+            // d'appel sont désormais atteignables (`PrimaryAction.callDetail`).
+            // VoiceOver n'a ni double tap ni appui long : les DEUX
+            // destinations lui sont offertes explicitement ci-dessous.
             card
                 .contentShape(Rectangle())
-                .onLongPressGesture(minimumDuration: 0.35) {
+                .onTapGesture(count: 2) {
                     HapticFeedback.medium()
                     onCallBack?(summary)
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(accessibilityLabel)
                 .accessibilityHint(Text(presentation.isLive
-                    ? String(localized: "bubble.call.join.a11y.hint.longPress",
-                             defaultValue: "Maintenez pour rejoindre l'appel", bundle: .main)
-                    : String(localized: "bubble.call.callback.hint.longPress",
-                             defaultValue: "Maintenez pour rappeler", bundle: .main)))
+                    ? String(localized: "bubble.call.join.a11y.hint.doubleTap",
+                             defaultValue: "Touchez deux fois pour rejoindre l'appel", bundle: .main)
+                    : String(localized: "bubble.call.callback.hint.doubleTap",
+                             defaultValue: "Touchez deux fois pour rappeler", bundle: .main)))
                 .accessibilityAction(named: Text(presentation.isLive
                     ? String(localized: "bubble.call.join.action", defaultValue: "Rejoindre l'appel", bundle: .main)
                     : String(localized: "bubble.call.callback.action", defaultValue: "Rappeler", bundle: .main))) {

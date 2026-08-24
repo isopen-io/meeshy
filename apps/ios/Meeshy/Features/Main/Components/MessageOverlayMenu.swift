@@ -54,6 +54,12 @@ struct MessageOverlayMenu: View {
     /// Ouvre la feuille « Plus… » native (MessageMoreSheet) — action `.more`
     /// de la liste verticale.
     var onShowMore: (() -> Void)? = nil
+    /// Ouvre la feuille de détail d'un appel — action `.callDetail`, présente
+    /// uniquement pour un message qui porte un `callSummary`. Cette
+    /// destination vivait sur l'appui long de la carte d'appel ; l'appui long
+    /// étant rendu au menu du message (directive 2026-08-24), elle entre dans
+    /// le menu plutôt que de disparaître.
+    var onShowCallDetail: (() -> Void)? = nil
     /// Ouvre le picker d'emoji complet (bouton `+` de la barre de réactions).
     var onExpandFullPicker: (() -> Void)? = nil
 
@@ -172,6 +178,7 @@ struct MessageOverlayMenu: View {
             // séparément (ConversationView) avec la vraie valeur
             // `!editRevisions(for:).isEmpty`.
             hasEditRevisions: true,
+            hasCallSummary: message.callSummary != nil,
             saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count,
             showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
             isForwardable: message.isForwardable
@@ -200,6 +207,8 @@ struct MessageOverlayMenu: View {
             onShowMore?()
         case .delete:
             onDelete?()
+        case .callDetail:
+            onShowCallDetail?()
         }
         dismiss()
     }
