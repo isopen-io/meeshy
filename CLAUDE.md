@@ -43,6 +43,15 @@ Source de verite iOS : `ConversationViewModel.preferredLanguages` + `preferredTr
 2. **La locale appareil entre en 4e priorité (Prisme étendu 2026-05-26)** — après `systemLanguage`, `regionalLanguage`, `customDestinationLanguage`. Elle ne les supplante jamais. iOS l'injecte via header `X-Device-Locale` ; gateway la persiste opportunément dans `User.deviceLocale`.
 3. **La langue d'origine concourt à son RANG dans le prisme, jamais comme court-circuit (2026-08-10).** Un résolveur parcourt les langues du lecteur DANS L'ORDRE ; la première servie gagne — par une traduction, ou parce que le message est déjà écrit dedans. Ne JAMAIS écrire « si la langue d'origine appartient au prisme ⇒ afficher l'original » : cette formulation rétrograde la langue PRIMAIRE dès que la langue d'origine occupe un rang inférieur, ce que produit mécaniquement la locale appareil (règle 2). Prisme `['fr','en']`, message anglais, traduction française disponible ⇒ **« Bonjour »**, jamais « Hello ». Sources de vérité, une par client : `resolveLastMessagePreview()` (`packages/shared/utils/conversation-helpers.ts`, consommée par le web), `MeeshyConversation.resolvedLastMessagePreview` (`packages/MeeshySDK/.../CoreModels.swift`) et `resolveLastMessagePreview()` (`apps/android/core/model/.../lang/LastMessagePreviewResolver.kt`) — toute évolution touche les TROIS. Android a rejoint la règle au cycle 118 : son `ApiConversation` ne déclarait ni `lastMessageTranslations` ni `lastMessageOriginalLanguage`, donc le décodeur les jetait et la ligne de liste restait dans la langue de l'expéditeur pour tout le monde. **Quand cette liste dit « jumelles », compter les clients avant de la croire.**
 
+   **Cette règle gouverne DEUX familles de résolveurs, pas une** (cycle 119). L'énumération ci-dessus ne couvre que l'APERÇU DE LISTE ; le contenu AUDIO a ses trois siens, et son web écrivait la phrase interdite mot pour mot :
+
+   | famille | web | iOS | Android |
+   |---|---|---|---|
+   | aperçu de liste | `resolveLastMessagePreview()` (`packages/shared/utils/conversation-helpers.ts`) | `MeeshyConversation.resolvedLastMessagePreview` | `LastMessagePreviewResolver.kt` |
+   | audio (transcription + piste jouée) | `resolveAutoLanguage` (`apps/web/hooks/use-audio-translation.ts`) | `AudioTrackLanguageResolver.resolve` | `resolveTranslatedAudio` (`BubbleContentBuilder.kt`) |
+
+   **Une énumération de sites porte DEUX affirmations** : « ces sites appliquent la règle » (vérifiable) et « ce sont les sites où la règle s'applique » (presque jamais vérifiée). Avant de se fier à une telle liste, demander : **cette règle gouverne-t-elle un autre TYPE DE CONTENU, et qui le résout ?** Le Prisme s'appliquant à TOUT le contenu (§ Cohérence), la réponse est en général oui. Et **un témoin de RANG s'écrit sur un rang AUTRE que le premier** : au rang 1, le court-circuit interdit et la règle juste rendent le même verdict, donc le témoin ne peut pas tomber. Détail : `tasks/lessons.md` § Leçon 261.
+
 ## Architecture
 
 ```

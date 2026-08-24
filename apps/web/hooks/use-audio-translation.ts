@@ -117,10 +117,33 @@ export function useAudioTranslation({
   const resolveAutoLanguage = useCallback(
     (audios: readonly SocketIOTranslatedAudio[]): string => {
       if (!userLanguages?.length || audios.length === 0) return 'original';
-      const originalLang = transcription?.language ?? initialTranscription?.language;
-      if (originalLang && userLanguages.includes(originalLang)) return 'original';
+      const originalLang = (transcription?.language ?? initialTranscription?.language)?.toLowerCase();
+      // Règle 3 du Prisme (`/CLAUDE.md`) : la langue d'origine concourt à son
+      // RANG, jamais en court-circuit. Ce parcours portait auparavant un test
+      // `userLanguages.includes(originalLang)` AVANT la boucle — c'est-à-dire
+      // mot pour mot la formulation que la règle interdit : « si la langue
+      // d'origine appartient au prisme ⇒ afficher l'original ». Elle
+      // rétrograde la langue PRIMAIRE dès que la langue d'origine occupe un
+      // rang inférieur, ce que la locale appareil (règle 2, rang 4) produit
+      // mécaniquement. Prisme ['fr','en'] + vocal anglais + piste française
+      // ⇒ la piste FRANÇAISE, jamais l'original.
+      //
+      // Miroir de `AudioTrackLanguageResolver.resolve` (iOS) et de
+      // `resolveTranslatedAudio` (Android) : on parcourt les langues du
+      // lecteur DANS L'ORDRE, et la première servie gagne — par une piste
+      // traduite, ou parce que le vocal est déjà dans cette langue.
+      //
+      // Les deux côtés sont minusculés : `userLanguages` sort lowercasé de
+      // `resolveUserLanguagesOrdered`, mais la langue d'origine vient de
+      // Whisper et la langue cible du pipeline TTS. On rend en revanche le
+      // `targetLanguage` TEL QU'IL EST STOCKÉ — `currentAudioUrl` et
+      // `currentAudioDuration` retrouvent leur piste par égalité stricte sur
+      // ce champ, qu'un code renormalisé ferait manquer.
       for (const lang of userLanguages) {
-        if (audios.find(t => t.targetLanguage === lang && t.url)) return lang;
+        const lower = lang.toLowerCase();
+        if (originalLang && lower === originalLang) return 'original';
+        const match = audios.find(t => t.targetLanguage.toLowerCase() === lower && t.url);
+        if (match) return match.targetLanguage;
       }
       return 'original';
     },
