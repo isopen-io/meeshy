@@ -89,6 +89,34 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `story deleted payload carries the story and author ids`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyDeleted.test {
+            handlers.getValue("story:deleted").invoke(
+                arrayOf(JSONObject("""{"storyId":"s7","authorId":"u4"}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.storyId).isEqualTo("s7")
+            assertThat(event.authorId).isEqualTo("u4")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `story deleted payload decodes with a defaulted author id when absent`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyDeleted.test {
+            handlers.getValue("story:deleted").invoke(
+                arrayOf(JSONObject("""{"storyId":"s8"}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.storyId).isEqualTo("s8")
+            assertThat(event.authorId).isEmpty()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `post bookmarked payload is decoded and emitted`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.postBookmarked.test {

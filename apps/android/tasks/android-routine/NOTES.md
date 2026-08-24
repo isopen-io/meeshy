@@ -5,6 +5,22 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-24 — a broadcast can reach a client via a room it never explicitly joins (slice `story-deleted-realtime-viewer`)
+`story:deleted` is emitted by `emitToFriends` to `ROOMS.feed(id)` — NOT the post room the story viewer joins
+(`joinPostRoom`). So the first instinct — "the viewer joins the post room, therefore it can fold post-room
+events" — undercounts what actually arrives: `broadcastStoryReacted` uses `emitToUserFeedAndPostRoom` (both
+rooms), but `story:deleted` is feed-room only. **The event still reaches the viewer**, because the gateway
+auto-joins every socket to its OWN `feed:{userId}` room on auth (`AuthHandler.ts:235`, `socket.join(ROOMS.feed(user.id))`).
+Before deciding a realtime fold is an orphan ("the client isn't in that room"), trace BOTH the broadcast target
+(`emitToFriends` vs `emitToUserFeedAndPostRoom` — read the handler, not the event name) AND the client's
+implicit room memberships (the personal feed room is always joined). The `story:deleted` broadcast targets
+friends' feed rooms, every client is in its own feed room, so a friend's deletion reaches it.
+
+SDK bootstrap THIS run: `dl.google.com` **200**; pristine `android-37.0` auto-installed by AGP, first `./gradlew`
+hash-errored on `android-37`; the four-edit copy→patch (`source.properties` ApiLevel 37.0→37, `package.xml`
+`<api-level>` + `path=`, BOTH `build.prop` `sdk_full` fields) with android-37.0 kept ALONGSIDE resolved it
+("THIRD mode"). `meeshy.sh check` then BUILD SUCCESSFUL, 973 tasks.
+
 ## 2026-08-24 — before wiring an "ignored" realtime event, prove it is a BROADCAST with a RENDER surface (slice `feed-post-reposted-realtime`)
 The Next pointer listed four still-ignored social events. A read-only scout killed three and shipped one — the
 discriminator each time was NOT "does iOS fold it?" but **"is it broadcast, and does Android render what it

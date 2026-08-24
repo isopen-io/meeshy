@@ -483,6 +483,18 @@ data class SocketStoryUnreactedData(
 )
 
 /**
+ * `story:deleted` — an author removed a story. The gateway broadcasts it to every
+ * friend's feed room (over-broadcast is safe: a recipient who never had the story
+ * ignores it), so an open viewer folds it out live. Mirror of iOS
+ * `SocketStoryDeletedData`; [authorId] defaults to empty for forward-compatible decoding.
+ */
+@Serializable
+data class SocketStoryDeletedData(
+    val storyId: String,
+    val authorId: String = "",
+)
+
+/**
  * `story:translation-updated` — the gateway translated a story's on-canvas text
  * overlay and broadcasts the new translations for the object at [textObjectIndex]
  * (the flat index into the story's translatable texts). Mirror of iOS

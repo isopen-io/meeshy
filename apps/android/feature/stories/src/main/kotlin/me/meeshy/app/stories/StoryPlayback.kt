@@ -78,6 +78,51 @@ data class StoryPlayback(
     /** Vertical swipe ↓: close the viewer. Position is preserved; idempotent. */
     fun dismissed(): StoryPlayback = if (isDismissed) this else copy(isDismissed = true)
 
+    /**
+     * Folds a realtime `story:deleted` for [storyId] into the open viewer: the
+     * matched slide is dropped, a group left with no slides is dropped too, and the
+     * cursor is re-anchored so the reader keeps watching the SAME content whenever it
+     * survives. An id absent from every group is inert (returns `this`).
+     *
+     * Re-anchoring rules, all derived from identity rather than raw indices so a
+     * dropped earlier group shifts the cursor correctly:
+     * - the current slide survives → stay on it (its index may shift down);
+     * - the current slide was the one removed but its group survives → the slot is
+     *   reused, landing on the next slide (or the new last when it was the last);
+     * - the current group was emptied → clamp onto the group that now occupies the
+     *   slot, at its first slide;
+     * - nothing remains → dismiss.
+     *
+     * Mirror of iOS `StoryViewModel.storyDeleted` (`purgeDeadStories`).
+     */
+    fun removingSlide(storyId: String): StoryPlayback {
+        if (groups.none { group -> group.slides.any { it.id == storyId } }) return this
+
+        val rebuilt = groups.mapNotNull { group ->
+            val remaining = group.slides.filterNot { it.id == storyId }
+            when {
+                remaining.size == group.slides.size -> group
+                remaining.isEmpty() -> null
+                else -> group.copy(slides = remaining)
+            }
+        }
+        if (rebuilt.isEmpty()) return copy(groups = emptyList(), groupIndex = 0, slideIndex = 0, isDismissed = true)
+
+        val anchorGroupId = currentGroup?.userId
+        val anchorSlideId = currentSlide?.id
+        val survivedGroupIndex = rebuilt.indexOfFirst { it.userId == anchorGroupId }
+        if (survivedGroupIndex >= 0) {
+            val survivedGroup = rebuilt[survivedGroupIndex]
+            val keptSlideIndex = survivedGroup.slides.indexOfFirst { it.id == anchorSlideId }
+            val newSlideIndex =
+                if (keptSlideIndex >= 0) keptSlideIndex
+                else slideIndex.coerceIn(0, survivedGroup.slides.lastIndex)
+            return copy(groups = rebuilt, groupIndex = survivedGroupIndex, slideIndex = newSlideIndex)
+        }
+
+        return copy(groups = rebuilt, groupIndex = groupIndex.coerceAtMost(rebuilt.lastIndex), slideIndex = 0)
+    }
+
     companion object {
         /** Build a live playback over the non-empty [groups], positioned at [startUserId]'s group. */
         fun startingAt(groups: List<StoryGroupSlides>, startUserId: String?): StoryPlayback {
