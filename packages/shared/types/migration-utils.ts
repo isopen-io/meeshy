@@ -7,6 +7,7 @@ import type { Message, Conversation } from './conversation.js';
 import type { SocketIOUser as User, SocketIOUser } from './socketio-events.js';
 import type { Participant } from './participant.js';
 import type { ApiResponse } from './api-responses.js';
+import { OBJECT_ID_REGEX } from '../utils/object-id.js';
 
 /**
  * Convertit un SocketIOUser vers User unifie
@@ -39,11 +40,14 @@ export function socketIOUserToUser(socketUser: SocketIOUser): User {
 }
 
 /**
- * Verifie si un ID est un ObjectId MongoDB valide
+ * Verifie si un ID est un ObjectId MongoDB valide.
+ *
+ * Délègue à la SSOT {@link OBJECT_ID_REGEX} (`utils/object-id.ts`) — le garde
+ * `typeof id !== 'string'` est préservé pour l'appelant à typage lâche.
  */
 export function isValidObjectId(id: string): boolean {
   if (!id || typeof id !== 'string') return false;
-  return /^[0-9a-fA-F]{24}$/.test(id);
+  return OBJECT_ID_REGEX.test(id);
 }
 
 /**
