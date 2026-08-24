@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.StoryTextObjectTranslationMerge
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
@@ -242,6 +243,28 @@ class StoryViewerViewModel @Inject constructor(
     init {
         load()
         observeReactionDeltas()
+        observeTranslationUpdates()
+    }
+
+    /**
+     * Fold realtime overlay translations into the open viewer. The gateway
+     * broadcasts `story:translation-updated` after translating a story's on-canvas
+     * text object; the pure [StoryTextObjectTranslationMerge.merge] upserts the new
+     * languages into the cached item, and [emit] re-projects the current slide so a
+     * reader whose preferred language just became available reads it at once — no
+     * tap, no refetch (parity with iOS `storyTranslationUpdated`). An event for an
+     * unknown story, or one whose merge is a no-op, changes nothing.
+     */
+    private fun observeTranslationUpdates() {
+        viewModelScope.launch {
+            socialSocket.storyTranslationUpdated.collect { event ->
+                val item = rawItems[event.postId] ?: return@collect
+                val merged = StoryTextObjectTranslationMerge.merge(item, event.textObjectIndex, event.translations)
+                if (merged == item) return@collect
+                rawItems[event.postId] = merged
+                emit()
+            }
+        }
     }
 
     /**
@@ -415,7 +438,13 @@ class StoryViewerViewModel @Inject constructor(
         if (languageOverride != null && languageOverride?.first != currentId) languageOverride = null
         val override = languageOverride?.second
         val reaction = playback.currentSlide?.let { reactionStateFor(it) } ?: StoryReactionState()
-        val slides = if (override == null) playback.slides else playback.slides.map { slideView ->
+        // The current slide is always re-projected from its raw item: [rawItems] is the
+        // single source of truth for translated content and can change at runtime (a
+        // tapped exploration [override], an on-demand pull, or a realtime
+        // `story:translation-updated` merge). With no override and no runtime merge this
+        // reproduces the projection [toSlideView] already computed, so non-current slides
+        // pass through untouched.
+        val slides = playback.slides.map { slideView ->
             if (slideView.id != currentId) return@map slideView
             val item = rawItems[slideView.id] ?: return@map slideView
             val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences

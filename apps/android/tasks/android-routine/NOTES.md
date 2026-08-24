@@ -5,6 +5,30 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-24 — a Prisme resolver lives SERVER-SIDE too: realtime pushed translations, not just on-demand pulls (slice `story-text-object-translation-realtime-merge`)
+When a §E "Next" pointer says "X translates only the caption on demand — scout iOS parity before building an
+N-call overlay pull", the scout's real question is **"where does the OTHER content get its translation from?"**
+For story text overlays the answer was NOT an on-demand pull at all: the **gateway** translates the overlay
+server-side and BROADCASTS it via `story:translation-updated` (`{postId, textObjectIndex, translations}`). iOS
+merges it into the open viewer; Android had no handler — a whole realtime Prisme channel on the floor. Lesson:
+before assuming a missing feature is an on-demand-pull gap, grep the gateway for a `*:translation-updated`
+broadcast for that content type — the pull may not exist because a PUSH already covers it. Caption has the
+same shape (`post:translation-updated`), a likely next Android viewer gap.
+
+Mechanics that recurred and are worth reusing verbatim: (a) a realtime merge into `rawItems` only repaints if
+`emit()` re-projects the current slide **unconditionally** — the viewer had gated re-projection behind an
+active exploration override, so a no-override realtime merge never reached the view; generalising it is safe
+because the override=null path reproduces `toSlideView`'s own resolver calls exactly. (b) Kotlin `copy` on the
+`StoryItem`/`StoryEffects`/`StoryTextObject` data classes makes the iOS "preserve every field" regression pin
+trivially true — no memberwise-init field-drop hazard to guard, though a field-preservation test is still cheap
+insurance. (c) RED-proof a multi-part slice PER PIECE: neuter the pure fn (`return item`) for the logic tests,
+comment the socket `listen` for the wiring tests, and revert ONLY the emit change to isolate that the chip test
+(reads `rawItems` directly) does NOT depend on it while the repaint test does.
+
+SDK bootstrap THIS run: `dl.google.com` **200**; `platforms;android-37` is not downloadable; `sdkmanager
+--channel=3 "platforms;android-37.0"` installed the preview and AGP mapped compileSdk 37 → android-37.0 on the
+first `./gradlew` — **pristine alone, no copy→patch, no both-dirs** (matches the 2026-08-23 entry below).
+
 ## 2026-08-23 — this container: `dl.google.com` REACHABLE, pristine `android-37.0` alone worked (slice `story-media-fade-envelope`)
 Egress to `dl.google.com` returned **200** this run (unlike the containers the CI-reality note describes,
 where it's 403), so the local gate WAS available. Full bootstrap ran clean: `commandlinetools`, then
