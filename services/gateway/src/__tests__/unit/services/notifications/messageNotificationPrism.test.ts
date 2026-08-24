@@ -108,10 +108,19 @@ const baseParams = {
 const servedPushData = (sendToUser: jest.Mock): Record<string, unknown> | undefined =>
   sendToUser.mock.calls[0]?.[0]?.payload?.data;
 
+/**
+ * Le CORPS réellement remis à APNs — le seul champ que les trois plateformes
+ * rendent, et donc le seul texte qu'un lecteur voit. `data.translatedContent`
+ * est un champ de service : aucun client ne le lit (cycle 122).
+ */
+const servedPushBody = (sendToUser: jest.Mock): string | undefined =>
+  sendToUser.mock.calls[0]?.[0]?.payload?.body;
+
 const runFanOut = async (opts: {
   recipient: LangPrefs;
   translations: unknown;
   originalLanguage: string | null;
+  params?: Partial<Parameters<NotificationService['createMessageNotification']>[0]>;
 }) => {
   const prisma = makePrismaMock(opts);
   const sendToUser = jest.fn().mockResolvedValue(undefined);
@@ -119,9 +128,14 @@ const runFanOut = async (opts: {
   service.setSocketIO(makeIO());
   service.setPushNotificationService({ sendToUser } as any);
 
-  const notification = await service.createMessageNotification(baseParams);
+  const notification = await service.createMessageNotification({ ...baseParams, ...opts.params });
 
-  return { notification, data: servedPushData(sendToUser), prisma };
+  return {
+    notification,
+    data: servedPushData(sendToUser),
+    body: servedPushBody(sendToUser),
+    prisma,
+  };
 };
 
 describe('createMessageNotification — le Prisme de la bannière DESCEND les rangs', () => {
@@ -242,5 +256,119 @@ describe('createMessageNotification — ce que la descente ne doit PAS relâcher
     });
 
     expect((data?.translatedContent as string)?.length).toBe(200);
+  });
+});
+
+/**
+ * Cycle 122 — le Prisme s'arrêtait au champ `translatedContent` du fil push.
+ *
+ * Le cycle 121 a corrigé le RANG de la traduction élue, et l'a déposée dans
+ * `context.translatedContent`. Mais ce champ n'est lu par AUCUN client : ni la
+ * NSE iOS (`MeeshyNotificationExtension`), ni l'application, ni Android, ni le
+ * service worker web. Le seul texte que les trois plateformes rendent est
+ * `payload.body`, et il restait composé depuis l'aperçu ORIGINAL.
+ *
+ * Autrement dit le symptôme que le cycle 121 visait — deux textes pour un même
+ * message, la bannière dans la langue de l'expéditeur pendant que la ligne de
+ * liste est traduite — survivait intact, une couche plus bas. Un correctif
+ * dont la valeur ne parvient jamais à un lecteur n'a corrigé personne.
+ */
+describe('createMessageNotification — le CORPS servi descend le Prisme', () => {
+  it('compose la bannière avec la traduction du rang atteint, pas avec l\'original', async () => {
+    // `payload.body` est le SEUL champ que les trois plateformes rendent.
+    // Avant ce correctif il valait « Hello » pendant que `translatedContent`,
+    // que personne ne lit, portait « Hola ».
+    const { body, data } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+    });
+
+    expect(body).toBe('Hola');
+    expect(data?.translatedContent).toBe('Hola');
+  });
+
+  it('persiste le MÊME texte dans la ligne in-app que celui de la bannière', async () => {
+    // La liste in-app est servie par `Notification.content`. Le laisser à
+    // l'original recréerait la divergence d'un cran : bannière traduite,
+    // historique dans la langue de l'expéditeur.
+    const { body, notification } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+    });
+
+    // La valeur ATTENDUE est écrite en clair : `content === body` seul ne peut
+    // pas tomber — les deux restent égaux quand aucun des deux ne descend.
+    expect((notification as any)?.content).toBe('Hola');
+    expect(body).toBe('Hola');
+  });
+
+  it('garde l\'ORIGINAL quand le Prisme n\'élit rien (règle #1)', async () => {
+    const { body } = await runFanOut({
+      recipient: { systemLanguage: 'de' },
+      translations: { it: { text: 'Ciao' } },
+      originalLanguage: 'en',
+    });
+
+    expect(body).toBe('Hello');
+  });
+
+  it('garde l\'original quand la langue d\'origine gagne à son rang (règle #3)', async () => {
+    const { body } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'en', customDestinationLanguage: 'fr' },
+      translations: { fr: { text: 'Bonjour' } },
+      originalLanguage: 'en',
+    });
+
+    expect(body).toBe('Hello');
+  });
+});
+
+describe('createMessageNotification — ce que la substitution ne doit PAS relâcher', () => {
+  it('ne substitue JAMAIS dans un aperçu protégé — la traduction relâcherait le texte masqué', async () => {
+    // Le mode d'échec du CORRECTIF, pas du défaut : un message éphémère /
+    // à vue unique / flouté montre un placeholder sur l'écran verrouillé.
+    // `Message.translations` porte pourtant le texte en clair — y substituer la
+    // traduction afficherait exactement ce que la protection cache.
+    const { body } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola, mon secret' } },
+      originalLanguage: 'en',
+      params: {
+        messagePreview: '⏱️ 💬 24h',
+        notificationLocKey: 'notification.ephemeral_message',
+      },
+    });
+
+    expect(body).toBe('⏱️ 💬 24h');
+  });
+
+  it('ne substitue pas la transcription d\'un vocal — un AUTRE texte que Message.content', async () => {
+    // `Message.translations` ne traduit que `Message.content` ; les traductions
+    // d'une transcription vivent sur `MessageAttachment.translations`. Servir
+    // l'une pour l'autre afficherait un contenu sans rapport avec l'audio.
+    const { body } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+      params: {
+        messagePreview: 'Salut, je te rappelle ce soir',
+        previewIsMessageContent: false,
+      },
+    });
+
+    expect(body).toBe('Salut, je te rappelle ce soir');
+  });
+
+  it('descend le CONTENU sans emporter le CADRAGE, qui reste au rang 1', async () => {
+    const { body, notification } = await runFanOut({
+      recipient: { systemLanguage: 'de', deviceLocale: 'pt-BR' },
+      translations: { pt: { text: 'Olá' } },
+      originalLanguage: 'en',
+    });
+
+    expect(body).toBe('Olá');
+    expect((notification as any)?.lang ?? 'de').toBe('de');
   });
 });
