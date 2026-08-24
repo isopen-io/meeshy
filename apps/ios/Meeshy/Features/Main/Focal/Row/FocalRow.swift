@@ -179,31 +179,21 @@ struct FocalRow: View {
             }
 
             failedRetrySection
+
+            // **UNE seule ligne basse** (directive 2026-08-24) : drapeaux et
+            // réactions à gauche, date et coches TOUT À DROITE. Elles vivaient
+            // sur une ligne à elles — qui, au repos, ne montre RIEN (l'heure et
+            // les coches ne paraissent qu'au défilement) tout en gardant sa
+            // hauteur. C'était l'essentiel du blanc entre deux messages : une
+            // ligne réservée à une information invisible.
+            //
+            // C'est aussi la disposition qu'a déjà la bande du message
+            // magnifié (`focusStrip` … `focusStampChip`) : les deux modes
+            // disent maintenant la même chose au même endroit.
             flagAndReactionsRow
                 // En focus, la bande SUR la ligne basse remplace visuellement
                 // cette ligne — qui garde sa place (hauteur stable).
                 .opacity(input.isFocused ? 0 : 1)
-
-            // Directive 2026-08-23 : la ligne BASSE date le message — tête de
-            // groupe comprise. Elle portait son heure et ses coches en haut,
-            // à côté du nom ; la même information changeait donc de bord
-            // selon la place du message dans son groupe. En focus, la chip du
-            // bas la remplace : la méta s'efface sans céder sa hauteur, comme
-            // l'en-tête et la ligne drapeaux.
-            FocalMetaRow(
-                isMe: content.isMe,
-                timeString: content.meta.timeString,
-                deliveryStatus: content.meta.deliveryStatus,
-                isDark: input.isDark,
-                indent: indent,
-                // F-083ter (F10) — « modifié » visible sur toute rangée.
-                editedAt: content.editedAt,
-                isEditSaving: content.isEditSaving,
-                hasEditHistory: content.hasEditHistory,
-                onShowReadStatus: actions.onShowReadStatus.map { show in { show(content.messageId) } }
-            )
-            .opacity(input.isFocused ? 0 : 1)
-
         }
         // Focus (2026-08-22) : la CARTE est le fond de ce bloc — même repère
         // que ses chips, toujours consolidés quelle que soit la hauteur
@@ -587,36 +577,56 @@ struct FocalRow: View {
     }
 
     @ViewBuilder
+    /// La ligne BASSE de toute rangée — drapeaux et réactions à gauche, date
+    /// et coches tout à droite (directive 2026-08-24).
+    ///
+    /// Elle se monte TOUJOURS, même sans drapeau ni réaction : c'est elle qui
+    /// porte désormais la méta, et un message sans traduction date quand même.
+    /// Le garde d'origine (`translation != nil || showsReactions`) ne couvrait
+    /// que son ancien contenu.
     private var flagAndReactionsRow: some View {
         let showsReactions = mountsReactions
-        if (content.translation != nil && !content.isBlurred) || showsReactions {
-            HStack(alignment: .center, spacing: 6) {
-                // Jamais de drapeau EN CLAIR sur un message protégé (revue
-                // adversariale 2026-08-18) : la bulle floute sa bande de
-                // drapeaux avec le contenu — révéler la langue d'origine
-                // d'un message voilé fuirait une information. Les réactions,
-                // elles, restent hors voile (parité bulle historique).
-                if let translation = content.translation, !content.isBlurred {
-                    plainLanguageFlags(translation)
-                }
-                if showsReactions {
-                    BubbleReactionsOverlay(
-                        messageId: content.messageId,
-                        summaries: content.reactions,
-                        isMe: content.isMe,
-                        isDark: input.isDark,
-                        isLastReceivedMessage: input.isLastReceivedMessage,
-                        accentHex: input.accentHex,
-                        onAddReaction: actions.onAddReaction,
-                        onToggleReaction: actions.onToggleReaction,
-                        onOpenReactPicker: actions.onOpenReactPicker,
-                        onShowReactions: actions.onShowReactions
-                    )
-                    .equatable()
-                }
+        return HStack(alignment: .center, spacing: 6) {
+            // Jamais de drapeau EN CLAIR sur un message protégé (revue
+            // adversariale 2026-08-18) : la bulle floute sa bande de
+            // drapeaux avec le contenu — révéler la langue d'origine
+            // d'un message voilé fuirait une information. Les réactions,
+            // elles, restent hors voile (parité bulle historique).
+            if let translation = content.translation, !content.isBlurred {
+                plainLanguageFlags(translation)
             }
-            .padding(.leading, indent)
+            if showsReactions {
+                BubbleReactionsOverlay(
+                    messageId: content.messageId,
+                    summaries: content.reactions,
+                    isMe: content.isMe,
+                    isDark: input.isDark,
+                    isLastReceivedMessage: input.isLastReceivedMessage,
+                    accentHex: input.accentHex,
+                    onAddReaction: actions.onAddReaction,
+                    onToggleReaction: actions.onToggleReaction,
+                    onOpenReactPicker: actions.onOpenReactPicker,
+                    onShowReactions: actions.onShowReactions
+                )
+                .equatable()
+            }
+
+            Spacer(minLength: 4)
+
+            FocalMetaRow(
+                isMe: content.isMe,
+                timeString: content.meta.timeString,
+                deliveryStatus: content.meta.deliveryStatus,
+                isDark: input.isDark,
+                indent: indent,
+                editedAt: content.editedAt,
+                isEditSaving: content.isEditSaving,
+                hasEditHistory: content.hasEditHistory,
+                onShowReadStatus: actions.onShowReadStatus.map { show in { show(content.messageId) } },
+            fillsWidth: false
+        )
         }
+        .padding(.leading, indent)
     }
 
     private var isShowingOriginal: Bool {

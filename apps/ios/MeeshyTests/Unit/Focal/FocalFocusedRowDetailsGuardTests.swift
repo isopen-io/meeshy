@@ -45,9 +45,11 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
             row.contains("if input.isFocused { HStack(alignment: .center, spacing: 4) { focusStrip Spacer(minLength: 4) focusStampChip }"),
             "bas : bande à gauche, date+coche à droite"
         )
+        // 3 → 2 le 2026-08-24 : la méta a REJOINT la ligne drapeaux+réactions,
+        // il n'y a donc plus qu'une ligne basse à effacer en focus.
         XCTAssertEqual(
-            row.components(separatedBy: ".opacity(input.isFocused ? 0 : 1)").count - 1, 3,
-            "en-tête, ligne drapeau+réactions ET méta-rangée s'effacent en focus — la chip du bas les remplace"
+            row.components(separatedBy: ".opacity(input.isFocused ? 0 : 1)").count - 1, 2,
+            "en-tête ET ligne basse (drapeaux + réactions + méta) s'effacent en focus — la bande du bas les remplace"
         )
         XCTAssertTrue(row.contains("BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint)"), "la coche d'état de réception dans la chip de date")
     }
@@ -441,5 +443,44 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
             FocalMetrics.Row.paddingVertical,
             "un groupe se distingue du suivant par plus d'air qu'il n'en met en lui-même"
         )
+    }
+
+    /// **UNE seule ligne basse** (directive 2026-08-24) : « les date et coche
+    /// devraient être tout à droite mais sur la même ligne que les drapeaux ou
+    /// réactions ».
+    ///
+    /// La méta vivait sur une ligne à elle — qui, au repos, ne montre RIEN
+    /// (l'heure et les coches ne paraissent qu'au défilement) tout en gardant
+    /// sa hauteur. C'était l'essentiel du blanc entre deux messages : une
+    /// ligne réservée à une information invisible.
+    func test_theBottomLine_carriesFlagsReactionsAndMeta_together() throws {
+        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let line = try XCTUnwrap(row.range(of: "private var flagAndReactionsRow: some View {"))
+        let body = String(row[line.lowerBound...].prefix(1800))
+        let iFlags = try XCTUnwrap(body.range(of: "plainLanguageFlags(")).lowerBound
+        let iReactions = try XCTUnwrap(body.range(of: "BubbleReactionsOverlay(")).lowerBound
+        let iSpacer = try XCTUnwrap(body.range(of: "Spacer(minLength: 4)")).lowerBound
+        let iMeta = try XCTUnwrap(body.range(of: "FocalMetaRow(")).lowerBound
+        XCTAssertTrue(iFlags < iReactions, "drapeaux d'abord")
+        XCTAssertTrue(iReactions < iSpacer && iSpacer < iMeta, "la méta est poussée TOUT À DROITE")
+        XCTAssertTrue(body.contains("fillsWidth: false"), "en ligne, la méta ne pousse plus elle-même")
+    }
+
+    /// La ligne se monte TOUJOURS : un message sans traduction ni réaction
+    /// date quand même. L'ancien garde ne couvrait que son ancien contenu.
+    func test_theBottomLine_isMountedEvenWithoutFlagsOrReactions() throws {
+        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let line = try XCTUnwrap(row.range(of: "private var flagAndReactionsRow: some View {"))
+        let body = String(row[line.lowerBound...].prefix(400))
+        XCTAssertFalse(
+            body.contains("if (content.translation != nil && !content.isBlurred) || showsReactions {"),
+            "plus de garde d'ensemble — sinon la meta disparaitrait avec les drapeaux"
+        )
+        XCTAssertTrue(body.contains("return HStack(alignment: .center, spacing: 6)"), "montee inconditionnellement")
+    }
+
+    func test_theGuardAbove_wouldCatchTheWholeLineBeingGatedAgain() {
+        let gated = "if (content.translation != nil && !content.isBlurred) || showsReactions {"
+        XCTAssertTrue(gated.contains("|| showsReactions {"))
     }
 }
