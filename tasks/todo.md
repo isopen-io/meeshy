@@ -85,6 +85,25 @@ doit prouver que la règle tombe encore depuis son nouveau site.
 - `tasks/realtime-sync-audit-2026-08-24-cycle124-bis.md`
 - `tasks/lessons.md` § 274 (rédigée 272, renumérotée deux fois — cf. la note dans la leçon)
 
+### Un rouge HÉRITÉ, réparé en passant
+
+`Test web` échouait sur `lentille-tokens.parity` — **identiquement sur `origin/main`**, mesuré
+des deux côtés : le token `thread.row.padding.vertical` vaut `3` dans
+`packages/shared/design/lentille-tokens.json` et `5px` dans `apps/web/styles/lentille-tokens.css`.
+
+La direction du correctif n'est pas une interprétation : elle est écrite dans le commit qui a
+créé l'écart (`97a14dc2`), au mot près — « le token […] lu par iOS **ET** par les composants
+Focal du web […] passe à 3 avec lui, ce qui applique la directive aux DEUX plateformes ». Le
+JSON et iOS sont passés à 3 ; le CSS du web, la seconde plateforme que la phrase nomme, est
+resté à 5.
+
+Porté ici parce qu'il bloque la branche PARTAGÉE, pas ce seul lot. Une ligne, dans le sens que
+son auteur a énoncé.
+
+> **Un rouge hérité se MESURE avant d'être qualifié.** « Rouge sur la base aussi » est une
+> affirmation vérifiable en deux commandes (`git show origin/main:<fichier>`), et c'est elle qui
+> distingue « pas mon défaut » d'une supposition commode.
+
 ### Suivi MESURÉ (non hérité)
 
 - `isEncrypted` reste lue et jamais émise — piège armé, pas panne.
