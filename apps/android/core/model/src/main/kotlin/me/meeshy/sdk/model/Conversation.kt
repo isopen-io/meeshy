@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model
 
 import kotlinx.serialization.Serializable
+import me.meeshy.sdk.lang.resolveLastMessagePreview
 
 /** Conversation — port of APIConversation (ConversationModels.swift). */
 @Serializable
@@ -15,6 +16,23 @@ data class ApiConversation(
     val banner: String? = null,
     val participants: List<ApiParticipant> = emptyList(),
     val lastMessage: ApiConversationLastMessage? = null,
+    /**
+     * The Prisme pair of the row's last-message line, shipped at the CONVERSATION root
+     * by `GET /conversations` (`conversationMinimalSchema`, `packages/shared/types/
+     * api-schemas.ts`) — not inside [lastMessage].
+     *
+     * [lastMessageTranslations] is `{ language: truncated preview }`, already restricted
+     * server-side to the READER's prism; `null` when nothing useful remains, which the
+     * resolver reads as "show the original".
+     *
+     * Both were absent from this class, so kotlinx-serialization discarded them at
+     * decode AND at re-encode into the Room cache: the row rendered
+     * `lastMessage.content` — the sender's language — for every reader, on every cold
+     * start, while web and iOS resolved the same payload into the reader's language.
+     * See [me.meeshy.sdk.lang.resolveLastMessagePreview].
+     */
+    val lastMessageTranslations: Map<String, String>? = null,
+    val lastMessageOriginalLanguage: String? = null,
     val unreadCount: Int = 0,
     val createdAt: String? = null,
     val updatedAt: String? = null,
@@ -39,6 +57,27 @@ data class ApiConversation(
     val resolvedPreferences: ApiConversationPreferences?
         get() = preferences ?: userPreferences.firstOrNull()
 }
+
+/**
+ * The row's last-message text after the Prisme Linguistique, or `null` when there is no
+ * last-message text to show.
+ *
+ * Delegates to [resolveLastMessagePreview] — the shared rule — rather than restating it:
+ * this conversation's job is only to say WHERE each of the three inputs lives on the
+ * Android payload (the raw preview inside [ApiConversation.lastMessage], the pair at the
+ * root), which is exactly what the web twin does
+ * (`apps/web/components/conversations/conversation-item/ConversationItem.tsx`).
+ *
+ * Returns the raw preview unchanged whenever no preferred language is served, so a caller
+ * can substitute the result for `lastMessage.content` unconditionally.
+ */
+fun ApiConversation.resolvedLastMessagePreview(preferredLanguages: List<String>): String? =
+    resolveLastMessagePreview(
+        preview = lastMessage?.content,
+        translations = lastMessageTranslations,
+        originalLanguage = lastMessageOriginalLanguage,
+        preferredLanguages = preferredLanguages,
+    )
 
 /**
  * The signed-in user's own [MemberRole] within this conversation — looked up

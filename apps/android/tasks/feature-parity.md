@@ -6539,3 +6539,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       header "last seen" line** (`ProfileHeaderBuilder.lastSeenEpochMillis` — null for an online user so the
       live dot speaks, else the parsed `lastActiveAt` for AWAY/OFFLINE; rendered as `profile_last_seen`
       "Vu / Last seen {relative}")
+- [x] **Prisme Linguistique on the conversation-row last-message line** — the third and
+      last client to receive the rule `/CLAUDE.md` §"Règles critiques du Prisme" #3 names
+      (twins: `resolveLastMessagePreview` in `packages/shared`, iOS
+      `MeeshyConversation.resolvedLastMessagePreview`). `GET /conversations` ships
+      `lastMessageTranslations` + `lastMessageOriginalLanguage` at the conversation ROOT;
+      `ApiConversation` declared neither, so `ignoreUnknownKeys` dropped both at decode
+      **and** the `ConversationCacheSource` re-encode dropped them again, and every row
+      rendered `lastMessage.content` — the sender's language — for every reader. Now:
+      the pair is declared, `me.meeshy.sdk.lang.resolveLastMessagePreview` is the pure
+      Kotlin twin (prism walked IN ORDER, the original language competing at its own
+      RANK, never a fall-back to an arbitrary translation), canonicalisation through the
+      new `LanguageCodeNormalizer.normalizeForDedup` (port of the TS
+      `normalizeLanguageForDedup` — the very function the gateway builds the wire map's
+      KEYS with), and `messageSummaryLine(resolvedContent = …)` substitutes it for the
+      raw content on STANDARD/EPHEMERAL_ACTIVE rows only. **Not yet wired**: the two
+      home-screen widgets, whose `WidgetEntryPoint` exposes a `userId` but no reader
+      prism, and the `conversation:updated` socket half (`ConversationUpdatedSocketEvent`
+      carries none of the preview group) — both are their own slices.
