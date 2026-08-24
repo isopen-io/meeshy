@@ -12020,3 +12020,89 @@ rôle sur `conversations/participants.ts` (hors périmètre calling) ; `redirect
 `returnUrl=` sur `app/links/tracked/[token]/page.tsx` (hors périmètre calling) ; `bun run lint`
 documenté cassé dans ce conteneur (pré-existant, hors périmètre). Aucun nouveau suivi ouvert
 par cette Vague.
+
+## Vague 177 — `call:check-active` perdait le rejoin d'un utilisateur ayant quitté puis rejoint le même appel (gateway) (2026-08-24)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Branche
+`claude/upbeat-dirac-8cl3q2` redémarrée depuis `origin/main` (Vague 176 déjà mergée, PR #3462,
+aucune branche `claude/upbeat-dirac-*` antérieure en avance). Audit délégué sur gateway/web en
+priorité (seule zone testable localement dans ce conteneur — pas de toolchain Swift ni d'accès
+réseau `dl.google.com`), cadré pour ne pas rouvrir les familles déjà closes (god-object
+`CallManager.swift`, ADR `actor CallEventQueue`, single-peer groupe iOS, gap de rôle
+`conversations/participants.ts`, `redirect=` vs `returnUrl=` sur le lien tracké, famille
+`clearRingingTimeout`/`clearHeartbeats`, `call:transcription-segment`/`call:request-ice-servers`
+→ `resolveActiveCallParticipantId`).
+
+### Root cause
+
+Le handler `call:check-active` (`CallEventsHandler.ts`, déclenché à chaque reconnexion socket
+pour rejouer `call:initiated` sur les appels encore sonnants que le client aurait manqués)
+collapsait `myParticipants` — le résultat d'un `callParticipant.findMany({ callSessionId: { in:
+callIds }, participant: { userId } })` SANS `orderBy` — dans un `Map<callSessionId, row>`. Or
+`CallService.joinCall()` ne réutilise une ligne `CallParticipant` existante que si `!leftAt`
+(documenté sur `toCallSessionResponse`/`call-session-response.ts`) : un utilisateur qui quitte
+puis rejoint le MÊME appel avant que celui-ci ne se termine (coupure réseau, relance de l'app,
+rechargement d'onglet — précisément le moment où `call:check-active` se déclenche, puisqu'il
+tourne au reconnect) possède donc DEUX lignes `CallParticipant` pour le même `callSessionId` :
+une avec `leftAt` posé (le départ), une sans (le rejoin actif). Un `Map` clé par
+`callSessionId` ne garde que la DERNIÈRE ligne écrite pour cette clé — sans `orderBy`, Prisma/
+Mongo ne garantit aucun ordre de retour, donc l'ordre dépend d'un détail d'implémentation non
+contractuel. Quand la ligne « partie » atterrit en dernier dans le `Map`, le handler traite un
+participant actuellement ACTIF comme s'il avait quitté.
+
+### Impact
+
+Après une coupure réseau ou une relance d'app pendant qu'un appel entrant sonne encore,
+l'utilisateur peut avoir quitté puis rejoint la session avant que le socket ne se reconnecte.
+Au reconnect, `call:check-active` doit rejouer `call:initiated` pour que le CallKit/la bannière
+réapparaisse — c'est tout le sens de ce handler. Avec le bug, si l'ordre de retour Mongo place
+la ligne « départ » en dernier pour ce `callSessionId`, le handler saute silencieusement le
+replay : aucune bannière d'appel entrant, aucune notification CallKit au retour de l'utilisateur,
+alors que l'appel continue de sonner réellement côté serveur — il finit par expirer en `missed`
+sans que l'utilisateur n'ait jamais revu l'invitation. Silencieux (aucune erreur, aucun log) et
+dépendant d'un ordre de retour non garanti par le driver — un vrai bug d'ordonnancement, pas
+une race de concurrence applicative.
+
+### Fix
+
+Remplacement du `Map<callSessionId, dernière ligne>` par un accumulateur qui réduit PAR appel :
+`leftAllRowsByCall` ne vaut `true` pour un `callSessionId` que si TOUTES les lignes de
+l'utilisateur pour cet appel ont `leftAt` posé — une seule ligne active suffit à garder le
+replay. Purement additif : `myParticipantMap.get(c.id)?.leftAt` → `leftAllRowsByCall.get(c.id)`,
+aucun autre champ de la ligne n'était lu ailleurs dans la boucle (vérifié par lecture directe —
+`myPart` ne servait qu'à ce test `leftAt`).
+
+### Tests (TDD, RED confirmé — vrai Jest)
+
+Nouveau fichier `CallEventsHandler-check-active-rejoin-after-leave.test.ts`, deux cas : (1) « still
+replays call:initiated when the departed row is returned AFTER the active row » — deux lignes
+pour le même `callId` (une active `leftAt: null`, une partie `leftAt: <Date>`) dans cet ordre
+volontairement adversarial ; RED confirmé avant fix (`Number of calls: 0` sur l'assertion
+`toHaveBeenCalledWith(CALL_EVENTS.INITIATED, …)`, vérifié en stashant le fix et en relançant le
+test) ; GREEN après. (2) « still skips the replay when EVERY row for this call has left » —
+garde le comportement existant (deux lignes toutes deux `leftAt` posé → pas de replay). Sweep
+gateway `--testPathPatterns="[Cc]all"` : **59/59 suites, 1272/1272 tests verts** (Vague 176
+laissait 58/58, 1270/1270 — delta = +1 suite/+2 tests, exactement ce fichier). `npx tsc --noEmit`
+(services/gateway) : 0 erreur. Suite complète gateway (`bun run test:coverage`) lancée en tâche
+de fond dans ce conteneur ; résultat consigné avant push.
+
+### Risk assessment
+
+Minimal — une seule substitution de structure de données dans un seul handler, aucun changement
+de signature, aucune écriture DB modifiée (lecture seule). Le seul comportement qui change : un
+utilisateur qui a quitté PUIS rejoint un appel encore sonnant voit désormais systématiquement
+son `call:initiated` rejoué au reconnect, indépendamment de l'ordre de retour Mongo — avant le
+fix, ce comportement dépendait d'un ordre non garanti (parfois correct, parfois non, sans lien
+avec le code applicatif). Le chemin sans rejoin (l'écrasante majorité des reconnects) est
+inchangé : un utilisateur avec une seule ligne par appel produit le même résultat avec les deux
+implémentations.
+
+### Non fait volontairement / reste ouvert
+
+Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~6372 lignes) ; ADR `actor
+CallEventQueue` non implémenté ; iOS single-peer côté groupe ; gap de hiérarchie de rôle sur
+`conversations/participants.ts` (hors périmètre calling) ; `redirect=` vs `returnUrl=` sur
+`app/links/tracked/[token]/page.tsx` (hors périmètre calling) ; famille
+`clearRingingTimeout`/`clearHeartbeats` (close, non ré-auditée cette Vague — aucun signal
+nouveau) ; `bun run lint` documenté cassé dans ce conteneur (pré-existant, hors périmètre).
+Aucun nouveau suivi ouvert par cette Vague.
