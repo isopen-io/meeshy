@@ -276,13 +276,15 @@ class ConversationMembersViewModel @Inject constructor(
         viewModelScope.launch {
             messageSocketManager.participantLeft.collect { event ->
                 if (event.conversationId != conversationId) return@collect
-                _state.update { it.copy(roster = it.roster.withoutUser(event.userId)) }
+                val removedId = event.userId ?: event.participantId ?: return@collect
+                _state.update { it.copy(roster = it.roster.withoutUser(removedId)) }
             }
         },
         viewModelScope.launch {
             messageSocketManager.participantBanned.collect { event ->
                 if (event.conversationId != conversationId) return@collect
-                _state.update { it.copy(roster = it.roster.withoutUser(event.userId)) }
+                val removedId = event.userId ?: event.participantId ?: return@collect
+                _state.update { it.copy(roster = it.roster.withoutUser(removedId)) }
             }
         },
     )
