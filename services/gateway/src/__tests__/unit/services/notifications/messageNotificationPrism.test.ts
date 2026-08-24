@@ -345,10 +345,146 @@ describe('createMessageNotification — le CORPS servi descend le Prisme', () =>
       originalLanguage: 'en',
       params: {
         messagePreview: 'Salut, je te rappelle ce soir',
-        previewIsMessageContent: false,
+        previewBasis: { kind: 'transcript', source: { translations: {}, originalLanguage: 'fr' } },
       },
     });
 
     expect(push?.body).toBe('Salut, je te rappelle ce soir');
+  });
+});
+
+/**
+ * Cycle 123 — la protection gardait le CORPS, pas le FIL.
+ *
+ * Le cycle 122 a fait descendre le Prisme jusqu'au corps AFFICHÉ et l'a gardé
+ * par `previewIsMessageContent` : un aperçu PROTÉGÉ (éphémère / vue unique /
+ * flouté) reste un placeholder, la traduction ne le remplace pas. Mais la
+ * descente qui alimente `data.translatedContent` / `data.translatedLanguage`,
+ * elle, restait INCONDITIONNELLE — deux résolutions parallèles sur la même
+ * méthode, gardées différemment.
+ *
+ * Conséquence mesurée : pour un message à vue unique, la bannière affichait
+ * « ⏱️ 💬 24h » pendant que la charge remise à APNs transportait, à côté, la
+ * TRADUCTION EN CLAIR du texte que la protection masque — puis la persistait
+ * dans la ligne `Notification`. Le pipeline de traduction n'a aucun gate sur
+ * ces drapeaux (mesuré : `MessageTranslationService.handleNewMessage` ne
+ * connaît ni `isViewOnce`, ni `isBlurred`, ni `expiresAt`), et les entrées
+ * produites ne portent pas `isEncrypted` — rien ne les écartait donc en amont.
+ *
+ * Le témoin du cycle 122 ne pouvait pas le voir : il assertait sur `push.body`
+ * seul. C'est la leçon 266 dans l'autre sens — le CHOIX DU CHAMP OBSERVÉ rend
+ * la règle inobservable, que la règle porte sur ce qu'on sert ou sur ce qu'on
+ * refuse de servir.
+ */
+describe('createMessageNotification — le fil ne transporte QUE ce que la bannière affiche', () => {
+  it('ne TRANSPORTE pas la traduction d\'un aperçu protégé — la protection vaut aussi sur data', async () => {
+    const { push, data } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola, mi secreto' } },
+      originalLanguage: 'en',
+      params: {
+        messagePreview: '⏱️ 💬 24h',
+        notificationLocKey: 'notification.ephemeral_message',
+      },
+    });
+
+    expect(push?.body).toBe('⏱️ 💬 24h');
+    expect(data?.translatedContent).toBeUndefined();
+    expect(data?.translatedLanguage).toBeUndefined();
+  });
+
+  it('ne transporte pas non plus la traduction du CONTENU sous une transcription', async () => {
+    // Même règle, autre base : le texte servi est la transcription, donc les
+    // champs de service doivent décrire CELLE-LÀ ou rien — jamais la traduction
+    // d'un `Message.content` que la bannière n'affiche pas.
+    const { data } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+      params: {
+        messagePreview: 'Salut, je te rappelle ce soir',
+        previewBasis: { kind: 'transcript', source: { translations: {}, originalLanguage: 'fr' } },
+      },
+    });
+
+    expect(data?.translatedContent).toBeUndefined();
+  });
+});
+
+/**
+ * Cycle 123 — la bannière d'un VOCAL descend enfin son propre Prisme.
+ *
+ * Suivi MESURÉ du cycle 122, et cinquième site de la même règle : la
+ * transcription d'un vocal est le texte que la bannière AFFICHE, et ses
+ * traductions vivent sur `MessageAttachment.translations` — une carte que
+ * l'éventail lit, et qu'aucune descente ne parcourait. Un francophone recevant
+ * un vocal espagnol lisait donc sa bannière en espagnol pendant que la ligne de
+ * liste de la même application servait la transcription traduite.
+ */
+describe('createMessageNotification — le Prisme d\'une TRANSCRIPTION', () => {
+  const transcript = (translations: Record<string, string>, originalLanguage: string | null) => ({
+    kind: 'transcript' as const,
+    source: { translations, originalLanguage },
+  });
+
+  it('sert la transcription TRADUITE au rang atteint, corps et fil ensemble', async () => {
+    const { push, data } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'fr' },
+      translations: null,
+      originalLanguage: 'es',
+      params: {
+        messagePreview: 'Hola, te llamo esta noche',
+        previewBasis: transcript({ fr: 'Salut, je t\'appelle ce soir' }, 'es'),
+      },
+    });
+
+    expect(push?.body).toBe('Salut, je t\'appelle ce soir');
+    expect(data?.translatedContent).toBe('Salut, je t\'appelle ce soir');
+    expect(data?.translatedLanguage).toBe('fr');
+  });
+
+  it('sert la transcription ORIGINALE quand la langue d\'origine gagne à son rang (règle #3)', async () => {
+    const { push } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es', customDestinationLanguage: 'fr' },
+      translations: null,
+      originalLanguage: 'es',
+      params: {
+        messagePreview: 'Hola, te llamo esta noche',
+        previewBasis: transcript({ fr: 'Salut, je t\'appelle ce soir' }, 'es'),
+      },
+    });
+
+    expect(push?.body).toBe('Hola, te llamo esta noche');
+  });
+
+  it('sert la transcription ORIGINALE quand aucune langue du lecteur n\'est servie (règle #1)', async () => {
+    const { push } = await runFanOut({
+      recipient: { systemLanguage: 'de' },
+      translations: null,
+      originalLanguage: 'es',
+      params: {
+        messagePreview: 'Hola, te llamo esta noche',
+        previewBasis: transcript({ it: 'Ciao, ti chiamo stasera' }, 'es'),
+      },
+    });
+
+    expect(push?.body).toBe('Hola, te llamo esta noche');
+  });
+
+  it('descend la carte de l\'ATTACHMENT, jamais celle du message', async () => {
+    // Le mode d'échec du CORRECTIF : les deux cartes coexistent sur le même
+    // envoi (un vocal peut porter une légende). Servir `Message.translations`
+    // ici afficherait un texte sans rapport avec l'audio.
+    const { push } = await runFanOut({
+      recipient: { systemLanguage: 'fr' },
+      translations: { fr: { text: 'Regarde cette photo' } },
+      originalLanguage: 'es',
+      params: {
+        messagePreview: 'Hola, te llamo esta noche',
+        previewBasis: transcript({ fr: 'Salut, je t\'appelle ce soir' }, 'es'),
+      },
+    });
+
+    expect(push?.body).toBe('Salut, je t\'appelle ce soir');
   });
 });

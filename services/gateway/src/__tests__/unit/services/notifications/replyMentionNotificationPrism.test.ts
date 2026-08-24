@@ -427,12 +427,10 @@ describe.each([
       messageId: p.messageId,
       conversationId: p.conversationId,
       messagePreview: p.messagePreview,
-      ...(p.previewIsMessageContent === undefined
-        ? {}
-        : { previewIsMessageContent: p.previewIsMessageContent }),
+      ...(p.previewBasis === undefined ? {} : { previewBasis: p.previewBasis }),
     })],
 ] as const)('%s — le CORPS servi descend le Prisme', (_name, invoke) => {
-  const runServed = async (opts: Scenario & { messagePreview?: string; previewIsMessageContent?: boolean }) => {
+  const runServed = async (opts: Scenario & { messagePreview?: string; previewBasis?: unknown }) => {
     const { service, sendToUser } = makeService(opts);
     const notification = await invoke(service, {
       recipientUserId: RECIPIENT_ID,
@@ -440,9 +438,7 @@ describe.each([
       messageId: MESSAGE_ID,
       conversationId: CONVERSATION_ID,
       messagePreview: opts.messagePreview ?? 'Hello',
-      ...(opts.previewIsMessageContent === undefined
-        ? {}
-        : { previewIsMessageContent: opts.previewIsMessageContent }),
+      ...(opts.previewBasis === undefined ? {} : { previewBasis: opts.previewBasis }),
     });
     return { notification, push: servedPush(sendToUser) };
   };
@@ -494,9 +490,31 @@ describe.each([
       translations: { fr: { text: 'Bonjour, mon secret' } },
       originalLanguage: 'en',
       messagePreview: '👁️ 💬',
-      previewIsMessageContent: false,
+      previewBasis: { kind: 'protected-placeholder' },
     });
 
     expect(push?.body).toBe('👁️ 💬');
+  });
+
+  /**
+   * Cycle 123 — la protection gardait le CORPS, pas le FIL.
+   *
+   * Le témoin ci-dessus est celui du cycle 122 : il assertait que la traduction
+   * ne REMPLACE pas le placeholder. Elle ne le remplaçait pas — et partait quand
+   * même, à côté, dans `data.translatedContent`, d'où elle était poussée sur le
+   * canal APNs/FCM puis persistée dans la ligne `Notification`. Le champ observé
+   * rendait la moitié de la règle inobservable (leçon 266).
+   */
+  it('ne TRANSPORTE pas non plus la traduction d\'un aperçu protégé', async () => {
+    const { push } = await runServed({
+      recipient: { systemLanguage: 'fr' },
+      translations: { fr: { text: 'Bonjour, mon secret' } },
+      originalLanguage: 'en',
+      messagePreview: '👁️ 💬',
+      previewBasis: { kind: 'protected-placeholder' },
+    });
+
+    expect(push?.data?.translatedContent).toBeUndefined();
+    expect(push?.data?.translatedLanguage).toBeUndefined();
   });
 });

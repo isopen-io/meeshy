@@ -43,8 +43,30 @@ const findMany = jest.fn<any>();
 const update = jest.fn<any>();
 const announceNotificationsReproduced = jest.fn<any>();
 
+/**
+ * Cycle 123 bis — l'unité relit désormais les drapeaux de PROTECTION du message
+ * édité, et son double doit les servir : un message PROTÉGÉ ne se démasque pas
+ * par une édition, et la relecture est fail-CLOSED (absente ou en échec ⇒
+ * « protégé », donc rien n'est réécrit). Sans ce délégué, TOUTE la suite
+ * atteste un no-op — ce qui est exactement ce que le harnais faisait avant
+ * qu'on l'aligne, et qu'aucun témoin n'aurait signalé comme une perte.
+ */
+const messageFindUnique = jest.fn<any>();
+const ORDINARY_MESSAGE = {
+  messageType: 'text',
+  isEncrypted: false,
+  isViewOnce: false,
+  isBlurred: false,
+  effectFlags: 0,
+  expiresAt: null,
+  createdAt: new Date('2026-08-24T10:00:00Z'),
+};
+
 const announcer = { announceNotificationsReproduced } as any;
-const prisma = { notification: { findMany, update } } as any;
+const prisma = {
+  notification: { findMany, update },
+  message: { findUnique: messageFindUnique },
+} as any;
 
 /** Les données que la réécriture rend à `update` pour une ligne. */
 function updatedData(index = 0): any {
@@ -65,6 +87,7 @@ const row = (over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   jest.clearAllMocks();
   update.mockResolvedValue({});
+  messageFindUnique.mockResolvedValue(ORDINARY_MESSAGE);
   announceNotificationsReproduced.mockResolvedValue(undefined);
   findMany.mockResolvedValue([]);
 });
@@ -346,5 +369,79 @@ describe('reproduceEditedMessageNotifications', () => {
       expect(reproduced).toBe(1);
       expect(updatedData().metadata).toMatchObject({ messagePreview: '' });
     });
+  });
+});
+
+/**
+ * Cycle 123 bis — une édition ne DÉMASQUE pas un message protégé.
+ *
+ * Les lignes d'un message éphémère / à vue unique / flouté / chiffré portent un
+ * placeholder posé par l'éventail (`protectedPreview`), et cette réécriture y
+ * substituait le nouveau texte EN CLAIR — pour tous ceux déjà notifiés, des
+ * TIERS — avant de le réannoncer. Mesuré : rien n'interdit d'éditer un message
+ * protégé (`messageEditAdmission` / `messageEditContent` ne portent aucun de
+ * ces drapeaux).
+ *
+ * Ne rien réécrire est la bonne issue et pas seulement la prudente : le
+ * placeholder ne dérive pas du contenu, donc une édition du contenu ne le
+ * périme pas — et sa seule part variable, la durée d'un éphémère, ne bouge pas
+ * non plus.
+ */
+describe('reproduceEditedMessageNotifications — la protection survit à l\'édition', () => {
+  const maskedRow = {
+    id: 'n-1',
+    userId: RECIPIENT_ID,
+    type: 'new_message',
+    content: '👁️ 💬',
+    context: { messageId: MESSAGE_ID, notificationLocKey: 'notification.view_once_message' },
+    metadata: { messagePreview: '👁️ 💬' },
+  };
+
+  it('n\'écrit RIEN quand le message est à vue unique', async () => {
+    findMany.mockResolvedValue([maskedRow]);
+    messageFindUnique.mockResolvedValue({ ...ORDINARY_MESSAGE, isViewOnce: true });
+
+    const count = await reproduceEditedMessageNotifications(
+      prisma, { messageId: MESSAGE_ID, content: 'le code du coffre est 4242' }, announcer
+    );
+
+    expect(update).not.toHaveBeenCalled();
+    expect(count).toBe(0);
+  });
+
+  it('n\'ANNONCE rien non plus — une annonce ferait relire la ligne', async () => {
+    findMany.mockResolvedValue([maskedRow]);
+    messageFindUnique.mockResolvedValue({ ...ORDINARY_MESSAGE, isBlurred: true });
+
+    await reproduceEditedMessageNotifications(
+      prisma, { messageId: MESSAGE_ID, content: 'secret' }, announcer
+    );
+
+    expect(announceNotificationsReproduced).not.toHaveBeenCalled();
+  });
+
+  it('fail-CLOSED — une relecture qui LÈVE laisse les copies intactes', async () => {
+    // L'inverse de l'arbitrage best-effort du reste de l'unité, et c'est
+    // délibéré : une copie périmée se rattrape, un secret poussé non.
+    findMany.mockResolvedValue([maskedRow]);
+    messageFindUnique.mockRejectedValue(new Error('mongo down'));
+
+    const count = await reproduceEditedMessageNotifications(
+      prisma, { messageId: MESSAGE_ID, content: 'secret' }, announcer
+    );
+
+    expect(update).not.toHaveBeenCalled();
+    expect(count).toBe(0);
+  });
+
+  it('fail-CLOSED — un message VOLATILISÉ laisse les copies intactes', async () => {
+    findMany.mockResolvedValue([maskedRow]);
+    messageFindUnique.mockResolvedValue(null);
+
+    await reproduceEditedMessageNotifications(
+      prisma, { messageId: MESSAGE_ID, content: 'secret' }, announcer
+    );
+
+    expect(update).not.toHaveBeenCalled();
   });
 });
