@@ -61,6 +61,59 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         XCTAssertTrue(code.contains("struct MeeshyComposerHost"), "Le fichier lu n'est pas celui du host")
     }
 
+    // MARK: - V3-2 : le meuble a un APPELANT
+
+    /// **LA garde qui empêche ce chantier de retomber inerte.**
+    ///
+    /// Trois lots ont écrit le meuble, sa table de portes, ses deux surfaces et
+    /// son gate du réel — et pendant tout ce temps `MeeshyComposerHost(` n'avait
+    /// AUCUN site d'appel de production : zéro utilisateur n'en voyait une
+    /// ligne. Rien ne le disait, parce que toutes les autres gardes de cette
+    /// suite lisent la source du host lui-même, et un type que personne ne
+    /// monte reste parfaitement conforme à toutes.
+    ///
+    /// L'invariant qu'elle nomme : **le meuble est monté quelque part dans
+    /// l'app.** Elle balaie l'arbre `Meeshy/` entier plutôt qu'une liste de
+    /// chemins — une liste aurait dû être tenue à jour par celui-là même qui
+    /// débranche la dernière porte.
+    func test_theHost_hasAtLeastOneProductionCaller() throws {
+        let callers = try productionCallersOfTheHost()
+
+        XCTAssertFalse(
+            callers.isEmpty,
+            "`MeeshyComposerHost` n'a plus AUCUN appelant de production : le meuble est redevenu du code "
+                + "que personne ne voit. Toutes les autres gardes de cette suite resteraient vertes."
+        )
+    }
+
+    /// Les fichiers de l'app — hors celui du host — qui montent le meuble.
+    /// La source est décommentée : le host est NOMMÉ dans les doc-comments de
+    /// plusieurs vues, et un `.contains` qui matche un commentaire ne prouve
+    /// rien.
+    private func productionCallersOfTheHost() throws -> [String] {
+        let appRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/Composer
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy")
+
+        guard let walker = FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil) else {
+            XCTFail("L'arbre source de l'app est introuvable — la garde ne mesurerait RIEN")
+            return []
+        }
+        let sources = walker
+            .compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+            .filter { $0.lastPathComponent != "MeeshyComposerHost.swift" }
+
+        XCTAssertGreaterThan(sources.count, 50, "Trop peu de sources balayées — le chemin de l'arbre app est faux")
+
+        return try sources
+            .filter { AppSourceGuard.stripComments(try String(contentsOf: $0, encoding: .utf8)).contains("MeeshyComposerHost(") }
+            .map { $0.lastPathComponent }
+    }
+
     // MARK: - Le host ENVELOPPE l'atelier, il ne le réécrit pas
 
     /// L'atelier de composition vit dans le SDK (`StoryComposerView`, des
@@ -112,6 +165,37 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         XCTAssertTrue(compacte.contains("audienceChip"), "Le bloc lu n'est pas celui du socle — la garde ne mesurerait RIEN")
         XCTAssertFalse(compacte.contains(compact(".hidden()")), "Le socle ne se cache jamais (loi 5 — le socle ne bouge pas)")
         XCTAssertFalse(compacte.contains(compact("if profile")), "Le socle ne se retire pas selon le profil")
+    }
+
+    /// Complément de la garde ci-dessus, et sans lui elle serait devenue VERTE
+    /// EN AYANT PERDU SON OBJET : le socle est désormais monté sous condition
+    /// dans `body`, donc lire le seul bloc `socle` ne prouve plus rien.
+    ///
+    /// La loi 5 interdit qu'il varie selon la PORTE. Elle n'interdit pas qu'il
+    /// s'efface devant l'atelier quand c'est l'atelier qui peint les mêmes
+    /// trois zones : peindre les deux donnerait à l'auteur deux audiences, deux
+    /// yeux et deux flèches, dont une inerte, sur la surface de création la
+    /// plus utilisée. La condition doit donc porter sur la PROPRIÉTÉ DU CHROME,
+    /// et sur rien d'autre.
+    func test_theSocleYieldsToTheAtelier_andNeverToTheDoor() throws {
+        let code = try hostCode()
+        guard let bodyBlock = declarationBody(startingAt: "var body: some View", in: code) else {
+            return XCTFail("Le `body` du host est introuvable — la garde doit être re-pointée")
+        }
+        let compacte = compact(bodyBlock)
+
+        XCTAssertTrue(compacte.contains("socle"), "Le bloc lu n'est pas celui du body — la garde ne mesurerait RIEN")
+        XCTAssertTrue(
+            compacte.contains(compact("if !chromeOwner.assembles(.publish)")),
+            "Le socle doit céder à l'atelier par la PROPRIÉTÉ DU CHROME — sans quoi deux barres de publication coexistent"
+        )
+        XCTAssertFalse(compacte.contains(compact("if profile")), "Le socle ne se retire jamais selon la porte (loi 5)")
+        XCTAssertFalse(compacte.contains(compact("if origin")), "Le socle ne se retire jamais selon l'origine (loi 5)")
+
+        XCTAssertTrue(
+            compact(code).contains(compact("chromeOwner: chromeOwner")),
+            "L'atelier doit recevoir LA MÊME valeur que celle qui gouverne le socle : deux avis sur qui publie remettraient les deux barres"
+        )
     }
 
     // MARK: - Aucune UI morte : les capacités suivent le PROFIL
@@ -199,12 +283,20 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// donc `\.storyPaste` valait `nil` partout, donc la capsule « Coller » de
     /// l'atelier ne se peignait sur aucun écran. Tout ce qui pend dessous
     /// (`PasteIntoComposer`) était juste, testé, et inatteignable.
-    func test_host_injectsTheFourAppSideProviders() throws {
+    ///
+    /// Ils sont CINQ depuis V3-2, et le cinquième
+    /// (`storyStickerLibraryProvided`) n'est pas un ajout : c'est celui que la
+    /// porte de création posait elle-même jusqu'ici. Le jour où le cover a
+    /// délégué au meuble, il est devenu la seule chose que le meuble pouvait
+    /// perdre en route — et sa perte est muette (la bibliothèque de stickers
+    /// disparaît de la sheet, le reste du composer fonctionne).
+    func test_host_injectsTheFiveAppSideProviders() throws {
         let code = try hostCompact()
         for provider in [".storyLocationPickerProvided()",
                          ".storyCameraCaptureProvided()",
                          ".storyRecentCameraRollProvided()",
-                         ".storyPasteProvided()"] {
+                         ".storyPasteProvided()",
+                         ".storyStickerLibraryProvided()"] {
             XCTAssertTrue(
                 code.contains(compact(provider)),
                 "Le host doit injecter \(provider) sur l'atelier qu'il monte"
@@ -214,33 +306,69 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
 
     // MARK: - L'éventail (loi 4)
 
-    /// Garde NÉGATIVE, et son sens est l'inverse de ce qu'on attendrait.
+    /// **Garde RETOURNÉE le 2026-08-24 (V3-3).** Elle était négative — « le host
+    /// ne monte PAS l'éventail » — et nommait deux conditions de levée. V1 a
+    /// levé la première (l'offre VARIE, `ComposerReelGate` lisant la composition
+    /// réelle), V2 la moitié de la seconde (changer de format change la surface
+    /// montée), V3-3 l'autre moitié : le format commande désormais le `type`
+    /// envoyé à `POST /posts`. L'ordre n'était pas négociable — monter
+    /// l'éventail avant que l'envoi ne suive aurait offert un choix que la
+    /// publication ignore, le pire des deux mondes puisqu'il aurait eu l'air de
+    /// marcher.
     ///
-    /// `ComposerFormatFan` est écrit et testé, mais le host ne le monte PAS,
-    /// et ce n'est pas un oubli : un sélecteur sans conséquence est l'UI morte
-    /// que ce chantier retire partout ailleurs.
-    ///
-    /// **État de ses deux conditions de levée, mesuré au 2026-08-23.** V1 a levé
-    /// la première : l'offre VARIE désormais, `ComposerReelGate` lisant la
-    /// composition réelle. V2 a levé la MOITIÉ de la seconde : changer de
-    /// format change la surface montée (`ComposerSurfaceRouting`). L'autre
-    /// moitié manque encore — changer de format ne change pas ce qui est
-    /// PUBLIÉ, le socle nommant la publication sans la piloter et le seul
-    /// publieur restant la barre du SDK. Monter l'éventail maintenant offrirait
-    /// donc un choix que l'envoi ignore : pire que rien, puisqu'il aurait l'air
-    /// de marcher.
-    ///
-    /// Elle rougit à la RÉINTRODUCTION du montage. Quand la moitié restante
-    /// tiendra, ce test se RETOURNE — il ne se supprime pas.
-    func test_host_doesNotMountTheFan_whileTheOfferCannotVary() throws {
-        let code = try hostCode()
-        XCTAssertFalse(
-            code.contains("ComposerFormatFan("),
-            "L'éventail ne se monte pas tant qu'il n'a aucune conséquence — cf. V1 + V2/V3"
+    /// Elle n'a pas été supprimée : une garde retirée ne protège plus rien. Elle
+    /// affirme maintenant l'invariant NEUF — le sélecteur est monté, et il est
+    /// monté SOUS la règle de repli, la seule chose qui l'empêche de peindre un
+    /// éventail dont aucun chip n'est marqué quand l'offre se referme.
+    func test_host_mountsTheFan_underTheSelectionPolicy() throws {
+        let code = try hostCompact()
+
+        XCTAssertEqual(
+            occurrences(of: compact("ComposerFormatFan("), in: code), 1,
+            "Le host doit monter l'éventail, une fois — sans lui `offeredFormats` n'a toujours aucun lecteur."
         )
-        XCTAssertFalse(
-            code.contains("ComposerFormatFanPolicy."),
-            "… et sa politique de sélection n'a pas de lecteur non plus tant qu'il n'est pas monté"
+        XCTAssertEqual(
+            occurrences(of: compact("ComposerFormatFanPolicy.resolvedSelection("), in: code), 1,
+            "…et lire la règle de repli : une sélection restée sur un format retiré ne marquerait plus aucun chip."
+        )
+    }
+
+    /// L'éventail est un outil du PLATEAU, pas du socle — et le plateau ne
+    /// coiffe que la scène. Garde ancrée sur le BLOC : `ComposerFormatFan`
+    /// apparaît aussi dans les doc-comments de la source, et le socle est
+    /// verrouillé par ailleurs sur ses trois zones.
+    func test_host_lEventail_vitDansLePlateau_pasDansLeSocle() throws {
+        guard let corps = declarationBody(startingAt: "private var plateauTools", in: try hostCode()) else {
+            return XCTFail("Le plateau doit être une propriété nommée `plateauTools` — la garde s'ancre dessus")
+        }
+        let compacte = compact(corps)
+
+        XCTAssertTrue(
+            compacte.contains(compact("ComposerFormatFan(")),
+            "L'éventail se peint dans le plateau, sur le flanc opposé aux outils de composition."
+        )
+        for interdit in [".disabled(", ".opacity("] {
+            XCTAssertEqual(
+                occurrences(of: compact(interdit), in: compacte), 0,
+                "Loi 4 : un format non offert est ABSENT du plateau, jamais grisé ni rendu transparent."
+            )
+        }
+    }
+
+    /// Ce que l'éventail RÉSOUT doit gouverner l'envoi, pas seulement le chip
+    /// marqué. Sans cette ligne, choisir « Post » repeignait l'éventail et
+    /// publiait une story — exactement le défaut que le retournement ci-dessus
+    /// aurait autorisé.
+    func test_host_donneLeFormatResolu_aLAtelierQuiPublie() throws {
+        let code = try hostCompact()
+
+        XCTAssertTrue(
+            code.contains(compact("publishTargetType: selectedFormat.postType")),
+            "L'atelier doit publier sous le format RÉSOLU — et par le pont existant `ComposerFormat.postType`."
+        )
+        XCTAssertTrue(
+            code.contains(compact("format: selectedFormat")),
+            "…et la surface montée doit suivre le même format résolu, pas le champ brut."
         )
     }
 
@@ -430,23 +558,26 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         return nil
     }
 
-    /// Garde NÉGATIVE — **l'écrivain que le commentaire promettait n'existe
-    /// pas**, et tant qu'il n'existe pas, personne ne doit pouvoir écrire qu'il
-    /// existe.
+    /// Elle fut une garde NÉGATIVE : « rien ne réaffecte `currentFormat` », née
+    /// de ce que `ComposerIntent` avait promis pendant deux révisions — « le
+    /// host rebascule au format du document une fois celui-ci chargé » — sans
+    /// qu'aucun écrivain n'existe. Un commentaire qui énonce un invariant que le
+    /// code ne tient pas devient la loi que lira la session suivante, celle qui
+    /// aurait monté `.draft` en confiance.
     ///
-    /// `ComposerIntent` a promis pendant deux révisions que « le host rebascule
-    /// au format du document une fois celui-ci chargé » : c'est ce qui rendait
-    /// sûr, en apparence, le `.post` TRANSITOIRE de `.draft`/`.share`. Rien ne
-    /// réaffecte `currentFormat` après la construction du host — un commentaire
-    /// qui énonce un invariant que le code ne tient pas devient la loi que lira
-    /// la session suivante, celle qui aurait monté `.draft` en confiance.
+    /// **Garde RETOURNÉE le 2026-08-24 (V3-3)**, à la condition de levée qu'elle
+    /// nommait elle-même : « le jour où le host sait réaffecter `currentFormat`
+    /// — par l'éventail ». Cet écrivain est l'éventail, et lui seul.
     ///
-    /// La conséquence est désormais tenue ailleurs, par `ComposerSurfaceRouting`
-    /// (une reprise monte l'atelier, quel que soit le format). **Condition de
-    /// levée nommée** : le jour où le host sait réaffecter `currentFormat` — par
-    /// l'éventail, ou par le chargement d'un brouillon — ce test se RETOURNE, et
-    /// la rév. 5 de `ComposerIntent` redevient écrivable au présent.
-    func test_host_neReaffectePasLeFormatCourant_tantQueLEcrivainNExistePas() throws {
+    /// Elle affirme désormais qu'il y a EXACTEMENT UN écrivain. Deux seraient
+    /// deux sources pour le même champ ; zéro ramènerait l'éventail à un décor.
+    ///
+    /// Ce qu'elle ne dit TOUJOURS PAS : le host ne rebascule pas au format d'un
+    /// brouillon chargé. Cet écrivain-là n'existe pas davantage qu'hier, et la
+    /// rév. 5 de `ComposerIntent` reste écrite au futur — la conséquence est
+    /// tenue par `ComposerSurfaceRouting`, qui fait de `.resume` une SCÈNE quel
+    /// que soit le format.
+    func test_host_neReaffecteLeFormatCourant_queParLEventail() throws {
         let code = try hostCompact()
 
         let affectations = occurrences(of: "currentFormat=", in: code)
@@ -457,9 +588,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "Le format courant doit être initialisé une fois, à la construction — la garde ne mesurerait rien sinon."
         )
         XCTAssertEqual(
-            affectations, 0,
-            "Le host réaffecte `currentFormat` : l'écrivain existe enfin. Retourner ce test et réécrire la rév. 5 "
-                + "de `ComposerIntent` au présent — ne pas le supprimer."
+            affectations, 1,
+            "Le champ doit avoir EXACTEMENT un écrivain : la liaison que le host donne à l'éventail. "
+                + "Zéro le rendrait décoratif, deux en feraient deux sources."
+        )
+        XCTAssertTrue(
+            code.contains(compact("Binding(get: { self.selectedFormat }, set: { self.currentFormat = $0 })")),
+            "L'écriture va au champ brut, la LECTURE passe par la règle de repli — l'inverse peindrait "
+                + "un éventail sans chip marqué dès que l'offre se referme."
         )
     }
 

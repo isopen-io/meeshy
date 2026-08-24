@@ -10,6 +10,66 @@ import XCTest
 /// robuste à l'absence ou à la corruption du sidecar.
 final class StickerLibraryStoreTests: XCTestCase {
 
+    // MARK: - V3-5 — le magasin est instancié EN PRODUCTION, `libraryWrite` a un lecteur
+
+    /// GARDE POSITIVE. Avant ce lot, `StickerLibraryStore` n'était construit
+    /// que par les tests ci-dessous — aucun site sous `apps/ios/Meeshy` ne
+    /// l'instanciait. Un magasin jamais instancié en production est un magasin
+    /// qui ne retient jamais rien, quelle que soit la qualité de sa suite de
+    /// tests unitaires.
+    func test_aProductionSite_instantiatesTheStore() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        guard let enumerateur = FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil) else {
+            return XCTFail("Arborescence app introuvable à \(racine.path)")
+        }
+        var found = false
+        for case let url as URL in enumerateur
+            where url.pathExtension == "swift" && url.lastPathComponent != "StickerLibraryStore.swift" {
+            let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            if source.contains("StickerLibraryStore()") {
+                found = true
+                break
+            }
+        }
+        XCTAssertTrue(
+            found,
+            "Aucun site de PRODUCTION (hors la déclaration elle-même) n'instancie "
+                + "StickerLibraryStore() — le magasin reste de l'infrastructure morte."
+        )
+    }
+
+    /// GARDE POSITIVE. `PasteDestinationTests` prouve la VALEUR de
+    /// `libraryWrite` (vrai sur `.stickers`, faux sur `.scene`) — mais une
+    /// valeur jamais LUE en production ne décide de rien. Avant ce lot, le
+    /// champ était calculé et jeté : aucun site ne le consultait pour décider
+    /// d'écrire dans le magasin.
+    func test_libraryWrite_hasAReaderInProduction() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        guard let enumerateur = FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil) else {
+            return XCTFail("Arborescence app introuvable à \(racine.path)")
+        }
+        var found = false
+        for case let url as URL in enumerateur
+            where url.pathExtension == "swift" && url.lastPathComponent != "PasteDestination.swift" {
+            let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            if source.contains(".libraryWrite") {
+                found = true
+                break
+            }
+        }
+        XCTAssertTrue(
+            found,
+            "Aucun site de PRODUCTION (hors la déclaration du champ) ne lit `.libraryWrite` — "
+                + "le champ reste calculé et jamais consulté."
+        )
+    }
+
     private func makeStore(budgetBytes: Int = StickerLibraryStore.defaultBudgetBytes) -> (StickerLibraryStore, URL) {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("MeeshyTests/sticker-lib-\(UUID().uuidString)", isDirectory: true)

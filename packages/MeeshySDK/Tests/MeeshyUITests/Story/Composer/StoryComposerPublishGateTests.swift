@@ -306,4 +306,54 @@ final class StoryComposerPublishGateTests: XCTestCase {
             "…et aucun dialogue de confirmation ne revient sur le chemin de sortie."
         )
     }
+
+    // MARK: - V3-1 — publier suppose de la matière ET un publieur
+
+    /// La délégation de chrome (`.host`) retire la flèche de la barre du SDK.
+    /// Elle ouvre donc un cas que le gate de contenu ne décrit pas : une
+    /// composition pleine, dans une barre sans bouton, et AUCUN déclencheur
+    /// armé pour la faire partir. Le symptôme, sinon, est le pire qui soit —
+    /// un bouton d'hôte qui ne fait rien, sans erreur ni trace.
+    func test_aDelegatedChromeWithoutATrigger_isNotPublishable() {
+        XCTAssertFalse(
+            ComposerChromeOwner.host.hasPublisher(triggerIsArmed: false),
+            "Personne ne publie : le composer doit le DIRE, pour que le meuble n'offre pas la commande (loi 4)."
+        )
+    }
+
+    func test_aDelegatedChromeWithAnArmedTrigger_isPublishable() {
+        XCTAssertTrue(ComposerChromeOwner.host.hasPublisher(triggerIsArmed: true))
+    }
+
+    /// L'atelier autonome, lui, n'a jamais eu de télécommande à armer : son
+    /// publieur est la flèche de sa propre barre. Lier son gate à un
+    /// déclencheur externe aurait éteint le bouton des quatre appelants
+    /// existants.
+    func test_theAtelier_alwaysHasItsOwnPublisher() {
+        XCTAssertTrue(ComposerChromeOwner.atelier.hasPublisher(triggerIsArmed: false))
+    }
+
+    /// Et le publieur ne remplace pas la matière : un déclencheur armé ne
+    /// publie toujours pas une page blanche (arbitrage S2, intact).
+    func test_anArmedPublisherStillDoesNotPublishABlankPage() {
+        XCTAssertFalse(StoryComposerView.canPublish(hasContent: false, carriesAudio: false))
+    }
+
+    /// Les deux termes doivent être COMPOSÉS là où le composer répond
+    /// « publiable ? ». Sans cette garde, la règle de publieur existerait,
+    /// serait verte, et ne serait lue par personne.
+    func test_theComposerPublishabilityComposesContentAndPublisher() throws {
+        let code = try ComposerSourceGuard.source("StoryComposerView+Publication.swift")
+        let body = try XCTUnwrap(
+            ComposerSourceGuard.functionBody(named: "var canPublish: Bool", in: code))
+
+        XCTAssertEqual(
+            ComposerSourceGuard.occurrences(of: "Self.canPublish(hasContent:", in: body), 1,
+            "Le gate de contenu reste le premier terme."
+        )
+        XCTAssertEqual(
+            ComposerSourceGuard.occurrences(of: "hasPublisher(triggerIsArmed:", in: body), 1,
+            "…et le second demande s'il existe quelqu'un pour l'envoyer."
+        )
+    }
 }

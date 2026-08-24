@@ -90,6 +90,74 @@ final class ComposerFormatFanTests: XCTestCase {
         )
     }
 
+    // MARK: - V3-3 — la règle de repli, dans la situation que le HOST fabrique
+
+    /// Le repli n'avait jamais été exercé hors de son propre test : on lui
+    /// passait un `offeredFormats` écrit à la main. Ici l'offre vient de la
+    /// TABLE, avec le gate du réel dans les deux positions — c'est exactement
+    /// la paire que le meuble recompose à chaque rendu (`profile` +
+    /// `selectedFormat`), et rien d'autre ne produit le cas.
+    ///
+    /// Scénario : le tray, deux images posées (le réel qualifie), l'auteur
+    /// choisit « Réel ». Il retire une image. L'offre se referme sur
+    /// `[.story, .post]` — et la sélection doit revenir au format de la porte,
+    /// sans quoi le meuble monterait une surface et publierait un type que la
+    /// porte n'offre plus.
+    func test_theHostFallback_bringsTheChoiceBack_whenTheReelGateCloses() {
+        let qualifying = ComposerProfile.profile(for: .storyTray, compositionQualifiesAsReel: true)
+        XCTAssertEqual(
+            ComposerFormatFanPolicy.resolvedSelection(current: .reel,
+                                                      offeredFormats: qualifying.offeredFormats),
+            .reel,
+            "Tant que la composition qualifie, le choix de l'auteur tient."
+        )
+
+        let withdrawn = ComposerProfile.profile(for: .storyTray, compositionQualifiesAsReel: false)
+        XCTAssertEqual(
+            ComposerFormatFanPolicy.resolvedSelection(current: .reel,
+                                                      offeredFormats: withdrawn.offeredFormats),
+            .story,
+            "L'offre s'est refermée : la sélection revient au format propre de la porte."
+        )
+    }
+
+    /// L'invariant qui rend le repli sûr, éprouvé sur les NEUF portes plutôt
+    /// que supposé : le premier format offert est toujours celui de la porte.
+    /// Si une porte le violait un jour, le repli renverrait l'auteur sur un
+    /// format que sa porte n'ouvre pas — et rien d'autre ne le dirait.
+    func test_theFallbackTarget_isAlwaysTheDoorOwnFormat() {
+        let doors: [ComposerOrigin] = [
+            .storyTray, .feedComposer, .reelTab, .moodChip,
+            .repost(ofPostId: "p1", sourceFormat: .story),
+            .edit(postId: "p2", documentFormat: .reel),
+            .draft(id: "d1"), .share,
+            .conversationMedia(messageId: "m1", attachmentId: "a1")
+        ]
+
+        for door in doors {
+            for gate in [true, false] {
+                let profile = ComposerProfile.profile(for: door, compositionQualifiesAsReel: gate)
+                XCTAssertEqual(
+                    ComposerFormatFanPolicy.resolvedSelection(current: .status,
+                                                              offeredFormats: profile.offeredFormats),
+                    profile.initialFormat,
+                    "Un format hors offre doit retomber sur le format propre de la porte \(door)."
+                )
+            }
+        }
+    }
+
+    /// Le pont que le meuble emprunte pour publier : le format résolu devient
+    /// un `PostType`, et c'est CE pont-là (`ComposerFormat.postType`, C1) qu'il
+    /// utilise. En écrire un second app-side ferait diverger deux traductions
+    /// du même fait.
+    func test_theResolvedFormat_translatesToTheWireType() {
+        XCTAssertEqual(ComposerFormat.story.postType, .story)
+        XCTAssertEqual(ComposerFormat.post.postType, .post)
+        XCTAssertEqual(ComposerFormat.reel.postType, .reel)
+        XCTAssertEqual(ComposerFormat.status.postType, .status)
+    }
+
     // MARK: - Les libellés sont localisés, pas des identifiants nus
 
     func test_everyFormatCarriesADistinctNonRawLabel() {

@@ -150,6 +150,31 @@ struct StoryPreviewAssets: Identifiable {
 /// L'état de présentation reste `StoryViewModel.showStoryComposer` : c'est déjà
 /// la source unique lue par les deux racines, le tray, le badge « + » et la
 /// notification `.openStoryComposer`. Seul le point de MONTAGE change.
+///
+/// ## V3-2 — ce que le cover monte
+///
+/// Il monte le MEUBLE (`MeeshyComposerHost`), pas l'atelier nu. Le meuble est
+/// la première porte de production du composer unifié : c'est lui qui lit la
+/// table des portes (`ComposerIntent` / `ComposerProfile`), choisit sa surface
+/// et enveloppe l'atelier du SDK.
+///
+/// Le cover ne garde donc que ce qui lui appartient VRAIMENT — l'état de
+/// présentation, le câblage de publication vers `StoryViewModel`, et l'aperçu
+/// qu'il superpose. Trois choses qu'il faisait et qu'il ne fait plus, chacune
+/// parce que le meuble les fait déjà et qu'en faire deux est SILENCIEUX :
+///
+/// 1. **le ViewModel du composer** — le meuble en construit un et lui fait
+///    adopter `draftId` dès sa construction. En fabriquer un second ici aurait
+///    laissé le composer s'autosauvegarder sous un id neuf, le brouillon repris
+///    restant intact à côté : le doublon que l'adoption existe pour éviter ;
+/// 2. **les cinq fournisseurs d'environnement** (lieu, caméra, pellicule,
+///    presse-papier, bibliothèque de stickers) — le meuble les pose au plus
+///    près de l'atelier. Les reposer ici empilerait deux couches sur la même
+///    clé d'environnement : la dernière gagne, sans erreur ni signal ;
+/// 3. **l'audience mémorisée** reste passée, elle : elle traverse maintenant
+///    DEUX maillons (porte → meuble → atelier) et le défaut du SDK
+///    (`PostVisibility.friends`) l'avalerait sans un mot à n'importe lequel des
+///    deux. `AppInitWireupTests` la suit maillon par maillon.
 struct StoryComposerCover: ViewModifier {
     @ObservedObject var viewModel: StoryViewModel
     let router: Router
@@ -159,24 +184,17 @@ struct StoryComposerCover: ViewModifier {
     /// lui rend la main à la fermeture, sans démonter la session d'édition.
     @State private var previewAssets: StoryPreviewAssets?
 
-    /// VM du composer de création. Adopte le brouillon à reprendre quand il y
-    /// en a un : sans cette adoption, le composer s'autosauvegarderait sous un
-    /// id neuf et le brouillon repris resterait intact à côté, en double.
-    private func makeComposerViewModel() -> StoryComposerViewModel {
-        let composer = StoryComposerViewModel()
-        if let draftId = viewModel.pendingDraftId { composer.adoptDraft(id: draftId) }
-        return composer
-    }
-
     func body(content: Content) -> some View {
         content.fullScreenCover(isPresented: $viewModel.showStoryComposer, onDismiss: {
             viewModel.pendingDraftId = nil
         }) {
-            StoryComposerView(
-                viewModel: makeComposerViewModel(),
+            MeeshyComposerHost(
+                intent: ComposerIntent(origin: .storyTray),
                 initialVisibility: viewModel.lastComposerVisibility,
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references in
+                draftId: viewModel.pendingDraftId,
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
                     viewModel.publishStoryInBackground(
+                        targetType: targetType,
                         slides: slides,
                         slideImages: slideImages,
                         loadedImages: loadedImages,
@@ -186,7 +204,9 @@ struct StoryComposerCover: ViewModifier {
                         visibility: visibility,
                         visibilityUserIds: visibilityUserIds,
                         draftId: draftId,
-                        references: references
+                        references: references,
+                        composerMediaAlt: accessibility.mediaAlt ?? [:],
+                        allowSoundExtraction: accessibility.allowSoundExtraction
                     )
                     // La création accepte TOUJOURS : hors-ligne, la story part
                     // en file d'attente au lieu de rester dans le composer.
@@ -205,10 +225,6 @@ struct StoryComposerCover: ViewModifier {
                     viewModel.showStoryComposer = false
                 }
             )
-            .storyLocationPickerProvided()
-            .storyCameraCaptureProvided()
-            .storyRecentCameraRollProvided()
-            .storyPasteProvided()
             .fullScreenCover(item: $previewAssets, onDismiss: {
                 NotificationCenter.default.post(name: .storyComposerUnmuteCanvas, object: nil)
             }) { assets in

@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import MeeshyUI
 
 /// C7-UI — collecte du texte alternatif par média.
@@ -228,6 +229,168 @@ final class MediaAltCollectionTests: XCTestCase {
                        "La construction doit être une PROPRIÉTÉ, jamais une expression de body.")
         XCTAssertTrue(collapsed(code).contains("@StateObject private var ownedAccessibilityStore = MediaAccessibilityStore()"),
                       "La possession doit passer par @StateObject — @ObservedObject ou un let seraient recréés.")
+    }
+
+    // MARK: - V3-4 — le texte saisi PART (transport, pas seulement collecte)
+
+    /// `test_accessibilityHandoff_carriesTheTypedAltText` rougit si la charge
+    /// remise à la publication cesse de porter ce que l'auteur a écrit.
+    ///
+    /// C'est la première assertion COMPORTEMENTALE du transport : jusqu'ici
+    /// toute la chaîne au-dessus du store n'était gardée que par lecture de
+    /// source, et `mediaAltPayload()` n'avait aucun appelant de production —
+    /// le texte se saisissait, se conservait, et ne partait jamais.
+    func test_accessibilityHandoff_carriesTheTypedAltText() {
+        let store = MediaAccessibilityStore()
+        store.setAlt("Un chat roux sur un muret", for: "media-1")
+
+        let handoff = StoryComposerView.accessibilityHandoff(from: store)
+
+        XCTAssertEqual(handoff.mediaAlt, ["media-1": "Un chat roux sur un muret"])
+    }
+
+    /// `test_accessibilityHandoff_saysNothingWhenNothingWasTyped` rougit si la
+    /// charge se met à porter un dictionnaire vide : « aucun texte » et « tous
+    /// les textes sont vides » sont deux signaux différents pour le gateway,
+    /// et le second écraserait au prochain update des textes déjà en base.
+    func test_accessibilityHandoff_saysNothingWhenNothingWasTyped() {
+        let handoff = StoryComposerView.accessibilityHandoff(from: MediaAccessibilityStore())
+
+        XCTAssertNil(handoff.mediaAlt)
+        XCTAssertNil(handoff.allowSoundExtraction)
+        XCTAssertEqual(handoff, .empty)
+    }
+
+    /// `test_createStoryRequest_encodesMediaAlt` rougit si le champ disparaît
+    /// du corps de `POST /posts` : le gateway l'accepte depuis
+    /// `CreatePostSchema.mediaAlt`, mais une story ne le lui envoyait jamais —
+    /// `CreateStoryRequest` ne portait pas le champ du tout.
+    func test_createStoryRequest_encodesMediaAlt() throws {
+        let body = CreateStoryRequest(mediaAlt: ["post-media-7": "Une plage au couchant"])
+
+        let json = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try JSONEncoder().encode(body)) as? [String: Any]
+        )
+
+        XCTAssertEqual(json["mediaAlt"] as? [String: String],
+                       ["post-media-7": "Une plage au couchant"])
+    }
+
+    /// `test_createStoryRequest_omitsMediaAltWhenAbsent` rougit si le champ
+    /// part à `null` faute de saisie : `UpdatePostSchema` lit l'ABSENCE comme
+    /// « n'y touche pas », et un `null` explicite est une autre phrase.
+    func test_createStoryRequest_omitsMediaAltWhenAbsent() throws {
+        let body = CreateStoryRequest(content: "coucou")
+
+        let json = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try JSONEncoder().encode(body)) as? [String: Any]
+        )
+
+        XCTAssertNil(json["mediaAlt"])
+    }
+
+    // MARK: - Les clés envoyées sont celles que le SERVEUR connaît
+
+    /// `test_serverKeyedAlt_translatesComposerIdsIntoPostMediaIds` rougit si la
+    /// traduction saute : le panneau collecte sous l'id d'élément du COMPOSER
+    /// (les médias ne sont uploadés qu'après le hand-off) alors que
+    /// `PostService.applyMediaAlt` FILTRE les clés absentes de `mediaIds`.
+    /// Envoyer les ids locaux serait un no-op parfaitement silencieux —
+    /// requête acceptée, aucun texte enregistré.
+    func test_serverKeyedAlt_translatesComposerIdsIntoPostMediaIds() {
+        let uploaded = StoryMediaObject(id: "local-1", postMediaId: "post-media-7", aspectRatio: 1)
+
+        let keyed = StoryMediaAltMapping.serverKeyed(
+            composerKeyed: ["local-1": "Une plage au couchant"],
+            mediaObjects: [uploaded]
+        )
+
+        XCTAssertEqual(keyed, ["post-media-7": "Une plage au couchant"])
+    }
+
+    /// `test_serverKeyedAlt_dropsMediaThatNeverReachedTheServer` rougit si un
+    /// média dont l'upload n'a pas abouti (`postMediaId` vide, cas déjà
+    /// journalisé par le publish) fait naître une clé vide dans le payload.
+    func test_serverKeyedAlt_dropsMediaThatNeverReachedTheServer() {
+        let neverUploaded = StoryMediaObject(id: "local-1", aspectRatio: 1)
+
+        let keyed = StoryMediaAltMapping.serverKeyed(
+            composerKeyed: ["local-1": "Une plage au couchant"],
+            mediaObjects: [neverUploaded]
+        )
+
+        XCTAssertTrue(keyed.isEmpty)
+    }
+
+    // MARK: - Gardes POSITIVES : la charge a un appelant, et il publie
+
+    /// `test_mediaAltPayload_hasAtLeastOneProductionCaller` rougit si le
+    /// snapshot redevient orphelin.
+    ///
+    /// Formulée en POSITIF (« au moins un appelant ») et non en négatif : une
+    /// garde qui vérifierait l'ABSENCE d'un motif interdit resterait verte le
+    /// jour où le motif change de nom, et c'est exactement l'état mesuré avant
+    /// ce lot — `mediaAltPayload()` compilait, était testé, et n'était appelé
+    /// par personne.
+    func test_mediaAltPayload_hasAtLeastOneProductionCaller() throws {
+        let callers = try ComposerSourceGuard.allStorySources()
+            .filter { $0.path != "Controls/MediaAccessibilityStore.swift" }
+            .filter { $0.code.contains("mediaAltPayload()") }
+            .map { $0.path }
+
+        XCTAssertFalse(
+            callers.isEmpty,
+            """
+            `mediaAltPayload()` n'a AUCUN appelant hors de sa propre déclaration : \
+            le texte alternatif se saisit, se conserve, et ne part nulle part.
+            """
+        )
+    }
+
+    /// `test_publishAllSlides_handsTheAccessibilityPayloadToTheHost` rougit si
+    /// la charge cesse d'être CALCULÉE dans le corps qui publie, ou si elle
+    /// l'est après le hand-off (donc trop tard pour partir avec).
+    func test_publishAllSlides_handsTheAccessibilityPayloadToTheHost() throws {
+        let code = try ComposerSourceGuard.source("StoryComposerView+Publication.swift")
+        let body = try XCTUnwrap(
+            ComposerSourceGuard.functionBody(named: "func publishAllSlides()", in: code)
+        )
+        let flat = collapsed(body)
+
+        XCTAssertTrue(flat.contains("Self.accessibilityHandoff(from: accessibilityStore)"),
+                      "La publication doit LIRE le store de collecte du composer.")
+        let handoff = try XCTUnwrap(flat.range(of: "onPublishAllInBackground("))
+        let payload = try XCTUnwrap(flat.range(of: "Self.accessibilityHandoff(from: accessibilityStore)"))
+        XCTAssertTrue(handoff.lowerBound < payload.lowerBound,
+                      "La charge doit être un ARGUMENT du hand-off, pas un calcul posé à côté.")
+    }
+
+    /// `test_composerOwnsTheAccessibilityStoreForTheWholeSession` rougit si le
+    /// composer cesse de POSSÉDER le store qu'il injecte : la couche de
+    /// contrôles retomberait sur le sien, et le point de publication lirait un
+    /// store vide — la saisie repartirait à zéro sans le moindre signal.
+    func test_composerOwnsTheAccessibilityStoreForTheWholeSession() throws {
+        let code = try ComposerSourceGuard.source("StoryComposerView.swift")
+
+        XCTAssertTrue(
+            collapsed(code).contains("@StateObject var accessibilityStore = MediaAccessibilityStore()"),
+            "Le composer doit posséder le store — un @ObservedObject serait recréé à chaque rendu."
+        )
+    }
+
+    /// `test_canvas_injectsTheComposerStoreIntoTheControlsLayer` rougit si
+    /// l'appelant cesse de passer le store : `ComposerControlsLayer` retombe
+    /// alors SILENCIEUSEMENT sur son store interne (`ownedAccessibilityStore`),
+    /// la saisie reste possible, et la publication lit un autre objet — le
+    /// défaut exact que ce lot répare.
+    func test_canvas_injectsTheComposerStoreIntoTheControlsLayer() throws {
+        let code = try ComposerSourceGuard.source("StoryComposerView+Canvas.swift")
+        let body = try XCTUnwrap(
+            ComposerSourceGuard.functionBody(named: "var bottomRegion: some View", in: code)
+        )
+
+        XCTAssertTrue(collapsed(body).contains("accessibilityStore: accessibilityStore"),
+                      "La région basse doit injecter le store du composer dans la couche de contrôles.")
     }
 
     /// `test_deletingMedia_clearsItsAccessibilityEntry` rougit si le bouton

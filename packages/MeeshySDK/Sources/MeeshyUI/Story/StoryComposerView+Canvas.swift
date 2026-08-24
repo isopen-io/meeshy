@@ -301,7 +301,12 @@ extension StoryComposerView {
                 onDismissActivePanel: dismissActiveBandPanel,
                 onOpenStickerPicker: { showStickerPicker = true },
                 onOpenLocationPicker: { showLocationPicker = true },
-                onOpenMentionPicker: { showMentionPicker = true }
+                onOpenMentionPicker: { showMentionPicker = true },
+                // V3-4 — le store de collecte vient du composer, pas de la
+                // couche : c'est le composer qui le relira au moment de
+                // publier. Sans cette ligne la couche retombe sur le sien,
+                // la saisie reste possible et la publication lit un objet vide.
+                accessibilityStore: accessibilityStore
             )
         }
     }

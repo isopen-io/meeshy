@@ -8,6 +8,55 @@ import MeeshySDK
 
 // MARK: - StoryComposerView + TopBar
 
+/// Une commande de la rangée haute. Le type existe pour que la question « qui
+/// assemble quoi » se pose à un prédicat PUR : la barre vit dans un `body`
+/// SwiftUI, et `StoryComposerView` n'est pas hostable en XCTest.
+public nonisolated enum ComposerTopBarControl: Sendable, CaseIterable, Equatable {
+    case audience
+    case preview
+    case publish
+    case overflow
+}
+
+/// Qui peint le chrome de publication du composer.
+///
+/// `.atelier` — l'atelier du SDK est autonome : sa rangée haute porte
+/// l'audience, l'œil et la flèche. C'est le comportement de tous les appelants
+/// existants, et la valeur par défaut des init publics le garantit.
+///
+/// `.host` — un meuble app-side peint ces trois commandes lui-même. La rangée
+/// du SDK ne les assemble PAS : deux barres, dont une inerte, seraient une
+/// régression sèche sur la surface de création la plus utilisée. Une commande
+/// reprise par le meuble est ABSENTE, jamais grisée ni transparente (loi 4).
+public nonisolated enum ComposerChromeOwner: Sendable, Equatable {
+    case atelier
+    case host
+
+    public func assembles(_ control: ComposerTopBarControl) -> Bool {
+        switch self {
+        case .atelier:
+            return true
+        case .host:
+            // Le ⋯ outille la COMPOSITION (transitions, timeline, brouillon,
+            // purge des slides) : le meuble ne reprend que la publication.
+            return control == .overflow
+        }
+    }
+
+    /// Y a-t-il quelqu'un pour publier ? En `.atelier`, la flèche de la rangée,
+    /// qui existe toujours. En `.host`, le déclencheur externe — et lui seul :
+    /// sans armement la composition n'a AUCUN chemin de départ, et le taire
+    /// laisserait pour seul symptôme un bouton d'hôte sans effet.
+    public func hasPublisher(triggerIsArmed: Bool) -> Bool {
+        switch self {
+        case .atelier:
+            return true
+        case .host:
+            return triggerIsArmed
+        }
+    }
+}
+
 extension StoryComposerView {
     // `showTopBar` a déménagé en `StoryComposerView+Chrome.swift` : il lit
     // désormais le contexte de chrome unique, comme la barre de FABs.
@@ -55,11 +104,15 @@ extension StoryComposerView {
             // déclencher « Aperçu » sur un tap au bord de « Publier ». Le
             // paramètre du conteneur reste une distance d'EFFET (morphing du
             // verre iOS 26) et suit l'écart visuel réel.
+            // V3-1 — les trois commandes de publication sortent de la rangée
+            // quand un meuble app-side les peint (`chromeOwner == .host`).
+            // ABSENTES, jamais grisées : une pastille inerte au-dessus d'un
+            // socle qui publie vraiment est le pire des deux mondes.
             AdaptiveGlassContainer(spacing: ComposerControlMetrics.glassBlendSpacing) {
                 HStack(spacing: ComposerControlMetrics.groupSpacing) {
-                    visibilityMenu
-                    previewButton
-                    publishButton
+                    if chromeOwner.assembles(.audience) { visibilityMenu }
+                    if chromeOwner.assembles(.preview) { previewButton }
+                    if chromeOwner.assembles(.publish) { publishButton }
                     overflowMenu
                 }
             }
