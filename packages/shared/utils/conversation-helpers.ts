@@ -3,6 +3,7 @@
  * Logique métier réutilisable entre Gateway et Frontend
  */
 import { normalizeLanguageCode, normalizeLanguageForDedup } from './language-normalize.js';
+import { OBJECT_ID_REGEX } from './object-id.js';
 
 /**
  * Options de résolution de langue. La locale appareil intervient en 4e priorité
@@ -439,10 +440,14 @@ export function resolveParticipantLanguage(participant: LanguageResolvable): str
 }
 
 /**
- * Vérifie si un identifiant est un ObjectID MongoDB valide
+ * Vérifie si un identifiant est un ObjectID MongoDB valide.
+ *
+ * Délègue à la SSOT {@link OBJECT_ID_REGEX} (`utils/object-id.ts`) — ne PAS
+ * réinliner la regex ici. Nom conservé pour ses consommateurs (gateway
+ * `routes/users/blocking.ts`).
  */
 export function isValidMongoId(id: string): boolean {
-  return /^[0-9a-fA-F]{24}$/.test(id);
+  return OBJECT_ID_REGEX.test(id);
 }
 
 /**
