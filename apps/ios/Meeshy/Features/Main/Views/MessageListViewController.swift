@@ -482,7 +482,13 @@ final class MessageListViewController: UIViewController {
     private func setChromeHiddenForScroll(_ hidden: Bool) {
         guard isChromeHiddenForScroll != hidden else { return }
         isChromeHiddenForScroll = hidden
-        stickyDayState.isSuppressed = hidden && readingMode != .bubbles
+        // **Le sticker de date RESTE** (directive 2026-08-24 : « il doit rester
+        // lorsque tous les autres composants disparaissent durant le scroll »).
+        // Il s'effaçait avec le reste du chrome en Script et en Focal — or
+        // c'est pendant le défilement qu'il sert : c'est le seul repère qui
+        // dise OÙ l'on est dans le fil. Le reste du chrome continue de se
+        // retirer (`onScrollingActiveChanged`).
+        stickyDayState.isSuppressed = false
         onScrollingActiveChanged?(hidden)
     }
 
@@ -2951,15 +2957,12 @@ extension MessageListViewController {
     func applyFocalPerspectiveToVisibleCells() {
         guard readingMode == .focal, isViewLoaded, focalSceneActive else { return }
         let focusY = focalFocusY
-        let reduceMotion = UIAccessibility.isReduceMotionEnabled
         let cells = collectionView.visibleCells
         var geometries: [FocalScrollPerspective.CellGeometry] = []
-        var cellById: [String: UICollectionViewCell] = [:]
         geometries.reserveCapacity(cells.count)
         for cell in cells {
             guard let geometry = focalGeometry(of: cell) else { continue }
             geometries.append(geometry)
-            cellById[geometry.id] = cell
         }
         // **Tant que la magnificence n'est pas armée, le fil défile comme en
         // Script** (directive 2026-08-24 : « si la magnificence n'est pas
@@ -2977,7 +2980,21 @@ extension MessageListViewController {
             }
             return
         }
-        let poses = FocalScrollPerspective.poses(cells: geometries, focusY: focusY, reduceMotion: reduceMotion)
+        // **Aucune animation ENTRE les messages** (directive 2026-08-24 :
+        // « les messages font comme des ressorts pour entrer et ressortir de
+        // l'écran ; JE NE VEUX aucune animation entre les messages — une fois
+        // dans la planche ils sont fixes »).
+        //
+        // `FocalScrollPerspective.poses` appliquait à CHAQUE rangée une échelle
+        // et une opacité fonction de sa distance à la ligne de focus, plus une
+        // compaction : c'est ce qui donnait le ressort à l'entrée et à la
+        // sortie de l'écran. La loi elle-même (spec Focal §5, courbe gelée)
+        // reste écrite et testée — elle n'est simplement plus APPLIQUÉE ; la
+        // planche est fixe.
+        //
+        // Ce qui distingue le message élu n'est donc plus sa taille mais sa
+        // CARTE et ses chips, posées par la reconfiguration au tick d'élection.
+        for cell in cells { FocalScrollPerspective.reset(cell.contentView.layer) }
         let focused = FocalScrollPerspective.focusedId(cells: geometries, focusY: focusY, currentId: focalFocusedLocalId)
         let electionChanged = focalFocusedLocalId != focused
         focalFocusedLocalId = focused
@@ -2986,27 +3003,11 @@ extension MessageListViewController {
         // hauteur (chips et identité sont des superpositions sur les lignes
         // de la carte), elle ne coûte qu'un rendu de deux cellules.
         if electionChanged { syncFocalFocusDetails() }  // différé + coalescé, jamais réentrant
-        let body = {
-            for pose in poses {
-                guard let cell = cellById[pose.id] else { continue }
-                FocalScrollPerspective.apply(pose, to: cell.contentView.layer)
-                // La carte est désormais le FOND de la rangée en focus
-                // (`FocalRow.focusCardBackground`, posée à la reconfiguration
-                // du tick d'élection) : plus de carte UIKit bornée à la
-                // cellule — elle dérivait de ses chips avant la pose.
-                FocalScrollPerspective.hideFocusCard(in: cell.contentView)
-            }
-        }
-        if CACurrentMediaTime() - focalSceneEnteredAt < FocalMetrics.Scene.enterDuration {
-            UIView.animate(
-                withDuration: FocalMetrics.Scene.enterDuration,
-                delay: 0,
-                options: [.curveEaseOut, .beginFromCurrentState, .allowUserInteraction],
-                animations: body
-            )
-        } else {
-            UIView.performWithoutAnimation(body)
-        }
+        // La carte du focus est le FOND SwiftUI de la rangée
+        // (`FocalRow.focusCardBackground`, posée à la reconfiguration du tick
+        // d'élection) : la carte UIKit résiduelle est démontée si un recyclage
+        // en a laissé une. Aucune animation ici — la planche est fixe.
+        for cell in cells { FocalScrollPerspective.hideFocusCard(in: cell.contentView) }
     }
 
     /// Les détails du message en focus (identité, jour + heure, texte
