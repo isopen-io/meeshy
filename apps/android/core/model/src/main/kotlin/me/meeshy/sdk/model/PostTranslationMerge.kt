@@ -76,6 +76,27 @@ public object PostTranslationMerge {
     }
 
     /**
+     * The push-side, comment-keyed sibling of the two overloads above: merge a whole
+     * [ApiPostTranslationEntry] (text plus its model / confidence / timestamp) into [comment],
+     * or return `null` on a no-op. The realtime `comment:translation-updated` event carries a
+     * finished entry from the gateway, not a bare string — folding the entry in preserves the
+     * metadata the string overload would drop, exactly as the post entry overload does.
+     *
+     * No-op (`null`) cases: a blank [targetLanguage] or a blank [entry] text (the Prisme never
+     * stores an empty translation), or the identical entry already present under that language
+     * (matched case-insensitively) — a metadata-only change is NOT a no-op, so richer server
+     * data is never silently dropped.
+     */
+    public fun mergeTranslation(
+        comment: ApiPostComment,
+        targetLanguage: String,
+        entry: ApiPostTranslationEntry,
+    ): ApiPostComment? {
+        val merged = upsert(comment.translations, targetLanguage, entry) ?: return null
+        return comment.copy(translations = merged)
+    }
+
+    /**
      * The shared upsert law over a translations map: trims [targetLanguage], rejects a
      * blank target or [translatedText] and an idempotent match (same language matched
      * case-insensitively, same text) as `null`; otherwise returns the map with the entry
