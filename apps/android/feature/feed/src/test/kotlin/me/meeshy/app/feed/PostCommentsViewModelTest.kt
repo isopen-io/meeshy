@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.model.SocketCommentReactionUpdateData
+import me.meeshy.sdk.model.SocketCommentTranslationUpdatedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -50,6 +51,8 @@ class PostCommentsViewModelTest {
     private val commentDeleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 64)
     private val commentReactionAdded = MutableSharedFlow<SocketCommentReactionUpdateData>(extraBufferCapacity = 64)
     private val commentReactionRemoved = MutableSharedFlow<SocketCommentReactionUpdateData>(extraBufferCapacity = 64)
+    private val commentTranslationUpdated =
+        MutableSharedFlow<SocketCommentTranslationUpdatedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun comment(id: String, content: String = "hi", parentId: String? = null) =
@@ -67,6 +70,7 @@ class PostCommentsViewModelTest {
         every { socialSocket.commentDeleted } returns commentDeleted
         every { socialSocket.commentReactionAdded } returns commentReactionAdded
         every { socialSocket.commentReactionRemoved } returns commentReactionRemoved
+        every { socialSocket.commentTranslationUpdated } returns commentTranslationUpdated
         val handle = SavedStateHandle(if (postId == null) emptyMap() else mapOf("postId" to postId))
         return PostCommentsViewModel(repository, session, socialSocket, config, mentionSearch, handle)
     }
@@ -1270,6 +1274,66 @@ class PostCommentsViewModelTest {
 
     private fun replyContentOf(vm: PostCommentsViewModel, parentId: String, replyId: String): String? =
         vm.state.value.replyThreads[parentId]?.replies?.firstOrNull { it.id == replyId }?.content
+
+    // --- Realtime comment translation merge (`comment:translation-updated`) ---
+
+    private fun translationUpdated(commentId: String, language: String, text: String, postId: String = "p1") =
+        SocketCommentTranslationUpdatedData(
+            postId = postId,
+            commentId = commentId,
+            language = language,
+            translation = ApiPostTranslationEntry(text = text, translationModel = "nllb", confidenceScore = 0.9),
+        )
+
+    @Test
+    fun `a pushed comment translation repaints a top-level comment in the reader's language with no tap`() = runTest {
+        // An es reader on a fr comment translated to en only: the Prisme falls back to the original.
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(frEnOnly("c1")))
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me", systemLanguage = "es"))
+        assertThat(contentOf(vm, "c1")).isEqualTo("Bonjour")
+
+        commentTranslationUpdated.emit(translationUpdated("c1", "es", "Hola"))
+
+        assertThat(contentOf(vm, "c1")).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `a pushed comment translation repaints a loaded reply too`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("c1").copy(replyCount = 1)))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(frEnOnly("r1", parentId = "c1")))
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me", systemLanguage = "es"))
+        vm.toggleReplies("c1")
+        assertThat(replyContentOf(vm, "c1", "r1")).isEqualTo("Bonjour")
+
+        commentTranslationUpdated.emit(translationUpdated("r1", "es", "Hola"))
+
+        assertThat(replyContentOf(vm, "c1", "r1")).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `a pushed comment translation for another post is ignored`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(frEnOnly("c1")))
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me", systemLanguage = "es"))
+
+        commentTranslationUpdated.emit(translationUpdated("c1", "es", "Hola", postId = "other"))
+
+        assertThat(contentOf(vm, "c1")).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `a pushed translation for an unknown comment is inert`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(frEnOnly("c1")))
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me", systemLanguage = "es"))
+
+        commentTranslationUpdated.emit(translationUpdated("ghost", "es", "Hola"))
+
+        assertThat(contentOf(vm, "c1")).isEqualTo("Bonjour")
+    }
 
     // --- Composer @-mention autocomplete ---
 
