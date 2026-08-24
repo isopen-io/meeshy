@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.SocketPostBookmarkedData
 import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.model.SocketCommentAddedData
+import me.meeshy.sdk.model.SocketCommentUpdatedData
 import me.meeshy.sdk.model.SocketCommentTranslationUpdatedData
 import me.meeshy.sdk.model.SocketCommentLikedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
@@ -46,6 +47,7 @@ class SocialSocketManager @Inject constructor(
     private val _postDeleted = buf<SocketPostDeletedData>()
     private val _postTranslationUpdated = buf<SocketPostTranslationUpdatedData>()
     private val _commentAdded = buf<SocketCommentAddedData>()
+    private val _commentUpdated = buf<SocketCommentUpdatedData>()
     private val _commentLiked = buf<SocketCommentLikedData>()
     private val _commentUnliked = buf<SocketCommentLikedData>()
     private val _commentDeleted = buf<SocketCommentDeletedData>()
@@ -78,6 +80,13 @@ class SocialSocketManager @Inject constructor(
     val postTranslationUpdated: SharedFlow<SocketPostTranslationUpdatedData> =
         _postTranslationUpdated.asSharedFlow()
     val commentAdded: SharedFlow<SocketCommentAddedData> = _commentAdded.asSharedFlow()
+
+    /**
+     * `comment:updated` — a comment was edited server-side; carries the COMPLETE new comment.
+     * The open thread replaces the matched row in place (content/effects/regenerated
+     * translations), idempotent by id — the edit sibling of [commentAdded].
+     */
+    val commentUpdated: SharedFlow<SocketCommentUpdatedData> = _commentUpdated.asSharedFlow()
     val commentLiked: SharedFlow<SocketCommentLikedData> = _commentLiked.asSharedFlow()
 
     /**
@@ -120,6 +129,7 @@ class SocialSocketManager @Inject constructor(
         listen("post:deleted", _postDeleted)
         listen("post:translation-updated", _postTranslationUpdated)
         listen("comment:added", _commentAdded)
+        listen("comment:updated", _commentUpdated)
         listen("comment:liked", _commentLiked)
         listen("comment:unliked", _commentUnliked)
         listen("comment:deleted", _commentDeleted)

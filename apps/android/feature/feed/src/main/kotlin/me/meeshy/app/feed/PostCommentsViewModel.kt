@@ -173,6 +173,12 @@ class PostCommentsViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            socialSocket.commentUpdated.collect { event ->
+                if (event.postId != postId) return@collect
+                onCommentUpdated(event.comment)
+            }
+        }
+        viewModelScope.launch {
             socialSocket.commentDeleted.collect { event ->
                 if (event.postId != postId) return@collect
                 onCommentDeleted(event.commentId)
@@ -218,6 +224,19 @@ class PostCommentsViewModel @Inject constructor(
         if (event.postId != postId || event.emoji != HEART_EMOJI) return
         val isOwn = event.userId == sessionRepository.currentUser.value?.id
         likes.update { it.reactionApplied(event.commentId, isOwn = isOwn, added = added) }
+    }
+
+    /**
+     * A live `comment:updated` for the open post: a comment was edited server-side and the gateway
+     * pushed the COMPLETE new comment. Replace the matched row in place in whichever collection holds
+     * it (top-level [thread] or a loaded [replies] thread — each transition is inert for the other),
+     * so the edited content/effects/translations repaint instantly with no refetch. Unlike a
+     * translation push this adopts every field (mirror of iOS `applyCommentEdit`). Inert for another
+     * post, an unknown/unloaded comment, or an id not currently present.
+     */
+    private fun onCommentUpdated(comment: ApiPostComment) {
+        thread.update { it.replaced(comment) }
+        replies.update { it.replacedReply(comment) }
     }
 
     private fun onCommentAdded(comment: ApiPostComment) {

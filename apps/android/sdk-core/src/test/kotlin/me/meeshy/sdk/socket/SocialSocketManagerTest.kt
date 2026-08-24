@@ -138,6 +138,26 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `comment updated payload carries the complete edited comment`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.commentUpdated.test {
+            handlers.getValue("comment:updated").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"postId":"p1","comment":{"id":"c7","content":"Salut (edited)","likeCount":3}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.comment.id).isEqualTo("c7")
+            assertThat(event.comment.content).isEqualTo("Salut (edited)")
+            assertThat(event.comment.likeCount).isEqualTo(3)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `a malformed reaction payload is ignored without emitting`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.storyReacted.test {

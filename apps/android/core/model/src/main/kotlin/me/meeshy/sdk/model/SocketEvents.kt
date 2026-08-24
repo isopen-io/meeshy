@@ -338,6 +338,18 @@ data class SocketCommentAddedData(
     val commentCount: Int = 0,
 )
 
+/**
+ * `comment:updated` — a comment was edited server-side (content, effects, regenerated
+ * translations). Carries the COMPLETE new comment so the client replaces the matched row
+ * in place, idempotent by id — the edit sibling of [SocketCommentAddedData]. Mirror of iOS
+ * `SocketCommentUpdatedData` (both nest the full [ApiPostComment] under `comment`).
+ */
+@Serializable
+data class SocketCommentUpdatedData(
+    val postId: String,
+    val comment: ApiPostComment,
+)
+
 @Serializable
 data class SocketCommentLikedData(
     val postId: String,

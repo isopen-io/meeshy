@@ -258,4 +258,35 @@ class CommentThreadStateTest {
         assertThat(base.retranslated("zzz", mapOf("es" to ApiPostTranslationEntry(text = "Hola"))))
             .isSameInstanceAs(base)
     }
+
+    @Test
+    fun replaced_swapsTheWholeRowInPlacePreservingPosition() {
+        val edited = ApiPostComment(id = "a", content = "edited", likeCount = 4, replyCount = 2)
+        val state = CommentThreadState()
+            .appended(page = listOf(comment("a"), comment("b")), nextCursor = null, more = false)
+            .replaced(edited)
+
+        assertThat(state.comments.map { it.id }).containsExactly("a", "b").inOrder()
+        val a = state.comments.first { it.id == "a" }
+        assertThat(a.content).isEqualTo("edited")
+        assertThat(a.likeCount).isEqualTo(4)
+        assertThat(a.replyCount).isEqualTo(2)
+    }
+
+    @Test
+    fun replaced_leavesEveryOtherCommentUntouched() {
+        val state = CommentThreadState()
+            .appended(page = listOf(comment("a"), comment("b")), nextCursor = null, more = false)
+            .replaced(ApiPostComment(id = "a", content = "edited"))
+
+        assertThat(state.comments.first { it.id == "b" }.content).isEqualTo("cb")
+    }
+
+    @Test
+    fun replaced_isInertForAnUnknownComment() {
+        val base = CommentThreadState()
+            .appended(page = listOf(comment("a")), nextCursor = null, more = false)
+        assertThat(base.replaced(ApiPostComment(id = "zzz", content = "edited")))
+            .isSameInstanceAs(base)
+    }
 }
