@@ -317,6 +317,23 @@ function PostCard({
     : undefined;
 
   const hasTranslations = translations && translations.length > 0;
+
+  /// Cycle 123 — le corps effectivement servi, tenu par la puce de langue.
+  ///
+  /// La variante `block` est montée `showContent={false}` (le corps a besoin de
+  /// `PostContentText` pour ses mentions et références, que la puce ne rend
+  /// pas), et l'hôte rendait `content` — l'ORIGINAL — inconditionnellement.
+  /// Deux conséquences : la zone « traductions disponibles » annonçait une
+  /// langue résolue jamais servie, et cliquer une traduction n'y changeait
+  /// RIEN — le contrôle était inerte. Même relais que `PostDetail`.
+  /// `null` tant que la puce n'a rien annoncé : on retombe sur `content`, ce
+  /// qui est exactement l'état d'un post sans traduction.
+  const [displayedContent, setDisplayedContent] = useState<string | null>(null);
+  const handleDisplayedChange = useCallback(
+    (version: { content: string }) => setDisplayedContent(version.content),
+    [],
+  );
+
   const hasReactions = reactionSummary && Object.keys(reactionSummary).length > 0;
   const hasMedia = media && media.length > 0;
 
@@ -437,8 +454,9 @@ function PostCard({
                 preferredLanguages={preferredLanguages}
                 variant="block"
                 showContent={false}
+                onDisplayedChange={handleDisplayedChange}
               />
-              <PostContentText content={content} references={mentions} className="text-[var(--gp-text-primary)]" />
+              <PostContentText content={displayedContent ?? content} references={mentions} className="text-[var(--gp-text-primary)]" />
               <ReferenceNoteRow references={mentions ?? []} viewerId={viewerId} />
             </div>
           ) : (
