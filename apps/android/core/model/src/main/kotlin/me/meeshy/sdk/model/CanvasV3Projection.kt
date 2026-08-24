@@ -140,11 +140,22 @@ private fun ObjectV3.asMedia(at: Pair<Double, Double>): StoryMediaObject {
     )
 }
 
+/**
+ * A sticker with neither channel is nothing to paint, so it is dropped like
+ * every other family here on a missing required field. One with only
+ * [StorySticker.postMediaId] (a future writer that skips the emoji fallback)
+ * must still project — Android is the reader here, not the compatibility
+ * guarantor; the fallback discipline lives at the writer.
+ */
 private fun ObjectV3.asSticker(at: Pair<Double, Double>): StorySticker? {
-    val emoji = payload.str("emoji") ?: return null
+    val emoji = payload.str("emoji")
+    val postMediaId = payload.str("postMediaId")
+    if (emoji == null && postMediaId == null) return null
     return StorySticker(
         id = id,
-        emoji = emoji,
+        emoji = emoji ?: "",
+        postMediaId = postMediaId ?: "",
+        provider = payload.str("provider"),
         x = at.first,
         y = at.second,
         scale = transform.scale,

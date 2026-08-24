@@ -275,4 +275,48 @@ final class SoundExtractionCollectionTests: XCTestCase {
         XCTAssertFalse(code.contains("SoundExtractionToggle("),
                        "Le panneau par-média ne doit pas dupliquer l'interrupteur composer-wide.")
     }
+
+    // MARK: - F2 — le choix SURVIT à la fermeture du composer
+
+    /// `test_draftSnapshot_carriesTheExplicitChoice` rougit si l'instantané
+    /// persisté par le brouillon cesse de porter le choix de l'auteur :
+    /// l'interrupteur redemanderait, à chaque reprise, une décision déjà prise.
+    func test_draftSnapshot_carriesTheExplicitChoice() {
+        let store = MediaAccessibilityStore()
+        store.setAllowsSoundExtraction(true)
+
+        XCTAssertEqual(store.draftSnapshot().allowSoundExtraction, true)
+    }
+
+    /// `test_draftSnapshot_staysSilentOnAnUntouchedSwitch` rougit si un
+    /// interrupteur jamais touché se met à persister `false` : la reprise
+    /// rendrait alors un refus EXPLICITE là où l'auteur n'avait rien décidé,
+    /// et le transport écraserait le défaut serveur au lieu de le laisser.
+    func test_draftSnapshot_staysSilentOnAnUntouchedSwitch() {
+        XCTAssertNil(MediaAccessibilityStore().draftSnapshot().allowSoundExtraction)
+    }
+
+    /// `test_restore_reposesTheExplicitChoice` rougit si adopter un brouillon
+    /// ne repose pas l'interrupteur dans le store vivant.
+    func test_restore_reposesTheExplicitChoice() {
+        let store = MediaAccessibilityStore()
+
+        store.restore(from: StoryDraftAccessibility(allowSoundExtraction: true))
+
+        XCTAssertTrue(store.allowsSoundExtraction())
+    }
+
+    /// `test_restore_ofADraftWithoutAChoice_keepsTheConservativeDefault` rougit
+    /// si la reprise d'un brouillon muet fabriquait un choix : le défaut du
+    /// store est le refus, mais c'est un défaut, pas une décision de l'auteur —
+    /// le payload doit rester silencieux.
+    func test_restore_ofADraftWithoutAChoice_keepsTheConservativeDefault() {
+        let store = MediaAccessibilityStore()
+        store.setAllowsSoundExtraction(true)
+
+        store.restore(from: .empty)
+
+        XCTAssertFalse(store.allowsSoundExtraction())
+        XCTAssertNil(store.allowSoundExtractionPayload())
+    }
 }

@@ -8,6 +8,34 @@ const v1 = (): Record<string, unknown> =>
   JSON.parse(readFileSync(join(DIR, 'v1-legacy-full.json'), 'utf8')) as Record<string, unknown>;
 
 describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
+  // Le convertisseur RECONSTRUIT le payload sticker au lieu de le transporter :
+  // toute clé qu'il ne recopie pas est PERDUE en silence pour un client qui
+  // traverse le serveur. `postMediaId` porte l'image intégrée d'un sticker —
+  // sans ces deux cas, un sticker image redevenait un simple glyphe sans que
+  // rien ne le signale. La spec O8 attendait déjà cette clé ici :
+  // `unclaimedCanvasMediaIds` compte `sticker` parmi ses kinds porteurs.
+  it('transporte postMediaId et provider d\'un sticker image', () => {
+    const doc = convertV1ToV3({
+      stickerObjects: [
+        { id: 's1', emoji: '🖼️', x: 0.5, y: 0.5, postMediaId: 'media-42', provider: 'genmoji' },
+      ],
+    }) as { scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[] };
+
+    const sticker = doc.scenes[0].objects.find((o) => o.kind === 'sticker');
+    expect(sticker?.payload.postMediaId).toBe('media-42');
+    expect(sticker?.payload.provider).toBe('genmoji');
+    expect(sticker?.payload.emoji).toBe('🖼️');
+  });
+
+  it('n\'invente aucune clé sur un sticker emoji seul', () => {
+    const doc = convertV1ToV3({
+      stickerObjects: [{ id: 's1', emoji: '🔥', x: 0.5, y: 0.5 }],
+    }) as { scenes: { objects: { kind: string; payload: Record<string, unknown> }[] }[] };
+
+    const sticker = doc.scenes[0].objects.find((o) => o.kind === 'sticker');
+    expect(sticker?.payload).toEqual({ emoji: '🔥' });
+  });
+
   it('detects v3 vs v1', () => {
     expect(isCanvasV3({ v: 3, scenes: [] })).toBe(true);
     expect(isCanvasV3(v1())).toBe(false);

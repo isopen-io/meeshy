@@ -59,6 +59,50 @@ public struct StoryDraftSummary: Identifiable, Sendable, Equatable {
     }
 }
 
+// MARK: - Story Draft Accessibility
+
+/// Ce qu'un brouillon retient de la collecte d'accessibilité du composer : le
+/// texte alternatif PAR MÉDIA et l'opt-in d'extraction de son.
+///
+/// Le transport portait déjà les deux jusqu'au gateway
+/// (`CreatePostSchema.mediaAlt` / `.allowSoundExtraction`) ; le brouillon, lui,
+/// ne les portait pas — refermer le composer perdait chaque texte saisi (F2).
+///
+/// Les deux champs se décodent par `decodeIfPresent` : un brouillon écrit avant
+/// ce lot n'a pas la clé du tout, et doit continuer de se relire — un brouillon
+/// perdu, c'est le travail de l'utilisateur perdu.
+public struct StoryDraftAccessibility: Codable, Equatable, Sendable {
+
+    /// Keyé par ID D'ÉLÉMENT DU COMPOSER, comme la collecte : la traduction
+    /// vers les ids de `PostMedia` n'a lieu qu'après l'upload, à la publication
+    /// (`StoryMediaAltMapping.serverKeyed`).
+    public let mediaAlt: [String: String]
+
+    /// `nil` tant que l'auteur n'a pas touché l'interrupteur — distinct d'un
+    /// `false`, que le transport lit comme un refus posé.
+    public let allowSoundExtraction: Bool?
+
+    public static let empty = StoryDraftAccessibility()
+
+    public var isEmpty: Bool { mediaAlt.isEmpty && allowSoundExtraction == nil }
+
+    public init(mediaAlt: [String: String] = [:], allowSoundExtraction: Bool? = nil) {
+        self.mediaAlt = mediaAlt
+        self.allowSoundExtraction = allowSoundExtraction
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case mediaAlt
+        case allowSoundExtraction
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        mediaAlt = try container.decodeIfPresent([String: String].self, forKey: .mediaAlt) ?? [:]
+        allowSoundExtraction = try container.decodeIfPresent(Bool.self, forKey: .allowSoundExtraction)
+    }
+}
+
 // MARK: - Story Draft Store (GRDB / SQLite)
 
 /// Persistance locale des brouillons Story via SQLite (GRDB).
@@ -910,6 +954,71 @@ public final class StoryDraftStore: @unchecked Sendable {
         }
         guard let base64 else { return nil }
         return Data(base64Encoded: base64)
+    }
+
+    // MARK: - Collecte d'accessibilité (F2)
+
+    /// Écrit la collecte du composer dans la méta du brouillon (JSON, colonne
+    /// TEXT existante — zéro migration), donc purgée avec lui par `delete()` et
+    /// `clear()`.
+    ///
+    /// Une collecte VIDE efface la clé, même fidélité que l'audience et la
+    /// langue : effacer son dernier texte alternatif ne doit pas laisser
+    /// l'ancienne valeur ressusciter à la reprise suivante. Un échec
+    /// d'encodage, lui, laisse en place ce qui était écrit — remplacer par
+    /// rien perdrait des textes déjà saisis.
+    @discardableResult
+    public func saveAccessibility(_ accessibility: StoryDraftAccessibility, draftId: String) -> Bool {
+        guard !accessibility.isEmpty else { return writeAccessibilityJSON(nil, draftId: draftId) }
+        guard let data = JSONEncoder().encodeOrLog(accessibility,
+                                                   field: "story draft accessibility",
+                                                   id: draftId, logger: Logger.cache),
+              let json = String(data: data, encoding: .utf8) else {
+            recordFailure("save-accessibility", message: "encoding failed")
+            return false
+        }
+        return writeAccessibilityJSON(json, draftId: draftId)
+    }
+
+    private func writeAccessibilityJSON(_ json: String?, draftId: String) -> Bool {
+        do {
+            try db.write { db in
+                guard let json else {
+                    try db.execute(
+                        sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'accessibility'",
+                        arguments: [draftId])
+                    return
+                }
+                try db.execute(
+                    sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'accessibility', ?)",
+                    arguments: [draftId, json])
+            }
+            return true
+        } catch {
+            Logger.cache.error("[StoryDraftStore] Erreur saveAccessibility: \(error.localizedDescription)")
+            recordFailure("save-accessibility", message: error.localizedDescription)
+            return false
+        }
+    }
+
+    /// Toujours une valeur, jamais `nil` : un brouillon d'avant ce champ rend
+    /// `.empty`, comme un brouillon dont l'auteur n'a rien saisi. L'appelant
+    /// repose l'état sans avoir à distinguer « rien saisi » de « rien
+    /// persisté » — les deux méritent la même collecte vide.
+    public func loadAccessibility(draftId: String) -> StoryDraftAccessibility {
+        let json: String?
+        do {
+            json = try db.read { db in
+                try Self.metaValue(db, draftId: draftId, key: "accessibility")
+            }
+        } catch {
+            Logger.cache.error("[StoryDraftStore] Erreur loadAccessibility: \(error.localizedDescription)")
+            return .empty
+        }
+        guard let data = json.flatMap({ $0.data(using: .utf8) }) else { return .empty }
+        return JSONDecoder().decodeOrLog(StoryDraftAccessibility.self, from: data,
+                                         field: "story draft accessibility",
+                                         id: draftId, logger: Logger.cache) ?? .empty
     }
 
     /// Efface TOUS les brouillons — déconnexion uniquement.

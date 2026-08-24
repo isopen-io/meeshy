@@ -140,8 +140,18 @@ export function convertV1ToV3(
 
   for (const st of asArray(blob.stickerObjects)) {
     const o = baseObject(st, 'sticker', 'fg', z++);
+    // `postMediaId`/`provider` : un sticker peut porter une IMAGE INTÉGRÉE au
+    // post, pas seulement un glyphe. Ce convertisseur RECONSTRUIT le payload au
+    // lieu de le transporter — omettre ces deux clés faisait donc perdre son
+    // image à un sticker qui traverse le serveur, en silence.
+    //
+    // La spec O8 les attendait déjà ici : `unclaimedCanvasMediaIds` compte
+    // `sticker` parmi les CLAIM_BEARING_KINDS et lit `payload.postMediaId`
+    // (ci-dessous). Le convertisseur était simplement en retard sur elle.
     o.payload = {
       emoji: st.emoji,
+      ...(str(st.postMediaId) ? { postMediaId: st.postMediaId } : {}),
+      ...(str(st.provider) ? { provider: st.provider } : {}),
       ...(typeof st.baseSize === 'number' ? { baseSize: st.baseSize } : {}),
       ...(str(st.anchorPoint) ? { anchorPoint: st.anchorPoint } : {}),
       ...(typeof st.fadeIn === 'number' ? { fadeIn: st.fadeIn } : {}),

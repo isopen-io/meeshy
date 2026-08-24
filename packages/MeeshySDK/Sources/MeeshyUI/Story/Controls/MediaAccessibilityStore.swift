@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import MeeshySDK
 
 /// Collecte, PAR média du composer, le texte alternatif d'accessibilité et le
 /// choix d'extraction de son.
@@ -73,6 +74,32 @@ public final class MediaAccessibilityStore: ObservableObject {
     /// même choix).
     public func remove(mediaId: String) {
         altText.removeValue(forKey: mediaId)
+    }
+
+    /// Ce que le BROUILLON retient de la collecte (F2).
+    ///
+    /// Rend le dictionnaire tel quel, vide compris, là où `mediaAltPayload()`
+    /// rend `nil` : un brouillon persiste un état d'édition, pas une requête —
+    /// « aucun texte » n'y dit rien de plus que « dictionnaire vide », alors
+    /// que le transport, lui, distingue les deux.
+    public func draftSnapshot() -> StoryDraftAccessibility {
+        StoryDraftAccessibility(mediaAlt: altText,
+                                allowSoundExtraction: allowSoundExtractionOverride)
+    }
+
+    /// Repose la collecte d'un brouillon adopté. REMPLACE l'état courant :
+    /// reprendre un brouillon prend la place de la composition en cours, il ne
+    /// fusionne pas ses textes avec ceux d'une autre — les ids d'éléments d'une
+    /// composition abandonnée n'ont aucun média en face dans celle-ci.
+    ///
+    /// Les textes repassent par `setAlt` : un brouillon a pu être écrit sous
+    /// une limite de transport différente.
+    public func restore(from accessibility: StoryDraftAccessibility) {
+        altText = [:]
+        for (mediaId, text) in accessibility.mediaAlt {
+            setAlt(text, for: mediaId)
+        }
+        allowSoundExtractionOverride = accessibility.allowSoundExtraction
     }
 
     /// Snapshot prêt pour `PostService.create/update(… mediaAlt:)`. `nil`

@@ -334,11 +334,15 @@ struct MeeshyComposerHost: View {
 
     /// La surface « document sans scène » (V2).
     ///
-    /// Elle ne porte PAS le plateau d'outils : `plateauTools` outille une
-    /// scène — diapositives, timeline — et un document n'en a aucune. Le
-    /// profil de `.feedComposer` annonce pourtant `showsSlides`/`showsTimeline`
-    /// à `true`, et c'est cohérent : ils décrivent ce que la porte offre APRÈS
-    /// bascule vers la story, pas ce que le document a.
+    /// Elle ne porte PAS le plateau — une garde de source le tient. Ce que le
+    /// plateau porte depuis le 2026-08-24 est le seul éventail, et le
+    /// paragraphe sur l'ÉVENTAIL plus bas dit ce qu'il en coûte ici.
+    ///
+    /// `profile.showsSlides` et `profile.showsTimeline` n'ont plus AUCUN
+    /// lecteur de production depuis que les trois pictogrammes inertes du
+    /// plateau sont partis ; seuls les tests de la table de C1 les lisent
+    /// encore. Ce n'est pas un oubli à combler ici : la table décrit ce que la
+    /// porte offre, et le meuble n'a aujourd'hui aucun moyen de l'honorer.
     ///
     /// Aucun outil n'y est servi aujourd'hui, et c'est la loi 4 qui le veut :
     /// le meuble n'a pas encore de chemin d'ingestion. Le pipeline existe et
@@ -377,28 +381,27 @@ struct MeeshyComposerHost: View {
 
     private var servedDocumentTools: [ComposerDocumentTool] { [] }
 
-    /// Les outils du plateau suivent le PROFIL, et une capacité refusée n'est
-    /// pas montée du tout (loi 4). Une affordance grisée promettrait une
-    /// surface qui n'existe pas pour cette porte.
+    /// Le plateau ne porte plus qu'UNE chose : l'éventail, le seul endroit du
+    /// meuble où l'auteur choisit ce qu'il PUBLIE.
     ///
-    /// L'éventail occupe le flanc opposé : c'est le seul endroit du meuble où
-    /// l'auteur choisit ce qu'il PUBLIE, et il doit se lire sans se confondre
-    /// avec les outils de composition.
-    @ViewBuilder
+    /// **Trois pictogrammes en sont partis le 2026-08-24** — caméra,
+    /// diapositives, timeline. Ils n'étaient pas des `Button` : le tap ne
+    /// faisait rien, et depuis que la porte de création monte le meuble ils
+    /// étaient inertes EN PRODUCTION, sur la surface de création la plus
+    /// utilisée. Loi 4 : une affordance non offerte est absente.
+    ///
+    /// Ils ne sont pas branchables d'ici. `addSlide()`, `isTimelineVisible` et
+    /// l'écriture de `currentEffects` (`public internal(set)`) sont `internal`
+    /// à `MeeshyUI` : le meuble peut LIRE la composition, pas la modifier.
+    /// Fabriquer un chemin de secours app-side aurait doublé des commandes que
+    /// l'atelier offre déjà et qui, elles, agissent — la bande de diapositives,
+    /// le menu ⋯ → Timeline, le fournisseur de capture que ce host injecte.
+    ///
+    /// Condition de retour, à remplir côté SDK : un écrivain public de la
+    /// composition atteignable par le meuble. Sans lui, un bouton ici ouvrirait
+    /// une caméra dont la photo n'aurait nulle part où aller.
     private var plateauTools: some View {
         HStack(spacing: 12) {
-            if profile.allowsCapture {
-                Image(systemName: "camera.fill")
-                    .accessibilityLabel(Text("composer.plateau.capture", bundle: .main))
-            }
-            if profile.showsSlides {
-                Image(systemName: "rectangle.stack")
-                    .accessibilityLabel(Text("composer.plateau.slides", bundle: .main))
-            }
-            if profile.showsTimeline {
-                Image(systemName: "timeline.selection")
-                    .accessibilityLabel(Text("composer.plateau.timeline", bundle: .main))
-            }
             Spacer()
             ComposerFormatFan(
                 offeredFormats: profile.offeredFormats,

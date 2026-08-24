@@ -29,10 +29,18 @@ nonisolated enum StoryOfflineMediaWriter {
     /// Qualité d'encodage des images — identique à celle du chemin d'origine.
     static let jpegQuality: CGFloat = 0.85
 
+    /// `alphaPreservingIds` : les éléments dont l'image est DÉTOURÉE — un
+    /// sticker importé. Le JPEG n'a pas de canal alpha ; réencoder un sticker
+    /// ainsi aplatit sa transparence, et c'est ce fichier-là que le drain
+    /// téléverse ensuite en `PostMedia`. L'appelant les nomme explicitement :
+    /// aucune heuristique sur les pixels ne décide à sa place, et le fond de
+    /// slide plein écran reste en JPEG plutôt que de faire enfler le dossier
+    /// de file.
     static func persist(images: [String: UIImage],
                         videos: [String: URL],
                         audios: [String: URL],
                         into directory: URL,
+                        alphaPreservingIds: Set<String> = [],
                         fileManager: FileManager = .default) -> Outcome {
         var references: [StoryMediaReference] = []
         var failed: [String] = []
@@ -41,8 +49,11 @@ nonisolated enum StoryOfflineMediaWriter {
         // même liste, ce qui rend les échecs reproductibles et testables.
         for id in images.keys.sorted() {
             guard let image = images[id] else { continue }
-            let destination = directory.appendingPathComponent("\(id).jpg")
-            guard let data = image.jpegData(compressionQuality: jpegQuality) else {
+            let preservesAlpha = alphaPreservingIds.contains(id)
+            let destination = directory.appendingPathComponent("\(id).\(preservesAlpha ? "png" : "jpg")")
+            guard let data = preservesAlpha
+                    ? image.pngData()
+                    : image.jpegData(compressionQuality: jpegQuality) else {
                 failed.append(id)
                 continue
             }

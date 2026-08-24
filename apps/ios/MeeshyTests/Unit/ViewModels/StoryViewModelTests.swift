@@ -2235,6 +2235,59 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(plan?.requiredObjectIds, [])
     }
 
+    func test_receiverCoverPlan_imageSticker_loadsItsPostMediaUnderTheElementId() {
+        var fx = StoryEffects()
+        fx.background = "101010"
+        fx.stickerObjects = [StorySticker(id: "st-1", emoji: "🖼️", postMediaId: "pm-sticker")]
+        let plan = StoryCoverThumbnail.receiverCoverPlan(
+            for: makeReceiverStory(
+                media: [FeedMedia(id: "pm-sticker", type: .image, url: "https://cdn/sticker.png")],
+                effects: fx))
+
+        XCTAssertEqual(plan?.imageURLsByObjectId["st-1"], "https://cdn/sticker.png",
+                       "l'image d'un sticker entre par le MÊME slot que les autres médias, keyée par id d'élément")
+        XCTAssertEqual(plan?.requiredObjectIds, [],
+                       "jamais indispensable : sans elle le renderer peint l'emoji de repli, ce qui vaut mieux que pas de cover")
+    }
+
+    func test_receiverCoverPlan_emojiSticker_loadsNothing() {
+        var fx = StoryEffects()
+        fx.background = "101010"
+        fx.stickerObjects = [StorySticker(id: "st-1", emoji: "🔥")]
+        let plan = StoryCoverThumbnail.receiverCoverPlan(
+            for: makeReceiverStory(
+                media: [FeedMedia(id: "pm-other", type: .image, url: "https://cdn/other.png")],
+                effects: fx))
+
+        XCTAssertEqual(plan?.imageURLsByObjectId, [:],
+                       "un sticker emoji n'a aucune image à charger")
+    }
+
+    func test_receiverCoverPlan_stickerMedia_isNeverMistakenForTheLegacyBackground() {
+        var fx = StoryEffects()
+        fx.background = "101010"
+        fx.stickerObjects = [StorySticker(id: "st-1", emoji: "🖼️", postMediaId: "pm-sticker")]
+        let plan = StoryCoverThumbnail.receiverCoverPlan(
+            for: makeReceiverStory(
+                media: [FeedMedia(id: "pm-sticker", type: .image, url: "https://cdn/sticker.png")],
+                effects: fx))
+
+        XCTAssertNil(plan?.legacyBackgroundURL,
+                     "l'image d'un sticker est attachée au post comme les autres : la prendre pour le fond la peindrait PLEIN CADRE derrière la composition")
+        XCTAssertEqual(plan?.imageURLsByObjectId["st-1"], "https://cdn/sticker.png",
+                       "elle reste chargée — à sa place, celle du sticker")
+    }
+
+    func test_receiverCoverPlan_stickerWhosePostMediaIsMissing_stillYieldsACover() {
+        var fx = StoryEffects()
+        fx.background = "101010"
+        fx.stickerObjects = [StorySticker(id: "st-1", emoji: "🖼️", postMediaId: "pm-vanished")]
+        let plan = StoryCoverThumbnail.receiverCoverPlan(for: makeReceiverStory(effects: fx))
+
+        XCTAssertNotNil(plan, "un média de sticker introuvable ne doit pas priver la story de sa cover")
+        XCTAssertEqual(plan?.imageURLsByObjectId, [:])
+    }
+
     func test_receiverCoverPlan_withoutEffects_isNil() {
         XCTAssertNil(StoryCoverThumbnail.receiverCoverPlan(for: makeReceiverStory(effects: nil)))
     }

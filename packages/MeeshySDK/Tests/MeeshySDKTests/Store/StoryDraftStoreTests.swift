@@ -368,6 +368,115 @@ final class StoryDraftStoreSDKTests: XCTestCase {
                       "La réconciliation ne doit jamais toucher un autre brouillon")
     }
 
+    // MARK: - F2 : le brouillon porte la collecte d'accessibilité
+
+    /// `test_accessibility_altText_survivesTheStoreBeingReopened` rougit si le
+    /// texte alternatif ne franchit pas la fermeture du composer : le transport
+    /// le portait déjà jusqu'au gateway, mais le BROUILLON ne le retenait pas —
+    /// reprendre son travail repartait d'une collecte vide, et la story publiée
+    /// perdait ses descriptions.
+    ///
+    /// Le store est ROUVERT sur le même fichier : lire la valeur depuis
+    /// l'instance qui vient de l'écrire ne prouverait pas la persistance.
+    func test_accessibility_altText_survivesTheStoreBeingReopened() {
+        store.saveAccessibility(
+            StoryDraftAccessibility(mediaAlt: ["media-1": "Un chat roux sur un muret"]),
+            draftId: draftId)
+
+        let reopened = StoryDraftStore(dbPath: dbPath,
+                                       mediaDirectory: tempDir.appendingPathComponent("media"))
+
+        XCTAssertEqual(reopened.loadAccessibility(draftId: draftId).mediaAlt,
+                       ["media-1": "Un chat roux sur un muret"])
+    }
+
+    /// `test_accessibility_explicitSoundChoice_survivesTheStoreBeingReopened`
+    /// rougit si l'opt-in d'extraction de son ne survit pas : l'auteur devrait
+    /// re-poser, à chaque reprise, un choix qu'il a déjà fait sur son contenu.
+    func test_accessibility_explicitSoundChoice_survivesTheStoreBeingReopened() {
+        store.saveAccessibility(StoryDraftAccessibility(allowSoundExtraction: true),
+                                draftId: draftId)
+
+        let reopened = StoryDraftStore(dbPath: dbPath,
+                                       mediaDirectory: tempDir.appendingPathComponent("media"))
+
+        XCTAssertEqual(reopened.loadAccessibility(draftId: draftId).allowSoundExtraction, true)
+    }
+
+    /// `test_loadAccessibility_neverSaved_isEmpty` rougit si l'absence de
+    /// collecte remonte autre chose que `.empty` : l'appelant repose l'état
+    /// sans avoir à distinguer « rien saisi » de « rien persisté ».
+    func test_loadAccessibility_neverSaved_isEmpty() {
+        XCTAssertEqual(store.loadAccessibility(draftId: draftId), .empty)
+    }
+
+    /// `test_legacyDraft_withoutTheAccessibilityKey_stillReloadsItsSlides`
+    /// rougit si l'arrivée du champ rend illisible un brouillon écrit AVANT
+    /// lui — un brouillon perdu, c'est le travail de l'utilisateur perdu.
+    ///
+    /// Les lignes sont posées en SQL brut, exactement comme les écrivait la
+    /// version antérieure : passer par le `save()` d'aujourd'hui ferait dire au
+    /// test « le code actuel se relit lui-même », ce qui n'est pas la question.
+    func test_legacyDraft_withoutTheAccessibilityKey_stillReloadsItsSlides() throws {
+        let queue = try DatabaseQueue(path: dbPath)
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO story_draft_slide (draft_id, id, order_index, content, effects_json, media_url, duration, updated_at)
+                VALUES (?, 's1', 0, 'Un texte ecrit avant le champ', '{}', NULL, 5, 1)
+                """, arguments: [draftId])
+            try db.execute(
+                sql: "INSERT INTO story_draft_meta (draft_id, key, value) VALUES (?, 'visibility', 'PUBLIC')",
+                arguments: [draftId])
+        }
+
+        let reloaded = try XCTUnwrap(store.load(draftId: draftId))
+
+        XCTAssertEqual(reloaded.slides.first?.content, "Un texte ecrit avant le champ")
+        XCTAssertEqual(store.loadAccessibility(draftId: draftId), .empty,
+                       "Un brouillon d'avant le champ rend une collecte vide, jamais un échec.")
+    }
+
+    /// `test_loadAccessibility_storedBlobMissingBothKeys_decodesToEmpty` rougit
+    /// si le décodage cesse de passer par `decodeIfPresent` : une clé absente du
+    /// blob ferait alors échouer la lecture ENTIÈRE, et un brouillon écrit par
+    /// une version dont la forme diffère serait rendu illisible.
+    func test_loadAccessibility_storedBlobMissingBothKeys_decodesToEmpty() throws {
+        let queue = try DatabaseQueue(path: dbPath)
+        try queue.write { db in
+            try db.execute(
+                sql: "INSERT INTO story_draft_meta (draft_id, key, value) VALUES (?, 'accessibility', '{}')",
+                arguments: [draftId])
+        }
+
+        XCTAssertEqual(store.loadAccessibility(draftId: draftId), .empty)
+    }
+
+    /// `test_saveAccessibility_emptyCollection_clearsWhatWasStored` rougit si
+    /// effacer le dernier texte alternatif laissait la valeur précédente en
+    /// base : elle ressusciterait à la reprise suivante, par-dessus une
+    /// suppression explicite de l'auteur — même fidélité que l'audience et la
+    /// langue, dont l'absence EFFACE la clé.
+    func test_saveAccessibility_emptyCollection_clearsWhatWasStored() {
+        store.saveAccessibility(StoryDraftAccessibility(mediaAlt: ["media-1": "Un texte"]),
+                                draftId: draftId)
+
+        store.saveAccessibility(.empty, draftId: draftId)
+
+        XCTAssertEqual(store.loadAccessibility(draftId: draftId), .empty)
+    }
+
+    /// `test_delete_purgesTheAccessibilityCollection` rougit si jeter un
+    /// brouillon laissait sa collecte derrière : un brouillon ultérieur portant
+    /// le même id hériterait de textes qui décrivent d'autres médias.
+    func test_delete_purgesTheAccessibilityCollection() {
+        store.saveAccessibility(StoryDraftAccessibility(mediaAlt: ["media-1": "Un texte"]),
+                                draftId: draftId)
+
+        store.delete(draftId: draftId)
+
+        XCTAssertEqual(store.loadAccessibility(draftId: draftId), .empty)
+    }
+
     // MARK: - Harnais
 
     private var blockSlideDeletionTrigger: String {
