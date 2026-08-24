@@ -1,71 +1,69 @@
-# Cycle 122 — le Prisme de la bannière était RÉSOLU mais jamais SERVI
+# Cycle 123 — la protection gardait le CORPS, pas le FIL ; et le vocal n'avait pas de Prisme
 
-## Défaut
+## Point de départ — le suivi MESURÉ du cycle 122
 
-Deux défauts empilés sur la même surface (les notifications poussées) :
+Deux suivis étaient laissés, tous deux mesurés (pas hérités) :
 
-1. **Le corps de la bannière ne descendait pas le Prisme.** Le cycle 121 avait corrigé le RANG
-   de la traduction élue et l'avait déposée dans `context.translatedContent` → payload APNs/FCM.
-   **Aucun client ne lit ce champ** (mesuré : NSE iOS, app iOS, Android, service worker web — zéro
-   occurrence). Le seul texte rendu par les trois plateformes est `payload.body`, composé depuis
-   l'aperçu ORIGINAL. Le symptôme visé par le cycle 121 — bannière dans la langue de l'expéditeur
-   pendant que la ligne de liste est traduite — survivait intact.
-2. **Les éventails RÉPONSE et MENTION n'appliquaient AUCUN Prisme** (suivi mesuré du cycle 121) :
-   `content: params.messagePreview`, sans `translatedContent` ni `translatedLanguage`, sans même
-   la langue de cadrage.
+1. **La bannière d'un VOCAL reste dans la langue de l'expéditeur.** Sa transcription a ses
+   propres traductions (`MessageAttachment.translations`), qu'aucun éventail ne descend.
+   C'est la raison même du `previewIsMessageContent: false` du cycle 122 — une absence
+   ASSUMÉE, jamais comblée.
+2. `prePersistMessage` (NSE iOS) lit `userInfo["content"]`, clé absente du payload push.
+   Défaut DISTINCT du Prisme, hors de ce lot (Swift, non exerçable ici).
 
-## Correctif
+## Le défaut trouvé en instruisant (1) — la protection ne gardait qu'une moitié
 
-- [x] Extraire la descente en helpers PARTAGÉS (`loadMessagePrismSource`, `resolveServedTranslation`,
-      `servedPreview`, `translatedPushFields`) — les trois éventails les appellent, pas de
-      cinquième famille divergente.
-- [x] Le CORPS servi (push `body` + `Notification.content` persisté) porte le texte du Prisme.
-- [x] Réponse + mention : descente complète (corps, champs de fil, langue de cadrage au rang 1).
-- [x] Lot de mentions : UNE lecture du message pour N mentionnés ; `createMentionNotification`
-      relit quand la source n'est pas fournie — la correction ne dépend pas du câblage.
-- [x] Garde de substitution (`previewIsMessageContent`), tranchée par l'éventail :
-      un aperçu protégé (placeholder) et une transcription de vocal ne sont PAS `Message.content`.
+En cherchant OÙ brancher la source de Prisme d'une transcription, le point de branchement
+révèle un second défaut, plus grave que celui visé :
 
-## Témoins
+`prismTranslationContext(prismSource, …)` est appelé **INCONDITIONNELLEMENT** dans les trois
+éventails (`NotificationService:1723`, `:1896`, `:3483`), pendant que `servedPreview` — le
+corps — est, lui, gardé par `previewIsMessageContent`. Conséquence pour un message PROTÉGÉ
+(éphémère / vue unique / flouté) :
 
-- [x] 26 témoins de Prisme de notification (16 nouveaux). Mesure du ROUGE : Prisme neutralisé
-      (`servedPreview` → identité, `translatedPushFields` → `{}`) ⇒ **16 tombent, 10 restent verts** —
-      ces 10 gardent le mode d'échec du CORRECTIF (pas de fuite sur aperçu protégé, règle #1,
-      règle #3, original servi), pas celui du défaut.
-- [x] Suite gateway complète + `tsc --noEmit` (0 erreur).
+- le CORPS porte le placeholder (« ⏱️ 💬 24h ») — la protection tient ;
+- `data.translatedContent` porte **le texte en clair traduit**, poussé sur le fil APNs/FCM
+  (`NotificationService:1367`) et persisté dans la ligne `Notification`.
 
-## Suivi MESURÉ (non hérité)
+C'est la leçon 266 dans l'autre sens : le cycle 122 a corrigé un champ que personne ne lit en
+oubliant le corps ; ici la protection garde le corps et oublie le champ. **Le témoin du
+cycle 122 ne pouvait pas le voir** : il assertait sur `push.body` seul (« la traduction ne
+remplace pas le placeholder »), jamais sur ce que la charge TRANSPORTE à côté.
 
-- Bannière d'un VOCAL : reste dans la langue de l'expéditeur — la transcription a ses propres
-  traductions (`MessageAttachment.translations`), qu'aucun éventail ne descend. Absence assumée
-  et nommée par ce lot, pas un oubli.
-- `prePersistMessage` (NSE iOS) lit `userInfo["content"]`, clé absente du payload push
-  (`PushNotificationService:785` pose `{...payload.data}`) ⇒ corps VIDE au démarrage à froid
-  jusqu'à la synchro REST. Défaut DISTINCT du Prisme.
+## La cause commune, et le correctif
 
-## Merge manuel avec le cycle 122 parallèle (PR #3444)
+Deux résolutions parallèles sur la même méthode : une pour le TEXTE servi, une pour les CHAMPS
+du fil — gardées différemment. Le correctif les fond en UNE :
 
-Une session parallèle a soldé le MÊME suivi (Prisme réponse/mention) et atterri sur `main`
-pendant ce lot — jusqu'au même nom de fichier de témoins. Résolu à la main, en union :
+- `PreviewPrismBasis` — un type somme qui dit ce que l'aperçu EST (`message-content`,
+  `protected-placeholder`, `transcript` + sa source), remplaçant le booléen
+  `previewIsMessageContent`. Un booléen et une source séparés pourraient se contredire ;
+- **une seule descente par destinataire**, dont le corps ET les champs du fil sont deux
+  projections. Ce que le fil transporte décrit désormais ce que la bannière affiche.
 
-- **Leur base est prise** pour `NotificationService` (`pushableTranslations` /
-  `loadMessagePrismSource` / `prismTranslationContext`) ; ma descente est ré-appliquée par-dessus
-  sous forme de `prismTranslation` (la descente NUE) + `servedPreview` (le corps).
-- **Leur correction d'un témoin du cycle 121 qui ne pouvait pas tomber est CONSERVÉE** —
-  `notification.lang ?? 'de'` lisait `undefined` puis assertait son propre repli. Elle
-  s'appliquait aussi à mes propres témoins de cadrage, qui reprenaient ce patron.
-- **Leur témoin de cadrage a trouvé un vrai bug dans mon correctif** : un aperçu VIDE
-  (message sans texte, porteur d'une pièce jointe) n'a rien à substituer — le corps se compose
-  alors des badges localisés. `servedPreview` refuse désormais un aperçu vide.
-- **Deux de leurs témoins gelaient l'inverse de ce lot** (« le corps original reste le corps »),
-  sur deux prémisses mesurées fausses depuis : aucun client ne lit `translatedContent`, et la
-  dégradation APNs coupe ce champ AVANT le corps — porter la traduction dans le corps la fait
-  survivre à la dégradation. Les témoins sont INVERSÉS, avec les deux prémisses écrites en clair,
-  jamais supprimés.
-- Leurs deux lots de témoins de fail-open couvrent les miens : les miens sont retirés au profit
-  des leurs, plus complets (message volatilisé ET relecture qui lève, sur les deux éventails).
+## Plan
 
-## Leçon
+- [x] `transcriptTranslationTexts()` dans `packages/shared/types/attachment-audio.ts` — la
+      SSOT du dépouillement `AttachmentTranslations` → `langue → texte` (soft-delete et
+      entrées vides écartées), pour qu'une cinquième famille ne réécrive pas la boucle.
+- [x] `PreviewPrismBasis` + descente unique dans les trois éventails de `NotificationService`.
+- [x] `messageNotificationFanOut` : lit `translations` sur l'attachment et compose la base
+      `transcript` quand l'aperçu poussé EST la transcription.
+- [x] Témoins RED d'abord, sur la charge REMISE (`push.body` ET `push.data`).
 
-`tasks/lessons.md` § Leçon 266 — un contenu RÉSOLU n'est pas un contenu SERVI.
-(§ Leçon 265 est celle du cycle 122 parallèle, conservée telle quelle.)
+## Résultat
+
+- **18 témoins neufs**, ROUGE mesuré par deux mutations : `previewPrismSource` neutralisée ⇒
+  **10 tombent** ; l'éventail privé de sa base transcription ⇒ **1 tombe**, celui qui garde le
+  câblage.
+- Gates : gateway **847/847 suites, 19397 témoins** · shared **108 fichiers, 2578 témoins** ·
+  `tsc --noEmit` 0 erreur.
+- Détail raisonné : `tasks/realtime-sync-audit-2026-08-24-cycle123.md`.
+- Leçon : `tasks/lessons.md` § 267.
+
+### Suivi MESURÉ (non hérité)
+
+- `prePersistMessage` (NSE iOS) — corps VIDE au démarrage à froid. Hérité du cycle 122, Swift,
+  non exerçable ici. Toujours ouvert.
+- La piste AUDIO traduite d'un vocal n'est pas attachée à la bannière (le fichier joint reste
+  l'original) — absence nommée, non instruite.
