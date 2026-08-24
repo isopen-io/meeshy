@@ -216,3 +216,27 @@ harnais.
 
 `tasks/lessons.md` § Leçon 269 — un helper de confidentialité à UN SEUL appelant est un
 inventaire, pas une garde.
+
+## Gates du lot 2
+
+- `services/gateway` : **848/848 suites, 19411 témoins** verts (bun, `test:coverage`),
+  code de sortie de JEST lu directement — cf. le corollaire d'outillage de la leçon 269.
+- `tsc --noEmit` : **0 erreur**.
+
+## Ce que le lot 2 a coûté en HARNAIS, et pourquoi c'était prévisible
+
+Trois doubles de test sont devenus MUETS d'un coup — `reproduceEditedMessageNotifications`
+(port `{ notification }` seul), `messageMentions` (`message` réduit à `update`) et
+`MessageHandlerEditDelete` (`findUnique` en `jest.fn()` nu). La relecture étant fail-CLOSED,
+leur silence se traduisait en « message protégé » : **16 témoins verts sur des unités qui ne
+réécrivaient plus rien.**
+
+C'est la contrepartie ASSUMÉE du choix de conception (une garde de confidentialité se relit CHEZ
+elle, jamais via ses paramètres) et la forme « double PARTIEL » que le CLAUDE.md du gateway
+documente depuis le cycle 91 : un double qui n'offre pas ce que la production offre ne signale
+pas la perte, il la rend invisible. Les trois doubles servent désormais un message ORDINAIRE par
+défaut, et chaque témoin qui parle d'un message protégé le dit dans SA ligne.
+
+Un témoin existant en est sorti plus honnête : « une mention ajoutée en ÉDITANT un message
+éphémère hérite de son échéance » posait `expiresAt` sur le PARAMÈTRE pendant que la ligne relue
+disait « ordinaire » — il attestait un message qui n'existe pas.
