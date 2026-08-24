@@ -46,6 +46,13 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
     /// La porte la plus utilisée de l'app ouvre un DOCUMENT. C'est toute la
     /// raison d'être de V2 : sans cette ligne, V3 n'a nulle part où atterrir.
+    ///
+    /// Ce qu'il ne prouve PAS, et c'est pourquoi le lot 3 en écrit un second
+    /// juste en dessous : que la porte ATTEINT cette règle. `surface(opening:
+    /// format:)` est une fonction pure, et l'interroger sur le profil du fil
+    /// reste vert que la porte route vers sa feuille historique ou non. Il dit
+    /// « si le meuble sert cette porte, il lui monte un document » ; il ne dit
+    /// rien du « si ».
     func test_surface_duFeedComposer_estLeDocument() {
         let profil = ComposerProfile.profile(for: .feedComposer)
 
@@ -166,6 +173,85 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                 .scene,
                 "Reprendre un brouillon doit ouvrir l'atelier qui l'a adopté — le `.post` d'ouverture est TRANSITOIRE, "
                     + "et l'écrivain qui devait rebasculer au format du document n'existe pas."
+            )
+        }
+    }
+
+    /// **Lot 3 — le « si » que le test d'ouverture de cette section ne dit pas.**
+    ///
+    /// `test_surface_duFeedComposer_estLeDocument` interroge une fonction PURE
+    /// sur le profil du fil, et reste vert quoi qu'il arrive au routage. Il
+    /// décrit une surface que, jusqu'au lot 3, aucun utilisateur n'atteignait :
+    /// la porte présentait `FeedComposerSheet` et le meuble n'était jamais
+    /// monté sur ce chemin.
+    ///
+    /// Ce test-ci ferme la chaîne dans l'ordre où elle se parcourt : la porte
+    /// atteint le meuble, PUIS le meuble lui monte un document. Le premier
+    /// maillon est celui que le lot 3 pose ; le second est celui que le lot 2
+    /// avait écrit d'avance.
+    func test_surface_duFeedComposer_estAtteinte_depuisQueLaPorteNeRoutePlus() {
+        let profil = ComposerProfile.profile(for: .feedComposer)
+
+        XCTAssertNil(
+            profil.routesToLegacy,
+            "Lot 3 : tant que la porte du fil route vers sa feuille historique, la surface document décrite "
+                + "par cette suite est une pièce dont personne n'a la clé."
+        )
+        XCTAssertEqual(
+            ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat),
+            .document,
+            "Et ce qu'elle atteint est bien le DOCUMENT — une porte recâblée vers l'atelier de scène aurait "
+                + "quitté sa feuille pour un canvas de story, ce que personne n'a demandé en tapant sur le fil."
+        )
+    }
+
+    /// Les portes que le meuble sert, et la surface que chacune monte —
+    /// écrites en toutes lettres plutôt que comptées.
+    ///
+    /// Un compte serait resté vert le jour où une porte en remplacerait une
+    /// autre. Ce tableau-ci rougit dans les DEUX sens : une porte qui quitterait
+    /// le périmètre du meuble, et une porte qui changerait de surface sous les
+    /// pieds de son auteur. C'est la vue d'ensemble que le lot 3 modifie —
+    /// `feedComposer` y entre, et il est la SEULE ligne à monter un document.
+    ///
+    /// Ce que ce test n'affirme pas : que chacune de ces portes ait un site de
+    /// montage en production. Elles ne l'ont pas toutes (les réels sont hors v1,
+    /// le média de conversation attend le lot G), et ce n'est pas ici que cela
+    /// se mesure — ce tableau parle des PROFILS.
+    ///
+    /// La garde qui parle des SITES existe depuis la revue du lot 3 :
+    /// `MeeshyComposerHostGuardTests`
+    /// `.test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`
+    /// balaie l'arbre de l'app et rougit le jour où un site monte une
+    /// porte-document pendant que le document n'a ni rangée servie, ni issue
+    /// pour sa saisie, ni publieur atteignable. Sans elle, la table du lot 3
+    /// aurait dit « le meuble sert cette porte » à un lot suivant qui l'aurait
+    /// crue, et l'auteur y aurait trouvé un écran sans issue.
+    func test_chaquePorteServieParLeMeuble_monteLaSurfaceQueSonFormatCommande() {
+        let portesDuMeuble: [(nom: String, origine: ComposerOrigin, surface: ComposerSurfaceKind)] = [
+            (nom: "storyTray", origine: .storyTray, surface: .scene),
+            (nom: "feedComposer", origine: .feedComposer, surface: .document),
+            (nom: "reelTab", origine: .reelTab, surface: .scene),
+            (nom: "draft", origine: .draft(id: "brouillon-42"), surface: .scene),
+            (nom: "share", origine: .share, surface: .scene),
+            (nom: "conversationMedia",
+             origine: .conversationMedia(messageId: "msg-7", attachmentId: "piece-3"),
+             surface: .scene)
+        ]
+
+        for porte in portesDuMeuble {
+            let profil = ComposerProfile.profile(for: porte.origine)
+
+            XCTAssertNil(
+                profil.routesToLegacy,
+                "\(porte.nom) doit être servie par le MEUBLE : une porte qui route vers un composer "
+                    + "historique ne monte aucune de ces deux surfaces."
+            )
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat),
+                porte.surface,
+                "\(porte.nom) doit ouvrir sur \(porte.surface) — changer la surface d'une porte change ce "
+                    + "que son auteur voit au premier tap, sans qu'aucun libellé ne l'annonce."
             )
         }
     }

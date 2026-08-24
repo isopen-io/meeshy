@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// C2 — gardes de SOURCE sur `MeeshyComposerHost`, le meuble du composer unifié.
@@ -91,6 +92,19 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// plusieurs vues, et un `.contains` qui matche un commentaire ne prouve
     /// rien.
     private func productionCallersOfTheHost() throws -> [String] {
+        try sourcesDeLApp(excluant: ["MeeshyComposerHost.swift"])
+            .filter { AppSourceGuard.stripComments(try String(contentsOf: $0, encoding: .utf8)).contains("MeeshyComposerHost(") }
+            .map { $0.lastPathComponent }
+    }
+
+    /// L'arbre source de l'app — le balayage que toutes les gardes cherchant un
+    /// site de PRODUCTION partagent.
+    ///
+    /// Il se garde lui-même : un chemin devenu faux rendrait une liste vide, et
+    /// toute garde bâtie dessus passerait au vert en ayant perdu son objet.
+    /// Une liste de chemins nommés aurait eu le même défaut en pire — elle
+    /// aurait dû être tenue à jour par celui-là même qui débranche une porte.
+    private func sourcesDeLApp(excluant fichiersExclus: Set<String> = []) -> [URL] {
         let appRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // .../Unit/Composer
             .deletingLastPathComponent()   // .../Unit
@@ -105,13 +119,11 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         let sources = walker
             .compactMap { $0 as? URL }
             .filter { $0.pathExtension == "swift" }
-            .filter { $0.lastPathComponent != "MeeshyComposerHost.swift" }
+            .filter { !fichiersExclus.contains($0.lastPathComponent) }
 
         XCTAssertGreaterThan(sources.count, 50, "Trop peu de sources balayées — le chemin de l'arbre app est faux")
 
-        return try sources
-            .filter { AppSourceGuard.stripComments(try String(contentsOf: $0, encoding: .utf8)).contains("MeeshyComposerHost(") }
-            .map { $0.lastPathComponent }
+        return sources
     }
 
     // MARK: - Le host ENVELOPPE l'atelier, il ne le réécrit pas
@@ -271,6 +283,306 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             try hostCode().contains("routesToLegacy"),
             "Le host doit lire `routesToLegacy` — sans quoi la table de C1 ne gouverne rien"
         )
+    }
+
+    // MARK: - Lot 3 — la porte du fil passe par le meuble
+
+    /// **Le LECTEUR, pas la table.** `ComposerIntent.routesToLegacy` vit dans ce
+    /// fichier-ci (extension en bas de `MeeshyComposerHost.swift`), et c'est LUI
+    /// que les portes de présentation interrogent pour décider si elles montent
+    /// le meuble ou la feuille historique. Il ne se contente pas de relire la
+    /// table : il lui passe `ComposerReelGate.withoutComposition`, une valeur
+    /// qu'il choisit seul. Le jumeau côté table est
+    /// `ComposerIntentTests.test_profile_feedComposer_estServiParLeMeuble_surSaSurfaceDocument`
+    /// — et les deux sont nécessaires, parce qu'une table qui cesserait de
+    /// router pendant que son lecteur, lui, continuerait de rendre une valeur
+    /// laisserait la porte présenter la feuille en toute conformité.
+    func test_lIntentionDuFil_ouvreLeMeuble_etNonSaFeuilleHistorique() {
+        XCTAssertNil(
+            ComposerIntent(origin: .feedComposer).routesToLegacy,
+            "Lot 3 : la porte la plus utilisée de l'app cesse de router vers `FeedComposerSheet`. Tant que "
+                + "ce lecteur rend une valeur, la porte présente la feuille et le meuble reste du code que "
+                + "personne ne voit sur cette porte-là."
+        )
+    }
+
+    /// La CHAÎNE complète, du point d'entrée à la surface, sans monter la
+    /// moindre vue : la porte du fil atteint le meuble (`routesToLegacy == nil`),
+    /// le meuble lui monte un DOCUMENT, et le clavier s'y lève d'emblée.
+    ///
+    /// Les trois maillons sont éprouvés ENSEMBLE parce qu'ils se protègent l'un
+    /// l'autre. Le premier seul autoriserait un recâblage vers l'atelier de
+    /// scène — un canvas de story là où l'auteur attend un champ de texte. Le
+    /// deuxième seul est déjà vrai aujourd'hui et le restera quoi qu'il arrive,
+    /// puisque `ComposerSurfaceRouting` est une fonction pure que personne
+    /// n'appelle sur cette porte tant qu'elle route. Le troisième est la
+    /// première des trois capacités que la spec v2 exige de cette surface
+    /// (§E lot 2 : « clavier sur `content` ») — la seule que le meuble tienne de
+    /// bout en bout.
+    ///
+    /// Ce qu'il ne dit PAS, et qui reste une dette CONSIGNÉE plutôt qu'un
+    /// acquis : la surface ainsi montée ne sert aujourd'hui aucun outil
+    /// (`servedDocumentTools` rend `[]`), n'a aucun chemin d'envoi
+    /// (`ComposerDocumentSendRouting` n'a aucun appelant, et
+    /// `test_leRoutageDEnvoi_nEstMonteNullePart` l'exige) et ne porte pas
+    /// l'éventail des formats. Les deux dernières capacités du DoD du lot 2 —
+    /// la rangée photo·caméra·emoji·document·lieu·micro et l'envoi durable
+    /// offline — ne sont pas tenues par ce test et ne le seront pas par le lot 3.
+    func test_leMeuble_monteLeDocument_pourLaPorteDuFil() {
+        let intention = ComposerIntent(origin: .feedComposer)
+        let profil = ComposerProfile.profile(
+            for: intention.origin,
+            compositionQualifiesAsReel: ComposerReelGate.withoutComposition
+        )
+
+        XCTAssertNil(
+            intention.routesToLegacy,
+            "Premier maillon : sans lui, les deux suivants décrivent une surface que personne n'atteint."
+        )
+        XCTAssertEqual(
+            ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat),
+            .document,
+            "Le fil ouvre un texte et des pièces jointes, pas un canvas : le meuble doit lui monter la "
+                + "surface DOCUMENT que le lot 2 a écrite."
+        )
+        XCTAssertTrue(
+            ComposerSurfaceRouting.focusesContentOnAppear(opening: profil.opensWith),
+            "Et le clavier s'y lève d'emblée — c'est la promesse que `keyboardOnContent` porte, et la "
+                + "première des trois capacités que la spec v2 exige de cette surface."
+        )
+    }
+
+    // MARK: - Lot 3 — la table désigne le meuble, la garde retient la PORTE
+
+    /// Les portes que le meuble monte en DOCUMENT, et le littéral par lequel un
+    /// site de production les construirait.
+    ///
+    /// Un tableau plutôt qu'une garde écrite sur `.feedComposer` : le jour où une
+    /// seconde porte monte un document, elle entre ici et hérite de la même
+    /// retenue sans qu'on réécrive quoi que ce soit.
+    ///
+    /// Le littéral porte `ComposerIntent(origin:` en entier, et ce n'est pas de
+    /// la prudence gratuite : chercher le seul `.feedComposer` ferrerait TROIS
+    /// sites de production qui n'ont rien à voir — `context: .feedComposer` est
+    /// un cas de `PasteContext`, écrit tel quel dans `FeedView`,
+    /// `FeedView+Attachments` et `RootViewComponents`. Le témoin
+    /// `test_leDetecteurDePorteDocument_ferreLIntention_etPasLeContexteDeCollage`
+    /// tient ce départage.
+    private static let portesDocumentDuMeuble: [(nom: String, origine: ComposerOrigin, litteral: String)] = [
+        (nom: "feedComposer", origine: .feedComposer, litteral: "ComposerIntent(origin: .feedComposer")
+    ]
+
+    /// **La garde que la bascule du lot 3 ARME.** Sans elle, la table de C1
+    /// serait un piège tendu au lot suivant.
+    ///
+    /// Depuis ce lot, `ComposerIntent(origin: .feedComposer).routesToLegacy`
+    /// rend `nil`, et le contrat gravé en bas de `MeeshyComposerHost.swift` dit
+    /// ce que `nil` VEUT DIRE : « la porte ouvre `MeeshyComposerHost` ».
+    /// Appliquer ce contrat est la seule chose que la table existe pour
+    /// gouverner — un agent remplacera le booléen d'une porte de présentation
+    /// par sa lecture, et montera le meuble.
+    ///
+    /// Ce qu'il obtiendrait aujourd'hui, mesuré sur la source : une croix, un
+    /// `TextEditor`, AUCUNE rangée d'outils (`servedDocumentTools` rend `[]`),
+    /// aucune issue pour le texte tapé (`documentText` n'est lu par personne) et
+    /// AUCUN bouton publier — le socle n'est pas peint tant que `chromeOwner`
+    /// vaut `.atelier`, et l'atelier, lui, n'est pas monté sous le document.
+    /// La seule sortie serait la croix, qui jette. C'est mot pour mot « la
+    /// régression sèche » que la spec v2 §E interdit en conditionnant le lot 3
+    /// au lot 2, et aucune suite ne la voyait : les huit tests du lot certifient
+    /// « le fil est servi par le meuble », les gardes négatives certifient « le
+    /// meuble ne publie pas » — deux suites vertes, un produit impossible.
+    ///
+    /// Ce qu'elle retient, donc : **la table peut désigner le meuble ; une porte
+    /// de PRÉSENTATION ne peut pas le monter tant que le document est une
+    /// impasse.** Elle est muette aujourd'hui par construction — aucun site ne
+    /// construit cette intention — et c'est le jour du câblage qu'elle parle.
+    ///
+    /// Ce qu'elle ne dit PAS : que les trois capacités soient tenues. Elle
+    /// n'exige rien tant que personne ne monte la porte, et c'est délibéré —
+    /// la dette du lot 2 reste une dette CONSIGNÉE, que le lot 7 lèvera ; cette
+    /// garde interdit seulement de la découvrir par un écran sans issue.
+    func test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse() throws {
+        let portesDocument = portesDocumentServiesParLeMeuble()
+        XCTAssertFalse(
+            portesDocument.isEmpty,
+            "Aucune des portes du tableau n'est plus un document servi par le meuble : la garde ne retient "
+                + "plus RIEN. Si une porte a été délibérément reroutée vers un composer historique, c'est ce "
+                + "tableau qu'il faut corriger — pas cette assertion qu'il faut retirer."
+        )
+
+        let sertUnOutil = try leMeubleSertAuMoinsUnOutilAuDocument()
+        let saisieAUneIssue = try laSaisieDuDocumentAUneIssue()
+        let publieurAtteignable = try leDocumentAUnPublieurAtteignable()
+
+        let sites = try sitesDeProductionOuvrantUnePorteDocument()
+        guard !sites.isEmpty else { return }
+
+        let ou = sites.map { "\($0.porte) dans \($0.fichier)" }.joined(separator: ", ")
+
+        XCTAssertTrue(
+            sertUnOutil,
+            "\(ou) monte le meuble sur une surface document dont la rangée d'outils ne se peint pas "
+                + "(`servedDocumentTools` rend `[]`, et `ComposerDocumentSurface.toolRow` ne peint rien d'une "
+                + "rangée vide). L'auteur perd photo·caméra·emoji·document·lieu·micro d'un coup, sur la "
+                + "porte la plus utilisée de l'app : c'est la deuxième capacité du DoD du lot 2 (spec v2 §E)."
+        )
+        XCTAssertTrue(
+            saisieAUneIssue,
+            "\(ou) monte le meuble sur une surface document dont le texte n'a AUCUNE issue : `documentText` "
+                + "n'est lu que par la liaison de la surface. Ce que l'auteur tape n'a nulle part où partir, et "
+                + "la croix le jette — c'est la troisième capacité du DoD du lot 2, l'envoi durable offline, "
+                + "dont `ComposerDocumentSendRouting` n'est aujourd'hui que la MESURE."
+        )
+        XCTAssertTrue(
+            publieurAtteignable,
+            "\(ou) monte le meuble sur une surface document sans aucun publieur ATTEIGNABLE. Attention au "
+                + "faux ami : `ComposerChromeOwner.atelier.hasPublisher(triggerIsArmed:)` rend `true` parce que "
+                + "« la flèche de la rangée existe toujours » — cette phrase ne vaut que là où l'atelier est "
+                + "MONTÉ, et il ne l'est pas sous le document. La seule flèche possible y est celle du socle, qui "
+                + "n'est peint que si le chrome cède la publication, et qui doit alors être un bouton — pas le "
+                + "`Label` témoin d'aujourd'hui."
+        )
+    }
+
+    /// Le témoin du détecteur — sans lui, la garde ci-dessus serait une garde
+    /// CONDITIONNELLE qui ne s'exécute jamais : verte pour toujours, y compris
+    /// le jour où son littéral cesserait de ferrer quoi que ce soit.
+    ///
+    /// Il éprouve les deux sens. Ce qui DOIT être ferré : la construction de
+    /// l'intention, y compris reformatée sur plusieurs lignes — le contournement
+    /// par retour à la ligne que la revue du 2026-08-23 a relevé quatre fois
+    /// dans ce fichier. Ce qui ne doit PAS l'être : `context: .feedComposer`, le
+    /// cas homonyme de `PasteContext` que trois vues de production écrivent
+    /// déjà, et une construction en COMMENTAIRE, qui ne monte rien.
+    func test_leDetecteurDePorteDocument_ferreLIntention_etPasLeContexteDeCollage() {
+        XCTAssertEqual(
+            monteUnePorteDocument("let intention = ComposerIntent(origin: .feedComposer)"), ["feedComposer"],
+            "Le détecteur ne ferre plus la construction qu'il cherche : la garde du lot 3 ne mesure RIEN."
+        )
+        XCTAssertEqual(
+            monteUnePorteDocument("ComposerIntent(\n    origin: .feedComposer\n)"), ["feedComposer"],
+            "Un retour à la ligne suffirait à contourner la garde — le mode d'extinction silencieuse propre "
+                + "aux gardes négatives."
+        )
+        XCTAssertTrue(
+            monteUnePorteDocument("PasteIntoComposer(context: .feedComposer)").isEmpty,
+            "`context: .feedComposer` est un cas de `PasteContext` : le ferrer condamnerait trois vues de "
+                + "production qui ne montent aucun composer."
+        )
+        XCTAssertTrue(
+            monteUnePorteDocument("// ComposerIntent(origin: .feedComposer)").isEmpty,
+            "Un commentaire ne monte aucune porte — et la source du meuble en NOMME une."
+        )
+        XCTAssertTrue(
+            monteUnePorteDocument("ComposerIntent(origin: .storyTray)").isEmpty,
+            "Le tray ouvre une SCÈNE : l'atelier du SDK y peint sa rangée, cette garde ne le concerne pas."
+        )
+    }
+
+    /// Les portes du tableau que la table sert RÉELLEMENT en document. Calculé,
+    /// jamais supposé : une porte reroutée vers un composer historique sort du
+    /// périmètre de cette garde, et l'assertion d'ouverture le fait dire à voix
+    /// haute au lieu de laisser la suite se vider en silence.
+    private func portesDocumentServiesParLeMeuble() -> [String] {
+        Self.portesDocumentDuMeuble
+            .filter { porte in
+                let profil = ComposerProfile.profile(for: porte.origine)
+                guard profil.routesToLegacy == nil else { return false }
+                return ComposerSurfaceRouting.surface(
+                    opening: profil.opensWith,
+                    format: profil.initialFormat
+                ) == .document
+            }
+            .map { $0.nom }
+    }
+
+    /// Les portes-document qu'une source construit — commentaires retirés,
+    /// blancs écrasés.
+    private func monteUnePorteDocument(_ source: String) -> [String] {
+        let compacte = compact(AppSourceGuard.stripComments(source))
+        return Self.portesDocumentDuMeuble
+            .filter { compacte.contains(compact($0.litteral)) }
+            .map { $0.nom }
+    }
+
+    private func sitesDeProductionOuvrantUnePorteDocument() throws -> [(fichier: String, porte: String)] {
+        try sourcesDeLApp().flatMap { url -> [(fichier: String, porte: String)] in
+            let contenu = try String(contentsOf: url, encoding: .utf8)
+            return monteUnePorteDocument(contenu).map { (fichier: url.lastPathComponent, porte: $0) }
+        }
+    }
+
+    /// Ce que le meuble SERT au document, lu sur la forme littérale du vide.
+    ///
+    /// Ce qu'elle mesure exactement : `servedDocumentTools` rend un tableau vide
+    /// ÉCRIT COMME TEL. Une rangée servie sous condition compterait pour servie,
+    /// et c'est assumé — le jour où le meuble a une matière à servir, la
+    /// question devient celle du câblage, pas celle de cette garde.
+    private func leMeubleSertAuMoinsUnOutilAuDocument() throws -> Bool {
+        guard let bloc = declarationBody(startingAt: "private var servedDocumentTools", in: try hostCode()) else {
+            XCTFail("`servedDocumentTools` est introuvable dans le meuble — la garde ne mesurerait RIEN")
+            return true
+        }
+        let corps = compact(bloc)
+        return !(corps.hasSuffix("{[]}") || corps.hasSuffix("{return[]}"))
+    }
+
+    /// Le texte du document a-t-il une ISSUE ? Il en a une dès que quelqu'un le
+    /// LIT ailleurs que la liaison qui le remplit.
+    ///
+    /// Deux occurrences aujourd'hui, commentaires retirés : la déclaration de
+    /// l'état et le `text: $documentText` passé à la surface. Une troisième est
+    /// forcément un lecteur — un envoi, un brouillon, un transfert vers
+    /// l'atelier. Le compte est préféré à la recherche d'un symbole d'envoi
+    /// nommé : la garde n'a pas à deviner PAR OÙ le texte partira.
+    private func laSaisieDuDocumentAUneIssue() throws -> Bool {
+        let code = try hostCode()
+        guard compact(code).contains(compact("@State private var documentText")) else {
+            XCTFail("L'état `documentText` est introuvable dans le meuble — la garde ne mesurerait RIEN")
+            return true
+        }
+        return occurrences(of: "documentText", in: code) > 2
+    }
+
+    /// Y a-t-il quelqu'un pour publier SOUS LE DOCUMENT ?
+    ///
+    /// Deux conditions, et la première est un faux ami qu'il faut nommer :
+    /// `hasPublisher(triggerIsArmed:)` rend `true` pour `.atelier` « parce que
+    /// la flèche de la rangée existe toujours » — vrai là où l'atelier est
+    /// monté, faux sous le document, que `MeeshyComposerHost.surface` monte
+    /// SEUL. La seule flèche possible y est celle du socle, et le socle n'est
+    /// peint que si le chrome lui cède la publication. Seconde condition : que
+    /// cette zone DÉCLENCHE, au lieu de nommer la publication comme le fait le
+    /// `Label` témoin d'aujourd'hui.
+    ///
+    /// Elle cherche une EXPRESSION `Button` (`Button{` ou `Button(`), jamais le
+    /// mot : la propriété s'appelle `publishButton`, et compter le mot aurait
+    /// rendu `true` sur le témoin inerte — une garde verte affirmant l'exact
+    /// contraire de ce qu'elle mesure. Le piège a été pris à la simulation, pas
+    /// au hasard, et il est consigné ici pour la prochaine ancre nommée d'après
+    /// ce qu'elle cherche.
+    private func leDocumentAUnPublieurAtteignable() throws -> Bool {
+        let chrome = try chromeOwnerDeclareParLeMeuble()
+        guard !chrome.assembles(.publish) else { return false }
+        guard let bloc = declarationBody(startingAt: "private var publishButton", in: try hostCode()) else {
+            XCTFail("La zone de publication du socle est introuvable — la garde ne mesurerait RIEN")
+            return false
+        }
+        let corps = compact(bloc)
+        return corps.contains("Button{") || corps.contains("Button(")
+    }
+
+    /// La valeur DÉCLARÉE de `chromeOwner`, lue sur la source : le champ est
+    /// `private let`, et l'ouvrir pour un test donnerait au reste de l'app un
+    /// réglage qui n'appartient qu'au meuble. Le prédicat, lui, n'est pas
+    /// recopié — c'est celui du SDK qui tranche.
+    private func chromeOwnerDeclareParLeMeuble() throws -> ComposerChromeOwner {
+        let compacte = try hostCompact()
+        if compacte.contains(compact("chromeOwner: ComposerChromeOwner = .host")) { return .host }
+        if compacte.contains(compact("chromeOwner: ComposerChromeOwner = .atelier")) { return .atelier }
+        XCTFail("La déclaration de `chromeOwner` est introuvable dans le meuble — la garde ne mesurerait RIEN")
+        return .atelier
     }
 
     // MARK: - C3 — le host rend au cover ce que le cover donne
