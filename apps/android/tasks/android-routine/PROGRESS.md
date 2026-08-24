@@ -2,6 +2,72 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-24 **the feed folds realtime post EDITS pushed over `post:updated`** (slice
+> `feed-post-updated-realtime-merge`, feature-parity Feed) — the WHOLE-POST sibling of the
+> `post-translation-updated` fold and the post analog of the `comment:updated` fold, both shipped the same day.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3481 (gateway anonymous IP-range),
+> #3477 (`claude/upbeat-dirac-*`, the SEPARATE calls routine — `tasks/calls-fonctionnel-todo.md`, left
+> untouched), #3475/#3474/#3470 (web/ios/gateway Prisme/i18n cycles): none is a `claude/apps/android/*` slice,
+> all touch production logic outside `apps/android`, none in this routine's scope. Prior slice
+> (`comment-updated-realtime-merge`, #3482) already merged into main. **Main's Android CI green** at 756e7b9d
+> (last android-touching commit; later main commits — cycle 126, web composer — touch no `apps/android` file,
+> so android.yml did not re-run and could not have reddened it). Branched off freshly-fetched `origin/main`
+> (`f79ed42f`).
+>
+> **The gap — the whole-post twin of the two content-folds Android already ships.** The gateway rebroadcasts an
+> edited post (caption / media / mood) as the COMPLETE new object `{ post }` to every feed/post room via
+> `SocialEventsHandler.broadcastPostUpdated`. iOS folds it into the feed, preserving the viewer's own `isLiked`
+> across the swap (`FeedViewModel` post:updated sink). On Android the event decoded nowhere: `SocialSocketManager`
+> had no `postUpdated` flow, `SocketEvents.kt` no DTO, `FeedViewModel` no subscriber — an edited post stayed
+> stale on the card until a full refetch, while `post:translation-updated` (the caption-only twin) already folded.
+>
+> **The fix — a DTO + a socket flow + a PURE viewer-state-preserving merge + a cache fold + a VM subscriber.**
+> (1) New `SocketPostUpdatedData(post: ApiPost)` in `:core:model` (mirror of iOS, nests the post under `post`).
+> (2) New pure `PostUpdateMerge.merge(previous, updated): ApiPost?` — adopts every AUTHORITATIVE field from the
+> edit (content, counts, translations, reactionSummary, media) while carrying the reader's OWN
+> `isLikedByMe`/`isBookmarkedByMe`/`isViewedByMe`/`currentUserReactions` across the swap. The broadcast is ONE
+> unpersonalized object shared by all recipients, so its viewer fields are the broadcaster's/default view;
+> adopting them wholesale would silently un-like/un-bookmark/un-view the card on any unrelated edit. iOS preserves
+> only `isLiked`; Android preserves all four — **strictly more faithful**. Returns `null` (inert, caller skips the
+> re-emit) when the merged result equals `previous` (a re-broadcast, or an edit that changed nothing visible).
+> (3) `SocialSocketManager.postUpdated` flow + `listen("post:updated", …)`. (4)
+> `PostRepository.applyPostUpdate(updated): Boolean` folds via `PostUpdateMerge` into `_feedCache` (the whole-post
+> sibling of `applyTranslationUpdate`). (5) `FeedViewModel` subscribes and routes to the repository (the
+> content-edit sibling of the `post:translation-updated` sink).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200).** Pristine `android-37.0` auto-installed by AGP but the
+> first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch (`source.properties` ApiLevel +
+> `package.xml` `<api-level>` + `path=` + BOTH `build.prop` `sdk_full` fields), keeping both dirs, resolved it
+> (per NOTES "THIRD mode").
+>
+> **Tests: +11** — 6 `PostUpdateMergeTest` (adopts edited content/counts; preserves the reader's like state
+> against an unpersonalized broadcast; preserves bookmark/viewed/reactions; inert when nothing visible changed;
+> inert on an identical re-broadcast; a reactionSummary-only change is NOT a no-op), 3 `PostRepositoryTest`
+> (folds the edit preserving the reader's like state; inert for an unknown post; inert on an identical
+> re-broadcast), 1 `SocialSocketManagerTest` (decodes the nested edited post), 1 `FeedViewModelTest` (a
+> `post:updated` routes to `applyPostUpdate`). **RED-proof isolated**: dropping the viewer-state preservation
+> (`merge` → `updated.takeIf { it != previous }`) reddened EXACTLY the 4 preservation/discrimination tests
+> (2968 completed, 4 failed) — the 2 preservation-independent tests (`adopts edited content`, `inert
+> re-broadcast`) stayed green: genuine discrimination, not an assertion echo.
+>
+> **Verified**: targeted `:core:model`/`:sdk-core`/`:feature:feed` unit tests **BUILD SUCCESSFUL**; full
+> `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) — **BUILD SUCCESSFUL in 4m
+> 10s (973 tasks)**. Reviewer
+> PASS. Diff is `apps/android` only (3 prod files edited in :core:model + :sdk-core + :feature:feed, 1 new pure
+> file, +11 tests across 4 files, tracking docs). Verdict: **PASS** — a DTO mirroring an existing type, a pure
+> viewer-state-preserving merge, a cache fold reusing the established `_feedCache` seam, a socket event mirroring
+> the existing social events, and a VM subscriber reusing the `post:translation-updated` pattern; behavioural
+> tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: Feed realtime is now honoured for POST caption (translation), POST body (edit), STORY overlay, and
+> COMMENT (add/edit/delete/translation/like). The remaining social realtime channels iOS folds that Android's
+> `SocialSocketManager` still ignores: **`post:reaction-added`/`-removed`/`-sync`** and
+> **`comment:reaction-sync`** (both need scouting first — Android models post/comment reactions as a like/heart
+> count + `reactionSummary`, but whether the feed/thread RENDERS the emoji summary decides orphan risk),
+> **`post:reposted`** (a repost landing live — scout whether the feed head accepts it), and `comment:media-updated`
+> (still BLOCKED on a comment-audio render surface). Scout read-only before committing to any.
+
 > On 2026-08-24 **the comment thread folds realtime EDITS pushed over `comment:updated`** (slice
 > `comment-updated-realtime-merge`, feature-parity Feed) — AND a required hotfix that **restored a red `main`**.
 >

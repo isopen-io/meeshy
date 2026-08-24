@@ -5,6 +5,27 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-24 — a broadcast fold of a WHOLE entity must preserve the reader's OWN per-viewer fields (slice `feed-post-updated-realtime-merge`)
+`post:updated` rebroadcasts the COMPLETE edited post `{ post }` to every feed/post room — ONE object, shared
+by all recipients, so it cannot be personalized. Its viewer-owned fields (`isLikedByMe`, `isBookmarkedByMe`,
+`isViewedByMe`, `currentUserReactions`) are therefore the broadcaster's/default view, NOT the reader's.
+Folding it in wholesale would silently un-like/un-bookmark/un-view the card on any unrelated edit. The pure
+`PostUpdateMerge.merge(previous, updated)` adopts every AUTHORITATIVE field from the edit while carrying those
+four personal fields across from the cached copy. **iOS preserves only `isLiked`; Android preserves all four
+its model exposes — do-better parity, not a copy.** The witness that catches a regression here is NOT "content
+updated" (that passes even with zero preservation) but "the reader's like survives an edit whose wire payload
+says un-liked" — RED-proof: dropping the preservation reddened exactly the 4 preservation/inert-discrimination
+tests, the 2 content-only tests stayed green. General rule for ANY realtime fold of a broadcast entity: **list
+the per-viewer fields the wire cannot personalize, and preserve every one — the diff a content-only test can't
+see.** No-op guard: `merge` returns `null` when the result equals `previous` (re-broadcast / nothing visible
+changed), so `_feedCache` never re-emits for free.
+
+**SDK bootstrap this run: `dl.google.com` 200; pristine `android-37.0` auto-installed but the first `./gradlew`
+HASH-ERRORED on `android-37`.** The four-edit copy→patch (`source.properties` ApiLevel, `package.xml`
+`<api-level>` + `path=`, BOTH `build.prop` `ro.build.version.sdk_full` AND `ro.system.build.version.sdk_full`),
+keeping android-37.0 alongside, resolved it (NOTES "THIRD mode"). The recipe still flips per container — read
+the first `./gradlew` outcome, don't assume last run's branch.
+
 ## 2026-08-24 — the caption sibling landed exactly where the last note predicted; reuse an existing model type as a socket-payload field (slice `post-translation-updated-realtime-merge`)
 The prior note ended "Caption has the same shape (`post:translation-updated`), a likely next Android viewer
 gap." It was — the scout confirmed iOS wires it (`FeedViewModel.applyPostTranslation`), the gateway broadcasts
