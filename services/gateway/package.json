@@ -65,7 +65,7 @@
     "speakeasy": "^2.0.0",
     "thumbhash": "^0.1.1",
     "ua-parser-js": "^2.0.10",
-    "uuid": "^14.0.1",
+    "uuid": "^14.0.2",
     "winston": "^3.19.0",
     "zeromq": "^6.5.0",
     "zod": "^4.4.3",
