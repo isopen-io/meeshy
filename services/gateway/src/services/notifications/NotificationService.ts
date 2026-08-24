@@ -86,13 +86,60 @@ export type MessagePrismSource = {
 export type MessageBannerSource = MessagePrismSource & {
   readonly createdAt: Date | null;
   readonly messageType: string | null;
+  readonly liveness: MessageLiveness;
 };
 
-const EMPTY_PRISM_SOURCE: MessageBannerSource = {
+/**
+ * Ce qu'une relecture a APPRIS de la vie du message — trois états, et le
+ * troisième n'est pas un détail de forme.
+ *
+ * `createMessageNotification` porte cette garde depuis toujours, et son
+ * commentaire dit pourquoi : entre le commit du message et l'éventail il peut
+ * s'écouler des centaines de millisecondes, et un message rappelé dans cette
+ * fenêtre ne doit pas pousser son texte ORIGINAL sur un écran verrouillé. La
+ * règle vaut mot pour mot pour la réponse et la mention, qui relisent la MÊME
+ * ligne dans la MÊME fenêtre (cycle 127).
+ *
+ *  - `live` — la ligne a été lue : ni rappelée, ni expirée. Annoncer.
+ *  - `gone` — la ligne a été lue et PROUVE le rappel ou l'expiration. Se taire.
+ *  - `unknown` — la lecture n'a rien PROUVÉ : elle a levé, ou n'a rendu aucune
+ *    ligne. Annoncer.
+ *
+ * La distinction `gone` / `unknown` est la leçon du cycle 112 : « la dépendance
+ * n'a pas répondu » et « la réponse dit non » sont deux verdicts, et un `catch`
+ * qui les confond transforme un hoquet Mongo en silence pour tout un fil. La
+ * relecture reste donc fail-OPEN sur l'ERREUR — une bannière appauvrie se
+ * rattrape, une annonce perdue non — et fail-CLOSED sur la PREUVE, où c'est un
+ * secret qui est en jeu.
+ *
+ * **Une ligne ABSENTE est `unknown`, jamais `gone`**, et le dépôt le tenait déjà
+ * pour dit : le balayage de rétraction de l'éventail refuse d'agir dessus dans
+ * les mêmes termes — « `deletedAt` non nul est la SEULE preuve d'un rappel. Une
+ * ligne absente ne prouve rien, et aucun chemin de la gateway ne supprime un
+ * message physiquement ». Le mécanisme qui la produit est réel : le message vient
+ * d'être committé, et une lecture servie par un secondaire en retard sur le jeu
+ * de réplicas rend `null` pour un message parfaitement vivant. En faire une
+ * preuve ferait perdre des annonces qu'aucun réessai ne rattrape.
+ */
+export type MessageLiveness = 'live' | 'gone' | 'unknown';
+
+/** Rien à traduire — la réponse de `previewPrismSource` sur un aperçu sans source. */
+const EMPTY_PRISM_SOURCE: MessagePrismSource = {
   translations: {},
   originalLanguage: null,
+};
+
+/**
+ * Ce qu'une relecture EN ÉCHEC rend : aucune traduction, aucune horloge, et un
+ * verdict de vie qui n'accuse RIEN. Distinct d'`EMPTY_PRISM_SOURCE`, dont il
+ * partage la forme mais pas la question : l'un dit « rien ne traduit cet
+ * aperçu », l'autre « je n'ai pas pu lire ».
+ */
+const UNKNOWN_BANNER_SOURCE: MessageBannerSource = {
+  ...EMPTY_PRISM_SOURCE,
   createdAt: null,
   messageType: null,
+  liveness: 'unknown',
 };
 
 /**
@@ -852,36 +899,87 @@ export class NotificationService {
   }
 
   /**
-   * Relire la source du Prisme d'un message pour les éventails dont la lecture
-   * n'est PAS un gate d'éligibilité — la mention et la réponse, qui tiennent
-   * leur échéance de l'appelant (`messageExpiresAt`).
+   * Relire ce qu'un message doit à la bannière qui l'annonce : la source du
+   * Prisme, l'horloge de la bulle, et — depuis le cycle 127 — s'il est encore
+   * VIVANT.
    *
-   * Fail-OPEN par décision : une lecture en échec rend une source vide, donc
-   * une bannière sans traduction, jamais une bannière supprimée. Même arbitrage
-   * que `loadNotificationPrefs` et `filterMutedRecipients` — la traduction est
-   * un confort, l'annonce du message une obligation de livraison.
+   * Cette phrase disait « pour les éventails dont la lecture n'est PAS un gate
+   * d'éligibilité », et c'était la description d'un défaut, pas d'un contrat :
+   * la réponse et la mention relisent cette ligne dans la même fenêtre de course
+   * que `createMessageNotification`, et passaient à côté des deux colonnes qui
+   * disent sa vie. Un message rappelé entre son commit et l'éventail poussait
+   * donc son texte ORIGINAL vers la personne à qui l'on répond et vers tous les
+   * mentionnés, pendant que les membres ordinaires du fil étaient protégés.
+   *
+   * Le balayage de rétraction en fin d'éventail ne rattrapait pas ce cas : il
+   * retire la LIGNE `Notification`, quand la bannière est déjà sur l'écran.
+   *
+   * Fail-OPEN sur l'ERREUR, fail-CLOSED sur la RÉPONSE — cf. {@link MessageLiveness}.
    */
   private async loadMessagePrismSource(messageId: string): Promise<MessageBannerSource> {
     try {
       const message = await this.prisma.message.findUnique({
         where: { id: messageId },
-        // Cycle 126 — `createdAt` et `messageType` dans la lecture qui se faisait
-        // déjà : deux colonnes de plus, aucune requête de plus.
-        select: { translations: true, originalLanguage: true, createdAt: true, messageType: true },
+        // Cycle 126 — `createdAt` et `messageType` ; cycle 127 — `deletedAt` et
+        // `expiresAt`, dans la lecture qui se faisait déjà : quatre colonnes de
+        // plus, aucune requête de plus. C'est ce qui rend la garde gratuite, et
+        // c'est pourquoi elle appartient ICI plutôt qu'à chaque éventail.
+        select: {
+          translations: true,
+          originalLanguage: true,
+          createdAt: true,
+          messageType: true,
+          deletedAt: true,
+          expiresAt: true,
+        },
       });
       return {
         translations: this.pushableTranslations(message?.translations),
         originalLanguage: message?.originalLanguage ?? null,
         createdAt: message?.createdAt instanceof Date ? message.createdAt : null,
         messageType: message?.messageType ?? null,
+        liveness: this.messageLiveness(message, messageId),
       };
     } catch (error) {
       notificationLogger.error('Relecture du Prisme en échec — bannière servie sans traduction', {
         error,
         messageId,
       });
-      return EMPTY_PRISM_SOURCE;
+      return UNKNOWN_BANNER_SOURCE;
     }
+  }
+
+  /**
+   * Le verdict de vie d'une ligne relue — cf. {@link MessageLiveness}.
+   *
+   * Extrait de `createMessageNotification` pour qu'il n'en existe qu'un site :
+   * la parité des trois éventails est le sujet même du cycle 127, et deux copies
+   * l'auraient reperdue au premier cycle suivant.
+   *
+   * Une ligne ABSENTE rend `unknown` : ce prédicat ne se prononce que sur ce
+   * qu'une ligne PROUVE. Le lot `regular` refuse en plus les lignes absentes,
+   * mais il le fait CHEZ LUI — c'est sa politique, pas une propriété du message.
+   */
+  private messageLiveness(
+    message: { deletedAt?: Date | null; expiresAt?: Date | null } | null,
+    messageId: string
+  ): MessageLiveness {
+    if (!message) return 'unknown';
+    if (message.deletedAt) {
+      notificationLogger.info('Skipping notification (soft-deleted in flight)', {
+        messageId,
+        deletedAt: message.deletedAt,
+      });
+      return 'gone';
+    }
+    if (message.expiresAt instanceof Date && message.expiresAt.getTime() <= Date.now()) {
+      notificationLogger.info('Skipping notification (already expired)', {
+        messageId,
+        expiresAt: message.expiresAt,
+      });
+      return 'gone';
+    }
+    return 'live';
   }
 
   /**
@@ -1932,37 +2030,41 @@ export class NotificationService {
     // Race-condition guard: between `MessageProcessor.handleMessage` and the
     // moment the notification actually fans out (sender lookup + conversation
     // lookup + push enqueue + socket emit) there can be hundreds of
-    // milliseconds. If the sender soft-deletes / burns / lets the message
-    // expire in that window we MUST NOT leak the original content via the
-    // banner. Refetch the live state right before the fan-out and bail when
-    // the message is no longer eligible.
+    // milliseconds. If the sender soft-deletes or lets the message expire in
+    // that window we MUST NOT leak the original content via the banner. Refetch
+    // the live state right before the fan-out and bail when the message is no
+    // longer eligible.
     // GW5 — the same refetch feeds the NSE persistence fields: authoritative
     // createdAt/messageType plus any translation already produced by the
     // pipeline at fan-out time (Message.translations JSON, keyed by language).
+    //
+    // Cycle 127 — la garde vit dans `messageLiveness`, que les TROIS éventails
+    // partagent désormais. Ce commentaire nommait une troisième cause — un
+    // message à vue unique « brûlé » en vol — que le code n'a jamais appliquée :
+    // `isViewOnce` et `viewOnceCount` étaient SÉLECTIONNÉS et lus par personne.
+    // C'est le select qui part, pas la garde qui arrive, et la raison se mesure :
+    // `viewOnceCount > 0` dit que QUELQU'UN a consommé, jamais que CE
+    // destinataire l'a fait — s'y fier ferait taire l'annonce pour tous les
+    // autres. Et le contenu d'un message à vue unique est de toute façon masqué
+    // en amont par `protectedPreview`, qui ne laisse partir qu'un placeholder.
     const liveMessage = await this.prisma.message.findUnique({
       where: { id: params.messageId },
-      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true, createdAt: true, messageType: true, translations: true, originalLanguage: true },
+      select: { deletedAt: true, expiresAt: true, createdAt: true, messageType: true, translations: true, originalLanguage: true },
     });
+    // La ligne ABSENTE est la politique PROPRE à ce lot, et elle lui reste :
+    // `messageLiveness` ne se prononce que sur ce qu'une ligne PROUVE (cf.
+    // {@link MessageLiveness}), quand ce lot-ci tient sa source de cette
+    // relecture SEULE — sans ligne, il n'a ni horloge, ni langue d'origine, ni
+    // traduction à servir. La réponse et la mention, elles, tiennent leur
+    // échéance de l'appelant et continuent d'annoncer : c'est une décision
+    // explicite, gardée par `replyMentionNotificationPrism.test.ts`.
     if (!liveMessage) {
       notificationLogger.info('Skipping message notification (message vanished)', {
         messageId: params.messageId,
       });
       return null;
     }
-    if (liveMessage.deletedAt) {
-      notificationLogger.info('Skipping message notification (soft-deleted in flight)', {
-        messageId: params.messageId,
-        deletedAt: liveMessage.deletedAt,
-      });
-      return null;
-    }
-    if (liveMessage.expiresAt instanceof Date && liveMessage.expiresAt.getTime() <= Date.now()) {
-      notificationLogger.info('Skipping message notification (already expired)', {
-        messageId: params.messageId,
-        expiresAt: liveMessage.expiresAt,
-      });
-      return null;
-    }
+    if (this.messageLiveness(liveMessage, params.messageId) === 'gone') return null;
 
     // Expéditeur + conversation : lectures indépendantes, en parallèle. Un
     // `senderProfile` fourni supprime la lecture `User` — elle est refaite ici
@@ -2178,6 +2280,11 @@ export class NotificationService {
 
     if (!mentioner) return null;
 
+    // Cycle 127 — cf. `createReplyNotification`. Le lot relit UNE fois pour tous
+    // ses mentionnés et passe sa source ici : le verdict voyage avec elle, donc
+    // il ne coûte pas une requête par destinataire.
+    if (prismSource.liveness === 'gone') return null;
+
     // Cycle 123 — UNE descente, deux projections : le corps et les champs du
     // fil. Cf. `createMessageNotification`.
     const servedTranslation = this.prismTranslation(
@@ -2305,6 +2412,12 @@ export class NotificationService {
     // La source du Prisme ne dépend pas du destinataire : une relecture pour
     // tout l'éventail, la DESCENTE restant par lecteur.
     const prismSource = await this.loadMessagePrismSource(commonData.messageId);
+
+    // Cycle 127 — un message rappelé l'est pour TOUT le lot. Le verdict est déjà
+    // dans la source relue une fois : le poser ici évite d'ouvrir un Prisme par
+    // mentionné pour n'en tirer que des `null`. La garde par destinataire de
+    // `createMentionNotification` reste, pour l'appelant qui l'atteint en solo.
+    if (prismSource.liveness === 'gone') return 0;
 
     // Cycle 126 — les deux seuls champs que ce relais RENOMME sont extraits ;
     // tout ce qui reste se répand. Recopié champ par champ, ce relais retenait
@@ -3863,6 +3976,10 @@ export class NotificationService {
     ]);
 
     if (!replier) return null;
+
+    // Cycle 127 — le message a-t-il survécu à la fenêtre de l'éventail ? La
+    // relecture ci-dessus le sait déjà ; seul le lot `regular` le demandait.
+    if (prismSource.liveness === 'gone') return null;
 
     // Cycle 123 — UNE descente, deux projections : le corps et les champs du
     // fil. Cf. `createMessageNotification`.
