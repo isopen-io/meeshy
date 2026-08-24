@@ -11,7 +11,7 @@ import { getSharedNotificationService } from './notifications/notification-servi
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
 import { retractCommentNotifications } from './posts/retractCommentNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
-import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { ConflictError } from '../errors/custom-errors';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
@@ -586,12 +586,11 @@ export class PostCommentService {
       const existingReactionCount = await this.prisma.commentReaction.count({
         where: { commentId, userId },
       });
-      if (!isReactionAllowed(existingReactionCount)) {
-        // `ConflictError` : la route REST (POST /posts/:postId/comments/:commentId/like)
-        // trie sur `instanceof ConflictError` pour répondre 409, comme
-        // `CommentReactionService` (premier chemin, socket).
-        throw new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED');
-      }
+      // `assertReactionAllowed` jette `ConflictError` : la route REST
+      // (POST /posts/:postId/comments/:commentId/like) trie sur `instanceof
+      // ConflictError` pour répondre 409, comme `CommentReactionService`
+      // (premier chemin, socket).
+      assertReactionAllowed(existingReactionCount);
     }
 
     // Source de vérité = table `CommentReaction` (comme le chemin socket).

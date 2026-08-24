@@ -10,7 +10,7 @@
 
 import { PrismaClient, PostReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
-import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { ConflictError } from '../errors/custom-errors';
 import { assertValidObjectId } from '../utils/object-id.js';
 
@@ -133,12 +133,10 @@ export class PostReactionService {
     const existingReactionCount = await this.prisma.postReaction.count({
       where: { postId, userId }
     });
-    if (!isReactionAllowed(existingReactionCount)) {
-      // `ConflictError` : `routes/posts/interactions.ts` (POST /posts/:postId/like,
-      // partagé par les posts, stories et statuts) trie déjà sur `instanceof
-      // ConflictError` pour répondre 409 (refus légitime), pas 500.
-      throw new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED');
-    }
+    // `assertReactionAllowed` jette `ConflictError` : `routes/posts/interactions.ts`
+    // (POST /posts/:postId/like, partagé par les posts, stories et statuts) trie
+    // déjà sur `instanceof ConflictError` pour répondre 409 (refus légitime), pas 500.
+    assertReactionAllowed(existingReactionCount);
 
     try {
       const reaction = await this.prisma.postReaction.create({
