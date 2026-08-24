@@ -166,9 +166,18 @@ describe('reproduceEditedMessageNotifications', () => {
      * texte, et c'est elle que le Prisme affiche en priorité : la laisser
      * afficherait l'ancien message traduit À LA PLACE du nouveau.
      */
-    it('purge la traduction embarquée, qui décrit l’ancien texte', async () => {
+    it.each(['new_message', 'user_mentioned', 'message_reply'])(
+      'purge la traduction embarquée d’un %s, qui décrit l’ancien texte',
+      async (type) => {
+      // Les TROIS éventails de `messageNotificationFanOut` embarquent une
+      // traduction depuis le cycle 122 : la mention et la réponse ont rejoint
+      // `new_message`, qui la portait seul depuis le cycle 121. La purge est
+      // type-agnostique et les couvrait déjà — ce témoin gèle le fait qu'elle
+      // les couvre, plutôt que de laisser deux types nouvellement porteurs
+      // reposer sur un témoin écrit pour un troisième.
       findMany.mockResolvedValue([
         row({
+          type,
           context: { conversationId: 'c1', translatedContent: 'old text', translatedLanguage: 'en' },
         }),
       ]);

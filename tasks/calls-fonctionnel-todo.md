@@ -11819,3 +11819,108 @@ cette Vague, pré-existant (Vague 172), hors périmètre. Le même défaut sur
 (inchangés) : dead code / god-object `CallManager.swift` (~6372 lignes) ; ADR `actor
 CallEventQueue` non implémenté ; iOS single-peer côté groupe ; même gap de hiérarchie de rôle sur
 `conversations/participants.ts` (hors périmètre calling).
+
+## Vague 175 — `DELETE /calls/:callId/participants/:participantId` attribuait un kick modérateur au participant EXPULSÉ, jamais au modérateur (gateway) (2026-08-24)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Branche
+redémarrée depuis `origin/main` (Vague 174 déjà mergée, PR #3433, aucune branche
+`claude/upbeat-dirac-*` antérieure en avance). Deux pistes candidates instruites puis écartées
+avant celle-ci : (1) le suivi « `call:transcription-segment`/`call:request-ice-servers` jamais
+étendus à `resolveActiveCallParticipantId` » laissé ouvert par la Vague 12/172 — vérifié FAUX
+aujourd'hui : les deux handlers utilisent déjà `resolveActiveCallSpeaker`/
+`resolveActiveCallParticipantId` (le fix a dû atterrir dans une Vague intermédiaire sans que le
+suivi soit retiré des « reste ouvert » recopiés) ; (2) un audit complet de la famille
+`clearRingingTimeout()`/`clearHeartbeats()` (fermée par les Vagues 164/165 — le pattern « nettoyage
+call-wide déclenché sur une branche où le groupe continue ») — chaque site de `CallEventsHandler.ts`
+et `CallService.ts` relu individuellement (7 + 8 sites), tous correctement scopés au statut
+terminal ou à une écriture qui termine par construction TOUTE la session (phantom/zombie cleanup,
+`forceEndOrphanedCallSession`, `finalizeMissedCallCleanup`) — famille confirmée close, aucun
+cinquième site trouvé.
+
+### Root cause
+
+`DELETE /calls/:callId/participants/:participantId` sert deux usages disjoints avec la MÊME route :
+un utilisateur quitte son propre appel (`participantId === userId`), ou un modérateur/admin EXPULSE
+un autre participant (`participantId` nomme la CIBLE). Le handler appelait
+`callService.leaveCall({ callId, userId: participantId, participantId: leaveParticipantId })` puis
+`callService.broadcastCallEndedIfTerminal(callSession, participantId)` — les deux passaient le
+paramètre d'URL brut `participantId` (l'identifiant de la CIBLE) là où `CallService` attend
+l'ACTEUR authentifié. Sur un self-leave les deux coïncident (`participantId === userId`), ce qui a
+masqué le défaut sur tous les autres tests de cette route ; un kick modérateur les fait diverger.
+Partout ailleurs dans la base — les trois handlers socket `call:leave`/`call:end`/`call:force-leave`
+(aucun ne supporte le kick, donc `userId`/`endedBy` y est toujours l'appelant authentifié par
+construction) et le propre chemin self-leave de cette même route — `userId`/`endedBy` nomme
+systématiquement celui qui AGIT, jamais celui qu'on retire. Cette route REST était le seul site du
+dépôt où un kick pouvait faire diverger les deux, et le seul à s'être trompé.
+
+### Impact
+
+`CallSession.metadata.endedBy` (écrit par `leaveCall()`) alimente
+`wasCancelledByInitiator()` (`packages/shared/utils/call-summary.ts`) : sur un appel jamais répondu
+(`!answeredAt`) où le kick expulse le DERNIER participant actif restant (`isLastParticipant`), la
+bulle de résumé compare `endedById === initiatorId` pour choisir « Appel annulé » (côté
+initiateur) plutôt que « Appel manqué ». Avec le bug, `endedById` portait l'identifiant de la CIBLE
+expulsée plutôt que celui du modérateur — un scénario plausible en appel de groupe : le créateur
+retire un invité qui n'a jamais décroché pendant que la sonnerie continue pour les autres, la cible
+expulsée n'étant PAS l'initiateur produit un mauvais verdict (« manqué » affiché comme si personne
+n'avait agi, alors que le modérateur a bien mis fin à la tentative pour ce participant). Second
+canal touché : `CallEndedEvent.endedBy`, diffusé à tous les clients sur `call:ended` (décodé côté
+iOS dans `CallEndData.endedBy`) — un contrat de qui a raccroché qui mentait sur l'acteur réel pour
+tout kick, quel que soit l'état de réponse de l'appel. Fenêtre étroite (nécessite un rôle
+modérateur/admin/creator ET l'usage du bouton kick de `VideoCallInterface`, câblé côté web) mais
+réelle et vérifiée par lecture directe du code, pas hypothétique.
+
+### Fix
+
+Deux lignes, purement additives dans leur substitution : `userId: participantId` → `userId` (la
+variable déjà résolue depuis `authRequest.authContext.userId` quelques lignes plus haut) dans
+l'appel à `leaveCall()`, et `broadcastCallEndedIfTerminal(callSession, participantId)` →
+`broadcastCallEndedIfTerminal(callSession, userId)`. Le troisième site voisin qui lit la MÊME
+variable route `participantId` — `broadcastParticipantLeft(callId, leavingCallParticipant.id,
+participantId, callSession.mode)` — reste INCHANGÉ : son propre paramètre `userId` est documenté
+(`CallService.broadcastParticipantLeft`'s doc comment) comme « the departing/removed participant's
+userId », c'est-à-dire la cible, pas l'acteur — sémantique opposée aux deux premiers sites,
+confirmée par lecture directe avant de le laisser tel quel plutôt que de le « corriger » par
+symétrie apparente.
+
+### Tests (TDD, RED confirmé — vrai Jest)
+
+Un test ajouté à `calls-routes.test.ts`, groupe `DELETE .../participants/:participantId` : «
+attributes the call end to the MODERATOR who kicked, not the kicked target » — modérateur (`USER_ID`)
+kick une cible résolue à `resolved-target-part-id` (route param `TARGET_PART_ID`), asserte
+`mockLeaveCall` appelé avec `userId: USER_ID` (jamais `TARGET_PART_ID`) et
+`mockBroadcastCallEndedIfTerminal` appelé avec `(session, USER_ID)`. RED confirmé avant le
+correctif : `Received: {"userId": "507f1f77bcf86cd799439055"}` (= `TARGET_PART_ID`) contre l'attendu
+`USER_ID`. GREEN après correctif : `calls-routes.test.ts` 87/87 (86 préexistants + 1 nouveau, 0
+régression — le test moderator-kick existant à ligne ~1055 n'assertait que sur `participantId`,
+jamais sur `userId`, ce qui explique que le défaut soit resté invisible). Sweep gateway
+`--testPathPatterns="[Cc]all"` : 58/58 suites, 1270/1270 tests verts. Suite gateway complète (`bun
+run test:coverage`) : **846/846 suites, 19363/19363 tests verts**, 0 régression. `npx tsc --noEmit`
+(services/gateway) : 0 erreur. Séquence complète exécutée dans ce conteneur : `bun install
+--ignore-scripts` + `packages/shared && npx prisma generate --generator client && bun run build`
+(prérequis CLAUDE.md racine), puis les commandes ci-dessus dans `services/gateway`.
+
+### Risk assessment
+
+Minimal — deux substitutions de variable (route param → variable acteur déjà résolue), aucun
+changement de signature, aucune nouvelle branche. Le seul comportement qui change : un kick
+modérateur attribue désormais correctement l'action à l'acteur ; le chemin self-leave (l'écrasante
+majorité des appels à cette route) est BYTE-FOR-BYTE identique (`participantId === userId` rend les
+deux formes indiscernables). Le troisième site voisin (`broadcastParticipantLeft`), à la sémantique
+opposée, n'a volontairement pas été touché.
+
+### Non fait volontairement / reste ouvert
+
+Suivi retiré cette Vague, vérifié FAUX : « `call:transcription-segment`/`call:request-ice-servers`
+jamais étendus à `resolveActiveCallParticipantId` » (Vague 12) — les deux utilisent désormais
+`resolveActiveCallSpeaker`/`resolveActiveCallParticipantId`, confirmé par lecture directe du code
+courant ; ne plus reconduire cette ligne dans les prochaines Vagues. Famille
+`clearRingingTimeout()`/`clearHeartbeats()` (Vagues 164/165) ré-auditée intégralement cette Vague,
+confirmée SANS site résiduel — ne pas rouvrir sans un nouveau signal concret. Reconduits
+(inchangés) : dead code / god-object `CallManager.swift` (~6372 lignes) ; ADR `actor CallEventQueue`
+non implémenté ; iOS single-peer côté groupe ; même gap de hiérarchie de rôle sur
+`conversations/participants.ts` (hors périmètre calling) ; le même défaut de redirection
+`redirect=` vs `returnUrl=` sur `app/links/tracked/[token]/page.tsx` (hors périmètre calling,
+cf. Vague 174) ; `bun run lint` reste documenté cassé dans ce conteneur (`eslint-plugin-react`
+incompatible avec `eslint`, pré-existant — non re-tenté ici, conformément à la consigne du
+CLAUDE.md racine).

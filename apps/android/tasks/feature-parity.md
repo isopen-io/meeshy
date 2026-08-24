@@ -3846,6 +3846,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       translatable-request arm both account for overlay languages. Consumer path unchanged (tap sets the
       ephemeral override, `emit()` re-projects overlays). +5 viewmodel tests; RED proven against unmodified
       production (exactly these 5 failed, the other 56 stayed green). One pure method; no wire/model change.
+- [x] **Realtime overlay translation merge** done (slice `story-text-object-translation-realtime-merge`,
+      2026-08-24): Android had **no** handler for `story:translation-updated` — the gateway broadcasts a
+      story's freshly-translated on-canvas text overlay (`{ postId, textObjectIndex, translations }`), iOS
+      merges it into the open viewer (`StoryItem.mergingTextObjectTranslations`), Android dropped it on the
+      floor: an overlay the reader had just asked to have translated never repainted until a full refetch.
+      New pure `StoryTextObjectTranslationMerge.merge(item, textObjectIndex, translations)` (canvas sibling of
+      `StoryTranslationMerge`) upserts the languages into the targeted text object (existing overwritten, new
+      added; out-of-range / no-effects / empty-map → unchanged) via immutable `copy`. New
+      `SocketStoryTranslationUpdatedData` + `SocialSocketManager.storyTranslationUpdated` flow wired to
+      `listen("story:translation-updated", …)`. The VM subscribes, merges into `rawItems`, and `emit()` now
+      re-projects the current slide from `rawItems` **unconditionally** (was gated on an active override), so a
+      reader whose preferred language just landed reads it at once — no tap, no refetch (parity with iOS,
+      which forces no override either). The unconditional re-projection reproduces `toSlideView` when nothing
+      changed, so non-current slides and no-merge emits are untouched. +12 tests (8 pure merge, 2 socket, 2
+      viewmodel + reused inert case); RED-proof isolated each piece: merge (4), socket (2), subscription+merge
+      (2 vm), and the emit re-projection alone reddened exactly the repaint test while the chip/inert tests
+      stayed green. No wire/production logic outside `apps/android`.
 - [ ] Per-clip inspector EDITOR (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)

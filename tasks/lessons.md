@@ -13877,3 +13877,252 @@ pas un mauvais rang), et c'est pourquoi il n'a pas été absorbé ici : deux év
 sémantiques de garde différentes dans le même lot, c'est le demi-correctif que le cycle 120
 recommande précisément d'éviter — **corriger le résolveur pour tous, câbler les surfaces une
 par une.** Le résolveur est partagé et juste ; il ne manque que la liste en entrée.
+
+## Leçon 265 — un suivi MESURÉ se solde ; et le témoin qui garde le cadrage ne peut pas s'écrire sur un champ non persisté (2026-08-24, cycle 122)
+
+**Le constat.** Le cycle 121 avait laissé un suivi mesuré, pas hérité : deux des trois
+éventails de `messageNotificationFanOut` n'appliquaient **aucun** Prisme.
+`createReplyNotification` et `createMentionNotification` posaient
+`content: params.messagePreview` — l'original — et ne poussaient ni `translatedContent` ni
+`translatedLanguage`. Une bannière de réponse ou de mention arrivait donc toujours dans la
+langue de l'expéditeur, pendant que celle d'un message simple — même conversation, même
+seconde, même destinataire — servait la traduction depuis le cycle 121.
+
+Défaut DISTINCT de celui du cycle 121, et c'est ce qui justifiait de ne pas l'absorber alors :
+là-bas un mauvais RANG, ici l'ABSENCE de la descente. Deux sémantiques de garde différentes
+dans un même lot, c'est le demi-correctif que le cycle 120 recommande d'éviter.
+
+> **Un suivi mesuré se solde au cycle suivant, et se solde en ENTIER.** Le mérite du
+> cycle 121 n'est pas d'avoir nommé le reste à faire — c'est de l'avoir mesuré en ouvrant les
+> deux méthodes plutôt qu'en déduisant de la forme du lot. C'est ce qui a rendu le cycle 122
+> mécanique : rien à re-diagnostiquer, seulement à câbler.
+
+### Le geste : corriger le RÉSOLVEUR pour tous, câbler les surfaces une par une (cycle 120)
+
+La descente est extraite en `prismTranslationContext(source, preferredLanguages)`, alimentée
+par `pushableTranslations` (le filtre de servabilité) et `loadMessagePrismSource` (la
+relecture). `createMessageNotification` — qui portait la seule descente correcte — en devient
+un consommateur comme les deux autres, sa source venant de la relecture vivante qui lui sert
+déjà de gate d'éligibilité : **aucune lecture de plus sur le chemin le plus chaud.**
+
+C'est le corollaire de la leçon 264 appliqué en préventif : quand un nouveau consommateur a
+besoin de ce que rend un résolveur existant, l'issue par défaut est de réécrire la boucle, et
+c'est ainsi que naissent les familles divergentes. Trois éventails, une descente.
+
+### Corollaire — une source qui ne dépend pas du LECTEUR se relit une fois, la DESCENTE reste par lecteur
+
+`createMentionNotificationsBatch` appelle `createMentionNotification` par mentionné. Une
+relecture du message par destinataire aurait multiplié une lecture IDENTIQUE par la taille de
+l'éventail. La source (`translations` + `originalLanguage`) est une propriété du MESSAGE ; le
+prisme est une propriété du LECTEUR. Séparer les deux dans le type (`MessagePrismSource`)
+rend la factorisation évidente et le paramètre optionnel (`prismSource`) suit le patron déjà
+présent dans le fichier (`senderProfile`, « identité d'acteur déjà résolue »).
+
+> **Avant de factoriser une lecture dans un éventail, demander de QUOI elle est une propriété.**
+> Ce qui appartient au sujet se lit une fois ; ce qui appartient au destinataire se lit par
+> destinataire. Les confondre coûte dans les deux sens : N lectures identiques, ou un prisme
+> unique appliqué à tout le monde.
+
+### Corollaire — un enrichissement fail-OPEN, un gate fail-closed : ce n'est pas la même lecture
+
+`createMessageNotification` relit le message comme **gate d'éligibilité** — un message
+volatilisé, supprimé ou expiré ANNULE la bannière, et c'est juste : la relecture y protège
+contre une fuite de contenu. Pour la mention et la réponse, l'échéance vient de l'appelant
+(`messageExpiresAt`) et la relecture n'est qu'un ENRICHISSEMENT. Elle échoue donc OUVERT :
+lecture en défaut ⇒ source vide ⇒ bannière sans traduction, jamais bannière supprimée. Même
+arbitrage que `loadNotificationPrefs` et `filterMutedRecipients`, et pour la même raison — la
+traduction est un confort, l'annonce du message une obligation de livraison.
+
+> **Copier une relecture d'un site à l'autre importe son mode d'ÉCHEC avec elle.** La question
+> à poser avant de réutiliser une lecture n'est pas « lit-elle les bons champs ? » mais
+> **« que doit-il se passer quand elle tombe, ICI ? »**. Le même `findUnique` était fail-closed
+> chez son auteur et devait être fail-open chez son emprunteur.
+
+### Le point de méthode — un témoin de CADRAGE ne peut pas s'écrire sur un champ non persisté
+
+Le cycle 121 avait posé le témoin qui sépare les deux résolutions (le CADRAGE reste au rang 1,
+seul le CONTENU descend) sous cette forme :
+
+```ts
+expect((notification as any)?.lang ?? 'de').toBe('de');
+```
+
+`Notification.lang` **n'est pas persisté** — il ne pilote que le rendu du titre/sous-titre à
+l'intérieur de `createNotification`, et n'apparaît pas dans les données écrites. Le témoin
+lisait donc `undefined`, puis assertait son propre repli. **Il ne pouvait pas tomber**, et le
+mesurer l'a confirmé : sous une mutation qui fusionne délibérément les deux résolutions, il
+restait vert.
+
+Le cadrage s'observe sur la valeur SERVIE, comme le reste du harnais l'exige déjà pour le
+contenu :
+
+| éventail | où le cadrage est observable |
+|---|---|
+| `new_message` | le CORPS localisé — donc uniquement sur un message porteur de pièce jointe (`📷 Foto` en allemand contre `📷 Photo` en français) ; sur un texte nu, le corps EST l'extrait et ne porte aucune langue |
+| `user_mentioned` | le SOUS-TITRE poussé (`hat dich erwähnt`) |
+| `message_reply` | **nulle part aujourd'hui** — ni titre localisé, ni sous-titre, et le corps est l'extrait brut |
+
+Les deux premiers témoins sont écrits et TOMBENT sous la mutation. Le troisième n'existe pas,
+et le dire est la seule issue honnête : `lang` y est passé pour la correction et l'économie
+d'une lecture, pas pour un effet mesurable — l'annoncer comme un correctif de cadrage aurait
+été une affirmation invérifiable.
+
+> **Un témoin de séparation entre deux résolutions doit exercer un cas où elles DIFFÈRENT sur
+> une valeur qui SORT.** La forme « fixture » de la leçon 261 a ici sa troisième arête : après
+> le prisme trop court (rang 1 seul) et la carte vide (aucune traduction à trouver), le champ
+> INTERNE — l'assertion est juste, le harnais bon, mais la valeur observée ne franchit jamais
+> la frontière, donc rien ne peut la contredire. Le tell : `?? valeur_attendue` dans un
+> `expect`. Un repli qui vaut exactement ce qu'on assert transforme le témoin en tautologie.
+
+### Ce que le lot n'a PAS ouvert, vérifié plutôt que supposé
+
+Embarquer une traduction dans une notification arme un piège connu : à l'édition du message,
+`Message.translations` est purgée et la traduction embarquée décrit l'ANCIEN texte — que le
+Prisme affiche EN PRIORITÉ. `reproduceEditedMessageNotifications` purge déjà
+`translatedContent`/`translatedLanguage`, et sa boucle est type-agnostique : `user_mentioned`
+et `message_reply` figurent dans `PREVIEW_METADATA_KEY`, donc les deux types nouvellement
+porteurs étaient couverts avant d'être porteurs. Son témoin, lui, n'exerçait que
+`new_message` — il est étendu aux trois dans le même lot.
+
+> **Rendre une donnée présente là où elle ne l'était pas oblige à relire ce qui l'INVALIDE,
+> pas seulement ce qui la produit.** C'est la règle du cycle 84 (« le lot qui rend une donnée
+> visible décide dans le même lot si elle a le droit de l'être ») dans sa variante temporelle :
+> ici la donnée avait le droit d'exister, la question était de savoir qui la périme.
+
+### Le suivi, MESURÉ
+
+Deux autres producteurs ont été OUVERTS avant d'être écartés, et leurs raisons ne sont pas les
+mêmes :
+
+- **`EmailService`** n'a aucune voie qui compose un extrait de message. Ses lanes sont
+  transactionnelles (vérification d'adresse, réinitialisation de mot de passe, alerte de
+  connexion). Rien à descendre.
+- **`createReactionNotification`** porte bien un extrait du message
+  (`metadata.messageContent`), et le Prisme n'a pourtant rien à y faire : son destinataire est
+  `messageAuthorId`, **l'AUTEUR du message**. Le texte est déjà dans la langue dans laquelle il
+  l'a écrit. Ce n'est pas une omission, c'est un cas où la question ne se pose pas.
+
+> Le second est le plus instructif : **un site qui porte du contenu et n'applique pas le Prisme
+> n'est pas nécessairement un défaut.** Le discriminant de la leçon 264 — « qui connaît les
+> préférences du lecteur au moment où le contenu est composé ? » — se double d'un second :
+> **le lecteur est-il l'AUTEUR ?** Si oui, l'original EST sa langue, et une descente n'aurait
+> rien à trouver. Ranger ce site dans « reste à câbler » aurait fabriqué une dette imaginaire,
+> exactement comme le suivi hérité du cycle 107.
+
+La quatrième famille est donc close côté serveur. Les surfaces WEB restées au rang 1
+(commentaires, stories, status — cf. le suivi du cycle 120) sont le reste à câbler, et elles
+sont CORRECTES, seulement pas encore rang-conscientes.
+## Leçon 266 — un contenu RÉSOLU n'est pas un contenu SERVI : le cycle 121 corrigeait un champ que personne ne lit (2026-08-24, cycle 122)
+
+**Le constat.** Le cycle 121 a trouvé la quatrième famille de résolveurs du Prisme (la bannière
+de notification, côté serveur), corrigé son rang, et déposé la traduction élue dans
+`context.translatedContent` — d'où elle repart sur le fil APNs/FCM. Le cycle 122 a posé la
+question suivante : **qui lit ce champ ?** Réponse mesurée, sur les quatre consommateurs
+possibles : personne. Ni `MeeshyNotificationExtension` (aucune occurrence), ni l'application
+iOS, ni Android, ni `firebase-messaging-sw.js`. Le seul texte que les trois plateformes rendent
+est `payload.body`, et il restait composé depuis `params.messagePreview` — l'ORIGINAL.
+
+Autrement dit : le symptôme que le cycle 121 nommait dans son propre titre — deux textes pour
+un même message, la bannière dans la langue de l'expéditeur pendant que la ligne de liste est
+traduite — **survivait intact, une couche plus bas.** Le rang était juste, le champ bien rempli,
+et l'écran inchangé.
+
+> **La question à poser à tout résolveur n'est pas « élit-il le bon rang ? » mais « qui AFFICHE
+> ce qu'il élit ? »** Un correctif dont la valeur n'atteint aucun lecteur n'a corrigé personne,
+> et il est plus difficile à voir qu'un correctif absent : il a un diff, des témoins verts, et
+> un journal qui décrit exactement le bon défaut.
+
+**Pourquoi le cycle 121 ne pouvait pas le voir avec ses propres témoins.** Ils assertaient sur
+`payload.data.translatedContent` — « la charge REMISE à APNs », ce qui est la bonne famille
+d'assertion (la valeur SERVIE, pas un calcul intermédiaire) et le bon champ *si l'on suppose
+qu'il est lu*. La supposition était le défaut, pas l'assertion. C'est la forme « fixture » de la
+leçon 261 déplacée d'un cran : le harnais est bon, l'assertion est juste, et **c'est le CHOIX DU
+CHAMP OBSERVÉ qui rend la règle inobservable.** Le témoin de la 122 est le même appel, sur
+`payload.body`.
+
+> **Corollaire d'outillage : avant d'asserter sur un champ de transport, mesurer qui le
+> consomme.** Un `grep` du nom du champ dans les trois clients coûte une minute et distingue un
+> champ SERVI d'un champ TRANSPORTÉ. C'est le jumeau exact de la leçon « une preuve
+> TRANSPORTÉE n'est pas une preuve VÉRIFIÉE » (X3DH, cycle 96) : là, une signature traversait
+> cinq couches sans que personne l'ouvre ; ici, une traduction traverse le fil sans que personne
+> l'affiche. Même forme, autre sous-système — **un champ présent à chaque étape se lit comme un
+> champ traité.**
+
+### Corollaire — le suivi mesuré du cycle précédent était bon, et il n'était pas le plus urgent
+
+Le cycle 121 laissait un suivi MESURÉ (leçon 107, pas hérité) : les éventails RÉPONSE et MENTION
+n'appliquaient aucun Prisme. C'était vrai, vérifié en ouvrant les deux méthodes, et
+effectivement corrigé ici. Mais le défaut le plus cher n'était pas dans la liste des suivis — il
+était sous le correctif lui-même. **Un suivi mesuré borne ce qu'on savait ne pas avoir fait ; il
+ne dit rien de ce qu'on croyait avoir fait.** Reprendre un suivi est le bon réflexe ; commencer
+par vérifier que le cycle précédent a produit un EFFET l'est davantage.
+
+### Corollaire — un filtre de substitution appartient au site qui sait ce que l'aperçu MONTRE
+
+Substituer la traduction dans le corps a une précondition que le résolveur ne peut pas
+connaître : `Message.translations` ne traduit que `Message.content`. Deux aperçus n'en sont pas :
+
+- un aperçu **PROTÉGÉ** (éphémère / vue unique / flouté / chiffré) est un placeholder — y
+  substituer la traduction relâcherait exactement le texte que la protection masque. C'est le
+  mode d'échec du CORRECTIF, pas du défaut ;
+- la **transcription d'un vocal** est un autre texte, dont les traductions vivent sur
+  `MessageAttachment.translations`. La substituer afficherait un contenu sans rapport avec
+  l'audio.
+
+Le seul site qui sait laquelle des trois formes l'aperçu porte est l'ÉVENTAIL, qui l'a composée.
+D'où un paramètre explicite (`previewIsMessageContent`) plutôt qu'une devinette côté résolveur.
+
+> **Quand une transformation dépend de ce qu'une valeur SIGNIFIE et non de ce qu'elle VAUT,
+> le prédicat remonte au site qui l'a construite.** Un résolveur qui essaie de deviner
+> (« est-ce que ça ressemble à un placeholder ? ») se trompera sur le premier texte qui
+> ressemble aux deux.
+
+### Corollaire — la correction ne dépend pas du câblage de l'appelant, seule l'ÉCONOMIE en dépend
+
+Le lot de mentions lit la carte de traductions UNE fois pour N destinataires et la passe à
+chaque descente ; `createMentionNotification` la relit quand elle n'est pas fournie. Les deux
+chemins servent le même texte. C'est la forme correcte d'une optimisation à une frontière
+publique : **un appelant qui oublie le paramètre perd une requête, jamais le Prisme.** L'inverse
+— un paramètre dont l'absence désactive la règle — est un demi-correctif qui se présente comme
+une optimisation, et un témoin le gèle ici (`le Prisme s'applique SANS câblage de l'appelant`).
+
+### Le suivi, MESURÉ
+
+- **La bannière d'un VOCAL reste dans la langue de l'expéditeur.** Sa transcription a ses
+  propres traductions (`MessageAttachment.translations`, `packages/shared/types/audio-transcription.ts:207`)
+  qu'aucun éventail ne descend — c'est la raison même du `previewIsMessageContent: false` de ce
+  lot, donc une absence ASSUMÉE et nommée, pas un oubli.
+- **`prePersistMessage` (NSE iOS) pré-enregistre un corps VIDE.** Il lit `userInfo["content"]`,
+  une clé que le payload push ne porte pas — vérifié à la source : `PushNotificationService:785`
+  pose `notification.payload = { ...payload.data }`, et `data` n'a pas de clé `content`. Défaut
+  DISTINCT du Prisme (le message pré-enregistré au démarrage à froid est sans texte jusqu'à la
+  synchro REST), relevé en instruisant le risque de régression de ce lot — donc mesuré, pas
+  déduit.
+
+
+### Corollaire de MERGE — deux cycles parallèles, et c'est le témoin de l'autre qui a trouvé mon bug
+
+Une session parallèle a soldé le même suivi (Prisme réponse/mention) et atterri sur `main`
+pendant ce lot, jusqu'au même nom de fichier de témoins. Trois choses en sont sorties, et aucune
+n'aurait existé sans la confrontation :
+
+1. **Son témoin de CADRAGE a fait tomber mon correctif.** Il exerce un message SANS texte,
+   porteur d'une image : le corps se compose alors des seuls badges localisés (« 📷 Foto »). Ma
+   substitution y injectait la traduction — pour un `Message.content` VIDE, dont aucune entrée de
+   `Message.translations` n'est la source. **Un aperçu vide n'a rien à substituer**, et c'est
+   exactement le genre de cas qu'un lot écrit seul ne se donne pas.
+2. **Deux de ses témoins GELAIENT l'inverse de ce lot** — « le corps original reste le corps » —
+   sur deux prémisses : « le client choisit » (faux, mesuré : personne ne lit le champ) et
+   « écraser le corps priverait la NSE de son repli sous le budget APNs » (inversé : la
+   dégradation coupe `translatedContent` AVANT le corps, donc porter la traduction dans le corps
+   est ce qui la fait SURVIVRE). Ces témoins sont INVERSÉS avec les deux prémisses écrites en
+   clair, jamais supprimés.
+3. **Sa correction d'un témoin du cycle 121 qui ne pouvait pas tomber s'appliquait à MES propres
+   témoins** : `expect(notification.lang ?? 'de').toBe('de')` lit `undefined` — `lang` n'est pas
+   persisté — puis assert son propre repli. J'avais recopié ce patron dans six témoins neufs.
+
+> **Devant un lot parallèle qui vise la même cible, la question n'est pas « lequel garder ? »
+> mais « que sait chacun que l'autre ignore ? »** Un `--ours` aurait perdu le bug de l'aperçu
+> vide et gardé six témoins incapables de tomber ; un `--theirs` aurait regelé la prémisse que ce
+> cycle a mesurée fausse. Le seul geste qui ne perd rien est de prendre la base de l'autre et d'y
+> RÉ-APPLIQUER son propre delta — ce qui force à relire chaque désaccord un par un.

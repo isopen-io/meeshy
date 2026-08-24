@@ -9,6 +9,7 @@ import { personNamePatternSource, usernamePatternSource } from '../types/api-sch
 import { createError } from './errors.js';
 import { isSupportedLanguage } from './languages.js';
 import { normalizeLanguageCode } from './language-normalize.js';
+import { OBJECT_ID_REGEX } from './object-id.js';
 
 /**
  * Nom de personne (prénom / nom). Compilé depuis la source unique
@@ -161,8 +162,8 @@ export const CommonSchemas = {
     before: z.string().optional(),
   }),
   
-  // ID MongoDB
-  mongoId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'ID MongoDB invalide'),
+  // ID MongoDB — regex issue de la SSOT `utils/object-id.ts`
+  mongoId: z.string().regex(OBJECT_ID_REGEX, 'ID MongoDB invalide'),
   
   // Langue — ISO 639-1 (2 lettres) OU ISO 639-3 (3 lettres, ex. 'bas', 'ksf',
   // 'nnh', 'ewo' — langues camerounaises officiellement supportées, préservées

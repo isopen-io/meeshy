@@ -665,6 +665,7 @@ function PostDetail({
           currentUserId={currentUserId}
           currentUser={currentUser}
           userLanguage={userLanguage}
+          preferredLanguages={preferredLanguages}
           likedCommentIds={likedCommentIds}
           isLoading={commentsLoading}
           hasMore={commentsHasMore}
