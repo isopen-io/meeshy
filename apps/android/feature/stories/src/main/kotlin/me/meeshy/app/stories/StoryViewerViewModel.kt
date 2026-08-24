@@ -144,6 +144,7 @@ data class StorySlideView(
     val backgroundVideoUrl: String? = null,
     val backgroundLoop: Boolean = true,
     val foregroundMedia: List<StoryForegroundMediaView> = emptyList(),
+    val textObjects: List<StoryTextObjectView> = emptyList(),
     val backgroundAudioUrl: String? = null,
     val foregroundAudioUrl: String? = null,
     val languageCode: String? = null,
@@ -542,6 +543,9 @@ class StoryViewerViewModel @Inject constructor(
         val foreground = storyEffects?.mediaObjects.orEmpty()
             .filterNot { it.isBackground }
             .mapNotNull { it.toForegroundMediaView(clipTransitions) }
+        val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
+        val textObjects = storyEffects?.textObjects.orEmpty()
+            .map { StoryTextObjectProjection.project(it, preferredLanguages) }
         return StorySlideView(
             id = id,
             text = resolved.content,
@@ -553,6 +557,7 @@ class StoryViewerViewModel @Inject constructor(
             backgroundVideoUrl = background.videoUrl,
             backgroundLoop = background.loop,
             foregroundMedia = foreground,
+            textObjects = textObjects,
             backgroundAudioUrl = resolveAudioUrl(preferBackground = true),
             foregroundAudioUrl = resolveAudioUrl(preferBackground = false),
         )

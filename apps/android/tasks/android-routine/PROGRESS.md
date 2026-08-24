@@ -2,6 +2,72 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-24 **a slide's text overlays render and animate on the viewer canvas** (slice
+> `story-text-object-viewer-projection`, feature-parity §E — the previous entry's `Next` pointer's
+> preferred candidate: the scout ranked the text-object viewer projection first, cleanest pure core with
+> the wire fully backed, reusing the two already-tested reader resolvers, chosen over the clip-inspector
+> editor reducer, which lands editor-side with no host surface yet, and the timeline transport, which has
+> no wire backing at all). The viewer decoded `storyEffects.textObjects` on the wire (`Story.kt`) and the
+> v3→v1 projection already produced them, but `StoryViewerViewModel.toSlideView` projected background +
+> foreground **media** only — a text overlay authored on a slide was dropped on the floor.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3418 (web/admin it. 257):
+> not a `claude/apps/android/*` slice, out of this routine's scope, untouched. Prior iteration
+> (`story-media-fade-envelope`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`5cb8ce45`).
+>
+> **One pure view + one pure projection, ported from iOS's canonical paths.** New `StoryTextObjectView`
+> mirrors `StoryForegroundMediaView`: `animated(atSeconds)` folds the keyframe transform
+> (`StoryKeyframeResolver`) with the object's own fadeIn/fadeOut envelope (`StoryMediaFadeResolver`) at
+> iOS render precedence `fade ?? keyframeOpacity ?? base` — a live envelope OVERRIDES a keyframe opacity;
+> a text object never participates in a clip transition (iOS parity), so unlike the media layer no
+> transition ramp is folded, and `animated()` returns `this` unchanged when neither a keyed channel nor a
+> live envelope acts. New `StoryTextObjectProjection.resolveText` ports iOS
+> `StoryTextObject.resolvedText(preferredLanguages:)` (`StoryModels.swift`): per preferred language, an
+> exact `translations[lang]` key first, then a case/region-insensitive `base()` match (via the shared
+> `LanguageCodeNormalizer`), before the next language — else the original text (Prisme rule 1: absent
+> target ⇒ show the original). `project()` maps transform/timing/keyframe fields into the view.
+>
+> **Real wiring (not orphan logic)**: `StorySlideView` gains `textObjects`; `toSlideView` projects
+> `storyEffects.textObjects` through `LanguageResolver.preferredContentLanguages(prefs)`. Compose
+> `StoryTextObjectLayer` renders each overlay at its center anchor with `.alpha(animated.opacity)`,
+> `fontSize × scale` mapped from the 1080-referential design space (iOS `StoryTextSize` parity) onto the
+> real canvas width, and a `graphicsLayer` rotation — so a fading, keyframed text overlay now paints and
+> animates where before it was invisible.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE, pristine `android-37.0` worked (NOTES' cheapest recipe).**
+> `sdkmanager "platforms;android-35" …` then `--channel=3 "platforms;android-37.0"`; `:feature:stories:help`
+> resolved `android-37` on the first run — no copy→patch, no both-dirs mode.
+>
+> **Tests: +19** — 6 `StoryTextObjectViewTest` (no-fade-no-kf → identity, fade-in folds, fade-out folds,
+> envelope OVERRIDES keyframe opacity while position keeps animating, outside-window → identity,
+> keyframes animate position while opacity holds base + un-keyed scale holds base), 11
+> `StoryTextObjectProjectionTest` (no-translations→original, empty-preferred→original, exact-key match,
+> case/region-insensitive match, normalized 3-letter key ↔ 2-letter preference, exact-key wins over
+> normalized sibling, preferred-priority first-match-wins, no-match→original, project carries
+> transform/timing/keyframe fields + animates, project resolves text via prisme, project defaults absent
+> timing to 0), +1 `StoryViewerViewModelTest` (a slide's text objects project into the view and ramp
+> their fade). **Mutation RED-proof (isolated, restored after)**: dropping the envelope override
+> (`fadeEnvelope ?: base.opacity` → `base.opacity`) failed EXACTLY the 4 fade-value tests (fade-in,
+> fade-out, override, viewmodel fade), the identity/keyframe-only/outside-window/projection tests stayed
+> green — genuine discrimination; production restored clean, no stray `.bak`.
+>
+> **Verified**: `:feature:stories:testDebugUnitTest` for the three files **BUILD SUCCESSFUL** (60 tests,
+> 3m15s); full `assembleDebug testDebugUnitTest` gate run for the PR. Reviewer PASS. Diff is
+> `apps/android` only (2 new pure files, 1 view-model data-class field + projection, 1 Compose layer +
+> render loop, +19 tests across 3 files, tracking docs). Verdict: **PASS** — pure app-side view + projection
+> reading existing wire fields, reusing two tested resolvers + the shared normalizer, behavioural tests
+> through the public API, no production logic outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) — with the reader now honouring text objects, either (a) the **clip-inspector
+> editor reducer** (pure per-clip volume/fadeIn/fadeOut/loop/background/delete derivation over a selected
+> object — rich pure core, but needs a timeline/selection host surface first, and two iOS fields
+> `mutedVolumeMemento`/`isDuckingDisabled` are not yet decoded on Android), or (b) the **timeline transport**
+> pure state (play/pause/scrub/zoom 0.25×–4×/mute — clean reducer modelled on chat's `OverlayMediaTransport`,
+> but ephemeral editor state with no wire backing), or (c) folding the **exploration language override**
+> into text-object re-resolution (the caption re-resolves on override today; text objects use default prefs).
+> Prefer the candidate with the cleanest pure core AND a real consumer surface; scout read-only first.
+
 > On 2026-08-23 **a timed foreground clip fades in/out on the viewer canvas** (slice
 > `story-media-fade-envelope`, feature-parity §E — the previous entry's `Next` pointer's clip-inspector
 > candidate, taken on its reader side first: the wire-backed fade envelope is a clean pure core, chosen
