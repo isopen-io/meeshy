@@ -536,7 +536,6 @@ extension iPadRootView {
             // a freshly-created conversation can land before the gateway
             // commit is visible to the recipient's auth context.
             let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-            var lastError: Error?
             for attempt in 0..<2 {
                 do {
                     let apiConv = try await ConversationService.shared.getById(conversationId)
@@ -551,7 +550,6 @@ extension iPadRootView {
                     openConversation(conv)
                     return
                 } catch {
-                    lastError = error
                     Logger.messages.error("[iPadRootView] navigateToConversationById attempt=\(attempt) id=\(conversationId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
                     if attempt == 0 {
                         try? await Task.sleep(nanoseconds: 600_000_000)

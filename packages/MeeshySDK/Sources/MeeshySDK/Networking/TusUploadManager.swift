@@ -304,6 +304,11 @@ public actor TusUploadManager {
         // token would be worse than surfacing the failure.
         var hasRetriedAfterAuthRefusal = false
 
+        // Les en-têtes d'identification client, résolus UNE fois pour tout le
+        // téléversement : un fichier de 100 Mo fait des dizaines de PATCH, et
+        // rien dans version/appareil/locale ne change entre deux tronçons.
+        let clientHeaders = await ClientInfoProvider.shared.buildHeaders()
+
         while offset < fileSize {
             let remaining = fileSize - offset
             let readSize = min(Int64(chunkSize), remaining)
@@ -313,6 +318,7 @@ public actor TusUploadManager {
 
             var patchReq = URLRequest(url: patchURL)
             patchReq.httpMethod = "PATCH"
+            Self.applyClientHeaders(clientHeaders, to: &patchReq)
             patchReq.setValue(credential.value, forHTTPHeaderField: credential.header)
             patchReq.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
             patchReq.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
@@ -444,6 +450,7 @@ public actor TusUploadManager {
         let uploadURL = baseURL.appendingPathComponent("api/v1/uploads")
         var createReq = URLRequest(url: uploadURL)
         createReq.httpMethod = "POST"
+        Self.applyClientHeaders(await ClientInfoProvider.shared.buildHeaders(), to: &createReq)
         createReq.setValue(credential.value, forHTTPHeaderField: credential.header)
         createReq.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
         createReq.setValue("\(fileSize)", forHTTPHeaderField: "Upload-Length")
@@ -474,9 +481,24 @@ public actor TusUploadManager {
     /// offset, used to recover from a 409 Conflict (client + server out of
     /// sync). Returns 0 if the response is malformed or the server doesn't
     /// support HEAD.
+    /// Applique les en-têtes d'identification client (version, appareil,
+    /// locale, géo) sur une requête TUS. La SOURCE reste
+    /// `ClientInfoProvider.shared.buildHeaders()`, la même autorité
+    /// qu'`APIClient` (`APIClient.swift:603` et `:915`) — cette fonction ne
+    /// fabrique aucun en-tête, elle ne fait que les poser.
+    ///
+    /// Posés AVANT ceux du protocole : si un nom venait à collisionner, TUS
+    /// tranche, jamais l'identification cliente.
+    private static func applyClientHeaders(_ headers: [String: String], to request: inout URLRequest) {
+        for (key, value) in headers {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+    }
+
     private func headOffset(patchURL: URL, credential: MeeshyRequestCredential) async throws -> Int64 {
         var req = URLRequest(url: patchURL)
         req.httpMethod = "HEAD"
+        Self.applyClientHeaders(await ClientInfoProvider.shared.buildHeaders(), to: &req)
         req.setValue(credential.value, forHTTPHeaderField: credential.header)
         req.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
         let (_, resp) = try await urlSession.data(for: req)

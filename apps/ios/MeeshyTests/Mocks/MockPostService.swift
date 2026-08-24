@@ -121,6 +121,11 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// qui n'est PAS la même chose qu'une liste vide : le serveur relit alors
     /// le texte lui-même.
     var lastCreateStoryMentions: [PostMentionInput]?
+    /// Le FORMAT sous lequel la dernière publication par canevas est partie
+    /// (V3-3). `nil` tant qu'aucune publication n'a eu lieu — jamais `.story`
+    /// par défaut, sans quoi « le format n'est pas parti » et « il est parti en
+    /// story » se confondraient.
+    var lastCreateCanvasPostType: PostType?
 
     var createWithTypeCallCount = 0
     var lastCreateWithTypeType: PostType?
@@ -410,6 +415,20 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
                                      mediaIds: mediaIds, repostOfId: repostOfId)
     }
 
+    /// Surcharge PORTEUSE du format (V3-3). Sans elle, le défaut du protocole
+    /// retomberait sur `createStory` et le double ne verrait jamais sous quel
+    /// type la publication est réellement partie — la chaîne aurait l'air
+    /// recousue.
+    func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?,
+                          visibility: String, visibilityUserIds: [String]?, originalLanguage: String?,
+                          mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?,
+                          allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost {
+        lastCreateCanvasPostType = type
+        return try await createStory(content: content, storyEffects: storyEffects, visibility: visibility,
+                                     visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
+                                     mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions)
+    }
+
     func createWithType(_ type: PostType, content: String, visibility: String,
                         moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost {
         createWithTypeCallCount += 1
@@ -625,6 +644,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         createStoryResultsQueue = []
         createStoryHangs = false
         createStoryCallCount = 0
+        lastCreateCanvasPostType = nil
         lastCreateStoryContent = nil
         lastCreateStoryRepostOfId = nil
         lastCreateStoryOriginalLanguage = nil

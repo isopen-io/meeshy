@@ -113,9 +113,14 @@ nonisolated enum ComposerReelGate {
 /// 2. **l'adoption de brouillon** (`adoptDraft`). Sans elle le composer
 ///    s'autosauvegarde sous un id neuf et le brouillon repris reste intact à
 ///    côté, en double ;
-/// 3. **les trois fournisseurs d'environnement** (lieu, caméra, pellicule).
-///    Sans eux la pastille « Lieu » et les amorces de page blanche
+/// 3. **les cinq fournisseurs d'environnement** (lieu, caméra, pellicule,
+///    presse-papier, bibliothèque de stickers). Sans eux la pastille « Lieu »,
+///    les amorces de page blanche et la bibliothèque de stickers
 ///    disparaissent — sans le moindre signal.
+///
+/// Depuis V3-2, ce n'est plus une équivalence à tenir « au cas où » : le cover
+/// de création MONTE ce host, et a cessé de poser lui-même ce que le host pose.
+/// Une des trois qui manquerait ici manquerait désormais à l'écran.
 struct MeeshyComposerHost: View {
 
     let intent: ComposerIntent
@@ -135,7 +140,12 @@ struct MeeshyComposerHost: View {
     /// n'ouvre pas un second chemin d'envoi : la file de publication unique est
     /// le lot V7, et fabriquer ici un chemin parallèle serait exactement la
     /// dette qu'il devra défaire.
-    let onPublishAllInBackground: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference]) -> Bool
+    ///
+    /// Son dernier terme est le FORMAT à publier (V3-3). Le host ne l'écrit pas
+    /// lui-même dans l'appel — il ne fait aucun appel : il le POSE sur l'atelier
+    /// (`publishTargetType`), qui le transmet au hand-off. C'est ce qui fait de
+    /// l'éventail un choix réel plutôt qu'un décor.
+    let onPublishAllInBackground: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool
     let onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     let onDismiss: () -> Void
 
@@ -150,18 +160,17 @@ struct MeeshyComposerHost: View {
     @AppStorage("composer.plateau.tint") private var storedTint: String = PlateauTint.defaultTint.rawValue
 
     /// Le format COURANT — un champ, pas une identité (loi 9). Il s'ouvre sur
-    /// `initialFormat` de la porte et, aujourd'hui, N'EN BOUGE PLUS : le
-    /// sélecteur (`ComposerFormatFan`) existe et est testé, mais il n'est PAS
-    /// monté.
+    /// `initialFormat` de la porte et l'éventail (`ComposerFormatFan`) l'écrit.
     ///
-    /// Sa garde négative nommait DEUX conditions de levée. V1 a levé la
-    /// première : l'offre varie désormais avec la composition. V2 a levé la
-    /// moitié de la seconde : changer de format change la SURFACE montée
-    /// (`ComposerSurfaceRouting`). Ce qui manque encore est l'autre moitié —
-    /// changer de format doit changer ce qui est PUBLIÉ, et le socle nomme
-    /// aujourd'hui la publication sans la piloter. Monter l'éventail avant
-    /// cela offrirait un choix que l'envoi ignore : le pire des deux mondes,
-    /// puisqu'il aurait l'air de marcher.
+    /// Sa garde négative nommait DEUX conditions de levée, et les deux sont
+    /// tombées : V1 a fait varier l'offre avec la composition, V2 a fait
+    /// changer la SURFACE montée avec le format, V3-3 a fait suivre l'ENVOI.
+    /// L'ordre importait — monter l'éventail avant que l'envoi ne suive aurait
+    /// offert un choix que la publication ignore, le pire des deux mondes
+    /// puisqu'il aurait eu l'air de marcher.
+    ///
+    /// Ce champ est ce que l'auteur a TAPÉ ; ce qui gouverne est
+    /// `selectedFormat`, qui le ramène dans l'offre quand celle-ci se referme.
     @State private var currentFormat: ComposerFormat
 
     /// Le contenu du DOCUMENT, quand la surface montée en est un. Il vit dans
@@ -178,7 +187,7 @@ struct MeeshyComposerHost: View {
         intent: ComposerIntent,
         initialVisibility: String,
         draftId: String? = nil,
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference]) -> Bool,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -217,10 +226,58 @@ struct MeeshyComposerHost: View {
         )
     }
 
+    /// Le format qui GOUVERNE — surface montée et type publié.
+    ///
+    /// Il n'est pas `currentFormat` : l'offre respire (le réel n'est offert que
+    /// tant que la composition qualifie), et retirer une image sous une
+    /// sélection `.reel` laisserait le meuble sur un format que la porte
+    /// n'offre plus. `resolvedSelection` le ramène au premier format offert,
+    /// qui est toujours celui de la porte (invariant de C1). C'est la règle
+    /// écrite avec l'éventail, et jusqu'ici jamais exercée hors de son test.
+    private var selectedFormat: ComposerFormat {
+        ComposerFormatFanPolicy.resolvedSelection(
+            current: currentFormat,
+            offeredFormats: profile.offeredFormats
+        )
+    }
+
+    /// Ce que l'éventail écrit. La LECTURE passe par la règle de repli, sinon
+    /// un éventail dont l'offre vient de se refermer ne marquerait plus aucun
+    /// chip ; l'ÉCRITURE va droit au champ, parce qu'un tap ne vise jamais
+    /// qu'un format offert.
+    private var formatSelection: Binding<ComposerFormat> {
+        Binding(get: { self.selectedFormat }, set: { self.currentFormat = $0 })
+    }
+
+    /// QUI peint la publication — audience, aperçu, flèche. UNE source, lue
+    /// deux fois : passée à l'atelier pour qu'il assemble ou non sa rangée
+    /// haute, et lue ici pour que le socle peigne ou non les mêmes trois zones.
+    ///
+    /// `.atelier` aujourd'hui, et ce n'est pas un provisoire mou : deux
+    /// blocages MESURÉS l'imposent, tous deux dans `MeeshyUI` donc hors
+    /// d'atteinte d'ici. (1) `visibilityMenu` est l'UNIQUE écrivain de
+    /// `visibility` dans l'atelier — le retirer priverait l'auteur de tout
+    /// moyen de changer son audience. (2) L'œil du socle monte
+    /// `MeeshyScenePlayer` SANS `preloadedImages/VideoURLs/AudioURLs`, qui sont
+    /// `internal` à `MeeshyUI` : il rendrait un aperçu AMPUTÉ de ses médias
+    /// locaux, ce qu'interdit la loi 6 (« l'aperçu ne peut pas mentir »).
+    ///
+    /// Condition de bascule vers `.host`, à remplir côté SDK : un écrivain
+    /// d'audience atteignable par le meuble, un aperçu qui porte les médias
+    /// préchargés, et un déclencheur de publication gaté sur la matière
+    /// (`ComposerPublishTrigger` armé sur `canPublish`, pas sur `onAppear`).
+    private let chromeOwner: ComposerChromeOwner = .atelier
+
     var body: some View {
         VStack(spacing: 0) {
             surface
-            socle
+            // `assembles(.publish)` dit que l'ATELIER peint la flèche. Le socle
+            // peint donc les MÊMES trois zones seulement quand l'atelier les a
+            // cédées : deux barres de publication, dont une inerte, seraient
+            // une régression sèche sur la surface de création la plus utilisée.
+            if !chromeOwner.assembles(.publish) {
+                socle
+            }
         }
         .background(tint.color.ignoresSafeArea())
     }
@@ -236,7 +293,7 @@ struct MeeshyComposerHost: View {
     /// (loi 5 — le socle ne bouge jamais).
     @ViewBuilder
     private var surface: some View {
-        switch ComposerSurfaceRouting.surface(opening: profile.opensWith, format: currentFormat) {
+        switch ComposerSurfaceRouting.surface(opening: profile.opensWith, format: selectedFormat) {
         case .scene:
             composerSurface
         case .document:
@@ -253,7 +310,7 @@ struct MeeshyComposerHost: View {
     /// gouverne ce que LUI monte autour (`plateauTools` ci-dessous). Passer des
     /// capacités à l'atelier appartient à l'écriture v3 native, hors de ce lot.
     ///
-    /// Les trois fournisseurs sont posés SUR l'atelier, au plus près de son
+    /// Les cinq fournisseurs sont posés SUR l'atelier, au plus près de son
     /// montage : c'est la forme que `AppInitWireupTests` compte, site par site.
     private var composerSurface: some View {
         VStack(spacing: 0) {
@@ -261,6 +318,8 @@ struct MeeshyComposerHost: View {
             StoryComposerView(
                 viewModel: viewModel,
                 initialVisibility: initialVisibility,
+                chromeOwner: chromeOwner,
+                publishTargetType: selectedFormat.postType,
                 onPublishAllInBackground: onPublishAllInBackground,
                 onPreview: onPreview,
                 onDismiss: onDismiss
@@ -269,6 +328,7 @@ struct MeeshyComposerHost: View {
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()
             .storyPasteProvided()
+            .storyStickerLibraryProvided()
         }
     }
 
@@ -288,6 +348,14 @@ struct MeeshyComposerHost: View {
     /// n'aurait nulle part où aller — l'affordance sans effet que ce chantier
     /// retire partout. `ComposerDocumentTool.canonicalRow` attend V3, dans
     /// l'ordre de la feuille historique, pour que rien n'ait à être réinventé.
+    ///
+    /// **Elle ne porte pas non plus l'ÉVENTAIL**, qui vit dans le plateau. Ce
+    /// n'est pas une impasse tant qu'aucune porte ne la monte : le seul appelant
+    /// de production ouvre sur `.cameraReady`, que `ComposerSurfaceRouting`
+    /// route toujours vers la scène, quel que soit le format. Le jour où une
+    /// porte la monte (`.feedComposer`, `.moodChip`), il faudra y porter le
+    /// sélecteur — sans lui, basculer vers le document serait une porte à sens
+    /// unique.
     ///
     /// **Sa SORTIE est celle du meuble.** `onDismiss` n'était atteignable que
     /// sous la scène, où l'atelier du SDK peint la croix ; le document n'a pas
@@ -332,6 +400,10 @@ struct MeeshyComposerHost: View {
                     .accessibilityLabel(Text("composer.plateau.timeline", bundle: .main))
             }
             Spacer()
+            ComposerFormatFan(
+                offeredFormats: profile.offeredFormats,
+                selection: formatSelection
+            )
         }
         .font(.footnote.weight(.semibold))
         .foregroundColor(MeeshyColors.textSecondary(isDark: true))
@@ -409,10 +481,33 @@ struct MeeshyComposerHost: View {
     /// app-side serait le second chemin de publication que la doctrine, C2 et
     /// le lot V7 interdisent tous les trois.
     ///
-    /// Tant que le SDK n'expose pas ce déclenchement, le socle NOMME la
-    /// publication sans la piloter. C'est ce qui interdit de basculer les
-    /// racines sur ce host : deux barres, dont une inerte, seraient une
-    /// régression sèche sur la surface de création la plus utilisée.
+    /// Le socle NOMME donc la publication sans la piloter, et c'est un état
+    /// TRANSITOIRE que V3-2 rend visible pour la première fois : l'auteur voit
+    /// la flèche vive de l'atelier et, sous elle, ce témoin.
+    ///
+    /// La raison a changé, et il faut qu'elle soit lue pour ce qu'elle est
+    /// aujourd'hui — pas pour ce qu'elle était. V3-1 a livré le déclenchement
+    /// externe (`ComposerPublishTrigger`) : le socle POURRAIT presser
+    /// `publishAllSlides()` sans rien recomposer. Ce qui l'en empêche est
+    /// mesuré, et c'est autre chose :
+    ///
+    /// - **la télécommande n'a pas de gate de matière.** Elle entre dans
+    ///   `publishAllSlides()` sans repasser par `canPublish` — interne à
+    ///   `MeeshyUI`, illisible d'ici. Une pression sur une page blanche
+    ///   partirait donc en publication, le seul cas que la barre du SDK refuse.
+    ///   **Levée** : que l'armement du déclencheur suive ce gate, ou que le
+    ///   gate devienne lisible app-side ;
+    /// - **le socle ne sait pas encore CHOISIR l'audience.** `visibilityMenu`
+    ///   de l'atelier est l'unique écrivain de sa visibilité ; `audienceChip`
+    ///   n'en montre que l'idée. Passer `chromeOwner: .host` retirerait les
+    ///   trois commandes de la rangée d'un coup (V3-1), donc l'audience avec —
+    ///   l'auteur ne pourrait plus la changer de la session. **Levée** : un
+    ///   écrivain d'audience atteignable depuis le meuble.
+    ///
+    /// Les deux tombées, la flèche du socle devient l'unique publieur visible
+    /// et `chromeOwner: .host` devient sûr. Aucune des deux ne se contourne
+    /// app-side, et brancher la moitié — presser sans gate — publierait des
+    /// pages blanches depuis la porte la plus utilisée de l'app.
     private var publishButton: some View {
         Label {
             Text("composer.socle.publish", bundle: .main)

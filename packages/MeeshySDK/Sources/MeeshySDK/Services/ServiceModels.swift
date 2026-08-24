@@ -321,7 +321,20 @@ public struct PostMentionInput: Codable, Sendable, Equatable {
 }
 
 public struct CreateStoryRequest: Encodable {
-    public let type = "STORY"
+    /// Le type de publication que ce corps crée.
+    ///
+    /// Il fut `= "STORY"`, figé. Ce littéral COMMANDAIT l'envoi : le composer
+    /// pouvait offrir « Post », le corps disait « STORY », et le choix aurait
+    /// eu l'air de marcher. C'est désormais l'appelant qui le pose — et le
+    /// défaut reste `STORY`, si bien qu'aucun appelant historique ne publie
+    /// autre chose qu'avant.
+    ///
+    /// Le CANEVAS voyage avec, quel que soit le type, et c'est la raison pour
+    /// laquelle le format est porté ici plutôt que par un corps sans effets :
+    /// le gateway persiste `storyEffects` pour n'importe quel `type`
+    /// (`PostService.createPost`) et son `hasAnyContentCarrier` accepte une
+    /// publication portée par le seul canevas.
+    public let type: String
     public let content: String?
     public let storyEffects: StoryEffects?
     public let visibility: String
@@ -333,13 +346,28 @@ public struct CreateStoryRequest: Encodable {
     /// sur le canevas imposait d'écrire son `@handle` dans la légende : le
     /// gateway n'extrayait les mentions que du texte du post.
     public let mentions: [PostMentionInput]?
+    /// Opt-in de l'auteur pour l'extraction de la bande-son des vidéos de la
+    /// story (miroir de `CreatePostSchema.allowSoundExtraction`). `nil` =
+    /// l'auteur n'a rien tranché, le défaut serveur s'applique par SILENCE et
+    /// non par écrasement.
+    public let allowSoundExtraction: Bool?
+    /// Texte alternatif par média (miroir de `CreatePostSchema.mediaAlt`).
+    ///
+    /// La clé est un id de `mediaIds` ci-dessus, et rien d'autre :
+    /// `PostService.applyMediaAlt` filtre les clés absentes de `mediaIds`, donc
+    /// une clé locale au composer serait acceptée par la requête et jetée par
+    /// le serveur, sans erreur. Cf. `StoryMediaAltMapping.serverKeyed`.
+    public let mediaAlt: [String: String]?
 
-    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil) {
+    public init(type: String = PostType.story.rawValue, content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil, allowSoundExtraction: Bool? = nil, mediaAlt: [String: String]? = nil) {
+        self.type = type
         self.content = content; self.storyEffects = storyEffects; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.originalLanguage = originalLanguage; self.mediaIds = mediaIds
         self.repostOfId = repostOfId
         self.mentions = mentions
+        self.allowSoundExtraction = allowSoundExtraction
+        self.mediaAlt = mediaAlt
     }
 }
 

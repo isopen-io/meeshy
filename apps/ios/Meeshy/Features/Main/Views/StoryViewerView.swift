@@ -894,6 +894,7 @@ struct StoryViewerView: View {
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()
             .storyPasteProvided()
+            .storyStickerLibraryProvided()
         }
         // Republication en STORY — le composeur s'ouvre prérempli avec la
         // slide source et un badge d'attribution VERROUILLÉ (le republieur ne
@@ -916,8 +917,9 @@ struct StoryViewerView: View {
                 initialVisibility: wrapper.story.visibility ?? PostVisibility.private.rawValue,
                 initialVisibilityUserIds: wrapper.story.visibilityUserIds ?? [],
                 allowedVisibilities: StoryRepostAudience.allowed(fromRawValue: wrapper.story.visibility),
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references in
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
                     viewModel.publishStoryInBackground(
+                        targetType: targetType,
                         slides: slides,
                         slideImages: slideImages,
                         loadedImages: loadedImages,
@@ -928,7 +930,9 @@ struct StoryViewerView: View {
                         visibilityUserIds: visibilityUserIds,
                         draftId: draftId,
                         repostOfId: wrapper.story.id,
-                        references: references
+                        references: references,
+                        composerMediaAlt: accessibility.mediaAlt ?? [:],
+                        allowSoundExtraction: accessibility.allowSoundExtraction
                     )
                     republishStorySource = nil
                     // La création accepte TOUJOURS : hors-ligne, la story part
@@ -942,6 +946,7 @@ struct StoryViewerView: View {
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()
             .storyPasteProvided()
+            .storyStickerLibraryProvided()
         }
     }
 
