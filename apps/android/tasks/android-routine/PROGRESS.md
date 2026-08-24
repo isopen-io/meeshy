@@ -2,6 +2,58 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-24 **the comment thread folds realtime EDITS pushed over `comment:updated`** (slice
+> `comment-updated-realtime-merge`, feature-parity Feed) — AND a required hotfix that **restored a red `main`**.
+>
+> **Step 0 — main was RED, and the fix came first.** `list_pull_requests` (open) → one android PR, #3477
+> (`claude/upbeat-dirac-*`, "Vague 178" calls routine), which belongs to the SEPARATE `tasks/calls-fonctionnel-todo.md`
+> routine, NOT this one (its slices are `claude/apps/android/<slice-id>`); left untouched. But bootstrapping the SDK
+> (dl.google.com **200**; pristine `android-37.0` hash-errored → four-edit copy→patch `android-37`, both dirs, per NOTES)
+> and running `meeshy.sh check` surfaced a **compile error on `origin/main`**: `bb99e9bd` made
+> `ParticipantLeftEvent`/`ParticipantBannedEvent.userId` nullable but never updated `ConversationMembersViewModel`, which
+> still passed `event.userId: String?` into `MemberRoster.withoutUser(String)`. **Android CI red on main since
+> `11f0c31e`** (last green `fb7afd47`, confirmed via `actions_list`). Since `assembleDebug` compiles all modules, NO
+> android PR could go green until this was fixed. Shipped as a dedicated hotfix PR **#3479**
+> (`claude/apps/android/fix-members-nullable-participant`): remove by `userId ?: participantId ?: return@collect` — which
+> also **completes `bb99e9bd`'s own intent** ("un visiteur sans compte expulsable": a link visitor with no account is now
+> expellable by participantId; the roster already matches either id). +3 tests (accountless visitor dropped by
+> participantId on left AND banned; neither-id event inert). RED-proof: dropping the participantId fallback fails exactly
+> the 2 accountless-visitor tests (28 completed, 2 failed). Full `meeshy.sh check` BUILD SUCCESSFUL (973 tasks).
+>
+> **The slice — the EDIT sibling of the comment folds already shipped.** The Next pointer named `comment:media-updated`,
+> but a read-only scout killed it as a thin slice: Android's `ApiPostComment` has **no `media` field at all** (iOS's
+> `APIPostComment` does), and no comment audio/media render surface exists — wiring the realtime event would be
+> orphan/dead-end code (routine forbids it; same orphan risk the pointer flagged for §E). Turned instead to
+> `comment:updated`: iOS folds it (`FeedCommentsSheet.applyCommentEdit`), Android had no handler — an edited comment
+> stayed stale until a full refetch. New `SocketCommentUpdatedData(postId, comment)` (mirror of iOS, nests the full
+> `ApiPostComment`) + `SocialSocketManager.commentUpdated` + `listen("comment:updated", …)`. New
+> `CommentThreadState.replaced(comment)` / `CommentRepliesState.replacedReply(reply)` reducers swap the whole row in
+> place by id (adopt every field — the payload is complete; the heart lives in a separate `CommentLikeState` keyed by id,
+> so a full-row swap never disturbs the viewer's like). `PostCommentsViewModel.onCommentUpdated` filters by `postId` and
+> applies both reducers (each inert for the collection it doesn't hold) — mirror of the `onCommentTranslationUpdated`
+> dual-update pattern.
+>
+> **Tests: +9** — 3 `CommentThreadStateTest` (replace swaps the row preserving position; leaves other rows untouched;
+> inert unknown), 3 `CommentRepliesStateTest` (replace swaps a reply in place; finds it in whichever thread; inert
+> unknown), 1 `SocialSocketManagerTest` (decodes the full edited comment), 2 `PostCommentsViewModelTest` (an edit
+> repaints a top-level comment AND a loaded reply in place with NO refetch; inert for another post; inert for an unknown
+> comment). **RED-proof isolated**: neutering both reducers to `return this` reddened EXACTLY the 5 transformation tests
+> (193 completed, 5 failed) — every inert/ignored test stayed green: genuine discrimination.
+>
+> **Verified**: full `meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) with hotfix+slice — **BUILD
+> SUCCESSFUL**. Reviewer PASS. Both diffs `apps/android` only. Verdict: **PASS** — the hotfix restores a red main and
+> completes the intent of the change that broke it; the slice is a DTO mirroring an existing type, two in-place-replace
+> reducers, a socket event mirroring the existing social events, and a dual-update VM fold reusing the established
+> pattern; behavioural tests through the public API; no production logic outside apps/android.
+>
+> **Next**: The realtime comment channels Android folds are now `added` / `deleted` / `translation-updated` / `updated`.
+> The remaining social realtime events iOS folds that Android's `SocialSocketManager` still ignores (existing host
+> surfaces, low orphan risk): **`comment:reaction-sync`** (authoritative reaction resync for a comment — Android already
+> wires `comment:reaction-added`/`-removed`, so the host exists), **`post:updated`** (a post edited — the feed VM already
+> handles posts), **`post:reposted`** and the **`post:reaction-*`** family (scout whether Android renders post emoji
+> reactions first — likes only may mean a missing surface). `comment:media-updated` stays BLOCKED on a comment-audio
+> render surface (add `ApiPostComment.media` + a comment audio player first — a larger UI slice, not a thin fold).
+
 > On 2026-08-24 **the comment thread folds realtime translations pushed over `comment:translation-updated`**
 > (slice `comment-translation-updated-realtime-merge`, feature-parity Feed/Prisme — the previous entry's `Next`
 > pointer named this exact candidate: "the adjacent sibling the scout flagged is `comment:translation-updated`…

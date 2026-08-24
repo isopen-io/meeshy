@@ -3312,6 +3312,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tests (3 no-op green), commenting the socket `listen` reddened the 2 socket tests, neutering the VM fold reddened
       exactly the 2 repaint tests (2 inert green). Full `meeshy.sh check` → BUILD SUCCESSFUL (local, SDK 37). No
       production logic outside `apps/android`.
+      **Comment EDIT realtime merge shipped** (slice `comment-updated-realtime-merge`, 2026-08-24 — the edit sibling of
+      the `comment:added`/`comment:deleted`/`comment:translation-updated` folds). Android had **no** handler for
+      `comment:updated`; the gateway broadcasts the COMPLETE edited comment (`{ postId, comment: PostComment }`), iOS
+      replaces the row in place via `FeedCommentsSheet.applyCommentEdit`, Android dropped it on the floor — an edited
+      comment stayed stale until a full refetch. New `SocketCommentUpdatedData(postId, comment)` (mirror of iOS, nests
+      the full `ApiPostComment`) + `SocialSocketManager.commentUpdated` flow wired to `listen("comment:updated", …)`. New
+      `CommentThreadState.replaced(comment)` / `CommentRepliesState.replacedReply(reply)` reducers swap the whole row in
+      place by id (adopt every field — content/effects/translations/counts — because the payload is complete; unlike
+      `retranslated` which touches only `translations`). The heart lives in a separate `CommentLikeState` keyed by id, so
+      a full-row swap never disturbs the viewer's like. `PostCommentsViewModel.onCommentUpdated` subscribes, filters by
+      `postId`, and applies both reducers (each inert for the collection that doesn't hold the id). +9 tests (3
+      `CommentThreadStateTest`, 3 `CommentRepliesStateTest`, 1 socket decode, 2 vm: repaint a top-level comment AND a
+      loaded reply in place with no refetch + inert for another post + inert for an unknown comment); RED-proof isolated:
+      neutering both reducers to `return this` reddened exactly the 5 transformation tests (193 completed, 5 failed), all
+      inert/ignored tests green. Full `meeshy.sh check` → BUILD SUCCESSFUL (local, SDK 37). No production logic outside
+      `apps/android`.
       **Story request arm shipped** (slice `story-viewer-translation-request`, 2026-08-21): the story viewer's
       language quick bar (`StoryViewerViewModel.availableLanguagesFor`) previously listed only present
       `StoryItem.translations`, so a configured-but-absent language was never requestable. It now appends each
