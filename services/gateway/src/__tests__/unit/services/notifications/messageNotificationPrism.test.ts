@@ -257,3 +257,98 @@ describe('createMessageNotification — ce que la descente ne doit PAS relâcher
     expect((data?.translatedContent as string)?.length).toBe(200);
   });
 });
+
+/**
+ * Cycle 122 — le Prisme s'arrêtait aux champs de SERVICE du fil push.
+ *
+ * La descente ci-dessus alimente `data.translatedContent` / `data.translatedLanguage`.
+ * Ces deux champs ne sont lus par AUCUN client : ni la NSE iOS
+ * (`MeeshyNotificationExtension`), ni l'application, ni Android, ni le service
+ * worker web. Le seul texte que les trois plateformes rendent est
+ * `payload.body`, et il restait composé depuis l'aperçu ORIGINAL.
+ *
+ * Le symptôme que le cycle 121 visait — deux textes pour un même message, la
+ * bannière dans la langue de l'expéditeur pendant que la ligne de liste est
+ * traduite — survivait donc intact, une couche plus bas. Un correctif dont la
+ * valeur ne parvient à aucun lecteur n'a corrigé personne.
+ */
+describe('createMessageNotification — le CORPS servi descend le Prisme', () => {
+  it('compose la bannière avec la traduction du rang atteint, pas avec l\'original', async () => {
+    const { push, data } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+    });
+
+    expect(push?.body).toBe('Hola');
+    expect(data?.translatedContent).toBe('Hola');
+  });
+
+  it('persiste dans la ligne in-app le MÊME texte que la bannière', async () => {
+    // La valeur attendue est écrite en clair : `content === body` seul ne peut
+    // pas tomber — les deux restent égaux quand aucun des deux ne descend.
+    const { push, notification } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+    });
+
+    expect((notification as any)?.content).toBe('Hola');
+    expect(push?.body).toBe('Hola');
+  });
+
+  it('sert l\'ORIGINAL quand le Prisme n\'élit rien (règle #1)', async () => {
+    const { push } = await runFanOut({
+      recipient: { systemLanguage: 'de' },
+      translations: { it: { text: 'Ciao' } },
+      originalLanguage: 'en',
+    });
+
+    expect(push?.body).toBe('Hello');
+  });
+
+  it('sert l\'original quand la langue d\'origine gagne à son rang (règle #3)', async () => {
+    const { push } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'en', customDestinationLanguage: 'fr' },
+      translations: { fr: { text: 'Bonjour' } },
+      originalLanguage: 'en',
+    });
+
+    expect(push?.body).toBe('Hello');
+  });
+
+  it('ne substitue JAMAIS dans un aperçu PROTÉGÉ — la traduction relâcherait le texte masqué', async () => {
+    // Mode d'échec du CORRECTIF, pas du défaut : un message éphémère / à vue
+    // unique / flouté n'affiche qu'un placeholder sur l'écran verrouillé.
+    // `Message.translations` porte pourtant le texte en clair — y substituer la
+    // traduction montrerait exactement ce que la protection cache.
+    const { push } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola, mi secreto' } },
+      originalLanguage: 'en',
+      params: {
+        messagePreview: '⏱️ 💬 24h',
+        notificationLocKey: 'notification.ephemeral_message',
+      },
+    });
+
+    expect(push?.body).toBe('⏱️ 💬 24h');
+  });
+
+  it('ne substitue pas la transcription d\'un vocal — un AUTRE texte que Message.content', async () => {
+    // Les traductions d'une transcription vivent sur
+    // `MessageAttachment.translations` ; une entrée de `Message.translations`
+    // substituée ici afficherait un contenu sans rapport avec l'audio.
+    const { push } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+      params: {
+        messagePreview: 'Salut, je te rappelle ce soir',
+        previewIsMessageContent: false,
+      },
+    });
+
+    expect(push?.body).toBe('Salut, je te rappelle ce soir');
+  });
+});

@@ -789,11 +789,7 @@ export class NotificationService {
     source: MessagePrismSource,
     preferredLanguages: readonly string[]
   ): { translatedContent?: string; translatedLanguage?: string } {
-    const matched = resolvePrismTranslation({
-      translations: source.translations,
-      originalLanguage: source.originalLanguage,
-      preferredLanguages,
-    });
+    const matched = this.prismTranslation(source, preferredLanguages);
     if (!matched) return {};
     return {
       translatedContent: matched.text.substring(0, PUSHED_TRANSLATION_MAX_CHARS),
@@ -801,6 +797,61 @@ export class NotificationService {
       // fil APNs et le client la rapproche de sa propre carte.
       translatedLanguage: matched.language,
     };
+  }
+
+  /**
+   * La descente NUE — le couple `{ language, text }` élu, ou `null` ⇒ servir
+   * l'original. `prismTranslationContext` en est la projection sur les champs
+   * du fil push ; ce qui suit en a besoin sous sa forme brute, parce que le
+   * TEXTE doit aussi devenir le corps de la bannière (cycle 122).
+   */
+  private prismTranslation(
+    source: MessagePrismSource,
+    preferredLanguages: readonly string[]
+  ): { readonly language: string; readonly text: string } | null {
+    return resolvePrismTranslation({
+      translations: source.translations,
+      originalLanguage: source.originalLanguage,
+      preferredLanguages,
+    });
+  }
+
+  /**
+   * Le texte que la bannière AFFICHE — cycle 122.
+   *
+   * Le Prisme ne s'arrête pas aux champs `translatedContent` /
+   * `translatedLanguage` du fil push : ils voyagent depuis le cycle 121 et
+   * AUCUN client ne les lit — ni la NSE iOS, ni l'application, ni Android, ni
+   * le service worker web. Le seul texte que les trois plateformes rendent est
+   * `payload.body`, composé depuis ce `content` : tant qu'il portait l'aperçu
+   * ORIGINAL, la bannière restait dans la langue de l'expéditeur pendant que la
+   * ligne de liste de la même application servait la traduction. Un contenu
+   * RÉSOLU n'est pas un contenu SERVI.
+   *
+   * `previewIsMessageContent` est la condition de substitution, et elle n'est
+   * pas décorative : `Message.translations` ne traduit QUE `Message.content`.
+   *  - aperçu PROTÉGÉ (éphémère / vue unique / flouté / chiffré) → un
+   *    placeholder ; y substituer la traduction relâcherait le texte que la
+   *    protection masque ;
+   *  - transcription d'un vocal → un AUTRE texte, dont les traductions vivent
+   *    sur `MessageAttachment.translations` ; la substituer afficherait un
+   *    contenu sans rapport.
+   *
+   * Seul l'éventail, qui a COMPOSÉ l'aperçu, sait laquelle des trois formes il
+   * porte — d'où un paramètre explicite plutôt qu'une devinette ici.
+   */
+  private servedPreview(params: {
+    preview: string;
+    translation: { readonly text: string } | null;
+    previewIsMessageContent: boolean;
+  }): string {
+    if (!params.translation || !params.previewIsMessageContent) return params.preview;
+    // Un aperçu VIDE n'a rien à substituer : le corps se compose alors
+    // entièrement des badges de pièce jointe, localisés dans la langue de
+    // CADRAGE. Y injecter la traduction remplacerait « 📷 Foto » par un texte
+    // dont `Message.content` — vide — n'est pas la source.
+    if (params.preview.trim() === '') return params.preview;
+    return params.translation.text;
   }
 
   /** Variante batch : un seul findMany, retourne une Map userId → langue (fallback 'fr'). */
@@ -1583,6 +1634,16 @@ export class NotificationService {
     firstAttachmentMimeType?: string;
     encryptedContent?: string;
     notificationLocKey?: string;
+    /**
+     * `messagePreview` est-il le rendu du CONTENU du message ?
+     * `Message.translations` ne traduit que `Message.content` : un aperçu qui
+     * est autre chose — un placeholder de protection, la transcription d'un
+     * vocal — ne peut pas être remplacé par une de ses entrées sans afficher
+     * un texte SANS RAPPORT, ou relâcher ce que la protection masque. Défaut
+     * `true` (cas nominal) ; l'éventail, qui a COMPOSÉ l'aperçu, est le seul à
+     * savoir le dire.
+     */
+    previewIsMessageContent?: boolean;
     /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
     senderProfile?: NotificationActorProfile;
   }): Promise<Notification | null> {
@@ -1655,16 +1716,23 @@ export class NotificationService {
     // inférieur — cas nominal dès que la locale appareil (rang 4) diffère de la
     // langue applicative. La source vient de la relecture VIVANTE ci-dessus,
     // qui sert déjà de gate d'éligibilité : aucune lecture de plus.
-    const prismContext = this.prismTranslationContext(
-      {
-        translations: this.pushableTranslations(liveMessage.translations),
-        originalLanguage: liveMessage.originalLanguage,
-      },
-      recipientPrism
-    );
+    const prismSource: MessagePrismSource = {
+      translations: this.pushableTranslations(liveMessage.translations),
+      originalLanguage: liveMessage.originalLanguage,
+    };
+    const prismContext = this.prismTranslationContext(prismSource, recipientPrism);
 
+    // Cycle 122 — le corps AFFICHÉ descend le Prisme, pas seulement les champs
+    // de service ci-dessus : c'est lui que les trois plateformes rendent.
+    // `notificationLocKey` est présent exactement quand l'aperçu est un
+    // placeholder de protection — jamais substituable.
     const content = buildMessageNotificationBodyI18n(recipientLang, {
-      messagePreview: params.messagePreview,
+      messagePreview: this.servedPreview({
+        preview: params.messagePreview,
+        translation: this.prismTranslation(prismSource, recipientPrism),
+        previewIsMessageContent:
+          params.previewIsMessageContent !== false && !params.notificationLocKey,
+      }),
       attachments: params.attachments,
       firstAttachmentFileSize: params.firstAttachmentFileSize,
       firstAttachmentDuration: params.firstAttachmentDuration,
@@ -1760,6 +1828,8 @@ export class NotificationService {
      * mentionné. Absente : relue ici (appel solo).
      */
     prismSource?: MessagePrismSource;
+    /** Cf. `createMessageNotification.previewIsMessageContent`. */
+    previewIsMessageContent?: boolean;
   }): Promise<Notification | null> {
     // Anti-spam: rate limit des mentions par paire (sender → recipient)
     if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
@@ -1793,7 +1863,13 @@ export class NotificationService {
       userId: params.mentionedUserId,
       type: 'user_mentioned',
       priority: 'high',
-      content: params.messagePreview,
+      // Cycle 122 — le corps AFFICHÉ porte le texte du Prisme : c'est lui que
+      // les trois plateformes rendent, pas les champs de service du fil push.
+      content: this.servedPreview({
+        preview: params.messagePreview,
+        translation: this.prismTranslation(prismSource, prism.ordered),
+        previewIsMessageContent: params.previewIsMessageContent !== false,
+      }),
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
       expiresAt: params.messageExpiresAt ?? undefined,
@@ -1846,6 +1922,8 @@ export class NotificationService {
       messageId: string;
       /** Échéance du message mentionnant — cf. `createMentionNotification`. */
       messageExpiresAt?: Date | null;
+      /** Cf. `createMessageNotification.previewIsMessageContent`. */
+      previewIsMessageContent?: boolean;
     },
     memberIds: string[]
   ): Promise<number> {
@@ -1878,6 +1956,7 @@ export class NotificationService {
           messagePreview: commonData.messageContent,
           senderProfile: commonData.senderProfile,
           messageExpiresAt: commonData.messageExpiresAt,
+          previewIsMessageContent: commonData.previewIsMessageContent,
           prismSource,
         })
       )
@@ -3345,6 +3424,8 @@ export class NotificationService {
      * `createMentionNotification.messageExpiresAt`.
      */
     messageExpiresAt?: Date | null;
+    /** Cf. `createMessageNotification.previewIsMessageContent`. */
+    previewIsMessageContent?: boolean;
   }): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
@@ -3373,7 +3454,13 @@ export class NotificationService {
       userId: params.recipientUserId,
       type: 'message_reply',
       priority: 'normal',
-      content: params.messagePreview,
+      // Cycle 122 — cf. `createMentionNotification` : le corps servi descend le
+      // Prisme, les champs du fil push ne suffisent pas.
+      content: this.servedPreview({
+        preview: params.messagePreview,
+        translation: this.prismTranslation(prismSource, prism.ordered),
+        previewIsMessageContent: params.previewIsMessageContent !== false,
+      }),
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
       expiresAt: params.messageExpiresAt ?? undefined,

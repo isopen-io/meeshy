@@ -206,11 +206,22 @@ describe.each([
     expect(data?.translatedLanguage).toBe('es');
   });
 
-  it('ne réécrit PAS le corps servi : le contenu original reste le corps', async () => {
-    // La descente ALIMENTE le client, elle ne remplace pas le corps serveur.
-    // `translatedContent` voyage à côté ; le client choisit. Un correctif qui
-    // écraserait `content` priverait la NSE du repli sur le body serveur quand
-    // la charge est dégradée pour tenir dans le budget APNs.
+  it('RÉÉCRIT le corps servi : c\'est le seul texte qu\'un lecteur voit', async () => {
+    // Ce témoin a d'abord gelé l'inverse (« le corps original reste le corps »)
+    // sur deux prémisses, mesurées depuis :
+    //
+    //  1. « `translatedContent` voyage à côté ; le client choisit. » — AUCUN
+    //     client ne le lit : ni la NSE iOS, ni l'application, ni Android, ni le
+    //     service worker web. Personne ne choisit ; tout le monde affiche
+    //     `payload.body`.
+    //  2. « écraser le corps priverait la NSE du repli quand la charge est
+    //     dégradée pour le budget APNs. » — la dégradation coupe d'ABORD
+    //     `translatedContent`, et garde le corps. Porter la traduction dans le
+    //     corps est donc ce qui la fait SURVIVRE à la dégradation, pas ce qui
+    //     l'expose.
+    //
+    // Les deux champs de service restent poussés : ils ne coûtent rien et
+    // deviendront lisibles le jour où un client s'en saisira.
     const { data, push } = await run({
       recipient: { systemLanguage: 'es' },
       translations: { es: { text: 'Hola' } },
@@ -218,7 +229,7 @@ describe.each([
     });
 
     expect(data?.translatedContent).toBe('Hola');
-    expect(push?.body).toBe('Hello');
+    expect(push?.body).toBe('Hola');
   });
 
   it('tronque la traduction poussée à 200 caractères, quel que soit son rang', async () => {
@@ -396,5 +407,96 @@ describe('createMentionNotificationsBatch — une seule relecture pour tout l\'�
     );
 
     expect(prisma.message.findUnique).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Cycle 122 — le CORPS servi, et non les seuls champs de service.
+ *
+ * `translatedContent` / `translatedLanguage` voyagent sur le fil push et aucun
+ * client ne les lit. Le seul texte que les trois plateformes rendent est
+ * `payload.body` : tant qu'il porte l'aperçu original, la descente ci-dessus
+ * n'atteint aucun lecteur.
+ */
+describe.each([
+  ['createReplyNotification', (s: NotificationService, p: any) => s.createReplyNotification(p)],
+  ['createMentionNotification', (s: NotificationService, p: any) =>
+    s.createMentionNotification({
+      mentionedUserId: p.recipientUserId,
+      mentionerUserId: p.replierUserId,
+      messageId: p.messageId,
+      conversationId: p.conversationId,
+      messagePreview: p.messagePreview,
+      ...(p.previewIsMessageContent === undefined
+        ? {}
+        : { previewIsMessageContent: p.previewIsMessageContent }),
+    })],
+] as const)('%s — le CORPS servi descend le Prisme', (_name, invoke) => {
+  const runServed = async (opts: Scenario & { messagePreview?: string; previewIsMessageContent?: boolean }) => {
+    const { service, sendToUser } = makeService(opts);
+    const notification = await invoke(service, {
+      recipientUserId: RECIPIENT_ID,
+      replierUserId: SENDER_ID,
+      messageId: MESSAGE_ID,
+      conversationId: CONVERSATION_ID,
+      messagePreview: opts.messagePreview ?? 'Hello',
+      ...(opts.previewIsMessageContent === undefined
+        ? {}
+        : { previewIsMessageContent: opts.previewIsMessageContent }),
+    });
+    return { notification, push: servedPush(sendToUser) };
+  };
+
+  it('compose la bannière avec la traduction du rang atteint', async () => {
+    const { push } = await runServed({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+    });
+
+    expect(push?.body).toBe('Hola');
+  });
+
+  it('DESCEND jusqu\'à la locale appareil — le rang 4', async () => {
+    const { push } = await runServed({
+      recipient: { systemLanguage: 'de', deviceLocale: 'pt-BR' },
+      translations: { pt: { text: 'Olá' } },
+      originalLanguage: 'en',
+    });
+
+    expect(push?.body).toBe('Olá');
+  });
+
+  it('persiste dans la ligne in-app le MÊME texte que la bannière', async () => {
+    const { push, notification } = await runServed({
+      recipient: { systemLanguage: 'fr' },
+      translations: { fr: { text: 'Bonjour' } },
+      originalLanguage: 'en',
+    });
+
+    expect((notification as any)?.content).toBe('Bonjour');
+    expect(push?.body).toBe('Bonjour');
+  });
+
+  it('sert l\'ORIGINAL quand la langue d\'origine gagne à son rang (règle #3)', async () => {
+    const { push } = await runServed({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'en', customDestinationLanguage: 'fr' },
+      translations: { fr: { text: 'Bonjour' } },
+      originalLanguage: 'en',
+    });
+
+    expect(push?.body).toBe('Hello');
+  });
+
+  it('ne substitue JAMAIS dans un aperçu PROTÉGÉ', async () => {
+    const { push } = await runServed({
+      recipient: { systemLanguage: 'fr' },
+      translations: { fr: { text: 'Bonjour, mon secret' } },
+      originalLanguage: 'en',
+      messagePreview: '👁️ 💬',
+      previewIsMessageContent: false,
+    });
+
+    expect(push?.body).toBe('👁️ 💬');
   });
 });
