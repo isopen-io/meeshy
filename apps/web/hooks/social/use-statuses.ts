@@ -53,6 +53,12 @@ export interface CreateStatusInput {
   moodEmoji: string;
   content?: string;
   visibility?: PostVisibility;
+  /**
+   * Audience nommée pour `EXCEPT`/`ONLY` — même couplage que
+   * `CreatePostRequest.visibilityUserIds` : absente sauf sous ces deux
+   * visibilités (W6, `ComposerMoodSurface`, `isAudienceIncomplete`).
+   */
+  visibilityUserIds?: string[];
   originalLanguage?: string;
   /** Declared, non-INLINE references only — absent (not `[]`) when not touched (tri-state). */
   mentions?: readonly PostReferenceInput[];
@@ -70,6 +76,7 @@ export function useCreateStatusMutation() {
         visibility: input.visibility ?? 'PUBLIC',
         originalLanguage: input.originalLanguage,
         ...(input.mentions ? { mentions: input.mentions } : {}),
+        ...(input.visibilityUserIds ? { visibilityUserIds: input.visibilityUserIds } : {}),
       }),
 
     onSuccess: (result) => {

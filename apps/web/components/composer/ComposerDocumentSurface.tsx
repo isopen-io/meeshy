@@ -15,6 +15,7 @@ import { PUBLICATION_VISIBILITY_OPTIONS } from '@/components/v2/publication-visi
 import { ReferencePicker } from '@/components/composer/ReferencePicker';
 import { ReferenceChipRow } from '@/components/composer/ReferenceChipRow';
 import { ComposerFormatFan } from '@/components/composer/ComposerFormatFan';
+import { AudioCapture, type AudioCaptureResult } from '@/components/composer/AudioCapture';
 import { useReferences } from '@/hooks/composer/useReferences';
 import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
 import { useAuthStore } from '@/stores/auth-store';
@@ -303,6 +304,23 @@ export function ComposerDocumentSurface({
     setAllowSoundExtractionTouched(true);
   }, []);
 
+  // Une seule stratégie de téléversement (Task W4) : l'outil micro rend le
+  // fichier produit, et il entre dans le MÊME pool que photo/vidéo — jamais un
+  // second appelant de téléversement.
+  //
+  // Le résultat ne porte AUCUNE langue, et cette surface n'en fabrique donc
+  // aucune : `originalLanguage` décrit la langue de `content` — la légende
+  // TAPÉE — et le seul signal qu'un reconnaisseur vocal pourrait offrir est sa
+  // propre locale de configuration, qui ne la mesure pas. Le gateway détecte
+  // depuis le texte (`detectLanguage`) dès que la clé est absente, ce qui est
+  // exactement la règle F7d. Voir la note d'en-tête d'`AudioCapture.tsx`.
+  const handleAudioCaptured = useCallback(
+    (result: AudioCaptureResult) => {
+      handleFilesSelected([result.file], [{ duration: result.durationMs }]);
+    },
+    [handleFilesSelected],
+  );
+
   // Une personne écrite `@handle` dans la légende est INLINE côté serveur (le
   // gateway la dérive du texte). La déplacer vers un mode déclaré n'a de sens
   // qu'une fois son handle sorti de la phrase — le retrait est un no-op quand
@@ -523,6 +541,8 @@ export function ComposerDocumentSurface({
                   >
                     🎥
                   </button>
+
+                  <AudioCapture disabled={mediaLimitReached} onCaptured={handleAudioCaptured} />
 
                   <ReferencePicker
                     references={references}

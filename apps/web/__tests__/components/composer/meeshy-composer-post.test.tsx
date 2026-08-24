@@ -56,6 +56,10 @@ jest.mock('@/components/v2/Avatar', () => ({
 jest.mock('@/stores/auth-store', () => ({
   useAuthStore: (selector: (s: { authToken: string | null }) => unknown) =>
     selector({ authToken: 'token-123' }),
+  // Consommé par l'outil micro (`AudioCapture`, Task W4) désormais monté dans
+  // la rangée d'outils de `ComposerDocumentSurface` — pas de préférence de
+  // langue affirmée ici, hors du périmètre de cette suite.
+  useUser: () => null,
 }));
 
 let mockValidation: { valid: boolean; errors: string[] } = { valid: true, errors: [] };
@@ -675,11 +679,18 @@ describe('W3 point 8 — l’éventail de la porte, à la place de la bascule lo
     expect(screen.getByTestId('composer-format-post')).toHaveAttribute('aria-checked', 'true');
   });
 
-  it('ne peint AUCUN éventail sur une composition vide — un seul format routable, donc rien à choisir', () => {
+  it('peint l’éventail dès une composition VIDE — `feedComposer` offre `story` sans condition (W5), reste sur POST tant que rien n’est choisi', () => {
+    // `composerOpening('feedComposer', ctx)` offre `['post','story']`
+    // INCONDITIONNELLEMENT — `story` n'est pas gardé par `qualifiesAsReel`
+    // comme `reel` l'est (`composer-contract.ts`, `case 'feedComposer'`).
+    // Depuis W5, `story` est routable : l'éventail montre donc déjà DEUX
+    // entrées sur un brouillon vierge, sans qu'aucun média n'ait été choisi.
     const { published } = renderComposer();
     expand();
 
-    expect(screen.queryByTestId('composer-format-fan')).not.toBeInTheDocument();
+    expect(screen.getByTestId('composer-format-fan')).toBeInTheDocument();
+    expect(screen.getByTestId('composer-format-post')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('composer-format-story')).toBeInTheDocument();
     type('Bonjour');
     clickPublish();
     expect(published()?.type).toBe('POST');
@@ -804,47 +815,56 @@ describe('W3 point 8 — l’éventail de la porte, à la place de la bascule lo
 // ─────────────────────────────────────────────────────────────────────────────
 // L'ÉVENTAIL NE PROPOSE QUE CE QUE LE MEUBLE SAIT PEINDRE
 //
-// La porte du fil OFFRE `story` (`composer-contract.ts`, `feedComposer` ⇒
-// `['post','story']`) et le meuble n'a pas encore de surface story. Peindre ce
-// bouton promettait une affordance qui, au clic, démontait la surface — donc le
-// brouillon entier : texte, médias, références, audience — sans laisser un seul
-// nœud pour revenir en arrière, puisque l'éventail vit DANS la surface.
+// Jusqu'à W5, la porte du fil OFFRAIT `story` (`composer-contract.ts`,
+// `feedComposer` ⇒ `['post','story']`) sans que le meuble ait cette surface —
+// peindre ce bouton aurait démonté toute la surface au clic, brouillon
+// compris. W5 a ABSORBÉ `StoryComposerSurface` : `story` est désormais
+// routable, et ce bloc en épingle la contrepartie plutôt que l'absence.
 //
-// La loi 4 tranche : rien à l'écran sans raison. Ce que l'auteur peut choisir
-// est l'intersection de ce que la PORTE offre et de ce que l'HÔTE sait peindre.
-// Ce n'est pas une règle de la table partagée — c'est l'aveu d'une capacité, et
-// il se referme tout seul le jour où la surface manquante arrive.
+// Ce qui reste vrai : la loi 4 tranche toujours — rien à l'écran sans raison,
+// et ce que l'auteur peut choisir est l'intersection de ce que la PORTE offre
+// et de ce que l'HÔTE sait peindre. `status` (`moodChip`) rejoint `story` à
+// W6 (`ComposerMoodSurface`, couvert plus bas) — mais SANS éventail : la
+// porte n'offre jamais que `['status']`, donc `paintedFormats()` (qui ne lit
+// que des `role="radio"`) y reste vide par construction, pas par un défaut de
+// couverture.
 // ─────────────────────────────────────────────────────────────────────────────
-describe('W3 — l’éventail n’offre jamais un format que le meuble ne peut pas peindre', () => {
-  it('n’offre PAS story sur `feedComposer`, alors que la porte l’offre — le meuble n’a pas cette surface', () => {
+describe('W3/W5 — l’éventail n’offre jamais un format que le meuble ne peut pas peindre', () => {
+  it('offre désormais `story` sur `feedComposer`, au même titre que `post` et `reel` qualifiant — W5', () => {
     mockAttachmentState.uploadedAttachments = TWO_IMAGES;
     renderComposer();
     expand();
 
     expect(webComposerOpening({ kind: 'feedComposer' }, TWO_IMAGES).offeredFormats).toContain('story');
-    expect(screen.queryByTestId('composer-format-story')).not.toBeInTheDocument();
-    expect(paintedFormats()).toEqual(['post', 'reel']);
+    expect(screen.getByTestId('composer-format-story')).toBeInTheDocument();
+    expect(paintedFormats()).toEqual(['post', 'story', 'reel']);
   });
 
   it('aucun bouton de l’éventail ne mène hors des formats que le meuble route, sur les neuf portes', () => {
     EVERY_DOOR.forEach((door) => {
       mockAttachmentState.uploadedAttachments = TWO_IMAGES;
-      const view = render(<MeeshyComposer door={door} onPublish={jest.fn()} />);
+      const view = render(<MeeshyComposer door={door} onPublish={jest.fn()} onPublishStory={jest.fn()} />);
       if (screen.queryByLabelText('postComposer.contentLabel')) expand();
 
-      paintedFormats().forEach((format) => expect(['post', 'reel']).toContain(format));
+      paintedFormats().forEach((format) => expect(['post', 'reel', 'story']).toContain(format));
 
       view.unmount();
     });
   });
 
-  it('le brouillon SURVIT à tout format que l’éventail propose — aucun choix offert n’est destructeur', () => {
+  it('le brouillon SURVIT à un cycle POST↔RÉEL — aucun choix DOCUMENT offert n’est destructeur', () => {
+    // `story` bascule vers une AUTRE surface montée (`StoryComposerSurface`) :
+    // ce n'est pas la destruction que W1-W3 réparait (un `null` sur un format
+    // non peint) — les deux surfaces sont réelles, c'est un remplacement de
+    // brouillon délibéré, couvert par `meeshy-composer-story.test.tsx`. Seuls
+    // post et réel partagent la MÊME surface montée : eux seuls doivent
+    // préserver le brouillon ici.
     mockAttachmentState.uploadedAttachments = TWO_IMAGES;
     renderComposer();
     expand();
     type('Un brouillon de trois cents mots');
 
-    paintedFormats().forEach((format) => {
+    (['post', 'reel'] as const).forEach((format) => {
       fireEvent.click(screen.getByTestId(`composer-format-${format}`));
       expect(screen.getByTestId('composer-document-surface')).toBeInTheDocument();
       expect(screen.getByLabelText('postComposer.contentLabel')).toHaveValue(
@@ -920,7 +940,7 @@ describe('W3 — un changement de PORTE re-sème le format', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Le meuble : ce qu'il route, et ce que CE LOT n'a pas encore peint
 // ─────────────────────────────────────────────────────────────────────────────
-describe('W3 — le meuble et sa porte', () => {
+describe('W3/W5 — le meuble et sa porte', () => {
   // Ce bloc n'assère QUE ce que la porte ouvre. La surface naît VIDE quelle que
   // soit la porte : rien ici n'hydrate un document déjà publié — ni son texte,
   // ni ses médias, ni son audience. Lire ces tests comme « l'édition marche »
@@ -932,23 +952,26 @@ describe('W3 — le meuble et sa porte', () => {
 
     expect(screen.getByTestId('composer-format-reel')).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByTestId('composer-format-post')).toBeInTheDocument();
+    // `editFormats('reel', ctx)` (`composer-contract.ts`) rend `['reel','post']` —
+    // `story` n'y entre JAMAIS, avant comme après W5 : l'édition ne convertit
+    // qu'entre POST et RÉEL, jamais vers un autre format (§C).
     expect(screen.queryByTestId('composer-format-story')).not.toBeInTheDocument();
   });
 
-  it('ne peint RIEN quand la PORTE elle-même ouvre sur un format sans surface — pas une surface document de repli', () => {
-    // `storyTray` ouvre sur `story` : le meuble n'a pas cette surface, donc il
-    // ne peint rien plutôt que d'ouvrir un POST que l'auteur n'a pas demandé.
-    // C'est le seul chemin qui reste vers l'écran vide — l'éventail, lui,
-    // n'offre plus aucun format que le meuble ne sait peindre.
+  it('peint désormais la surface STORY sur `storyTray` — W5, absorption ; détail dans `meeshy-composer-story.test.tsx`', () => {
     const { container } = renderComposer({ kind: 'storyTray' });
 
-    expect(container).toBeEmptyDOMElement();
+    expect(container).not.toBeEmptyDOMElement();
+    expect(screen.getByTestId('composer-story-surface')).toBeInTheDocument();
     expect(screen.queryByTestId('composer-document-surface')).not.toBeInTheDocument();
   });
 
-  it('ne peint rien du tout sur `moodChip`, dont le format n’a pas de surface ici', () => {
+  it('peint désormais la surface MOOD sur `moodChip` — W6 ; détail dans `meeshy-composer-status.test.tsx`', () => {
     const { container } = renderComposer({ kind: 'moodChip' });
-    expect(container).toBeEmptyDOMElement();
+
+    expect(container).not.toBeEmptyDOMElement();
+    expect(screen.getByTestId('composer-status-surface')).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-document-surface')).not.toBeInTheDocument();
   });
 });
 

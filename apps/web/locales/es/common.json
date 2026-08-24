@@ -299,6 +299,7 @@
       "contentLabel": "Contenido de la publicación",
       "addPhoto": "Añadir foto",
       "addVideo": "Añadir vídeo",
+      "addAudio": "Añadir audio",
       "changeVisibility": "Cambiar visibilidad",
       "mediaAlt": {
         "label": "Texto alternativo",
@@ -307,6 +308,13 @@
       "soundExtraction": {
         "label": "Permitir la reutilización del sonido",
         "caption": "Otras personas podrán reutilizar el audio de los vídeos de esta publicación en sus propias publicaciones."
+      },
+      "audio": {
+        "start": "Iniciar grabación",
+        "stop": "Detener grabación",
+        "retry": "Reintentar",
+        "confirm": "Usar grabación",
+        "error": "Acceso al micrófono denegado. Permite el acceso al micrófono e inténtalo de nuevo."
       },
       "reelToggle": {
         "groupLabel": "Tipo de publicación",

@@ -299,6 +299,7 @@
       "contentLabel": "Conteúdo da publicação",
       "addPhoto": "Adicionar foto",
       "addVideo": "Adicionar vídeo",
+      "addAudio": "Adicionar áudio",
       "changeVisibility": "Alterar visibilidade",
       "mediaAlt": {
         "label": "Texto alternativo",
@@ -307,6 +308,13 @@
       "soundExtraction": {
         "label": "Permitir a reutilização do som",
         "caption": "Outras pessoas poderão reutilizar o áudio dos vídeos desta publicação nas suas próprias publicações."
+      },
+      "audio": {
+        "start": "Iniciar gravação",
+        "stop": "Parar gravação",
+        "retry": "Repetir",
+        "confirm": "Usar gravação",
+        "error": "Acesso ao microfone negado. Permita o acesso ao microfone e tente novamente."
       },
       "reelToggle": {
         "groupLabel": "Tipo de publicação",

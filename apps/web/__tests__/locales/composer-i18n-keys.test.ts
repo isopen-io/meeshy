@@ -83,6 +83,22 @@ const MEDIA_KEYS = ['composer.media.limitReached', 'composer.media.limitPartial'
 
 const ALL_COMPOSER_KEYS = [...COMPOSER_KEYS, ...MEDIA_KEYS];
 
+/**
+ * W4 — l'outil micro de `ComposerDocumentSurface`. Ces clés vivent sous
+ * `postComposer`, siblings de `addPhoto`/`addVideo` (le mic est un outil de
+ * PLUS dans la même rangée, pas un format) et de `mediaAlt`/`soundExtraction`
+ * (même nesting `postComposer.audio.*`) — même portée `common` que
+ * `ALL_COMPOSER_KEYS` ci-dessus, donc la même garde de résolution s'applique.
+ */
+const AUDIO_TOOL_KEYS = [
+  'postComposer.addAudio',
+  'postComposer.audio.start',
+  'postComposer.audio.stop',
+  'postComposer.audio.retry',
+  'postComposer.audio.confirm',
+  'postComposer.audio.error',
+] as const;
+
 describe("W2 — clés de l'éventail, joignables via useI18n('common')", () => {
   LOCALES.forEach((locale) => {
     const ns = loadScopedCommon(locale);
@@ -124,6 +140,28 @@ describe("W2 — clés de l'éventail, joignables via useI18n('common')", () => 
       const partial = resolve(ns, 'composer.media.limitPartial') as string;
       expect(partial).toContain('{max}');
       expect(partial).toContain('{added}');
+    });
+  });
+});
+
+describe("W4 — les clés de l'outil micro, joignables via useI18n('common')", () => {
+  LOCALES.forEach((locale) => {
+    const ns = loadScopedCommon(locale);
+
+    AUDIO_TOOL_KEYS.forEach((key) => {
+      it(`[${locale}] t('${key}') résout vers une chaîne non vide sous la portée réelle 'common'`, () => {
+        const value = resolve(ns, key);
+        expect(typeof value).toBe('string');
+        expect((value as string).trim().length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  it('les six libellés sont DISTINCTS dans chaque locale — un repli copié-collé se détecterait ici', () => {
+    LOCALES.forEach((locale) => {
+      const ns = loadScopedCommon(locale);
+      const labels = AUDIO_TOOL_KEYS.map((key) => resolve(ns, key) as string);
+      expect(new Set(labels).size).toBe(AUDIO_TOOL_KEYS.length);
     });
   });
 });

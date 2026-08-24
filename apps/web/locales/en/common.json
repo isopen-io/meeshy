@@ -299,6 +299,7 @@
       "contentLabel": "Post content",
       "addPhoto": "Add photo",
       "addVideo": "Add video",
+      "addAudio": "Add audio",
       "changeVisibility": "Change visibility",
       "mediaAlt": {
         "label": "Alt text",
@@ -307,6 +308,13 @@
       "soundExtraction": {
         "label": "Allow others to reuse this sound",
         "caption": "Other people will be able to reuse the soundtrack of this post's videos in their own publications."
+      },
+      "audio": {
+        "start": "Start recording",
+        "stop": "Stop recording",
+        "retry": "Retry",
+        "confirm": "Use recording",
+        "error": "Microphone access denied. Please allow microphone access and try again."
       },
       "reelToggle": {
         "groupLabel": "Post type",

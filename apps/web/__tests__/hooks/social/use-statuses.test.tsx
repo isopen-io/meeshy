@@ -184,4 +184,39 @@ describe('useCreateStatusMutation', () => {
 
     expect(mockCreatePost.mock.calls[0][0]).not.toHaveProperty('mentions');
   });
+
+  // W6 — le mood gagne enfin son audience nommée (EXCEPT/ONLY), même couplage
+  // que `CreatePostRequest.visibilityUserIds` : forwarded when the caller
+  // (`ComposerMoodSurface`) provides it, never fabricated.
+  it('passes visibilityUserIds through to postsService.createPost when provided', async () => {
+    mockCreatePost.mockResolvedValue({ success: true, data: makeStatus() });
+    const qc = makeQC();
+
+    const { result } = renderHook(() => useCreateStatusMutation(), { wrapper: wrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        moodEmoji: '🎯',
+        visibility: 'ONLY',
+        visibilityUserIds: ['user-7'],
+      });
+    });
+
+    expect(mockCreatePost).toHaveBeenCalledWith(
+      expect.objectContaining({ visibility: 'ONLY', visibilityUserIds: ['user-7'] }),
+    );
+  });
+
+  it('omits visibilityUserIds when not provided (tri-state, never [])', async () => {
+    mockCreatePost.mockResolvedValue({ success: true, data: makeStatus() });
+    const qc = makeQC();
+
+    const { result } = renderHook(() => useCreateStatusMutation(), { wrapper: wrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ moodEmoji: '😴', visibility: 'PUBLIC' });
+    });
+
+    expect(mockCreatePost.mock.calls[0][0]).not.toHaveProperty('visibilityUserIds');
+  });
 });

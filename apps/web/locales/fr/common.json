@@ -299,6 +299,7 @@
       "contentLabel": "Contenu du post",
       "addPhoto": "Ajouter une photo",
       "addVideo": "Ajouter une vidéo",
+      "addAudio": "Ajouter un audio",
       "changeVisibility": "Changer la visibilité",
       "mediaAlt": {
         "label": "Texte alternatif",
@@ -307,6 +308,13 @@
       "soundExtraction": {
         "label": "Autoriser la reprise du son",
         "caption": "D’autres personnes pourront réutiliser la bande-son des vidéos de ce post dans leurs propres publications."
+      },
+      "audio": {
+        "start": "Démarrer l’enregistrement",
+        "stop": "Arrêter l’enregistrement",
+        "retry": "Recommencer",
+        "confirm": "Utiliser cet enregistrement",
+        "error": "Accès au micro refusé. Autorisez l’accès au micro et réessayez."
       },
       "reelToggle": {
         "groupLabel": "Type de publication",
