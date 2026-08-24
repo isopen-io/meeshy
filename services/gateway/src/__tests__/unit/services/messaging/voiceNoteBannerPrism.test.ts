@@ -1,49 +1,38 @@
 /**
- * Cycle 124 — la bannière d'un VOCAL : ce qu'elle MONTRE, et dans quelle langue.
+ * Cycle 124 — la protection était ANNONCÉE par deux champs et APPLIQUÉE par
+ * aucun : le CORPS d'un vocal protégé partait en clair.
  *
- * Suivi MESURÉ du cycle 122, qui l'avait nommé et laissé ouvert : « la bannière
- * d'un VOCAL reste dans la langue de l'expéditeur — sa transcription a ses
- * propres traductions (`MessageAttachment.translations`) qu'aucun éventail ne
- * descend ». En l'instruisant, un SECOND défaut est tombé au même site, et il
- * est plus grave que le premier.
+ * Le cycle 123 a fermé le FIL de ce message — sa traduction ne part plus sur le
+ * canal push, `previewPrismSource` rendant une source VIDE dès que la base est
+ * `protected-placeholder` ou qu'un `notificationLocKey` est présent. Le CORPS,
+ * lui, était déjà perdu une couche PLUS HAUT que toute déclaration de base :
  *
- * ── Défaut A — la protection était ANNONCÉE sans être APPLIQUÉE ──────────────
+ *     const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
  *
- * `notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview`
- * faisait gagner la transcription INCONDITIONNELLEMENT, y compris quand
- * `protectedPreview` venait de composer un placeholder. Un vocal ÉPHÉMÈRE, à VUE
- * UNIQUE, FLOUTÉ ou CHIFFRÉ poussait donc son texte transcrit ENTIER sur l'écran
- * verrouillé — exactement ce que la protection masque. Le `locKey` partait
- * pourtant avec, et `previewIsMessageContent` était correctement à `false` : les
- * deux garde-fous du cycle 122 étaient en place, et gardaient une SUBSTITUTION
- * qui n'avait plus rien à empêcher, le texte ayant déjà pris la place du
- * placeholder une couche plus haut.
+ * `notificationPreview` est le placeholder que `protectedPreview` vient de
+ * composer. La transcription gagnait INCONDITIONNELLEMENT. Un vocal ÉPHÉMÈRE / à
+ * VUE UNIQUE / FLOUTÉ / CHIFFRÉ poussait donc son texte transcrit ENTIER sur
+ * l'écran verrouillé — exactement ce que la protection masque, et le seul écran
+ * où elle a une raison d'être.
  *
- * C'est la forme exacte du défaut du cycle 123 sur `StoryViewer` : le résolveur
- * dit juste, l'hôte rend autre chose. Ici l'hôte rend PLUS que ce que le
- * résolveur autorise.
+ * `previewIsProtectedPlaceholder` gouvernait `previewBasis`, jamais l'aperçu
+ * lui-même. Les deux gardes du dépôt étaient posées, justes, testées — et elles
+ * gardaient la SUBSTITUTION d'un texte que la couche du dessus avait déjà
+ * remplacé.
  *
- * ── Défaut B — la transcription ne descendait aucun Prisme ───────────────────
- *
- * `Message.translations` ne traduit que `Message.content` ; les traductions
- * d'une transcription vivent sur `MessageAttachment.translations`, sous une
- * AUTRE forme (`{ lang: { transcription, deletedAt? } }`). Aucun éventail ne les
- * lisait, donc la bannière d'un vocal restait dans la langue de l'expéditeur
- * pendant que la bulle de la même application, elle, descend le Prisme
- * (`AudioTrackLanguageResolver` / `resolveAutoLanguage` / `resolveTranslatedAudio`).
+ * > Un champ de service qui DÉCLARE une restriction ne la fait pas respecter.
+ * > La question à poser à toute garde n'est pas « est-elle posée ? » mais « le
+ * > texte qu'elle gouverne est-il bien celui qui part ? ».
  *
  * Les témoins portent sur ce que l'éventail REMET au créateur de notification —
- * la seule valeur qui atteint un lecteur.
+ * la seule valeur qui atteigne un lecteur.
  *
  * @jest-environment node
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
 
-import {
-  notifyMessageRecipients,
-  transcriptPrismSource,
-} from '../../../../services/messaging/messageNotificationFanOut';
+import { notifyMessageRecipients } from '../../../../services/messaging/messageNotificationFanOut';
 
 const CONV_ID = '507f1f77bcf86cd799439022';
 const MSG_ID = '507f1f77bcf86cd799439051';
@@ -91,7 +80,7 @@ const audioAttachment = (overrides: Record<string, unknown> = {}) => ({
   height: null,
   fileUrl: 'https://cdn.example/vocal.m4a',
   transcription: { text: TRANSCRIPT, language: 'fr' },
-  translations: null,
+  translations: { es: { type: 'audio', transcription: 'Te llamo esta noche', createdAt: new Date() } },
   ...overrides,
 });
 
@@ -154,97 +143,28 @@ describe('éventail — la transcription ne franchit PAS une protection', () => 
     expect(params.notificationLocKey).toBeTruthy();
   });
 
-  it('et n\'expose AUCUNE source de Prisme sur un vocal protégé', async () => {
-    // Le corollaire du cycle 122 : un contenu qu'on refuse d'afficher ne se
-    // relâche pas non plus par le champ de service `translatedContent`.
-    const params = await servedParams({
-      message: { isViewOnce: true },
-      attachments: [
-        audioAttachment({ translations: { es: { transcription: 'Te llamo esta noche' } } }),
-      ],
-    });
+  it('et sa base redevient le PLACEHOLDER, non la transcription', async () => {
+    // Corollaire de forme, et il n'est pas accessoire : sans transcription à ce
+    // moment-là, `pushPreviewBasis` ne peut plus élire `transcript` sur un
+    // message protégé. La carte de l'attachment cesse d'être offerte à la
+    // descente, et le second verrou (`notificationLocKey`) cesse d'être la seule
+    // chose qui retienne la traduction du texte masqué.
+    const params = await servedParams({ message: { isViewOnce: true } });
 
-    expect(params.previewPrismSource).toBeUndefined();
+    expect(params.previewBasis).toEqual({ kind: 'protected-placeholder' });
   });
 
-  it('un vocal ORDINAIRE affiche bien sa transcription', async () => {
-    // Mode d'échec du CORRECTIF : refermer la protection ne doit pas supprimer
-    // la transcription inline du cas nominal, qui est la raison d'être de
-    // `extractTranscriptionText`.
+  it('un vocal ORDINAIRE affiche bien sa transcription, et déclare SA source', async () => {
+    // Mode d'échec du CORRECTIF : refermer la protection ne doit ni supprimer la
+    // transcription inline du cas nominal — la raison d'être
+    // d'`extractTranscriptionText` — ni lui retirer la source que le cycle 123
+    // lui a donnée.
     const params = await servedParams({});
 
     expect(params.messagePreview).toBe(TRANSCRIPT);
-  });
-});
-
-describe('éventail — la transcription porte SA source de Prisme', () => {
-  it('remet les traductions de la transcription et sa langue d\'origine', async () => {
-    const params = await servedParams({
-      attachments: [
-        audioAttachment({
-          transcription: { text: TRANSCRIPT, language: 'fr' },
-          translations: {
-            es: { type: 'audio', transcription: 'Te llamo esta noche' },
-            en: { type: 'audio', transcription: 'I will call you tonight' },
-          },
-        }),
-      ],
+    expect(params.previewBasis).toEqual({
+      kind: 'transcript',
+      source: { translations: { es: 'Te llamo esta noche' }, originalLanguage: 'fr' },
     });
-
-    expect(params.previewPrismSource).toEqual({
-      translations: { es: 'Te llamo esta noche', en: 'I will call you tonight' },
-      originalLanguage: 'fr',
-    });
-  });
-
-  it('n\'en remet AUCUNE quand le message n\'a pas de transcription', async () => {
-    // Sans transcription, l'aperçu est `Message.content` : lui appliquer la
-    // source d'une pièce jointe afficherait un texte sans rapport.
-    const params = await servedParams({
-      attachments: [audioAttachment({ transcription: null })],
-      processedContent: 'Écoute ça',
-    });
-
-    expect(params.previewPrismSource).toBeUndefined();
-    expect(params.messagePreview).toBe('Écoute ça');
-  });
-});
-
-describe('transcriptPrismSource — la projection du stockage vers la descente', () => {
-  it('écarte les entrées SOFT-SUPPRIMÉES', async () => {
-    expect(
-      transcriptPrismSource({
-        transcription: { text: TRANSCRIPT, language: 'fr' },
-        translations: {
-          es: { transcription: 'Te llamo', deletedAt: '2026-08-01T00:00:00Z' },
-          it: { transcription: 'Ti chiamo' },
-        },
-      })
-    ).toEqual({ translations: { it: 'Ti chiamo' }, originalLanguage: 'fr' });
-  });
-
-  it('écarte les entrées sans texte utilisable', async () => {
-    expect(
-      transcriptPrismSource({
-        transcription: { text: TRANSCRIPT, language: 'fr' },
-        translations: { es: { transcription: '   ' }, de: { url: 'https://cdn/de.mp3' } },
-      })
-    ).toEqual({ translations: {}, originalLanguage: 'fr' });
-  });
-
-  it('rend une langue d\'origine NULLE quand la transcription ne la déclare pas', async () => {
-    // Règle #3 : sans langue d'origine, aucun rang ne peut être court-circuité —
-    // la descente élit alors la première traduction du prisme, ce qui est juste.
-    expect(
-      transcriptPrismSource({
-        transcription: { text: TRANSCRIPT },
-        translations: { it: { transcription: 'Ti chiamo' } },
-      })
-    ).toEqual({ translations: { it: 'Ti chiamo' }, originalLanguage: null });
-  });
-
-  it('rend `undefined` sans pièce jointe', async () => {
-    expect(transcriptPrismSource(null)).toBeUndefined();
-    expect(transcriptPrismSource(undefined)).toBeUndefined();
   });
 });

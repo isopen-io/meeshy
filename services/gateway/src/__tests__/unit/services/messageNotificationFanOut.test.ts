@@ -424,6 +424,121 @@ describe('notifyMessageRecipients — l’éventail', () => {
     expect(params.firstAttachmentUrl).toBe('https://cdn/voix.m4a');
   });
 
+  /**
+   * Cycle 123 — l'éventail COMPOSE l'aperçu poussé, donc il déclare ce qui le
+   * traduit.
+   *
+   * La transcription d'un vocal n'est pas `Message.content` : ses traductions
+   * vivent sur `MessageAttachment.translations`. Le cycle 122 en concluait
+   * « rien ne la traduit » (`previewIsMessageContent: false`) — la bannière d'un
+   * vocal restait donc dans la langue de l'expéditeur pendant que la ligne de
+   * liste de la même application servait la transcription traduite. Ces témoins
+   * gardent le CÂBLAGE : sans lui la descente du service n'a aucune source, et
+   * le correctif n'atteindrait personne.
+   */
+  it('déclare la base TRANSCRIPTION, avec la carte de l’attachment et la langue parlée', async () => {
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID],
+      attachments: [
+        {
+          mimeType: 'audio/m4a', fileName: 'v.m4a', fileSize: 1, duration: 1,
+          width: null, height: null, fileUrl: null,
+          transcription: { text: 'Hola, te llamo esta noche', language: 'es' },
+          translations: {
+            fr: { type: 'audio', transcription: "Salut, je t'appelle ce soir", createdAt: new Date() },
+            it: { type: 'audio', transcription: 'Ciao', createdAt: new Date(), deletedAt: new Date() },
+          },
+        },
+      ],
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: '',
+    });
+
+    const params = notificationService.createMessageNotification.mock.calls[0][0] as any;
+    expect(params.previewBasis).toEqual({
+      kind: 'transcript',
+      source: {
+        // L'entrée soft-supprimée ne concourt à aucun rang.
+        translations: { fr: "Salut, je t'appelle ce soir" },
+        originalLanguage: 'es',
+      },
+    });
+  });
+
+  it('CHARGE les traductions de l’attachment — sans ce select, la carte serait toujours vide', async () => {
+    // Charger n'est pas servir (§ gateway/CLAUDE.md), et l'inverse est vrai
+    // aussi : la base ci-dessus ne peut rien porter que la requête n'a pas
+    // demandé, et une carte vide se lit exactement comme « pas de traduction ».
+    const prisma = makePrisma({ ...registeredSender, members: [PEER_USER_ID] });
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService: makeNotificationService(),
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'Hello',
+    });
+
+    const select = (prisma.messageAttachment.findMany.mock.calls[0][0] as any).select;
+    expect(select.translations).toBe(true);
+  });
+
+  it('sans transcription, la base reste le CONTENU du message', async () => {
+    const prisma = makePrisma({ ...registeredSender, members: [PEER_USER_ID] });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage(),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'Hello',
+    });
+
+    const params = notificationService.createMessageNotification.mock.calls[0][0] as any;
+    expect(params.previewBasis).toEqual({ kind: 'message-content' });
+  });
+
+  it('un aperçu PROTÉGÉ déclare le placeholder — sur les TROIS éventails', async () => {
+    // Le corps et le fil dérivent tous deux de cette déclaration depuis le
+    // cycle 123 : la manquer sur un éventail y relâcherait la traduction en
+    // clair du texte que la protection masque.
+    const prisma = makePrisma({
+      ...registeredSender,
+      members: [PEER_USER_ID, OTHER_USER_ID],
+      replyAuthorParticipantId: 'part_other',
+      replyAuthorUserId: OTHER_USER_ID,
+    });
+    const notificationService = makeNotificationService();
+
+    await notifyMessageRecipients({
+      prisma: prisma as any,
+      notificationService,
+      message: makeMessage({ replyToId: 'msg_cited', isViewOnce: true }),
+      senderParticipantId: SENDER_PART_ID,
+      conversationId: CONV_ID,
+      processedContent: 'mon secret',
+      validatedMentionUserIds: [PEER_USER_ID],
+    });
+
+    const placeholder = { kind: 'protected-placeholder' };
+    expect((notificationService.createReplyNotification.mock.calls[0][0] as any).previewBasis)
+      .toEqual(placeholder);
+    expect((notificationService.createMentionNotificationsBatch.mock.calls[0][1] as any).previewBasis)
+      .toEqual(placeholder);
+  });
+
   it('une transcription illisible retombe sur l’aperçu du message', async () => {
     const prisma = makePrisma({
       ...registeredSender,

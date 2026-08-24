@@ -1,5 +1,10 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { protectedPreview, type NotificationActorProfile } from '../notifications/NotificationService';
+import {
+  protectedPreview,
+  type NotificationActorProfile,
+  type PreviewPrismBasis,
+} from '../notifications/NotificationService';
+import { transcriptTranslationTexts } from '@meeshy/shared/types/attachment-audio';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import {
   retractMessageNotifications,
@@ -96,59 +101,20 @@ export function extractTranscriptionText(att: { transcription?: unknown } | null
 }
 
 /**
- * La SOURCE du Prisme d'une TRANSCRIPTION — cycle 124.
+ * La langue dans laquelle le vocal a été PARLÉ, telle que Whisper l'a rendue.
  *
- * `Message.translations` ne traduit que `Message.content` ; la transcription
- * d'un vocal est un autre texte, dont les traductions vivent sur
- * `MessageAttachment.translations` sous une autre forme :
- * `{ lang: { transcription, deletedAt?, … } }` (cf. `AttachmentTranslation`,
- * `packages/shared/types/attachment-audio.ts`), là où `Message.translations`
- * porte `{ lang: { text } }`.
- *
- * Cette fonction ne DESCEND rien : elle projette le stockage vers la forme que
- * la descente unique (`resolvePrismTranslation`) consomme. C'est le pendant de
- * `NotificationService.pushableTranslations` pour l'autre porteur — et la raison
- * pour laquelle il en faut un second est la forme du stockage, jamais la règle,
- * qui reste UNE (leçon 264).
- *
- * `originalLanguage` vient de la langue DÉTECTÉE par la transcription : elle
- * concourt à son rang (règle #3) et n'est jamais un court-circuit. Absente, elle
- * vaut `null` — aucun rang n'est alors court-circuité.
- *
- * Rend `undefined` sans pièce jointe : l'aperçu est alors `Message.content`, et
- * lui appliquer cette source afficherait un texte sans rapport.
+ * Elle concourt à son RANG dans le Prisme du lecteur (règle #3), et n'est
+ * jamais un court-circuit : un prisme `['fr','es']` sur un vocal espagnol
+ * traduit en français sert le FRANÇAIS. `null` quand la transcription ne la
+ * porte pas — la descente traite alors toutes les langues du lecteur comme
+ * servables par traduction, ce qui est le comportement sûr : au pire elle sert
+ * une traduction vers une langue où le vocal était déjà, jamais une langue que
+ * le lecteur ne lit pas.
  */
-export function transcriptPrismSource(
-  att: { transcription?: unknown; translations?: unknown } | null | undefined
-): { translations: Readonly<Record<string, string>>; originalLanguage: string | null } | undefined {
-  if (!att) return undefined;
-
-  const transcription =
-    att.transcription && typeof att.transcription === 'object'
-      ? (att.transcription as Record<string, unknown>)
-      : undefined;
-  const originalLanguage =
-    typeof transcription?.language === 'string' && transcription.language.trim() !== ''
-      ? transcription.language
-      : null;
-
-  const raw =
-    att.translations && typeof att.translations === 'object'
-      ? (att.translations as Record<string, Record<string, unknown> | null>)
-      : {};
-
-  const translations = Object.fromEntries(
-    Object.entries(raw)
-      // `deletedAt` est le soft-delete d'une traduction de pièce jointe
-      // (`hasTranslation` / `getTranslation` l'appliquent déjà côté lecture) :
-      // servir une entrée retirée sur une bannière la rendrait plus durable que
-      // partout ailleurs.
-      .filter(([, t]) => !t?.deletedAt)
-      .filter(([, t]) => typeof t?.transcription === 'string' && (t.transcription as string).trim() !== '')
-      .map(([lang, t]) => [lang, t!.transcription as string])
-  );
-
-  return { translations, originalLanguage };
+export function transcriptionLanguage(att: { transcription?: unknown } | null | undefined): string | null {
+  if (!att?.transcription || typeof att.transcription !== 'object') return null;
+  const language = (att.transcription as Record<string, unknown>).language;
+  return typeof language === 'string' && language.trim() !== '' ? language.trim() : null;
 }
 
 /**
@@ -367,7 +333,7 @@ export async function notifyMessageRecipients(params: {
     // pas : y substituer la traduction relâcherait le texte que la protection
     // masque. `Message.translations` ne traduisant que `Message.content`, c'est
     // ici — où l'on sait ce que l'aperçu montre — que la question se tranche.
-    const previewIsMessageContent = protectedOverride === null;
+    const previewIsProtectedPlaceholder = protectedOverride !== null;
 
     const sender = await resolveNotificationSender({ prisma, senderParticipantId });
     if (!sender) return;
@@ -413,8 +379,8 @@ export async function notifyMessageRecipients(params: {
       select: {
         mimeType: true, fileName: true, fileSize: true, duration: true,
         width: true, height: true, fileUrl: true, transcription: true,
-        // Cycle 124 — les traductions de la TRANSCRIPTION, seule source qui
-        // puisse traduire l'aperçu quand celui-ci est un vocal transcrit.
+        // Cycle 123 — les traductions de la TRANSCRIPTION, que la bannière d'un
+        // vocal sert : elles vivent ici, jamais sur `Message.translations`.
         translations: true,
       },
     });
@@ -444,23 +410,44 @@ export async function notifyMessageRecipients(params: {
     // condition manquait : la transcription gagnait inconditionnellement sur le
     // placeholder que `protectedPreview` venait de composer, si bien qu'un vocal
     // ÉPHÉMÈRE / à VUE UNIQUE / FLOUTÉ / CHIFFRÉ poussait son texte transcrit
-    // ENTIER sur l'écran verrouillé — exactement ce que la protection masque. Le
-    // `locKey` partait pourtant avec, et `previewIsMessageContent` valait déjà
-    // `false` : les deux gardes du cycle 122 étaient en place et gardaient une
-    // SUBSTITUTION que le texte avait déjà rendue sans objet, une couche plus
-    // haut. La protection était ANNONCÉE sans être APPLIQUÉE.
+    // ENTIER sur l'écran verrouillé — exactement ce que la protection masque.
+    //
+    // Le cycle 123 a fermé le FIL de ce même message (sa traduction ne part
+    // plus sur le canal push) et laissé le CORPS ouvert : le texte nu de la
+    // transcription était déjà substitué à l'aperçu une couche PLUS HAUT que
+    // toute déclaration de base. `previewIsProtectedPlaceholder` gouvernait
+    // `previewBasis`, jamais l'aperçu lui-même — la protection était donc
+    // ANNONCÉE par deux champs et APPLIQUÉE par aucun.
+    //
+    // Conséquence de forme, et elle n'est pas accessoire : `pushPreviewBasis`
+    // ne peut plus élire `transcript` sur un message protégé, puisqu'il n'y a
+    // plus de transcription à ce moment-là. La base retombe sur
+    // `protected-placeholder`, et le second verrou (`notificationLocKey`) cesse
+    // d'être la seule chose qui retienne la traduction du texte masqué.
     const firstAttachmentTranscript =
       protectedOverride === null && first?.mimeType?.startsWith('audio/')
         ? extractTranscriptionText(first as { transcription?: unknown })
         : undefined;
     const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
-    // La source qui traduit l'aperçu SERVI. Elle n'existe que quand cet aperçu
-    // est la transcription : autrement l'aperçu est `Message.content`, dont la
-    // source est relue par le créateur lui-même.
-    const transcriptSource =
-      firstAttachmentTranscript !== undefined
-        ? transcriptPrismSource(first as { transcription?: unknown; translations?: unknown })
-        : undefined;
+
+    // Cycle 123 — ce que l'aperçu EST décide de ce qui le traduit. Un
+    // placeholder de protection n'a pas de source (et sa traduction ne doit pas
+    // partir sur le fil non plus) ; une transcription a la SIENNE, sur
+    // l'attachment. Le message reste le cas nominal.
+    const previewBasis: PreviewPrismBasis = previewIsProtectedPlaceholder
+      ? { kind: 'protected-placeholder' }
+      : { kind: 'message-content' };
+    const pushPreviewBasis: PreviewPrismBasis = firstAttachmentTranscript !== undefined
+      ? {
+          kind: 'transcript',
+          source: {
+            translations: transcriptTranslationTexts(
+              (first as { translations?: unknown } | undefined)?.translations
+            ),
+            originalLanguage: transcriptionLanguage(first as { transcription?: unknown }),
+          },
+        }
+      : previewBasis;
 
     // Les trois valeurs ci-dessous disent ce qui est réellement PARTI, pas ce
     // qui était visé — même règle de compte rendu que
@@ -485,7 +472,7 @@ export async function notifyMessageRecipients(params: {
             originalMessageId: message.replyToId!,
             senderProfile: sender.profile,
             messageExpiresAt: message.expiresAt ?? null,
-            previewIsMessageContent,
+            previewBasis,
           });
           return created != null;
         })
@@ -507,7 +494,7 @@ export async function notifyMessageRecipients(params: {
               // pas. Le chemin `new_message`, lui, la prend de sa propre
               // relecture vivante — il en fait une de toute façon.
               messageExpiresAt: message.expiresAt ?? null,
-              previewIsMessageContent,
+              previewBasis,
             },
             memberIds
           )
@@ -546,16 +533,10 @@ export async function notifyMessageRecipients(params: {
           encryptedContent: message.encryptedContent || undefined,
           notificationLocKey,
           // La transcription d'un vocal n'est PAS `Message.content` : ses
-          // traductions vivent sur `MessageAttachment.translations`, et une
-          // entrée de `Message.translations` substituée ici afficherait un
-          // texte sans rapport.
-          previewIsMessageContent: previewIsMessageContent && firstAttachmentTranscript === undefined,
-          // Cycle 124 — mais elle a le droit de descendre SA source. La règle
-          // n'a jamais été « ne pas traduire un vocal », elle était « ne pas le
-          // traduire avec la mauvaise source » : la bannière était la seule
-          // surface du produit à ne pas descendre le Prisme sur ce contenu,
-          // pendant que la bulle audio de la même application le descend.
-          previewPrismSource: transcriptSource,
+          // traductions vivent sur `MessageAttachment.translations`. Le cycle 122
+          // s'en tenait à ne RIEN substituer ; le cycle 123 lui donne sa propre
+          // source, et la bannière d'un vocal descend enfin le Prisme.
+          previewBasis: pushPreviewBasis,
           ...attachmentInfo,
         })
       ));

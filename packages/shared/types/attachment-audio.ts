@@ -357,3 +357,39 @@ export function toSocketIOTranslations(
  * Alias pour compatibilité avec ancien code
  */
 export const toSocketIOAudios = toSocketIOTranslations;
+
+/**
+ * Les transcriptions traduites d'un attachment, sous la forme que la DESCENTE
+ * du Prisme consomme : `langue → texte`, sans enveloppe.
+ *
+ * Un vocal est du contenu comme un autre (« le Prisme s'applique à TOUT le
+ * contenu », `/CLAUDE.md` § Cohérence), mais ses traductions ne vivent pas là
+ * où celles d'un message vivent : `Message.translations` traduit
+ * `Message.content`, et la transcription — un AUTRE texte — a la sienne, ici.
+ * C'est ce décalage qui a tenu la bannière d'un vocal hors du Prisme jusqu'au
+ * cycle 123, alors que sa ligne de liste, elle, descendait.
+ *
+ * Cette fonction est le site UNIQUE du dépouillement, pour la raison de la
+ * leçon 264 : un consommateur qui a besoin d'un peu plus que ce que rend le
+ * résolveur existant réécrit la boucle chez lui, et c'est ainsi que naissent
+ * les familles divergentes que les cycles 118 à 122 ont payées.
+ *
+ * Accepte `unknown` — la valeur sort d'une colonne `Json` Prisma, donc d'une
+ * frontière de désérialisation, et un appelant qui devrait la caster avant
+ * d'appeler perdrait la garde. Les entrées soft-supprimées et les textes vides
+ * sont écartés : une entrée qu'aucun lecteur ne doit servir n'a pas à concourir
+ * pour un rang, et un texte vide effacerait la bannière au lieu de la traduire.
+ */
+export function transcriptTranslationTexts(
+  translations: unknown
+): Readonly<Record<string, string>> {
+  if (!translations || typeof translations !== 'object') return {};
+  const entries = translations as Record<string, Partial<AttachmentTranslation> | null>;
+  return Object.fromEntries(
+    Object.entries(entries)
+      .filter(([, t]) => typeof t?.transcription === 'string'
+        && t.transcription.trim() !== ''
+        && !t.deletedAt)
+      .map(([lang, t]) => [lang, t!.transcription as string])
+  );
+}

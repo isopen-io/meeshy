@@ -1,8 +1,9 @@
 # Cycle 124 — la bannière d'un VOCAL, et la bulle qu'un push pré-enregistre
 
-Deux défauts, tous deux nommés par le suivi MESURÉ du cycle 122, tous deux au
-même endroit du fil push. En instruisant le premier, un TROISIÈME est tombé — et
-c'est le plus grave des trois.
+Deux défauts nommés par le suivi MESURÉ du cycle 122, tous deux au même endroit
+du fil push. En instruisant le premier, un TROISIÈME est tombé — et c'est le plus
+grave. Le premier, lui, a été résolu en parallèle par le cycle 123 avec une
+meilleure conception, que ce lot adopte en entier (§ 3).
 
 ## 1. Le point de départ : un suivi qui nommait deux absences
 
@@ -43,13 +44,22 @@ en place et JUSTES :
 | garde | état | ce qu'elle gardait |
 |---|---|---|
 | `notificationLocKey` | posé | le repli localisé de la NSE |
-| `previewIsMessageContent: false` | posé | la SUBSTITUTION par une traduction |
+| `previewBasis: 'protected-placeholder'` | posé (cycle 123) | la SUBSTITUTION par une traduction, et la source du fil |
 
 Elles gardaient la substitution d'un texte que la couche du dessus avait déjà
 remplacé. **La protection était annoncée par deux champs et appliquée par
 aucun** — c'est la forme exacte du défaut du cycle 123 sur `StoryViewer` (« le
 Prisme était ANNONCÉ sans être APPLIQUÉ »), avec l'inversion qui la rend pire :
 ici l'hôte rend PLUS que ce que le résolveur autorise.
+
+Le cycle 123, mergé pendant ce lot, a renforcé ces gardes sans les déplacer :
+`previewBasis: 'protected-placeholder'` vide désormais la source, et
+`notificationLocKey` reste un second verrou. Les deux gouvernent toujours la
+SUBSTITUTION, jamais l'aperçu. Corollaire de forme, non décoratif :
+`pushPreviewBasis` élisait `transcript` AVANT de regarder la protection — sans
+transcription à ce moment-là, la base retombe sur `protected-placeholder` et la
+carte de l'attachment cesse d'être OFFERTE à la descente. **Une garde qui n'a
+qu'un verrou n'a pas de garde ; elle a un pari sur ce verrou.**
 
 > Un champ de service qui DÉCLARE une restriction ne la fait pas respecter. La
 > question à poser à toute garde n'est pas « est-elle posée ? » mais « le texte
@@ -58,38 +68,30 @@ ici l'hôte rend PLUS que ce que le résolveur autorise.
 **Correctif** : la transcription n'est extraite que si `protectedOverride ===
 null`. Une ligne, à l'endroit où l'aperçu est composé.
 
-## 3. Défaut B — la transcription ne descendait AUCUN Prisme
+## 3. Défaut B — CONVERGENCE avec le cycle 123, mené en parallèle le même jour
 
-`Message.translations` ne traduit que `Message.content`. Les traductions d'une
-transcription vivent sur `MessageAttachment.translations`, sous une AUTRE forme :
+Ce lot a trouvé, et corrigé, une seconde absence : la transcription d'un vocal ne
+descendait aucun Prisme, ses traductions vivant sur `MessageAttachment.translations`
+sous une forme différente de celles du message.
 
-| porteur | forme | texte |
+**Le cycle 123 (PR #3459) l'a trouvée aussi, le même jour, et a été mergé le
+premier.** Sa conception est MEILLEURE, et ce lot la prend en entier :
+
+| | ce lot (abandonné) | cycle 123 (retenu) |
 |---|---|---|
-| `Message.translations` | `{ lang: { text, isEncrypted? } }` | `.text` |
-| `MessageAttachment.translations` | `{ lang: { transcription, deletedAt?, … } }` | `.transcription` |
+| forme | `previewPrismSource?: MessagePrismSource` **+** `previewIsMessageContent: boolean` | `PreviewPrismBasis`, type SOMME à trois membres |
+| exclusivité | deux paramètres qui **peuvent se contredire** | mutuellement exclusifs par construction |
+| portée | l'éventail `regular` seul | les **trois** éventails |
+| projection du stockage | `transcriptPrismSource()`, local à la passerelle | `transcriptTranslationTexts()`, dans `packages/shared`, à côté du type qu'il projette |
 
-Aucun éventail ne lisait la seconde. La bannière d'un vocal était donc **la seule
-surface du produit à ne pas descendre le Prisme sur ce contenu**, pendant que la
-bulle audio de la même application le descend depuis le cycle 119
-(`AudioTrackLanguageResolver` / `resolveAutoLanguage` / `resolveTranslatedAudio`).
+> **La résolution d'une convergence n'est pas un compromis : c'est PRENDRE la
+> meilleure conception en entier**, puis rejouer par-dessus ce que l'autre avait
+> d'unique. Panacher aurait produit exactement la divergence que la leçon 264
+> dénonce, dans le fichier qui la cite.
 
-Le cycle 122 avait posé la bonne CONDITION et en avait tiré la mauvaise
-conclusion : « la transcription est un autre texte » ⇒ ne pas la traduire. La
-règle juste est **« ne pas la traduire avec la MAUVAISE source »**.
-
-**Correctif** : `previewPrismSource` — la source qui traduit l'aperçu SERVI,
-remise par l'éventail, qui est le seul à savoir ce que cet aperçu montre. La
-DESCENTE, elle, reste le site unique (`resolvePrismTranslation`) : ce qui est
-ajouté est une source, pas une boucle (leçon 264).
-
-`transcriptPrismSource()` projette le stockage de la pièce jointe vers la forme
-que la descente consomme — le pendant de `pushableTranslations` pour l'autre
-porteur. Il en faut un second à cause de la FORME du stockage, jamais de la
-règle, qui reste une.
-
-Il écarte les entrées `deletedAt` : servir sur une bannière une traduction
-soft-supprimée la rendrait plus durable que partout ailleurs, `hasTranslation` et
-`getTranslation` l'appliquant déjà côté lecture.
+Ce que le cycle 123 n'avait pas vu, et qui reste le contenu propre de ce lot :
+le défaut A ci-dessus (le CORPS, qu'il a laissé ouvert en fermant le FIL) et le
+défaut C ci-dessous.
 
 ## 4. Défaut C — la bulle pré-enregistrée n'avait ni corps ni langue
 
@@ -128,9 +130,12 @@ exclusif.
 
 | fichier | témoins | rouges prouvés |
 |---|---|---|
-| `unit/services/messaging/voiceNoteBannerPrism.test.ts` | 12 | **5** (garde de protection retirée) |
-| `unit/services/notifications/messageNotificationPrism.test.ts` (+4) | 4 | **1** |
+| `unit/services/messaging/voiceNoteBannerPrism.test.ts` | 6 | **5** (garde de protection retirée) |
 | `unit/services/notifications/nsePrePersistedMessage.test.ts` | 7 | **3** |
+
+Les quatre témoins ajoutés à `messageNotificationPrism.test.ts` sont retirés : le
+cycle 123 couvre la descente de la transcription par sa propre conception, et
+ses témoins.
 
 Trois points de méthode, tous repris de cycles antérieurs :
 
@@ -138,12 +143,12 @@ Trois points de méthode, tous repris de cycles antérieurs :
    APNs (`pushService.sendToUser`) ou les paramètres que l'éventail REMET au
    créateur. Jamais un calcul intermédiaire.
 2. **Les verts ne sont pas du remplissage.** Le témoin « un vocal ORDINAIRE
-   affiche bien sa transcription » garde le mode d'échec du CORRECTIF A : fermer
-   la protection ne doit pas supprimer l'inline du cas nominal. Celui qui pose
-   `Message.translations = { es: 'Hola' }` FACE à une source de transcription
-   `{ es: 'Te llamo' }` ne peut passer que si la source remise l'emporte — un
-   correctif qui aurait simplement rouvert la substitution servirait « Hola »,
-   sans rapport avec l'audio.
+   affiche bien sa transcription, et déclare SA source » garde le mode d'échec du
+   CORRECTIF A : refermer la protection ne doit ni supprimer l'inline du cas
+   nominal — la raison d'être d'`extractTranscriptionText` — ni lui retirer la
+   source que le cycle 123 lui a donnée. Côté défaut C, « l'ORIGINAL, jamais la
+   traduction » garde l'erreur qu'un correctif pressé aurait commise : poser dans
+   `content` le texte que la bannière sert, et faire mentir `originalLanguage`.
 3. **Le ROUGE se prouve par la mutation qu'il nomme.** Les cinq témoins de
    protection ont été vus tomber en retirant la seule condition
    `protectedOverride === null`.

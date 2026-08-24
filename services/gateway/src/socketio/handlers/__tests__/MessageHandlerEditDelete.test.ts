@@ -849,6 +849,15 @@ describe('MessageHandler — handleMessageEdit et les mentions', () => {
     (deps.prisma.conversation.findUnique as jest.Mock<any>).mockResolvedValue({
       participants: [{ userId: USER_ID }, { userId: 'u-bob' }, { userId: 'u-alice' }],
     });
+    // Cycle 123 bis — la notification d'un ENTRANT relit les drapeaux de
+    // PROTECTION du message édité, et cette relecture est fail-CLOSED : un
+    // double muet ferait passer tout message pour protégé et servirait un
+    // placeholder. Ce bloc décrit un message ORDINAIRE.
+    (deps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue({
+      messageType: 'text', isEncrypted: false, isViewOnce: false,
+      isBlurred: false, effectFlags: 0, expiresAt: null,
+      createdAt: new Date('2026-08-24T10:00:00Z'),
+    });
   });
 
   it('réconcilie les lignes Mention : le partant s’en va, l’entrant arrive', async () => {

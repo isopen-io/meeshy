@@ -165,7 +165,10 @@ describe('push data — ce que la NSE pré-enregistre au démarrage à froid', (
       originalLanguage: 'fr',
       params: {
         messagePreview: 'Salut, je te rappelle ce soir',
-        previewIsMessageContent: false,
+        previewBasis: {
+          kind: 'transcript',
+          source: { translations: { es: 'Te llamo esta noche' }, originalLanguage: 'fr' },
+        },
       },
     });
 

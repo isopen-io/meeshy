@@ -9,6 +9,7 @@ import {
   toSocketIOTranslations,
   toSocketIOAudio,
   toSocketIOAudios,
+  transcriptTranslationTexts,
 } from '../../types/attachment-audio';
 import type {
   AttachmentTranslation,
@@ -302,5 +303,50 @@ describe('toSocketIOTranslations', () => {
     const translations = { fr: undefined } as unknown as AttachmentTranslations;
     const result = toSocketIOTranslations('att-1', translations);
     expect(result).toEqual([]);
+  });
+});
+
+/**
+ * Cycle 123 — la bannière d'un VOCAL descend son propre Prisme.
+ *
+ * `resolvePrismTranslation` consomme `langue → texte`. Les traductions d'une
+ * transcription arrivent, elles, dans l'enveloppe de stockage d'un attachment
+ * (`{ type, transcription, url, deletedAt? }`) et depuis une colonne `Json`,
+ * donc en `unknown`. Ce dépouillement est le site UNIQUE de la conversion.
+ */
+describe('transcriptTranslationTexts', () => {
+  it('dépouille l\'enveloppe de stockage en langue → texte', () => {
+    const result = transcriptTranslationTexts({
+      fr: { type: 'audio', transcription: 'Salut', url: '/a.mp3', createdAt: new Date() },
+      es: { type: 'audio', transcription: 'Hola', createdAt: new Date() },
+    });
+
+    expect(result).toEqual({ fr: 'Salut', es: 'Hola' });
+  });
+
+  it('écarte une entrée soft-supprimée — aucun lecteur ne doit la servir', () => {
+    const result = transcriptTranslationTexts({
+      fr: { type: 'audio', transcription: 'Salut', createdAt: new Date(), deletedAt: new Date() },
+      es: { type: 'audio', transcription: 'Hola', createdAt: new Date() },
+    });
+
+    expect(result).toEqual({ es: 'Hola' });
+  });
+
+  it('écarte un texte vide — il effacerait la bannière au lieu de la traduire', () => {
+    const result = transcriptTranslationTexts({
+      fr: { type: 'audio', transcription: '   ', createdAt: new Date() },
+      es: { type: 'audio', transcription: 'Hola', createdAt: new Date() },
+    });
+
+    expect(result).toEqual({ es: 'Hola' });
+  });
+
+  it('tolère une colonne Json absente ou informe — c\'est une frontière de désérialisation', () => {
+    expect(transcriptTranslationTexts(null)).toEqual({});
+    expect(transcriptTranslationTexts(undefined)).toEqual({});
+    expect(transcriptTranslationTexts('pas un objet')).toEqual({});
+    expect(transcriptTranslationTexts({ fr: null })).toEqual({});
+    expect(transcriptTranslationTexts({ fr: { type: 'audio' } })).toEqual({});
   });
 });
