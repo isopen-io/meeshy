@@ -31,6 +31,10 @@ final class PostStatAccessibilityTests: XCTestCase {
         XCTAssertTrue(PostStatAccessibility.repostsLabel(3).contains("3"))
     }
 
+    func test_repliesLabel_includesCount() {
+        XCTAssertTrue(PostStatAccessibility.repliesLabel(9).contains("9"))
+    }
+
     // MARK: - Accord singulier / pluriel, langue par langue
     //
     // La langue que résout `String(localized:)` vient du BUNDLE, donc de la
@@ -97,14 +101,43 @@ final class PostStatAccessibilityTests: XCTestCase {
         XCTAssertEqual(try label(reposts, 4, in: "fr"), "4 repartages")
     }
 
+    // MARK: - `replies` : le nom compté ajouté en 240i
+    //
+    // Le défaut d'origine était VISIBLE à l'écran : `feed.post.comment.replies_count`
+    // (plate) rendait « 1 réponses » sur `FeedPostCard`, et « 1 replies » en
+    // anglais. C'est l'accord singulier — le cas que la clé plate ne pouvait pas
+    // faire — qui doit être juste dans les deux langues.
+
+    func test_repliesLabel_singularForOne() throws {
+        let replies = PostStatAccessibility.repliesLabel
+        XCTAssertEqual(try label(replies, 1, in: "en"), "1 reply")
+        XCTAssertEqual(try label(replies, 1, in: "fr"), "1 réponse")
+    }
+
+    func test_repliesLabel_pluralForMany() throws {
+        let replies = PostStatAccessibility.repliesLabel
+        XCTAssertEqual(try label(replies, 8, in: "en"), "8 replies")
+        XCTAssertEqual(try label(replies, 8, in: "fr"), "8 réponses")
+    }
+
+    func test_repliesLabel_pluralForZero() throws {
+        let replies = PostStatAccessibility.repliesLabel
+        XCTAssertEqual(try label(replies, 0, in: "en"), "0 replies")
+        XCTAssertEqual(try label(replies, 0, in: "fr"), "0 réponse")
+    }
+
     // MARK: - Chaque compteur nomme sa propre sémantique (pas de confusion)
 
     func test_labels_areDistinctPerStatType() {
         let likes = PostStatAccessibility.likesLabel(2)
         let comments = PostStatAccessibility.commentsLabel(2)
         let reposts = PostStatAccessibility.repostsLabel(2)
+        let replies = PostStatAccessibility.repliesLabel(2)
         XCTAssertNotEqual(likes, comments)
         XCTAssertNotEqual(comments, reposts)
         XCTAssertNotEqual(likes, reposts)
+        XCTAssertNotEqual(replies, comments)
+        XCTAssertNotEqual(replies, reposts)
+        XCTAssertNotEqual(replies, likes)
     }
 }
