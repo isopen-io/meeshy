@@ -1500,6 +1500,43 @@ describe('registerParticipantsRoutes', () => {
       });
     }
 
+    /** La CIBLE du retrait — une autre personne que l'appelant. */
+    function createTargetParticipant(overrides: Record<string, unknown> = {}) {
+      return {
+        id: TARGET_PARTICIPANT_ID,
+        conversationId: VALID_CONV_ID,
+        userId: TARGET_USER_ID,
+        role: 'member',
+        isActive: true,
+        leftAt: null,
+        bannedAt: null,
+        displayName: 'Target',
+        shareLinkId: null,
+        ...overrides,
+      };
+    }
+
+    /**
+     * Le handler interroge DEUX participants — l'appelant, puis la cible — et la
+     * cible se résout sous les DEUX colonnes (`userId`, ou `Participant.id` qui
+     * est la seule identité d'un visiteur venu par un lien partagé).
+     *
+     * Un double qui rend la MÊME ligne aux deux questions fait croire au handler
+     * que l'appelant se retire lui-même. Celui-ci répond au `where`, comme la
+     * vraie requête.
+     */
+    function stubParticipantLookups(caller: any, target: any = createTargetParticipant()) {
+      mockPrisma.participant.findFirst.mockImplementation((async (args: any) => {
+        const where = args?.where ?? {};
+        if (where.userId === VALID_USER_ID) return caller;
+        if (target && where.userId !== undefined && where.userId === target.userId) return target;
+        if (target && where.id !== undefined && where.id === target.id) return target;
+        return null;
+      }) as any);
+      mockPrisma.participant.update.mockResolvedValue(target ?? {});
+      return target;
+    }
+
     it('should return 403 when conversation ID cannot be resolved', async () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
       const request = createDeleteRequest({ params: { id: 'bad-id', userId: TARGET_USER_ID } });
@@ -1523,7 +1560,7 @@ describe('registerParticipantsRoutes', () => {
 
     it('should return 403 when current user is neither admin nor creator', async () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
-      mockPrisma.participant.findFirst.mockResolvedValue(
+      stubParticipantLookups(
         createParticipant({ role: 'member', user: { ...createParticipant().user, role: 'USER' } })
       );
       const reply = createMockReply();
@@ -1538,10 +1575,10 @@ describe('registerParticipantsRoutes', () => {
 
     it('should allow MODERATOR role to remove participants', async () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
-      mockPrisma.participant.findFirst.mockResolvedValue(
+      stubParticipantLookups(
         createParticipant({ role: 'moderator', user: { ...createParticipant().user, role: 'MODERATOR' } })
       );
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      
       mockPrisma.participant.findMany.mockResolvedValue([]);
       const reply = createMockReply();
 
@@ -1552,7 +1589,7 @@ describe('registerParticipantsRoutes', () => {
 
     it('should return 400 when trying to remove yourself', async () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
-      mockPrisma.participant.findFirst.mockResolvedValue(createAdminParticipant());
+      stubParticipantLookups(createAdminParticipant());
       const request = createDeleteRequest({ params: { id: VALID_CONV_ID, userId: VALID_USER_ID } });
       const reply = createMockReply();
 
@@ -1566,19 +1603,17 @@ describe('registerParticipantsRoutes', () => {
 
     it('should soft delete the participant when authorized as creator', async () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
-      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      stubParticipantLookups(createCreatorParticipant());
+      
       mockPrisma.participant.findMany.mockResolvedValue([]);
       const reply = createMockReply();
 
       await route.handler(createDeleteRequest(), reply);
 
-      expect(mockPrisma.participant.updateMany).toHaveBeenCalledWith({
-        where: {
-          conversationId: VALID_CONV_ID,
-          userId: TARGET_USER_ID,
-          isActive: true,
-        },
+      // `update` sur la ligne RÉSOLUE, plus `updateMany` : une écriture qui ne
+      // trouve pas sa cible doit échouer, pas répondre 200 en silence.
+      expect(mockPrisma.participant.update).toHaveBeenCalledWith({
+        where: { id: TARGET_PARTICIPANT_ID },
         data: {
           isActive: false,
           leftAt: expect.any(Date),
@@ -1593,8 +1628,8 @@ describe('registerParticipantsRoutes', () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
       const io = createMockIO();
       const request = createDeleteRequest({ server: { io, notificationService: createMockNotificationService() } });
-      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      stubParticipantLookups(createCreatorParticipant());
+      
       mockPrisma.participant.findMany.mockResolvedValue([]);
       const reply = createMockReply();
 
@@ -1604,7 +1639,7 @@ describe('registerParticipantsRoutes', () => {
       expect(io._emit).toHaveBeenCalledWith('conversation:participant-left', expect.objectContaining({
         conversationId: VALID_CONV_ID,
         userId: TARGET_USER_ID,
-        displayName: 'TestUser',
+        displayName: 'Target',
         leftAt: expect.any(String),
       }));
       expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
@@ -1614,8 +1649,8 @@ describe('registerParticipantsRoutes', () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
       const io = createMockIO();
       const request = createDeleteRequest({ server: { io, notificationService: createMockNotificationService() } });
-      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      stubParticipantLookups(createCreatorParticipant());
+      
       mockPrisma.participant.findMany.mockResolvedValue([]);
       const reply = createMockReply();
 
@@ -1637,40 +1672,42 @@ describe('registerParticipantsRoutes', () => {
 
     it('should evict the removed participant from the message-send lookup cache', async () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
-      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      stubParticipantLookups(createCreatorParticipant());
+      
       mockPrisma.participant.findMany.mockResolvedValue([]);
       const reply = createMockReply();
-      cacheParticipant(PARTICIPANT_ID, VALID_CONV_ID, {
-        id: PARTICIPANT_ID,
+      // C'est la ligne de la CIBLE qui est évincée — celle que le handler vient
+      // de résoudre, pas celle de l'appelant.
+      cacheParticipant(TARGET_PARTICIPANT_ID, VALID_CONV_ID, {
+        id: TARGET_PARTICIPANT_ID,
         conversationId: VALID_CONV_ID,
         isActive: true,
       });
 
       await route.handler(createDeleteRequest(), reply);
 
-      expect(getCachedParticipant(PARTICIPANT_ID, VALID_CONV_ID)).toBeUndefined();
+      expect(getCachedParticipant(TARGET_PARTICIPANT_ID, VALID_CONV_ID)).toBeUndefined();
     });
 
     it('should soft delete the participant when authorized as ADMIN user role', async () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
-      mockPrisma.participant.findFirst.mockResolvedValue(createAdminParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      stubParticipantLookups(createAdminParticipant());
+      
       mockPrisma.participant.findMany.mockResolvedValue([]);
       const reply = createMockReply();
 
       await route.handler(createDeleteRequest(), reply);
 
-      expect(mockPrisma.participant.updateMany).toHaveBeenCalled();
+      expect(mockPrisma.participant.update).toHaveBeenCalled();
       expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
 
     it('should soft delete the participant when authorized as BIGBOSS user role', async () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
-      mockPrisma.participant.findFirst.mockResolvedValue(
+      stubParticipantLookups(
         createParticipant({ role: 'member', user: { ...createParticipant().user, role: 'BIGBOSS' } })
       );
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      
       mockPrisma.participant.findMany.mockResolvedValue([]);
       const reply = createMockReply();
 
@@ -1683,8 +1720,8 @@ describe('registerParticipantsRoutes', () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
       const ns = createMockNotificationService();
       const request = createDeleteRequest({ server: { notificationService: ns } });
-      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      stubParticipantLookups(createCreatorParticipant());
+      
       mockPrisma.participant.findMany.mockResolvedValue([]);
       const reply = createMockReply();
 
@@ -1702,8 +1739,8 @@ describe('registerParticipantsRoutes', () => {
       const ns = createMockNotificationService();
       const adminId = '507f1f77bcf86cd799439066';
       const request = createDeleteRequest({ server: { notificationService: ns } });
-      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      stubParticipantLookups(createCreatorParticipant());
+      
       mockPrisma.participant.findMany.mockResolvedValue([{ userId: adminId }]);
       const reply = createMockReply();
 
@@ -1720,8 +1757,8 @@ describe('registerParticipantsRoutes', () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
       const ns = createMockNotificationService();
       const request = createDeleteRequest({ server: { notificationService: ns } });
-      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      stubParticipantLookups(createCreatorParticipant());
+      
       mockPrisma.participant.findMany.mockResolvedValue([]);
       const reply = createMockReply();
 
@@ -1742,8 +1779,8 @@ describe('registerParticipantsRoutes', () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
       const ns = createMockNotificationService();
       const request = createDeleteRequest({ server: { notificationService: ns } });
-      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      stubParticipantLookups(createCreatorParticipant());
+      
       mockPrisma.participant.findMany.mockResolvedValue([{ userId: null }]);
       const reply = createMockReply();
 
@@ -1755,8 +1792,8 @@ describe('registerParticipantsRoutes', () => {
     it('should not crash when notificationService is undefined', async () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
       const request = createDeleteRequest({ server: {} });
-      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      stubParticipantLookups(createCreatorParticipant());
+      
       const reply = createMockReply();
 
       await route.handler(request, reply);
@@ -1769,8 +1806,8 @@ describe('registerParticipantsRoutes', () => {
       const ns = createMockNotificationService();
       ns.createRemovedFromConversationNotification.mockRejectedValue(new Error('push failed'));
       const request = createDeleteRequest({ server: { notificationService: ns } });
-      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      stubParticipantLookups(createCreatorParticipant());
+      
       mockPrisma.participant.findMany.mockResolvedValue([]);
       const reply = createMockReply();
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -1788,8 +1825,8 @@ describe('registerParticipantsRoutes', () => {
       ns.createMemberRemovedNotification.mockRejectedValue(new Error('push failed'));
       const adminId = '507f1f77bcf86cd799439066';
       const request = createDeleteRequest({ server: { notificationService: ns } });
-      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
-      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      stubParticipantLookups(createCreatorParticipant());
+      
       mockPrisma.participant.findMany.mockResolvedValue([{ userId: adminId }]);
       const reply = createMockReply();
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});

@@ -1159,8 +1159,26 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // `GET /conversations` ne sert plus la laissait cliquable pour de bon :
     // `staleTime: Infinity` ne relit jamais de lui-même, et le seul rattrapage
     // était le tombstone du prochain delta.
-    const handleConversationParticipantLeft = (data: { conversationId: string; userId: string; displayName: string; leftAt: string; memberCount?: number; memberCountCapped?: boolean }) => {
-      if (data.userId === useAuthStore.getState().user?.id) {
+    /**
+     * L'événement nomme-t-il le lecteur ?
+     *
+     * Une identité porte un `User.id` pour un compte inscrit et un
+     * `Participant.id` pour un visiteur venu par un lien partagé — qui n'a
+     * aucune ligne `User`, donc dont le `userId` vaut `null` sur le fil.
+     * `participantId` est la seule identité toujours servie.
+     */
+    const namesMe = (data: { userId?: string | null; participantId?: string }) => {
+      const me = useAuthStore.getState().user?.id;
+      if (!me) return false;
+      return me === data.userId || me === data.participantId;
+    };
+
+    const handleConversationParticipantLeft = (data: { conversationId: string; userId: string | null; participantId?: string; displayName: string; leftAt: string; memberCount?: number; memberCountCapped?: boolean }) => {
+      // `namesMe` et non `userId === me` : une identité porte un `User.id` pour
+      // un compte, un `Participant.id` pour un visiteur venu par un lien
+      // partagé, dont le `userId` vaut `null`. L'événement nomme les deux faces ;
+      // ne comparer qu'à l'une rate systématiquement l'autre.
+      if (namesMe(data)) {
         dropConversationFromCache(data.conversationId);
         return;
       }
@@ -1172,14 +1190,14 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // ex-member is what keeps them from walking back in through a share link,
     // but it removes no membership, so the count must not move. Absent on
     // servers older than that contract, where a ban always removed one.
-    const handleConversationParticipantBanned = (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean; memberCount?: number; memberCountCapped?: boolean }) => {
+    const handleConversationParticipantBanned = (data: { conversationId: string; userId: string | null; participantId?: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean; memberCount?: number; memberCountCapped?: boolean; closedShareLinkId?: string }) => {
       // Être banni est la troisième fin d'appartenance, et elle se traite comme
       // les deux autres. Le test d'identité passe AVANT le court-circuit
       // `membershipEnded === false` : celui-ci protège un COMPTEUR, or il n'y a
       // pas de compteur à protéger sur une ligne qui s'en va. Un ban qui suit
       // un départ non synchronisé porte précisément ce drapeau, et c'est le cas
       // où la ligne fantôme est encore là.
-      if (data.userId === useAuthStore.getState().user?.id) {
+      if (namesMe(data)) {
         dropConversationFromCache(data.conversationId);
         return;
       }

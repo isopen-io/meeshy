@@ -1275,6 +1275,12 @@ export function registerCoreRoutes(
             conversationRole: callerConversationRole
           })
         }),
+        // Le rang était résolu ici depuis toujours — pour décider du plafond
+        // d'effectif juste au-dessus — et n'était pas servi. Les clients
+        // ouvrant une conversation par sa fiche (notification, lien) n'avaient
+        // donc AUCUN moyen de savoir qu'ils l'administrent. Même clé que la
+        // ligne de liste : une seule notion, un seul nom.
+        currentUserRole: callerConversationRole,
         unreadCount
       });
 
@@ -1685,12 +1691,28 @@ export function registerCoreRoutes(
   });
 
   // Route pour mettre à jour une conversation
-  fastify.put<{
+  // `PUT` ET `PATCH` sur un SEUL handler. Ce sont deux verbes pour un seul
+  // geste — « modifie ces champs-là » — et les avoir écrits deux fois, dans
+  // deux fichiers, a produit exactement ce qu'une duplication produit : deux
+  // contrats qui divergent. Le jumeau vivait dans `sharing.ts` et n'acceptait
+  // que `title`/`description`/`type` ; le web lui postait `avatar` et `banner`,
+  // qu'il ignorait en silence tout en répondant 200 — bannière et avatar
+  // restaient vides pendant que l'interface annonçait le succès (mesuré en
+  // production le 2026-08-24). Il ne diffusait par ailleurs AUCUN
+  // `conversation:updated`, et laissait n'importe quel membre renommer le
+  // groupe. Il a été supprimé : ici est le seul point d'écriture des
+  // métadonnées d'une conversation.
+  //
+  // Garde : `conversation-update-route.test.ts` rejoue chaque cas SUR LES DEUX
+  // VERBES — un handler qui se remettrait à diverger y rougirait.
+  fastify.route<{
     Params: ConversationParams;
     Body: Partial<CreateConversationBody>;
-  }>('/conversations/:id', {
+  }>({
+    method: ['PUT', 'PATCH'],
+    url: '/conversations/:id',
     schema: {
-      description: 'Update conversation details (title, description) - requires admin/moderator role',
+      description: 'Update conversation metadata (title, description, avatar, banner) and container settings - requires creator/admin/moderator role. PUT and PATCH are equivalent: both apply only the fields present in the body.',
       tags: ['conversations'],
       summary: 'Update conversation',
       params: {
@@ -1709,8 +1731,8 @@ export function registerCoreRoutes(
         500: errorResponseSchema
       }
     },
-    preValidation: [requiredAuth]
-  }, async (request, reply) => {
+    preValidation: [requiredAuth],
+    handler: async (request, reply) => {
     try {
       const { id } = request.params;
       const { title: rawTitle, description: rawDescription, avatar, banner, defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled } = request.body as {
@@ -1728,13 +1750,23 @@ export function registerCoreRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
+      // « ID or identifier », dit le schéma — et seul le jumeau supprimé le
+      // tenait. Ici, `where: { conversationId: id }` recevait le `mshy_…` tel
+      // quel, ne trouvait aucune appartenance, et répondait 403 à un créateur
+      // parfaitement légitime qui avait ouvert sa conversation par son
+      // identifiant lisible. Toutes les routes voisines résolvent d'abord.
+      const conversationId = id === 'meeshy' ? id : await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return sendNotFound(reply, 'Conversation not found');
+      }
+
       // Vérifier les permissions d'administration
       // Le `select` ramène le TYPE du conteneur par la relation que cette
       // requête d'appartenance charge déjà — la garde du tête-à-tête ci-dessous
       // en dépend, et aucune requête de plus n'est émise pour l'obtenir.
       const membership = await prisma.participant.findFirst({
         where: {
-          conversationId: id,
+          conversationId: conversationId,
           userId: userId,
           role: { in: ['creator', 'admin', 'moderator'] },
           isActive: true
@@ -1784,33 +1816,84 @@ export function registerCoreRoutes(
         return sendForbidden(reply, 'Un tête-à-tête n\'a pas de hiérarchie d\'écriture : ces réglages ne s\'y appliquent pas');
       }
 
-      const updatedConversation = await prisma.conversation.update({
-        where: { id },
-        data: {
-          title,
-          description,
-          ...(avatar !== undefined && { avatar }),
-          ...(banner !== undefined && { banner }),
-          ...(defaultWriteRole !== undefined && { defaultWriteRole }),
-          ...(isAnnouncementChannel !== undefined && { isAnnouncementChannel }),
-          ...(slowModeSeconds !== undefined && { slowModeSeconds }),
-          ...(autoTranslateEnabled !== undefined && { autoTranslateEnabled }),
-        },
-        include: {
-          participants: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  avatar: true,
-                  banner: true
-                }
+      const conversationInclude = {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                banner: true
               }
             }
           }
         }
+      } as const;
+
+      const updateData = {
+        ...(title !== undefined && { title }),
+        ...(description !== undefined && { description }),
+        ...(avatar !== undefined && { avatar }),
+        ...(banner !== undefined && { banner }),
+        ...(defaultWriteRole !== undefined && { defaultWriteRole }),
+        ...(isAnnouncementChannel !== undefined && { isAnnouncementChannel }),
+        ...(slowModeSeconds !== undefined && { slowModeSeconds }),
+        ...(autoTranslateEnabled !== undefined && { autoTranslateEnabled }),
+      };
+
+      // Un corps qui ne nomme aucun champ connu n'est pas une erreur du client :
+      // c'est une écriture vide. Prisma, lui, refuse un `data` vide et levait —
+      // la route répondait 500 à un `{}`. On rend l'état courant, sans écrire et
+      // sans annoncer un changement qui n'a pas eu lieu.
+      // Gate de présence des co-participants. `conversationParticipantSchema`
+      // DÉCLARE `isOnline`/`lastActiveAt`, et l'`include` ci-dessus ramène tous
+      // les scalaires de `Participant` : ces deux champs atteignaient le fil
+      // BRUTS. Régime `resolvePrefsOnly` — la co-participation est un contexte
+      // d'accès garanti des DEUX côtés, seules les préférences s'appliquent, et
+      // un id ABSENT de la carte vaut MONTRABLE (un participant sans compte n'a
+      // pas de préférences et doit rester visible).
+      //
+      // Défini ici, appliqué aux DEUX sorties : la branche « rien à écrire »
+      // rend les mêmes lignes que la branche nominale, donc la même donnée à
+      // garder. Une porte posée sur une seule des deux n'est pas une porte.
+      const gatePresence = async <P extends { userId: string | null; isOnline: boolean | null; lastActiveAt: Date | null }>(
+        participants: P[]
+      ) => {
+        const vis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+          participants
+            .map((p) => p.userId)
+            .filter((uid): uid is string => !!uid)
+        );
+        return participants.map((p) => {
+          const prefs = p.userId ? vis.get(p.userId) : undefined;
+          return {
+            ...p,
+            isOnline: prefs?.showOnline === false ? false : p.isOnline,
+            lastActiveAt: prefs?.showLastSeenTimestamp === false ? null : p.lastActiveAt,
+          };
+        });
+      };
+
+      if (Object.keys(updateData).length === 0) {
+        const unchanged = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          include: conversationInclude
+        });
+        if (!unchanged) {
+          return sendNotFound(reply, 'Conversation not found');
+        }
+        return sendSuccess(reply, {
+          ...unchanged,
+          participants: await gatePresence(unchanged.participants),
+        });
+      }
+
+      const updatedConversation = await prisma.conversation.update({
+        where: { id: conversationId },
+        data: updateData,
+        include: conversationInclude
       });
 
       // Typé sur le contrat, pas `Record<string, unknown>` : une carte ouverte
@@ -1856,11 +1939,11 @@ export function registerCoreRoutes(
         // traduction parfaitement valide sur toutes les lignes de liste.
         emitToConversationParticipants({
           io,
-          conversationId: id,
+          conversationId,
           participants: updatedConversation.participants.filter(p => p.isActive),
           event: SERVER_EVENTS.CONVERSATION_UPDATED,
           payload: {
-            conversationId: id,
+            conversationId,
             ...changedFields,
             updatedBy: { id: userId },
             updatedAt: new Date().toISOString(),
@@ -1868,11 +1951,19 @@ export function registerCoreRoutes(
         })
       }
 
-      return sendSuccess(reply, updatedConversation);
+      // La route jumelle supprimée gardait la présence ; le `PUT`, jamais.
+      // Porter ce qu'un exemplaire avait de PLUS fait partie de la
+      // consolidation — sans quoi unifier revient à choisir la moins bonne des
+      // deux moitiés.
+      return sendSuccess(reply, {
+        ...updatedConversation,
+        participants: await gatePresence(updatedConversation.participants),
+      });
 
     } catch (error) {
       logger.error('error updating conversation', { error });
       return sendInternalError(reply, 'Error updating conversation');
+    }
     }
   });
 

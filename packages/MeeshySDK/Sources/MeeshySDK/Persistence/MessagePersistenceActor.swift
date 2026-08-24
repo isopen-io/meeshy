@@ -64,12 +64,22 @@ fileprivate func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord
         && a.replyToJson == b.replyToJson && a.forwardedFromId == b.forwardedFromId
         && a.forwardedFromConversationId == b.forwardedFromConversationId
         && a.forwardedFromJson == b.forwardedFromJson
+    // **`messageSource` et `messageType` DOIVENT figurer ici** (régression
+    // 2026-08-24). Ils décident du RENDU — un message `system` s'affiche en
+    // avis dédié, un `user` en parole avec avatar et nom. Ils manquaient à
+    // cette comparaison : une ligne née `"user"` (le chemin de réconciliation
+    // depuis le cache l'écrivait en dur) recevait ensuite la charge canonique
+    // portant `"system"`, l'upsert jugeait la ligne INCHANGÉE, et le mensonge
+    // devenait définitif — plus aucune correction du serveur ne pouvait
+    // l'atteindre. Symptôme : les avis d'arrivée rendus comme des paroles,
+    // avec le texte de repli du gateway en guise de bulle.
+    let kindAndSource = a.messageSource == b.messageSource && a.messageType == b.messageType
     let extras = a.mentionedUsersJson == b.mentionedUsersJson
         && a.callSummaryJson == b.callSummaryJson && a.joinNoticeJson == b.joinNoticeJson
         && a.effectFlags == b.effectFlags
         && a.locationJson == b.locationJson
     return contentAndState && attachmentsAndReactions && encryptionAndDelivery
-        && sender && replyAndForward && extras
+        && sender && replyAndForward && extras && kindAndSource
 }
 
 public actor MessagePersistenceActor {
@@ -114,13 +124,27 @@ public actor MessagePersistenceActor {
         public let content: String?
         public let createdAt: Date
         public let computedState: MessageState
+        /// **Ce qui décide du RENDU** — un `system` s'affiche en avis dédié,
+        /// un `user` en parole avec avatar et nom.
+        ///
+        /// Cette forme est APPAUVRIE par nature : elle sert à réconcilier un
+        /// message aperçu ailleurs, pas à le décrire entièrement. Elle écrivait
+        /// donc `"user"` en dur, et un avis d'arrivée naissait en base comme
+        /// une parole (régression 2026-08-24). Le défaut reste `"user"` — tous
+        /// les appelants existants gardent leur comportement — mais celui qui
+        /// CONNAÎT la source doit pouvoir la transmettre.
+        public let messageSource: String
+        public let messageType: String
 
         public init(id: String, conversationId: String, senderId: String,
-                    content: String?, createdAt: Date, computedState: MessageState) {
+                    content: String?, createdAt: Date, computedState: MessageState,
+                    messageSource: String = "user", messageType: String = "text") {
             self.id = id
             self.conversationId = conversationId
             self.senderId = senderId
             self.content = content
+            self.messageSource = messageSource
+            self.messageType = messageType
             self.createdAt = createdAt
             self.computedState = computedState
         }
@@ -638,8 +662,8 @@ public actor MessagePersistenceActor {
                         conversationId: msg.conversationId,
                         senderId: msg.senderId,
                         content: msg.content,
-                        originalLanguage: "fr", messageType: "text",
-                        messageSource: "user", contentType: "text",
+                        originalLanguage: "fr", messageType: msg.messageType,
+                        messageSource: msg.messageSource, contentType: "text",
                         state: msg.computedState, retryCount: 0, lastError: nil,
                         isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
                         replyToId: nil, storyReplyToId: nil,
@@ -1889,6 +1913,30 @@ public actor MessagePersistenceActor {
                     if !pendingDelete {
                         existing.deletedAt = api.deletedAt
                     }
+                    // **La NATURE du message est corrigible** (régression
+                    // 2026-08-24). Une ligne née `"user"` — le chemin de
+                    // réconciliation depuis le cache l'écrivait ainsi en dur —
+                    // ne pouvait plus jamais redevenir `"system"` : cette
+                    // branche affectait le contenu, les pièces jointes, les
+                    // réactions, le chiffrement… mais NI la source, NI le type,
+                    // NI le metadata système. La charge canonique portait la
+                    // vérité, et rien ne l'écrivait. Résultat à l'écran : un
+                    // avis d'arrivée rendu comme une parole, avec avatar et
+                    // nom, et le texte de repli du gateway en guise de bulle.
+                    //
+                    // `??` et non affectation sèche pour le metadata : une
+                    // charge qui n'en porte pas ne doit pas effacer celui d'un
+                    // avis déjà reconnu — même discipline que les pièces
+                    // jointes juste en dessous.
+                    existing.messageSource = api.messageSource ?? existing.messageSource
+                    existing.messageType = api.messageType ?? existing.messageType
+                    existing.joinNoticeJson = joinNoticeJson ?? existing.joinNoticeJson
+                    // `callSummaryJson` N'EST PAS touché ici : il a déjà sa
+                    // règle, plus fine (`isStaleLiveCallSnapshot`), qui refuse
+                    // qu'un snapshot REST sérialisé PENDANT l'appel fasse
+                    // régresser un résumé TERMINAL reçu par socket. Ma première
+                    // version l'écrasait — et le test de cette règle a rougi,
+                    // exactement comme il devait.
                     // Preserve existing attachments when the payload carries
                     // none: a media echo that races server-side processing can
                     // arrive attachment-less, and a hard overwrite would blank

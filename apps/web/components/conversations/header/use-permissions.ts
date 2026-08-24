@@ -15,8 +15,28 @@ export function usePermissions(
     return Boolean(currentUser);
   }, [currentUser]);
 
+  /**
+   * `currentUserRole` porte DEUX taxonomies selon ce que le serveur a pu dire :
+   * le rang dans la conversation ('creator', 'admin', 'moderator', 'member') ou,
+   * à défaut, le rôle plateforme ('BIGBOSS', 'ADMIN'…). Cf. `getCurrentUserRole`
+   * dans `use-participant-info.ts`.
+   *
+   * Ce gate ne testait que la seconde. Or aucun de ces titres ne se gagne en
+   * créant un groupe : le créateur est un `USER` ordinaire dont le rang vit dans
+   * la conversation. Il ne pouvait donc pas changer l'image de son propre
+   * groupe, quand un ANALYST de la plateforme le pouvait sur n'importe lequel.
+   *
+   * Les deux taxonomies sont admises — c'est ce que le gateway lui-même
+   * accepte : `creator`/`admin`/`moderator` de la conversation, OU un rang
+   * plateforme d'intervention.
+   */
   const canModifyConversationImage = useCallback((): boolean => {
     if (conversation.type === 'direct') return false;
+
+    const role = String(currentUserRole ?? '');
+
+    const conversationRanks = ['creator', 'admin', 'moderator'];
+    if (conversationRanks.includes(role.toLowerCase())) return true;
 
     return [
       UserRoleEnum.BIGBOSS,

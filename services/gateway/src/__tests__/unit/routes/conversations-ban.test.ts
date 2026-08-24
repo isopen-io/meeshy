@@ -155,7 +155,7 @@ describe('PATCH /conversations/:id/participants/:userId/ban — already banned',
         participant: {
           findFirst: jest.fn<any>()
             .mockResolvedValueOnce({ id: 'part-caller', role: 'admin' })
-            .mockResolvedValueOnce({ id: 'part-target', role: 'member', bannedAt: new Date(), displayName: 'Bob' }),
+            .mockResolvedValueOnce({ id: 'part-target', userId: TARGET_USER_ID, role: 'member', bannedAt: new Date(), displayName: 'Bob' }),
         },
       },
     }));
@@ -176,7 +176,7 @@ describe('PATCH /conversations/:id/participants/:userId/ban — insufficient rol
         participant: {
           findFirst: jest.fn<any>()
             .mockResolvedValueOnce({ id: 'part-caller', role: 'member' })       // caller is member (level 10)
-            .mockResolvedValueOnce({ id: 'part-target', role: 'admin', bannedAt: null, displayName: 'Bob' }), // target is admin (level 30)
+            .mockResolvedValueOnce({ id: 'part-target', userId: TARGET_USER_ID, role: 'admin', bannedAt: null, displayName: 'Bob' }), // target is admin (level 30)
         },
       },
     }));
@@ -199,7 +199,7 @@ describe('PATCH /conversations/:id/participants/:userId/ban — success', () => 
         participant: {
           findFirst: jest.fn<any>()
             .mockResolvedValueOnce({ id: 'part-caller', role: 'admin' })
-            .mockResolvedValueOnce({ id: 'part-target', role: 'member', bannedAt: null, displayName: 'Bob' }),
+            .mockResolvedValueOnce({ id: 'part-target', userId: TARGET_USER_ID, role: 'member', bannedAt: null, displayName: 'Bob' }),
           update: jest.fn<any>().mockResolvedValue({}),
         },
       },
@@ -312,7 +312,7 @@ describe('PATCH /conversations/:id/participants/:userId/unban — success', () =
         participant: {
           findFirst: jest.fn<any>()
             .mockResolvedValueOnce({ id: 'part-caller', role: 'admin' })
-            .mockResolvedValueOnce({ id: 'part-target' }),
+            .mockResolvedValueOnce({ id: 'part-target', userId: TARGET_USER_ID , bannedAt: new Date('2026-08-01T00:00:00.000Z') }),
           update: jest.fn<any>().mockResolvedValue({}),
         },
       },
@@ -367,7 +367,7 @@ describe('PATCH …/ban — les AUTRES appareils du banni', () => {
         findFirst: jest.fn<any>()
           .mockResolvedValueOnce({ id: 'part-actor', role: 'creator', userId: USER_ID })
           .mockResolvedValue({
-            id: 'part-target',
+            id: 'part-target', userId: TARGET_USER_ID,
             role: 'member',
             bannedAt: null,
             displayName: 'Target',
@@ -450,7 +450,7 @@ describe('PATCH …/ban et …/unban — l\'effectif ENTIER pour l\'admin du gro
       jest.fn<any>()
         .mockResolvedValueOnce({ id: 'part-actor', role: 'creator', userId: USER_ID })
         .mockResolvedValue({
-          id: 'part-target',
+          id: 'part-target', userId: TARGET_USER_ID,
           role: 'member',
           bannedAt: null,
           displayName: 'Target',
@@ -472,7 +472,7 @@ describe('PATCH …/ban et …/unban — l\'effectif ENTIER pour l\'admin du gro
       `/conversations/${CONV_ID}/participants/${TARGET_USER_ID}/unban`,
       jest.fn<any>()
         .mockResolvedValueOnce({ id: 'part-caller', role: 'admin' })
-        .mockResolvedValueOnce({ id: 'part-target' })
+        .mockResolvedValueOnce({ id: 'part-target', userId: TARGET_USER_ID , bannedAt: new Date('2026-08-01T00:00:00.000Z') })
     );
 
     const sends = io._sendsFor('conversation:participant-unbanned');

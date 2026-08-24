@@ -15,6 +15,7 @@ jest.mock('@/services/api.service', () => ({
   apiService: {
     get: jest.fn(),
     post: jest.fn(),
+    put: jest.fn(),
     patch: jest.fn(),
     delete: jest.fn(),
   },
@@ -256,18 +257,42 @@ describe('ConversationsCrudService', () => {
   // ── updateConversation ────────────────────────────────────────────────────
 
   describe('updateConversation', () => {
-    it('returns updated conversation data directly', async () => {
+    // `apiService` rend TOUJOURS `{ success, data }` où `data` est le corps
+    // ENTIER de la réponse — enveloppe du gateway comprise. Le témoin précédent
+    // mockait `{ data: conversation }`, une forme que la couche HTTP ne produit
+    // jamais : il attestait donc une convention à lui, et laissait passer le
+    // fait que la méthode rendait l'enveloppe au lieu de la conversation.
+    const envelope = (data: unknown) => ({ data: { success: true, data } }) as any;
+
+    it('poste sur le verbe que le gateway sert et déballe la conversation', async () => {
       const updated = makeConversation('conv-1');
-      mockApi.patch.mockResolvedValue({ data: updated } as any);
+      mockApi.put.mockResolvedValue(envelope(updated));
 
       const result = await svc.updateConversation('conv-1', { title: 'Updated' });
 
-      expect(mockApi.patch).toHaveBeenCalledWith('/conversations/conv-1', { title: 'Updated' });
-      expect(result).toBe(updated);
+      expect(mockApi.put).toHaveBeenCalledWith('/conversations/conv-1', { title: 'Updated' });
+      expect(result).toEqual(updated);
+    });
+
+    it("transmet l'avatar et la bannière", async () => {
+      // Le défaut d'origine : ces deux champs partaient sur une route qui ne les
+      // déclarait pas, elle répondait 200, et rien n'était écrit.
+      const updated = makeConversation('conv-1');
+      mockApi.put.mockResolvedValue(envelope(updated));
+
+      await svc.updateConversation('conv-1', {
+        avatar: 'https://static.meeshy.me/a.jpg',
+        banner: 'https://static.meeshy.me/b.jpg',
+      } as never);
+
+      expect(mockApi.put).toHaveBeenCalledWith('/conversations/conv-1', {
+        avatar: 'https://static.meeshy.me/a.jpg',
+        banner: 'https://static.meeshy.me/b.jpg',
+      });
     });
 
     it('throws when response is empty', async () => {
-      mockApi.patch.mockResolvedValue({ data: null } as any);
+      mockApi.put.mockResolvedValue({ data: null } as any);
 
       await expect(svc.updateConversation('conv-1', {})).rejects.toThrow(
         'Erreur lors de la mise à jour de la conversation',

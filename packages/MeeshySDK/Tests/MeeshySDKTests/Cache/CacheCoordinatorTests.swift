@@ -594,12 +594,12 @@ private final class BareConversationService: ConversationServiceProviding, @unch
     func deleteForMe(conversationId: String) async throws {}
     func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation] { [] }
     func findDirectWith(userId: String) async throws -> APIConversation? { nil }
-    func removeParticipant(conversationId: String, participantId: String) async throws {}
-    func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws {}
+    func removeParticipant(conversationId: String, key: String) async throws {}
+    func updateParticipantRole(conversationId: String, userId: String, role: String) async throws {}
     func update(conversationId: String, title: String?, description: String?, avatar: String?, banner: String?, defaultWriteRole: String?, isAnnouncementChannel: Bool?, slowModeSeconds: Int?, autoTranslateEnabled: Bool?) async throws -> APIConversation { throw MeeshyError.network(.timeout) }
     func leave(conversationId: String) async throws {}
-    func banParticipant(conversationId: String, userId: String) async throws {}
-    func unbanParticipant(conversationId: String, userId: String) async throws {}
+    func banParticipant(conversationId: String, key: String) async throws {}
+    func unbanParticipant(conversationId: String, key: String) async throws {}
 }
 
 private final class BareMessageService: MessageServiceProviding, @unchecked Sendable {
