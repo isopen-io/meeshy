@@ -524,6 +524,21 @@ struct BubbleStandardLayout: View {
                             .onTapGesture { revealBlurredContent() }
                     }
                 }
+                // Les effets du message se posent sur LA BULLE, jamais sur la
+                // rangée. Ils ont vécu montés sur `BubbleStandardLayout(...)`
+                // depuis `ThemedMessageBubble` — c'est-à-dire sur le `HStack`
+                // ci-dessous, qui contient l'avatar, la bulle, le strip de
+                // réactions ET tout l'espace vide jusqu'au bord de l'écran.
+                // Le liseré arc-en-ciel encadrait donc du vide sur la moitié
+                // de sa longueur, et aucun réglage d'animation ne pouvait
+                // rattraper ça.
+                //
+                // Ce `ZStack` a exactement la largeur intrinsèque du contenu :
+                // le cap de `bubbleMaxWidth` est appliqué PLUS HAUT, sur le
+                // `VStack` parent. Posé ici — et avant l'overlay de réactions,
+                // pour que les pastilles restent au-dessus du liseré — le
+                // contour épouse la bulle réelle.
+                .messageEffects(message.effects)
                 // Reactions sit at the BOTTOM corner of the bubble, sur le
                 // cote OPPOSE au bord d'ecran. Une bulle recue (a gauche)
                 // a son strip ancre en bottom-TRAILING (deborde vers la
