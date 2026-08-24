@@ -1,118 +1,108 @@
-# Cycle 126 — la bulle pré-enregistrée d'une RÉPONSE ou d'une MENTION était ordonnée par l'horloge du DEVICE
+# Cycle 126 — le cycle 125 bis a fait converger le CORPS ; ce qui le QUALIFIE est resté derrière
 
-> Troisième reprise du suivi MESURÉ du cycle 124. Les deux premières ont porté sur le TEXTE
-> (cycle 124 : il n'arrivait pas ; cycle 125 bis : il arrivait vide). Celle-ci porte sur ce qui
-> décide de sa PLACE et de son RENDU.
+Date : 2026-08-24 · Branche : `claude/keen-hamilton-veokcs` · Base : `a604d477`
 
-## Le défaut
+## Note de convergence, d'abord
 
-La NSE iOS pré-enregistre une bulle dès qu'un push porte un `messageId` — donc pour les **trois**
-éventails de `messageNotificationFanOut`, pas seulement le message simple. Elle en écrit quatre
-champs :
+Ce cycle a démarré sur le même défaut que le **cycle 125 bis** (PR #3478,
+`2f618c3a`) : « répondre par un vocal ou une photo poussait une bannière au corps
+VIDE ». Les deux passes l'ont diagnostiqué, corrigé et mesuré en parallèle. Le
+cycle 125 bis a mergé le premier ; **son implémentation est celle qui est
+retenue**, intégralement, y compris sa décision explicite de NE PAS étendre le
+rich-push (`firstAttachmentUrl` / `firstAttachmentMimeType` /
+`metadata.attachments`) aux éventails réponse et mention :
 
-| champ NSE | ce qu'il décide | repli quand le fil ne le porte pas |
+> Le rich-push n'est délibérément pas étendu à ces deux éventails — leur bannière
+> compose désormais le bon TEXTE ; y attacher le média inline rouvrirait une
+> surface que le cycle 125 vient de resserrer.
+
+Cette passe-ci avait pris la décision inverse, par argument de cohérence. **Une
+convergence ne se résout pas en prenant l'union des deux lots** : la décision
+explicite et raisonnée du lot mergé en premier l'emporte. Elle est conservée
+telle quelle, et rien de ce cycle ne la rouvre.
+
+Ce qui reste, ci-dessous, est ce que cette passe apportait EN PLUS et que le
+cycle 125 bis ne couvre pas.
+
+## Ce que le lot précédent a laissé derrière
+
+Le cycle 125 bis a fait converger le CORPS des trois bannières. Deux champs de
+l'éventail ne l'ont pas suivi, et pour une raison qu'il faut dire à voix haute :
+**ils ne composent aucune chaîne.**
+
+| champ | ce qu'il fait | ce que son absence coûtait à la réponse et à la mention |
 |---|---|---|
-| `content` | le texte de la bulle | `""` |
-| `originalLanguage` | l'étiquette de langue, donc la descente du Prisme | `"en"` |
-| **`createdAt`** | **la PLACE de la bulle dans le fil** | **`Date()` — l'horloge du device** |
-| **`messageType`** | **le RENDU (audio / image / vidéo vs texte)** | **`text`** |
+| `notificationLocKey` | QUALIFIE le placeholder d'un message protégé — la NSE iOS le rend depuis sa propre table de localisation — et sert de SECOND VERROU à `createNotification` | placeholder servi dans la chaîne composée par la passerelle, non localisé ; le verrou du cycle 125 inapplicable ; `protectedByLocKey` absent de `previewPrismSource` et `prePersistedMessageFields` |
+| `messageCreatedAt` / `messageType` | l'horloge SERVEUR de la bulle que la NSE PRÉ-ENREGISTRE au démarrage à froid | la bulle d'une réponse ou d'une mention datée par l'horloge du DEVICE, donc rangée au mauvais endroit du fil |
 
-Les deux premiers sont composés par `NotificationService.prePersistedMessageFields`, que les trois
-éventails appellent depuis le cycle 124. **Les deux derniers étaient posés EN LIGNE, dans le seul
-`createMessageNotification`.** Sur un même message :
+`createMessageNotification` tenait les deux de sa relecture VIVANTE — celle qui
+lui sert aussi de gate d'éligibilité. Réponse et mention n'ont que
+`loadMessagePrismSource`, dont le `select` ne demandait ni `createdAt` ni
+`messageType`.
 
-| destinataire | sa bulle au démarrage à froid |
-|---|---|
-| les membres du fil | à sa place, rendue selon son type |
-| **celui à qui on répond** | **rangée à l'heure de RÉCEPTION du push, rendue en `text`** |
-| **celui qu'on mentionne** | **idem** |
+## La leçon (§ 279)
 
-Deux conséquences distinctes, les deux mesurées :
+> **Un lot qui partage une valeur composée doit énumérer ce qui voyage AVEC elle,
+> pas seulement ce qui la compose.** Un champ qui QUALIFIE un texte — une clé de
+> localisation, une horloge, un type — ne se trouve pas en cherchant « qui compose
+> ce texte ? » : par construction, il n'apparaît dans aucune composition.
 
-1. **L'ordre.** Deux appareils du même compte n'ont aucune raison d'horodater pareil, et une salve
-   de messages range la bulle à contretemps de celles que la synchro REST pose ensuite.
-2. **Le rendu.** Ces deux éventails ne poussent pas `attachmentMimeType` non plus — décision
-   DÉLIBÉRÉE du cycle 125 bis (« le rich-push n'est pas étendu à la réponse ni à la mention »),
-   donc le repli `mediaMessageTypes` de l'extension ne peut rien rattraper. La bulle d'une réponse
-   VOCALE était un rectangle de texte **vide** jusqu'à la synchro REST — c'est-à-dire pendant toute
-   la fenêtre où un pré-enregistrement a une raison d'être.
+C'est la forme du cycle 125 rejouée un cran plus haut : là, quatre gardes tenaient
+une CHAÎNE pendant que le fichier partait dans l'objet voisin ; ici, un lot fait
+converger une CHAÎNE pendant que ce qui la qualifie reste derrière.
 
-## Pourquoi il a survécu au cycle 125 bis
-
-Ce cycle-là a consolidé la composition du CORPS des trois bannières, en nommant exactement la
-bonne cause : « la composition vivait chez UN des trois ». Il n'a pas regardé le
-PRÉ-ENREGISTREMENT, parce que celui-ci avait déjà son helper partagé — `prePersistedMessageFields`,
-appelé par les trois — et que ce partage suffisait à le faire passer pour partagé.
-
-Le helper ne composait que **deux des quatre** champs que son nom annonce.
-
-> **Un helper PARTAGÉ peut ne composer qu'une PARTIE de ce que son nom promet, et le partage de la
-> partie fait passer le TOUT pour partagé.**
->
-> C'est le retournement exact de la leçon du cycle 125 bis (« compter les appelants du helper le
-> plus BAS rassure à tort — c'est le plus HAUT qu'il faut compter »). Ici le helper EST le plus
-> haut, ses trois appelants sont bien les trois éventails, et le compte est juste. Ce qui manque
-> n'est pas un appelant, c'est un CHAMP. La question qui l'attrape ne se pose donc pas du côté des
-> appelants mais du côté du CONSOMMATEUR : **quels champs la NSE lit-elle, et lesquels ce helper
-> compose-t-il ?** — deux listes à confronter, pas un compte à faire.
+**Et le motif de structure qui l'a rendu possible** : `createMentionNotificationsBatch`
+relayait `commonData` **champ par champ** — neuf lignes de recopie. Un relais de
+cette forme retient silencieusement tout ce qu'on ajoute en amont : il ne rougit
+jamais, il oublie. Il répand désormais, ne recopiant que les deux champs qui
+changent de NOM.
 
 ## Le correctif
 
-1. **`prePersistedMessageFields` compose les QUATRE champs** — un site unique enfin conforme à son
-   nom. `createMessageNotification` cesse de poser les deux siens en ligne : les trois éventails
-   passent désormais par la même projection, donc ne peuvent plus diverger.
+1. **`MessageBannerSource`** — `MessagePrismSource` + `createdAt` + `messageType`.
+   Deux types et non un : la première dit ce qui TRADUIT l'aperçu, la seconde ce
+   qui l'ORDONNE. Elles voyagent ensemble parce qu'elles viennent de la même
+   lecture, pas parce qu'elles répondent à la même question.
+2. **`loadMessagePrismSource`** lit deux colonnes de plus dans la requête qu'il
+   faisait déjà — aucune requête supplémentaire, et un témoin l'assert sur le
+   `select` autant que sur la valeur servie.
+3. **`messageClockFields()`** — la projection, partagée par les trois éventails ;
+   `createMessageNotification` y est rebranché pour qu'il n'en existe qu'un site.
+4. **`notificationLocKey`** déclaré et servi sur `createReplyNotification`,
+   `createMentionNotification` et le batch ; `protectedByLocKey` posé sur leurs
+   `previewPrismSource` et `prePersistedMessageFields`.
+5. **Le relais du batch répand** au lieu de recopier.
 
-2. **`MessagePrePersistStamp`** — l'estampille (`createdAt`, `messageType`), et
-   **`MessageNotificationSource`** qui la tient AVEC la source du Prisme. Les deux viennent de la
-   même ligne `Message` et aucune ne dépend du destinataire : `loadMessagePrismSource` devient
-   `loadMessageNotificationSource` et rend les deux en **UNE** requête (deux colonnes de plus dans
-   un `select` existant — aucune lecture ajoutée, et l'éventail de mentions continue de relire une
-   seule fois pour tout son lot). `createMessageNotification` n'y touche pas : sa propre relecture
-   est un GATE d'éligibilité et chargeait déjà les quatre colonnes.
-
-3. **L'estampille traverse les trois refus du helper, et c'est une décision.** `prePersistedMessageFields`
-   refuse d'écrire le TEXTE d'un placeholder de protection, d'une transcription, ou d'un aperçu
-   vide. L'estampille, elle, n'est pas du contenu : un horodatage ne révèle que l'instant d'un
-   message que la bannière annonce de toute façon, et un type ne révèle que l'icône que
-   `protectedPreview` compose déjà (« 👁️ 🎵 »). Les retirer avec le texte n'ajouterait **aucune**
-   garde et laisserait la bulle d'un message protégé se ranger à l'heure du device. C'est aussi,
-   exactement, ce que `createMessageNotification` faisait déjà : le lot ne change rien à l'éventail
-   de référence.
-
-4. **Fail-OPEN inchangé, et une absence ne ment pas.** Une relecture en échec rend une estampille
-   vide ⇒ aucune clé sur le fil ⇒ l'extension retombe sur ses propres replis. Poser une valeur
-   inventée (l'heure du fan-out, `text`) ferait mentir l'ordre du fil — pire qu'une absence, que le
-   client sait interpréter.
+Le verrou est REDONDANT avec la base `protected-placeholder` que l'éventail pose
+déjà — et c'est voulu : `protectedPreview` est l'unique producteur de cette clé
+dans tout le dépôt, donc sa présence DÉCLARE la protection là où une base peut
+être omise par un appelant solo.
 
 ## Gates
 
 | gate | résultat |
 |---|---|
-| `prePersistStampParity.test.ts` (nouveau) | **8 témoins — 5 rouges avant, 8 verts après** |
-| suites voisines (`notifications/` + éventail + `NotificationService`) | 42 suites, 760 témoins verts |
-| suite gateway complète | **859 suites / 19 527 témoins verts** (exit 0) |
-| `services/gateway` `tsc --noEmit` | 0 erreur |
-| Swift | non modifié — le fil porte enfin les clés que la NSE lisait déjà |
-
-Trois des huit témoins étaient VERTS avant le correctif, délibérément : la référence
-(`createMessageNotification` pousse l'estampille), le fail-open, et « l'éventail de mentions relit
-UNE fois ». Ils ne conduisent pas le correctif, ils gardent ce qu'il ne doit pas casser — le
-troisième en particulier, parce qu'élargir un `select` est exactement le geste qui invite à ajouter
-une requête.
+| `replyMentionBannerClock.test.ts` (nouveau) | **14 rouges contre `origin/main` / 19 verts après** |
+| suites voisines (`notifications/` + `messaging/` + éventail + `NotificationService`) | 36 suites, 709 témoins |
+| suite gateway complète (`bun run test:coverage`) | **859/859 suites, 19538 témoins**, exit 0 — couverture globale 95,47 % stmts / 89,60 % branches |
+| `services/gateway` `tsc --noEmit` | 0 erreur (code de retour lu SANS pipe — cf. la règle du pipefail) |
+| `packages/shared` `tsc --noEmit` | 0 erreur |
+| non-régression du cycle 125 bis (`replyMentionMediaPreview.test.ts`) | vert |
+| Swift / Kotlin | non modifiés |
 
 ## Suivi MESURÉ
 
-- **Le rich-push n'est toujours pas étendu à la réponse ni à la mention** — inchangé, et toujours
-  délibéré (cycle 125 bis). Leur bulle porte désormais le bon TYPE sans le FICHIER : elle se rend
-  en bulle audio/image en attente de téléchargement, plus en rectangle vide. C'est la dégradation
-  correcte, pas un contournement.
-- `isEncrypted` reste lue par la NSE et jamais émise. **Piège armé, pas panne, et mesuré comme
-  tel** : `prePersistMessage` et la branche `locKey` retombent toutes deux sur
-  `encryptedContent`, que le fil porte. Le jour où quelqu'un chiffre sans poser `encryptedContent`,
-  les deux gardes tombent ensemble.
-- La bannière d'un vocal joint toujours le fichier ORIGINAL, jamais la piste traduite du Prisme.
-- Aucun chemin de création n'écrit `isViewOnce` / `isBlurred` sur une `MessageAttachment` : le
-  second niveau de `maskedAttachment` reste armé, pas encore atteignable.
-- **La bulle pré-enregistrée porte `state: .delivered` et `deliveredAt: nil`** — non instruit ce
-  cycle-ci. À vérifier au prochain : un accusé de remise part bien de `postDeliveryReceipt`, mais
-  la ligne locale ne le reflète pas, et c'est elle que l'app relit au démarrage à froid.
+- **Le rich-push reste hors des éventails réponse et mention** — décision du
+  cycle 125 bis, conservée. Le suivi qu'elle laisse ouvert est le sien.
+- La bannière d'un vocal joint toujours le fichier ORIGINAL, jamais la piste
+  traduite du Prisme (cycle 123, toujours ouvert).
+- `isEncrypted` reste lue par la NSE iOS et n'est jamais émise (cycle 124) —
+  piège armé, pas panne.
+- Aucun chemin de création n'écrit `isViewOnce` / `isBlurred` sur une
+  `MessageAttachment` (cycle 125) — armé, pas atteignable.
+- Couverture des deux fichiers touchés : `messageNotificationFanOut.ts` 99,13 % · `NotificationService.ts` 94,63 % — inchangée ou en hausse.
+- **Le lot `regular` reste le seul à faire une relecture VIVANTE du message**
+  (son gate d'éligibilité : supprimé / expiré / brûlé en vol). Réponse et mention
+  tiennent leur échéance de l'appelant. Ce n'est pas une divergence de bannière
+  mais une divergence de GATE : un message soft-supprimé dans la fenêtre de
+  l'éventail annonce encore sa réponse et ses mentions. Distinct, non instruit.

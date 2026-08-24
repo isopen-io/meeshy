@@ -16,7 +16,20 @@
  * @see docs/superpowers/specs/2026-08-19-meeshy-composer-views.html — doctrine
  */
 
-export type ComposerFormat = 'story' | 'post' | 'reel' | 'status';
+/**
+ * Les QUATRE formats, énumérables à l'exécution.
+ *
+ * Même forme que `COMPOSER_DOORS` ci-dessous, et pour la même raison : une
+ * union TypeScript disparaît à la compilation, donc chaque consommateur qui a
+ * besoin de parcourir les formats en réécrit la liste — et une liste réécrite
+ * reste VERTE le jour où un cinquième format entre dans l'union.
+ *
+ * Ce tableau ne descend aucune affordance : c'est le vocabulaire lui-même, pas
+ * ce qu'une plateforme sait en faire. La loi 1 tient.
+ */
+export const COMPOSER_FORMATS = ['story', 'post', 'reel', 'status'] as const;
+
+export type ComposerFormat = (typeof COMPOSER_FORMATS)[number];
 
 /**
  * Les NEUF portes. Le forward n'en est pas une dixième : la fiche de partage

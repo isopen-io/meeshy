@@ -532,6 +532,13 @@ export async function notifyMessageRecipients(params: {
             messageExpiresAt: message.expiresAt ?? null,
             previewBasis: pushPreviewBasis,
             ...bannerMedia,
+            // Cycle 126 — la clé de PROTECTION, que seul le lot regular
+            // recevait. Le cycle 125 bis a fait converger le TEXTE des trois
+            // bannières ; celle-ci ne compose aucun texte, elle le QUALIFIE —
+            // et c'est ce qui l'a laissée hors du lot. Elle vaut ici la
+            // localisation cliente du placeholder et le second verrou de
+            // `createNotification`.
+            notificationLocKey,
           });
           return created != null;
         })
@@ -559,6 +566,9 @@ export async function notifyMessageRecipients(params: {
               // relecture vivante — il en fait une de toute façon.
               messageExpiresAt: message.expiresAt ?? null,
               previewBasis: pushPreviewBasis,
+              // Cycle 126 — cf. `createReplyNotification` : la clé de protection
+              // qualifie l'aperçu que ce lot vient de recevoir.
+              notificationLocKey,
             },
             memberIds
           )

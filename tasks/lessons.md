@@ -15196,85 +15196,65 @@ réveiller un défaut qui dormait DERRIÈRE lui** — le corriger dans le même 
 pas dans un suivi, parce que le premier correctif seul aurait été une
 régression (double sonnerie) dans le cas exact qu'il vise à réparer.
 
-## Leçon 279 — un helper PARTAGÉ peut ne composer qu'une PARTIE de ce que son nom promet (2026-08-24, cycle 126)
+## Leçon 279 — un lot qui fait CONVERGER une chaîne laisse derrière tout ce qui la QUALIFIE (2026-08-24, cycle 126)
 
-Le cycle 125 bis a consolidé la composition du CORPS des trois bannières de
-`messageNotificationFanOut`, en nommant la bonne cause : « la composition vivait
-chez UN des trois ». Il n'a pas regardé le PRÉ-ENREGISTREMENT — la bulle que la
-NSE iOS écrit en base locale dès qu'un push porte un `messageId` — parce que
-celui-ci avait DÉJÀ son helper partagé, `prePersistedMessageFields`, appelé par
-les trois éventails depuis le cycle 124.
+**Contexte.** Le cycle 125 bis a fait converger le CORPS des trois bannières de
+`messageNotificationFanOut` : réponse et mention reçoivent enfin
+`notificationPreviewForPush`, `pushPreviewBasis` et le résumé de média qui
+compose le texte. Le correctif est juste, testé, et sa leçon (§ 277) nomme
+exactement le motif — « la composition vivait chez UN des trois ».
 
-Le partage était réel. Le helper ne composait que **deux des quatre** champs que
-la NSE lit :
+Deux champs de l'éventail ne l'ont pas suivi, et pour une raison qu'il faut dire
+à voix haute : **ils ne composent aucune chaîne.**
 
-| champ NSE | composé par | ce qu'il décide |
+| champ resté derrière | ce qu'il fait | ce que son absence coûtait |
 |---|---|---|
-| `content` | le helper partagé | le texte |
-| `originalLanguage` | le helper partagé | l'étiquette de langue, donc la descente du Prisme |
-| `createdAt` | **en ligne, chez UN des trois** | **la PLACE de la bulle dans le fil** |
-| `messageType` | **en ligne, chez UN des trois** | **le RENDU (audio / image vs texte)** |
+| `notificationLocKey` | QUALIFIE le placeholder (la NSE le rend depuis sa propre table) et sert de SECOND VERROU à `createNotification` | placeholder non localisé ; le verrou du cycle 125 inapplicable sur ces deux éventails |
+| `messageCreatedAt` / `messageType` | l'horloge SERVEUR de la bulle que la NSE PRÉ-ENREGISTRE | la bulle d'une réponse datée par l'horloge du DEVICE, donc mal rangée dans le fil |
 
-Coût mesuré : la bulle d'une RÉPONSE ou d'une MENTION était horodatée à l'heure
-de RÉCEPTION du push — deux appareils du même compte n'ont aucune raison de
-l'ordonner pareil — et rendue en `text`. Ces deux éventails ne poussant pas
-`attachmentMimeType` non plus (décision délibérée du cycle 125 bis), le repli
-`mediaMessageTypes` de l'extension ne rattrapait rien : **la bulle d'une réponse
-VOCALE était un rectangle de texte vide** jusqu'à la synchro REST, c'est-à-dire
-pendant toute la fenêtre où un pré-enregistrement a une raison d'être.
+**La règle.**
 
-> **Le partage d'une PARTIE fait passer le TOUT pour partagé.** Un helper nommé
-> d'après ce que le consommateur lit — ici « les champs pré-enregistrés » — est
-> une AFFIRMATION (cycles 86 bis, 93, 94 : un tri, un compte, un commentaire de
-> contrainte), et il faut la vérifier comme telle.
+> **Un lot qui partage une valeur composée doit énumérer ce qui voyage AVEC
+> elle, pas seulement ce qui la compose.** Un champ qui QUALIFIE un texte —
+> une clé de localisation, une horloge, un type, une base — ne se trouve pas en
+> cherchant « qui compose ce texte ? » : par construction, il n'apparaît dans
+> aucune composition.
 
-### Ce n'est PAS la leçon 277 rejouée — c'est son retournement
+C'est la forme du cycle 125 (§ 275) rejouée un cran plus haut. Là, quatre gardes
+tenaient une CHAÎNE pendant que le fichier partait dans l'objet voisin ; ici, un
+lot fait converger une CHAÎNE pendant que ce qui la qualifie reste derrière. Le
+même angle mort, la même cause : **le niveau d'abstraction du correctif rend
+invisible ce qui ne participe pas à sa phrase.** La question se pose AU MOMENT du
+correctif, et se répond en lisant l'objet remis LIGNE À LIGNE — pas en relisant le
+code qui le construit.
 
-La 277 dit : « quand N sites appliquent une règle, compter les appelants du
-helper le plus BAS rassure à tort ; c'est le plus HAUT qu'il faut compter ».
-Ici le helper EST le plus haut, ses trois appelants sont bien les trois
-éventails, et **le compte est juste**. Ce qui manque n'est pas un appelant,
-c'est un CHAMP.
+**Le motif de structure qui l'a rendu possible.** `createMentionNotificationsBatch`
+relayait `commonData` vers `createMentionNotification` **champ par champ** : neuf
+lignes de recopie. Un relais de cette forme retient silencieusement tout ce qu'on
+ajoute en amont — il ne rougit jamais, il ne perd rien de visible, il oublie. Le
+correctif extrait les deux seuls champs RENOMMÉS (`senderId` → `mentionerUserId`,
+`messageContent` → `messagePreview`) et répand le reste :
 
-> La question qui l'attrape ne se pose donc pas du côté des APPELANTS mais du
-> côté du CONSOMMATEUR : **quels champs le lecteur lit-il, et lesquels ce site
-> compose-t-il ?** Deux listes à confronter, jamais un compte à faire. Un
-> `grep` des appelants ne peut pas la poser ; ouvrir le consommateur, si.
+```ts
+const { senderId, messageContent, ...banner } = commonData;
+… this.createMentionNotification({ ...banner, mentionedUserId, mentionerUserId: senderId, messagePreview: messageContent, prismSource })
+```
 
-C'est la forme « complétude » de la famille ouverte au cycle 124 (§ Leçon 274,
-« un contrat entre deux langages dérive dans les DEUX sens ») : le diff s'y
-faisait entre ce que la passerelle ÉMET et ce que l'extension LIT. Le diff
-d'ici se fait entre ce que l'extension LIT et ce qu'UN SITE de la passerelle
-compose — même méthode, un cran plus bas.
+> **Un relais qui recopie est un inventaire à tenir à jour ; un relais qui répand
+> n'en est pas un.** Ne recopier que ce qui change de NOM — le reste passe, et un
+> champ ajouté demain arrive à destination sans qu'on ait à s'en souvenir.
 
-### Corollaire : tout ce qu'un site remet n'est pas du même GENRE
+**Ce qui n'a PAS été repris, et pourquoi.** Le cycle 125 bis a délibérément gardé
+le rich-push (`firstAttachmentUrl` / `firstAttachmentMimeType` /
+`metadata.attachments`) hors de ces deux éventails : « leur bannière compose
+désormais le bon TEXTE ; y attacher le média inline rouvrirait une surface que le
+cycle 125 vient de resserrer ». Cette décision est CONSERVÉE. Une convergence de
+lots ne se résout pas en prenant l'union des deux : la décision explicite et
+raisonnée du lot mergé en premier l'emporte sur l'argument de cohérence du second
+(§ Note de convergence, `CLAUDE.md`).
 
-En consolidant, il a fallu trancher : l'estampille (`createdAt`, `messageType`)
-doit-elle subir les trois refus que le helper oppose au TEXTE (placeholder de
-protection, transcription, aperçu vide) ?
-
-Non — et la raison est la symétrie exacte de la leçon 275 (« une garde de
-confidentialité qui ne garde qu'une chaîne ne garde rien »). Là, une garde
-écrite pour du texte laissait partir un FICHIER : elle était trop étroite. Ici,
-étendre une garde écrite pour du texte à des champs qui n'en sont pas la
-rendrait trop LARGE — un horodatage ne révèle que l'instant d'un message que la
-bannière annonce de toute façon, un type ne révèle que l'icône que
-`protectedPreview` compose déjà (« 👁️ 🎵 »). Les retirer avec le texte
-n'ajouterait **aucune** garde et laisserait la bulle d'un message protégé se
-ranger à l'heure du device.
-
-> **Une garde se mesure sur ce que la charge TRANSPORTE (275) ; son PÉRIMÈTRE se
-> mesure sur ce que chaque champ RÉVÈLE.** Les deux erreurs sont symétriques et
-> coûtent différemment : trop étroite, elle laisse fuir ; trop large, elle
-> dégrade un service sans rien protéger — et personne ne le signale jamais,
-> parce qu'une garde excessive ressemble à de la prudence.
-
-### Et un témoin VERT avant le correctif peut être le plus utile du lot
-
-Trois des huit témoins de ce cycle passaient déjà avant le fix, délibérément :
-la référence (l'éventail conforme), le fail-open, et « l'éventail de mentions
-relit le message UNE fois pour tout son lot ». Aucun ne conduit le correctif ;
-ils gardent ce qu'il ne doit pas casser. Le troisième en particulier — parce que
-**élargir un `select` est exactement le geste qui invite à ajouter une
-requête**, et qu'une requête par destinataire ne rougit nulle part : elle se
-paie en latence de fan-out, sur un chemin que personne ne mesure.
+**Le témoin qui l'attrape** n'assert ni sur le texte ni sur le rang, mais sur ce
+qui l'accompagne : `replyMentionBannerClock.test.ts` — l'horloge servie, le
+`select` qui la charge (une requête, pas deux), le silence quand la relecture
+fail-open tombe, et les trois choses que le verrou retient (traduction du fil,
+corps pré-enregistré, média).
