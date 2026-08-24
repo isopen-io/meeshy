@@ -108,7 +108,7 @@
   "thread": {
     "row": {
       "padding": {
-        "vertical": 5,
+        "vertical": 3,
         "horizontal": 16
       }
     },

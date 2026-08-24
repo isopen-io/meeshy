@@ -1418,6 +1418,15 @@ export class NotificationService {
                     translatedContent: params.context.translatedContent,
                     translatedLanguage: params.context.translatedLanguage || '',
                   } : {}),
+                  // Cycle 124 — le couple que la NSE PRÉ-ENREGISTRE. Les DEUX
+                  // clés portent le nom que `prePersistMessage` lit, et elles
+                  // voyagent ensemble : un contenu sans son étiquette de langue
+                  // serait résolu par le Prisme comme de l'anglais, le repli
+                  // que la NSE applique faute de mieux.
+                  ...(params.context.messageContent ? {
+                    content: params.context.messageContent,
+                    originalLanguage: params.context.messageOriginalLanguage || '',
+                  } : {}),
                 } : {}),
               },
             };
@@ -1431,7 +1440,16 @@ export class NotificationService {
           const APNS_SAFE_PAYLOAD_BYTES = 3800;
           const payloadBytes = (p: unknown): number => Buffer.byteLength(JSON.stringify(p), 'utf8');
           const { translatedContent: _tc, translatedLanguage: _tl, ...dataWithoutTranslation } = pushPayload.data;
-          const { encryptedContent: _ec, ...dataWithoutContentFields } = dataWithoutTranslation;
+          // `content` part avec `encryptedContent` : les deux portent le texte
+          // du message, et un push REJETÉ ne pré-enregistre rien du tout. Ils
+          // sont de toute façon exclusifs — un message chiffré n'a pas d'aperçu
+          // de base `message-content`, donc jamais de `content`.
+          const {
+            encryptedContent: _ec,
+            content: _mc,
+            originalLanguage: _ol,
+            ...dataWithoutContentFields
+          } = dataWithoutTranslation;
           const boundedPayload = [
             pushPayload,
             { ...pushPayload, data: dataWithoutTranslation },
@@ -1779,6 +1797,22 @@ export class NotificationService {
     );
     const prismContext = this.servedTranslationFields(servedTranslation);
 
+    // Cycle 124 — le corps de la bulle que la NSE PRÉ-ENREGISTRE au démarrage à
+    // froid. `PreviewPrismBasis` répond ici à une seconde question, distincte de
+    // « qu'est-ce qui traduit cet aperçu ? » : « cet aperçu EST-il le contenu du
+    // message ? ». Seul `message-content` l'est — un placeholder de protection
+    // rendrait « 👁️ 🎵 » dans la bulle et relâcherait ce que la protection
+    // masque ; une transcription n'est pas `Message.content` et sera rendue par
+    // la bulle audio après la synchro REST. Un aperçu VIDE ne dit rien de plus
+    // que son absence et coûte du budget APNs.
+    const previewIsOwnContent =
+      !params.notificationLocKey &&
+      (params.previewBasis ?? MESSAGE_CONTENT_BASIS).kind === 'message-content';
+    const prePersistedContent =
+      previewIsOwnContent && params.messagePreview.trim() !== ''
+        ? params.messagePreview
+        : undefined;
+
     // Cycle 122 — le corps AFFICHÉ descend le Prisme, pas seulement les champs
     // de service ci-dessus : c'est lui que les trois plateformes rendent.
     const content = buildMessageNotificationBodyI18n(recipientLang, {
@@ -1831,6 +1865,14 @@ export class NotificationService {
         // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
         messageCreatedAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt.toISOString() : undefined,
         messageType: liveMessage.messageType ?? undefined,
+        // Cycle 124 — cf. `prePersistedContent` ci-dessus : le corps et la
+        // langue de la bulle pré-enregistrée par la NSE.
+        ...(prePersistedContent
+          ? {
+              messageContent: prePersistedContent,
+              messageOriginalLanguage: liveMessage.originalLanguage ?? undefined,
+            }
+          : {}),
         ...prismContext,
       },
 

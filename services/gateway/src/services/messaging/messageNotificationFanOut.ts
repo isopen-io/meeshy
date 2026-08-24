@@ -405,8 +405,27 @@ export async function notifyMessageRecipients(params: {
 
     // Phase A — un vocal déjà transcrit affiche son texte sur l'écran verrouillé ;
     // le fichier reste attaché pour la lecture inline.
+    //
+    // Cycle 124 — et il ne l'affiche PAS quand le message est protégé. Cette
+    // condition manquait : la transcription gagnait inconditionnellement sur le
+    // placeholder que `protectedPreview` venait de composer, si bien qu'un vocal
+    // ÉPHÉMÈRE / à VUE UNIQUE / FLOUTÉ / CHIFFRÉ poussait son texte transcrit
+    // ENTIER sur l'écran verrouillé — exactement ce que la protection masque.
+    //
+    // Le cycle 123 a fermé le FIL de ce même message (sa traduction ne part
+    // plus sur le canal push) et laissé le CORPS ouvert : le texte nu de la
+    // transcription était déjà substitué à l'aperçu une couche PLUS HAUT que
+    // toute déclaration de base. `previewIsProtectedPlaceholder` gouvernait
+    // `previewBasis`, jamais l'aperçu lui-même — la protection était donc
+    // ANNONCÉE par deux champs et APPLIQUÉE par aucun.
+    //
+    // Conséquence de forme, et elle n'est pas accessoire : `pushPreviewBasis`
+    // ne peut plus élire `transcript` sur un message protégé, puisqu'il n'y a
+    // plus de transcription à ce moment-là. La base retombe sur
+    // `protected-placeholder`, et le second verrou (`notificationLocKey`) cesse
+    // d'être la seule chose qui retienne la traduction du texte masqué.
     const firstAttachmentTranscript =
-      first?.mimeType?.startsWith('audio/')
+      protectedOverride === null && first?.mimeType?.startsWith('audio/')
         ? extractTranscriptionText(first as { transcription?: unknown })
         : undefined;
     const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;

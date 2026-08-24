@@ -150132,6 +150132,12 @@
             "value": "Unirse a la conversación"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rejoindre la conversation"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -150171,6 +150177,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Continuar como %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuer en tant que %@"
           }
         },
         "it": {
@@ -150214,6 +150226,12 @@
             "value": "Tu cuenta, tu historial"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre compte, votre historique"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -150253,6 +150271,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "mi cuenta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mon compte"
           }
         },
         "it": {
@@ -150296,6 +150320,12 @@
             "value": "Unirse sin cuenta"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rejoindre sans compte"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -150335,6 +150365,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Continuar de forma anónima"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reprendre en anonyme"
           }
         },
         "it": {
@@ -150378,6 +150414,12 @@
             "value": "Tu cuenta queda fuera de esta conversación"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre compte reste en dehors de cette conversation"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -150417,6 +150459,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sin cuenta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sans compte"
           }
         },
         "it": {
@@ -150460,6 +150508,12 @@
             "value": "Sin cuenta"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sans compte"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -150499,6 +150553,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ se unió a la conversación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ a rejoint la conversation"
           }
         },
         "it": {
@@ -150542,6 +150602,12 @@
             "value": "sin cuenta"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sans compte"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -150581,6 +150647,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "puede enviar archivos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "peut envoyer des fichiers"
           }
         },
         "it": {
@@ -150624,6 +150696,12 @@
             "value": "no puede enviar archivos"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ne peut pas envoyer de fichiers"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -150663,6 +150741,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "puede enviar fotos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "peut envoyer des photos"
           }
         },
         "it": {
@@ -150706,6 +150790,12 @@
             "value": "no puede enviar fotos"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ne peut pas envoyer de photos"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -150745,6 +150835,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "puede escribir mensajes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "peut écrire des messages"
           }
         },
         "it": {
@@ -150788,6 +150884,12 @@
             "value": "no puede escribir mensajes"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ne peut pas écrire de messages"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -150827,6 +150929,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ficha del participante"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fiche du participant"
           }
         },
         "it": {
@@ -150870,6 +150978,12 @@
             "value": "sin cuenta"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sans compte"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -150909,6 +151023,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Idioma"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Langue"
           }
         },
         "it": {
@@ -150952,6 +151072,12 @@
             "value": "País"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pays"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -150991,6 +151117,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Se unió el"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrivé le"
           }
         },
         "it": {
@@ -151034,6 +151166,12 @@
             "value": "Por el enlace"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Par le lien"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -151073,6 +151211,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Correo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Email"
           }
         },
         "it": {
@@ -151116,6 +151260,12 @@
             "value": "Nacimiento"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Naissance"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -151155,6 +151305,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "proporcionado, solo moderadores"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fourni, réservé aux modérateurs"
           }
         },
         "it": {
@@ -151198,6 +151354,12 @@
             "value": "Ficha no disponible"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fiche indisponible"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -151237,6 +151399,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Esta persona ha salido de la conversación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette personne a quitté la conversation"
           }
         },
         "it": {
@@ -151280,6 +151448,12 @@
             "value": "Ver ficha"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir la fiche"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -151319,6 +151493,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "En esta conversación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dans cette conversation"
           }
         },
         "it": {
@@ -151362,6 +151542,12 @@
             "value": "Sin restricciones"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune restriction"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -151401,6 +151587,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ajustes del enlace"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglages du lien"
           }
         },
         "it": {
@@ -151444,6 +151636,12 @@
             "value": "Este enlace ha sido desactivado"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce lien a été désactivé"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -151483,6 +151681,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Entradas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrées"
           }
         },
         "it": {
@@ -151526,6 +151730,12 @@
             "value": "Caduca el"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expire le"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -151562,6 +151772,12 @@
           }
         },
         "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exige"
+          }
+        },
+        "fr": {
           "stringUnit": {
             "state": "translated",
             "value": "Exige"
@@ -151608,6 +151824,12 @@
             "value": "Países admitidos"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pays admis"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -151647,6 +151869,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Idiomas admitidos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Langues admises"
           }
         },
         "it": {
@@ -151690,6 +151918,12 @@
             "value": "apodo"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pseudo"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -151729,6 +151963,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "correo electrónico"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "email"
           }
         },
         "it": {
@@ -151772,6 +152012,12 @@
             "value": "fecha de nacimiento"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "date de naissance"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -151811,6 +152057,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "No ve los mensajes anteriores a su llegada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ne voit pas les messages antérieurs à son arrivée"
           }
         },
         "it": {
@@ -151854,6 +152106,12 @@
             "value": "No puede escribir mensajes"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ne peut pas écrire"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -151893,6 +152151,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "No puede enviar fotos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ne peut pas envoyer d’images"
           }
         },
         "it": {
@@ -151936,6 +152200,12 @@
             "value": "No puede enviar archivos"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ne peut pas envoyer de fichiers"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -151975,6 +152245,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "No puede enviar vídeos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ne peut pas envoyer de vidéos"
           }
         },
         "it": {
@@ -152018,6 +152294,12 @@
             "value": "No puede enviar audio"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ne peut pas envoyer d’audio"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -152057,6 +152339,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "No puede enviar enlaces"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ne peut pas envoyer de liens"
           }
         },
         "it": {
@@ -152100,6 +152388,12 @@
             "value": "No puede compartir su ubicación"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ne peut pas partager sa position"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -152139,6 +152433,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ver los mensajes anteriores"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir les messages antérieurs"
           }
         },
         "it": {
@@ -152182,6 +152482,12 @@
             "value": "Escribir mensajes"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrire des messages"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -152221,6 +152527,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enviar fotos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyer des photos"
           }
         },
         "it": {
@@ -152264,6 +152576,12 @@
             "value": "Enviar archivos"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyer des fichiers"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -152303,6 +152621,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enviar vídeos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyer des vidéos"
           }
         },
         "it": {
@@ -152346,6 +152670,12 @@
             "value": "Enviar audio"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyer de l’audio"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -152385,6 +152715,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enviar enlaces"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyer des liens"
           }
         },
         "it": {
@@ -152428,6 +152764,12 @@
             "value": "Compartir su ubicación"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partager sa position"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -152467,6 +152809,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "entregado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "distribué"
           }
         },
         "it": {
@@ -152510,6 +152858,12 @@
             "value": "error al enviar"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "échec d'envoi"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -152549,6 +152903,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "enviado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "envoyé"
           }
         },
         "it": {
@@ -152592,6 +152952,12 @@
             "value": "Muestra el perfil del autor citado"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affiche le profil de l'auteur cité"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -152631,6 +152997,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Abrir el contenido citado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le média cité"
           }
         },
         "it": {
@@ -152674,6 +153046,12 @@
             "value": "Detalles de la conversación"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Détails de la conversation"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -152713,6 +153091,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ver perfil"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir le profil"
           }
         },
         "it": {
@@ -152756,6 +153140,12 @@
             "value": "Volver a la traducción (%@)"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revenir à la traduction (%@)"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -152797,6 +153187,12 @@
             "value": "Mostrar la versión original (%@)"
           }
         },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher la version originale (%@)"
+          }
+        },
         "it": {
           "stringUnit": {
             "state": "translated",
@@ -152836,6 +153232,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cambia al siguiente modo. Mantén pulsado para ver la lista de modos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passe au mode suivant. Appui long pour la liste des modes."
           }
         },
         "it": {
