@@ -106,9 +106,14 @@ class CallStateMachineTest {
     }
 
     @Test
-    fun `offering ignores a ring timeout (cancelled once the peer joined)`() {
+    fun `offering ends as missed on a ring timeout (the ring timer stays live through early-join)`() {
+        // The gateway deliberately keeps the ring timer armed after the callee
+        // early-joins the call room (see CallEventsHandler.ts's `call:join`
+        // handler comment) — the offer must flow during the ring, so a real
+        // `call:missed`/RingTimeout can legitimately arrive while local state
+        // is still Offering. Mirrors reduceRinging's own RingTimeout arm.
         assertThat(reduce(CallState.Offering, CallEvent.RingTimeout))
-            .isEqualTo(CallState.Offering)
+            .isEqualTo(CallState.Ended(CallEndReason.Missed))
     }
 
     @Test

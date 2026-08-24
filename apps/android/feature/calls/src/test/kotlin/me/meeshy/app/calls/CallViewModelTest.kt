@@ -1478,6 +1478,23 @@ class CallViewModelTest {
     }
 
     @Test
+    fun `a missed teardown for an outgoing call that already early-joined ends it as missed`() = runTest {
+        // The gateway deliberately keeps the ring timer armed once the callee's
+        // device early-joins the call room (offer must flow during the ring),
+        // so a genuine call:missed can arrive while the caller is already
+        // Offering — not just while still Ringing.
+        val vm = vm()
+        vm.start(outgoingVideo) // outgoing ringing, id call-1
+        vm.onSignal(CallEvent.ParticipantJoined()) // callee early-joined → offering
+
+        endedCalls.emit(CallEndedSignal("call-1", CallEvent.RingTimeout))
+
+        val s = vm.state.value
+        assertThat(s.status).isEqualTo(CallStatus.ENDED)
+        assertThat(s.endReason).isEqualTo(CallEndReason.Missed)
+    }
+
+    @Test
     fun `an ended id matching neither the active nor a waiting call is inert`() = runTest {
         val vm = vm().connect() // active connected call, id call-9
         incomingOffers.emit(offer(callId = "call-77"))
