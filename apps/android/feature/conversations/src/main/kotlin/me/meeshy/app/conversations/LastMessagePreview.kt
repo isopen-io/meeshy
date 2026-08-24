@@ -46,15 +46,25 @@ fun draftPreview(
  * attachment-kind labels (📷 Photo / 🎬 Vidéo / 🎵 Message vocal / 📎 Fichier /
  * 📍 Localisation): a caption always wins over the type label, and group rows
  * prefix the sender ("Vous" for the current user).
+ *
+ * [resolvedContent] is the message's text AFTER the Prisme Linguistique
+ * ([me.meeshy.sdk.model.resolvedLastMessagePreview]) — the reader's language when the
+ * server shipped a translation for it, the original otherwise. It replaces
+ * [ApiConversationLastMessage.content] and nothing else: the media-type labels below
+ * are reached only when there is no text at all, so there is nothing to translate
+ * there (same boundary the web twin draws in `formatLastMessage`). `null` — the default
+ * — keeps the raw content, which is what every caller that has no reader prism at hand
+ * (the widgets, the preview card, which resolves per message on its own) needs.
  */
 fun lastMessagePreview(
     message: ApiConversationLastMessage?,
     currentUserId: String?,
     showSender: Boolean,
     labels: LastMessagePreviewLabels,
+    resolvedContent: String? = null,
 ): String {
     if (message == null) return labels.none
-    val body = message.content?.trim().orEmpty().ifEmpty {
+    val body = (resolvedContent ?: message.content)?.trim().orEmpty().ifEmpty {
         when (message.messageType) {
             "image" -> labels.photo
             "video" -> labels.video
@@ -96,13 +106,18 @@ fun messageSummaryLine(
     showSender: Boolean,
     labels: LastMessagePreviewLabels,
     nowMillis: Long,
+    resolvedContent: String? = null,
 ): SummaryLine {
     val kind = MessageSummaryKind.of(message, nowMillis)
     return when (kind) {
         MessageSummaryKind.STANDARD, MessageSummaryKind.EPHEMERAL_ACTIVE -> SummaryLine(
-            text = lastMessagePreview(message, currentUserId, showSender, labels),
+            text = lastMessagePreview(message, currentUserId, showSender, labels, resolvedContent),
             kind = kind,
         )
+        // EXPIRED / HIDDEN / VIEW_ONCE do not render the message text: their body is a
+        // kind label, so there is nothing for the Prisme to resolve. The partial-locale
+        // fall-through keeps its existing behaviour untouched — widening it is a
+        // decision about what a hidden row may show, not part of this rule.
         MessageSummaryKind.EXPIRED -> SummaryLine(
             text = labels.expired.takeIf { it.isNotBlank() }
                 ?: lastMessagePreview(message, currentUserId, showSender = false, labels),
