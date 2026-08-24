@@ -133,13 +133,23 @@ function TranslationToggle({
   // Le signal part APRÈS le rendu et ne dépend que de la version affichée : un
   // hôte qui rend le texte lui-même doit servir EXACTEMENT celle que la rangée
   // annonce, sans quoi le drapeau et le paragraphe se contredisent.
+  //
+  // Les dépendances sont les trois PRIMITIVES envoyées, jamais l'objet qui les
+  // porte (cycle 123). `displayedVersion` est un `useMemo` dont `autoResolved`
+  // dépend de `preferredLanguages` : un hôte qui passe ce tableau en littéral —
+  // ce que son type `string[]` autorise à tout site d'appel — le recrée à chaque
+  // rendu, l'objet change d'identité, l'effet repart, l'hôte pose son état, et
+  // le rendu boucle SANS FIN. Comparer les valeurs servies referme la boucle à
+  // la source : deux rendus qui servent le même texte ne notifient qu'une fois.
+  const { languageCode: displayedLanguageCode, content: displayedContent, isOriginal: displayedIsOriginal } =
+    displayedVersion;
   useEffect(() => {
     onDisplayedChange?.({
-      languageCode: displayedVersion.languageCode,
-      content: displayedVersion.content,
-      isOriginal: displayedVersion.isOriginal,
+      languageCode: displayedLanguageCode,
+      content: displayedContent,
+      isOriginal: displayedIsOriginal,
     });
-  }, [displayedVersion, onDisplayedChange]);
+  }, [displayedLanguageCode, displayedContent, displayedIsOriginal, onDisplayedChange]);
 
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
