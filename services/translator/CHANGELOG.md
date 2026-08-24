@@ -1,5 +1,99 @@
 # @meeshy/translator
 
+## 1.31.1
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - langgraph 1.x exige @langchain/core 1.x — le bump seul cassait la résolution
+
+## 1.31.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - les 8 clés « publier depuis la feuille de partage » n'entraient pas au catalogue
+  - comments & status descend the ordered Prisme (rank-conscious) [itération 257]
+  - REST leave route attributed a moderator kick to the kicked target, not the moderator [Vague 175]
+  - merge realtime overlay translations pushed over story:translation-updated (#3455)
+  - la bannière RÉSOLVAIT le Prisme sans jamais le SERVIR [cycle 122]
+  - la réponse et la mention n'appliquaient AUCUN Prisme [cycle 122]
+  - language bar descends the Prisme over ALL slide content (#3432)
+  - call links dropped their post-login destination — redirect vs returnUrl [Vague 174]
+  - la bannière ne descendait que le rang 1 du Prisme [cycle 121]
+  - le Prisme des posts ne descendait que le rang 1 — parité iOS/Android [cycle 120]
+  - re-resolve text overlays into the Exploration language (#3427)
+  - WebRtcEngine's remote-video replay leaked the ended call's disposed track into the next call [Vague 173]
+  - la langue d'origine gagne à son RANG, jamais en court-circuit [cycle 119]
+  - importer `encodeToString` — le témoin de cache ne compilait pas [cycle 118]
+  - call:join's own ack is the joiner's completion signal, never a broadcast the server sends back [Vague 172] (#3422)
+  - la ligne de liste n'appliquait pas le Prisme — le 3e client n'avait jamais reçu la règle [cycle 118]
+  - project text objects into the story viewer (#3421)
+  - retirer `feed.post.reach`, devenue clé morte — ma décision de la garder était fausse [239i] — run test
+  - SSOT des formateurs de planification d'agent
+  - applySurvivalVideoSend's OS-suspension guard only blocked resume, not suspend [Vague 171]
+  - reader fadeIn/fadeOut envelope on the viewer canvas (#3416)
+  - le catalogue app n a plus AUCUNE cle en double — et A3 est applique
+  - une garde de hash perimee remplacee par son invariant, une cle etrangere adoptee
+  - un agrégat DIFFUSÉ ne peut pas porter la réponse d'un lecteur [cycle 115]
+  - MediaAccessibilityStore declarait ObservableObject sans importer Combine
+  - les deux rouges du catalogue — trois cles mortes de mon fait, une cle absente qui bloquait main
+  - vague 2 + ses correctifs — rendre ATTEIGNABLE ce qui etait ecrit
+  - backfiller capturedInApp — sans quoi les conversations anciennes cessent de charger
+  - l audience nommee de la file prend son defaut — un parametre sans defaut casse tous ses appelants
+  - une note vocale enregistrée DÉCLARE sa provenance
+  - publier depuis la feuille de partage — le troisième client rejoint la règle
+  - la confirmation de publication d'une capture ne s'est jamais déclenchée
+  - clip-transition opacity ramp on the viewer canvas (#3412)
+  - un post peut NAITRE avec une audience nommee — les six modes, jusqu au bout de la file
+  - une suite arrivee par la fusion n etait enregistree nulle part
+  - la date et les coches vivent EN BAS — magnifie ou non
+  - les deux rouges du gate — une garde retournee, une cle morte
+  - la borne STRICTE endMs > startMs triplée entre enfin dans time-range [itération 256]
+  - play back keyframe animation on the story viewer canvas (#3406)
+  - toggleVideo's three video-disabling failure paths also reset videoSurvivalController [Vague 169]
+  - en conversation chiffree, nommer quelqu'un ne produisait rien
+  - vague 1 du lot C — quatre chantiers a fichiers disjoints
+  - l'appui long en mode Focal montre le message NORMAL, plus une capture tranchée
+  - la magnification de la Lentille n'est plus une carte — c'est la rangée
+  - l audience d une publication se change apres coup — et une story y naît publique
+  - handleHold's unhold generic catch also resets videoSurvivalController — run test [Vague 168]
+  - rebrancher deux pastilles de langue sur la SSOT du Prisme
+  - derive story text base writing direction (RTL) from content (#3402)
+  - les six audiences, offertes partout et jusqu au bout — y compris apres publication
+  - une publication naît publique — l audience se resserre, elle ne se devine pas
+  - le glyphe de synchronisation quitte la rangee — arbitrage produit rendu
+  - la rangee remonte sur l atome de non-lus, et le point du pont cesse d etre reclame
+  - per-element fade in/out timing for text elements (parity iOS) (#3396)
+  - handleAudioRouteChange's .newDeviceAvailable reverts isSpeaker on applySpeakerRoute() failure — run test [Vague 167]
+  - l accuse de reception dit enfin ce qu il envoie
+  - la surface decide de ce qu un collage produit — et un document n est jamais avale
+  - publier une piece jointe recue, sans la retelecharger
+  - typer la liste des versions de la rangee de drapeaux
+  - un nombre, un élément, un nom — les statistiques de portée que VoiceOver ne pouvait pas attribuer [239i] — run test
+  - un mot peut accompagner un transfert
+  - le corps d un post se lit UNE fois, et une rangee de drapeaux dit sa langue
+  - web call-signaling emits stop hiding their contract behind casts [Vague 166]
+  - le `Server` NU pris pour emettre n'etait garde par rien
+  - la porte de mise a jour, sur les DEUX racines
+  - le binaire annonce sa version et entend le 426 du gateway
+  - SSOT du prédicat ObjectId — 8 copies du littéral rebranchées sur isValidMongoId [258]
+  - le checkpoint /sync n'avance que sur une reponse qui a COUVERT la fenetre
+  - la file hors ligne de message:new ne depend plus de la synchro de liste
+  - le seul rejeu qui ne pouvait pas se declarer indelivrable annoncait sa remise [cycle 114]
+  - une entrée de file dont l'id de conversation est illisible désarmait le gate d'autorisation du lot ENTIER [cycle 113]
+  - les identifiants PUBLICS cessent de dire quand ils sont nés — et de collisionner en silence
+  - le rejeu hors ligne diffusait une charge informe, et une entrée non datée désordonnait les saines [cycle 111]
+  - l import de l enveloppe vivait SOUS le schema qui la lit
+  - le chemin d'envoi PRIMAIRE strippait l'enveloppe de chiffrement
+  - le rejeu hors ligne ne peut plus perdre un message en silence
+  - retirer le SecurityMonitor mort (supplanté par les securityEvent.create en ligne)
+  - retirer le `participant-resolver` util mort, homonyme du vivant [itération 254]
+  - SSOT du prédicat ObjectId — 4 copies rebranchées, 2 regex divergentes fondues [itération 259]
+  - le témoin de post.ts affirmait « aucune valeur d'exécution » sur un module qui en exporte une
+
 ## 1.30.0
 
 ### Minor Changes

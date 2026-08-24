@@ -195,6 +195,16 @@ public struct TranscriptionDisplaySegment: Identifiable {
         self.speakerId = speakerId; self.speakerColor = speakerColor
     }
 
+    /// Le même segment, texte remplacé — timings, locuteur et couleur
+    /// conservés. Sert à la coupe « trentaine de mots » : le segment tronqué
+    /// doit garder son ancre temporelle pour rester surlignable et seekable.
+    /// L'`id` est neuf par construction (`UUID()`), ce qui est correct : c'est
+    /// un AUTRE segment affiché, pas une mutation du premier.
+    public nonisolated func replacingText(_ text: String) -> TranscriptionDisplaySegment {
+        TranscriptionDisplaySegment(text: text, startTime: startTime, endTime: endTime,
+                                    speakerId: speakerId, speakerColor: speakerColor)
+    }
+
     public nonisolated static let speakerPalette = ["08D9D6", "FF6B6B", "9B59B6", "F8B500", "2ECC71", "E91E63", "3498DB", "FF7F50"]
 
     public nonisolated static func from(_ segment: MessageTranscriptionSegment, speakerIndex: Int = 0) -> TranscriptionDisplaySegment {

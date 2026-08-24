@@ -1085,7 +1085,7 @@ struct FeedPostCard: View {
             .disabled(isHeartInFlight)
             .animation(.easeOut(duration: 0.2), value: effectiveIsLiked)
             .accessibilityLabel(String(localized: "a11y.feed.post.like", defaultValue: "Aimer", bundle: .main))
-            .accessibilityValue(String(format: String(localized: "a11y.feed.post.like.value", defaultValue: "%d j'aime", bundle: .main), effectiveLikeCount))
+            .accessibilityValue(PostStatAccessibility.likesLabel(effectiveLikeCount))
             .accessibilityAddTraits(effectiveIsLiked ? .isSelected : [])
 
             Spacer()
@@ -1419,7 +1419,7 @@ struct FeedPostCard: View {
                                     .font(.caption2)
                                     .foregroundColor(theme.accentText(accentColor).opacity(0.7))
                                     .accessibilityHidden(true)
-                                Text(String(localized: "feed.post.comment.replies_count", defaultValue: "\(comment.replies) réponses", bundle: .main))
+                                Text(PostStatAccessibility.repliesLabel(comment.replies))
                                     .font(.caption.weight(.medium))
                                     .foregroundColor(theme.textMuted)
                             }

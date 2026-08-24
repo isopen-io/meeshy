@@ -55,28 +55,49 @@ final class FocalTimestampRevealState: ObservableObject {
     }
 }
 
-/// L'heure d'une rangée NON focalisée : masquée au repos, révélée pendant le
-/// défilement.
+/// Ce qu'une rangée NON focalisée ne montre QUE pendant le défilement :
+/// masqué au repos, révélé au geste, effacé `lingerMs` après le dernier.
 ///
-/// Seule vue du fil à observer `FocalTimestampRevealState` — et elle ne
-/// contient qu'un `Text`. C'est la contrepartie de la règle « leaf views :
-/// zéro `@ObservedObject` sur un singleton global » : l'observation est
-/// permise ici précisément parce que la feuille est minuscule et que son
-/// invalidation ne peut rien entraîner d'autre.
+/// **Directive 2026-08-24** — l'heure passait déjà par ce révélé, les coches
+/// non : une conversation immobile portait donc la moitié de ses détails de
+/// réception. Cet enrobage est le point unique où la fenêtre s'applique, pour
+/// que les deux informations ne puissent plus diverger.
 ///
-/// La rangée ÉLUE ne passe jamais par ici — elle affiche date ET heure en
-/// permanence (`FocalRowInput.isFocused`), défilement ou pas.
-struct FocalRevealedTime: View {
-    let timeString: String
-    let tint: Color
+/// Les seules vues du fil à observer `FocalTimestampRevealState` — et elles
+/// n'enveloppent qu'une feuille (un `Text`, une coche). C'est la contrepartie
+/// de la règle « leaf views : zéro `@ObservedObject` sur un singleton
+/// global » : l'observation est permise ici précisément parce que la feuille
+/// est minuscule et que son invalidation ne peut rien entraîner d'autre.
+///
+/// `allowsHitTesting` suit l'opacité : les coches sont un BOUTON (détails de
+/// lecture) — sans cette coupure, le fil au repos serait semé de boutons
+/// invisibles qui s'ouvriraient sous le doigt.
+///
+/// La rangée ÉLUE ne passe jamais par ici — elle affiche date, heure et
+/// coches en permanence (`FocalRowInput.isFocused`), défilement ou pas.
+struct FocalRevealedDetail<Content: View>: View {
+    @ViewBuilder let content: () -> Content
     @EnvironmentObject private var reveal: FocalTimestampRevealState
 
     var body: some View {
-        Text(timeString)
-            .font(MeeshyFont.relative(10.5))
-            .foregroundColor(tint)
+        content()
             .opacity(reveal.isRevealed ? 1 : 0)
+            .allowsHitTesting(reveal.isRevealed)
             .animation(.easeInOut(duration: FocalMetrics.Pill.fadeDuration), value: reveal.isRevealed)
-            .accessibilityHidden(true)
+    }
+}
+
+/// L'heure d'une rangée NON focalisée — le premier consommateur du révélé.
+struct FocalRevealedTime: View {
+    let timeString: String
+    let tint: Color
+
+    var body: some View {
+        FocalRevealedDetail {
+            Text(timeString)
+                .font(MeeshyFont.relative(10.5))
+                .foregroundColor(tint)
+        }
+        .accessibilityHidden(true)
     }
 }

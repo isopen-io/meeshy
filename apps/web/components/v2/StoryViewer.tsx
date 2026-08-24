@@ -20,6 +20,7 @@ import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 import { CanvasV3Scene, type CanvasV3MediaResolution } from './CanvasV3Scene';
 import { BackgroundSoundBadge } from './BackgroundSoundBadge';
 import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
+import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 
 /// Voile de lisibilité — identique aux DEUX chemins (legacy et v3, constat
 /// 19). `CanvasV3Scene` reste un composant PUR : StoryViewer choisit tout
@@ -224,24 +225,28 @@ function isPastExpiry(expiresAt: string | undefined, now: number): boolean {
   return Boolean(expiresAt) && new Date(expiresAt as string).getTime() <= now;
 }
 
-/// Resolve a Prisme-chain pick for a per-text translation map. The web side
-/// receives a single `userLanguage` for now (audit B11B will plumb the full
-/// chain). Returns the original `content` when no translation matches — never
-/// falls back implicitly to "en", per CLAUDE.md "Prisme Linguistique".
-function resolvePrismeText(obj: StoryTextObjectData, preferredLanguage?: string): string {
-  if (preferredLanguage && obj.translations) {
-    const exact = obj.translations[preferredLanguage];
-    if (exact) return exact;
-    // Fallback to a 2-letter prefix match (en-US → en) so users with locales
-    // like "en-GB" still see English translations.
-    const prefix = preferredLanguage.split('-')[0]?.toLowerCase();
-    if (prefix && prefix !== preferredLanguage) {
-      for (const [lang, text] of Object.entries(obj.translations)) {
-        if (lang.toLowerCase() === prefix) return text;
-      }
-    }
-  }
-  return obj.content;
+/// Descente du Prisme sur la carte de traductions d'UN overlay de texte.
+///
+/// Cycle 123 — cette fonction ne voyait que le RANG 1 (`preferredLanguage`,
+/// une seule langue) et rattrapait à la main le décalage de région par un
+/// `startsWith` de préfixe. Deux défauts en un : elle ratait toute traduction
+/// d'un rang inférieur — cas NOMINAL dès que la locale appareil (rang 4)
+/// diffère de la langue applicative — et son préfixe sur-matchait (`fry`
+/// Frisian pour une préférence `fr`). La descente est déléguée à la SSOT
+/// unique du Prisme (`resolvePrismTranslation`), qui parcourt la chaîne
+/// ORDONNÉE et canonicalise les trois sources de codes par
+/// `normalizeLanguageForDedup`.
+///
+/// `null` de la SSOT ⇒ servir l'ORIGINAL (règle #1 du Prisme) : soit la langue
+/// d'origine a gagné à son rang, soit aucune langue du lecteur n'est servie.
+/// Jamais un repli implicite sur une traduction quelconque.
+function resolvePrismeText(obj: StoryTextObjectData, preferredLanguages: readonly string[]): string {
+  const resolved = resolvePrismTranslation({
+    translations: obj.translations,
+    originalLanguage: obj.sourceLanguage,
+    preferredLanguages,
+  });
+  return resolved ? resolved.text : obj.content;
 }
 
 function textObjectClass(style?: StoryTextObjectData['textStyle']): string {
@@ -520,6 +525,46 @@ function StoryViewer({
   const reactToStoryMutation = useReactToStoryMutation();
 
   const story = stories[currentIndex];
+
+  /// Constat 15 — la chaîne ORDONNÉE du Prisme (`getUserLanguagePreferences`,
+  /// source de vérité unique côté web, déjà consommée par PinnedMessageBanner
+  /// / useConversationFiltering), jamais une seule langue tronquée à son rang 1.
+  /// Correction rattrapage (revue) — `/story/:id` est une route PUBLIQUE
+  /// (`middleware.ts` ne garde que `/admin`) : `authUser` vaut `null` pour un
+  /// visiteur SANS compte, alors que `userLanguage` (prop, `usePreferredLanguage()`
+  /// → language-store persistant) reste DISPONIBLE sans compte. Vider la chaîne
+  /// dans ce cas ferait retomber `resolvePrismeText()` sur l'original —
+  /// régression du Prisme pour tout visiteur anonyme. Le repli n'est engagé QUE
+  /// sans compte ; avec compte, la chaîne complète prime toujours sur la langue
+  /// unique.
+  ///
+  /// Mémoïsée, et déclarée AVANT les retours anticipés (`!story`,
+  /// `referenceAccessBlocked`) : la chaîne alimente maintenant l'auto-résolution
+  /// de `TranslationToggle`, donc son identité compte.
+  const preferredLanguages = useMemo(
+    () => (authUser ? getUserLanguagePreferences(authUser) : userLanguage ? [userLanguage] : []),
+    [authUser, userLanguage],
+  );
+
+  /// Cycle 123 — le CORPS effectivement servi, tenu par la puce de langue.
+  ///
+  /// Le bloc de texte rendait `story.content` — l'ORIGINAL — pendant que
+  /// `TranslationToggle` (monté `showContent={false}`, car l'hôte le positionne
+  /// lui-même) annonçait la langue résolue : la puce disait « Français »
+  /// au-dessus d'un paragraphe anglais. Le Prisme était ANNONCÉ sans être
+  /// APPLIQUÉ. Même relais que `PostDetail`, à une différence près : le viewer
+  /// fait DÉFILER les stories, donc la version annoncée est estampillée de
+  /// l'`id` de la story qui l'a produite. Sans cette estampille, la story
+  /// suivante afficherait le corps de la précédente le temps d'une frame —
+  /// le signal ne partant qu'APRÈS le rendu.
+  const [displayedBody, setDisplayedBody] = useState<{ storyId: string; content: string } | null>(null);
+  const handleBodyDisplayedChange = useCallback(
+    (version: { content: string }) => {
+      if (!currentStoryId) return;
+      setDisplayedBody({ storyId: currentStoryId, content: version.content });
+    },
+    [currentStoryId],
+  );
 
   // Le rendu ne consomme jamais le droit de référence ; seule la vue
   // AFFICHÉE le fait (StoryPage.onView → POST /posts/:id/view). Calculé ici,
@@ -933,21 +978,6 @@ function StoryViewer({
   /// Constat 3 — le crédit de bibliothèque voyage sur l'objet `kind:audio` de
   /// FOND de la scène, jamais dégradé en `♫ —` alors que la métadonnée existe.
   const backgroundSoundMeta = isCanvasV3 ? backgroundSoundCredit(effects?.scenes) : undefined;
-  /// Constat 15 — la chaîne ORDONNÉE du Prisme (`getUserLanguagePreferences`,
-  /// source de vérité unique côté web, déjà consommée par PinnedMessageBanner
-  /// / useConversationFiltering), jamais une seule langue tronquée à son rang 1.
-  /// Correction rattrapage (revue) — `/story/:id` est une route PUBLIQUE
-  /// (`middleware.ts` ne garde que `/admin`) : `authUser` vaut `null` pour un
-  /// visiteur SANS compte, alors que `userLanguage` (prop, `usePreferredLanguage()`
-  /// → language-store persistant) reste DISPONIBLE sans compte. Vider la chaîne
-  /// dans ce cas ferait retomber `resolveText()` sur l'original — régression du
-  /// Prisme pour tout visiteur anonyme. Le repli n'est engagé QUE sans compte ;
-  /// avec compte, la chaîne complète prime toujours sur la langue unique.
-  const preferredLanguages = authUser
-    ? getUserLanguagePreferences(authUser)
-    : userLanguage
-      ? [userLanguage]
-      : [];
   const bgStyles = parseBackground(effects?.background);
   const cssFilter = effects?.filter ? FILTER_MAP[effects.filter] : undefined;
   const textColor = effects?.textColor || '#ffffff';
@@ -1120,16 +1150,15 @@ function StoryViewer({
 
         {/* Per-text overlays produced by the iOS composer. Position is
             normalized 0-1; iOS sends actual normalized values so we multiply
-            by 100 for CSS percentages. Each text picks its own translation
-            via the Prisme chain (passed via `userLanguage` for now; full
-            chain support ships in B11B). */}
+            by 100 for CSS percentages. Each text descends the ORDERED Prisme
+            chain (`preferredLanguages`, cycle 123) — jamais le seul rang 1. */}
         {/* `containerType: inline-size` scopes `cqw` units to the canvas width
             so iOS design-pixel font sizes (1080 reference) scale to the live
             canvas. Isolated to this full-bleed wrapper so it never becomes the
             containing block for the fixed-position overlays elsewhere. */}
         <div className="absolute inset-0 pointer-events-none" style={{ containerType: 'inline-size' }}>
         {effects?.textObjects?.map((t) => {
-          const resolvedText = resolvePrismeText(t, userLanguage);
+          const resolvedText = resolvePrismeText(t, preferredLanguages);
           if (!resolvedText) return null;
           // Canonical iOS size is design px on the 1080-wide canvas → express it
           // as a fraction of the live canvas width (`cqw`). Legacy `textSize` is
@@ -1323,8 +1352,12 @@ function StoryViewer({
                   textShadow,
                 }}
               >
+                {/* Le corps servi est celui que la puce ANNONCE : sans ce
+                    relais (`onDisplayedChange`), la puce afficherait
+                    « Français » au-dessus d'un paragraphe resté en version
+                    originale — le Prisme annoncé sans être appliqué. */}
                 <p className={cn(textStyleClass, 'text-center leading-relaxed')}>
-                  {story.content}
+                  {displayedBody?.storyId === story.id ? displayedBody.content : story.content}
                 </p>
 
                 {/* Translation toggle */}
@@ -1332,13 +1365,19 @@ function StoryViewer({
                   story.translations &&
                   story.translations.length > 0 && (
                     <div className="mt-2 flex justify-center">
+                      {/* `key` par story : l'exploration manuelle du lecteur est
+                          une propriété de LA story qu'il lit, jamais un état qui
+                          survit au défilement vers la suivante. */}
                       <TranslationToggle
+                        key={story.id}
                         originalContent={story.content}
                         originalLanguage={story.originalLanguage}
                         translations={story.translations}
                         userLanguage={userLanguage}
+                        preferredLanguages={preferredLanguages}
                         variant="inline"
                         showContent={false}
+                        onDisplayedChange={handleBodyDisplayedChange}
                       />
                     </div>
                   )}

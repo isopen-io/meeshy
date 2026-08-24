@@ -902,9 +902,22 @@ export default async function callRoutes(fastify: FastifyInstance) {
         (p) => p.participantId === leaveParticipantId && !p.leftAt
       );
 
+      // Bug fix (Vague 175) — `userId` here (and below, `broadcastCallEndedIfTerminal`'s
+      // actor) must be the AUTHENTICATED CALLER, never the route's raw
+      // `:participantId` param. For a self-leave the two coincide
+      // (`participantId === userId`), which hid this on every OTHER site
+      // exercising this route; a moderator KICK makes them diverge — the
+      // route used to attribute the leave/end to the KICKED target instead
+      // of the moderator who performed it, the one place in the codebase
+      // where `endedBy`/`userId` didn't name the actor (every socket
+      // handler — call:leave/call:end/call:force-leave — always passes its
+      // own authenticated userId; there is no kick path through sockets).
+      // `CallSession.metadata.endedBy` feeds `wasCancelledByInitiator()`
+      // (packages/shared/utils/call-summary.ts) and `CallEndedEvent.endedBy`
+      // is broadcast to every client on `call:ended`.
       const callSession = await callService.leaveCall({
         callId,
-        userId: participantId,
+        userId,
         participantId: leaveParticipantId,
       });
       // Parité socket call:leave — invalide le cache de session `call:signal`
@@ -918,7 +931,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       callService.finalizeCallSummary(callId);
       // Parité socket call:leave — diffuse `call:ended` au pair UNIQUEMENT si le
       // leave a rendu l'appel terminal (broadcastCallEndedIfTerminal auto-gardé).
-      callService.broadcastCallEndedIfTerminal(callSession, participantId);
+      callService.broadcastCallEndedIfTerminal(callSession, userId);
       // Bug fix — cette route (self-leave ET kick modérateur) ne diffusait
       // JAMAIS `call:participant-left`, contrairement au handler socket
       // `call:leave` : les autres pairs d'un appel de groupe qui continue

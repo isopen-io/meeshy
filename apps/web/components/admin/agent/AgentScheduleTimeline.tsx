@@ -17,35 +17,12 @@ import {
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
+import { formatTime, formatDuration, budgetColor, budgetGlow } from './schedule-format';
 
 type AgentScheduleTimelineProps = {
   conversationId: string;
   compact?: boolean;
 };
-
-function formatTime(ts: number, locale: string): string {
-  return new Date(ts).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-}
-
-function formatDuration(ms: number): string {
-  const mins = Math.round(ms / 60_000);
-  if (mins < 60) return `${mins}min`;
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return m > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`;
-}
-
-function budgetColor(ratio: number): string {
-  if (ratio > 0.6) return 'bg-emerald-500';
-  if (ratio > 0.3) return 'bg-amber-400';
-  return 'bg-red-500';
-}
-
-function budgetGlow(ratio: number): string {
-  if (ratio > 0.6) return 'shadow-emerald-500/30';
-  if (ratio > 0.3) return 'shadow-amber-400/30';
-  return 'shadow-red-500/30';
-}
 
 export default memo(function AgentScheduleTimeline({ conversationId, compact = false }: AgentScheduleTimelineProps) {
   const { t, locale } = useI18n('admin');
