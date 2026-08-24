@@ -67,6 +67,12 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     conversation: {
       findUnique: jest.fn(),
     },
+    // Cycle 122 — `createReplyNotification` et `createMentionNotification`
+    // rechargent la carte des traductions du message pour descendre le Prisme.
+    // Sans ce délégué, l'appel lève sur `prisma.message.findUnique`.
+    message: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
     participant: {
       count: jest.fn().mockResolvedValue(5),
     },

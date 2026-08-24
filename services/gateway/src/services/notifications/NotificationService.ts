@@ -720,6 +720,45 @@ export class NotificationService {
     return out;
   }
 
+  /**
+   * Descente du Prisme sur la charge d'une NOTIFICATION de message (nouveau
+   * message, mention, réponse). Deux étapes indissociables :
+   *
+   *  1. **Filtrer** `Message.translations` aux entrées SERVABLES sur le canal
+   *     push — une entrée chiffrée n'est pas servable ; la NSE déchiffre
+   *     `encryptedContent`, jamais les traductions. Le filtre PRÉCÈDE la
+   *     descente et ne l'interrompt pas — un candidat écarté n'abandonne pas la
+   *     recherche, le rang suivant reste dû au lecteur (cf. `resolvePrismTranslation`).
+   *  2. **Descendre** les langues du destinataire DANS L'ORDRE, la première
+   *     servie gagne — jamais un fallback `translations.first` (règle #1) ; la
+   *     langue d'origine concourt à son propre rang (règle #3).
+   *
+   * Une seule source pour les trois éventails de `messageNotificationFanOut`
+   * évite la « JUMELLE » : trois copies d'une même règle synchronisées à la
+   * main dériveraient au premier `>` transformé en `>=`, ou au premier oubli
+   * du filtre chiffré. Les cycles 118-121 ont mesuré cette famille exactement.
+   */
+  private _resolveNotificationTranslation(
+    liveMessage: { translations: unknown; originalLanguage: string | null } | null | undefined,
+    recipientPrism: readonly string[]
+  ): { readonly language: string; readonly text: string } | null {
+    if (!liveMessage) return null;
+    const translationsJson = liveMessage.translations as
+      | Record<string, { text?: unknown; isEncrypted?: unknown }>
+      | null
+      | undefined;
+    const pushableTranslations = Object.fromEntries(
+      Object.entries(translationsJson ?? {})
+        .filter(([, t]) => typeof t?.text === 'string' && !t.isEncrypted)
+        .map(([lang, t]) => [lang, t.text as string])
+    );
+    return resolvePrismTranslation({
+      translations: pushableTranslations,
+      originalLanguage: liveMessage.originalLanguage,
+      preferredLanguages: recipientPrism,
+    });
+  }
+
   // ==============================================
   // PREFERENCE CHECKS
   // ==============================================
@@ -1551,29 +1590,19 @@ export class NotificationService {
     const { lang: recipientLang, ordered: recipientPrism } =
       await this.resolveRecipientPrism(params.recipientUserId);
 
-    // Les traductions SERVABLES sur le canal push. Le filtre précède la
-    // descente et ne l'interrompt pas : une entrée chiffrée n'est pas une
-    // raison de priver le lecteur du rang suivant (la NSE déchiffre
-    // `encryptedContent`, jamais les traductions).
-    const translationsJson = liveMessage.translations as Record<string, { text?: unknown; isEncrypted?: unknown }> | null | undefined;
-    const pushableTranslations = Object.fromEntries(
-      Object.entries(translationsJson ?? {})
-        .filter(([, t]) => typeof t?.text === 'string' && !t.isEncrypted)
-        .map(([lang, t]) => [lang, t.text as string])
-    );
-
     // Cycle 121 — Prisme : DESCENDRE les langues du destinataire dans l'ordre,
     // la première servie gagne. `recipientLang` est la langue de CADRAGE et ne
     // convient PAS ici : appariée seule, elle ratait toute traduction d'un rang
     // inférieur — cas nominal dès que la locale appareil (rang 4) diffère de la
     // langue applicative. `null` ⇒ servir l'original, jamais une traduction
     // quelconque (règle #1) ; la langue d'origine concourt à son propre rang
-    // (règle #3), d'où `originalLanguage` dans la relecture vivante.
-    const matchedTranslation = resolvePrismTranslation({
-      translations: pushableTranslations,
-      originalLanguage: liveMessage.originalLanguage,
-      preferredLanguages: recipientPrism,
-    });
+    // (règle #3).
+    //
+    // Cycle 122 — `_resolveNotificationTranslation` mutualise le couple
+    // filtre-chiffré + descente pour les trois éventails de
+    // `messageNotificationFanOut` : trois copies gardées à la main dériveraient
+    // au premier oubli (règle « Cette entité a-t-elle une JUMELLE ? »).
+    const matchedTranslation = this._resolveNotificationTranslation(liveMessage, recipientPrism);
 
     const content = buildMessageNotificationBodyI18n(recipientLang, {
       messagePreview: params.messagePreview,
@@ -1681,7 +1710,15 @@ export class NotificationService {
       return null;
     }
 
-    const [mentioner, conversation] = await Promise.all([
+    // Cycle 122 — jumelle du correctif Prisme du cycle 121 :
+    // `createMessageNotification` DESCEND les rangs et pousse la traduction
+    // servable ; les DEUX autres éventails (mention et réponse) posaient
+    // `content: messagePreview` — l'original — et ne poussaient ni
+    // `translatedContent` ni `translatedLanguage`, quelle que soit la langue de
+    // la personne mentionnée. Défaut DISTINCT du cycle 121 (absence du Prisme,
+    // pas un mauvais rang), et c'est pourquoi il n'a pas été absorbé là-bas
+    // (règle du cycle 120 : le résolveur pour tous, les surfaces une par une).
+    const [mentioner, conversation, liveMessage] = await Promise.all([
       params.senderProfile
         ? Promise.resolve(params.senderProfile)
         : this.prisma.user.findUnique({
@@ -1692,15 +1729,30 @@ export class NotificationService {
         where: { id: params.conversationId },
         select: { title: true, type: true, avatar: true },
       }),
+      // Refetch minimal (translations + originalLanguage) : la fenêtre du
+      // cycle 121 sur `createMessageNotification` n'a de sens qu'ici pour la
+      // même raison — le message peut naître, être traduit et notifié à des
+      // instants différents. La race guard (`deletedAt`/`expiresAt`) reste
+      // portée par le seul chemin qui l'a explicitement documentée à ce jour.
+      this.prisma.message.findUnique({
+        where: { id: params.messageId },
+        select: { translations: true, originalLanguage: true },
+      }),
     ]);
 
     if (!mentioner) return null;
+
+    const { lang: recipientLang, ordered: recipientPrism } =
+      await this.resolveRecipientPrism(params.mentionedUserId);
+
+    const matchedTranslation = this._resolveNotificationTranslation(liveMessage, recipientPrism);
 
     return this.createNotification({
       userId: params.mentionedUserId,
       type: 'user_mentioned',
       priority: 'high',
       content: params.messagePreview,
+      lang: recipientLang,
       collapseId: `conv-${params.conversationId}`,
       expiresAt: params.messageExpiresAt ?? undefined,
 
@@ -1719,6 +1771,10 @@ export class NotificationService {
         conversationAvatar: conversation?.avatar ?? undefined,
         conversationType: conversation?.type as any,
         messageId: params.messageId,
+        ...(matchedTranslation ? {
+          translatedContent: matchedTranslation.text.substring(0, 200),
+          translatedLanguage: matchedTranslation.language,
+        } : {}),
       },
 
       metadata: {
@@ -3246,7 +3302,12 @@ export class NotificationService {
       return null;
     }
 
-    const [replier, conversation] = await Promise.all([
+    // Cycle 122 — jumelle du correctif Prisme du cycle 121, cf. le commentaire
+    // en tête de `createMentionNotification`. Sans cette descente, l'auteur du
+    // message cité recevait TOUJOURS la bannière dans la langue de son
+    // interlocuteur, quand la ligne de liste de la même application, elle,
+    // descendait.
+    const [replier, conversation, liveMessage] = await Promise.all([
       params.senderProfile
         ? Promise.resolve(params.senderProfile)
         : this.prisma.user.findUnique({
@@ -3257,15 +3318,25 @@ export class NotificationService {
         where: { id: params.conversationId },
         select: { title: true, type: true },
       }),
+      this.prisma.message.findUnique({
+        where: { id: params.messageId },
+        select: { translations: true, originalLanguage: true },
+      }),
     ]);
 
     if (!replier) return null;
+
+    const { lang: recipientLang, ordered: recipientPrism } =
+      await this.resolveRecipientPrism(params.recipientUserId);
+
+    const matchedTranslation = this._resolveNotificationTranslation(liveMessage, recipientPrism);
 
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'message_reply',
       priority: 'normal',
       content: params.messagePreview,
+      lang: recipientLang,
       collapseId: `conv-${params.conversationId}`,
       expiresAt: params.messageExpiresAt ?? undefined,
 
@@ -3282,6 +3353,10 @@ export class NotificationService {
         conversationType: conversation?.type as any,
         messageId: params.messageId,
         originalMessageId: params.originalMessageId,
+        ...(matchedTranslation ? {
+          translatedContent: matchedTranslation.text.substring(0, 200),
+          translatedLanguage: matchedTranslation.language,
+        } : {}),
       },
 
       metadata: {

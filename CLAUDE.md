@@ -56,7 +56,17 @@ Source de verite iOS : `ConversationViewModel.preferredLanguages` + `preferredTr
 
    **La descente elle-même est UNE fonction** : `resolvePrismTranslation()` (`packages/shared/utils/conversation-helpers.ts`), qui rend `{ language, text } | null` — `null` ⇒ servir l'original. `resolveLastMessagePreview()` en est désormais une projection. Tout consommateur TS qui doit DIRE dans quelle langue il sert (et pas seulement afficher un texte) l'appelle plutôt que de réécrire la boucle : c'est la réécriture qui a produit trois familles divergentes en trois cycles.
 
-   **Reste à câbler (suivi cycle 121, MESURÉ) :** deux des trois éventails de `messageNotificationFanOut` n'appliquent AUCUN Prisme — `createReplyNotification` (`:3268`) et `createMentionNotification` (`:1703`) posent `content: params.messagePreview`, c'est-à-dire l'original, et ne poussent ni `translatedContent` ni `translatedLanguage`. Défaut DISTINCT de celui du cycle 121 (absence du Prisme, pas un mauvais rang) : une bannière de réponse ou de mention est toujours dans la langue de l'expéditeur. Leur câblage suit le patron de `createMessageNotification` (relecture vivante de `translations` + `originalLanguage` → `resolvePrismTranslation`).
+   **Suivi cycle 121 refermé au cycle 122 :** les deux jumelles de
+   `createMessageNotification` (`createReplyNotification` et `createMentionNotification`)
+   descendent désormais le Prisme et poussent `translatedContent` /
+   `translatedLanguage`. Le couple filtre-chiffré + descente est extrait en
+   helper privé `NotificationService._resolveNotificationTranslation`, consommé
+   par les TROIS éventails — trois copies gardées à la main dériveraient au
+   premier `>` transformé en `>=`, ou au premier oubli du filtre chiffré (règle
+   « Cette entité a-t-elle une JUMELLE ? »). Suivis distincts restant listés :
+   parité race guard `deletedAt`/`expiresAt` sur mention/réponse (cycle à part,
+   change le comportement de fire) ; pré-fetch dans
+   `createMentionNotificationsBatch` (optimisation N−1 lectures).
 
    **Une énumération de sites porte DEUX affirmations** : « ces sites appliquent la règle » (vérifiable) et « ce sont les sites où la règle s'applique » (presque jamais vérifiée). Avant de se fier à une telle liste, demander : **cette règle gouverne-t-elle un autre TYPE DE CONTENU, et qui le résout ?** Le Prisme s'appliquant à TOUT le contenu (§ Cohérence), la réponse est en général oui — la troisième famille a été trouvée en posant exactement cette question. Et **un témoin de RANG s'écrit sur un rang AUTRE que le premier** : au rang 1, le court-circuit interdit et la règle juste rendent le même verdict, donc le témoin ne peut pas tomber. Détail : `tasks/lessons.md` § Leçon 261.
 
