@@ -40,7 +40,7 @@ export default function CallPage({ params }: CallPageProps) {
     if (!user) {
       logger.warn('[CallPage]', 'User not authenticated, redirecting to login');
       toast.error('Please sign in to join the call');
-      router.push(`/login?redirect=/call/${callId}`);
+      router.push(`/login?returnUrl=${encodeURIComponent(`/call/${callId}`)}`);
       return;
     }
 
