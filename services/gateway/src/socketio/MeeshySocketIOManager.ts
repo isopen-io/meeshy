@@ -100,6 +100,7 @@ import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -1114,7 +1115,7 @@ export class MeeshySocketIOManager {
    */
   private async normalizeConversationId(conversationId: string): Promise<string> {
     try {
-      if (/^[0-9a-fA-F]{24}$/.test(conversationId)) return conversationId;
+      if (isValidObjectId(conversationId)) return conversationId;
       const cached = this.conversationIdCache.get(conversationId);
       if (cached) return cached;
       const conversation = await this.prisma.conversation.findUnique({

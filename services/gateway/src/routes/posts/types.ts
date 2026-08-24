@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 
 // ============================================
 // CURSOR PAGINATION HELPERS
@@ -122,7 +123,7 @@ const StoryTextObjectSchema = z.object({
    * garde-fou global de 256 KB l'arrêterait, et un champ que le serveur LIT
    * mérite d'être validé comme les autres.
    */
-  referenceUserId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
+  referenceUserId: z.string().regex(OBJECT_ID_REGEX).optional(),
 }).passthrough();
 
 const StoryStickerObjectSchema = z.object({
@@ -204,7 +205,7 @@ export const StoryEffectsSchema = z.object({
  * premier désaccord.
  */
 export const PostReferenceInputSchema = z.object({
-  userId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
+  userId: z.string().regex(OBJECT_ID_REGEX).optional(),
   username: z.string().min(1).max(64).optional(),
   /**
    * OPTIONNEL, défaut PINNED — et ce n'est pas une commodité.
@@ -463,7 +464,7 @@ export const EngagementSessionSchema = z.object({
   // prend l'identité du token auth (anti-spoof). Optionnel pour refléter
   // qu'il n'est pas fiable côté serveur.
   userId: z.string().optional(),
-  postId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+  postId: z.string().regex(OBJECT_ID_REGEX),
   contentType: z.enum(['POST', 'REEL', 'STORY', 'STATUS']),
   surface: z.string().max(40),
   startedAt: z.string(),

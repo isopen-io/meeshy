@@ -2,6 +2,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { LinkMessageNewEventData } from '@meeshy/shared/types/socketio-events';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { Anonymized, ServerEventName, ServerEventPayload } from './serverEmit';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 
 /**
  * Un `eventType` de file, absence comprise.
@@ -118,8 +119,6 @@ export function isDeliverableQueuedPayload(payload: unknown): payload is Record<
   return typeof payload === 'object' && payload !== null && !Array.isArray(payload);
 }
 
-const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
-
 /**
  * L'entrée relue porte-t-elle une conversation qu'on puisse INTERROGER ?
  *
@@ -157,7 +156,7 @@ const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
  * mettre l'entrée dans la question.
  */
 export function isAddressableConversationId(conversationId: unknown): conversationId is string {
-  return typeof conversationId === 'string' && OBJECT_ID.test(conversationId);
+  return isValidObjectId(conversationId);
 }
 
 /**

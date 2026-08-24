@@ -20,6 +20,7 @@ import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import { enqueueOfflineReactionEvent, type ReactionEventType } from '../reactionOfflineQueue';
 import { emitServerEvent } from '../serverEmit';
 import { queuedVariantOf, type QueuedPayloadFor } from '../queuedEventContract';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 
 const logger = enhancedLogger.child({ module: 'ReactionHandler' });
 
@@ -405,7 +406,7 @@ export class ReactionHandler {
     // aborts the whole reaction flow. The optimistic row is not yet reconciled to
     // its server id, so we skip gracefully; the caller replies "Could not resolve
     // participant" and the client retries after the send ACK reconciles the cid.
-    if (!/^[0-9a-fA-F]{24}$/.test(messageId)) {
+    if (!isValidObjectId(messageId)) {
       logger.warn('reaction — unreconciled optimistic messageId, skipping', { messageId });
       return undefined;
     }
