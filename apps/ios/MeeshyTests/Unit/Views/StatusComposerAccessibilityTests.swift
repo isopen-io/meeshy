@@ -9,6 +9,20 @@ import XCTest
 /// The fix pins the accessible name to the action (`status.composer.publish`) and
 /// carries the transient/blocked states as value + hint — the same shape as the
 /// create-tracking-link button.
+///
+/// **Cette suite mesure un écran que PLUS AUCUN SITE NE MONTE (lot 4.6).** Les
+/// quatre présentations du mood ouvrent `MoodComposerDoor` → `MeeshyComposerHost`,
+/// et `StatusComposerSheetPresentationTests`
+/// `.test_noEntryPointStillMountsTheLegacyComposer` l'assère fichier par fichier. Ces quatre tests restent donc verts sur une affordance sans public :
+/// c'est le motif d'extinction silencieuse RETOURNÉ — la garde n'a pas perdu sa
+/// cible, sa cible a perdu son public.
+///
+/// L'affordance réellement livrée est `MeeshyComposerHost.publishButton`, et elle
+/// a sa propre garde depuis le 2026-08-24 :
+/// `MeeshyComposerHostGuardTests.test_laFlecheDuSocle_porteSonEtatAccessible`.
+/// **Ne pas supprimer cette suite-ci avant le retrait de `StatusComposerView`**
+/// (lot 4.8, conditionnel) : tant que le fichier existe, la retirer laisserait
+/// son bouton sans mesure si une porte devait le remonter.
 @MainActor
 final class StatusComposerAccessibilityTests: XCTestCase {
 

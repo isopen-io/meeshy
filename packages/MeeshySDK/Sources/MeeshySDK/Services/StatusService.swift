@@ -7,7 +7,13 @@ public protocol StatusServiceProviding: Sendable {
     /// `mentions` fait partie de la REQUIREMENT et non d'un défaut concret :
     /// un protocole muet jetterait la déclaration avant le mock, et un test
     /// vert prouverait l'inverse de ce qu'il croit.
-    func create(moodEmoji: String, content: String?, originalLanguage: String?, visibility: String, visibilityUserIds: [String]?, viaUsername: String?, audioUrl: String?, repostOfId: String?, mentions: [PostMentionInput]?) async throws -> APIPost
+    ///
+    /// Il n'y a pas de `viaUsername` ici, et ce n'est pas un oubli : le
+    /// gateway ne l'a jamais lu (`CreatePostSchema` ne le déclare pas, et un
+    /// `z.object()` écarte silencieusement les clés inconnues). L'attribution
+    /// d'une republication voyage par `repostOfId`, seul. Le « via @X » qu'un
+    /// composer affiche est un fait LOCAL, jamais une écriture.
+    func create(moodEmoji: String, content: String?, originalLanguage: String?, visibility: String, visibilityUserIds: [String]?, audioUrl: String?, repostOfId: String?, mentions: [PostMentionInput]?) async throws -> APIPost
     func delete(statusId: String) async throws
     func react(statusId: String, emoji: String) async throws
 }
@@ -36,8 +42,8 @@ public final class StatusService: StatusServiceProviding, @unchecked Sendable {
         try await api.paginatedRequest(endpoint: mode.endpoint, cursor: cursor, limit: limit)
     }
 
-    public func create(moodEmoji: String, content: String?, originalLanguage: String? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, viaUsername: String? = nil, audioUrl: String? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil) async throws -> APIPost {
-        let body = CreatePostRequest(content: content ?? "", type: "STATUS", visibility: visibility, moodEmoji: moodEmoji, visibilityUserIds: visibilityUserIds, audioUrl: audioUrl, originalLanguage: originalLanguage, viaUsername: viaUsername, repostOfId: repostOfId, mentions: mentions)
+    public func create(moodEmoji: String, content: String?, originalLanguage: String? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, audioUrl: String? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil) async throws -> APIPost {
+        let body = CreatePostRequest(content: content ?? "", type: "STATUS", visibility: visibility, moodEmoji: moodEmoji, visibilityUserIds: visibilityUserIds, audioUrl: audioUrl, originalLanguage: originalLanguage, repostOfId: repostOfId, mentions: mentions)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }

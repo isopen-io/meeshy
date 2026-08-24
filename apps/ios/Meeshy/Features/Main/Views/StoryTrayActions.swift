@@ -212,6 +212,27 @@ struct StoryComposerCover: ViewModifier {
                     // en file d'attente au lieu de rester dans le composer.
                     return true
                 },
+                onPublishDocument: { _ in
+                    // La porte du tray ouvre sur `.cameraReady`, et
+                    // `ComposerSurfaceRouting` route TOUJOURS une ouverture de
+                    // capture vers la SCÈNE, quel que soit le format choisi
+                    // ensuite. Le socle n'est donc jamais peint ici, et cette
+                    // fermeture jamais appelée — `MeeshyComposerHostGuardTests`
+                    // `.test_laPorteDuTray_nAtteintAucuneSurfaceQuiPublieParLeSocle`
+                    // en répond, et rougirait le jour où l'ouverture changerait.
+                    //
+                    // Elle REFUSE plutôt qu'elle n'accepte : un `true` ferait
+                    // fermer le composer sur une publication qui n'a pas eu lieu.
+                    // Le paramètre n'a pas de défaut côté meuble, précisément
+                    // pour que ce refus s'écrive au lieu de se supposer.
+                    false
+                },
+                // La porte du tray ne sème AUCUN mood : elle n'atteint pas cette
+                // surface, pour la raison ci-dessus. Écrit en toutes lettres
+                // parce que le paramètre n'a pas de défaut — un défaut l'aurait
+                // fait disparaître d'un site de republication, où son absence
+                // transformerait la republication en mood neuf, sans un mot.
+                moodSeed: nil,
                 onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in
                     previewAssets = StoryPreviewAssets(
                         slides: slides,

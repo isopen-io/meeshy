@@ -32,7 +32,6 @@ final class MockStatusService: StatusServiceProviding, @unchecked Sendable {
     var lastCreateOriginalLanguage: String?
     var lastCreateVisibility: String?
     var lastCreateVisibilityUserIds: [String]?
-    var lastCreateViaUsername: String?
     var lastCreateAudioUrl: String?
     var lastCreateRepostOfId: String?
     /// Références DÉCLARÉES du dernier mood publié. `nil` = aucune, ce qui
@@ -58,7 +57,7 @@ final class MockStatusService: StatusServiceProviding, @unchecked Sendable {
 
     func create(moodEmoji: String, content: String?, originalLanguage: String?,
                 visibility: String,
-                visibilityUserIds: [String]?, viaUsername: String? = nil,
+                visibilityUserIds: [String]?,
                 audioUrl: String? = nil, repostOfId: String? = nil,
                 mentions: [PostMentionInput]? = nil) async throws -> APIPost {
         lastCreateMentions = mentions
@@ -68,7 +67,6 @@ final class MockStatusService: StatusServiceProviding, @unchecked Sendable {
         lastCreateOriginalLanguage = originalLanguage
         lastCreateVisibility = visibility
         lastCreateVisibilityUserIds = visibilityUserIds
-        lastCreateViaUsername = viaUsername
         lastCreateAudioUrl = audioUrl
         lastCreateRepostOfId = repostOfId
         return try createResult.get()
@@ -103,7 +101,6 @@ final class MockStatusService: StatusServiceProviding, @unchecked Sendable {
         lastCreateOriginalLanguage = nil
         lastCreateVisibility = nil
         lastCreateVisibilityUserIds = nil
-        lastCreateViaUsername = nil
         lastCreateAudioUrl = nil
         lastCreateRepostOfId = nil
 
