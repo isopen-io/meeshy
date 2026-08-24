@@ -1,5 +1,13 @@
 # @meeshy/translator
 
+## 1.31.1
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - langgraph 1.x exige @langchain/core 1.x — le bump seul cassait la résolution
+
 ## 1.31.0
 
 ### Minor Changes
