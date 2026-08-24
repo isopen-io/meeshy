@@ -3821,9 +3821,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       fields into the view. `StorySlideView` gains `textObjects`; the VM projects them with
       `LanguageResolver.preferredContentLanguages(prefs)`. Compose `StoryTextObjectLayer` renders each at
       its center anchor with `.alpha(animated.opacity)`, `fontSize × scale` mapped from the 1080-referential
-      design space onto the canvas width, and a `graphicsLayer` rotation. Pending: the exploration
-      language-override re-resolving text objects (caption re-resolves today, text objects use default
-      prefs); authored background/outline/RTL styling on the overlay; text-object keyframe **editing**.
+      design space onto the canvas width, and a `graphicsLayer` rotation. Pending: authored
+      background/outline/RTL styling on the overlay; text-object keyframe **editing**.
+- [x] **Text-object exploration language override** done (slice `story-text-object-exploration-override`,
+      2026-08-24): the caption re-resolved when the reader taps a language chip but text overlays stayed in
+      the default-chain language — a tapped "es" translated the caption yet left every overlay unchanged.
+      `StoryTextObjectProjection.resolveText`/`project` gain an optional `overrideLanguage` (default `null`,
+      2-arg call sites unchanged) tried FIRST without removing the preference chain — mirroring
+      `StoryContentResolver`'s own override contract — by prepending it to the exact-then-normalised
+      language loop, so it inherits the resolver's case/region-insensitive matching and falls through to
+      the normal Prisme resolution when no translation matches. `emit()`'s override branch now re-projects
+      the current slide's text objects from the raw item alongside the caption; the Compose layer already
+      reads `slide.textObjects`, so caption and overlays repaint together in the chosen language. +9 tests
+      (7 projection, 2 viewmodel); mutation RED-proof isolated exactly the 5 override-dependent tests.
 - [ ] Per-clip inspector EDITOR (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)

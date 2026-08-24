@@ -902,6 +902,48 @@ class StoryViewerViewModelTest {
         assertThat(vm.state.value.current?.text).isEqualTo("text-s1")
     }
 
+    @Test
+    fun `toggling a language override re-resolves the current slide's text objects`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(
+                    StoryTextObject(
+                        id = "txt",
+                        text = "Hello",
+                        translations = mapOf("fr" to "Bonjour", "es" to "Hola"),
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "fr"), posts = listOf(post))
+
+        // Default projection follows the reader's chain (fr).
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Bonjour")
+
+        vm.toggleLanguageOverride("es")
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hola")
+
+        // Re-tapping clears the override, returning the object to the automatic resolution.
+        vm.toggleLanguageOverride("es")
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `a language override with no matching text-object translation falls back to the preferred chain`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(
+                    StoryTextObject(id = "txt", text = "Hello", translations = mapOf("fr" to "Bonjour")),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "fr"), posts = listOf(post))
+
+        vm.toggleLanguageOverride("de")
+        // No "de" text-object translation exists, so the reader's fr chain still resolves.
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Bonjour")
+    }
+
     // --- On-demand story translation (the flag strip's request arm) ---
 
     private fun viewer(systemLanguage: String) =

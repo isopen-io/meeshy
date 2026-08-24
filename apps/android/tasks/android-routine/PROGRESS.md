@@ -2,6 +2,75 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-24 **a text overlay re-resolves into the "Exploration" language the reader taps** (slice
+> `story-text-object-exploration-override`, feature-parity §E — the previous entry's `Next` pointer
+> candidate (c): folding the exploration language override into text-object re-resolution, chosen over
+> the clip-inspector editor reducer (needs a timeline/selection host surface first) and the timeline
+> transport (ephemeral editor state, no wire backing) because it has BOTH the cleanest pure core AND a
+> real consumer surface — the viewer we wired text objects into the run before). The caption already
+> re-resolved on a language-bar tap (`StoryContentResolver.resolve(item, prefs, override)` in `emit()`),
+> but the freshly-shipped text overlays did **not**: `toSlideView` projected them once with the default
+> `preferredLanguages` and `emit()`'s override branch copied only the caption's `text`/`isTranslated`/
+> `languageCode` — so tapping "es" translated the slide's caption but left every text overlay stuck in the
+> chain language. The overlay and the caption disagreed on the very language the user had just chosen.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3425 (web/audio cycle 119),
+> #3424 (gateway ObjectId it. 258), #3418 (web/admin it. 257): none is a `claude/apps/android/*` slice,
+> all touch production logic outside `apps/android`, none in this routine's scope, none touched. Prior
+> iteration (`story-text-object-viewer-projection`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`924c8618`).
+>
+> **One pure param, threaded to a real consumer, mirroring the caption's own override contract.**
+> `StoryTextObjectProjection.resolveText`/`project` gain an optional `overrideLanguage` (default `null` —
+> the 2-arg call sites are byte-identical). The override is tried FIRST without removing the preference
+> chain, exactly as `StoryContentResolver` documents its own `overrideLanguage`: implemented by prepending
+> the override to the language list the existing exact-then-normalised loop already walks
+> (`listOf(override) + preferredLanguages`), so the override inherits the text-object resolver's own
+> case/region-insensitive matching (iOS `resolvedText` parity) and an override with no matching translation
+> falls straight through to the normal Prisme resolution. A blank/null override is inert. The empty-guard
+> moved from `preferredLanguages.isEmpty()` to the effective `languages.isEmpty()` so an override still
+> resolves for a reader with no configured chain.
+>
+> **Real wiring (not orphan logic)**: `emit()`'s override branch now re-projects the current slide's text
+> objects from the raw item — `item.storyEffects.textObjects.map { project(it, preferredLanguages, override) }`
+> — alongside the caption re-resolution, and the Compose `StoryTextObjectLayer` already reads
+> `slide.textObjects`, so a tapped language now repaints caption AND overlays together. Zero screen edit.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE, but pristine `android-37.0` HASH-ERRORED this image; the
+> four-edit copy→patch `android-37` + keep-both-dirs recipe worked.** `sdkmanager "platforms;android-35"…`
+> installed fine, `:feature:stories:help`/`testDebugUnitTest` died `Failed to find target with hash string
+> 'android-37'`. Applied the documented copy→patch (source.properties ApiLevel, package.xml `<api-level>` +
+> `path=`, build.prop both `sdk_full` keys) then kept BOTH `android-37` and pristine `android-37.0` — next
+> run green. (NOTES' "recipe is image-dependent, flips between runs" held again; pristine-first cost one run.)
+>
+> **Tests: +9** — 7 `StoryTextObjectProjectionTest` (override tried FIRST ahead of chain, override with no
+> match falls back to chain, override matched case/region-insensitively, override resolves with no
+> configured chain, blank override inert ≡ no override, neither override nor chain matches → original,
+> `project` resolves via override), +2 `StoryViewerViewModelTest` (toggling the override re-resolves the
+> current slide's text objects then a re-tap restores the automatic resolution; an override with no
+> text-object translation falls back to the reader's chain). **Mutation RED-proof (isolated, restored
+> after)**: neutering the override (`val languages = preferredLanguages`) failed EXACTLY the 5
+> override-dependent tests (4 pure + 1 viewmodel toggle) while the 4 fallback/inert tests
+> (no-match-falls-back, blank-inert, neither-matches, viewmodel-fallback) stayed green — genuine
+> discrimination on the FIXTURE, not the assertion; production restored clean, no stray `.bak`.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest) locally, **BUILD
+> SUCCESSFUL** (973 tasks, 4m). Reviewer PASS. Diff is `apps/android` only (2 prod files edited, +9 tests
+> across 2 files, tracking docs). Verdict: **PASS** — one pure optional param threaded to the one existing
+> consumer, reusing the resolver's own matching, mirroring the caption's documented override contract,
+> behavioural tests through the public API, no production logic outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) — the two remaining reader-side overrides now both honour Exploration (caption +
+> text objects); the on-demand story translation (`requestStoryTranslation`) already merges the pulled
+> translation into the raw item so text objects will pick it up on the next `emit()` — worth a scout to
+> confirm a pulled-then-displayed text object resolves. Otherwise the editor-side candidates resurface:
+> (a) the **clip-inspector editor reducer** (pure per-clip volume/fade/loop/background/delete derivation —
+> rich pure core, still needs a timeline/selection host surface, two iOS fields
+> `mutedVolumeMemento`/`isDuckingDisabled` not yet decoded on Android), or (b) the **timeline transport**
+> pure state (play/pause/scrub/zoom 0.25×–4×/mute, modelled on chat's `OverlayMediaTransport`, ephemeral
+> editor state no wire backing). Prefer the candidate with the cleanest pure core AND a real consumer
+> surface; scout read-only first.
+
 > On 2026-08-24 **a slide's text overlays render and animate on the viewer canvas** (slice
 > `story-text-object-viewer-projection`, feature-parity §E — the previous entry's `Next` pointer's
 > preferred candidate: the scout ranked the text-object viewer projection first, cleanest pure core with

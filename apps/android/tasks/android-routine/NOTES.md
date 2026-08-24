@@ -1754,3 +1754,29 @@ language, tries an exact map key then a normalized-key match. Port `base(code)` 
 ?: code.split('-','_').first().lowercase()` (the shared normalizer IS the Android mirror of `MeeshyUser.normalizeLanguageCode`),
 and apply it to BOTH the preferred code and the map key so `"fr-FR"`/`"FR"`/`"fra"` collapse onto `"fr"`. Exact-key-before-normalized
 preserves a `"pt-BR"` override over its `"pt"` sibling.
+
+## 2026-08-24 — SDK recipe flipped AGAIN: pristine `android-37.0` hash-errored, copy→patch `android-37` + keep-both worked (slice `story-text-object-exploration-override`)
+`dl.google.com` **200** again this run, so the local gate was available. But the cheapest path (pristine
+`android-37.0` alone) HASH-ERRORED here: `sdkmanager "platforms;android-35" "build-tools;35.0.0"
+"platform-tools"` installed fine, then `:feature:stories:testDebugUnitTest` died `Failed to find target
+with hash string 'android-37'` (AGP even re-materialised `android-37.0` on that first run, then still
+failed). The four-edit copy→patch fixed it: `cp -r android-37.0 android-37`, then patch
+`source.properties` `AndroidVersion.ApiLevel=37`, `package.xml` `<api-level>37</api-level>` + `path=
+"platforms;android-37"`, `build.prop` both `ro.build.version.sdk_full=37` and
+`ro.system.build.version.sdk_full=37`; KEEP the pristine `android-37.0` alongside the patched `android-37`
+(both dirs present). `./gradlew --stop` then re-run → BUILD SUCCESSFUL (973 tasks). Net: the "recipe is
+image-dependent and flips between runs" rule holds — try pristine first (cost one failed run here), fall
+back to copy→patch+keep-both when it hash-errors.
+
+## 2026-08-24 — the exploration override is a PREPEND, not a new resolver (slice `story-text-object-exploration-override`)
+When a reader-side view already resolves content through an ordered preferred-language chain, the ephemeral
+"Exploration" language pick is NOT a separate code path — it is the chain with the override prepended
+(`listOf(override) + preferredLanguages`). This mirrors `StoryContentResolver`'s documented contract
+("tried FIRST, without removing the preference chain") and gives the override, for free, whatever matching
+the base resolver already does (here the text-object resolver's exact-then-normalized per-language walk),
+plus automatic fall-through to normal Prisme resolution when the override has no matching translation. Keep
+the empty-guard on the EFFECTIVE list (`languages.isEmpty()`), not `preferredLanguages.isEmpty()`, so an
+override still resolves for a reader with no configured chain (e.g. anonymous). A blank/null override must
+be inert. Wire it by threading an optional `overrideLanguage` param (default `null`) so 2-arg call sites
+stay byte-identical, and re-project from the RAW item in `emit()`'s override branch — the projected view
+was built once with default prefs.
