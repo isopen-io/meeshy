@@ -149,17 +149,27 @@ struct AudioPlayerTranscriptionWordLimitTests {
     }
 }
 
-/// La limite vit dans le PLAN de tenue — une seule constante, lue par la
-/// carte comme par la rangée plate élue : deux coupes différentes pour la
-/// même transcription seraient deux lois.
+/// La coupe à trente mots vit dans le PLAN de tenue, et elle ne concerne
+/// QUE la rangée plate.
+///
+/// Arbitrage user 2026-08-24 : « la transcription en mode bulle est déjà ok
+/// comme ça ». La bulle a sa carte pour s'étendre — son chevron déplie en
+/// ligne à 255 caractères et reste. La rangée plate n'a pas cette place :
+/// elle coupe court et renvoie au plein écran. Deux surfaces, deux places
+/// disponibles, deux réponses — ce n'est pas la même question posée deux
+/// fois.
 @Suite("AudioPlayerChromePlan.transcriptionWordLimit")
 struct AudioPlayerChromeWordLimitTests {
 
-    @Test("la carte et la rangée élue coupent à la MÊME trentaine de mots")
-    func test_cardAndFocusedRow_shareTheSameLimit() {
-        #expect(AudioPlayerChromePlan.plan(for: .card).transcriptionWordLimit == AudioPlayerChromePlan.standardTranscriptionWordLimit)
+    @Test("seule la rangée plate élue coupe à la trentaine de mots")
+    func test_onlyTheFocusedFlatRow_carriesTheWordLimit() {
         #expect(AudioPlayerChromePlan.plan(for: .flatFocused).transcriptionWordLimit == AudioPlayerChromePlan.standardTranscriptionWordLimit)
         #expect(AudioPlayerChromePlan.standardTranscriptionWordLimit == 30)
+    }
+
+    @Test("la tenue CARTE ne coupe pas en mots — elle garde son dépliage en ligne")
+    func test_card_keepsItsInlineExpansion() {
+        #expect(AudioPlayerChromePlan.plan(for: .card).transcriptionWordLimit == nil)
     }
 
     @Test("la tenue minimale garde sa citation à 2 lignes — elle n'a pas de karaoké à couper")

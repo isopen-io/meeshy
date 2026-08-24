@@ -708,10 +708,14 @@ nonisolated public struct AudioPlayerChromePlan: Equatable, Sendable {
     /// bloc laisserait le surlignage courir hors champ.
     public let transcriptionWordLimit: Int?
 
-    /// La trentaine de mots — UNE constante, lue par la carte comme par la
-    /// rangée plate élue. Deux coupes différentes pour la même transcription
-    /// seraient deux lois : c'est ce que faisait l'ancien seuil à 255
-    /// caractères, propre à la carte et invisible de la rangée plate.
+    /// La trentaine de mots — coupe de la RANGÉE PLATE seule.
+    ///
+    /// La tenue carte (mode bulles) garde son dépliage en ligne à 255
+    /// caractères : il convient là où la bulle a déjà sa carte pour
+    /// s'étendre (arbitrage user 2026-08-24, « la transcription en mode
+    /// bulle est déjà ok comme ça »). C'est la rangée plate qui n'a pas
+    /// cette place — d'où le renvoi au plein écran plutôt qu'un dépliage
+    /// qui repousserait tout le fil.
     public static let standardTranscriptionWordLimit = 30
 
     public init(
@@ -746,8 +750,7 @@ nonisolated public struct AudioPlayerChromePlan: Equatable, Sendable {
                 showsRetranscribe: true,
                 showsTranscribeCTA: true,
                 rendersFlatTranscription: false,
-                flatTranscriptionLineLimit: nil,
-                transcriptionWordLimit: standardTranscriptionWordLimit
+                flatTranscriptionLineLimit: nil
             )
         case .flatMinimal:
             return AudioPlayerChromePlan(
@@ -890,6 +893,9 @@ public struct AudioPlayerView: View {
     /// and the moment the server-pushed transcription lands in `transcription`.
     /// Drives the shimmer skeleton in `transcriptionBlock`.
     @State private var isTranscribing = false
+    /// Tenue CARTE seule : la transcription longue est-elle dépliée ? Le
+    /// chevron la bascule sur place, la bulle ayant la place de s'étendre.
+    @State private var isTranscriptionExpanded = false
     /// Toggled in `onAppear` of the skeleton view to drive the pulse.
     @State private var transcriptionPulsePhase = false
     /// `true` pendant le drag de scrub sur la waveform. Publié via
@@ -1053,6 +1059,13 @@ public struct AudioPlayerView: View {
         displaySegments.map(\.text).joined(separator: " ")
     }
 
+    /// Seuil de la tenue CARTE — celui du chevron qui déplie en ligne. Sans
+    /// rapport avec `transcriptionWordLimit`, qui est la coupe de la rangée
+    /// plate : deux surfaces, deux places disponibles, deux réponses.
+    private var isLongTranscription: Bool {
+        fullTranscriptionText.count > 255
+    }
+
     // MARK: - Body
     public var body: some View {
         VStack(spacing: 0) {
@@ -1064,6 +1077,7 @@ public struct AudioPlayerView: View {
                     .transition(.opacity)
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTranscriptionExpanded)
         .onAppear {
             // CRITICAL: when an external engine is injected, the parent owns
             // `attachmentId` (it tracks which audio the shared engine is
@@ -1267,11 +1281,17 @@ public struct AudioPlayerView: View {
             VStack(spacing: 0) {
                 slotDivider
 
-                inlineFlowTranscription(segments: renderedSegments)
+                let segments = isLongTranscription && !isTranscriptionExpanded
+                    ? truncatedSegments
+                    : displaySegments
+
+                inlineFlowTranscription(segments: segments)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
 
-                seeMoreButton
+                if isLongTranscription {
+                    expandToggleButton
+                }
                 retranscribeButton
             }
             .padding(.bottom, 6)
@@ -1402,6 +1422,46 @@ public struct AudioPlayerView: View {
             .fill(color)
             .frame(width: width, height: 9)
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
+    }
+
+    // MARK: - Chevron de la tenue CARTE — déplie la transcription EN LIGNE
+
+    /// La bulle a la place de s'étendre : son chevron reste (arbitrage user
+    /// 2026-08-24). La rangée plate, elle, renvoie au plein écran
+    /// (`seeMoreButton` ci-dessous) — elle n'a pas cette place.
+    @ViewBuilder
+    private var expandToggleButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isTranscriptionExpanded.toggle()
+            }
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: isTranscriptionExpanded ? "chevron.up" : "chevron.down")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(isDark ? .white.opacity(0.35) : .black.opacity(0.25))
+                .frame(maxWidth: .infinity)
+                .frame(height: 20)
+        }
+    }
+
+    /// Coupe de la carte : 255 caractères, ellipse sur le segment coupé.
+    private var truncatedSegments: [TranscriptionDisplaySegment] {
+        var charCount = 0
+        var result: [TranscriptionDisplaySegment] = []
+        for segment in displaySegments {
+            charCount += segment.text.count
+            if charCount > 255 {
+                let overflow = charCount - 255
+                let trimmed = String(segment.text.dropLast(overflow))
+                if !trimmed.isEmpty {
+                    result.append(segment.replacingText(trimmed + "..."))
+                }
+                break
+            }
+            result.append(segment)
+        }
+        return result
     }
 
     // MARK: - « Voir plus » — la suite se lit EN PLEIN ÉCRAN
