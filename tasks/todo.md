@@ -69,7 +69,7 @@ la garde existait déjà.
 | gate | résultat |
 |---|---|
 | répertoire `notifications/` + `messaging/` | **32 suites, 619 témoins** (dont les deux suites de #3465) |
-| suite gateway complète | voir ci-dessous |
+| suite gateway complète | **850/850 suites, 19439 témoins** |
 | `services/gateway` `tsc --noEmit` | 0 erreur |
 | `packages/shared` build (`tsc`) | 0 erreur |
 | mutation « câblage des jumelles retiré » | **6 témoins tombent** |

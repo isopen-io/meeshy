@@ -105,7 +105,7 @@ C'est la règle de `services/gateway/CLAUDE.md` appliquée à son propre lot —
 
 | gate | résultat |
 |---|---|
-| suite gateway complète | voir § Revue de `tasks/todo.md` |
+| suite gateway complète | **850/850 suites, 19439 témoins** |
 | `services/gateway` `tsc --noEmit` | 0 erreur |
 | `packages/shared` build (`tsc`) | 0 erreur |
 | Swift | **non compilable ici** — gardé par la CI (`Build app (app + cibles de test)`) |
