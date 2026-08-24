@@ -107,6 +107,74 @@ reformate en entier. Revenue en arrière, insertion en **texte brut** : 235
 lignes, zéro suppression. **Un catalogue se modifie par insertion textuelle,
 jamais par re-sérialisation.**
 
+## Ce que la CI a attrapé — dont une erreur à moi, instructive
+
+Tête `66327dbd` : **7 échecs sur 7855**. Trois sont à moi, quatre sont de base.
+
+### Mes trois : j'ai CITÉ la doctrine puis violé son application
+
+```
+test_labels_followTheReadersLocale     — ("Step 1 of 8") is equal to ("Step 1 of 8")
+test_revisitHint_isLocalizedAndNonEmpty — ("Go back…") is equal to ("Go back…")
+test_positionLabel_arabicUsesItsOwnDigits — obtenu « Step ١ of ٨ »
+```
+
+Le troisième message est le diagnostic complet : **les chiffres sont bien
+arabo-indiens** (`١`, `٨` — `LocalizedNumber.exact` a fait son travail) mais le
+**gabarit est resté ANGLAIS**. Le catalogue n'a jamais été consulté en arabe.
+
+Cause : mes tests passaient **le `locale` seul**, en laissant `bundle: .main`.
+Or c'est le **bundle** qui choisit la TABLE de traduction ; le `locale`
+n'applique que ses règles à cette table. En CI (simulateur anglais), toute
+lecture retombait donc sur `en`.
+
+Ce piège est énoncé mot pour mot dans le doc-comment de
+`PostStatAccessibility` — et le doc-comment que j'ai écrit pour
+`positionLabel` **le cite**. J'ai donc recopié la doctrine dans le code testé
+et l'ai oubliée au banc d'essai.
+
+> **Connaître un piège ne protège pas d'y tomber : il faut l'appliquer AU BANC
+> DE TEST, pas seulement au code testé.** Le symptôme distinctif est un
+> `XCTAssertNotEqual` qui échoue en comparant deux chaînes IDENTIQUES : deux
+> locales différentes n'ont pas pu rendre le même texte, donc la table n'a pas
+> changé.
+
+Correctif : helper `inLocale(_:_:)` qui injecte `Bundle(path: <code>.lproj)` **et**
+`Locale(identifier:)`, exactement l'idiome de `PostStatAccessibilityTests`. Le
+test arabe gagne au passage une seconde assertion — le gabarit doit différer de
+l'anglais — sans laquelle il aurait continué à passer sur un texte anglais dès
+lors que les chiffres étaient bons.
+
+`LocalizedNumber.exact` ne consulte **aucun catalogue** : c'est du formatage
+Foundation pur, il ne prend qu'un `locale`. La suite le dit désormais
+explicitement, pour que la distinction ne se reperde pas.
+
+### Les quatre autres sont de BASE — dont une visible
+
+| test | verdict |
+|---|---|
+| `test_chaqueTraductionGardeLesMarqueursDeSaSource` | base |
+| `test_focusCardInsets_leaveTheSameVisibleMargin_topAndBottom` | base |
+| `test_row_padding` | base |
+| `test_versionFlag_sharesTheReactionsLine_flagFirst…` | base |
+
+Vérifié : mon diff ne touche aucun de ces fichiers, et la clé incriminée par le
+premier est **identique à `main`**. La 241i était verte à 0/7803 sur une base
+plus ancienne ; le dépôt compte maintenant 7855 tests — d'autres pistes ont
+livré entre-temps.
+
+**Et le premier signale un vrai défaut visible** :
+
+```
+bubble.joinNotice.joined  ·  fr → "\(presentation.primaryName) a rejoint la conversation"
+```
+
+Une **interpolation Swift a été gravée comme littéral** dans la valeur française
+du catalogue : les autres locales portent `%@`, le français porte le texte
+source. Un utilisateur francophone lit donc `\(presentation.primaryName) a
+rejoint la conversation`. Ce n'est pas à moi — signalé à la piste propriétaire
+plutôt qu'élargi ici.
+
 ## Bilan
 
 **1 fichier prod** · **5 clés i18n neuves × 7 locales** (aucune réutilisable :
