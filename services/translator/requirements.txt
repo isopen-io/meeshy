@@ -3,7 +3,7 @@ python-dotenv==1.2.3
 
 # Framework web
 fastapi==0.141.1
-uvicorn[standard]==0.52.3
+uvicorn[standard]==0.52.4
 pydantic-settings==2.15.0
 pydantic==2.13.4
 
