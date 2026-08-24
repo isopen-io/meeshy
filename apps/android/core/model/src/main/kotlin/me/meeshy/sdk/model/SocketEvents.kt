@@ -413,6 +413,20 @@ data class SocketStoryUnreactedData(
 )
 
 /**
+ * `story:translation-updated` — the gateway translated a story's on-canvas text
+ * overlay and broadcasts the new translations for the object at [textObjectIndex]
+ * (the flat index into the story's translatable texts). Mirror of iOS
+ * `SocketStoryTranslationUpdatedData`. [translations] is a language→text map;
+ * an empty map is a no-op the merge ignores.
+ */
+@Serializable
+data class SocketStoryTranslationUpdatedData(
+    val postId: String,
+    val textObjectIndex: Int,
+    val translations: Map<String, String> = emptyMap(),
+)
+
+/**
  * `status:unreacted` — a user removed their reaction from a mood status. Same shape as
  * [SocketStatusReactedData] (mirror of the shared `StatusUnreactedEventData`): it carries
  * no aggregate count, so the bar decrements the emoji by one (clamped ≥0, dropping the
