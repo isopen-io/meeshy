@@ -84,7 +84,7 @@ dans tout le dépôt, donc sa présence DÉCLARE la protection là où une base 
 |---|---|
 | `replyMentionBannerClock.test.ts` (nouveau) | **14 rouges contre `origin/main` / 19 verts après** |
 | suites voisines (`notifications/` + `messaging/` + éventail + `NotificationService`) | 36 suites, 709 témoins |
-| suite gateway complète | (voir ci-dessous) |
+| suite gateway complète (`bun run test:coverage`) | **859/859 suites, 19538 témoins**, exit 0 — couverture globale 95,47 % stmts / 89,60 % branches |
 | `services/gateway` `tsc --noEmit` | 0 erreur (code de retour lu SANS pipe — cf. la règle du pipefail) |
 | `packages/shared` `tsc --noEmit` | 0 erreur |
 | non-régression du cycle 125 bis (`replyMentionMediaPreview.test.ts`) | vert |
@@ -100,6 +100,7 @@ dans tout le dépôt, donc sa présence DÉCLARE la protection là où une base 
   piège armé, pas panne.
 - Aucun chemin de création n'écrit `isViewOnce` / `isBlurred` sur une
   `MessageAttachment` (cycle 125) — armé, pas atteignable.
+- Couverture des deux fichiers touchés : `messageNotificationFanOut.ts` 99,13 % · `NotificationService.ts` 94,63 % — inchangée ou en hausse.
 - **Le lot `regular` reste le seul à faire une relecture VIVANTE du message**
   (son gate d'éligibilité : supprimé / expiré / brûlé en vol). Réponse et mention
   tiennent leur échéance de l'appelant. Ce n'est pas une divergence de bannière

@@ -50,7 +50,7 @@ relais qui RECOPIE champ par champ est un inventaire à tenir à jour** —
 - [x] `tsc --noEmit` gateway et shared — 0 erreur (code de retour lu SANS pipe)
 - [x] suites voisines — 36 suites, 709 témoins
 - [x] non-régression du cycle 125 bis (`replyMentionMediaPreview.test.ts`) — verte
-- [x] suite gateway complète — voir le rapport
+- [x] suite gateway complète — **859/859 suites, 19538 témoins**, exit 0 (couverture 95,47 %)
 
 ## Revue
 
