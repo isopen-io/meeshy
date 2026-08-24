@@ -596,8 +596,8 @@ struct FocalRow: View {
                 // drapeaux avec le contenu — révéler la langue d'origine
                 // d'un message voilé fuirait une information. Les réactions,
                 // elles, restent hors voile (parité bulle historique).
-                if content.translation != nil, !content.isBlurred {
-                    originalLanguageFlag
+                if let translation = content.translation, !content.isBlurred {
+                    plainLanguageFlags(translation)
                 }
                 if showsReactions {
                     BubbleReactionsOverlay(
@@ -629,9 +629,32 @@ struct FocalRow: View {
     /// Les langues proposées sur la bordure : l'originale d'abord, puis les
     /// traductions disponibles, puis la langue AFFICHÉE (sans doublon,
     /// ordre du Prisme) — l'active porte l'anneau plein.
-    nonisolated static func focusFlagCodes(originalLangCode: String, availableFlags: [String], activeLangCode: String) -> [String] {
+    /// Les drapeaux proposés par une rangée, dédupliqués et PLAFONNÉS.
+    ///
+    /// Directive 2026-08-24 : « un message qui a plusieurs traductions
+    /// disponibles liste les 3 premiers drapeaux sans magnificence, et les 5
+    /// premiers en magnificence ». Sans plafond, un message très traduit
+    /// remplissait sa ligne de drapeaux jusqu'à la noyer.
+    ///
+    /// L'ORDRE porte le sens et survit à la coupe : l'original d'abord — c'est
+    /// la version que le message est —, puis les traductions disponibles, puis
+    /// la langue affichée. Cette dernière est ajoutée en queue et pourrait
+    /// donc tomber sous le plafond : elle est ramenée en tête de la coupe
+    /// quand elle n'y figure pas, car un drapeau ACTIF invisible serait un
+    /// état sans son témoin.
+    nonisolated static func focusFlagCodes(
+        originalLangCode: String,
+        availableFlags: [String],
+        activeLangCode: String,
+        limit: Int
+    ) -> [String] {
         var seen = Set<String>()
-        return ([originalLangCode] + availableFlags + [activeLangCode]).filter { seen.insert($0.lowercased()).inserted }
+        let ordered = ([originalLangCode] + availableFlags + [activeLangCode])
+            .filter { seen.insert($0.lowercased()).inserted }
+        guard limit > 0, ordered.count > limit else { return ordered }
+        let kept = Array(ordered.prefix(limit))
+        guard !kept.contains(where: { $0.lowercased() == activeLangCode.lowercased() }) else { return kept }
+        return [activeLangCode] + kept.dropLast()
     }
 
     private var focusAccent: Color { Color(hex: input.accentHex) }
@@ -683,7 +706,8 @@ struct FocalRow: View {
                     Self.focusFlagCodes(
                         originalLangCode: translation.originalLangCode,
                         availableFlags: translation.availableFlags,
-                        activeLangCode: translation.activeLangCode
+                        activeLangCode: translation.activeLangCode,
+                        limit: FocalMetrics.FocusStrip.flagLimitMagnified
                     ),
                     id: \.self
                 ) { code in
@@ -766,15 +790,22 @@ struct FocalRow: View {
     /// précis où le message est le plus regardé. Elle réemploie donc l'en-tête,
     /// à un gabarit plus grand, au lieu d'en réécrire une version amputée.
     ///
-    /// Le toucher mène aux CONDITIONS de l'auteur DANS CETTE CONVERSATION
-    /// (`ParticipantProfileSheet` : droits, lien d'entrée, coordonnées
-    /// consenties). Il ouvrait `onOpenProfile`, qui ne route vers cette fiche
-    /// que pour un visiteur SANS compte ; pour tous les autres il présentait
-    /// une page de profil, sans la moindre action possible depuis le fil.
+    /// **Elle n'a NI fond NI capsule** (directive 2026-08-24) : l'auteur se
+    /// pose HORS de la carte, juste au-dessus d'elle, exactement comme la
+    /// rangée Script affiche le sien. Seule la taille demeure agrandie. La
+    /// capsule opaque la faisait lire comme une pastille posée SUR la bulle,
+    /// alors que l'auteur n'appartient pas au message : il le précède.
+    ///
+    /// Le toucher passe par `onOpenProfile`, le routage que l'hôte tient
+    /// déjà : la feuille de PROFIL pour un compte, la fiche de participation
+    /// pour un visiteur qui n'en a pas — lui n'a pas d'autre identité que
+    /// celle-là. (Cette fiche s'ouvrait pleine d'identifiants bruts : ses 39
+    /// clés étaient au catalogue sans une seule valeur française. Réparé le
+    /// même jour, avec la garde qui manquait.)
     private var focusIdentityChip: some View {
         focusChip(height: FocalMetrics.FocusStrip.identityChipHeight) {
             FocalIdentityHeader(
-                isMe: content.isMe,
+            isMe: content.isMe,
                 senderDisplayName: input.senderDisplayName,
                 senderUsername: input.senderUsername,
                 senderAvatarURL: input.senderAvatarURL,
@@ -785,15 +816,15 @@ struct FocalRow: View {
                 senderMoodEmoji: input.senderMoodEmoji,
                 senderIsAnonymous: input.senderIsAnonymous,
                 profileUser: input.profileSheetUser,
-                isDark: input.isDark,
+            isDark: input.isDark,
                 agentStyle: AgentAuthoredStyle.resolve(
-                    isAgentAuthored: input.isAgentAuthored,
-                    isAgentGrammarEnabled: input.showsAgentGrammar
+                isAgentAuthored: input.isAgentAuthored,
+                isAgentGrammarEnabled: input.showsAgentGrammar
                 ),
+                onOpenProfile: actions.onOpenProfile,
                 avatarDiameter: FocalMetrics.FocusStrip.identityAvatarSize,
                 nameSize: FocalMetrics.FocusStrip.identityNameSize,
-                fillsWidth: false,
-                onTap: { actions.onOpenParticipantProfile?(input.senderId) }
+                fillsWidth: false
             )
             .padding(.leading, -3)
         }
@@ -824,6 +855,40 @@ struct FocalRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(headerTimeString)
+    }
+
+    /// Les drapeaux d'une rangée ORDINAIRE — trois au plus.
+    ///
+    /// Elle n'en montrait qu'UN, le basculeur original/traduction. Un message
+    /// disponible en six langues n'en laissait donc rien paraître hors
+    /// magnificence : il fallait l'élire pour découvrir qu'il y avait à
+    /// choisir. Toucher un drapeau affiche cette langue — la même action que
+    /// sur la ligne du message magnifié, jamais une seconde grammaire.
+    @ViewBuilder
+    private func plainLanguageFlags(_ translation: BubbleContent.Translation) -> some View {
+        HStack(spacing: 4) {
+            ForEach(
+                Self.focusFlagCodes(
+                    originalLangCode: translation.originalLangCode,
+                    availableFlags: translation.availableFlags,
+                    activeLangCode: translation.activeLangCode,
+                    limit: FocalMetrics.FocusStrip.flagLimitPlain
+                ),
+                id: \.self
+            ) { code in
+                let isActive = code.lowercased() == translation.activeLangCode.lowercased()
+                Button {
+                    actions.onSetActiveDisplayLanguage?(content.messageId, code)
+                } label: {
+                    Text(flagEmoji(code))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize))
+                        .opacity(isActive ? 1 : 0.55)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(LanguageData.info(for: code.lowercased())?.name ?? code)
+            }
+        }
     }
 
     @ViewBuilder

@@ -132,10 +132,15 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
 
     func test_focusFlagCodes_putTheOriginalFirst_thenAvailable_thenTheDisplayedOne_neverRepeated() {
         XCTAssertEqual(
-            FocalRow.focusFlagCodes(originalLangCode: "en", availableFlags: ["fr", "EN", "es"], activeLangCode: "fr"),
+            FocalRow.focusFlagCodes(originalLangCode: "en", availableFlags: ["fr", "EN", "es"],
+                                    activeLangCode: "fr", limit: FocalMetrics.FocusStrip.flagLimitMagnified),
             ["en", "fr", "es"]
         )
-        XCTAssertEqual(FocalRow.focusFlagCodes(originalLangCode: "fr", availableFlags: [], activeLangCode: "en"), ["fr", "en"])
+        XCTAssertEqual(
+            FocalRow.focusFlagCodes(originalLangCode: "fr", availableFlags: [],
+                                    activeLangCode: "en", limit: FocalMetrics.FocusStrip.flagLimitMagnified),
+            ["fr", "en"]
+        )
     }
 
     /// L'heure permanente a suivi la date : elle vit dans la méta du bas, et
@@ -232,33 +237,41 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         XCTAssertTrue(body.contains("senderIsAnonymous: input.senderIsAnonymous"), "le fantôme d'un compte anonyme")
     }
 
-    /// **Le toucher mène aux CONDITIONS de l'auteur dans CETTE conversation.**
-    /// Il ouvrait `onOpenProfile`, qui ne route vers la fiche de participation
-    /// que pour un visiteur SANS compte ; pour tous les autres il présentait
-    /// une page de profil — sans droits, sans lien d'entrée, sans la moindre
-    /// action possible depuis la conversation.
-    func test_theMagnifiedIdentity_opensTheAuthorsStandingHere_neverAProfilePage() throws {
+    /// **Le toucher mène au PROFIL** (directive 2026-08-24), par le routage
+    /// que l'hôte tient déjà : feuille de profil pour un compte, fiche de
+    /// participation pour un visiteur qui n'en a pas — lui n'a pas d'autre
+    /// identité que celle-là.
+    func test_theMagnifiedIdentity_opensTheProfile_throughTheHostsExistingRouting() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         let chip = try XCTUnwrap(row.range(of: "private var focusIdentityChip: some View {"))
         let body = String(row[chip.lowerBound...].prefix(1400))
-        XCTAssertTrue(body.contains("actions.onOpenParticipantProfile?(input.senderId)"), "la fiche de participation")
-        XCTAssertFalse(body.contains("actions.onOpenProfile?"), "plus de page de profil depuis la bulle magnifiée")
+        XCTAssertTrue(body.contains("onOpenProfile: actions.onOpenProfile"), "le routage de l'hôte, pas un second")
     }
 
-    func test_theGuardAbove_wouldCatchTheProfilePageComingBack() {
-        XCTAssertTrue("actions.onOpenProfile?(input.profileSheetUser)".contains("actions.onOpenProfile?"))
-    }
-
-    /// « En plus agrandi simplement » : l'identité du message magnifié est la
-    /// seule chip à dépasser le gabarit commun.
-    func test_theMagnifiedIdentity_isLargerThanEveryOtherChip() {
-        XCTAssertGreaterThan(FocalMetrics.FocusStrip.identityChipHeight, FocalMetrics.FocusStrip.chipHeight)
-        XCTAssertGreaterThan(FocalMetrics.FocusStrip.identityAvatarSize, FocalMetrics.Avatar.size)
+    /// **L'identité revient EN BORDURE** (directive 2026-08-24, seconde
+    /// passe) : sa chip est de nouveau posée à cheval sur la ligne haute de la
+    /// carte, comme celles de la ligne basse. Elle avait été sortie de la
+    /// carte le matin même ; c'est le placement d'avant qui est retenu.
+    @MainActor
+    func test_theMagnifiedIdentity_sitsOnTheCardsEdge_inItsChip() throws {
+        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let chip = try XCTUnwrap(row.range(of: "private var focusIdentityChip: some View {"))
+        let body = String(row[chip.lowerBound...].prefix(1500))
+        XCTAssertTrue(body.contains("focusChip(height: FocalMetrics.FocusStrip.identityChipHeight)"), "sa chip, à son gabarit")
+        XCTAssertTrue(body.contains("FocalIdentityHeader("), "et l'en-tête complet dedans")
         XCTAssertEqual(
             FocalMetrics.FocusStrip.identityOverhang,
             FocalMetrics.FocusStrip.identityChipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin,
-            "le centre de la chip tombe sur la ligne de la carte — sinon elle flotte"
+            "son centre tombe SUR la ligne de la carte"
         )
+    }
+
+    /// « Juste la taille qui est maintenue » : l'auteur du message magnifié
+    /// reste plus grand que celui d'une rangée ordinaire.
+    @MainActor
+    func test_theMagnifiedIdentity_keepsItsLargerSize() {
+        XCTAssertGreaterThan(FocalMetrics.FocusStrip.identityAvatarSize, FocalMetrics.Avatar.size)
+        XCTAssertGreaterThan(FocalMetrics.FocusStrip.identityNameSize, FocalMetrics.Name.size)
     }
 
     /// L'en-tête reste utilisable là où il vivait : hors focus, il remplit sa
@@ -267,6 +280,166 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         let header = try normalized("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
         XCTAssertTrue(header.contains("var fillsWidth: Bool = true"), "par défaut il remplit sa ligne")
         XCTAssertTrue(header.contains("if let onTap { onTap() } else { onOpenProfile?(profileUser) }"),
-                      "sans destination explicite, le comportement historique tient")
+                      "sans destination explicite, le routage de l'hôte tient")
+    }
+
+    // MARK: - Quand la magnificence s'arme (directive 2026-08-24)
+
+    /// Le premier pixel défilé ne magnifie plus rien : un pouce qui ripe, un
+    /// rebond, un ajustement de deux points posaient la carte et faisaient
+    /// apparaître les chips.
+    func test_magnification_doesNotArmOnTheFirstPixelScrolled() {
+        XCTAssertFalse(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: 1_000, now: 1_050, velocity: 40)
+        )
+    }
+
+    /// Première porte : un défilement franc dit dès le premier événement qu'on
+    /// cherche quelque chose.
+    func test_magnification_armsImmediately_onHighVelocity() {
+        XCTAssertTrue(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: 1_000, now: 1_000,
+                velocity: FocalMagnificationLaw.highVelocityThreshold)
+        )
+        XCTAssertTrue(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: nil, now: 1_000,
+                velocity: -FocalMagnificationLaw.highVelocityThreshold),
+            "le sens du geste n'entre pas en compte — seule la vitesse"
+        )
+    }
+
+    /// Seconde porte : lent, mais SOUTENU. La borne est inclusive à
+    /// `sustainedMs` pile, et pas une milliseconde avant.
+    func test_magnification_armsOnSustainedScroll_atTheBoundaryAndNotBefore() {
+        let start = 10_000.0
+        let ms = FocalMagnificationLaw.sustainedScrollMs
+        XCTAssertFalse(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: start, now: start + ms - 1, velocity: 10)
+        )
+        XCTAssertTrue(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: start, now: start + ms, velocity: 10)
+        )
+    }
+
+    /// **Une fois armée, elle le reste** : désarmer au moindre repos ferait
+    /// clignoter la carte à chaque pause — or c'est à l'arrêt qu'on lit le
+    /// message élu.
+    func test_magnification_staysArmed_onceItHasBeen() {
+        XCTAssertTrue(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: true, scrollStartedAt: nil, now: 99_999, velocity: 0)
+        )
+    }
+
+    /// Au repos, sans geste et sans historique, rien ne s'arme.
+    func test_magnification_staysQuiet_whenNothingIsScrolling() {
+        XCTAssertFalse(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: nil, now: 5_000, velocity: 0)
+        )
+    }
+
+    /// Les deux seuils sont NOMMÉS — ils passeront aux préférences
+    /// utilisateur, et il ne doit y avoir qu'un endroit à brancher.
+    func test_magnificationThresholds_areNamed_forTheComingPreference() {
+        XCTAssertEqual(FocalMagnificationLaw.sustainedScrollMs, 4000)
+        XCTAssertGreaterThan(FocalMagnificationLaw.highVelocityThreshold, 0)
+        XCTAssertTrue(
+            FocalMagnificationLaw.isArmed(
+                alreadyArmed: false, scrollStartedAt: 0, now: 900, velocity: 0,
+                sustainedMs: 800, velocityThreshold: 5_000),
+            "les seuils s'injectent — c'est par là que la préférence entrera"
+        )
+    }
+
+    /// La peau doit CONSULTER la loi, pas la réimplémenter : sans élection,
+    /// pas de carte ni de chips.
+    func test_theController_asksTheLaw_beforeElecting() throws {
+        let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        XCTAssertTrue(controller.contains("FocalMagnificationLaw.isArmed("), "la loi est consultée")
+        XCTAssertTrue(controller.contains("focalMagnificationArmed"), "son verdict est retenu")
+        // La garde a suivi l'implémentation : l'élection n'est plus protégée
+        // SUR SA LIGNE mais par un `guard` en amont, qui suspend TOUTE la
+        // passe — poses comprises (directive 2026-08-24, seconde passe). Le
+        // témoin de ce guard vit dans
+        // `test_withoutArming_theRowsStayFlat_asInScript`.
+        XCTAssertTrue(
+            controller.contains("guard focalMagnificationArmed else {"),
+            "sans armement, la passe entière s'arrête — sinon la carte reparaît au premier pixel"
+        )
+    }
+
+    // MARK: - Directive 2026-08-24 (seconde passe)
+
+    /// **Trois drapeaux sans magnificence, cinq avec.** Une rangée ordinaire
+    /// n'en montrait qu'UN : un message disponible en six langues ne laissait
+    /// rien paraître tant qu'il n'était pas élu.
+    func test_flagCodes_areCappedAtThreePlain_andFiveMagnified() {
+        let many = ["fr", "es", "de", "it", "pt", "ar"]
+        XCTAssertEqual(
+            FocalRow.focusFlagCodes(originalLangCode: "en", availableFlags: many, activeLangCode: "en",
+                                    limit: FocalMetrics.FocusStrip.flagLimitPlain).count,
+            3
+        )
+        XCTAssertEqual(
+            FocalRow.focusFlagCodes(originalLangCode: "en", availableFlags: many, activeLangCode: "en",
+                                    limit: FocalMetrics.FocusStrip.flagLimitMagnified).count,
+            5
+        )
+        XCTAssertEqual(FocalMetrics.FocusStrip.flagLimitPlain, 3)
+        XCTAssertEqual(FocalMetrics.FocusStrip.flagLimitMagnified, 5)
+    }
+
+    /// La coupe ne perd JAMAIS le drapeau affiché : un état actif dont le
+    /// témoin a disparu serait pire que pas de témoin du tout.
+    func test_theActiveFlag_survivesTheCap_evenWhenItRanksLast() {
+        let codes = FocalRow.focusFlagCodes(
+            originalLangCode: "en", availableFlags: ["fr", "es", "de", "it"], activeLangCode: "ar", limit: 3)
+        XCTAssertEqual(codes.count, 3)
+        XCTAssertTrue(codes.contains("ar"), "la langue affichée reste montrée")
+        XCTAssertEqual(codes.first, "ar", "et elle passe en tête de la coupe")
+    }
+
+    /// Sous le plafond, rien ne bouge : l'ordre porte le sens — l'original
+    /// d'abord, puis les traductions.
+    func test_belowTheCap_theOrderIsUntouched() {
+        XCTAssertEqual(
+            FocalRow.focusFlagCodes(originalLangCode: "en", availableFlags: ["fr"], activeLangCode: "fr", limit: 5),
+            ["en", "fr"]
+        )
+    }
+
+    /// **Tant que la magnificence n'est pas armée, le fil défile comme en
+    /// Script** : ni réduction, ni compaction, ni élection. J'avais d'abord
+    /// retardé la seule élection en laissant le relief s'appliquer — c'était
+    /// la moitié de la règle.
+    func test_withoutArming_theRowsStayFlat_asInScript() throws {
+        let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        XCTAssertTrue(controller.contains("guard focalMagnificationArmed else {"), "la passe s'arrête AVANT les poses")
+        XCTAssertTrue(
+            controller.contains("for cell in cells { FocalScrollPerspective.reset(cell.contentView.layer) }"),
+            "et remet les cellules à plat, sinon une pose héritée resterait figée"
+        )
+    }
+
+    func test_theGuardAbove_wouldCatchThePosesBeingAppliedUnarmed() {
+        let unguarded = "let poses = FocalScrollPerspective.poses(cells: geometries, focusY: focusY)"
+        XCTAssertFalse(unguarded.contains("guard focalMagnificationArmed else {"))
+    }
+
+    /// « Moins d'espace entre les messages d'un groupe » — et la respiration
+    /// passe à la FRONTIÈRE des groupes, qui doit rester lisible.
+    func test_groupSpacing_isTighterInside_thanBetweenGroups() {
+        XCTAssertLessThanOrEqual(FocalMetrics.Row.paddingVertical, 3)
+        XCTAssertGreaterThan(
+            FocalMetrics.Row.groupTopPadding,
+            FocalMetrics.Row.paddingVertical,
+            "un groupe se distingue du suivant par plus d'air qu'il n'en met en lui-même"
+        )
     }
 }
