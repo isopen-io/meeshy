@@ -214,4 +214,59 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - Directive 2026-08-24 — l'identité de la bulle magnifiée
+
+    /// La chip d'identité du focus recomposait une identité PAUVRE : un
+    /// avatar et un nom, rien d'autre. La présence, le mood, l'anneau de
+    /// story et le fantôme des visiteurs sans compte — tout ce que
+    /// `FocalIdentityHeader` sait déjà porter — s'évaporaient au moment
+    /// précis où le message est le plus regardé.
+    func test_theMagnifiedIdentity_reusesTheHeader_ratherThanRecomposingAPoorerOne() throws {
+        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let chip = try XCTUnwrap(row.range(of: "private var focusIdentityChip: some View {"))
+        let body = String(row[chip.lowerBound...].prefix(1400))
+        XCTAssertTrue(body.contains("FocalIdentityHeader("), "la chip réutilise l'en-tête, elle ne le réécrit pas")
+        XCTAssertTrue(body.contains("senderPresence: input.senderPresence"), "présence")
+        XCTAssertTrue(body.contains("senderMoodEmoji: input.senderMoodEmoji"), "mood")
+        XCTAssertTrue(body.contains("senderIsAnonymous: input.senderIsAnonymous"), "le fantôme d'un compte anonyme")
+    }
+
+    /// **Le toucher mène aux CONDITIONS de l'auteur dans CETTE conversation.**
+    /// Il ouvrait `onOpenProfile`, qui ne route vers la fiche de participation
+    /// que pour un visiteur SANS compte ; pour tous les autres il présentait
+    /// une page de profil — sans droits, sans lien d'entrée, sans la moindre
+    /// action possible depuis la conversation.
+    func test_theMagnifiedIdentity_opensTheAuthorsStandingHere_neverAProfilePage() throws {
+        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let chip = try XCTUnwrap(row.range(of: "private var focusIdentityChip: some View {"))
+        let body = String(row[chip.lowerBound...].prefix(1400))
+        XCTAssertTrue(body.contains("actions.onOpenParticipantProfile?(input.senderId)"), "la fiche de participation")
+        XCTAssertFalse(body.contains("actions.onOpenProfile?"), "plus de page de profil depuis la bulle magnifiée")
+    }
+
+    func test_theGuardAbove_wouldCatchTheProfilePageComingBack() {
+        XCTAssertTrue("actions.onOpenProfile?(input.profileSheetUser)".contains("actions.onOpenProfile?"))
+    }
+
+    /// « En plus agrandi simplement » : l'identité du message magnifié est la
+    /// seule chip à dépasser le gabarit commun.
+    func test_theMagnifiedIdentity_isLargerThanEveryOtherChip() {
+        XCTAssertGreaterThan(FocalMetrics.FocusStrip.identityChipHeight, FocalMetrics.FocusStrip.chipHeight)
+        XCTAssertGreaterThan(FocalMetrics.FocusStrip.identityAvatarSize, FocalMetrics.Avatar.size)
+        XCTAssertEqual(
+            FocalMetrics.FocusStrip.identityOverhang,
+            FocalMetrics.FocusStrip.identityChipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin,
+            "le centre de la chip tombe sur la ligne de la carte — sinon elle flotte"
+        )
+    }
+
+    /// L'en-tête reste utilisable là où il vivait : hors focus, il remplit sa
+    /// ligne et ouvre le profil. Les deux emplois ne doivent pas se confondre.
+    func test_theHeader_keepsItsRowBehaviour_whereItAlreadyLived() throws {
+        let header = try normalized("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
+        XCTAssertTrue(header.contains("var fillsWidth: Bool = true"), "par défaut il remplit sa ligne")
+        XCTAssertTrue(header.contains("if let onTap { onTap() } else { onOpenProfile?(profileUser) }"),
+                      "sans destination explicite, le comportement historique tient")
+    }
 }

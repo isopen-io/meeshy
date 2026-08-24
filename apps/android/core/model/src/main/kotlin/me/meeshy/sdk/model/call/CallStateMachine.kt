@@ -53,6 +53,12 @@ object CallStateMachine {
 
     private fun reduceOffering(event: CallEvent): CallState = when (event) {
         CallEvent.RemoteAnswer -> CallState.Connecting
+        // The gateway deliberately keeps the ring timer armed after the callee
+        // early-joins the call room (`call:join` handler in
+        // CallEventsHandler.ts) — the SDP offer must flow during the ring, so
+        // a real `call:missed`/RingTimeout can legitimately arrive while local
+        // state is still Offering. Mirrors reduceRinging's own RingTimeout arm.
+        CallEvent.RingTimeout -> CallState.Ended(CallEndReason.Missed)
         else -> terminal(event) ?: CallState.Offering
     }
 

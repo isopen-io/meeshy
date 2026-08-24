@@ -50,6 +50,28 @@ public enum DeliveryStatusResolver {
     ///     currently leaves these null (the cursor-based read model no longer
     ///     computes them), so at cold-start the per-message counts are
     ///     authoritative and the markers carry only locally-confirmed state.
+
+    /// **« On ne lit pas ce qu'on n'a pas reçu »** — l'invariant logique qui
+    /// lie les deux compteurs.
+    ///
+    /// Le gateway les servait par des chemins ASYMÉTRIQUES : la date de lecture
+    /// acceptait un repli sur le curseur, celle de réception non. Un
+    /// participant qui marque LU sans avoir jamais émis d'accusé de livraison
+    /// comptait donc comme lecteur sans compter comme destinataire — d'où
+    /// `Distribué 0` en face de `Lu 2` sur un même message (capture user
+    /// 2026-08-24), et une bulle bloquée à UNE coche : le palier « lu » exige
+    /// `readCount >= recipientCount`, et celui juste en dessous réclamait un
+    /// `deliveredCount` que personne n'avait incrémenté.
+    ///
+    /// La source est corrigée (`resolveReceivedAt`, gateway). Ce plancher n'est
+    /// pas un pansement posé dessus : un cache local, un événement partiel ou un
+    /// serveur plus ancien peuvent encore tendre `delivered < read`, et
+    /// l'indicateur doit rester juste. Il ne GONFLE rien — il ne fait jamais
+    /// dépasser le nombre de lecteurs réellement observés.
+    static func effectiveDeliveredCount(deliveredCount: Int, readCount: Int) -> Int {
+        max(deliveredCount, readCount)
+    }
+
     public static func resolve(
         status: MeeshyMessage.DeliveryStatus,
         deliveredCount: Int,
@@ -94,7 +116,8 @@ public enum DeliveryStatusResolver {
         // unambiguous "all" markers first (count-blind live path), then the
         // per-message counters (authoritative at cold-start).
         if readByAllAt != nil || readCount >= recipientCount { return degradeRead(.read) }
-        if deliveredToAllAt != nil || deliveredCount >= recipientCount { return .delivered }
+        let delivered = effectiveDeliveredCount(deliveredCount: deliveredCount, readCount: readCount)
+        if deliveredToAllAt != nil || delivered >= recipientCount { return .delivered }
         return .sent
     }
 
@@ -116,7 +139,8 @@ public enum DeliveryStatusResolver {
             return .sent
         }
         if readCount >= recipientCount { return .read }
-        if deliveredCount >= recipientCount { return .delivered }
+        let delivered = effectiveDeliveredCount(deliveredCount: deliveredCount, readCount: readCount)
+        if delivered >= recipientCount { return .delivered }
         return .sent
     }
 }

@@ -13,6 +13,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.PostViewersResponse
 import me.meeshy.sdk.model.SharedPlace
@@ -414,6 +415,24 @@ class PostRepository @Inject constructor(
     suspend fun requestOnDemandTranslation(postId: String, targetLanguage: String): Boolean {
         val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
         val merged = translatePost(post, targetLanguage) ?: return false
+        _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
+        return true
+    }
+
+    /**
+     * Realtime translation (Prisme, push side): the gateway translated a post server-side
+     * and broadcast the finished [entry] over `post:translation-updated`. Folds it into the
+     * in-memory feed cache via [PostTranslationMerge] so an open card re-renders in the
+     * reader's preferred language the instant it lands — the push sibling of
+     * [requestOnDemandTranslation], minus the translator call (the text is already done).
+     *
+     * Returns `true` only when the cache actually changed. Inert (`false`, nothing stored)
+     * when the post is not in the cache or the merge is a no-op (blank language, blank text,
+     * or the identical entry already present).
+     */
+    fun applyTranslationUpdate(postId: String, language: String, entry: ApiPostTranslationEntry): Boolean {
+        val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
+        val merged = PostTranslationMerge.mergeTranslation(post, language, entry) ?: return false
         _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
         return true
     }

@@ -5,6 +5,29 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-24 — the caption sibling landed exactly where the last note predicted; reuse an existing model type as a socket-payload field (slice `post-translation-updated-realtime-merge`)
+The prior note ended "Caption has the same shape (`post:translation-updated`), a likely next Android viewer
+gap." It was — the scout confirmed iOS wires it (`FeedViewModel.applyPostTranslation`), the gateway broadcasts
+it, Android had no handler. Shipped as the POST caption sibling of the story overlay merge.
+
+Two reusable moves from this slice: **(a) when a socket payload's object field has the SAME shape as an
+existing `@Serializable` model, decode straight into that type — don't mint a bespoke payload struct.** The
+`post:translation-updated` `translation` object is `{text, translationModel?, confidenceScore?, createdAt?}`,
+byte-identical to `ApiPostTranslationEntry`, so `SocketPostTranslationUpdatedData.translation:
+ApiPostTranslationEntry`. Fewer types, and the merge takes the entry directly. **(b) A push-side merge must
+PRESERVE the metadata the pull-side string merge drops.** The existing `PostTranslationMerge.mergeTranslation(
+post, lang, text:String)` stored `ApiPostTranslationEntry(text=…)` only — fine for the on-demand pull (the
+translator returns a bare string), but the PUSH carries model/confidence. Added an entry overload; a
+metadata-only change is deliberately NOT a no-op (else richer server data silently vanishes). Test that with a
+"same text, different model → stored" case — it's the witness that the overload isn't just the string one.
+
+**No override forced on a realtime push** (same as the story slice, same as iOS): merging into `_feedCache` is
+enough; the projection's preferred-language chain surfaces it iff the language is in the reader's prisme. An
+override is for an EXPLICIT user tap (`requestOnDemandTranslation` sets it), never for a server push.
+
+**SDK bootstrap this run: `dl.google.com` 200; pristine `sdkmanager --channel=3 "platforms;android-37.0"`
+alone worked** (AGP 8.13.0 mapped compileSdk 37 → android-37.0 first `./gradlew`). "Try pristine first" held.
+
 ## 2026-08-24 — a Prisme resolver lives SERVER-SIDE too: realtime pushed translations, not just on-demand pulls (slice `story-text-object-translation-realtime-merge`)
 When a §E "Next" pointer says "X translates only the caption on demand — scout iOS parity before building an
 N-call overlay pull", the scout's real question is **"where does the OTHER content get its translation from?"**
