@@ -167,7 +167,16 @@ nonisolated enum FocalScrollPerspective {
     /// tête de groupe, `Row.groupTopPadding` de plus en haut : la carte
     /// mange ces rembourrages asymétriques pour encadrer le message avec
     /// les mêmes espaces qu'en Script (directive user 2026-08-21).
-    static let focusCardInnerMargin: CGFloat = 4
+    ///
+    /// 4 → 9 le 2026-08-24 : « dans la bulle, l'espace entre le contenu et les
+    /// bords doit être exactement le même que pour le premier message d'un
+    /// groupe ; les messages suivants sont collés aux bordures ». La cause de
+    /// l'écart est ailleurs — en tête de groupe, `FocalIdentityHeader` occupe
+    /// sa hauteur réservée (`Focus.avatarSize`) même effacé en focus, et la
+    /// carte l'englobe : elle paraît aérée en haut. Une rangée de SUITE n'a
+    /// pas cet en-tête, son contenu commence au bord. Élargir la marge donne
+    /// à toutes la respiration que seule la tête de groupe avait par accident.
+    static let focusCardInnerMargin: CGFloat = 9
     /// Teintes de la carte et de ses chips (fond SwiftUI de la rangée en
     /// focus) — nommées ici, dans `Core/`, parce que le garde des littéraux
     /// de loi (`scripts/check-law-literals.sh`) interdit `0.45`/`0.40`/`0.35`

@@ -2961,14 +2961,24 @@ extension MessageListViewController {
             geometries.append(geometry)
             cellById[geometry.id] = cell
         }
+        // **Tant que la magnificence n'est pas armée, le fil défile comme en
+        // Script** (directive 2026-08-24 : « si la magnificence n'est pas
+        // activée, la réduction et l'effet loop non plus ; le scroll se fait
+        // naturellement en Script jusqu'à activation, où on considère TOUTES
+        // les fonctions du mode Focal »). J'avais d'abord retardé la seule
+        // élection en laissant le relief s'appliquer — c'était la moitié de la
+        // règle : la réduction et la compaction sont, elles aussi, des
+        // fonctions du mode, pas un décor neutre.
+        guard focalMagnificationArmed else {
+            for cell in cells { FocalScrollPerspective.reset(cell.contentView.layer) }
+            if focalFocusedLocalId != nil {
+                focalFocusedLocalId = nil
+                syncFocalFocusDetails()
+            }
+            return
+        }
         let poses = FocalScrollPerspective.poses(cells: geometries, focusY: focusY, reduceMotion: reduceMotion)
-        // Sans armement, AUCUN élu : pas de carte, pas de chips, pas de détails
-        // — la rangée reste telle qu'en Script. La perspective de défilement,
-        // elle, continue de s'appliquer : c'est la mise en avant d'UN message
-        // que la loi retarde, pas le relief de la liste.
-        let focused = focalMagnificationArmed
-            ? FocalScrollPerspective.focusedId(cells: geometries, focusY: focusY, currentId: focalFocusedLocalId)
-            : nil
+        let focused = FocalScrollPerspective.focusedId(cells: geometries, focusY: focusY, currentId: focalFocusedLocalId)
         let electionChanged = focalFocusedLocalId != focused
         focalFocusedLocalId = focused
         // Les détails du message en focus apparaissent AVEC la carte, pas au
