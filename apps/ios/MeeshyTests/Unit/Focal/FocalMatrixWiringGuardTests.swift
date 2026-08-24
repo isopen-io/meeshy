@@ -122,9 +122,13 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             return XCTFail("`flagAndReactionsRow` introuvable — drapeau + réactions vivent sur LA MÊME ligne, en bas de la rangée")
         }
         let rowBody = String(code[rowStart.lowerBound...].prefix(1400))
-        guard let flagPos = rowBody.range(of: "originalLanguageFlag"),
+        // Le drapeau UNIQUE est devenu une BANDE (3 au plus hors magnificence,
+        // directive 2026-08-24) : le jeton rendu est `plainLanguageFlags`.
+        // L'invariant, lui, ne bouge pas — les drapeaux viennent EN PREMIER,
+        // sur la même HStack que les réactions.
+        guard let flagPos = rowBody.range(of: "plainLanguageFlags("),
               let reactionsPos = rowBody.range(of: "BubbleReactionsOverlay(")
-        else { return XCTFail("drapeau ou réactions RENDUES absents de flagAndReactionsRow (le prédicat `.isMounted(` ne compte pas — il ne rend rien)") }
+        else { return XCTFail("drapeaux ou réactions RENDUS absents de flagAndReactionsRow (le prédicat `.isMounted(` ne compte pas — il ne rend rien)") }
         XCTAssertTrue(
             flagPos.lowerBound < reactionsPos.lowerBound,
             "le drapeau vient EN PREMIER, avant les réactions, sur la même ligne (HStack) — user 2026-08-18"
