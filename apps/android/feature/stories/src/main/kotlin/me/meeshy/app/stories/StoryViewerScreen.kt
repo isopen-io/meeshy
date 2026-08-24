@@ -78,6 +78,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -105,6 +106,9 @@ private val SWIPE_VERTICAL_THRESHOLD = 120.dp
 
 /** Foreground media renders at this fraction of the canvas width, scaled by the object's own [StoryForegroundMediaView.scale]. */
 private const val FOREGROUND_WIDTH_FRACTION = 0.45f
+
+/** Wire `StoryTextObject.fontSize` is authored in this 1080-referential design space (iOS parity); the on-screen size scales it by the canvas width. */
+private const val TEXT_DESIGN_CANVAS_WIDTH = 1080f
 
 /**
  * Minimal but real story viewer: segmented progress, tap-to-advance/dismiss,
@@ -404,6 +408,15 @@ fun StoryViewerScreen(
             key(foreground.url) {
                 StoryForegroundLayer(
                     media = foreground,
+                    playheadSeconds = progress.value * SLIDE_DURATION_MS / 1000f,
+                )
+            }
+        }
+
+        slide?.textObjects?.forEach { textObject ->
+            key(textObject.id) {
+                StoryTextObjectLayer(
+                    textObject = textObject,
                     playheadSeconds = progress.value * SLIDE_DURATION_MS / 1000f,
                 )
             }
@@ -813,5 +826,61 @@ private fun StoryForegroundLayer(
                 modifier = layerModifier,
             )
         }
+    }
+}
+
+/**
+ * A text overlay positioned at [StoryTextObjectView.x]/[y] (canvas-normalised, 0..1)
+ * as its center anchor. The [playheadSeconds] clock drives the pure
+ * [StoryTextObjectView.animated]: position follows the object's keyframes and opacity
+ * ramps through its fadeIn/fadeOut envelope for the current instant, or holds its
+ * static base when the object authored neither. The Prisme-resolved [text] renders in
+ * the authored [colorHex]/[align]; wire `fontSize` is a 1080-referential design unit
+ * (× the object's `scale`) mapped onto the real canvas width, and [rotation] tilts the
+ * glyphs about their own center — iOS `fontSize × scale` parity.
+ */
+@Composable
+private fun StoryTextObjectLayer(
+    textObject: StoryTextObjectView,
+    playheadSeconds: Float,
+    modifier: Modifier = Modifier,
+) {
+    val animated = textObject.animated(playheadSeconds)
+    var textSize by remember { mutableStateOf(IntSize.Zero) }
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        val centerXpx = with(density) { (maxWidth * animated.x.toFloat()).toPx() }
+        val centerYpx = with(density) { (maxHeight * animated.y.toFloat()).toPx() }
+        val canvasWidthPx = with(density) { maxWidth.toPx() }
+        val color = animated.colorHex
+            ?.let { runCatching { hexColor(it) }.getOrNull() }
+            ?: MeeshyPalette.White
+        val textAlign = when (animated.align) {
+            "left" -> TextAlign.Start
+            "right" -> TextAlign.End
+            else -> TextAlign.Center
+        }
+        val fontSizePx = (animated.fontSize * animated.scale)
+            .toFloat()
+            .times(canvasWidthPx / TEXT_DESIGN_CANVAS_WIDTH)
+            .coerceAtLeast(1f)
+        Text(
+            text = animated.text,
+            color = color,
+            textAlign = textAlign,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = with(density) { fontSizePx.toSp() },
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .onSizeChanged { textSize = it }
+                .offset {
+                    IntOffset(
+                        (centerXpx - textSize.width / 2f).roundToInt(),
+                        (centerYpx - textSize.height / 2f).roundToInt(),
+                    )
+                }
+                .graphicsLayer { rotationZ = animated.rotation.toFloat() }
+                .alpha(animated.opacity.toFloat().coerceIn(0f, 1f)),
+        )
     }
 }

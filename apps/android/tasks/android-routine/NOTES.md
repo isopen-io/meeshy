@@ -1738,3 +1738,19 @@ gateway serializes it — and Android is simply dropping it. That turns an "unve
 risk into a pure Android model+projection gap (add the `@Serializable` field, project it, render it), diff stays
 `apps/android`-only. Applied for `feed-repost-embed-mood-emoji` (iOS `PostModels.swift:87,281`). The mirror still
 open — `ApiRepostOf.location` — is confirmable the same way (`APIRepostOf.location: SharedPlace?` is on the wire).
+
+## 2026-08-24 — a viewer layer that ports iOS's canvas render should reuse the SAME two reader resolvers; only the transition arm differs (slice `story-text-object-viewer-projection`)
+Text objects and media clips share iOS's canvas render precedence `fade ?? keyframeOpacity ?? base`, so the
+Android `StoryTextObjectView.animated()` is `StoryForegroundMediaView.animated()` minus one arm: text objects
+never join a `StoryClipTransition`, so there is no transition ramp to fold and no `duration==0` degenerate-window
+guard to carry — the whole `clipTransitions`/`transitionOpacity` block simply drops out. Reusing `StoryKeyframeResolver`
++ `StoryMediaFadeResolver` verbatim meant the pure core was two small files and the mutation proof reused the same
+"drop the fade override" trick. Lesson: when a second canvas layer arrives, diff its iOS render against the layer
+already ported and port only the *delta* — don't re-derive keyframe/fade math that a shared resolver already owns.
+
+Prisme for a `Map<String,String>` translations field (text objects) is NOT the list-based `LanguageResolver.preferredTranslation`
+(that keys on `TranslationLike.targetLanguage`). iOS `StoryTextObject.resolvedText` walks preferred languages and, per
+language, tries an exact map key then a normalized-key match. Port `base(code)` as `LanguageCodeNormalizer.normalize(code)
+?: code.split('-','_').first().lowercase()` (the shared normalizer IS the Android mirror of `MeeshyUser.normalizeLanguageCode`),
+and apply it to BOTH the preferred code and the map key so `"fr-FR"`/`"FR"`/`"fra"` collapse onto `"fr"`. Exact-key-before-normalized
+preserves a `"pt-BR"` override over its `"pt"` sibling.

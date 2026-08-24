@@ -3808,6 +3808,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       ramp — so an authored envelope overrides a keyframe opacity and still multiplies with a crossfade.
       Compose `.alpha()` glue unchanged. Pending (editor side): the per-clip inspector UI to author
       volume / fade in-out / loop / background / delete.
+- [~] **Text-object viewer projection** shipped (slice `story-text-object-viewer-projection`, 2026-08-24):
+      the viewer decoded `storyEffects.textObjects` on the wire but dropped them from the projection —
+      a text overlay authored on a slide rendered nothing. New pure `StoryTextObjectView` +
+      `animated(atSeconds)` mirrors `StoryForegroundMediaView`: keyframe transform (via
+      `StoryKeyframeResolver`) folded with the object's own fadeIn/fadeOut envelope (via
+      `StoryMediaFadeResolver`) at iOS precedence `fade ?? keyframeOpacity ?? base` — a text object never
+      joins a clip transition so no transition ramp is folded. New pure `StoryTextObjectProjection`
+      resolves the displayed text through the Prisme chain (port of iOS
+      `StoryTextObject.resolvedText(preferredLanguages:)` — exact key, then case/region-insensitive
+      match, per preferred language in order, else the original) and maps transform/timing/keyframe
+      fields into the view. `StorySlideView` gains `textObjects`; the VM projects them with
+      `LanguageResolver.preferredContentLanguages(prefs)`. Compose `StoryTextObjectLayer` renders each at
+      its center anchor with `.alpha(animated.opacity)`, `fontSize × scale` mapped from the 1080-referential
+      design space onto the canvas width, and a `graphicsLayer` rotation. Pending: the exploration
+      language-override re-resolving text objects (caption re-resolves today, text objects use default
+      prefs); authored background/outline/RTL styling on the overlay; text-object keyframe **editing**.
 - [ ] Per-clip inspector EDITOR (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)

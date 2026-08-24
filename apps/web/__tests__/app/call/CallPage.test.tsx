@@ -156,4 +156,55 @@ describe('CallPage — join effect cleanup', () => {
 
     expect(useCallStore.getState().isInCall).toBe(true);
   });
+
+  /**
+   * Vague 172 — `call:join`'s own ack is this page's ONLY completion signal
+   * for the joiner's OWN join. `CALL_PARTICIPANT_JOINED` is a broadcast the
+   * gateway explicitly skips sending back to the socket that just joined
+   * (`CallEventsHandler.ts`: `if (remoteSocket.id === socket.id) continue;`)
+   * — it exists to tell OTHER participants someone new arrived, never to
+   * confirm the joiner's own join. A user who navigates straight to
+   * `/call/:callId` for a call already active server-side (bookmarked link,
+   * shared URL) therefore never receives it and must not depend on it.
+   */
+  it("completes this user's own join from the call:join ack alone, with no participant-joined broadcast", async () => {
+    const callSession = {
+      id: CALL_ID,
+      conversationId: 'conv-1',
+      mode: 'p2p',
+      status: 'active',
+      initiatorId: 'user-2',
+      startedAt: new Date(),
+      participants: [],
+    };
+    const socket = {
+      ...makeFakeSocket(),
+    };
+    socket.emit = jest.fn((_event: string, _payload: unknown, ack?: (a: unknown) => void) => {
+      ack?.({ success: true, data: { callSession, iceServers: [] } });
+    });
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+
+    renderCallPage();
+
+    // No CALL_PARTICIPANT_JOINED / CALL_INITIATED ever fires in this test —
+    // only the ack that the gateway actually delivers to the joiner itself.
+    await waitFor(() => expect(useCallStore.getState().isInCall).toBe(true));
+    expect(useCallStore.getState().currentCall?.id).toBe(CALL_ID);
+  });
+
+  it('surfaces the server-reported error immediately when call:join is rejected via its ack', async () => {
+    const socket = {
+      ...makeFakeSocket(),
+    };
+    socket.emit = jest.fn((_event: string, _payload: unknown, ack?: (a: unknown) => void) => {
+      ack?.({ success: false, error: { code: 'CALL_ENDED', message: 'This call has ended' } });
+    });
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+
+    const { findByText } = renderCallPage();
+
+    expect(await findByText('This call has ended')).toBeInTheDocument();
+    expect(useCallStore.getState().isInCall).toBe(false);
+  });
 });
