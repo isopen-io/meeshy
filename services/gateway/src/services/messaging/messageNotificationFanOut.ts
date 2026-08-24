@@ -5,7 +5,10 @@ import {
   type NotificationActorProfile,
   type PreviewPrismBasis,
 } from '../notifications/NotificationService';
-import { transcriptTranslationTexts } from '@meeshy/shared/types/attachment-audio';
+import {
+  transcriptTranslationTexts,
+  transcriptTranslationTracks,
+} from '@meeshy/shared/types/attachment-audio';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import {
   retractMessageNotifications,
@@ -482,6 +485,25 @@ export async function notifyMessageRecipients(params: {
         : undefined;
     const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
 
+    // Cycle 128 — la carte des PISTES traduites, jumelle du dépouillement du
+    // TEXTE juste au-dessus. La MÊME colonne les porte : le cycle 123 n'en a
+    // pris que la transcription, si bien que la bannière d'un vocal servait la
+    // bonne langue en texte et attachait le fichier ORIGINAL en son.
+    //
+    // Le tri par langue se fait PAR DESTINATAIRE, chez le créateur, où le Prisme
+    // est déjà descendu : ce site ne peut que remettre les candidates. Et il ne
+    // les remet qu'au lot `regular`, seul porteur du média de rich-push (cf.
+    // `richPushMedia` et la décision du cycle 125 bis).
+    //
+    // Gardé par `mediaMayTravel`, comme le fichier original et la transcription
+    // : une piste traduite est le CONTENU d'un message protégé au même titre
+    // que la parole dont elle sort. Sans cette condition, le lot rouvrirait par
+    // une porte neuve exactement ce que le cycle 125 vient de fermer.
+    const attachmentTracks =
+      mediaMayTravel && first?.mimeType?.startsWith('audio/')
+        ? transcriptTranslationTracks((first as { translations?: unknown }).translations)
+        : undefined;
+
     // Cycle 123 — ce que l'aperçu EST décide de ce qui le traduit. Un
     // placeholder de protection n'a pas de source (et sa traduction ne doit pas
     // partir sur le fil non plus) ; une transcription a la SIENNE, sur
@@ -612,6 +634,9 @@ export async function notifyMessageRecipients(params: {
           // source, et la bannière d'un vocal descend enfin le Prisme.
           previewBasis: pushPreviewBasis,
           ...attachmentInfo,
+          // Cycle 128 — les candidates de PISTE. L'élection est par lecteur, et
+          // elle suit la langue du texte SERVI : cf. `servedAttachmentMedia`.
+          attachmentTracks,
         })
       ));
 

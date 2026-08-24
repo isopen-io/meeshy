@@ -10,6 +10,7 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import type { AttachmentTranslationTrack } from '@meeshy/shared/types/attachment-audio';
 import type {
   NotificationDeletedBulkScope,
   NotificationReadBulkScope,
@@ -1179,6 +1180,73 @@ export class NotificationService {
   }
 
   /**
+   * Le média que la bannière ATTACHE, élu par le Prisme — cycle 128.
+   *
+   * Le cycle 123 a fait descendre le prisme au TEXTE de la bannière d'un vocal
+   * (`PreviewPrismBasis.transcript`). Le FICHIER attaché à côté, lui, est resté
+   * `first?.fileUrl` — l'original, sans condition, identique pour tous les
+   * lecteurs : un francophone voyait une bannière en français au-dessus d'un
+   * `UNNotificationAttachment` qui parle anglais. Les trois clients descendent
+   * pourtant déjà le Prisme sur la piste JOUÉE en conversation
+   * (`AudioTrackLanguageResolver` iOS, `resolveAutoLanguage` web,
+   * `resolveTranslatedAudio` Android) ; l'écran verrouillé était la SEULE
+   * surface qui ne le faisait pas.
+   *
+   * > Une résolution de CONTENU se mesure sur tout ce que la charge TRANSPORTE,
+   * > jamais sur sa seule chaîne (leçon 275).
+   *
+   * **La piste est élue par la langue du TEXTE SERVI, jamais par une descente
+   * indépendante.** C'est la règle centrale du cycle : deux descentes parallèles
+   * laisseraient la bannière dire « la réunion est déplacée » au-dessus d'une
+   * piste espagnole. Une descente, deux projections — la même discipline que
+   * `servedPreview` / `servedTranslationFields` (cycle 123).
+   *
+   * Deux replis, tous deux vers l'ORIGINAL, et ils disent deux choses
+   * différentes :
+   *  - `served === null` — le Prisme n'a rien élu, le message est déjà dans la
+   *    langue du lecteur ;
+   *  - langue élue SANS piste — le TTS peut manquer là où la traduction texte
+   *    existe. Fail-OPEN sur le médium : le son d'origine vaut mieux que le
+   *    silence, et le texte reste servi traduit.
+   *
+   * Les trois champs voyagent ENSEMBLE. Servir la piste traduite sous le mime et
+   * la durée de l'originale ferait mentir le `typeHint` UTI de la NSE et le
+   * libellé « 🎤 · 0:12 » que le corps compose depuis cette durée — c'est la
+   * leçon 279 : ce qui QUALIFIE une chaîne voyage avec elle.
+   *
+   * `durationMs` est l'unité de bout en bout : `MessageAttachment.duration` est
+   * en MILLISECONDES (`schema.prisma`), ce que `formatSingleAttachmentLabelI18n`
+   * redit dans son propre doc-comment.
+   */
+  private servedAttachmentMedia(params: {
+    readonly tracks?: Readonly<Record<string, AttachmentTranslationTrack>>;
+    readonly served: { readonly language: string } | null;
+    readonly originalUrl?: string;
+    readonly originalMimeType?: string;
+    readonly originalDurationMs?: number | null;
+  }): {
+    readonly url?: string;
+    readonly mimeType?: string;
+    readonly durationMs?: number;
+  } {
+    const original = {
+      url: params.originalUrl,
+      mimeType: params.originalMimeType,
+      durationMs: params.originalDurationMs ?? undefined,
+    };
+    if (!params.served) return original;
+
+    const track = params.tracks?.[params.served.language];
+    if (!track) return original;
+
+    // La piste remplace le fichier ; son étiquette et sa durée ne retombent PAS
+    // sur celles de l'original — elles décriraient un autre fichier. Absentes,
+    // elles restent absentes : la NSE déduit l'UTI de l'extension, et le corps
+    // se compose sans durée plutôt qu'avec une fausse.
+    return { url: track.url, mimeType: track.mimeType, durationMs: track.durationMs };
+  }
+
+  /**
    * L'horloge SERVEUR de la bulle que la NSE PRÉ-ENREGISTRE, et son type.
    *
    * Troisième projection partagée par les trois éventails (cycle 126). Le
@@ -2016,6 +2084,12 @@ export class NotificationService {
     /** MIME type du 1er attachment, ex. `audio/m4a`, `image/jpeg`, `video/mp4`.
      *  Utilisé par l'extension pour choisir le UTI typeHint correct. */
     firstAttachmentMimeType?: string;
+    /**
+     * Les pistes TRADUITES de la première pièce jointe, par langue — cycle 128.
+     * Élues par la langue du texte SERVI, cf. {@link servedAttachmentMedia}.
+     * Absentes (cas de l'écrasante majorité) : l'original est attaché.
+     */
+    attachmentTracks?: Readonly<Record<string, AttachmentTranslationTrack>>;
     encryptedContent?: string;
     notificationLocKey?: string;
     /**
@@ -2127,6 +2201,17 @@ export class NotificationService {
       protectedByLocKey: !!params.notificationLocKey,
     });
 
+    // Cycle 128 — le MÉDIUM descend la même élection que le texte. Calculé
+    // AVANT le corps : c'est la durée de la piste SERVIE qui compose
+    // « 🎵 Audio · 0:09 », pas celle de l'original.
+    const servedMedia = this.servedAttachmentMedia({
+      tracks: params.attachmentTracks,
+      served: servedTranslation,
+      originalUrl: params.firstAttachmentUrl,
+      originalMimeType: params.firstAttachmentMimeType,
+      originalDurationMs: params.firstAttachmentDuration,
+    });
+
     // Cycle 122 — le corps AFFICHÉ descend le Prisme, pas seulement les champs
     // de service ci-dessus : c'est lui que les trois plateformes rendent.
     // Cycle 125 bis — et la composition vit dans `servedBannerBody`, que les
@@ -2135,7 +2220,7 @@ export class NotificationService {
       lang: recipientLang,
       preview: params.messagePreview,
       translation: servedTranslation,
-      media: params,
+      media: { ...params, firstAttachmentDuration: servedMedia.durationMs ?? null },
     });
 
     return this.createNotification({
@@ -2166,11 +2251,15 @@ export class NotificationService {
         conversationType: conversation?.type as any,
         messageId: params.messageId,
         // Phase A — propagation au payload APN pour rendu media inline iOS.
-        firstAttachmentUrl: params.firstAttachmentUrl,
-        firstAttachmentMimeType: params.firstAttachmentMimeType,
-        firstAttachmentDurationMs: params.firstAttachmentDuration != null
-          ? Math.round(params.firstAttachmentDuration * 1000)
-          : undefined,
+        // Cycle 128 — les TROIS champs sortent de l'élection du Prisme, pas des
+        // paramètres bruts : la piste servie, son étiquette et sa durée.
+        firstAttachmentUrl: servedMedia.url,
+        firstAttachmentMimeType: servedMedia.mimeType,
+        // `MessageAttachment.duration` est DÉJÀ en millisecondes (`schema.prisma`,
+        // et le doc-comment de `formatSingleAttachmentLabelI18n` le redit). Ce
+        // site la multipliait par 1000 comme si elle était en secondes : un
+        // vocal de 34 s partait sur le fil annoncé pour 9 h 26.
+        firstAttachmentDurationMs: servedMedia.durationMs,
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
         // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
@@ -2191,8 +2280,11 @@ export class NotificationService {
             count: params.attachmentCount,
             firstType: params.firstAttachmentType || 'document',
             firstFilename: params.firstAttachmentFilename || 'file',
-            ...(params.firstAttachmentDuration != null
-              ? { firstDurationMs: Math.round(params.firstAttachmentDuration * 1000) }
+            // Cf. `firstAttachmentDurationMs` ci-dessus : la colonne est déjà en
+            // millisecondes, et c'est l'unité que le SDK iOS décode sous ce nom.
+            // La ligne PERSISTÉE porte la durée SERVIE, comme la bannière.
+            ...(servedMedia.durationMs != null
+              ? { firstDurationMs: servedMedia.durationMs }
               : {}),
             ...(params.firstAttachmentFileSize != null ? { firstFileSize: params.firstAttachmentFileSize } : {}),
             ...(params.firstAttachmentWidth != null ? { firstWidth: params.firstAttachmentWidth } : {}),

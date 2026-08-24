@@ -706,6 +706,61 @@ Et la garde était GRATUITE : les trois éventails relisent la MÊME ligne dans 
 MÊME fenêtre — deux colonnes de plus sur une lecture existante. **Avant de
 conclure qu'une garde coûterait une requête, regarder ce que le site lit déjà.**
 
+## Un nom de champ annonce l'unité de sa DESTINATION, jamais celle de sa SOURCE
+
+`MessageAttachment.duration` est en MILLISECONDES — `schema.prisma` le dit
+(« Durée en MILLISECONDES ») et le doc-comment de
+`formatSingleAttachmentLabelI18n` le REDIT. Son unique producteur, l'éventail,
+passe la colonne telle quelle. Deux sites de `createMessageNotification` la
+multipliaient pourtant par 1000 comme si elle était en secondes : un vocal de
+34 s partait annoncé pour **9 h 26**, sur le fil push ET dans la ligne
+`Notification` persistée que le SDK iOS décode (cycle 128).
+
+> Deux lectures d'un MÊME champ, dans le MÊME objet littéral, sous deux unités.
+> Le doc-comment qui dit vrai est à quarante lignes de la ligne qui dit faux, et
+> rien ne les confronte. Ce qui rend la conversion crédible est le NOM du champ
+> d'ARRIVÉE (`…DurationMs`) : il déclare l'unité de la DESTINATION, et se relit
+> comme une preuve que la source est dans une autre. **Devant tout `x * 1000`
+> posé sous un nom qui finit par `Ms`, ouvrir le PRODUCTEUR.**
+
+Il n'a pas été cherché : il s'est présenté dans le premier témoin RED du cycle,
+qui a rendu « 🎵 Audio · 0:00 » pour un vocal de 12 secondes. **Lire le texte
+qu'un correctif compose, et pas seulement l'assertion qu'on avait prévue.**
+
+## Un correctif de RÉSOLUTION se mesure comme une garde de PROTECTION
+
+Le § précédent sur `mediaMayTravel` dit qu'une protection de CONTENU se mesure
+sur tout ce que la charge TRANSPORTE. La règle vaut identiquement d'un correctif
+de RÉSOLUTION, et le cycle 128 l'a mesuré au même endroit : le cycle 123 a fait
+descendre le Prisme au TEXTE de la bannière d'un vocal, et laissé douze lignes
+plus bas `firstAttachmentUrl: first?.fileUrl` — l'ORIGINAL, sans condition,
+identique pour tous les lecteurs. Bannière en français, pièce jointe en anglais.
+
+La piste TTS vit sur la colonne que l'éventail lit DÉJÀ
+(`MessageAttachment.translations[lang].url`, `select` inchangé depuis le cycle
+123) : `transcriptTranslationTexts()` n'en prenait que le texte, sa jumelle
+`transcriptTranslationTracks()` en prend le médium.
+
+Trois règles en sont sorties, toutes portées par `servedAttachmentMedia` :
+
+- **La piste est élue par la langue du TEXTE SERVI**, jamais par une descente
+  indépendante — sans quoi la bannière servirait deux langues à la fois.
+- **Deux replis, tous deux vers l'original, et ils disent deux choses** :
+  `served === null` (le Prisme n'a rien élu) et langue élue SANS piste (le TTS
+  peut manquer là où la traduction texte existe — fail-OPEN sur le médium).
+- **Une carte de candidates est une porte NEUVE vers un écran verrouillé.** Elle
+  est gardée par `mediaMayTravel`, aux DEUX niveaux qui déclarent la protection,
+  et vidée une seconde fois par le verrou `notificationLocKey`. Ouvrir un chemin
+  de média sans lui poser la garde du cycle 125 rouvre la même fuite sous un
+  autre nom.
+
+**Et vérifier la chaîne jusqu'au PIXEL découvre les contraintes du correctif**,
+ce n'est pas une formalité de fin de lot : le producteur écrit `format: 'mp3'`
+(extension NUE), qui rate le `hasPrefix("audio/")` de `fileHints` côté NSE et
+retombe sur un `typeHint` NUL — pièce jointe rendue en dégradé. La normalisation
+du mime est portante, et les deux producteurs du dépôt divergeant
+(`'mp3'` / `'audio/mp3'`), le dépouillement NORMALISE au lieu de choisir.
+
 ## Cette entité a-t-elle une JUMELLE ?
 
 À poser au moment où l'on corrige, pas des cycles plus tard. Le dépôt est plein
