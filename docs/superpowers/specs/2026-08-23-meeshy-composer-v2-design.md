@@ -402,6 +402,65 @@ Le composer web complet : une entrée, quatre formats, l'éventail, l'édition.
 Un seul chemin de publication pour les quatre formats, offline compris.
 **Retrait** : `EditPostSheet.swift` (498 l.), dernier legacy.
 
+## E bis. Les plans d'exécution v2 *(2026-08-24)*
+
+Les lots ci-dessus sont une **conception**. Quatre d'entre eux ont désormais un
+plan d'exécution écrit, sur le gabarit des six plans v1
+(`2026-08-20-meeshy-composer-lot-{a..f}.md`) : contraintes globales, tâches
+numérotées nommées d'une phrase produit, gate final, « hors périmètre » dit une
+fois.
+
+| Lot | Plan | État du plan |
+|---|---|---|
+| 0 — le contrat partagé | *aucun plan dédié* | livré (`packages/shared/utils/composer-contract.ts`, commit `1e6837b6d`) ; suivi dans `tasks/todo-composer-lot-c-et-v2-2026-08-23.md` (V0) |
+| 0 bis — le repost web miroite | *aucun plan dédié* | suivi dans le même fichier de tâches (V0 bis) |
+| 1 — l'éventail | *aucun plan dédié* | une ligne de tâche (V1) |
+| 2 — la surface « document sans scène » | *aucun plan dédié* | une ligne de tâche (V2) |
+| 3 — la porte la plus utilisée | *aucun plan dédié* | une ligne de tâche (V3) |
+| **4 — Mood (S3) et repost** | `docs/superpowers/plans/2026-08-24-meeshy-composer-v2-lot-4.md` | **écrit**, 9 tâches — **rév. 2, audit adversarial du 2026-08-24** |
+| **5 — média reçu et forward (O13)** | `docs/superpowers/plans/2026-08-24-meeshy-composer-v2-lot-5.md` | **écrit**, 7 tâches — **rév. 2, audit adversarial du 2026-08-24** |
+| **6 — web** | `docs/superpowers/plans/2026-08-24-meeshy-composer-v2-lot-6.md` | **écrit**, 9 tâches — **rév. 2, audit adversarial du 2026-08-24** |
+| **7 — file de publication unique** | `docs/superpowers/plans/2026-08-24-meeshy-composer-v2-lot-7.md` | **écrit**, 9 tâches — **rév. 2, audit adversarial du 2026-08-24** |
+
+*(Les décomptes de LIGNES qui figuraient ici — 424 · 679 · 619 · 569 — ont été
+retirés : ils étaient déjà faux le jour même, et un compte de lignes de document
+périme à la première correction. Le nombre de TÂCHES, lui, est structurel.)*
+
+**Un plan n'est pas une livraison.** Les quatre plans ci-dessus n'ont aucune
+ligne de code derrière eux au 2026-08-24 ; ils portent en revanche des
+corrections OPPOSABLES au §E de ce document, mesurées fichier par fichier au
+moment de leur rédaction — notamment que plusieurs des retraits annoncés ici
+coûtent plus que les fichiers qu'ils nomment, et que certains décomptes de
+lignes du §E sont périmés. **Chaque plan prime sur le paragraphe de §E qu'il
+détaille** : le §E dit l'intention, le plan dit l'état mesuré.
+
+**Et un plan n'est pas une mesure PERMANENTE.** Les quatre ont été rédigés
+pendant que les lots 3 et 0 bis étaient en vol ; ces deux-là ont mergé le jour
+même (`96b707da6`, `d4a40f600`), ce qui a déplacé une partie des ancres citées et
+rendu caduques trois affirmations d'état. Un **audit adversarial du 2026-08-24** a
+relu les quatre plans contre le code et les a corrigés en place ; chaque
+correction y est datée et encadrée. Quatre points valent d'être connus sans
+ouvrir les plans :
+
+1. **`viaUsername` ne doit être ajouté nulle part.** Le champ a **zéro
+   occurrence** dans `services/gateway` et `packages/shared`, `schema.prisma`
+   compris : un `z.object()` l'écarte en silence depuis trois versions.
+   L'attribution d'un repost passe par **`repostOfId`**, et par rien d'autre. Le
+   lot 4 le retire du fil (4.2) ; le lot 7 ne l'ajoute **pas** à la charge
+   durable (7.2, quatre champs et non cinq).
+2. **Le retrait d'`UnifiedPostComposer.swift` n'a AUCUN exécutant.** Le fichier
+   vit sous `packages/MeeshySDK/Sources/MeeshyUI/Story/` (739 l.) ; le lot 4 s'y
+   interdit d'écrire, le lot 7 aussi. Le §E lot 4 promet donc un retrait que
+   personne ne porte : il attend le lot qui possédera `MeeshyUI`.
+3. **Le retrait d'`EditPostSheet.swift` est hors du lot 7** (658 l. et non 498 —
+   `690e575f7` l'a agrandi le 2026-08-23), derrière un STOP nommé et un
+   inventaire de sept capacités.
+4. **Le tableau de bord `2026-08-19-meeshy-composer-views.html` se contredit
+   lui-même** au 2026-08-24 (rév. 22 : arc `62 / 70`, puce verte « 57 tâches,
+   81,4 % ») et il est **modifié non committé**. Le gate du premier lot qui y
+   touchera doit réconcilier les deux, ou dire lequel fait foi — pas en choisir
+   un en silence.
+
 ---
 
 ## F. Compatibilité — les anciens POSTs et RÉELs restent affichables

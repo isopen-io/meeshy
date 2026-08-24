@@ -71,7 +71,8 @@ simple ») comparait à rien.
 ### Détail
 
 - `tasks/realtime-sync-audit-2026-08-24-cycle125-bis.md`
-- `tasks/lessons.md` § Leçon 276
+- `tasks/lessons.md` § Leçon 277 (rédigée 276, renumérotée : une passe parallèle — cycle 125 sur
+  la langue de CADRAGE, PR #3473 — a pris le 276 pendant que ce lot était en CI)
 - Le lot précédent : `tasks/realtime-sync-audit-2026-08-24-cycle125.md`, § Leçon 275
 
 ### Suivi MESURÉ

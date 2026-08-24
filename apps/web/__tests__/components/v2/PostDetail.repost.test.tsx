@@ -137,6 +137,28 @@ describe('PostDetail — repost rendering', () => {
     clickSpy.mockRestore();
   });
 
+  /**
+   * L'ancrage est un SECOND geste, rendu à côté du repost, et jamais décidé
+   * par la carte : c'est l'hôte qui sait si le miroir mènerait à de
+   * l'éphémère. Jumeau de `StoryViewer` (`onRepostAsPost`).
+   */
+  describe("l'ancrage — « garder ça pour de bon »", () => {
+    it("rend le bouton d'ancrage quand l'hôte le câble", () => {
+      const onRepostAsPost = jest.fn();
+      render(
+        <PostDetail post={makePost()} comments={[]} onRepost={jest.fn()} onRepostAsPost={onRepostAsPost} />,
+      );
+
+      fireEvent.click(screen.getByTestId('post-detail-repost-as-post'));
+      expect(onRepostAsPost).toHaveBeenCalledTimes(1);
+    });
+
+    it("ne rend rien quand l'hôte ne le câble pas — un post est déjà son propre ancrage", () => {
+      render(<PostDetail post={makePost()} comments={[]} onRepost={jest.fn()} />);
+      expect(screen.queryByTestId('post-detail-repost-as-post')).not.toBeInTheDocument();
+    });
+  });
+
   describe('counters — simple repost vs quote (controller amendment)', () => {
     it("simple repost: outer stats bar shows the ORIGINAL's counts, nested counter row is absent", () => {
       render(<PostDetail post={makePost({ repostOf })} comments={[]} />);

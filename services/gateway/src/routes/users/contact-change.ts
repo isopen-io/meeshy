@@ -10,6 +10,7 @@ import { smsService } from '../../services/SmsService';
 import crypto from 'crypto';
 import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict } from '../../utils/response';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 
 const logger = enhancedLogger.child({ module: 'contact-change' });
 
@@ -120,7 +121,7 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
       // Get current user
       const user = await fastify.prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, email: true, firstName: true, lastName: true, displayName: true, systemLanguage: true }
+        select: { id: true, email: true, firstName: true, lastName: true, displayName: true, ...RECIPIENT_LANG_SELECT }
       });
 
       if (!user) {
@@ -173,7 +174,7 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
         name: user.displayName || `${user.firstName} ${user.lastName}`,
         verificationLink,
         expiryHours: tokenExpiryHours,
-        language: user.systemLanguage || 'fr'
+        language: recipientLanguage(user, 'fr')
       });
 
       logger.info(`[EMAIL_CHANGE] Verification email sent to ${newEmail} for user ${userId}`);
@@ -381,7 +382,7 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
           firstName: true,
           lastName: true,
           displayName: true,
-          systemLanguage: true,
+          ...RECIPIENT_LANG_SELECT,
           pendingEmail: true,
           pendingEmailVerificationExpiry: true
         }
@@ -435,7 +436,7 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
         name: user.displayName || `${user.firstName} ${user.lastName}`,
         verificationLink,
         expiryHours: tokenExpiryHours,
-        language: user.systemLanguage || 'fr'
+        language: recipientLanguage(user, 'fr')
       });
 
       logger.info(`[EMAIL_CHANGE] Verification email resent to ${user.pendingEmail} for user ${userId}`);

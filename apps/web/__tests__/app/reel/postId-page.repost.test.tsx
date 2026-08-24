@@ -14,7 +14,7 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 
-const mockReel = {
+const mockReel: Record<string, unknown> = {
   id: 'reel-1',
   authorId: 'author-2',
   author: { id: 'author-2', displayName: 'Bob' },
@@ -82,10 +82,16 @@ jest.mock('@/components/v2', () => ({ useToast: () => ({ addToast: mockAddToast 
 type RepostModalStubProps = {
   open: boolean;
   onRepost: () => void;
+  onQuote: (content: string) => void;
 };
 jest.mock('@/components/v2/RepostModal', () => ({
-  RepostModal: ({ open, onRepost }: RepostModalStubProps) =>
-    open ? <button data-testid="repost-modal-confirm" onClick={onRepost}>Confirm repost</button> : null,
+  RepostModal: ({ open, onRepost, onQuote }: RepostModalStubProps) =>
+    open ? (
+      <div>
+        <button data-testid="repost-modal-confirm" onClick={onRepost}>Confirm repost</button>
+        <button data-testid="repost-modal-quote" onClick={() => onQuote('mon commentaire')}>Confirm quote</button>
+      </div>
+    ) : null,
 }));
 
 type ReelPlayerStubProps = {
@@ -106,6 +112,8 @@ import ReelPage from '@/app/reel/[postId]/page';
 describe('ReelPage — repost wiring', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    delete mockReel.repostOfId;
+    delete mockReel.originalRepostOfId;
     mockRepostMutate.mockImplementation((_vars, opts) => opts?.onSuccess?.());
   });
 
@@ -134,6 +142,50 @@ describe('ReelPage — repost wiring', () => {
     await waitFor(() =>
       expect(mockRepostMutate).toHaveBeenCalledWith(
         { postId: 'reel-1', data: { isQuote: false, targetType: 'REEL' } },
+        expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+      ),
+    );
+  });
+
+  /**
+   * Moitié RÉFÉRENCE de la même loi : le repli remonte la chaîne
+   * (`originalRepostOfId ?? repostOfId ?? id`). Le test ci-dessus reste vert
+   * sur une carte plate — c'est le troisième terme du repli —, donc seul ce
+   * témoin-ci discrimine.
+   */
+  it("vise la RACINE quand le réel affiché est lui-même un repost", async () => {
+    mockReel.repostOfId = 'reel-root';
+    render(<ReelPage />);
+
+    fireEvent.click(screen.getByTestId('reel-repost'));
+    expect(await screen.findByTestId('repost-modal-confirm')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('repost-modal-confirm'));
+    });
+
+    await waitFor(() =>
+      expect(mockRepostMutate).toHaveBeenCalledWith(
+        { postId: 'reel-root', data: { isQuote: false, targetType: 'REEL' } },
+        expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+      ),
+    );
+  });
+
+  it('la citation porte la même racine et le même format que la republication nue', async () => {
+    mockReel.repostOfId = 'reel-root';
+    render(<ReelPage />);
+
+    fireEvent.click(screen.getByTestId('reel-repost'));
+    expect(await screen.findByTestId('repost-modal-quote')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('repost-modal-quote'));
+    });
+
+    await waitFor(() =>
+      expect(mockRepostMutate).toHaveBeenCalledWith(
+        { postId: 'reel-root', data: { content: 'mon commentaire', isQuote: true, targetType: 'REEL' } },
         expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
       ),
     );

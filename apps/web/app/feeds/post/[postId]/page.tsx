@@ -29,7 +29,8 @@ import { useCommentTarget } from '@/hooks/use-comment-target';
 import { postBackgroundSound } from '@/lib/story-transforms';
 import { PostDetail } from '@/components/v2/PostDetail';
 import { PostEditor } from '@/components/v2/PostEditor';
-import type { PostVisibility } from '@meeshy/shared/types/post';
+import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
+import { repostTargetId } from '@meeshy/shared/utils/repost-target';
 import { RepostModal } from '@/components/v2/RepostModal';
 import { useToast } from '@/components/v2';
 import { Skeleton } from '@/components/v2/Skeleton';
@@ -206,19 +207,37 @@ export default function PostDetailPage() {
     );
   };
 
-  const handleRepost = () => {
+  /**
+   * Le miroir et l'ancrage partent ENSEMBLE, et c'est ici qu'ils manquaient le
+   * plus. Cette page est montée sur TROIS routes — `/feeds/post/:id`,
+   * `/post/:id` et `/mood/:id`, cible officielle de résolution des liens
+   * tracés de type STATUS (`buildWebFallbackTarget`) — donc sa carte peut être
+   * éphémère, contrairement à `/reel/:id` (garde `seedIsReel`) et
+   * `/story/:id` (garde `postIsStory`).
+   *
+   * Le miroir seul y serait DESTRUCTEUR : un mood republié en STATUS vit une
+   * heure, puis `ExpiredStoriesCleanupService` détruit la ligne — là où le
+   * même geste donnait un post permanent. L'ancrage est le recours.
+   */
+  const repostAs = (targetType: PostType, content?: string) => {
+    const isQuote = content !== undefined;
     repostMutation.mutate(
-      // Loi du miroir : le format suit celui de la CARTE sur laquelle on a agi.
-      { postId: post.id, data: { isQuote: false, targetType: post.type } },
+      // La RÉFÉRENCE remonte la chaîne, le FORMAT reste celui de la carte agie.
+      { postId: repostTargetId(post), data: { ...(isQuote ? { content } : {}), isQuote, targetType } },
       {
         onSuccess: () => {
           setRepostModalOpen(false);
-          showToast('Reposted!', 'success');
+          showToast(isQuote ? 'Quoted!' : 'Reposted!', 'success');
         },
-        onError: () => showToast('Failed to repost', 'error'),
+        onError: () => showToast(isQuote ? 'Failed to quote' : 'Failed to repost', 'error'),
       },
     );
   };
+
+  const handleRepost = () => repostAs(post.type);
+
+  /** L'ANCRAGE — « garder ça pour de bon » : la seule cible permanente. */
+  const handleRepostAsPost = () => repostAs('POST');
 
   const handleReportPost = () => {
     if (!window.confirm('Report this post?')) return;
@@ -228,18 +247,7 @@ export default function PostDetailPage() {
       .catch(() => showToast("Couldn't report the post.", 'error'));
   };
 
-  const handleQuote = (content: string) => {
-    repostMutation.mutate(
-      { postId: post.id, data: { content, isQuote: true, targetType: post.type } },
-      {
-        onSuccess: () => {
-          setRepostModalOpen(false);
-          showToast('Quoted!', 'success');
-        },
-        onError: () => showToast('Failed to quote', 'error'),
-      },
-    );
-  };
+  const handleQuote = (content: string) => repostAs(post.type, content);
 
   return (
     <DashboardLayout title="Post" className="!max-w-none !px-0" backHref="/feed/posts">
@@ -289,6 +297,10 @@ export default function PostDetailPage() {
             onUnbookmark={() => unbookmarkMutation.mutate(post.id)}
             onShare={handleShare}
             onRepost={() => setRepostModalOpen(true)}
+            /* Reposter un POST ne propose pas l'ancrage deux fois : il est
+               déjà son propre ancrage (jumeau iOS : `offeredFormats`,
+               `ComposerIntent.swift`). */
+            onRepostAsPost={post.type === 'POST' ? undefined : handleRepostAsPost}
             onEdit={isAuthor ? handleEdit : undefined}
             onDelete={isAuthor ? handleDeletePost : undefined}
             onReport={isAuthor ? undefined : handleReportPost}

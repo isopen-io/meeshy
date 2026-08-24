@@ -372,6 +372,38 @@ Errors under `error: { code, message }`, NOT `error: "string"`.
 ALWAYS use `resolveUserLanguage()` from `@meeshy/shared` for language resolution.
 NEVER reimplement the priority order locally.
 
+**Et dans le gateway, passer par `utils/recipient-language.ts`** — jamais
+`resolveUserLanguage` à cru. La descente exige DEUX choses, et rien d'autre ne les
+tient ensemble : la forme du `select` (`RECIPIENT_LANG_SELECT` — les quatre
+colonnes) et l'option `deviceLocale`. Dix-sept sites en avaient sauté au moins une
+au cycle 124.
+
+| besoin | appeler |
+|---|---|
+| langue de **CADRAGE** (l'interface : sujet d'e-mail, titre de notification) | `recipientLanguage(user, fallback)` |
+| liste ordonnée où un **CONTENU** se résout | `recipientLanguages(user)` |
+| étiquette pour `Intl` / `toLocaleString` | `recipientDateLocale(user, fallback)` |
+
+Trois pièges, tous mesurés :
+
+- **Le `select` est le seul des trois qu'aucun témoin de rang ne peut voir.** Un
+  mock Prisma rend ce qu'on lui dit quel que soit le `select` : un témoin de rang
+  passe au VERT sur un site dont la requête ne ramène pas les colonnes du Prisme,
+  et la descente est morte en production. Un témoin de projection assert donc sur
+  la REQUÊTE, pas sur le rendu.
+- **Un témoin de RANG s'écrit sur un rang AUTRE que le premier.** Au rang 1,
+  `user.systemLanguage || 'xx'` et la descente rendent le même verdict — un témoin
+  posé là ne peut pas tomber. Cinq témoins du dépôt étaient dans ce cas, dont un
+  dont le commentaire AFFIRMAIT que le site appelait `resolveUserLanguage`.
+- **Une langue résolue ne suffit pas si la DATE qui l'accompagne ne l'est pas.**
+  `systemLanguage === 'en' ? 'en-US' : 'fr-FR'` et `toLocaleDateString('fr-FR')`
+  vivaient à côté de titres correctement localisés.
+
+Le **repli terminal est un PARAMÈTRE**, pas un défaut partagé : `resolveUserLanguage`
+retombe sur `'fr'`, plusieurs sites sur `'en'`. Le garder au site rend visible la
+question produit — « quelle langue pour un compte sans AUCUNE préférence ? » — sans
+la mêler à un correctif de Prisme.
+
 ## Toute porte qui sort un profil de TIERS filtre sa présence
 
 `select: { isOnline: true, lastActiveAt: true }` sur quelqu'un d'AUTRE que
