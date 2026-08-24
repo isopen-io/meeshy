@@ -72,9 +72,21 @@ datasets==5.0.1
 huggingface_hub==1.28.0
 safetensors==0.8.0
 peft==0.20.0
-# PIN EXACT — chatterbox-tts 0.1.6 requiert transformers==5.15.1 (cf. uv.lock + pyproject.toml).
-# NE PAS élargir : transformers>=4.55 référence torch.float8_e8m0fnu (dtype MXFP4) absent de
-# torch 2.6.0 (épinglé dans Dockerfile) → AttributeError à l'import de chatterbox au build.
+# PIN EXACT — comme toute lib ML de ce fichier. Le service tourne SCIEMMENT sur
+# transformers 5.x : la task « translation » a disparu du PIPELINE_REGISTRY en 5.0
+# et NLLB passe depuis par un wrapper maison (cf. TRANSFORMERS_V5_MIGRATION.md).
+#
+# NE PAS chercher ici une contrainte de chatterbox-tts. chatterbox-tts 0.1.6
+# DÉCLARE `transformers==4.46.3` — metadata PyPI, et `uv.lock` + `pyproject.toml`
+# de ce service le résolvent bien à 4.46.3 — mais le Dockerfile l'installe en
+# `--no-deps` (étape 3/3), donc cette déclaration ne lie rien. Le commentaire
+# précédent affirmait l'inverse (« chatterbox-tts requiert transformers==5.15.x,
+# cf. uv.lock + pyproject.toml ») : Dependabot y substituait le numéro à chaque
+# bump, faisant d'une justification périmée une affirmation mouvante que les deux
+# fichiers cités contredisaient.
+#
+# Ce qui reste à vérifier à chaque bump : que `import chatterbox` passe au build
+# (torch est épinglé à 2.6.0 dans le Dockerfile, installé AVANT ce fichier).
 transformers==5.15.1
 # librosa: version gérée par ESPnet (0.9.2 pour espnet 202412) et chatterbox-tts
 
