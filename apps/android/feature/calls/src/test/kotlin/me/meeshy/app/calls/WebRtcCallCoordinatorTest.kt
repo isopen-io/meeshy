@@ -51,6 +51,7 @@ class WebRtcCallCoordinatorTest {
         every { iceConnectionState } returns iceState
         every { localIceCandidates } returns localCandidates
         coEvery { createOffer() } returns SessionDescription(SessionDescription.Type.OFFER, "v=0-restart")
+        coEvery { createAnswer() } returns SessionDescription(SessionDescription.Type.ANSWER, "v=0-answer")
         coEvery { setLocalDescription(any()) } returns Unit
     }
 
