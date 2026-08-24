@@ -150,4 +150,4 @@ entrée.
 | `packages/shared` — `tsc --noEmit` | 0 erreur |
 | `services/gateway` — `tsc --noEmit` | 0 erreur |
 | `services/gateway` — suite notifications | 16 suites / 194 témoins verts |
-| `services/gateway` — suite complète | cf. CI |
+| `services/gateway` — suite COMPLÈTE (bun) | **845 suites / 19 336 témoins verts** |
