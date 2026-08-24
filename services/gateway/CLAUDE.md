@@ -714,6 +714,44 @@ pour l'échec : les deux relectures sont fail-CLOSED (une lecture qui ne conclut
 pas répond « protégé »), à l'inverse du best-effort qui gouverne le reste de ces
 unités. Une notification appauvrie se rattrape ; un secret poussé, non.
 
+### La jumelle d'une garde peut être un MÉDIUM, pas une entité (cycle 125)
+
+Les formes ci-dessus cherchent la jumelle dans une autre table, un autre site,
+un autre moment. Il en existe une quatrième, et elle est la plus proche : **le
+même site, la même charge, un autre médium.**
+
+Quatre cycles de gardes se sont posées sur ce chemin — `protectedPreview`,
+`previewPrismSource`, `prePersistedMessageFields`, le verrou du cycle 124.
+Toutes justes, toutes testées. **Toutes gardent une chaîne de caractères.**
+Douze lignes sous la dernière, dans le même objet littéral, `firstAttachmentUrl:
+first?.fileUrl` partait sans aucune condition — et la NSE iOS télécharge cette
+URL puis l'attache en `UNNotificationAttachment` sans regarder
+`notificationLocKey`. Une photo à VUE UNIQUE s'affichait ENTIÈRE sur l'écran
+verrouillé sous une bannière disant « 👁️ 🖼️ ».
+
+> **Une protection de CONTENU se mesure sur tout ce que la charge TRANSPORTE,
+> jamais sur sa seule chaîne** — texte, fichier, nom de fichier, taille, durée,
+> vignette, URL. La question se pose AU MOMENT du correctif : « la charge que ce
+> site remet contient-elle autre chose que ce que je viens de garder ? », et
+> elle se répond en lisant l'objet remis LIGNE À LIGNE, sans lire le code qui le
+> construit — c'est le niveau d'abstraction du correctif qui rend l'objet voisin
+> invisible, parce qu'il ne compose aucune chaîne.
+
+Deux corollaires, mesurés dans le même lot :
+
+- **Un champ de protection présent au modèle et absent de toute requête est un
+  piège armé.** `MessageAttachment` déclare `isViewOnce`, `isBlurred` et
+  `effectFlags` ; le `select` de l'éventail n'en lisait aucun. Aucun chemin de
+  création ne les écrit *aujourd'hui* — le jour où une ligne les pose, dans un
+  lot qui parlera d'autre chose, la protection sera tenue pour acquise par tous
+  ceux qui lisent le schéma. Les respecter coûte trois champs dans un `select`.
+- **Le second verrou se pose sur la clé qui DÉCLARE, pas sur celle qui décrit.**
+  `notificationLocKey` a un unique producteur (`protectedPreview`) : sa présence
+  n'est pas un indice, c'est une déclaration de protection qu'aucun appelant ne
+  pose par accident. `createNotification` s'en sert pour vider `attachmentUrl` —
+  un appelant qui masque le corps sans retirer son média perd le rich-push,
+  jamais le secret.
+
 ## Un témoin d'écriture assert sur l'EFFET, jamais sur le statut
 
 `expect(res.statusCode).toBe(200)` atteste que la route RÉPOND, pas qu'elle
