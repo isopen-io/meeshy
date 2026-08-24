@@ -127,7 +127,7 @@ struct ConversationDashboardView: View {
                     // localisée, valeur brute — 0 clé i18n neuve, cohérent avec StatRing).
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(String(localized: "dashboard.health", defaultValue: "Sante", bundle: .main))
-                    .accessibilityValue("\(health)")
+                    .accessibilityValue(LocalizedNumber.exact(health))
 
                     if summary.engagementLevel != nil || summary.conflictLevel != nil {
                         HStack(spacing: 10) {
@@ -1222,7 +1222,7 @@ private struct StatRing: View {
         // — la valeur brute non abrégée, le libellé déjà localisé (pas de capitales).
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
-        .accessibilityValue("\(value)")
+        .accessibilityValue(LocalizedNumber.exact(value))
     }
 }
 

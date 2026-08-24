@@ -1417,7 +1417,7 @@ private struct ReelScrubBar: View {
             .accessibilityLabel(String(localized: "reels.scrub", defaultValue: "Avancer ou reculer", bundle: .main))
             // No on-screen time numbers (Instagram-reels style), but VoiceOver
             // still announces playback position as a percentage.
-            .accessibilityValue("\(Int((progress * 100).rounded()))%")
+            .accessibilityValue(LocalizedNumber.percent(Int((progress * 100).rounded())))
     }
 
     private var track: some View {
@@ -1792,7 +1792,13 @@ private struct ReelImageView: View {
         // announcing each anonymous circle.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "reels.carousel.image", defaultValue: "Image", bundle: .main))
-        .accessibilityValue("\((images.firstIndex { $0.id == currentImageId } ?? 0) + 1) / \(images.count)")
+        // Le séparateur « / » reste : sa forme EST la donnée (« 3 / 10 » se lit
+        // comme une seule position), et 239i l'a explicitement distingué de la
+        // puce de mise en page qu'elle bannissait. Seuls les CHIFFRES changent.
+        .accessibilityValue(
+            LocalizedNumber.exact((images.firstIndex { $0.id == currentImageId } ?? 0) + 1)
+            + " / " + LocalizedNumber.exact(images.count)
+        )
     }
 }
 

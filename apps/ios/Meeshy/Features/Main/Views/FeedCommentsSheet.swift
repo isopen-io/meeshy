@@ -2351,7 +2351,7 @@ struct CommentRowView: View, Equatable {
                     .accessibilityLabel(isLiked
                         ? String(localized: "a11y.comment.unlike", defaultValue: "Je n'aime plus", bundle: .main)
                         : String(localized: "a11y.comment.like", defaultValue: "J'aime", bundle: .main))
-                    .accessibilityValue("\(likeCount)")
+                    .accessibilityValue(LocalizedNumber.exact(likeCount))
                     .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
 
                     // Réponses plates à 2 niveaux : on peut répondre à un commentaire
