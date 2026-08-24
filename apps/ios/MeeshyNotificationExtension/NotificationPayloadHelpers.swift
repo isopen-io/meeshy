@@ -368,4 +368,99 @@ nonisolated enum NotificationPayloadHelpers {
         }
         return CommunicationFraming(usesGroupFraming: true, groupName: action, intentKey: key)
     }
+
+    // MARK: - Cycle 124 bis — le message PRÉ-ENREGISTRÉ au démarrage à froid
+
+    /// Les champs que `prePersistMessage` écrit dans la bulle locale, dérivés du
+    /// fil RÉEL — c'est-à-dire des clés que la passerelle émet vraiment.
+    ///
+    /// Le cycle 124 a posé `content` et `originalLanguage` sur le fil, sous les
+    /// noms que cette extension lit déjà. Restaient TROIS écarts, mesurés par le
+    /// diff du contrat dans les deux sens :
+    ///
+    ///  - `senderName` — lu ici, jamais émis : la passerelle envoie
+    ///    `senderDisplayName`, que le cadrage Communication du fichier voisin
+    ///    lit correctement depuis toujours ;
+    ///  - `createdAt` et `messageType` — ÉMIS pour cette extension (« GW5 —
+    ///    persistance NSE »), et lus par personne : la bulle était ordonnée par
+    ///    l'horloge du device.
+    struct PrePersistedMessageFields: Equatable {
+        /// Le texte du message, tel que le fil le porte. VIDE quand la
+        /// passerelle n'a rien à donner (mode privé, placeholder de protection,
+        /// transcription) — une bulle sans texte vaut mieux qu'une bulle qui
+        /// MENT et que la synchro REST pourrait ne jamais corriger.
+        let content: String
+        /// L'étiquette de langue de ce texte. Le repli « en » ne vaut que le
+        /// temps que la synchro REST écrase l'enregistrement — mais il ne
+        /// s'applique plus au cas nominal, où le fil la porte.
+        let language: String
+        /// L'horodatage SERVEUR du message, qui ordonne la bulle dans le fil.
+        let createdAt: Date
+        /// Le nom d'affichage de l'expéditeur, sous la clé que la passerelle émet.
+        let senderName: String?
+    }
+
+    /// Compose ces quatre champs depuis le payload.
+    ///
+    /// `fallbackNow` est l'horloge du device, conservée en repli — mais elle
+    /// n'est plus le cas nominal : deux appareils qui reçoivent le même message
+    /// n'ont aucune raison de l'ordonner pareil.
+    nonisolated static func prePersistedMessageFields(
+        userInfo: [AnyHashable: Any],
+        fallbackNow: Date
+    ) -> PrePersistedMessageFields {
+        PrePersistedMessageFields(
+            content: nonEmptyString(userInfo["content"]) ?? "",
+            // Repli historique : « en » est un faux moins nuisible que « fr »
+            // pour la résolution du Prisme d'un lecteur non francophone.
+            language: nonEmptyString(userInfo["originalLanguage"]) ?? "en",
+            createdAt: pushDate(userInfo["createdAt"]) ?? fallbackNow,
+            // `senderName` n'a JAMAIS été une clé du payload : la passerelle
+            // émet `senderDisplayName`, que le cadrage Communication de ce
+            // même fichier lit correctement depuis toujours.
+            senderName: nonEmptyString(userInfo["senderDisplayName"])
+                ?? nonEmptyString(userInfo["senderUsername"])
+        )
+    }
+
+    /// Le `messageType` / `contentType` de la bulle pré-enregistrée.
+    ///
+    /// Le mime de la pièce jointe reste PRIORITAIRE : c'est lui qui décide du
+    /// rendu média (N4), et `Message.messageType` vaut `text` pour un vocal
+    /// légendé. Le type du fil ne sert qu'en l'absence de pièce jointe, où il
+    /// est plus fin que le repli `text`.
+    nonisolated static func prePersistedMessageTypes(
+        userInfo: [AnyHashable: Any]
+    ) -> (messageType: String, contentType: String) {
+        let mime = userInfo["attachmentMimeType"] as? String
+        let fromMime = mediaMessageTypes(forAttachmentMimeType: mime)
+        guard fromMime.messageType == "text",
+              let wireType = nonEmptyString(userInfo["messageType"])?.lowercased(),
+              wireType != "text"
+        else { return fromMime }
+        return (wireType, wireType)
+    }
+
+    /// Une valeur de payload lue comme chaîne NON VIDE. Les `data` APNs/FCM ne
+    /// transportent que des chaînes, et la passerelle y pose `''` là où elle
+    /// n'a rien à dire — les deux formes veulent dire « absent ».
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let string = value as? String else { return nil }
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Un horodatage ISO 8601 du fil, avec ou sans fraction de seconde — la
+    /// passerelle émet `toISOString()`, qui en porte toujours une, mais un
+    /// parseur qui n'accepte qu'une seule forme rendrait `nil` au premier
+    /// producteur qui l'omet.
+    private static func pushDate(_ value: Any?) -> Date? {
+        guard let raw = nonEmptyString(value) else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFraction.date(from: raw) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: raw)
+    }
 }
