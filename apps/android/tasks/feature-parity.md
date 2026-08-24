@@ -3834,6 +3834,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       the current slide's text objects from the raw item alongside the caption; the Compose layer already
       reads `slide.textObjects`, so caption and overlays repaint together in the chosen language. +9 tests
       (7 projection, 2 viewmodel); mutation RED-proof isolated exactly the 5 override-dependent tests.
+- [x] **Language bar descends the Prisme over ALL slide content** done (slice
+      `story-language-bar-text-object-translations`, 2026-08-24): `availableLanguagesFor` built its "present"
+      content chips from the CAPTION (`item.translations`) alone, so a slide whose text overlays carried a
+      translation the caption lacked (nominal once the device locale, rank 4, differs from the app language)
+      offered the reader no chip to reach it — the overlay's translation existed but was unreachable, the same
+      caption/overlay disagreement the two prior cycles fixed, one rung earlier (the strip that OFFERS the
+      languages, not the resolver that renders them). Now unions caption languages (in caption order) with
+      every language key across `storyEffects.textObjects[].translations` (blank values filtered, mirroring
+      the caption's `content.isNotBlank()`), deduped case-insensitively; the empty-gate and the
+      translatable-request arm both account for overlay languages. Consumer path unchanged (tap sets the
+      ephemeral override, `emit()` re-projects overlays). +5 viewmodel tests; RED proven against unmodified
+      production (exactly these 5 failed, the other 56 stayed green). One pure method; no wire/model change.
 - [ ] Per-clip inspector EDITOR (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)

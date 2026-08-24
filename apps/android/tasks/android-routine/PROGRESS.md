@@ -2,6 +2,68 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-24 **the story language bar descends the Prisme over ALL slide content, not the caption alone**
+> (slice `story-language-bar-text-object-translations`, feature-parity §E — the previous entry's `Next`
+> pointer's scout arm: "worth a scout to confirm a pulled-then-displayed text object resolves." The scout
+> found the gap one rung earlier than the pull: the **language bar itself** never offered overlay languages).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3431 (gateway/shared notif Prisme
+> cycle 121), #3429 (shared ObjectId it. 259), #3426 (ios i18n 240i), #3424 (gateway ObjectId 258), #3418
+> (web/admin 257): none is a `claude/apps/android/*` slice, all touch production logic outside `apps/android`,
+> none in this routine's scope, none touched. Prior slice (`story-text-object-exploration-override`) already
+> merged into main. Branched off freshly-fetched `origin/main` (`7fdd6b64`).
+>
+> **The gap — the exploration strip was blind to overlay translations.** `availableLanguagesFor` built its
+> "present" content chips from `item.translations` alone (the CAPTION). But CLAUDE.md §Cohérence: the Prisme
+> applies to ALL content, and the two prior cycles wired text overlays as first-class translatable content
+> (`StoryTextObject.translations`, resolved by `StoryTextObjectProjection`). A slide whose overlays carried a
+> translation the caption lacked (nominal once the device locale, rank 4, differs from the app language)
+> offered the reader NO chip to reach it — the overlay's translation existed but was unreachable. Same shape
+> as the caption/overlay disagreement the last two cycles fixed, one rung earlier: the strip that OFFERS the
+> languages, not the resolver that renders them.
+>
+> **The fix — union caption + overlay languages, caption-first, deduped case-insensitively.**
+> `availableLanguagesFor` now unions `item.translations` languages (in caption order) with every language key
+> across `storyEffects.textObjects[].translations` (blank values filtered, mirroring the caption's
+> `content.isNotBlank()`), `distinctBy { lowercase() }`. The empty-gate (`present.isEmpty()` ⇒ no strip) and
+> the translatable-request arm's `presentLower` exclusion both now account for overlay languages, so an
+> overlay-only-translated story (a) shows its overlay languages as present content chips and (b) still offers
+> a configured-absent language as a translatable request chip. Consumer path unchanged: tapping a present
+> overlay-language chip sets the ephemeral override, `emit()` re-projects the overlays into it (proven by the
+> toggle test). One pure private method edited; zero screen/model/wire change.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE; gradle auto-installed pristine `android-37.0` which HASH-ERRORED
+> (`Failed to find target with hash string 'android-37'`); the four-edit copy→patch `android-37` + keep-both-dirs
+> recipe worked** (source.properties ApiLevel=37, package.xml `<api-level>`+`path=`, build.prop `sdk_full=37`;
+> both `android-37` and `android-37.0` kept). Matches the immediately-prior slice's finding — this image family
+> wants the patched integer-hash dir. (NOTES' "recipe is image-dependent" still holds.)
+>
+> **Tests: +5** (`StoryViewerViewModelTest`) — overlay-only translation surfaces as a present content chip;
+> caption+overlay unioned caption-first with no duplicate (`.inOrder()` es,de); a blank overlay translation
+> value is not offered; an overlay-only-translated story still offers a configured-absent language as
+> translatable; tapping an overlay-only present chip re-resolves the overlays into it (the full offer→act
+> loop). **RED proven against unmodified production**: exactly these 5 failed, the other 56
+> `StoryViewerViewModelTest` cases stayed green — genuine discrimination on the fixture, not the assertion.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest) locally — **BUILD
+> SUCCESSFUL** (973 tasks, 6m34s). Reviewer PASS. Diff is `apps/android` only (1 prod file, +5 tests in 1
+> file, tracking docs). Verdict: **PASS** — one pure method extended to union overlay translations into the
+> exploration strip, reusing the existing chip/override machinery, behavioural tests through the public API,
+> no production logic outside apps/android, no wire/shared/model change.
+>
+> **Next**: §E (Stories) — the exploration strip now offers every present content language across caption +
+> overlays, and both reader-side resolvers (caption + overlays) honour the tapped override. One reader-side
+> loose end remains: **`requestStoryTranslation` translates only the CAPTION** (`translateStory` →
+> `StoryTranslationMerge.mergeTranslation` on `item.content`), so a pulled on-demand language repaints the
+> caption but leaves overlays on their own chain — worth a scout to confirm whether iOS translates overlays
+> on demand (parity) before building an N-call overlay pull. Otherwise the editor-side candidates resurface:
+> (a) the **clip-inspector editor reducer** (pure per-clip volume/fade/loop/background/delete; needs a
+> timeline/selection host surface first — orphan risk until then, two iOS fields
+> `mutedVolumeMemento`/`isDuckingDisabled` still undecoded on Android), or (b) the **timeline transport**
+> pure state (play/pause/scrub/zoom 0.25×–4×/mute, modelled on chat's `OverlayMediaTransport`, ephemeral
+> editor state no wire backing — also needs a host surface). Prefer the candidate with the cleanest pure core
+> AND a real consumer surface; scout read-only first.
+
 > On 2026-08-24 **a text overlay re-resolves into the "Exploration" language the reader taps** (slice
 > `story-text-object-exploration-override`, feature-parity §E — the previous entry's `Next` pointer
 > candidate (c): folding the exploration language override into text-object re-resolution, chosen over

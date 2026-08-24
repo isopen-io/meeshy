@@ -456,20 +456,32 @@ class StoryViewerViewModel @Inject constructor(
      * pure-original story (no translations) from dumping every preferred language as
      * a request affordance; an anonymous/logged-out viewer (no prefs) sees only the
      * present translations.
+     *
+     * The Prisme applies to ALL of a slide's content (CLAUDE.md §Cohérence), so a
+     * present language is any language a translation exists for across the caption
+     * **and** the on-canvas text overlays — not the caption alone. A slide whose
+     * overlays are translated but whose caption is not would otherwise expose no way
+     * to explore them. Caption languages lead (in caption order), then each
+     * overlay-only language, all deduped case-insensitively.
      */
     private fun availableLanguagesFor(storyId: String?): List<StoryLanguageOption> {
         val item = storyId?.let { rawItems[it] } ?: return emptyList()
-        val present = item.translations.orEmpty()
+        val captionCodes = item.translations.orEmpty()
             .filter { it.language.isNotBlank() && it.content.isNotBlank() }
-            .distinctBy { it.language.lowercase() }
-            .map { languageOption(it.language, storyId, isTranslatable = false) }
+            .map { it.language }
+        val overlayCodes = item.storyEffects?.textObjects.orEmpty()
+            .flatMap { it.translations.orEmpty().entries }
+            .filter { it.key.isNotBlank() && it.value.isNotBlank() }
+            .map { it.key }
+        val presentCodes = (captionCodes + overlayCodes).distinctBy { it.lowercase() }
+        val present = presentCodes.map { languageOption(it, storyId, isTranslatable = false) }
         if (present.isEmpty()) return emptyList()
 
         val user = sessionRepository.currentUser.value ?: return present
-        val presentCodes = present.mapTo(mutableSetOf()) { it.code.lowercase() }
+        val presentLower = presentCodes.mapTo(mutableSetOf()) { it.lowercase() }
         val translatable = LanguageResolver.preferredContentLanguages(user)
             .distinctBy { it.lowercase() }
-            .filter { it.lowercase() !in presentCodes }
+            .filter { it.lowercase() !in presentLower }
             .map { languageOption(it, storyId, isTranslatable = true) }
         return present + translatable
     }
