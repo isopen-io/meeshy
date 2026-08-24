@@ -221,12 +221,20 @@ export function summarizeCallReliability(
     avgRtt: avg(connected.map((r) => r.averageRtt)),
     avgPacketLoss: avg(connected.map((r) => r.averagePacketLoss)),
     maxPacketLoss: records.reduce((acc, r) => Math.max(acc, r.maxPacketLoss), 0),
-    qualityDistribution: {
-      excellent: sum((r) => r.qualityDistribution.excellent) / n,
-      good: sum((r) => r.qualityDistribution.good) / n,
-      fair: sum((r) => r.qualityDistribution.fair) / n,
-      poor: sum((r) => r.qualityDistribution.poor) / n,
-    },
+    // Same sentinel-shaped hazard as avgRtt/avgPacketLoss above: a
+    // never-connected call never took a quality sample, so it reports
+    // qualityDistribution = all zeros rather than a real (summing-to-1)
+    // distribution. Averaging that zero-vector in over ALL calls dilutes
+    // every bucket by the never-connected fraction and the result no longer
+    // sums to 1 — average over CONNECTED calls only.
+    qualityDistribution: connected.length > 0
+      ? {
+          excellent: connected.reduce((acc, r) => acc + r.qualityDistribution.excellent, 0) / connected.length,
+          good: connected.reduce((acc, r) => acc + r.qualityDistribution.good, 0) / connected.length,
+          fair: connected.reduce((acc, r) => acc + r.qualityDistribution.fair, 0) / connected.length,
+          poor: connected.reduce((acc, r) => acc + r.qualityDistribution.poor, 0) / connected.length,
+        }
+      : { excellent: 0, good: 0, fair: 0, poor: 0 },
     byPlatform: byCount((r) => r.platform),
     byEndReason: byCount((r) => normalizeEndReason(r.endReason)),
   };

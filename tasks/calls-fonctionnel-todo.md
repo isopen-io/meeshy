@@ -12143,3 +12143,104 @@ exécutables localement (pas de toolchain Xcode dans cet environnement) —
 validation finale via CI (« iOS Tests »).
 
 Détail : `tasks/lessons.md` § Leçon 277.
+
+## Vague 180 — `summarizeCallReliability` diluait sa `qualityDistribution` avec les appels jamais connectés (gateway) (2026-08-24)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Branche
+`claude/upbeat-dirac-wuf3dx` fast-forwardée depuis `origin/main` (Vagues 176-179 déjà mergées,
+dernier commit visible `48b2fe41`, puis rattrapage jusqu'à `74796e7c` — PR #3481/#3487 sans rapport
+avec le calling). Audit délégué sur gateway/web en priorité (seule zone testable localement dans ce
+conteneur), cadré pour ne pas rouvrir les familles déjà closes (god-object `CallManager.swift`, ADR
+`actor CallEventQueue`, single-peer groupe iOS, gap de rôle `conversations/participants.ts`,
+`redirect=` vs `returnUrl=` sur le lien tracké, famille `clearRingingTimeout`/`clearHeartbeats`,
+`call:transcription-segment`/`call:request-ice-servers` → `resolveActiveCallParticipantId`,
+`TelecomCallReporter` Android, ré-entrance `restartIceAndRenegotiate` Android, `bun run lint`).
+
+### Root cause
+
+`summarizeCallReliability` (`services/callAnalyticsAggregate.ts`) agrège le tableau brut
+`qualityDistribution` (`{excellent, good, fair, poor}`, des FRACTIONS sommant à 1) que chaque
+participant écrit dans `buildAnalyticsPayload` (web `lib/call-analytics.ts`, miroir iOS/Android) à la
+fin de son appel. Un appel qui ne s'est **jamais connecté** (setup raté, appelé n'a jamais décroché)
+n'a pris **aucun échantillon de qualité** : `buildAnalyticsPayload` rend alors le vecteur zéro
+`{excellent:0, good:0, fair:0, poor:0}` — pas une distribution réelle, juste « rien à mesurer ».
+
+`avgRtt` et `avgPacketLoss`, juste au-dessus dans la même fonction, gardent déjà cette garde — filtrées
+sur `connected` (`setupTimeMs >= 0`), avec le commentaire qui l'explique noir sur blanc : « a
+never-connected call reports rtt/loss = 0 (no samples) — averaging those in deflates the mean (prod
+2026-07-12: ~half of rows never connected) ». `qualityDistribution` divisait au contraire par `n`
+(le total de TOUS les enregistrements) plutôt que par `connected.length` — exactement le même défaut
+que celui déjà corrigé deux champs plus haut, laissé de côté sur celui-ci.
+
+### Impact
+
+Sur le dashboard admin de fiabilité (`GET /admin/analytics/calls`, `routes/admin/analytics.ts`), la
+`qualityDistribution` agrégée ne somme plus à 1 dès qu'une fraction non nulle des appels ne se
+connecte jamais (le cas nominal d'après le commentaire prod du 2026-07-12 : « ~half of rows never
+connected »). Chaque case (`excellent`/`good`/`fair`/`poor`) est diluée par le vecteur zéro des appels
+jamais connectés — un opérateur lisant « 50 % excellent » sur un échantillon où la moitié des lignes
+n'a jamais pris de mesure lirait en réalité « 100 % excellent parmi les appels connectés », sous-
+estimant systématiquement la qualité perçue par les utilisateurs qui ont effectivement pu parler.
+Silencieux : aucune erreur, un total qui ne fait pas 100 % passe pour un artefact d'arrondi plutôt
+qu'un biais de mesure.
+
+### Fix
+
+`qualityDistribution` est désormais moyennée sur `connected` (déjà calculé juste au-dessus pour
+`avgRtt`/`avgPacketLoss`), avec le même repli à zéro quand aucun appel n'a connecté — miroir exact du
+patron déjà en place pour ses deux voisins :
+
+```ts
+qualityDistribution: connected.length > 0
+  ? {
+      excellent: connected.reduce((acc, r) => acc + r.qualityDistribution.excellent, 0) / connected.length,
+      good: connected.reduce((acc, r) => acc + r.qualityDistribution.good, 0) / connected.length,
+      fair: connected.reduce((acc, r) => acc + r.qualityDistribution.fair, 0) / connected.length,
+      poor: connected.reduce((acc, r) => acc + r.qualityDistribution.poor, 0) / connected.length,
+    }
+  : { excellent: 0, good: 0, fair: 0, poor: 0 },
+```
+
+Purement additif : seule la formule de ce champ change, aucune signature, aucun type exporté, aucun
+autre champ de `CallReliabilitySummary` touché.
+
+### Tests (TDD, RED confirmé — vrai Jest)
+
+`callAnalyticsAggregate.test.ts`, deux cas ajoutés : (1) « excludes never-connected calls (all-zero
+distribution, no samples) from the quality-distribution mean » — un appel connecté à 100 % `good` et
+deux jamais connectés (setupTimeMs -1, vecteur zéro) ; RED confirmé (`Received: 0.333…` au lieu de
+`1` — la dilution par 3 au lieu de 1) ; GREEN après fix, et assertion supplémentaire que les quatre
+fractions somment bien à 1. (2) « leaves qualityDistribution zeroed when no call ever connected » —
+comportement de repli inchangé quand `connected` est vide. Sweep gateway `--testPathPatterns="[Cc]all"` :
+**59/59 suites, 1274/1274 tests verts** (Vague 177 laissait 59/59, 1272/1272 — delta = +2 tests,
+exactement les deux ajoutés ici, aucune suite supplémentaire car le fichier existait déjà). `npx tsc
+--noEmit` (services/gateway) : 0 erreur. Suite complète gateway (`bun run test`, sans `--coverage` —
+la variante `--coverage` dépasse le budget de temps de ce conteneur, déjà documenté dans les Vagues
+précédentes) lancée en tâche de fond ; résultat consigné avant push.
+
+### Risk assessment
+
+Minimal — un seul champ dérivé change de dénominateur dans une fonction pure sans I/O, testée à 100 %
+par construction (aucune branche non exercée). Aucune écriture DB, aucun contrat de fil, aucun client
+mobile touché (l'émission `call:analytics` — côté web/iOS/Android — est inchangée ; seule la LECTURE
+agrégée admin change). Le seul comportement qui change : la ventilation qualité du dashboard de
+fiabilité ne compte plus les appels jamais connectés dans son dénominateur, exactement comme ses deux
+voisins `avgRtt`/`avgPacketLoss` le font déjà depuis l'incident du 2026-07-12. Aucun consommateur
+(admin route) ne teste la valeur agrégée elle-même (`admin-analytics.test.ts` ne fixture que
+`coerceCallAnalytics`, jamais `summarizeCallReliability` en bout de route) — vérifié, aucun témoin
+existant n'attestait l'ancien (faux) comportement.
+
+### Non fait volontairement / reste ouvert
+
+Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~6372 lignes) ; ADR `actor
+CallEventQueue` non implémenté ; iOS single-peer côté groupe ; gap de hiérarchie de rôle sur
+`conversations/participants.ts` (hors périmètre calling) ; `redirect=` vs `returnUrl=` sur
+`app/links/tracked/[token]/page.tsx` (hors périmètre calling) ; famille
+`clearRingingTimeout`/`clearHeartbeats` (close, non ré-auditée cette Vague) ;
+`call:transcription-segment`/`call:request-ice-servers` → `resolveActiveCallParticipantId` (close) ;
+`TelecomCallReporter` Android (stub documenté) ; ré-entrance `restartIceAndRenegotiate` Android
+(différée) ; `bun run lint` documenté cassé dans ce conteneur (pré-existant, hors périmètre). Aucun
+nouveau suivi ouvert par cette Vague : le patron `connected`-only est désormais appliqué aux TROIS
+champs de la fonction qui en avaient besoin (`avgRtt`, `avgPacketLoss`, `qualityDistribution`) — un
+audit ultérieur pourrait vérifier qu'aucun futur champ de `CallReliabilitySummary` ne réintroduit la
+même dilution.
