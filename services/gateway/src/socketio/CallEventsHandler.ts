@@ -2397,12 +2397,25 @@ export class CallEventsHandler {
               where: { callSessionId: { in: callIds }, participant: { userId } }
             })
           : [];
-        const myParticipantMap = new Map<string, { leftAt: Date | null }>(
-          myParticipants.map(p => [p.callSessionId as string, p as { leftAt: Date | null }])
-        );
+        // Vague 177 — a leave-then-rejoin (network blip, app relaunch mid-ring)
+        // never reuses the departed `CallParticipant` row (`joinCall` only
+        // reuses a row while `!leftAt`), so a user can own MULTIPLE rows for
+        // the SAME callSessionId: one departed, one active. Collapsing them
+        // into a `Map<callSessionId, row>` kept only the LAST row `findMany`
+        // (no `orderBy`, no ordering guarantee) happened to return, silently
+        // discarding the other — a leave-then-rejoin is exactly the moment
+        // `call:check-active` fires (it runs on reconnect), so this hit the
+        // target scenario, not a corner case. `leftAllRows` instead reduces
+        // per call: skip the replay only when EVERY row for that call has
+        // `leftAt` set — one active row is always enough to keep replaying.
+        const leftAllRowsByCall = new Map<string, boolean>();
+        for (const p of myParticipants) {
+          const key = p.callSessionId as string;
+          const leftThisRow = Boolean((p as { leftAt: Date | null }).leftAt);
+          leftAllRowsByCall.set(key, (leftAllRowsByCall.get(key) ?? true) && leftThisRow);
+        }
         for (const c of activeCalls) {
-          const myPart = myParticipantMap.get(c.id);
-          if (myPart?.leftAt) continue;
+          if (leftAllRowsByCall.get(c.id)) continue;
 
           const full = await this.callService.getCallSession(c.id);
           const callType: 'audio' | 'video' = (full.metadata as { type?: string } | null)?.type === 'video' ? 'video' : 'audio';
