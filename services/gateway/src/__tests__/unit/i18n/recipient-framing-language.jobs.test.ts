@@ -1,5 +1,5 @@
 /**
- * Cycle 124 — la langue de CADRAGE d'un destinataire NOMMÉ.
+ * Cycle 125 — la langue de CADRAGE d'un destinataire NOMMÉ.
  *
  * `NotificationService.resolveRecipientPrism` en porte la règle, et son
  * doc-comment l'énonce : la langue de cadrage est « le rang le plus haut
@@ -26,7 +26,7 @@
  *
  * Le REPLI terminal de chaque site est PRÉSERVÉ ('en' ici, là où
  * `resolveUserLanguage` rendrait 'fr') : le correctif ajoute la descente, il ne
- * trancheZ pas la question produit « quelle langue pour un compte sans AUCUNE
+ * tranche pas la question produit « quelle langue pour un compte sans AUCUNE
  * préférence ». Un témoin d'anti-régression le fixe.
  *
  * @jest-environment node

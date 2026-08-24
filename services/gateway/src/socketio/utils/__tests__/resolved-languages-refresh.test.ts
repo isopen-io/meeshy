@@ -33,7 +33,7 @@ describe('applyResolvedLanguagesRefresh', () => {
     expect(m.get('u1')!.resolvedLanguages).toEqual(['en']);
   });
 
-  // Cycle 124 — les quatre témoins ci-dessus épinglent tous le RANG 1, où la
+  // Cycle 125 — les quatre témoins ci-dessus épinglent tous le RANG 1, où la
   // lecture directe (`prefs.systemLanguage`) et la descente rendent le même
   // verdict. Aucun ne pouvait donc voir que `language` était écrit brut pendant
   // que `resolvedLanguages`, dans la MÊME instruction, descendait le Prisme.

@@ -3293,6 +3293,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       +3 `CommentThreadStateTest`/`CommentRepliesStateTest`, +1 `CommentProjectionTest`, +4 `PostCommentsViewModelTest`;
       1 obsolete dead-arm test rewritten to the new contract; mutation-proved ×2 — in-flight guard, active-language
       switch). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (local, SDK 37 bootstrapped).
+      **Comment realtime push merge shipped** (slice `comment-translation-updated-realtime-merge`, 2026-08-24 — the
+      comment-keyed sibling of the `post-translation-updated-realtime-merge` slice, one rung over). Android had **no**
+      handler for `comment:translation-updated`; the gateway translates a comment server-side and broadcasts the
+      finished entry (`{ postId, commentId, language, translation:{text,translationModel?,confidenceScore?,createdAt?} }`),
+      iOS folds it into the open thread via `PostDetailViewModel`/`FeedViewModel.applyCommentTranslation`, Android
+      dropped it on the floor. New `SocketCommentTranslationUpdatedData` (reuses `ApiPostTranslationEntry` as its
+      `translation` shape) + `SocialSocketManager.commentTranslationUpdated` flow wired to
+      `listen("comment:translation-updated", …)`. New entry-preserving `PostTranslationMerge.mergeTranslation(comment,
+      lang, entry): ApiPostComment?` overload (the comment sibling of the post entry overload, reusing the private entry
+      upsert; the comment STRING overload dropped the model/confidence the push carries; metadata-only change is NOT a
+      no-op). `PostCommentsViewModel.onCommentTranslationUpdated` subscribes, filters by `postId`, finds the comment
+      (top-level or a loaded reply), merges the entry, and folds via the existing `thread.retranslated` /
+      `replies.retranslated` reducers — **no `activeLanguages` override forced** (the reader did not tap; their own
+      Prisme chain decides, parity with iOS and the post slice). +13 tests (7 pure comment-entry merge, 2 socket decode,
+      4 vm: es-reader repaint of a top-level comment AND a loaded reply with no tap + inert for another post + inert for
+      an unknown comment); RED-proof isolated ×3: neutering the comment entry merge reddened exactly the 4 transformation
+      tests (3 no-op green), commenting the socket `listen` reddened the 2 socket tests, neutering the VM fold reddened
+      exactly the 2 repaint tests (2 inert green). Full `meeshy.sh check` → BUILD SUCCESSFUL (local, SDK 37). No
+      production logic outside `apps/android`.
       **Story request arm shipped** (slice `story-viewer-translation-request`, 2026-08-21): the story viewer's
       language quick bar (`StoryViewerViewModel.availableLanguagesFor`) previously listed only present
       `StoryItem.translations`, so a configured-but-absent language was never requestable. It now appends each

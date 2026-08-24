@@ -29,7 +29,7 @@ export function applyResolvedLanguagesRefresh<
   const resolvedLanguages = resolveUserLanguagesOrdered(prefs, {
     deviceLocale: prefs.deviceLocale ?? undefined,
   });
-  // Cycle 124 — la langue de CADRAGE est la TÊTE de la liste qu'on vient de
+  // Cycle 125 — la langue de CADRAGE est la TÊTE de la liste qu'on vient de
   // calculer, pas une seconde lecture de `systemLanguage`. Les deux divergeaient
   // dans la MÊME instruction dès que le rang 1 est vide (`language: null` dans
   // un champ typé `string`) ou seulement dénormalisé (`'pt-BR'` là où la liste

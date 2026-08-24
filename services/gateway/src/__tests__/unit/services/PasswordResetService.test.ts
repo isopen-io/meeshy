@@ -343,7 +343,7 @@ describe('PasswordResetService', () => {
         });
       });
 
-      // Cycle 124 — la langue de l'e-mail descend le Prisme du lecteur, comme
+      // Cycle 125 — la langue de l'e-mail descend le Prisme du lecteur, comme
       // toute écriture vers un destinataire NOMMÉ. `user.systemLanguage || 'en'`
       // servait l'anglais à quiconque n'a renseigné qu'un rang inférieur, et
       // servait un `'pt-BR'` non normalisé aux autres.

@@ -1189,7 +1189,7 @@ describe('AuthHandler', () => {
       expect(connectedUsers.get('user-123')?.language).toBe('en');
     });
 
-    // Cycle 124 — le témoin ci-dessus ne pouvait pas tomber. Son commentaire
+    // Cycle 125 — le témoin ci-dessus ne pouvait pas tomber. Son commentaire
     // AFFIRME « systemLanguage is the highest-priority source in
     // resolveUserLanguage », mais le site lisait `user.systemLanguage || 'en'`
     // en direct : au rang 1, la lecture directe et la descente rendent le même

@@ -244,4 +244,73 @@ class PostTranslationMergeTest {
         assertThat(merged).isNotNull()
         assertThat(merged!!.translations!!.keys).containsExactly("es")
     }
+
+    // --- Comment entry overload: the push-side, comment-keyed merge that PRESERVES
+    //     model/confidence/createdAt (the realtime `comment:translation-updated` payload
+    //     carries a full entry — the comment text-only overload would drop that metadata). ---
+
+    @Test
+    fun `appends a pushed entry to a comment preserving its model, confidence and timestamp`() {
+        val merged = PostTranslationMerge.mergeTranslation(comment(translations = null), "es", entry())
+
+        assertThat(merged).isNotNull()
+        assertThat(merged!!.id).isEqualTo("c1")
+        assertThat(merged.translations).containsExactly("es", entry())
+    }
+
+    @Test
+    fun `appends a pushed comment entry alongside existing translations, preserving order`() {
+        val merged = PostTranslationMerge.mergeTranslation(
+            comment(translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello"))),
+            "es",
+            entry(),
+        )
+
+        assertThat(merged).isNotNull()
+        assertThat(merged!!.translations!!.keys).containsExactly("en", "es").inOrder()
+        assertThat(merged.translations!!["es"]).isEqualTo(entry())
+    }
+
+    @Test
+    fun `replaces an existing comment entry in place under its case-insensitively matched key`() {
+        val merged = PostTranslationMerge.mergeTranslation(
+            comment(translations = mapOf("ES" to entry(text = "Hola vieja", confidence = 0.5))),
+            "es",
+            entry(text = "Hola nueva", confidence = 0.99),
+        )
+
+        assertThat(merged).isNotNull()
+        assertThat(merged!!.translations!!.keys).containsExactly("ES")
+        assertThat(merged.translations!!["ES"]).isEqualTo(entry(text = "Hola nueva", confidence = 0.99))
+    }
+
+    @Test
+    fun `stores a metadata-only comment entry change so richer server data is never dropped`() {
+        val merged = PostTranslationMerge.mergeTranslation(
+            comment(translations = mapOf("es" to entry(model = "nllb", confidence = 0.5))),
+            "es",
+            entry(model = "m2m100", confidence = 0.9),
+        )
+
+        assertThat(merged).isNotNull()
+        assertThat(merged!!.translations!!["es"]!!.translationModel).isEqualTo("m2m100")
+        assertThat(merged.translations!!["es"]!!.confidenceScore).isEqualTo(0.9)
+    }
+
+    @Test
+    fun `is a no-op when the identical comment entry is already present`() {
+        assertThat(
+            PostTranslationMerge.mergeTranslation(comment(translations = mapOf("es" to entry())), "es", entry()),
+        ).isNull()
+    }
+
+    @Test
+    fun `is a no-op for a blank target language on the comment entry overload`() {
+        assertThat(PostTranslationMerge.mergeTranslation(comment(), "   ", entry())).isNull()
+    }
+
+    @Test
+    fun `is a no-op for a pushed comment entry whose text is blank`() {
+        assertThat(PostTranslationMerge.mergeTranslation(comment(), "es", entry(text = "   "))).isNull()
+    }
 }

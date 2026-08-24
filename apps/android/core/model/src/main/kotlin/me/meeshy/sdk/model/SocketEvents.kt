@@ -443,6 +443,23 @@ data class SocketPostTranslationUpdatedData(
 )
 
 /**
+ * `comment:translation-updated` — the gateway translated a comment's text into [language]
+ * server-side and broadcasts the finished entry so an open comment thread can switch that
+ * row to it without a refetch (the comment-keyed sibling of
+ * [SocketPostTranslationUpdatedData], one rung over: it carries [commentId] too). Mirror of
+ * iOS `SocketCommentTranslationUpdatedData`. [translation] has the same shape as
+ * [ApiPostTranslationEntry] — text plus optional model/confidence/timestamp — so it decodes
+ * straight into one; a blank text is a no-op the [PostTranslationMerge] ignores.
+ */
+@Serializable
+data class SocketCommentTranslationUpdatedData(
+    val postId: String,
+    val commentId: String,
+    val language: String,
+    val translation: ApiPostTranslationEntry,
+)
+
+/**
  * `status:unreacted` — a user removed their reaction from a mood status. Same shape as
  * [SocketStatusReactedData] (mirror of the shared `StatusUnreactedEventData`): it carries
  * no aggregate count, so the bar decrements the emoji by one (clamped ≥0, dropping the

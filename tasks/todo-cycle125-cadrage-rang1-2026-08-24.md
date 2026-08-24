@@ -1,4 +1,4 @@
-# Cycle 124 — la langue de CADRAGE d'un destinataire NOMMÉ, élue au rang 1
+# Cycle 125 — la langue de CADRAGE d'un destinataire NOMMÉ, élue au rang 1
 
 ## Point de départ
 
@@ -166,3 +166,26 @@ le premier.**
 - Suivi NOMMÉ et mesuré, non fait : `AuthService:611` (arbitrage de persistance),
   `MessageTranslationService:2402` (langue du LOCUTEUR, thèse distincte),
   `MessagingService.ensureParticipantFromMember` (corrigé sans témoin propre).
+
+## Convergence (merge manuel avec `origin/main`)
+
+Une passe parallèle a livré son propre **cycle 124** le même jour — le suivi `prePersistMessage`
+que ce cycle-ci avait ouvert puis écarté au profit de la face CADRAGE. Aucun chevauchement de
+code : elle touche le fil push (`content` / `originalLanguage`) et l'éventail de vocaux, nous
+touchons la résolution de langue. Le seul conflit était **documentaire** — les deux passes ont
+écrit une « leçon 273 ».
+
+Convention du dépôt (cf. note du cycle 123) : **la leçon atterrie la première garde son
+numéro.** La leur reste 273 ; la nôtre devient **274**, et ce cycle est renuméroté **125**.
+
+
+## Convergence (merge manuel avec `origin/main`)
+
+Une passe parallèle a livré son propre **cycle 124** le même jour — le suivi
+`prePersistMessage` que ce cycle-ci avait ouvert puis écarté au profit de la face CADRAGE.
+Aucun chevauchement de code : elle touche le fil push (`content` / `originalLanguage`) et
+l'éventail de vocaux, nous touchons la résolution de langue. Le seul conflit était
+**documentaire** — les deux passes ont écrit une « leçon 273 ».
+
+Convention du dépôt (cf. note du cycle 123) : **la leçon atterrie la première garde son
+numéro.** La leur reste 273 ; la nôtre devient **274**, et ce cycle est renuméroté **125**.

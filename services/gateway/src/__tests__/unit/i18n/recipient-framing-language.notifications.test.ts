@@ -1,5 +1,5 @@
 /**
- * Cycle 124 — la langue de CADRAGE, dans le service qui en porte la règle.
+ * Cycle 125 — la langue de CADRAGE, dans le service qui en porte la règle.
  *
  * `NotificationService.resolveRecipientPrism` EST la SSOT du cadrage, et son
  * doc-comment l'énonce : « le rang le plus haut RENSEIGNÉ, ce que rend
@@ -116,7 +116,7 @@ const NO_PREFERENCE_AT_ALL = {
 
 function makeNotif() {
   return {
-    id: 'notif-124', userId: RECIPIENT_ID, type: 'password_changed',
+    id: 'notif-cadrage', userId: RECIPIENT_ID, type: 'password_changed',
     isRead: false, createdAt: new Date(), content: '', priority: 'high',
     actor: null, context: {}, metadata: {}, delivery: { emailSent: false, pushSent: false },
   };
