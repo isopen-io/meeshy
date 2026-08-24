@@ -99,12 +99,16 @@ export interface RepostRequest {
    *
    * Le champ manquait entièrement côté web : tous les sites envoyaient
    * `{ isQuote: false }`, le gateway retombait sur son défaut `?? POST`
-   * (`PostService.ts:2221`), et **republier une story fabriquait donc un post
-   * permanent en silence** — le geste disait « repartager », le résultat disait
-   * « ancrer ». Un réel y perdait aussi sa nature et quittait le fil des réels.
+   * (`PostService.repostPost`), et **republier une story fabriquait donc un
+   * post permanent en silence** — le geste disait « repartager », le résultat
+   * disait « ancrer ». Un réel y perdait aussi sa nature et quittait le fil
+   * des réels.
    *
-   * Omettre le champ reste licite : le filet `?? POST` du gateway vaut mieux
-   * qu'une supposition quand le type de la source est inconnu.
+   * Le champ est OPTIONNEL au TYPE parce que le gateway garde un filet pour
+   * les clients qui l'ignorent — pas parce qu'un site web pourrait s'en
+   * passer. Tout site web qui affiche un repost connaît le type de sa carte et
+   * DOIT l'envoyer. Le compilateur ne le vérifie pas : ce sont les tests par
+   * site d'appel qui tiennent la loi.
    */
   readonly targetType?: PostType;
 }

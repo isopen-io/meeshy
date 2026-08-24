@@ -126,6 +126,16 @@ export default function StoryPage() {
    */
   const repostStory = useCallback(
     (storyId: string, targetType: PostType) => {
+      // La scène VUE, jamais la racine de sa chaîne — et c'est délibéré, ici
+      // comme sur le jumeau iOS (`StoryViewerView.repostAsPostDirect` envoie
+      // `story.id`, quand les surfaces de CARTE passent par `RepostTargeting`).
+      // Deux raisons, chacune suffisante :
+      //   - `repostPost` recopie le contenu et les médias d'une source
+      //     ÉPHÉMÈRE dans le repost, donc la story vue est autonome : viser la
+      //     racine n'éviterait aucune carte vide ;
+      //   - `repostPost` refuse un original dont l'échéance est passée. Une
+      //     story repartagée vit plus longtemps que sa racine, donc grimper
+      //     ferait échouer un geste qui réussit aujourd'hui.
       repostMutation.mutate(
         { postId: storyId, data: { isQuote: false, targetType } },
         {
