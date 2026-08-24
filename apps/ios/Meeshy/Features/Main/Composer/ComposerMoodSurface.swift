@@ -319,6 +319,28 @@ struct ComposerMoodSurface: View {
     /// prenait déjà soin de restaurer.
     @Binding var visibilityUserIds: [String]
 
+    /// **Ce que le ruban a le DROIT de peindre**, calculé par le meuble
+    /// (`ComposerAudienceOffer.offered(for:)`) et remis ici.
+    ///
+    /// La surface peignait `PostVisibility.composerSelectableCases` en dur — les
+    /// six niveaux, y compris sous une REPUBLICATION, qui est le seul chemin du
+    /// meuble vivant en production avec ce ruban. Deux d'entre eux y sont des
+    /// contrôles SANS EFFET : sur un repost, le serveur remplace la liste
+    /// nominative d'un `ONLY`/`EXCEPT` par celle de la source
+    /// (`repostVisibilityInheritsAudienceList`), si bien que le sélecteur de
+    /// personnes s'ouvrait, se remplissait, et ne gouvernait rien.
+    ///
+    /// **Elle la REÇOIT plutôt que de la calculer**, et c'est le fond de
+    /// l'affaire : le socle porte le même réglage sous une autre forme (un menu
+    /// replié, `MeeshyComposerHost.audienceChip`). Deux offres pour un même
+    /// réglage, c'est un plafond posé d'un côté seulement — exactement le défaut
+    /// que ce lot referme, où le raisonnement sur le plafond était écrit dans
+    /// `ComposerIntent` pendant que le sélecteur déjà peint n'en avait aucun.
+    ///
+    /// Sans valeur par défaut, à dessein : un défaut ferait retomber un site de
+    /// montage sur les six niveaux sans casser la moindre compilation.
+    let allowedAudiences: [PostVisibility]
+
     @Binding var references: [ComposerReference]
 
     /// Le bandeau « Status de @X ». **AFFICHAGE seul** : ce nom ne part jamais
@@ -338,7 +360,14 @@ struct ComposerMoodSurface: View {
     /// **La mémoire d'audience du FORMAT status** (loi 10), et c'est la MÊME
     /// clé que l'écran historique. Une clé neuve en ferait une seconde mémoire,
     /// donc deux réglages à faire diverger pour un seul geste d'auteur.
-    @AppStorage("lastStatusVisibility") private var lastVisibility: String = PostVisibility.public.rawValue
+    ///
+    /// Elle est nommée par `ComposerAudienceMemory.statusKey` et non par son
+    /// littéral depuis le lot 4.9 : le socle du document a désormais SA mémoire,
+    /// et l'`init` du meuble relit celle du format d'ouverture. Deux
+    /// orthographes d'une clé, c'est deux mémoires — le meuble sèmerait depuis
+    /// l'une pendant que cette vue écrirait dans l'autre.
+    @AppStorage(ComposerAudienceMemory.statusKey)
+    private var lastVisibility: String = PostVisibility.public.rawValue
 
     @State private var audiencePickerMode: PostVisibility?
 
@@ -479,7 +508,7 @@ struct ComposerMoodSurface: View {
     private var audiencePicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: MeeshySpacing.sm) {
-                ForEach(PostVisibility.composerSelectableCases, id: \.rawValue) { candidate in
+                ForEach(allowedAudiences, id: \.rawValue) { candidate in
                     audienceChip(candidate)
                 }
             }
@@ -488,10 +517,27 @@ struct ComposerMoodSurface: View {
     }
 
     /// Choisir écrit la mémoire dans le même geste — sinon un mood publié
-    /// depuis une autre surface repartirait sur l'audience d'avant. Un mode qui
-    /// exige une liste nominative ouvre son sélecteur dans la foulée : l'écran
-    /// historique le faisait déjà, et ne pas le faire laisserait un `ONLY` sans
-    /// personne, que le gateway refuse.
+    /// depuis une autre surface repartirait sur l'audience d'avant.
+    ///
+    /// Un mode qui exige une liste nominative ouvre son sélecteur dans la
+    /// foulée : l'écran historique le faisait déjà, et ne pas le faire
+    /// laisserait un `ONLY` sans personne, que le gateway refuse — non pas dans
+    /// `PostService`, mais UNE COUCHE plus haut, au schéma de la route
+    /// (`CreatePostSchema`, « EXCEPT and ONLY visibility require at least one
+    /// userId in visibilityUserIds », 400 `VALIDATION_ERROR`). Le dire au bon
+    /// étage compte : chercher ce refus dans le service ferait conclure qu'il
+    /// n'existe pas.
+    ///
+    /// **L'ouverture ne suffit pas, et c'est pourquoi le gate la double.**
+    /// Toucher « Annuler » dans `AudienceUserPickerView` ne rappelle rien — son
+    /// en-tête n'appelle `onDone` que sur « OK » — et laissait donc l'audience
+    /// nominative debout avec une liste vide. `ComposerDocumentPublishGate`
+    /// refuse ce cas depuis le même lot.
+    ///
+    /// Sous une REPUBLICATION, ces deux modes ne sont plus peints du tout
+    /// (`ComposerAudienceOffer`) : leur portée y appartient à la source, et un
+    /// sélecteur dont le résultat est écrasé par le serveur est un contrôle sans
+    /// effet.
     private func audienceChip(_ candidate: PostVisibility) -> some View {
         let isSelected = visibility == candidate
         let showsCount = candidate.requiresUserSelection && isSelected && !visibilityUserIds.isEmpty
@@ -543,18 +589,32 @@ struct ComposerMoodSurface: View {
     /// textes doivent le rester : deux commentaires contraires à trois fichiers
     /// d'écart, c'est une session sur deux qui « corrige » dans le mauvais sens.
     ///
-    /// **Dette nommée** : le jour où republier un mood devra HÉRITER de
-    /// l'audience de sa source, c'est ici qu'il faudra l'écrire. Il n'y a
-    /// aucun héritage aujourd'hui, et l'écran historique n'en avait pas non
-    /// plus — ce n'est donc pas une régression, c'est une capacité absente des
-    /// deux côtés.
+    /// **Dette nommée, à moitié soldée — lire la moitié qui reste.** Republier
+    /// une humeur n'HÉRITE toujours pas de l'audience de sa source : la mémoire
+    /// du format s'applique ici comme ailleurs. Ce qui a changé est l'OFFRE, pas
+    /// l'héritage — `ComposerAudienceOffer` retire d'une republication les deux
+    /// audiences dont la portée appartient à la source (`ONLY`/`EXCEPT`), parce
+    /// que le serveur y écrase la liste et que le sélecteur ne gouvernait rien.
+    ///
+    /// Ce qui n'est PAS fermé est l'ÉLARGISSEMENT : une humeur `FRIENDS`
+    /// republiée en `PUBLIC` part encore vers un 403 `REPOST_AUDIENCE_WIDENING`
+    /// que ce ruban n'annonce pas. Le plafond existe
+    /// (`StoryRepostAudience.allowed(from:)`) et il lui manque son entrée —
+    /// l'audience de l'original, qu'`APIPost.toStatusEntry()` ne transmet pas.
+    /// C'est là, et non ici, que commence la levée.
+    ///
+    /// Un mot sur l'écriture précédente, qui disait « aucun héritage, donc pas
+    /// une régression, une capacité absente des deux côtés » : la seconde moitié
+    /// était vraie, la CONCLUSION ne l'était pas. L'écran historique n'offrait
+    /// pas d'héritage, mais il n'offrait pas non plus une republication à six
+    /// audiences dont quatre partaient vers un refus.
+    /// **La relecture est celle de `ComposerAudienceMemory`, pas une seconde
+    /// écriture de la même règle.** Elle vivait ici en toutes lettres ; le socle
+    /// du document en avait besoin à son tour, et deux `guard` jumeaux à deux
+    /// fichiers d'écart sont deux occasions de corriger un repli à moitié —
+    /// celui de la valeur HORS OFFRE, le moins visible des deux.
     private func applyRememberedAudience() {
-        guard let remembered = PostVisibility(rawValue: lastVisibility),
-              PostVisibility.composerSelectableCases.contains(remembered) else {
-            visibility = .public
-            return
-        }
-        visibility = remembered
+        visibility = ComposerAudienceMemory.remembered(lastVisibility)
     }
 
     // MARK: - Bloc 4 — la saisie plafonnée et son compteur
@@ -674,6 +734,17 @@ struct ComposerMoodSurface: View {
 /// l'audience et les mentions, exactement comme l'écran historique le faisait.
 /// **DETTE consignée, non refermée par ce lot** : la remontée d'échec commence
 /// par faire rendre un résultat à `setStatus`, et elle n'est écrite nulle part.
+///
+/// **Le lot 4.10 l'a laissée intacte, et il faut dire pourquoi plutôt que de
+/// laisser croire qu'elle est tombée.** `DocumentComposerDoor` — la porte
+/// jumelle, écrite le même jour — émet de vrais refus : son publieur,
+/// `FeedViewModel.createPost`, pose `publishSuccess` / `publishError`, et sa
+/// branche texte enfile la ligne SANS consulter la connectivité. Les deux
+/// portes ne diffèrent donc ni par leur forme ni par leur soin, mais par ce que
+/// leur modèle rend : `createPost` répond, `setStatus` se tait. Une porte ne
+/// peut pas remonter un échec que son publieur ne lui dit pas, et le contourner
+/// ici — lire l'outbox, appeler le service — serait le second chemin d'envoi
+/// que `test_laPorte_neTouchePasLesServicesDirectement` interdit.
 struct MoodComposerDoor: View {
 
     /// La porte au sens de la table : `.moodChip` pour une création,
@@ -716,10 +787,11 @@ struct MoodComposerDoor: View {
         MeeshyComposerHost(
             intent: intent,
             // Le mood ne lit pas cette valeur : sa mémoire d'audience est
-            // `@AppStorage("lastStatusVisibility")`, dans la surface, parce que
-            // c'est la mémoire du FORMAT status (loi 10). Une seconde clé posée
-            // ici en ferait une seconde mémoire à faire diverger. Le paramètre
-            // reste obligatoire pour la SCÈNE, que cette porte ne monte jamais.
+            // celle du FORMAT status (loi 10), tenue par la surface sous
+            // `ComposerAudienceMemory.statusKey`, et le meuble la relit lui-même
+            // à la construction. Une seconde clé posée ici en ferait une seconde
+            // mémoire à faire diverger. Le paramètre reste obligatoire pour la
+            // SCÈNE, que cette porte ne monte jamais.
             initialVisibility: PostVisibility.public.rawValue,
             // Le canal de la SCÈNE, sans objet ici : `.moodGrid` et
             // `.keyboardOnContent` + `.status` routent tous deux vers la surface

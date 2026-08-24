@@ -328,18 +328,38 @@ final class ComposerMoodSurfaceTests: XCTestCase {
         }
     }
 
-    /// **Bloc 3 — l'audience et sa MÉMOIRE.** La clé littérale est assertée :
-    /// c'est la mémoire d'audience du format status (loi 10), et une clé neuve
-    /// en ferait une seconde à faire diverger.
+    /// **Bloc 3 — l'audience et sa MÉMOIRE.**
+    ///
+    /// Elle assertait le LITTÉRAL `"lastStatusVisibility"` dans la vue. Le lot
+    /// 4.9 lui retire ce littéral : la clé est devenue une constante partagée
+    /// (`ComposerAudienceMemory.statusKey`), parce que le socle du document a
+    /// désormais SA mémoire et que l'`init` du meuble relit celle du format
+    /// d'ouverture. Deux orthographes d'une clé, c'est deux mémoires — le
+    /// meuble sèmerait depuis l'une pendant que la vue écrirait dans l'autre.
+    ///
+    /// La garde n'y perd rien, elle y gagne : elle vérifie maintenant la VALEUR
+    /// de la constante (ce qu'un `.contains` ne pouvait pas faire) et que la vue
+    /// la lit, plutôt qu'un littéral qui aurait pu être n'importe où.
     func test_parite_audienceEtSaMemoire() throws {
         let bloc = try surfaceBlock()
-        XCTAssertTrue(
-            bloc.contains("\"lastStatusVisibility\""),
+        XCTAssertEqual(
+            ComposerAudienceMemory.statusKey, "lastStatusVisibility",
             "L'audience se souvient sous la MÊME clé que l'écran historique — loi 10, une mémoire par format."
         )
         XCTAssertTrue(
+            bloc.contains("ComposerAudienceMemory.statusKey"),
+            "La vue lit la clé PARTAGÉE : un littéral recopié ici divergerait de ce que le meuble sème."
+        )
+        XCTAssertTrue(
+            bloc.contains("allowedAudiences"),
+            "Les niveaux peints sont ceux que le MEUBLE offre. La surface en décidait elle-même — elle "
+                + "peignait les six du SDK, y compris sous une REPUBLICATION, où deux d'entre eux sont des "
+                + "contrôles sans effet et quatre un 403 que rien à l'écran n'annonce."
+        )
+        XCTAssertFalse(
             bloc.contains("PostVisibility.composerSelectableCases"),
-            "Les six niveaux viennent de la source unique du SDK, jamais d'une liste recopiée."
+            "La vue décide encore de son offre : le plafond d'une republication vaudrait pour le socle et "
+                + "pas pour le ruban, sur le seul écran d'où l'on republie."
         )
         XCTAssertTrue(
             bloc.contains("AudienceUserPickerView("),

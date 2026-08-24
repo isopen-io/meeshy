@@ -142,10 +142,35 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// Loi 6 de la doctrine — « le lecteur EST l'aperçu ». Composer et viewers
     /// partagent un seul registre de rendu ; un quatrième chemin d'aperçu
     /// casserait le WYSIWYG par construction.
-    func test_host_previewIsThePlayer_inPreviewMode() throws {
+    ///
+    /// **Elle exigeait `MeeshyScenePlayer(` dans le meuble. Le lot 4.9 a retiré
+    /// l'œil, et laissée telle quelle elle serait devenue un rouge pour la
+    /// mauvaise raison** — celui qu'on « corrige » en supprimant l'assertion.
+    /// Elle change donc d'objet plutôt que de disparaître, et devient une
+    /// ÉQUIVALENCE, ce qui la rend strictement plus forte que ce qu'elle était :
+    ///
+    /// - un œil peint SANS le lecteur ⇒ quelqu'un a écrit un aperçu maison, ce
+    ///   qu'interdit la loi 6 ;
+    /// - le lecteur SANS aucun œil peint ⇒ du code d'aperçu survit à
+    ///   l'affordance qui l'ouvrait, et la prochaine session le rebranchera en
+    ///   croyant réparer.
+    ///
+    /// Elle ne peut donc pas devenir vacante : quel que soit le côté qui bouge,
+    /// l'autre doit suivre dans le même commit.
+    func test_lOeilEtSonLecteur_vivent_etMeurent_ensemble() throws {
         let code = try hostCode()
-        XCTAssertTrue(code.contains("MeeshyScenePlayer("), "L'œil du socle doit être `MeeshyScenePlayer`, jamais un aperçu maison")
-        XCTAssertTrue(code.contains(".preview"), "Le lecteur de l'aperçu tourne en mode `.preview`")
+        let unOeilEstPeint = [ComposerSurfaceKind.scene, .document, .mood]
+            .contains { ComposerChromeOwnership.socleZones(for: $0).contains(.preview) }
+
+        XCTAssertEqual(
+            unOeilEstPeint, code.contains("MeeshyScenePlayer("),
+            unOeilEstPeint
+                ? "Le socle peint un œil sans monter `MeeshyScenePlayer` : c'est un quatrième chemin d'aperçu, "
+                    + "et il ment sur ce qui sera publié (loi 6)."
+                : "Le meuble monte encore `MeeshyScenePlayer` alors qu'aucune surface ne peint d'œil : du code "
+                    + "d'aperçu survit à l'affordance qui l'ouvrait, et la prochaine session le rebranchera en "
+                    + "croyant réparer."
+        )
     }
 
     // MARK: - Le socle ne bouge JAMAIS
@@ -166,16 +191,54 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// Ce qui n'a PAS changé, et que cette garde retient : l'ORDRE, et le fait
     /// qu'aucune de ces variations ne dépende de la PORTE. Le second point est
     /// tenu par `test_socle_isNeverHiddenNorConditionallyRemoved`, le premier ici.
-    func test_socle_keepsItsThreeZones_inOrder() throws {
+    /// **Elle nommait les trois zones en dur. Le lot 4.9 en a retiré une**, et
+    /// une garde d'ORDRE qui énumère ses membres meurt à chaque retrait — en
+    /// rougissant pour la mauvaise raison, jamais pour la sienne.
+    ///
+    /// Elle lit donc l'ordre CANONIQUE dans la règle, et vérifie que le corps du
+    /// socle présente en sous-suite croissante les zones que la règle peint.
+    /// Elle rougirait toujours à l'interdit qu'elle garde — l'audience posée
+    /// après la flèche — et elle rougira EN PLUS le jour où l'œil reviendra
+    /// ailleurs qu'entre les deux.
+    func test_socle_peintSesZones_dansLOrdreCanonique() throws {
         let code = try hostCompact()
-        guard let audience = code.range(of: "audienceChip"),
-              let preview = code.range(of: "previewEye"),
-              let publish = code.range(of: "publishButton") else {
-            return XCTFail("Les trois zones du socle doivent être nommées : audienceChip, previewEye, publishButton")
+        let peintes = Self.ordreCanoniqueDuSocle.filter { rang in
+            [ComposerSurfaceKind.document, .mood].contains {
+                ComposerChromeOwnership.socleZones(for: $0).contains(rang.0)
+            }
         }
-        XCTAssertTrue(audience.lowerBound < preview.lowerBound, "L'audience précède l'œil")
-        XCTAssertTrue(preview.lowerBound < publish.lowerBound, "L'œil précède la publication")
+        XCTAssertGreaterThanOrEqual(
+            peintes.count, 2,
+            "Moins de deux zones peintes sur l'ensemble des surfaces : la garde d'ordre ne mesurerait presque RIEN."
+        )
+
+        var precedent: String.Index?
+        for (zone, declaration) in peintes {
+            guard let position = code.range(of: declaration)?.lowerBound else {
+                return XCTFail(
+                    "La règle peint \(zone), mais le socle ne nomme aucun `\(declaration)` — la garde ne "
+                        + "mesurerait RIEN sur cette zone."
+                )
+            }
+            if let precedent {
+                XCTAssertTrue(
+                    precedent < position,
+                    "`\(declaration)` est écrit hors de son rang. Le socle est le point fixe du composer "
+                        + "(loi 5) : un socle qui se réorganise redevient une barre d'outils contextuelle."
+                )
+            }
+            precedent = position
+        }
     }
+
+    /// L'ordre de lecture du socle, écrit UNE fois : audience, œil, flèche.
+    /// C'est celui de la rangée haute de l'atelier (`ComposerTopBarControl`),
+    /// et le socle en est le remplaçant sous les surfaces sans atelier.
+    private static let ordreCanoniqueDuSocle: [(ComposerTopBarControl, String)] = [
+        (.audience, "audienceChip"),
+        (.preview, "previewEye"),
+        (.publish, "publishButton")
+    ]
 
     /// Garde NÉGATIVE — la plus fragile, et la plus importante.
     ///
@@ -246,11 +309,12 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// La règle qui a remplacé la constante `.atelier`.
     ///
     /// Les deux blocages qui imposaient cette constante sont des blocages de la
-    /// SCÈNE — `visibilityMenu` est l'unique écrivain d'audience DE L'ATELIER, et
-    /// l'œil du socle rendrait un aperçu amputé des médias préchargés DE
-    /// L'ATELIER. Sous le document et sous le mood, il n'y a pas d'atelier :
-    /// aucune des deux raisons n'a d'objet. Une constante qui les faisait valoir
-    /// pour les trois surfaces était une constante mal placée.
+    /// SCÈNE — `visibilityMenu` est l'unique écrivain de `visibility` DE
+    /// L'ATELIER (un `@State` privé, que le sélecteur du socle ne peut pas
+    /// atteindre), et un œil peint ici rendrait un aperçu amputé des médias
+    /// préchargés DE L'ATELIER. Sous le document et sous le mood, il n'y a pas
+    /// d'atelier : aucune des deux raisons n'a d'objet. Une constante qui les
+    /// faisait valoir pour les trois surfaces était une constante mal placée.
     func test_leChrome_cedeALAtelier_sousLaScene_etRevientAuMeuble_ailleurs() {
         XCTAssertEqual(
             ComposerChromeOwnership.owner(for: .scene), .atelier,
@@ -298,12 +362,15 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
 
     /// **Le mood ne voit PAS deux fois son audience.**
     ///
-    /// `ComposerMoodSurface` porte son propre sélecteur six niveaux, avec la
-    /// mémoire `@AppStorage("lastStatusVisibility")` du format (loi 10).
-    /// `audienceChip`, lui, est un TÉMOIN inerte. Peindre les deux aurait donné à
-    /// l'auteur un affichage mort au-dessous d'un vrai sélecteur : la loi 4 veut
-    /// une affordance non offerte ABSENTE, jamais grisée, et le commentaire
-    /// d'`audienceChip` s'interdit lui-même de doubler le réglage.
+    /// `ComposerMoodSurface` porte son propre sélecteur six niveaux, dans le
+    /// RUBAN de son bloc 3, avec la mémoire du format status (loi 10).
+    ///
+    /// **La raison a changé au lot 4.9, et la nuance compte** : `audienceChip`
+    /// n'est plus un témoin inerte, c'est un vrai sélecteur. Ce qui l'exclut ici
+    /// n'est donc plus son inertie mais la PLACE — deux contrôles pour un même
+    /// réglage sur un même écran. Les deux formes existent à dessein : un ruban
+    /// de six chips tient dans un bloc, jamais dans une rangée qui porte aussi
+    /// la flèche.
     ///
     /// **Divergence assumée avec le plan du lot 4**, qui écrivait « sous `.mood`
     /// … audience + flèche ». La mesure a tranché contre lui.
@@ -327,18 +394,211 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         )
     }
 
-    /// Le document, lui, garde les trois. **Dette CONSIGNÉE, pas refermée** : son
-    /// œil rendrait aujourd'hui une scène VIDE, `viewModel.currentEffects` n'étant
-    /// rempli par personne sous cette surface — même cause que
-    /// `servedDocumentTools == []`, l'absence de chemin d'ingestion. Ce test
-    /// enregistre le choix ; c'est
-    /// `test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`
-    /// qui empêche un auteur de le rencontrer.
-    func test_leSocle_gardeSesTroisZones_sousLeDocument() {
+    /// **Le document en garde DEUX depuis le lot 4.9, et la dette est refermée
+    /// par RETRAIT.**
+    ///
+    /// Son œil rendait une scène VIDE — `viewModel.currentEffects` n'est rempli
+    /// par personne sous cette surface, même cause que `servedDocumentTools ==
+    /// []`. Une dette consignée reste de l'UI morte tant qu'elle est peinte, et
+    /// la loi 4 ne fait pas d'exception pour ce qui est écrit dans un
+    /// doc-comment : une affordance sans objet est ABSENTE.
+    ///
+    /// Les deux qui restent, elles, TIENNENT : l'audience est un vrai sélecteur
+    /// avec sa mémoire, la flèche un vrai bouton avec son gate de matière.
+    func test_leSocle_nePeintQueCeQuIlTient_sousLeDocument() {
         XCTAssertEqual(
             ComposerChromeOwnership.socleZones(for: .document),
-            [.audience, .preview, .publish],
-            "Sous le document, personne d'autre ne peint ces trois zones."
+            [.audience, .publish],
+            "Sous le document, personne d'autre ne peint ces deux zones — et l'œil n'avait rien à lire."
+        )
+    }
+
+    // MARK: - Lot 4.9 — l'audience du socle CHOISIT
+
+    /// **Un témoin qui nomme un réglage sans l'écrire est de l'UI morte.**
+    ///
+    /// `audienceChip` fut un `Label` : un pictogramme et un mot. Sous le
+    /// document, personne n'écrivait l'audience, et le brouillon partait sur la
+    /// visibilité que la PORTE avait semée. La loi 4 ne tolère pas cette forme —
+    /// une affordance qui ne fait rien est ABSENTE, pas décorative.
+    ///
+    /// Quatre moitiés seraient chacune pire que l'ancien témoin, et la garde les
+    /// nomme une par une : un menu sans écrivain n'aurait pas d'effet ; un
+    /// écrivain sans mémoire oublierait le choix à la fermeture (loi 10) ; une
+    /// liste de niveaux recopiée divergerait de celle du SDK ; un `ONLY` sans
+    /// sélecteur nominatif partirait vide, et le gateway le rejetterait.
+    func test_lAudienceDuSocle_estUnVraiSelecteur_etEcritSaMemoire() throws {
+        guard let bloc = declarationBody(startingAt: "private var audienceChip", in: try hostCode()) else {
+            return XCTFail("L'audience du socle doit être une propriété nommée `audienceChip` — la garde s'ancre dessus")
+        }
+        let corps = compact(bloc)
+
+        XCTAssertTrue(
+            corps.contains("Menu{"),
+            "L'audience du socle est un MENU qui se replie en capsule — la forme de la rangée haute de "
+                + "l'atelier. Le ruban de six chips du mood mangerait la largeur du socle et repousserait la "
+                + "flèche hors de l'écran."
+        )
+        XCTAssertTrue(
+            corps.contains("offeredAudiences"),
+            "Les niveaux viennent de l'OFFRE (`ComposerAudienceOffer`), jamais de `composerSelectableCases` "
+                + "en bloc : sous une republication, deux des six niveaux sont des contrôles sans effet — le "
+                + "serveur y remplace la liste nominative par celle de la source."
+        )
+        XCTAssertFalse(
+            corps.contains("PostVisibility.composerSelectableCases"),
+            "Le socle offre les six niveaux du SDK sans passer par l'offre : il repeint les audiences que "
+                + "la republication retire, et la loi 4 les veut ABSENTES, pas grisées."
+        )
+        XCTAssertTrue(
+            corps.contains("AudienceUserPickerView("),
+            "ONLY/EXCEPT ouvrent le sélecteur nominatif — sans lui, le gateway rejette la publication."
+        )
+
+        guard let choix = declarationBody(startingAt: "private func chooseAudience", in: try hostCode()) else {
+            return XCTFail("Le geste de choix doit être une fonction nommée `chooseAudience` — la garde s'ancre dessus")
+        }
+        let geste = compact(choix)
+        XCTAssertTrue(
+            geste.contains("composerVisibility="),
+            "Choisir doit ÉCRIRE l'audience du meuble : un menu sans écrivain est un témoin de plus."
+        )
+        XCTAssertTrue(
+            geste.contains("lastDocumentVisibility="),
+            "Choisir doit écrire la MÉMOIRE dans le même geste (loi 10). Séparer les deux écritures, c'est "
+                + "l'occasion d'oublier la seconde — et l'audience repartirait à zéro à chaque ouverture."
+        )
+        XCTAssertTrue(
+            geste.contains("requiresUserSelection"),
+            "C'est le MODE qui décide d'ouvrir le sélecteur nominatif, jamais deux cas écrits à la main. "
+                + "Sans lui, un ONLY partirait sans personne et le gateway le rejetterait."
+        )
+
+        let meuble = compact(try hostCode())
+        XCTAssertTrue(
+            meuble.contains("@AppStorage(ComposerAudienceMemory.postKey)"),
+            "La mémoire du socle est celle du format POST, nommée par sa constante partagée."
+        )
+        XCTAssertFalse(
+            meuble.contains("\"lastPostVisibility\"") || meuble.contains("\"lastStatusVisibility\""),
+            "Une clé de mémoire est écrite en littéral dans le meuble : `ComposerAudienceMemory` en est "
+                + "l'unique orthographe, et deux orthographes d'une clé sont deux mémoires."
+        )
+    }
+
+    /// **Le socle et le RUBAN offrent la même chose, par la même règle.**
+    ///
+    /// Les deux formes existent à dessein — un menu qui se replie dans une
+    /// rangée, un ruban de chips dans un bloc — et elles ne sont jamais peintes
+    /// ensemble. Mais deux OFFRES pour un même réglage, c'est un plafond posé
+    /// d'un côté et pas de l'autre : exactement le défaut que ce lot referme,
+    /// où `ComposerIntent` raisonnait sur le plafond d'une republication pendant
+    /// que le sélecteur déjà peint, dix lignes plus loin, n'en avait aucun.
+    ///
+    /// Le meuble calcule donc l'offre UNE fois et la remet à la surface. Une
+    /// surface qui la recalculerait serait une seconde écriture de la règle.
+    func test_leSocle_etLeRuban_offrentLaMemeChose_parLaMemeRegle() throws {
+        let meuble = compact(try hostCode())
+        XCTAssertTrue(
+            meuble.contains(compact("ComposerAudienceOffer.offered(for: intent.origin)")),
+            "Le meuble doit lire l'offre depuis la PORTE : c'est elle qui sait si l'on republie."
+        )
+        XCTAssertEqual(
+            occurrences(of: compact("ComposerAudienceOffer.offered("), in: meuble), 1,
+            "L'offre est calculée à DEUX endroits dans le meuble : deux lectures d'une règle sont deux "
+                + "occasions de la corriger à moitié."
+        )
+
+        guard let mood = declarationBody(startingAt: "private var moodSurface", in: try hostCode()) else {
+            return XCTFail("`moodSurface` est introuvable — la garde ne mesurerait RIEN")
+        }
+        XCTAssertTrue(
+            compact(mood).contains(compact("allowedAudiences: offeredAudiences")),
+            "Le ruban du mood reçoit l'offre du meuble. Sans elle, il repeint les six niveaux du SDK — le "
+                + "seul chemin du meuble vivant en production, et celui d'où partent les republications."
+        )
+
+        let surface = AppSourceGuard.stripComments(try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerMoodSurface.swift"),
+            encoding: .utf8
+        ))
+        // L'ancre porte son TYPE, et ce n'est pas du zèle : `audiencePickerMode`
+        // est déclaré plus haut dans le même fichier et contient le nom du
+        // ruban en préfixe. Ancrée sur le nom nu, la garde partait de ce `@State`
+        // — dont la déclaration n'ouvre aucune accolade — et l'appariement
+        // filait jusqu'au corps de `body`, où `ForEach(allowedAudiences` ne
+        // figure pas. Elle aurait rougi pour la mauvaise raison, celle qu'on
+        // « corrige » en retirant l'assertion.
+        guard let ruban = declarationBody(startingAt: "private var audiencePicker: some View", in: surface) else {
+            return XCTFail("`audiencePicker` est introuvable dans la surface — la garde ne mesurerait RIEN")
+        }
+        XCTAssertTrue(
+            compact(ruban).contains("ForEach(allowedAudiences"),
+            "Le ruban peint l'offre qu'il REÇOIT — sinon le plafond d'une republication vaudrait pour le "
+                + "socle et pas pour lui, sur le seul écran où l'on republie."
+        )
+        XCTAssertFalse(
+            compact(ruban).contains("composerSelectableCases"),
+            "Le ruban décide encore de son offre : deux offres pour un même réglage, c'est un plafond posé "
+                + "d'un côté seulement."
+        )
+    }
+
+    /// **Ce que la flèche remet doit porter l'audience que l'auteur a CHOISIE.**
+    ///
+    /// Le défaut que cette garde retient est silencieux par construction : le
+    /// brouillon lisait `initialVisibility`, la graine de la PORTE. Un auteur
+    /// pouvait donc changer d'audience et publier sous l'ancienne, sans qu'aucun
+    /// écran ne le dise. C'est la moitié qui manquait au sélecteur ci-dessus —
+    /// un contrôle existe s'il a un EFFET (loi 4).
+    func test_leBrouillonDuDocument_litLAudienceCourante_jamaisCelleDeLaPorte() throws {
+        guard let bloc = declarationBody(startingAt: "private var documentDraft", in: try hostCode()) else {
+            return XCTFail("Le brouillon doit être une propriété nommée `documentDraft` — la garde s'ancre dessus")
+        }
+        let corps = compact(bloc)
+
+        XCTAssertTrue(
+            corps.contains("ComposerDocumentDraft.document("),
+            "Le bloc lu n'est pas celui du brouillon — la garde ne mesurerait RIEN."
+        )
+        XCTAssertFalse(
+            corps.contains("initialVisibility"),
+            "Le brouillon lit encore la graine de la PORTE : l'audience choisie au socle serait perdue en "
+                + "silence, et l'auteur publierait sous un réglage qu'il vient de changer."
+        )
+        XCTAssertTrue(
+            corps.contains("visibility:composerVisibility"),
+            "Les DEUX brouillons — mood et document — lisent la même audience : le meuble n'en a qu'une."
+        )
+    }
+
+    /// **UNE audience pour les deux surfaces sans atelier.**
+    ///
+    /// Même raison que `documentText`, et elle est écrite au-dessus de lui : la
+    /// loi 9 autorise à changer de format, jamais à jeter ce qui est composé.
+    /// Deux champs jumeaux (`moodVisibility` d'un côté, une audience de document
+    /// de l'autre) auraient perdu le réglage au premier tap de l'éventail, sans
+    /// qu'aucun test ne le dise.
+    func test_leMeuble_nAQuUneSeuleAudience_pourSesDeuxSurfacesSansAtelier() throws {
+        let code = compact(try hostCode())
+        XCTAssertFalse(
+            code.contains("moodVisibility"),
+            "Le meuble porte encore une audience nommée pour le MOOD : elle ne suivra pas une bascule de "
+                + "format, et le réglage se perdra sans un mot."
+        )
+        XCTAssertTrue(
+            code.contains("varcomposerVisibility:PostVisibility"),
+            "L'audience du meuble s'appelle `composerVisibility` — un nom qui dit qu'elle n'appartient à "
+                + "aucune des deux surfaces."
+        )
+        XCTAssertTrue(
+            code.contains("visibility:$composerVisibility"),
+            "La surface du mood se lie à l'audience du MEUBLE, pas à une audience qui lui serait propre."
         )
     }
 
@@ -350,11 +610,11 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// premier assouplissement.
     func test_leGate_refuseUnMoodSansEmoji_etAccepteAvec() {
         XCTAssertFalse(
-            ComposerDocumentPublishGate.canPublish(surface: .mood, emoji: nil, text: "ça va", isPublishing: false),
+            ComposerDocumentPublishGate.canPublish(surface: .mood, emoji: nil, text: "ça va", visibility: .public, visibilityUserIds: [], isPublishing: false),
             "Sans emoji, rien ne part — c'était déjà le gate de l'écran historique."
         )
         XCTAssertTrue(
-            ComposerDocumentPublishGate.canPublish(surface: .mood, emoji: "🔥", text: "", isPublishing: false),
+            ComposerDocumentPublishGate.canPublish(surface: .mood, emoji: "🔥", text: "", visibility: .public, visibilityUserIds: [], isPublishing: false),
             "Un mood SANS texte part très bien : c'est l'emoji qui fait la matière, pas la phrase."
         )
     }
@@ -363,15 +623,15 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// une matière. L'écran n'existe pas encore en production ; la règle, si.
     func test_leGate_refuseUnDocumentVideOuBlanc() {
         XCTAssertFalse(
-            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "", isPublishing: false),
+            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "", visibility: .public, visibilityUserIds: [], isPublishing: false),
             "Une page blanche ne part pas."
         )
         XCTAssertFalse(
-            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "   \n ", isPublishing: false),
+            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "   \n ", visibility: .public, visibilityUserIds: [], isPublishing: false),
             "Trois espaces et un retour à la ligne ne sont pas un post."
         )
         XCTAssertTrue(
-            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "bonjour", isPublishing: false),
+            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "bonjour", visibility: .public, visibilityUserIds: [], isPublishing: false),
             "… et une phrase, oui — sans quoi la garde précédente serait verte sur un gate toujours fermé."
         )
     }
@@ -381,11 +641,11 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// la même règle par le même drapeau.
     func test_leGate_refuseTantQuUnEnvoiEstEnVol() {
         XCTAssertFalse(
-            ComposerDocumentPublishGate.canPublish(surface: .mood, emoji: "🔥", text: "ça va", isPublishing: true),
+            ComposerDocumentPublishGate.canPublish(surface: .mood, emoji: "🔥", text: "ça va", visibility: .public, visibilityUserIds: [], isPublishing: true),
             "Un envoi en vol ferme le gate — deux taps ne font pas deux moods."
         )
         XCTAssertFalse(
-            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "bonjour", isPublishing: true),
+            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "bonjour", visibility: .public, visibilityUserIds: [], isPublishing: true),
             "… et le document ne fait pas exception."
         )
     }
@@ -397,8 +657,91 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// refuse au lieu d'inventer une réponse qu'il n'a pas.
     func test_leGate_neDeclencheJamaisSousLaScene() {
         XCTAssertFalse(
-            ComposerDocumentPublishGate.canPublish(surface: .scene, emoji: "🔥", text: "une phrase", isPublishing: false),
+            ComposerDocumentPublishGate.canPublish(surface: .scene, emoji: "🔥", text: "une phrase", visibility: .public, visibilityUserIds: [], isPublishing: false),
             "Le gate du document ne sait rien d'une composition de scène : il ne prétend pas la juger."
+        )
+    }
+
+    /// **Une audience NOMINATIVE sans personne n'est pas une audience.**
+    ///
+    /// `EXCEPT`/`ONLY` ne se lisent pas seules : leur portée EST la liste qui les
+    /// accompagne. `CreatePostSchema` le refuse en toutes lettres
+    /// (`services/gateway/src/routes/posts/types.ts` — « EXCEPT and ONLY
+    /// visibility require at least one userId in visibilityUserIds »), et la
+    /// feuille historique du fil retenait déjà l'envoi pour cette raison
+    /// (`FeedComposerSheet.postAudienceIncomplete`). Le meuble ne le faisait
+    /// pas : sa flèche s'armait à la première lettre et l'auteur recevait un
+    /// refus que rien à l'écran n'avait annoncé.
+    ///
+    /// Deux chemins l'atteignaient, et le second survit à toute mémoire :
+    /// toucher « Annuler » dans `AudienceUserPickerView` — son en-tête n'appelle
+    /// `onDone` que sur « OK » — laisse l'audience nominative debout avec une
+    /// liste vide.
+    func test_leGate_refuseUneAudienceNominativeSansPersonne_surLesDeuxSurfaces() {
+        for nominative in PostVisibility.composerSelectableCases where nominative.requiresUserSelection {
+            XCTAssertFalse(
+                ComposerDocumentPublishGate.canPublish(
+                    surface: .mood, emoji: "🔥", text: "ça va",
+                    visibility: nominative, visibilityUserIds: [], isPublishing: false
+                ),
+                "Un mood « \(nominative.rawValue) » sans personne arme la flèche : le gateway le refuse, et "
+                    + "l'auteur perd sa composition sur un refus que rien n'annonçait."
+            )
+            XCTAssertFalse(
+                ComposerDocumentPublishGate.canPublish(
+                    surface: .document, emoji: nil, text: "bonjour",
+                    visibility: nominative, visibilityUserIds: [], isPublishing: false
+                ),
+                "… et le document ne fait pas exception : son socle sait choisir « \(nominative.rawValue) »."
+            )
+            XCTAssertTrue(
+                ComposerDocumentPublishGate.canPublish(
+                    surface: .mood, emoji: "🔥", text: "ça va",
+                    visibility: nominative, visibilityUserIds: ["u1"], isPublishing: false
+                ),
+                "… et une seule personne suffit — sans quoi la garde ci-dessus serait verte sur un gate "
+                    + "toujours fermé."
+            )
+        }
+    }
+
+    /// La complétude de l'audience est une règle NOMMÉE, pas une condition
+    /// enfouie dans le gate : la flèche la lit pour s'armer, et l'indice
+    /// d'accessibilité la lit pour ne pas MENTIR. Deux lectures, une écriture.
+    func test_laCompletudeDeLAudience_estUneRegleLisibleAPart() {
+        XCTAssertTrue(
+            ComposerDocumentPublishGate.audienceIsComplete(.public, userIds: []),
+            "Une audience qui n'exige aucune liste est complète sans liste."
+        )
+        XCTAssertFalse(
+            ComposerDocumentPublishGate.audienceIsComplete(.only, userIds: []),
+            "Un ONLY sans personne est incomplet — c'est ce que le gateway refuse."
+        )
+        XCTAssertTrue(
+            ComposerDocumentPublishGate.audienceIsComplete(.except, userIds: ["u1"]),
+            "Une personne suffit à donner sa portée à un EXCEPT."
+        )
+    }
+
+    /// **L'indice d'accessibilité ne doit pas MENTIR.** La seule phrase déjà
+    /// traduite dit « choisissez un emoji », ce qui est FAUX d'un mood qui en a
+    /// un et que seule son audience retient. Le lot n'ajoute aucune clé au
+    /// catalogue (sept locales, cliquet français à zéro tolérance) : mieux vaut
+    /// MUET que faux, et la condition est lue par la règle ci-dessus plutôt que
+    /// réécrite dans la vue.
+    func test_lIndiceDeLaFleche_seTait_quandLeBlocageNestPasLaMatiere() throws {
+        guard let bloc = declarationBody(startingAt: "private var publishBlockedHint", in: try hostCode()) else {
+            return XCTFail("`publishBlockedHint` est introuvable — la garde ne mesurerait RIEN")
+        }
+        let compacte = compact(bloc)
+        XCTAssertTrue(
+            compacte.contains(compact("ComposerSocleCopy.publishBlockedHint(")),
+            "Le bloc lu n'est pas celui de l'indice."
+        )
+        XCTAssertTrue(
+            compacte.contains(compact("ComposerDocumentPublishGate.audienceIsComplete(")),
+            "L'indice annonce « choisissez un emoji » même quand c'est l'AUDIENCE qui retient la flèche : "
+                + "VoiceOver dicterait un geste qui ne débloque rien."
         )
     }
 
@@ -467,7 +810,9 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// qu'aucune vue ne remplit aurait fabriqué une capacité que le premier
     /// lecteur aurait crue tenue.
     func test_leBrouillonDuDocument_neFabriqueNiEmojiNiMention() {
-        let brouillon = ComposerDocumentDraft.document(format: .post, text: "bonjour", visibility: .friends)
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, text: "bonjour", visibility: .friends, visibilityUserIds: []
+        )
         XCTAssertNil(brouillon.emoji)
         XCTAssertNil(brouillon.mentions)
         XCTAssertNil(brouillon.repostOfId)
@@ -543,6 +888,45 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         }
     }
 
+    /// **Un envoi qui ÉCHOUE ne ferme pas le composer.**
+    ///
+    /// C'est le seul geste de `publishDocument` qu'aucune garde de source ne
+    /// rattraperait après coup : une fermeture INCONDITIONNELLE jetterait le
+    /// texte, l'audience et l'emoji que l'auteur vient de composer, et le
+    /// produit resterait plausible — l'écran se ferme, exactement comme quand
+    /// tout va bien. C'est ce qui rend cette perte-là silencieuse.
+    ///
+    /// Elle n'était pas gardée avant le lot 4.10, et elle ne pouvait pas
+    /// l'être utilement : aucun site de montage n'émettait jamais `false`, donc
+    /// la branche du refus était morte. `DocumentComposerDoor` en émet un — un
+    /// publieur qui refuse la ligne, un publieur muet, un chemin non durable —
+    /// et la branche devient atteignable le jour où la porte est montée.
+    ///
+    /// Trois faits, et le troisième est celui qu'on oublie : le meuble ne doit
+    /// pas non plus VIDER sa saisie sur le chemin du refus. Fermer et effacer
+    /// perdent la même chose par deux portes différentes.
+    func test_lEnvoiDuSocle_neFermeQueSurUneAcceptation_etNeJettePasLaSaisie() throws {
+        guard let bloc = declarationBody(startingAt: "private func publishDocument", in: try hostCode()) else {
+            return XCTFail("`publishDocument` est introuvable dans le meuble — la garde ne mesurerait RIEN")
+        }
+        let compacte = compact(bloc)
+
+        XCTAssertTrue(compacte.contains("onPublishDocument("), "Le bloc lu n'est pas celui de l'envoi du socle.")
+        XCTAssertTrue(
+            compacte.contains(compact("if accepted { onDismiss() }")),
+            "La sortie doit être CONDITIONNÉE par l'acceptation du site de montage. Un `onDismiss()` "
+                + "inconditionnel jetterait ce que l'auteur vient d'écrire sur un envoi que le publieur a "
+                + "refusé — et l'écran se refermerait comme si tout allait bien."
+        )
+        for jet in ["documentText = \"\"", "moodEmoji = nil", "moodReferences = []"] {
+            XCTAssertFalse(
+                compacte.contains(compact(jet)),
+                "L'envoi du socle exécute « \(jet) » : sur un refus, la saisie serait perdue sans même que "
+                    + "l'écran se ferme — la même perte par une autre porte."
+            )
+        }
+    }
+
     /// **Le canal n'a AUCUNE valeur par défaut**, et c'est le fond de l'affaire :
     /// un défaut l'aurait fait disparaître en silence d'un site de montage — le
     /// mode d'échec exact que `ComposerDocumentSurface.onClose` consigne, et que
@@ -579,12 +963,24 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// pourrait naître avec un canal qui refuse, et le mood s'y composerait sans
     /// jamais partir.
     ///
-    /// Le compte est écrit en dur — DEUX sites : la porte de création de story
-    /// (`StoryTrayActions`) et la porte du mood (`MoodComposerDoor`, dans le
-    /// fichier de la surface). Les quatre feuilles du mood ne montent PAS le
-    /// meuble elles-mêmes : elles montent la porte, qui porte la reprise
-    /// hors-ligne et l'envoi. Quatre copies de ce geste auraient été quatre
-    /// contrats à faire diverger.
+    /// Le compte est écrit en dur — TROIS sites depuis le lot 4.10, et ce que
+    /// la liste affirme n'est pas « ces trois fichiers-là » mais **« seules des
+    /// PORTES montent le meuble, jamais une feuille de présentation »** : la
+    /// porte de création de story (`StoryTrayActions`), la porte du mood
+    /// (`MoodComposerDoor`) et la porte du document (`DocumentComposerDoor`),
+    /// ces deux dernières vivant dans le fichier de leur surface.
+    ///
+    /// Les quatre feuilles du mood ne montent PAS le meuble elles-mêmes : elles
+    /// montent la porte, qui porte la reprise hors-ligne et l'envoi. Quatre
+    /// copies de ce geste auraient été quatre contrats à faire diverger — et
+    /// c'est exactement pour cela que la porte du document naît AVANT ses sites
+    /// de présentation, et non l'inverse.
+    ///
+    /// **Une liste comme celle-ci porte DEUX affirmations**, et la seconde ne se
+    /// vérifie jamais toute seule : « ces sites donnent bien canal et graine »
+    /// (mesuré ci-dessous) et « ce sont les seuls sites où le meuble se monte »
+    /// (l'égalité finale). Y ajouter un nom sans se demander lequel des deux on
+    /// vient d'affaiblir est la façon dont ce genre de garde meurt.
     func test_chaqueSiteQuiMonteLeMeuble_luiDonneSonCanalDePublication_etSaGraine() throws {
         var sitesVus: [String] = []
         for url in sourcesDeLApp(excluant: ["MeeshyComposerHost.swift"]) {
@@ -603,10 +999,12 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         }
         XCTAssertFalse(sitesVus.isEmpty, "Aucun site ne monte le meuble — la garde ne mesurerait RIEN.")
         XCTAssertEqual(
-            Set(sitesVus), ["StoryTrayActions.swift", "ComposerMoodSurface.swift"],
-            "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres : un montage de plus, "
-                + "posé directement dans une feuille, recopierait la reprise hors-ligne et l'envoi que "
-                + "`MoodComposerDoor` tient pour les quatre présentations du mood."
+            Set(sitesVus),
+            ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "ComposerDocumentSurface.swift"],
+            "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
+                + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "
+                + "et la reprise hors-ligne que `MoodComposerDoor` et `DocumentComposerDoor` tiennent une "
+                + "fois pour toutes leurs présentations."
         )
     }
 
@@ -924,13 +1322,15 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// bout en bout.
     ///
     /// Ce qu'il ne dit PAS, et qui reste une dette CONSIGNÉE plutôt qu'un
-    /// acquis : la surface ainsi montée ne sert aujourd'hui aucun outil
-    /// (`servedDocumentTools` rend `[]`), n'a aucun chemin d'envoi
-    /// (`ComposerDocumentSendRouting` n'a aucun appelant, et
-    /// `test_leRoutageDEnvoi_nEstMonteNullePart` l'exige) et ne porte pas
-    /// l'éventail des formats. Les deux dernières capacités du DoD du lot 2 —
-    /// la rangée photo·caméra·emoji·document·lieu·micro et l'envoi durable
-    /// offline — ne sont pas tenues par ce test et ne le seront pas par le lot 3.
+    /// acquis : la surface ainsi montée ne sert qu'UN outil sur six, et ne porte
+    /// pas l'éventail des formats. La rangée
+    /// photo·caméra·emoji·document·lieu·micro n'est pas tenue par ce test.
+    ///
+    /// L'ENVOI DURABLE, lui, l'est depuis le lot 4.10 — `DocumentComposerDoor`,
+    /// `ComposerDocumentSendPlan`, et la table qui a désormais un appelant,
+    /// exactement un. Ce test ne le mesure pas davantage :
+    /// `test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`
+    /// est le seul à lier les trois capacités au câblage d'une porte.
     func test_leMeuble_monteLeDocument_pourLaPorteDuFil() {
         let intention = ComposerIntent(origin: .feedComposer)
         let profil = ComposerProfile.profile(
@@ -998,9 +1398,23 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// Le socle est peint sous le document (`ComposerChromeOwnership.owner(for:
     /// .document)` rend `.host`), sa flèche est un vrai `Button` gaté sur la
     /// matière, et le texte a une issue — `onPublishDocument`. Reste la première :
-    /// `servedDocumentTools` rend toujours `[]`, faute de chemin d'ingestion. La
-    /// garde n'a donc PAS perdu son objet ; elle en a perdu deux tiers, et c'est
-    /// le tiers restant qui retient encore la porte.
+    /// la rangée d'outils. La garde n'a donc PAS perdu son objet ; elle en a
+    /// perdu deux tiers, et c'est le tiers restant qui retient encore la porte.
+    ///
+    /// **Ce tiers a failli s'évaporer le 2026-08-24, et la façon dont il a failli
+    /// vaut d'être écrite.** La rangée s'est mise à peindre — UN outil, l'emoji,
+    /// le seul dont le résultat ait une destination. La condition mesurée ici
+    /// était « `servedDocumentTools` ne rend pas `[]` » : un PROXY, choisi le jour
+    /// où la seule question possible était « la rangée existe-t-elle ? ». Servir
+    /// un outil l'aurait satisfaite EN ENTIER, et la garde aurait laissé passer
+    /// le câblage de `.feedComposer` sur une surface qui perd encore
+    /// photo·caméra·fichier·lieu·micro d'un coup, par rapport à la feuille
+    /// qu'elle remplace.
+    ///
+    /// Le proxy est donc remplacé par la question qu'il représentait : la rangée
+    /// SERVIE couvre-t-elle la rangée CANONIQUE — celle de la feuille historique,
+    /// outil pour outil ? C'est cela, « ne pas régresser », et c'est ce qu'un
+    /// booléen « au moins un » ne pouvait pas dire.
     ///
     /// Ce qu'elle retient, donc : **la table peut désigner le meuble ; une porte
     /// de PRÉSENTATION ne peut pas le monter tant que le document est une
@@ -1020,7 +1434,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "tableau qu'il faut corriger — pas cette assertion qu'il faut retirer."
         )
 
-        let sertUnOutil = try leMeubleSertAuMoinsUnOutilAuDocument()
+        let sertLaRangee = try leMeubleSertLaRangeeDuDocument()
         let saisieAUneIssue = try laSaisieDuDocumentAUneIssue()
         let publieurAtteignable = try leDocumentAUnPublieurAtteignable()
 
@@ -1030,18 +1444,21 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         let ou = sites.map { "\($0.porte) dans \($0.fichier)" }.joined(separator: ", ")
 
         XCTAssertTrue(
-            sertUnOutil,
-            "\(ou) monte le meuble sur une surface document dont la rangée d'outils ne se peint pas "
-                + "(`servedDocumentTools` rend `[]`, et `ComposerDocumentSurface.toolRow` ne peint rien d'une "
-                + "rangée vide). L'auteur perd photo·caméra·emoji·document·lieu·micro d'un coup, sur la "
-                + "porte la plus utilisée de l'app : c'est la deuxième capacité du DoD du lot 2 (spec v2 §E)."
+            sertLaRangee,
+            "\(ou) monte le meuble sur une surface document dont la rangée d'outils est INCOMPLÈTE : elle "
+                + "sert \(ComposerDocumentTool.servedRow.map(\.rawValue)) là où la feuille absorbée en "
+                + "offrait \(ComposerDocumentTool.canonicalRow.map(\.rawValue)). Ce qui manque, l'auteur le "
+                + "perd d'un coup sur la porte la plus utilisée de l'app : c'est la deuxième capacité du DoD "
+                + "du lot 2 (spec v2 §E). Un outil n'entre dans la rangée qu'en gagnant un "
+                + "`ComposerDocumentTool.effect`, donc une destination réelle — jamais en étant peint inerte."
         )
         XCTAssertTrue(
             saisieAUneIssue,
             "\(ou) monte le meuble sur une surface document dont le texte n'a AUCUNE issue : `documentText` "
                 + "n'est lu que par la liaison de la surface. Ce que l'auteur tape n'a nulle part où partir, et "
-                + "la croix le jette — c'est la troisième capacité du DoD du lot 2, l'envoi durable offline, "
-                + "dont `ComposerDocumentSendRouting` n'est aujourd'hui que la MESURE."
+                + "la croix le jette. La troisième capacité du DoD du lot 2 — l'envoi durable offline — est "
+                + "tenue depuis le lot 4.10 par `DocumentComposerDoor` ; cette assertion garde ce qui la "
+                + "précède, l'issue même du texte."
         )
         XCTAssertTrue(
             publieurAtteignable,
@@ -1128,13 +1545,12 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// ÉCRIT COMME TEL. Une rangée servie sous condition compterait pour servie,
     /// et c'est assumé — le jour où le meuble a une matière à servir, la
     /// question devient celle du câblage, pas celle de cette garde.
-    private func leMeubleSertAuMoinsUnOutilAuDocument() throws -> Bool {
-        guard let bloc = declarationBody(startingAt: "private var servedDocumentTools", in: try hostCode()) else {
+    private func leMeubleSertLaRangeeDuDocument() throws -> Bool {
+        guard declarationBody(startingAt: "private var servedDocumentTools", in: try hostCode()) != nil else {
             XCTFail("`servedDocumentTools` est introuvable dans le meuble — la garde ne mesurerait RIEN")
             return true
         }
-        let corps = compact(bloc)
-        return !(corps.hasSuffix("{[]}") || corps.hasSuffix("{return[]}"))
+        return ComposerDocumentTool.servedRow == ComposerDocumentTool.canonicalRow
     }
 
     /// Le texte du document a-t-il une ISSUE ? Il en a une dès que quelqu'un le
@@ -1789,5 +2205,98 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             astérisque, ou coupe la séquence.
             """
         )
+    }
+
+    // MARK: - La rangée d'outils : servie, câblée, et d'un seul geste
+
+    /// **Loi 4, côté MONTAGE.** La règle pure dit qu'un outil servi a un effet
+    /// (`ComposerDocumentTool.effect`, éprouvée dans
+    /// `ComposerDocumentSurfaceTests`). Elle ne dit rien de ce que le meuble en
+    /// fait : il pouvait servir la rangée et ne pas brancher `onTool`, ce qui
+    /// aurait peint une icône dont le tap ne déclenche RIEN — l'affordance sans
+    /// effet, arrivée par l'autre bout.
+    ///
+    /// Deux faits, donc, qu'aucune valeur ne peut dire : la surface reçoit un
+    /// `onTool`, et ce que ce rappel déclenche existe.
+    func test_leMeuble_cableLaRangeeQuIlSert_sansQuoiLIconeSeraitInerte() throws {
+        guard let surface = declarationBody(startingAt: "private var documentSurface", in: try hostCode()) else {
+            return XCTFail("`documentSurface` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
+        }
+        XCTAssertTrue(
+            compact(surface).contains("onTool:"),
+            "Le meuble sert une rangée d'outils sans brancher `onTool` : chaque icône peinte serait un "
+                + "bouton dont le tap ne fait rien (loi 4)."
+        )
+        XCTAssertNotNil(
+            declarationBody(startingAt: "private func handleDocumentTool", in: try hostCode()),
+            "Le rappel `onTool` ne mène à aucun geste nommé dans le meuble."
+        )
+    }
+
+    /// La liste servie est une PROJECTION de la règle, jamais une seconde
+    /// liste écrite ici. Le jour où un outil gagnera son chemin, il suffira de
+    /// lui donner un `effect` ; une énumération recopiée dans le meuble aurait
+    /// exigé de penser aux DEUX endroits, et le second est celui qu'on oublie.
+    func test_laListeServie_projetteLaRegle_elleNeLaRecopiePas() throws {
+        guard let bloc = declarationBody(startingAt: "private var servedDocumentTools", in: try hostCode()) else {
+            return XCTFail("`servedDocumentTools` est introuvable — la garde ne mesurerait RIEN.")
+        }
+        let corps = compact(bloc)
+        XCTAssertTrue(
+            corps.contains("ComposerDocumentTool.servedRow"),
+            "Le meuble n'énumère pas les outils : il sert ce que la règle déclare servi."
+        )
+        for outilEcritEnDur in [".photo", ".camera", ".emoji", ".document", ".place", ".microphone"] {
+            XCTAssertFalse(
+                corps.contains(outilEcritEnDur),
+                "Un outil (« \(outilEcritEnDur) ») est écrit en dur dans le meuble : c'est une seconde liste, "
+                    + "et elle divergera de `ComposerDocumentTool.effect` sans que rien ne le dise."
+            )
+        }
+    }
+
+    /// **Ce que l'emoji ÉCRIT, et où.** Le seul effet servi aujourd'hui insère
+    /// dans `documentText` — l'état que le brouillon emporte — et surtout PAS
+    /// dans `moodEmoji`, qui est la matière DÉFINISSANTE d'un mood
+    /// (`ComposerMoodPolicy.canPublish`). Les deux sont des emojis, ils vivent
+    /// à trois lignes l'un de l'autre dans ce fichier, et les confondre
+    /// changerait l'emoji du mood chaque fois que l'auteur en glisse un dans sa
+    /// phrase.
+    func test_lEmojiInsere_ecritDansLeTexte_jamaisDansLEmojiDuMood() throws {
+        let code = try hostCode()
+        guard let bloc = declarationBody(startingAt: "private var emojiPickerSheet", in: code) else {
+            return XCTFail("Le sélecteur d'emoji du meuble est introuvable — la garde ne mesurerait RIEN.")
+        }
+        let corps = compact(bloc)
+        XCTAssertTrue(
+            corps.contains("documentText+="),
+            "Le sélecteur d'emoji n'écrit pas dans le texte composé : son résultat n'a nulle part où aller."
+        )
+        XCTAssertFalse(
+            corps.contains("moodEmoji"),
+            "Le sélecteur d'emoji touche `moodEmoji` : insérer un emoji dans une phrase changerait l'emoji "
+                + "DÉFINISSANT du mood, et donc ce que le gate de matière autorise à publier."
+        )
+    }
+
+    /// Garde NÉGATIVE — le meuble réutilise le sélecteur d'emoji du dépôt, il
+    /// n'en fabrique pas un second. `EmojiPickerSheet` tourne déjà en
+    /// production (le fil le monte, `composerText += emoji`) : une seconde
+    /// grille ici serait deux listes d'emojis, deux mémoires de récents et deux
+    /// jeux de catégories à faire diverger — le motif exact que la surface du
+    /// mood a refusé pour `StatusViewModel.moodOptions`.
+    func test_leMeuble_neFabriquePasUneSecondeGrilleDEmojis() throws {
+        let code = try hostCode()
+        XCTAssertTrue(
+            code.contains("EmojiPickerSheet("),
+            "Le meuble doit monter le sélecteur du dépôt — sinon cette garde ne mesurerait rien."
+        )
+        for interdit in ["EmojiGridCategory", "LazyVGrid", "emojiOptions", "\"😀\", \"😃\""] {
+            XCTAssertFalse(
+                code.contains(interdit),
+                "Le meuble fabrique sa propre grille d'emojis (« \(interdit) ») : la seconde liste est le "
+                    + "défaut, pas le composant."
+            )
+        }
     }
 }

@@ -137,29 +137,44 @@ nonisolated enum ComposerChromeOwnership {
     ///
     /// La loi 5 dit que le socle ne varie jamais selon la PORTE. Elle n'a jamais
     /// dit qu'il peignait une commande sans objet : il s'efface déjà devant
-    /// l'atelier, qui peint les mêmes trois zones. La même phrase, tenue jusqu'au
+    /// l'atelier, qui peint les mêmes zones. La même phrase, tenue jusqu'au
     /// bout, donne les trois lignes ci-dessous.
     ///
     /// - `.scene` — RIEN. L'atelier assemble les trois ; en peindre une seconde
     ///   série donnerait deux audiences, deux yeux et deux flèches, dont une
     ///   inerte, sur la surface de création la plus utilisée.
-    /// - `.document` — les trois, personne d'autre ne les peignant. **Dette
-    ///   CONSIGNÉE, non refermée ici** : l'œil ouvre `MeeshyScenePlayer` sur
-    ///   `viewModel.currentEffects`, que la surface document ne remplit pas — il
-    ///   rendrait donc une scène VIDE. La cause est celle de
-    ///   `servedDocumentTools == []` : le meuble n'a pas de chemin d'ingestion,
-    ///   donc pas de média, donc rien à prévisualiser. Aucune porte de production
-    ///   ne monte ce document, et
-    ///   `test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`
-    ///   le retient.
+    /// - `.document` — l'audience et la flèche, personne d'autre ne les
+    ///   peignant. **L'œil en est parti le 2026-08-24, par RETRAIT et non par
+    ///   réparation.** Il ouvrait `MeeshyScenePlayer` sur
+    ///   `viewModel.currentEffects`, que la surface document ne remplit pas :
+    ///   une scène VIDE. La cause a SURVÉCU à l'arrivée de la rangée d'outils —
+    ///   le seul outil servi (`ComposerDocumentTool.effect`) insère du TEXTE et
+    ///   ne rapporte aucun média, donc toujours rien à prévisualiser. Un outil
+    ///   peint n'est pas un chemin d'ingestion, et confondre les deux
+    ///   rebrancherait l'œil sur le même vide. Une dette CONSIGNÉE reste de l'UI morte tant qu'elle
+    ///   est peinte, et la loi 4 ne fait pas d'exception pour ce qui est écrit
+    ///   dans un doc-comment. La loi 6 ferme l'autre issue : fabriquer un
+    ///   aperçu maison du texte serait un quatrième chemin de rendu. L'œil
+    ///   revient le jour où le document a des médias à montrer, pas avant.
+    ///   L'audience, elle, RESTE — et elle CHOISIT depuis le même lot
+    ///   (`MeeshyComposerHost.audienceChip`), avec la mémoire du format post
+    ///   (`ComposerAudienceMemory.postKey`).
     /// - `.mood` — la flèche SEULE. L'audience y est ABSENTE, jamais grisée
-    ///   (loi 4) : `ComposerMoodSurface` porte son propre sélecteur six niveaux
-    ///   avec sa mémoire `@AppStorage("lastStatusVisibility")` (loi 10), tandis
-    ///   qu'`audienceChip` n'est qu'un témoin inerte. Le poser au-dessus d'un
-    ///   vrai sélecteur ferait deux affichages pour un même réglage — ce que le
-    ///   commentaire d'`audienceChip` s'interdit lui-même. L'œil est absent pour
-    ///   une raison plus dure : un mood n'a pas de canvas, et la loi 6 interdit
-    ///   d'en fabriquer un aperçu.
+    ///   (loi 4) : `ComposerMoodSurface` porte son propre sélecteur six niveaux,
+    ///   dans le RUBAN de son bloc 3, avec la mémoire du format status
+    ///   (`ComposerAudienceMemory.statusKey`, loi 10). En peindre un second au
+    ///   socle ferait deux contrôles pour un même réglage sur un même écran.
+    ///
+    ///   **Ce n'est PLUS la même raison qu'avant le lot 4.9**, et la nuance
+    ///   compte pour la suite : `audienceChip` n'est plus un témoin inerte, c'est
+    ///   un vrai sélecteur. Ce qui l'exclut ici n'est donc pas son inertie mais
+    ///   la PLACE — deux formes d'un même réglage, l'une dans le corps, l'autre
+    ///   dans le socle. Les deux formes existent à dessein : un ruban de six
+    ///   chips tient dans un bloc, jamais dans une rangée qui porte aussi la
+    ///   flèche.
+    ///
+    ///   L'œil est absent pour une raison plus dure : un mood n'a pas de canvas,
+    ///   et la loi 6 interdit d'en fabriquer un aperçu.
     ///
     /// **Divergence ASSUMÉE avec le plan du lot 4**, qui écrivait « sous `.mood`
     /// … audience + flèche ». La mesure a tranché contre lui, et le dire ici vaut
@@ -167,8 +182,146 @@ nonisolated enum ComposerChromeOwnership {
     static func socleZones(for surface: ComposerSurfaceKind) -> [ComposerTopBarControl] {
         switch surface {
         case .scene: return []
-        case .document: return [.audience, .preview, .publish]
+        case .document: return [.audience, .publish]
         case .mood: return [.publish]
+        }
+    }
+}
+
+/// **La mémoire d'audience — une par FORMAT (loi 10), et sa relecture.**
+///
+/// Deux choses que rien ne doit séparer : sous QUELLE clé une audience se
+/// souvient, et CE QU'ELLE REND quand on la relit. Les tenir ensemble est ce qui
+/// répare la forme précédente — `StatusComposerView` écrivait la clé dans la vue
+/// et la relisait dans la même vue, si bien qu'aucun test ne pouvait dire ce
+/// qu'une mémoire corrompue devait rendre.
+///
+/// **Une clé par format, jamais une pour tous.** Le cas qui commande : un auteur
+/// restreint son mood à trois personnes. Sous une mémoire partagée, le post
+/// qu'il écrit ensuite s'ouvrirait en `ONLY` sur ces trois personnes — un
+/// rétrécissement d'audience que rien à l'écran n'annoncerait.
+nonisolated enum ComposerAudienceMemory {
+
+    /// La mémoire du format status — **celle de l'écran historique**, à l'octet
+    /// près. Une clé neuve en ferait une seconde mémoire, donc deux réglages à
+    /// faire diverger pour un seul geste d'auteur.
+    static let statusKey = "lastStatusVisibility"
+
+    /// La mémoire du format post. `FeedComposerSheet` n'en avait AUCUNE — son
+    /// audience repart à `PUBLIC` à chaque ouverture. C'est donc une capacité
+    /// que le meuble AJOUTE, et non une parité qu'il tient : le dire évite qu'on
+    /// la lise plus tard comme une régression de la feuille historique.
+    static let postKey = "lastPostVisibility"
+
+    /// `nil` sous la scène, et c'est une RÉPONSE, pas un trou : l'atelier reçoit
+    /// sa graine par `initialVisibility`, que le tray alimente depuis
+    /// `lastComposerVisibility`. Le socle n'y peint aucune audience
+    /// (`ComposerChromeOwnership.socleZones(for: .scene)` est vide), et lui
+    /// inventer une mémoire ici en ferait une seconde à faire diverger de celle
+    /// du tray.
+    ///
+    /// Le `switch` reste exhaustif : un cinquième format casse la compilation
+    /// ICI, avant de pouvoir hériter d'une mémoire par défaut.
+    static func key(for format: ComposerFormat) -> String? {
+        switch format {
+        case .status: return statusKey
+        case .post: return postKey
+        case .story, .reel: return nil
+        }
+    }
+
+    /// Ce qu'une mémoire rend quand on la relit — `.public` dès qu'elle porte
+    /// autre chose qu'une audience relisible ET exploitable.
+    ///
+    /// **TROIS replis, et ils répondent à DEUX questions distinctes.** Les deux
+    /// premiers demandent « cette valeur est-elle LISIBLE ? » : une valeur
+    /// INCONNUE (mémoire d'une version antérieure, réglage effacé) se voit tout
+    /// de suite ; une valeur connue mais HORS OFFRE est plus coûteuse, aucun
+    /// chip ne la montre et l'auteur publierait sous un réglage qu'aucun écran
+    /// ne lui a dit.
+    ///
+    /// Le troisième demande « une fois relue, est-elle EXPLOITABLE ? », et c'est
+    /// une autre question. `ONLY` et `EXCEPT` sont parfaitement lisibles,
+    /// parfaitement offertes — et leur portée EST la liste d'utilisateurs qui
+    /// les accompagne, que cette mémoire ne porte PAS : elle ne persiste qu'un
+    /// `rawValue`. Les relire telles quelles restaurait donc une audience
+    /// nominative avec une liste vide, que `CreatePostSchema` refuse
+    /// (« EXCEPT and ONLY visibility require at least one userId in
+    /// visibilityUserIds »). Et comme rien ne réécrit la mémoire sur un échec,
+    /// la publication échouait à CHAQUE ouverture suivante — un seul post
+    /// restreint suffisait à bloquer durablement la porte.
+    ///
+    /// Persister la liste À CÔTÉ du mode serait l'autre réponse possible ; elle
+    /// est refusée ici : une liste d'identifiants qui survit à la session
+    /// ressusciterait, des semaines plus tard, une audience que l'auteur ne
+    /// reverrait qu'après avoir publié.
+    static func remembered(_ rawValue: String?) -> PostVisibility {
+        guard let rawValue,
+              let remembered = PostVisibility(rawValue: rawValue),
+              PostVisibility.composerSelectableCases.contains(remembered),
+              !remembered.requiresUserSelection else {
+            return .public
+        }
+        return remembered
+    }
+}
+
+/// **Ce qu'un écran a le DROIT de proposer comme audience** — l'offre, distincte
+/// de la mémoire qui en choisit une.
+///
+/// Elle vit à côté de `ComposerAudienceMemory` parce que les deux tiennent
+/// ensemble un même invariant : *ce que la mémoire rend appartient toujours à
+/// l'offre*. Séparées, un chip s'ouvrirait sans marque et l'auteur publierait
+/// sous un réglage qu'aucun écran ne lui aurait dit —
+/// `test_touteMemoireRelue_appartientALOffre_desDeuxCotesDeLaRepublication` le
+/// tient.
+///
+/// # Pourquoi une REPUBLICATION n'offre pas les six
+///
+/// `EXCEPT` et `ONLY` ne se lisent pas seules : leur portée EST la liste
+/// d'utilisateurs qui les accompagne. Sur une republication, cette liste vient
+/// de la SOURCE — `StoryRepostAudience.inheritsAudienceList`, miroir de
+/// `repostVisibilityInheritsAudienceList` que `PostService.createPost` applique
+/// en REMPLAÇANT `data.visibilityUserIds` par ceux de l'original.
+///
+/// Le sélecteur nominatif était donc peint, ouvrable, renseignable — et son
+/// résultat n'avait aucun effet (loi 4 : un contrôle existe s'il a un EFFET).
+/// Pire : republier une humeur PUBLIQUE en `ONLY` produisait un post `ONLY`
+/// portant la liste vide de la source, c'est-à-dire visible de PERSONNE, sur une
+/// feuille qui s'était refermée sur un succès.
+///
+/// # Ce que cette règle ne fait PAS, et pourquoi elle ne le peut pas
+///
+/// Elle ne plafonne pas l'ÉLARGISSEMENT — republier en `PUBLIC` une humeur
+/// `FRIENDS` —, que le serveur refuse par un 403 `REPOST_AUDIENCE_WIDENING` et
+/// que `StoryRepostAudience.allowed(from:)` saurait plafonner… si le client
+/// connaissait l'audience de l'original.
+///
+/// Il ne la connaît pas, et le canal est mort UNE COUCHE plus bas que là où on
+/// le cherche : `StatusEntry` porte bien un `visibility`, mais
+/// `APIPost.toStatusEntry()` ne le lui passe pas — il vaut `nil` pour TOUTE
+/// humeur que l'app affiche. Semer `visibility:` dans les graines de
+/// republication donnerait donc `StoryRepostAudience.allowed(fromRawValue: nil)`,
+/// c'est-à-dire `[.private]` : un ruban à UN chip sur chaque republication, la
+/// loi 4 défaite dans l'autre sens.
+///
+/// **Condition de levée, en deux parties et dans cet ordre** : (1)
+/// `toStatusEntry()` transmet `visibility` — une ligne, `StoryModels.swift`,
+/// hors du dossier Composer ; (2) cette règle prend l'audience de l'original et
+/// la passe à `StoryRepostAudience.allowed(from:)`, l'intersection restant
+/// ordonnée par `composerSelectableCases`. Elle est mesurée par
+/// `test_lOffre_dUneRepublication_nePlafonnePasLElargissement_fauteDeConnaitreLaSource`,
+/// qui se RETOURNE ce jour-là.
+nonisolated enum ComposerAudienceOffer {
+
+    /// - Parameter origin: la PORTE. C'est elle qui sait si l'on republie
+    ///   (`ComposerOrigin.repostedPostId`), et la lire ici évite qu'un site de
+    ///   montage recopie ce fait dans un drapeau — deux sources pour une même
+    ///   question.
+    static func offered(for origin: ComposerOrigin) -> [PostVisibility] {
+        guard origin.repostedPostId != nil else { return PostVisibility.composerSelectableCases }
+        return PostVisibility.composerSelectableCases.filter {
+            !StoryRepostAudience.inheritsAudienceList($0)
         }
     }
 }
@@ -179,6 +332,26 @@ nonisolated enum ComposerChromeOwnership {
 /// dans son ORDRE : photo · caméra · emoji · document · lieu · micro. L'ordre
 /// n'est pas décoratif — c'est la position que les doigts connaissent depuis
 /// des mois sur la porte la plus utilisée de l'app.
+/// **Ce qu'un outil de la rangée sait faire aujourd'hui.**
+///
+/// Un type SOMME plutôt qu'un booléen « servi / pas servi », et pour la raison
+/// que ce dépôt a déjà payée ailleurs : un booléen dit qu'un geste existe, il ne
+/// dit pas LEQUEL, si bien que le site qui sert la rangée et le site qui la
+/// câble finissent par répondre à deux questions différentes. Une valeur ici
+/// nomme la destination, et le meuble n'a plus qu'à l'honorer.
+nonisolated enum ComposerDocumentToolEffect: Equatable {
+
+    /// Insère un emoji dans le TEXTE composé — pas dans l'emoji DÉFINISSANT
+    /// d'un mood, qui est une autre matière et un autre gate
+    /// (`ComposerMoodPolicy.canPublish`).
+    ///
+    /// C'est le seul effet qui n'INGÈRE rien : sa destination est le champ que
+    /// le meuble possède déjà et que le brouillon emporte. Le précédent est
+    /// mesuré et vivant — le composer inline du fil monte `EmojiPickerSheet` et
+    /// fait exactement `composerText += emoji`.
+    case insertsEmojiIntoText
+}
+
 nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     case photo
     case camera
@@ -194,6 +367,45 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     static let canonicalRow: [ComposerDocumentTool] = [
         .photo, .camera, .emoji, .document, .place, .microphone
     ]
+
+    /// **Ce que cet outil DÉCLENCHE — et `nil` veut dire « rien ».**
+    ///
+    /// C'est ici que la loi 4 cesse d'être une discipline pour devenir une
+    /// propriété du type. La rangée SERVIE se déduit de cette réponse
+    /// (`servedRow`) : un outil sans effet n'est pas peint, et un outil peint
+    /// a forcément un geste. Les deux dérives que la forme précédente laissait
+    /// passer — une liste servie plus longue que les gestes câblés, un geste
+    /// écrit pour un outil que rien ne sert — n'ont plus d'endroit où naître.
+    ///
+    /// **La question à poser avant d'ajouter une valeur ici n'est pas « sait-on
+    /// ouvrir le sélecteur ? » mais « où va son RÉSULTAT ? »** — jusqu'au
+    /// brouillon, puis jusqu'au publieur. Les cinq `nil` ci-dessous butent tous
+    /// sur la même réponse : `ComposerDocumentDraft` ne porte ni `mediaIds`, ni
+    /// fichier, ni lieu, et le seul publieur de production que le meuble
+    /// atteigne (`StatusViewModel.setStatus`, par la porte du mood) n'en
+    /// accepte aucun. Ouvrir une photothèque au-dessus de ce trou rendrait une
+    /// image que rien ne transporterait.
+    ///
+    /// Le `switch` reste exhaustif : un septième outil casse la compilation ICI
+    /// plutôt que d'hériter d'un effet par défaut.
+    var effect: ComposerDocumentToolEffect? {
+        switch self {
+        case .emoji:
+            return .insertsEmojiIntoText
+        case .photo, .camera, .document, .place, .microphone:
+            return nil
+        }
+    }
+
+    /// Les outils que le meuble sert RÉELLEMENT — une projection de la rangée
+    /// canonique, jamais une seconde liste.
+    ///
+    /// L'ordre vient donc de `canonicalRow` et de nulle part ailleurs : c'est la
+    /// position que les doigts connaissent sur la feuille historique, et une
+    /// liste écrite à part l'aurait reprise à son compte.
+    static var servedRow: [ComposerDocumentTool] {
+        canonicalRow.filter { $0.effect != nil }
+    }
 
     var symbolName: String {
         switch self {
@@ -245,7 +457,18 @@ nonisolated enum ComposerDocumentToolPolicy {
 nonisolated enum ComposerDocumentSendPath: Equatable {
     /// La citation : `POST /posts/:id/repost`. Pas de file durable.
     case quotedRepost
-    /// Texte (ou lieu) seul : déjà durable, en ligne comme hors ligne.
+    /// Texte (ou lieu) seul : durable des DEUX côtés du réseau — **chez le
+    /// publieur qui l'enfile lui-même**.
+    ///
+    /// La nuance n'est pas rhétorique : la durabilité est une propriété du
+    /// PUBLIEUR, jamais du contenu. `FeedViewModel.createPost` enfile sa branche
+    /// texte sans consulter la connectivité — mesuré, ce modèle n'a pas même
+    /// d'`isOffline` —, ce qui rend ce chemin durable en ligne comme hors ligne.
+    /// `StatusViewModel.setStatus` fait l'INVERSE sur la même forme de contenu :
+    /// il n'atteint sa file que si `isOffline()` répond oui, et un échec réseau
+    /// en ligne n'y laisse qu'un toast. Lire « textOnly donc durable » sans
+    /// regarder QUI publie ferait donc certifier durable un envoi qui ne l'est
+    /// pas.
     case textOnly
     /// La file durable — le seul chemin qui survit à un hors-ligne ET à un kill.
     case durableOutbox
@@ -261,20 +484,27 @@ nonisolated enum ComposerDocumentSendPath: Equatable {
     }
 }
 
-/// **Sans appelant, et ASSUMÉ tel quel** — pas un oubli de câblage.
+/// **UN SEUL appelant depuis le lot 4.10 : `ComposerDocumentSendPlan`.**
 ///
-/// Le meuble ne publie pas : l'unique publieur est la barre du SDK
-/// (`publishAllSlides()`), et le socle NOMME la publication sans la piloter.
-/// Brancher cette table aujourd'hui exigerait d'écrire le second chemin d'envoi
-/// que la doctrine, C2 et le lot V7 interdisent tous les trois.
+/// Elle fut sans appelant, et l'assumait : le meuble ne publiait pas, l'unique
+/// publieur était la barre du SDK, et la table ne valait que comme MESURE
+/// consignée chemin par chemin de ce que la feuille historique fait réellement.
+/// Cette mesure reste la sienne — c'est ce qu'aucun lot ultérieur ne pourra
+/// redécouvrir sans relire `FeedComposerSheet` ligne à ligne.
 ///
-/// Ce qu'elle vaut donc en attendant : une MESURE consignée, chemin par chemin,
-/// de ce que la feuille historique fait réellement — c'est la seule chose que
-/// V7 ne pourra pas redécouvrir sans relire `FeedComposerSheet` ligne à ligne.
+/// Le meuble possède désormais l'ENVOI du document. `ComposerDocumentSendPlan`
+/// l'interroge pour décider par où un brouillon a le droit de partir, et refuse
+/// tout chemin qu'elle déclare non durable. Ce n'est pas un second chemin de
+/// publication : la table ne publie rien, elle NOMME — l'envoi lui-même reste
+/// chez le modèle du fil, qui possède l'outbox, le cache et la réconciliation
+/// optimiste.
 ///
-/// **Condition de levée nommée** : le jour où le meuble possède son envoi (V7,
-/// file de publication unifiée), `test_leRoutageDEnvoi_nEstMonteNullePart` se
-/// RETOURNE — il ne se supprime pas.
+/// **La garde a été RETOURNÉE, jamais supprimée.**
+/// `test_leRoutageDEnvoi_nAQuUnSeulAppelant_etCEstLeMeuble` exigeait zéro
+/// appelant ; elle en exige exactement un, et vérifie qu'il vit dans le dossier
+/// Composer. Un second interrogateur serait le second chemin d'envoi que la
+/// doctrine, C2 et le lot 7 interdisent tous les trois — et il naîtrait là où
+/// personne ne le cherche, puisque la table, elle, est désormais légitime.
 nonisolated enum ComposerDocumentSendRouting {
 
     /// L'ordre des trois questions EST la règle, et l'inverser perd du contenu :
@@ -299,6 +529,148 @@ nonisolated enum ComposerDocumentSendRouting {
     }
 }
 
+/// **Pourquoi un brouillon ne part PAS** — cinq raisons, et aucune n'est un
+/// échec que l'auteur doive subir.
+///
+/// Chacune laisse le composer OUVERT, sa saisie intacte. C'est le seul geste de
+/// cette chaîne qu'aucune garde de source ne rattraperait après coup : un
+/// composer refermé sur un envoi perdu reste PLAUSIBLE — il se ferme exactement
+/// comme quand tout va bien, et c'est ce qui rend cette perte-là silencieuse.
+nonisolated enum ComposerDocumentSendRefusal: Equatable {
+
+    /// Le brouillon n'est pas un post. Jumelle de la garde de format sortant du
+    /// mood : un format sans publieur sur ce chemin n'a pas de traduction
+    /// raisonnable, et le laisser passer fabriquerait un contenu d'un AUTRE type
+    /// que celui que l'auteur a composé.
+    case wrongFormat(ComposerFormat)
+
+    /// Rien à publier. Ce n'est PAS une redite du gate de la flèche : celui-ci
+    /// garde le BOUTON, celui-là garde l'ENVOI — et le publieur, lui, ne garde
+    /// rien. Sa branche durable exige un texte non blanc pour s'ouvrir ; un
+    /// brouillon vide retomberait donc sur son appel réseau direct, c'est-à-dire
+    /// sur un envoi volatil obtenu en n'écrivant rien.
+    case emptyDraft
+
+    /// Le chemin existe mais ne survit ni au hors-ligne ni à un kill de l'app.
+    /// Refuser vaut mieux qu'envoyer : un contenu perdu en silence coûte plus
+    /// cher qu'un geste à refaire.
+    case nonDurablePath(ComposerDocumentSendPath)
+
+    /// Le publieur a refusé la ligne — file pleine, écriture impossible. Le
+    /// texte porte ce que le modèle a rendu (`publishError`), jamais une phrase
+    /// réinventée ici : deux formulations d'un même échec divergent au premier
+    /// cas limite.
+    case publisherRejected(String)
+
+    /// Le publieur n'a ni confirmé ni refusé. **Le doute REFUSE** : fermer coûte
+    /// le texte de l'auteur, ne pas fermer ne coûte qu'un geste, et des deux
+    /// erreurs possibles une seule est réparable par celui qui la subit.
+    case publisherSilent
+
+    /// L'audience exige une liste nominative, et elle est VIDE. C'est le seul
+    /// refus de cette liste que le gateway émet déjà de son côté —
+    /// `CreatePostSchema` rejette `EXCEPT`/`ONLY` sans aucun `visibilityUserIds`
+    /// (400 `VALIDATION_ERROR`). Le laisser partir produirait donc un échec
+    /// certain, présenté à l'auteur comme une erreur générique.
+    ///
+    /// Il porte l'audience concernée plutôt qu'un booléen : c'est elle que
+    /// l'écran nomme, et un refus qui ne sait pas dire QUOI est un refus qu'on
+    /// ne peut pas traduire.
+    case incompleteAudience(PostVisibility)
+}
+
+/// **Ce que le meuble a le droit d'envoyer, et par où** — la question posée
+/// AVANT l'envoi.
+///
+/// C'est l'unique appelant de `ComposerDocumentSendRouting` : la table sait
+/// ordonner ses trois questions, ce plan sait ce qu'un brouillon du meuble peut
+/// répondre. Les fondre aurait fait porter à la table une connaissance du
+/// brouillon qu'elle n'a pas, et à ce plan une règle de routage qu'il aurait
+/// fallu recopier.
+///
+/// **`hasLocalMedia` y est un littéral `false`, et c'est mesuré, pas supposé** :
+/// `ComposerDocumentDraft` ne porte ni identifiants de média, ni fichier — la
+/// première capacité manquante du DoD du lot 2. Ce littéral est vrai par
+/// ABSENCE, et une absence ne se garde pas toute seule : le jour où le brouillon
+/// gagnera un canal média, il deviendra un MENSONGE et une composition avec
+/// photo partirait par le chemin texte en laissant son fichier sur place.
+/// `test_leBrouillon_nAAucunCanalMedia_ceQuiTientLeLitteralDuPlan` rougit ce
+/// jour-là.
+///
+/// **`isOffline` est demandé même s'il n'est pas lu aujourd'hui.** La table ne
+/// le consulte qu'après avoir vu un fichier local, et il n'y en a pas : le
+/// paramètre traverse donc sans effet. Le supprimer aurait fait de ce plan une
+/// fonction du seul format, et il aurait fallu le rouvrir — c'est-à-dire
+/// retrouver la question — le jour où un média voyage.
+nonisolated enum ComposerDocumentSendPlan: Equatable {
+
+    /// Le brouillon part, et par ce chemin-là.
+    case send(ComposerDocumentSendPath)
+
+    /// Le brouillon ne part pas, et voici pourquoi.
+    case refuse(ComposerDocumentSendRefusal)
+
+    static func plan(for draft: ComposerDocumentDraft, isOffline: Bool) -> ComposerDocumentSendPlan {
+        guard draft.format == .post else { return .refuse(.wrongFormat(draft.format)) }
+        guard let texte = draft.text,
+              !texte.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .refuse(.emptyDraft)
+        }
+        // La complétude de l'audience passe par la MÊME règle que le gate de la
+        // flèche : deux écritures de « un ONLY sans personne ne part pas »
+        // seraient deux occasions de la corriger à moitié. Ce plan est la
+        // SECONDE ligne — la porte lit le brouillon, jamais le gate.
+        guard ComposerDocumentPublishGate.audienceIsComplete(
+            draft.visibility,
+            userIds: draft.visibilityUserIds ?? []
+        ) else {
+            return .refuse(.incompleteAudience(draft.visibility))
+        }
+
+        let chemin = ComposerDocumentSendRouting.path(
+            isQuote: draft.repostOfId != nil,
+            hasLocalMedia: false,
+            isOffline: isOffline
+        )
+        guard chemin.isDurable else { return .refuse(.nonDurablePath(chemin)) }
+        return .send(chemin)
+    }
+}
+
+/// **Ce que le publieur a rendu** — la question posée APRÈS l'envoi, et elle est
+/// DISTINCTE de la précédente.
+///
+/// Deux types parce que deux questions. Le plan demande « ce brouillon a-t-il le
+/// droit de partir, et par où ? » ; celui-ci demande « le publieur l'a-t-il
+/// pris ? ». Les fondre aurait fait porter au plan une réponse qu'il ne peut pas
+/// avoir — et c'est précisément ce trou qui a laissé le `Bool` de
+/// `onPublishDocument` sans le moindre émetteur de `false` pendant deux lots,
+/// pendant que son doc-comment le documentait comme une ACCEPTATION.
+nonisolated enum ComposerDocumentSendOutcome: Equatable {
+    case accepted
+    case refused(ComposerDocumentSendRefusal)
+
+    var isAccepted: Bool { self == .accepted }
+
+    /// - Parameters:
+    ///   - succeeded: `FeedViewModel.publishSuccess`, relu APRÈS l'envoi.
+    ///   - error: `FeedViewModel.publishError`, la chaîne que le modèle a posée.
+    ///
+    /// **L'ordre des deux questions est load-bearing** : l'erreur prime sur le
+    /// drapeau de succès. `publishSuccess` est un `@Published` qui SURVIT d'un
+    /// envoi à l'autre ; le lire en premier ferait accepter un échec sur la foi
+    /// d'un succès précédent. La règle ne suppose donc rien de l'hygiène du
+    /// publieur — pas même qu'il remette ses drapeaux à zéro en entrant.
+    ///
+    /// Une chaîne VIDE n'est pas une erreur : `publishError` est un texte
+    /// (`error.localizedDescription`), pas un `Error`, et la traiter en refus
+    /// ferait republier un envoi réussi — en double.
+    static func reported(succeeded: Bool, error: String?) -> ComposerDocumentSendOutcome {
+        if let error, !error.isEmpty { return .refused(.publisherRejected(error)) }
+        return succeeded ? .accepted : .refused(.publisherSilent)
+    }
+}
+
 /// **Le gate de MATIÈRE du socle** — ce sans quoi une pression sur la flèche
 /// partirait sur une page blanche.
 ///
@@ -313,19 +685,49 @@ nonisolated enum ComposerDocumentSendRouting {
 /// pour un même format divergeraient au premier assouplissement.
 nonisolated enum ComposerDocumentPublishGate {
 
-    /// - Parameter surface: la surface MONTÉE. `.scene` rend toujours `false`, et
-    ///   ce n'est pas une précaution gratuite : le jour où le socle publiera sous
-    ///   la scène, il devra passer par le gate de l'atelier (`canPublish`,
-    ///   `internal` à `MeeshyUI`) et non par celui-ci, qui ne voit ni les
-    ///   diapositives ni la timeline. Rendre `false` REFUSE ; il n'invente pas
-    ///   une réponse qu'il n'a pas.
+    /// **Une audience NOMINATIVE sans personne n'est pas une audience.**
+    ///
+    /// Règle NOMMÉE plutôt qu'une condition enfouie dans le gate, parce qu'elle
+    /// a deux lecteurs : la flèche s'en sert pour s'armer, et l'indice
+    /// d'accessibilité pour ne pas MENTIR — « choisissez un emoji » est faux
+    /// d'un mood qui en a un et que seule son audience retient.
+    ///
+    /// Elle miroite ce que la feuille historique du fil tenait déjà
+    /// (`FeedComposerSheet.postAudienceIncomplete`) et ce que `CreatePostSchema`
+    /// refuse côté serveur : « EXCEPT and ONLY visibility require at least one
+    /// userId in visibilityUserIds ». Le meuble ne la tenait nulle part, si bien
+    /// que deux chemins armaient la flèche sur un refus certain : la MÉMOIRE,
+    /// qui restaurait un mode nominatif sans sa liste (fermé depuis par
+    /// `ComposerAudienceMemory.remembered`), et le geste INTERACTIF — toucher
+    /// « Annuler » dans `AudienceUserPickerView`, dont l'en-tête n'appelle
+    /// `onDone` que sur « OK ». Le second survit à toute correction de la
+    /// mémoire, et c'est lui qui rend cette règle nécessaire.
+    static func audienceIsComplete(_ visibility: PostVisibility, userIds: [String]) -> Bool {
+        !visibility.requiresUserSelection || !userIds.isEmpty
+    }
+
+    /// - Parameters:
+    ///   - surface: la surface MONTÉE. `.scene` rend toujours `false`, et ce
+    ///     n'est pas une précaution gratuite : le jour où le socle publiera sous
+    ///     la scène, il devra passer par le gate de l'atelier (`canPublish`,
+    ///     `internal` à `MeeshyUI`) et non par celui-ci, qui ne voit ni les
+    ///     diapositives ni la timeline. Rendre `false` REFUSE ; il n'invente pas
+    ///     une réponse qu'il n'a pas.
+    ///   - visibility: l'audience COURANTE du meuble.
+    ///   - visibilityUserIds: sa liste nominative. Elle et l'audience sont SANS
+    ///     valeur par défaut : un défaut les aurait fait disparaître d'un site
+    ///     d'appel sans casser la moindre compilation, et le gate serait
+    ///     redevenu celui qui arme une flèche sur un refus certain.
     static func canPublish(
         surface: ComposerSurfaceKind,
         emoji: String?,
         text: String,
+        visibility: PostVisibility,
+        visibilityUserIds: [String],
         isPublishing: Bool
     ) -> Bool {
         guard !isPublishing else { return false }
+        guard audienceIsComplete(visibility, userIds: visibilityUserIds) else { return false }
         switch surface {
         case .scene:
             return false
@@ -416,17 +818,29 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// références, et aucune porte de production ne la monte. Lui inventer des
     /// champs qu'aucune vue ne remplit aurait fabriqué une capacité que le
     /// premier lecteur aurait crue tenue.
+    ///
+    /// **`visibilityUserIds` est arrivé au lot 4.9, avec le sélecteur du
+    /// socle**, et il n'a PAS de valeur par défaut : le socle sait désormais
+    /// choisir `ONLY`/`EXCEPT`, et un brouillon qui perdrait sa liste
+    /// nominative serait rejeté par le gateway — un refus que rien à l'écran
+    /// n'aurait annoncé. Un défaut ici l'aurait fait disparaître d'un site
+    /// d'appel sans casser la moindre compilation.
+    ///
+    /// La normalisation de la loi 3 est la MÊME que celle du mood, et à la même
+    /// place — dans la fabrique, jamais chez l'appelant : porter une liste sous
+    /// une audience qui n'en veut pas la ferait persister pour rien.
     static func document(
         format: ComposerFormat,
         text: String,
-        visibility: PostVisibility
+        visibility: PostVisibility,
+        visibilityUserIds: [String]
     ) -> ComposerDocumentDraft {
         ComposerDocumentDraft(
             format: format,
             text: text.isEmpty ? nil : text,
             emoji: nil,
             visibility: visibility,
-            visibilityUserIds: nil,
+            visibilityUserIds: visibility.requiresUserSelection ? visibilityUserIds : nil,
             mentions: nil,
             repostOfId: nil,
             audioUrl: nil
@@ -458,6 +872,18 @@ nonisolated enum ComposerDocumentCopy {
     /// l'en rapproche pour rien.
     static var close: String {
         String(localized: "common.close", defaultValue: "Fermer", bundle: .main)
+    }
+
+    /// L'échec d'un envoi, DIT à l'auteur.
+    ///
+    /// **Aucune clé neuve** : c'est celle du fil (`feed.post.publish.error`),
+    /// traduite dans les sept langues du catalogue — et le publieur est
+    /// littéralement le même objet, `FeedViewModel`. Une seconde clé pour la
+    /// même phrase, sur le même échec, aurait été deux traductions à faire
+    /// diverger, et un cran de plus vers le plafond du cliquet français.
+    static var publishError: String {
+        String(localized: "feed.post.publish.error",
+               defaultValue: "Erreur lors de la publication", bundle: .main)
     }
 
     /// **Aucune clé neuve pour les six outils** — la famille `composer.attach.*`
@@ -651,5 +1077,161 @@ struct ComposerDocumentSurface: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.focusDelay) {
             isContentFocused = true
         }
+    }
+}
+
+/// **La PORTE du document** — le site qui monte le meuble pour un post, et le
+/// seul endroit du dossier Composer qui sache ENVOYER.
+///
+/// Jumelle de `MoodComposerDoor`, et écrite pour la même raison : deux choses
+/// sont communes à toute présentation du document sans appartenir ni à la
+/// surface ni au meuble — l'ENVOI, et la lecture de ce que le publieur en a
+/// fait. Les écrire dans la surface en ferait un second chemin de publication ;
+/// les écrire chez chaque site de présentation en ferait autant de copies à
+/// faire diverger.
+///
+/// **C'est la troisième capacité du DoD du lot 2**, celle dont l'oubli PERD du
+/// contenu. Ce qui la rend durable n'est pas cette porte mais le publieur
+/// qu'elle choisit : la branche texte de `FeedViewModel.createPost` enfile
+/// elle-même sa ligne `.createPost` SANS consulter la connectivité — mesuré, ce
+/// modèle n'a pas même d'`isOffline` —, insère un post optimiste et laisse
+/// l'`OutboxFlusher` la dépêcher à la reconnexion. « Offline compris » est donc
+/// une propriété du CHEMIN, pas une branche écrite ici. C'est exactement ce qui
+/// sépare ce publieur de celui du mood, dont la file n'est atteinte que si
+/// `isOffline()` répond oui, et dont un échec réseau en ligne ne laisse qu'un
+/// toast.
+///
+/// **Ce qu'elle ne fait PAS, et qu'il ne faut pas lire comme tenu.** Elle ne
+/// récupère pas un post bloqué hors ligne pour le rouvrir en brouillon :
+/// `FeedViewModel.recoverUnsentPost()` existe, le mood fait la chose
+/// équivalente, mais le meuble n'a pas de canal de graine pour un document
+/// (`moodSeed` est le seul) et lui en ouvrir un déplacerait l'`init` que le lot
+/// 5.5 a déjà réservé. Dette NOMMÉE, non refermée ici — elle ne perd rien
+/// aujourd'hui, la ligne bloquée partant seule à la reconnexion.
+///
+/// **Elle ne laisse pas non plus l'auteur DÉCLARER la langue de son post, et
+/// c'est la dette qui perdrait le plus.** `originalLanguage:` reçoit ici
+/// `DefaultComposerLanguage.resolve()`, une CONSTANTE qui rend « fr ». La
+/// feuille absorbée ne fait pas ça : `FeedComposerSheet` tient un
+/// `composerLanguage` ÉCRIVABLE, avec sa capsule de langue et son sélecteur,
+/// dans la même barre que les six outils d'attache. Le meuble n'a ni ce champ,
+/// ni ce contrôle, ni un canal pour lui sur `ComposerDocumentDraft`.
+///
+/// Monter cette porte en l'état ferait partir un « Hello everyone » étiqueté
+/// français : le Prisme le traduirait FR→EN sur un texte déjà anglais, la carte
+/// afficherait un badge de langue faux, et l'auteur n'aurait aucun moyen de
+/// corriger. **La langue est donc, avec la rangée, la SECONDE condition de levée
+/// de la porte** — et il faut le dire ici parce qu'elle ne se lit dans AUCUNE
+/// rangée : `ComposerDocumentTool.canonicalRow` ne modélise que les six boutons
+/// d'attache, et une garde qui ne compare que ces deux listes serait passée au
+/// vert en laissant la régression entrer.
+///
+/// **Aucun site de production ne la monte encore**, et ce n'est pas un oubli de
+/// câblage : ni la rangée d'outils ni la langue ne couvrent ce que la feuille
+/// remplacée offre. Son témoin,
+/// `test_laPorteDuDocument_nEstMonteeParAucunSiteDeProduction_etCEstLaRangeeQuiLaRetient`,
+/// déclare cet état et porte les DEUX déclencheurs — il rougira le jour où les
+/// deux tomberont, le jour où il faudra monter cette porte, et le retourner.
+struct DocumentComposerDoor: View {
+
+    /// La porte au sens de la table. C'est elle qui décide du format d'ouverture
+    /// et de la surface montée ; la porte ne les recopie pas.
+    let intent: ComposerIntent
+
+    /// Le modèle du fil, **sans `@ObservedObject`**. La porte n'affiche rien qui
+    /// en dépende : elle l'utilise pour envoyer, puis pour lire ce qu'il a fait
+    /// de l'envoi. L'observer ferait re-rendre le composer entier à chaque
+    /// `post:created` reçu par la socket, pendant que l'auteur tape — c'est la
+    /// raison, mot pour mot, que porte déjà la porte du mood.
+    let viewModel: FeedViewModel
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        MeeshyComposerHost(
+            intent: intent,
+            // La mémoire d'audience du format POST est tenue par le MEUBLE, qui
+            // la relit lui-même à la construction sous `ComposerAudienceMemory`.
+            // Une seconde graine posée ici en ferait une seconde mémoire à faire
+            // diverger. Le paramètre reste obligatoire pour la SCÈNE, que cette
+            // porte ne monte jamais.
+            initialVisibility: PostVisibility.public.rawValue,
+            // Le canal de la SCÈNE, sans objet ici : `.keyboardOnContent` plus
+            // `.post` routent vers la surface du document, jamais vers
+            // l'atelier. Écrit en toutes lettres plutôt que rendu optionnel — un
+            // défaut le ferait disparaître des sites qui, eux, montent vraiment
+            // une scène.
+            onPublishAllInBackground: { _, _, _, _, _, _, _, _, _, _, _, _ in false },
+            onPublishDocument: { draft in await publish(draft) },
+            // `moodSeed:` vient APRÈS `onPublishDocument:`, et l'ordre des
+            // arguments est load-bearing : Swift n'autorise aucun
+            // réordonnancement, et une garde le tient désormais pour le jour où
+            // un paramètre s'insérera au milieu de cet `init`.
+            moodSeed: nil,
+            onPreview: { _, _, _, _, _ in },
+            onDismiss: { dismiss() }
+        )
+    }
+
+    /// **L'ENVOI DURABLE**, en trois temps que rien ne doit fusionner.
+    ///
+    /// 1. le PLAN décide si ce brouillon a le droit de partir, et par où : il
+    ///    refuse un format qui n'est pas un post, un brouillon sans matière, et
+    ///    tout chemin qui ne survivrait pas à un kill de l'app ;
+    /// 2. l'envoi passe par le MODÈLE, jamais par un service — le modèle possède
+    ///    la file durable, le cache et la réconciliation optimiste, et un appel
+    ///    direct les perdrait tous les trois d'un coup ;
+    /// 3. l'ISSUE lit ce que le modèle a rendu. Le silence REFUSE.
+    ///
+    /// Elle ne referme JAMAIS la porte elle-même. La sortie appartient au
+    /// meuble, qui la conditionne à l'acceptation ; un `dismiss()` posé ici
+    /// court-circuiterait ce gate et jetterait la saisie sur un refus.
+    ///
+    /// **Ce qu'une acceptation dit exactement, et ce qu'elle ne dit pas** : la
+    /// ligne est ENFILÉE, pas LIVRÉE. `createPost` insère le post optimiste et
+    /// rend la main dès que l'outbox a pris la ligne ; sa livraison réelle
+    /// appartient à l'`OutboxFlusher`, qui la retentera et, s'il épuise son
+    /// budget, retirera le post optimiste avec son propre toast
+    /// (`observeOutcome`). Fermer sur cette acceptation-là est donc juste — le
+    /// contenu est durable —, et lire `true` comme « publié » serait faux.
+    private func publish(_ draft: ComposerDocumentDraft) async -> Bool {
+        guard case .send = ComposerDocumentSendPlan.plan(
+            for: draft,
+            isOffline: NetworkMonitor.shared.isOffline
+        ) else {
+            return refuse()
+        }
+
+        // `content:` reçoit le texte du brouillon tel quel : le plan vient de
+        // garantir qu'il n'est ni absent ni blanc, et le re-normaliser ici en
+        // ferait une seconde écriture de la même règle.
+        await viewModel.createPost(
+            content: draft.text,
+            visibility: draft.visibility.rawValue,
+            visibilityUserIds: draft.visibilityUserIds,
+            originalLanguage: DefaultComposerLanguage.resolve(),
+            mentions: draft.mentions
+        )
+
+        let issue = ComposerDocumentSendOutcome.reported(
+            succeeded: viewModel.publishSuccess,
+            error: viewModel.publishError
+        )
+        guard issue.isAccepted else { return refuse() }
+
+        HapticFeedback.success()
+        return true
+    }
+
+    /// Un refus qui se DIT.
+    ///
+    /// Rendre `false` sans rien dire laisserait l'auteur devant une flèche qui
+    /// semble ne rien faire — et il la presserait encore. Écrit une fois pour
+    /// les deux chemins de refus : deux formulations à la main diraient l'échec
+    /// deux fois, ou une seule, et c'est la moitié muette qu'on découvrirait en
+    /// production.
+    private func refuse() -> Bool {
+        FeedbackToastManager.shared.showError(ComposerDocumentCopy.publishError)
+        return false
     }
 }

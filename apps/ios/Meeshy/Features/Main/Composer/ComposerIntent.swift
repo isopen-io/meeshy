@@ -206,12 +206,20 @@ nonisolated extension ComposerProfile {
             // DETTE CONSIGNÉE, jamais acquis : la surface ainsi désignée tient
             // UNE des quatre capacités que la rév. 4 énumérait. Le clavier sur
             // `content` est tenu de bout en bout. Ne le sont pas — la rangée
-            // photo·caméra·emoji·document·lieu·micro, qui ne se peint pas
-            // (`servedDocumentTools` rend `[]`, le meuble n'ayant pas de chemin
-            // d'ingestion, loi 4) ; l'envoi durable offline, dont la table
-            // (`ComposerDocumentSendRouting`) n'a aucun appelant et qu'une
-            // garde de source exige de n'en avoir aucun ; la bascule réel
-            // `forcePlainPost`, absente du dossier `Composer/`. L'éventail des
+            // photo·caméra·emoji·document·lieu·micro, dont UN SEUL outil se peint
+            // depuis le 2026-08-24 (l'emoji, le seul dont le résultat ait une
+            // destination ; les cinq autres n'ont ni champ sur
+            // `ComposerDocumentDraft` ni publieur qui les accepte, et restent donc
+            // ABSENTS plutôt qu'inertes, loi 4) ; la bascule réel
+            // `forcePlainPost`, absente du dossier Composer.
+            //
+            // L'ENVOI DURABLE, lui, est TENU depuis le lot 4.10, et c'était la
+            // troisième des trois capacités : `DocumentComposerDoor` monte le
+            // meuble, `ComposerDocumentSendPlan` interroge la table — qui a donc
+            // désormais un appelant, et un seul —, et l'envoi part par la branche
+            // texte de `FeedViewModel.createPost`, qui enfile sa ligne sans même
+            // consulter la connectivité. La garde de source a été RETOURNÉE en
+            // conséquence : elle exige un appelant unique au lieu d'aucun. L'éventail des
             // formats, lui, ne descend pas non plus sous le document — le
             // paragraphe de `MeeshyComposerHost.documentSurface` dit le blocage
             // SDK qui l'y retient. Basculer les écrans du fil AVANT ces
@@ -221,22 +229,26 @@ nonisolated extension ComposerProfile {
             //
             // Et cette dette n'est pas qu'écrite : elle est GARDÉE. Un site de
             // production qui construirait cette intention pendant qu'il manque
-            // au document l'UNE des trois — rangée servie, issue pour sa
+            // au document l'UNE des trois — rangée COUVERTE, issue pour sa
             // saisie, publieur atteignable — fait rougir
             // `MeeshyComposerHostGuardTests`
             // `.test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`.
             // Sans elle, la valeur `nil` posée ici aurait promis au lot suivant
             // une surface que le meuble ne sait pas encore tenir.
             //
-            // ÉTAT AU LOT 4.5 : DEUX des trois sont tombées, et il faut le lire
-            // au mot près. Le socle est peint sous le document
+            // ÉTAT AU 2026-08-24 : DEUX des trois sont tombées, et il faut le
+            // lire au mot près. Le socle est peint sous le document
             // (`ComposerChromeOwnership.owner(for: .document)` rend `.host`),
             // sa flèche est un vrai bouton gaté sur la matière, et le texte a
             // une issue — `MeeshyComposerHost.onPublishDocument`. Reste la
-            // PREMIÈRE : `servedDocumentTools` rend toujours `[]`. C'est elle,
-            // seule, qui retient encore la porte — et la lire comme « il ne
-            // reste plus rien » serait précisément l'erreur que cette garde
-            // existe pour empêcher.
+            // PREMIÈRE, la rangée — et elle ne se lit plus comme un booléen :
+            // elle sert UN outil sur six. La garde a d'ailleurs changé de
+            // mesure le même jour, parce que la sienne était un PROXY : « ne
+            // rend pas `[]` » représentait « la rangée existe-t-elle ? », une
+            // question à laquelle servir un seul outil répond OUI. Elle mesure
+            // désormais la COUVERTURE de la rangée canonique. Lire « il ne
+            // reste plus rien » parce qu'une icône est apparue serait
+            // précisément l'erreur que cette garde existe pour empêcher.
             return ComposerProfile(
                 initialFormat: .post,
                 offeredFormats: plusReel([.post, .story]),
@@ -335,16 +347,61 @@ nonisolated extension ComposerProfile {
             // post est bien OFFERT par `offeredFormats` ci-dessous, et il
             // n'atteint AUCUN écran. L'éventail (`ComposerFormatFan`) vit dans
             // `plateauTools`, que seule la scène monte — ni la surface mood ni
-            // la surface document ne le portent. Le porter sous elles est un
-            // geste que le lot 4.5 a explicitement refusé de préparer : le socle
-            // du document peint encore une audience INERTE et un œil qui
-            // ouvrirait une scène VIDE, et le rendre atteignable livrerait ces
-            // deux affordances mortes. Condition de levée nommée, et elle est
-            // app-side : que `ComposerChromeOwnership.socleZones(for: .document)`
-            // cesse de promettre ce que le document ne tient pas. La garde
+            // la surface document ne le portent.
+            //
+            // La raison écrite ici jusqu'au 2026-08-24 (« le socle du document
+            // peint une audience INERTE et un œil qui ouvrirait une scène
+            // VIDE ») est PÉRIMÉE : le lot 4.9 a retiré l'œil et rendu
+            // l'audience choisissante, et sa condition de levée — que
+            // `socleZones(for: .document)` cesse de promettre ce que le document
+            // ne tient pas — est REMPLIE. Elle n'était pas la bonne.
+            //
+            // Ce qui retient l'éventail est la LOI 10, la même que le troisième
+            // tiret ci-dessus oppose à l'atelier, et elle mord ici pour une
+            // raison PIRE : l'atelier a un plafond qu'on ne lui passe pas, le
+            // meuble n'a rien à passer. Plafonner exige la visibilité de
+            // l'ORIGINAL ; `ComposerIntent.repost` ne porte qu'un identifiant, et
+            // le canal supposé de la graine (`ComposerMoodSeed.visibility`) est
+            // mort UNE COUCHE plus bas que là où on le cherche : `StatusEntry`
+            // porte bien un `visibility`, mais `APIPost.toStatusEntry()` ne le
+            // lui passe pas — il vaut `nil` pour TOUTE humeur que l'app affiche.
+            // Semer `visibility:` dans les deux graines ne donnerait donc que
+            // `StoryRepostAudience.allowed(fromRawValue: nil)`, c'est-à-dire
+            // `[.private]` : un ancrage dont l'unique audience possible serait
+            // PRIVÉ n'est pas un sélecteur (loi 4). Descendre l'éventail sans ce
+            // plafond offrirait au contraire les audiences élargissantes, que le
+            // gateway refuse par un 403 `REPOST_AUDIENCE_WIDENING` — sur les
+            // DEUX portes, `POST /posts/:id/repost` comme `POST /posts` portant
+            // `repostOfId`, celle qu'emprunte déjà le mood.
+            //
+            // AVERTISSEMENT, payé une fois : ce raisonnement a longtemps conclu
+            // « donc on ne descend pas l'éventail » en laissant intact, sur un
+            // écran RÉEL, le sélecteur d'audience que la republication peint
+            // DÉJÀ. Un plafond raisonné pour un contrôle futur ne dispense pas
+            // de regarder le contrôle présent. Ce qui pouvait l'être sans
+            // connaître la source l'a été depuis : `ComposerAudienceOffer` retire
+            // d'une republication les deux audiences dont la PORTÉE appartient à
+            // la source (`ONLY`/`EXCEPT`, dont le serveur écrase la liste), et le
+            // socle comme le ruban lisent cette offre. L'ÉLARGISSEMENT, lui,
+            // reste ouvert — c'est le seul morceau qui exige vraiment la
+            // visibilité de l'original.
+            //
+            // Condition de levée, en TROIS parties et dans cet ordre : (1)
+            // `APIPost.toStatusEntry()` transmet `visibility`, PUIS les deux
+            // sites de republication le sèment dans leur `ComposerMoodSeed` —
+            // les deux hors du dossier Composer ; (2) `ComposerAudienceOffer`
+            // intersecte son offre avec `StoryRepostAudience.allowed(from:)` ;
+            // (3) `MoodComposerDoor.publish` gagne sa branche d'ancrage, la
+            // seule des trois qui soit un geste de vingt lignes — et donc la
+            // seule qu'on risque de prendre pour le tout.
+            //
+            // Deux gardes tiennent ce constat, et il faut les lire ENSEMBLE :
             // `ComposerDocumentSurfaceTests`
-            // `.test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint` tient
-            // ce constat et rougira le jour où l'éventail descendra.
+            // `.test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint` (le
+            // fait) et
+            // `.test_lAncrageDUnMood_nAAucunPlafondDAudience_etCEstCE_quiRetientLeventail`
+            // (la raison contraignante). La première, seule, nomme un blocage
+            // réel mais NON contraignant.
             return ComposerProfile(
                 initialFormat: sourceFormat,
                 offeredFormats: sourceFormat == .post ? [.post] : [sourceFormat, .post],

@@ -79,9 +79,11 @@ nonisolated enum ComposerReelGate {
 ///   refaire une version app-side ferait diverger deux surfaces sans qu'aucun
 ///   test ne le dise ;
 /// - il **ne construit aucun aperçu**. Loi 6 de la doctrine — « le lecteur EST
-///   l'aperçu » : composer et viewers partagent un seul registre de rendu, et
-///   l'œil du socle monte `MeeshyScenePlayer(mode: .preview)`. Un quatrième
-///   chemin d'aperçu casserait le WYSIWYG par construction ;
+///   l'aperçu » : composer et viewers partagent un seul registre de rendu, et un
+///   quatrième chemin d'aperçu casserait le WYSIWYG par construction. Le socle
+///   ne peint plus d'œil du tout depuis le lot 4.9 : aucune de ses deux surfaces
+///   n'a de canvas à lire, et un aperçu VIDE ment autant qu'un aperçu maison.
+///   L'œil de l'atelier, lui, est intact — c'est l'atelier qui le peint ;
 /// - il **ne décide de rien** : ce qu'il montre est fonction du
 ///   `ComposerProfile` que `ComposerIntent` lui donne (C1). Le host lit la
 ///   table, il ne la double pas ;
@@ -91,11 +93,14 @@ nonisolated enum ComposerReelGate {
 ///   rendre la main. Un second chemin app-side publierait un document que
 ///   personne n'a rabattu.
 ///
-/// **Le socle ne bouge jamais** (loi 5 de la doctrine P1). Ses trois zones —
-/// audience, œil, publication — sont toujours présentes, dans cet ordre, quelle
-/// que soit la porte d'entrée. C'est le point fixe qui fait qu'un composer reste
-/// le même objet vu de neuf endroits différents. `MeeshyComposerHostGuardTests`
-/// le verrouille par garde de source, faute d'une sortie observable.
+/// **Le socle ne bouge jamais** (loi 5 de la doctrine P1) — et ce que la loi 5
+/// interdit n'est pas qu'une zone manque, c'est qu'elle manque SELON LA PORTE.
+/// Les zones peintes suivent la SURFACE montée, par une règle pure
+/// (`ComposerChromeOwnership.socleZones`), et gardent partout le même ordre de
+/// lecture : audience, œil, publication. C'est le point fixe qui fait qu'un
+/// composer reste le même objet vu de neuf endroits différents.
+/// `MeeshyComposerHostGuardTests` le verrouille par garde de source, faute d'une
+/// sortie observable.
 ///
 /// **Aucune UI morte** : une capacité refusée par le profil n'est pas montée
 /// puis désactivée, elle est ABSENTE (loi 4 — « rien à l'écran sans raison »).
@@ -264,9 +269,10 @@ struct MeeshyComposerHost: View {
     let onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     let onDismiss: () -> Void
 
-    /// L'atelier et le socle lisent le MÊME état de composition. Le host le
-    /// possède pour que l'œil du socle puisse migrer l'instant courant en v3
-    /// sans redemander quoi que ce soit à l'atelier.
+    /// L'atelier et le meuble lisent le MÊME état de composition. Le host le
+    /// possède pour que le gate du réel (`ComposerReelGate`) lise la composition
+    /// RÉELLE sans redemander quoi que ce soit à l'atelier — c'est ce qui fait
+    /// varier l'offre de formats avec ce qui est composé.
     @StateObject private var viewModel: StoryComposerViewModel
 
     /// O6 — la teinte du plateau est un réglage PERSISTÉ, propre à l'auteur.
@@ -305,26 +311,47 @@ struct MeeshyComposerHost: View {
     /// `documentText` : le publieur est le socle, pas la surface.
     @State private var moodEmoji: String?
 
-    /// L'audience du mood et sa liste nominative. La MÉMOIRE, elle, n'est pas
-    /// ici : `@AppStorage("lastStatusVisibility")` vit dans la surface, parce
-    /// que c'est la mémoire d'audience du FORMAT status (loi 10) et qu'une
-    /// seconde clé posée ici en ferait une seconde mémoire à faire diverger.
-    @State private var moodVisibility: PostVisibility = .public
-    @State private var moodVisibilityUserIds: [String] = []
+    /// L'audience du meuble et sa liste nominative — **UNE seule pour ses deux
+    /// surfaces sans atelier**, exactement pour la raison écrite au-dessus de
+    /// `documentText` : la loi 9 autorise à changer de format, jamais à jeter ce
+    /// qui est composé. Deux champs jumeaux auraient perdu le réglage au premier
+    /// tap de l'éventail, sans qu'aucun test ne le dise.
+    ///
+    /// Elle est SEMÉE à la construction, depuis la mémoire du format d'ouverture
+    /// (`init`), et jamais réappliquée ensuite : relire la mémoire à chaque
+    /// apparition d'un contrôle écraserait, au premier changement de format,
+    /// l'audience que l'auteur vient de choisir sur l'autre surface.
+    @State private var composerVisibility: PostVisibility
+    @State private var composerVisibilityUserIds: [String] = []
+
+    /// La mémoire d'audience du format POST (loi 10) — celle qu'écrit le
+    /// sélecteur du socle, seul contrôle d'audience de la surface document. La
+    /// mémoire du format status, elle, vit dans `ComposerMoodSurface`, avec le
+    /// ruban qui l'écrit. Les deux ne se croisent jamais : un `ONLY` posé sur un
+    /// mood ne doit pas rétrécir le post écrit ensuite.
+    @AppStorage(ComposerAudienceMemory.postKey)
+    private var lastDocumentVisibility: String = PostVisibility.public.rawValue
+
+    /// Le mode dont le sélecteur nominatif est ouvert. `nil` = fermé — la même
+    /// forme que les cinq autres écrans qui montent `AudienceUserPickerView`.
+    @State private var audiencePickerMode: PostVisibility?
 
     /// Les personnes que ce mood nomme sans que son texte le dise. Le meuble
     /// les porte ; la RÈGLE de ce qu'on en déclare au serveur est
     /// `ComposerMoodPolicy.declared` (`nil` et jamais `[]`, loi 3).
     @State private var moodReferences: [ComposerReference] = []
 
-    @State private var showsPreview = false
-    @State private var previewSceneIndex = 0
-    @State private var previewIsPlaying = false
-
     /// L'envoi EN VOL du socle. Il ferme le gate le temps de l'aller-retour :
     /// sans lui, un double tap sur la flèche produirait deux publications, ce
     /// que l'écran historique du mood évitait par le même drapeau.
     @State private var isPublishingDocument = false
+
+    /// Le sélecteur d'emoji de la rangée d'outils est-il ouvert ? Il vit dans le
+    /// MEUBLE et non dans la surface, pour la même raison que `documentText` :
+    /// c'est le meuble qui possède le texte où l'emoji atterrit, et une surface
+    /// qui porterait le sélecteur devrait posséder sa destination — donc cesser
+    /// d'être la simple présentation qu'elle est.
+    @State private var showsEmojiPicker = false
 
     init(
         intent: ComposerIntent,
@@ -349,10 +376,25 @@ struct MeeshyComposerHost: View {
         if let draftId { composer.adoptDraft(id: draftId) }
         _viewModel = StateObject(wrappedValue: composer)
 
-        _currentFormat = State(initialValue: ComposerProfile.profile(
+        let ouverture = ComposerProfile.profile(
             for: intent.origin,
             compositionQualifiesAsReel: ComposerReelGate.compositionQualifiesAsReel(composer.currentEffects)
-        ).initialFormat)
+        ).initialFormat
+        _currentFormat = State(initialValue: ouverture)
+
+        // La mémoire d'audience s'applique ICI, et une seule fois — loi 10 sur
+        // le format que la porte OUVRE. La poser dans un `.onAppear` aurait
+        // rendu le moment de son application dépendant de la surface montée :
+        // au premier changement de format, elle aurait écrasé l'audience que
+        // l'auteur venait de choisir sur l'autre surface (loi 9).
+        //
+        // `UserDefaults.standard` est bien le magasin de `@AppStorage` : la
+        // graine et l'écriture du socle lisent donc le même endroit, sous la
+        // même clé, dont `ComposerAudienceMemory` est l'unique orthographe.
+        _composerVisibility = State(initialValue: ComposerAudienceMemory.remembered(
+            ComposerAudienceMemory.key(for: ouverture)
+                .flatMap { UserDefaults.standard.string(forKey: $0) }
+        ))
     }
 
     private var tint: PlateauTint {
@@ -411,12 +453,24 @@ struct MeeshyComposerHost: View {
     /// **Ce fut une CONSTANTE `.atelier`, et le lot 4 l'a rendue calculée** —
     /// pas par confort : les deux blocages qui l'imposaient sont des blocages de
     /// la SCÈNE, et une constante qui les faisait valoir pour les trois surfaces
-    /// était une constante mal placée. (1) `visibilityMenu` est l'UNIQUE
-    /// écrivain de `visibility` DANS L'ATELIER — le retirer priverait l'auteur
-    /// de tout moyen de changer son audience, sous la scène. (2) L'œil du socle
-    /// monte `MeeshyScenePlayer` SANS `preloadedImages/VideoURLs/AudioURLs`,
-    /// `internal` à `MeeshyUI` : il rendrait un aperçu AMPUTÉ des médias
-    /// LOCAUX de l'atelier, ce qu'interdit la loi 6.
+    /// était une constante mal placée.
+    ///
+    /// (1) **L'audience de l'atelier n'est pas atteignable d'ici.**
+    /// `StoryComposerView.visibility` est un `@State` PRIVÉ, semé à la
+    /// construction par `initialVisibility`, dont `visibilityMenu` est l'unique
+    /// écrivain. Le socle a beau savoir choisir une audience depuis le lot 4.9,
+    /// il écrit `composerVisibility`, que l'atelier ne lit jamais : céder le
+    /// chrome sous la scène retirerait `visibilityMenu` et laisserait l'auteur
+    /// devant un sélecteur qui ne gouverne rien. **Condition de levée, côté
+    /// SDK** : que l'atelier accepte une audience en `@Binding` plutôt qu'en
+    /// graine.
+    ///
+    /// (2) **L'aperçu de l'atelier porte des médias que le meuble ne voit pas.**
+    /// `preloadedImages/VideoURLs/AudioURLs` sont `internal` à `MeeshyUI` ; un
+    /// œil peint ici rendrait une scène amputée des médias LOCAUX, ce
+    /// qu'interdit la loi 6. Le socle n'en peint plus aucun depuis le lot 4.9 —
+    /// pour une raison voisine mais DISTINCTE, qu'il ne faut pas confondre :
+    /// sous ses deux surfaces il n'y a pas de canvas du tout, pas même amputé.
     ///
     /// Sous le document et sous le mood, **il n'y a pas d'atelier** : aucune de
     /// ces deux raisons n'a d'objet. La règle qui tranche est
@@ -425,9 +479,9 @@ struct MeeshyComposerHost: View {
     ///
     /// **Ce que la bascule NE lève PAS, et qu'il ne faut pas lire comme acquis** :
     /// la scène reste sur `.atelier`, et ses deux conditions de levée sont
-    /// intactes — un écrivain d'audience atteignable par le meuble, et un aperçu
-    /// qui porte les médias préchargés. Elles se remplissent côté SDK, jamais
-    /// depuis ce fichier.
+    /// intactes — une audience de l'atelier PILOTABLE depuis le meuble, et un
+    /// aperçu qui porte les médias préchargés. Elles se remplissent côté SDK,
+    /// jamais depuis ce fichier.
     private var chromeOwner: ComposerChromeOwner {
         ComposerChromeOwnership.owner(for: mountedSurface)
     }
@@ -438,6 +492,23 @@ struct MeeshyComposerHost: View {
     /// en deux exemplaires.
     private var paintedSocleZones: [ComposerTopBarControl] {
         ComposerChromeOwnership.socleZones(for: mountedSurface)
+    }
+
+    /// **Les audiences que le meuble a le droit de proposer**, lues UNE fois et
+    /// remises telles quelles à ses deux formes de sélecteur — le menu du socle
+    /// et le ruban du mood.
+    ///
+    /// Les deux formes existent à dessein (une rangée n'accueille pas six chips)
+    /// et ne sont jamais peintes ensemble. Mais deux OFFRES pour un même réglage
+    /// seraient un plafond posé d'un côté seulement, et c'est très exactement le
+    /// défaut que ce lot referme : le raisonnement sur le plafond d'une
+    /// republication était écrit dans `ComposerIntent` pendant que le ruban
+    /// déjà peint, sur le seul chemin vivant en production, offrait les six.
+    ///
+    /// C'est la PORTE qui répond, jamais la surface : elle seule sait si l'on
+    /// republie (`ComposerOrigin.repostedPostId`).
+    private var offeredAudiences: [PostVisibility] {
+        ComposerAudienceOffer.offered(for: intent.origin)
     }
 
     var body: some View {
@@ -481,14 +552,14 @@ struct MeeshyComposerHost: View {
             into: ComposerMoodComposition(
                 emoji: moodEmoji,
                 text: documentText,
-                visibility: moodVisibility,
-                visibilityUserIds: moodVisibilityUserIds
+                visibility: composerVisibility,
+                visibilityUserIds: composerVisibilityUserIds
             )
         )
         moodEmoji = adoptee.emoji
         documentText = adoptee.text
-        moodVisibility = adoptee.visibility
-        moodVisibilityUserIds = adoptee.visibilityUserIds
+        composerVisibility = adoptee.visibility
+        composerVisibilityUserIds = adoptee.visibilityUserIds
     }
 
     // MARK: - Les trois surfaces (V2, élargies au mood par le lot 4)
@@ -555,14 +626,19 @@ struct MeeshyComposerHost: View {
     /// encore. Ce n'est pas un oubli à combler ici : la table décrit ce que la
     /// porte offre, et le meuble n'a aujourd'hui aucun moyen de l'honorer.
     ///
-    /// Aucun outil n'y est servi aujourd'hui, et c'est la loi 4 qui le veut :
-    /// le meuble n'a pas encore de chemin d'ingestion. Le pipeline existe et
-    /// tourne (`ComposerDropResolver` / `ComposerIngestRouter`, six sites de
-    /// production) mais aucun de ses points d'entrée n'est dans le composer.
-    /// Peindre la rangée avant lui ouvrirait des sélecteurs dont le résultat
-    /// n'aurait nulle part où aller — l'affordance sans effet que ce chantier
-    /// retire partout. `ComposerDocumentTool.canonicalRow` attend V3, dans
-    /// l'ordre de la feuille historique, pour que rien n'ait à être réinventé.
+    /// **La rangée d'outils s'y peint depuis le 2026-08-24 — et elle en compte
+    /// UN.** Ce n'est pas un demi-travail, c'est la loi 4 appliquée jusqu'au
+    /// bout : `ComposerDocumentTool.effect` ne concède un outil que si son
+    /// RÉSULTAT a une destination, et cinq des six n'en ont pas. Le pipeline
+    /// d'ingestion du dépôt tourne bien (`ComposerDropResolver` /
+    /// `ComposerIngestRouter`, six sites de production) mais le trou n'est pas
+    /// là : `ComposerDocumentDraft` ne porte ni `mediaIds`, ni fichier, ni
+    /// lieu, et le seul publieur que le meuble atteigne n'en accepte aucun.
+    /// Peindre une photothèque au-dessus de ce trou rendrait une image que rien
+    /// ne transporterait.
+    ///
+    /// L'emoji, lui, n'ingère rien : il écrit dans `documentText`, que le
+    /// brouillon emporte déjà. Sa chaîne est complète, donc il se peint.
     ///
     /// **Elle ne porte pas non plus l'ÉVENTAIL**, qui vit dans le plateau. Ce
     /// n'est pas une impasse aujourd'hui — mais la raison a changé au lot 4.6,
@@ -623,6 +699,20 @@ struct MeeshyComposerHost: View {
     /// atteignable par le meuble. L'éventail descend alors ici AVEC le
     /// transfert de la saisie, jamais avant lui.
     ///
+    /// **Ce raisonnement vaut pour `.feedComposer`, et pour lui SEUL — ne pas
+    /// le généraliser.** Il tient parce que cette porte offre `.story`, que le
+    /// routage envoie à la scène. La porte de REPUBLICATION D'UN MOOD n'offre
+    /// que `[.status, .post]`, deux formats qui restent sur les surfaces sans
+    /// atelier : la perte de texte n'y est pas même possible, `documentText`
+    /// étant l'ÉTAT du meuble et les deux surfaces s'y liant. Conclure de ce
+    /// paragraphe que « l'éventail attend le SDK » serait donc faux pour 4.7, et
+    /// coûteux : la vraie raison y est app-side, c'est le plafond d'audience de
+    /// la loi 10, dont le meuble n'a aucune entrée (`ComposerIntent.swift`,
+    /// branche `.repost`, et la garde
+    /// `test_lAncrageDUnMood_nAAucunPlafondDAudience_etCEstCE_quiRetientLeventail`).
+    /// Deux portes, deux blocages distincts, un seul éventail immobile — et
+    /// lever l'un ne lève pas l'autre.
+    ///
     /// **Sa SORTIE est celle du meuble.** `onDismiss` n'était atteignable que
     /// sous la scène, où l'atelier du SDK peint la croix ; le document n'a pas
     /// d'atelier, et la surface serait restée un écran sans issue au moment
@@ -637,11 +727,60 @@ struct MeeshyComposerHost: View {
                 allowsCapture: profile.allowsCapture
             ),
             focusesOnAppear: ComposerSurfaceRouting.focusesContentOnAppear(opening: profile.opensWith),
-            onClose: onDismiss
+            onClose: onDismiss,
+            onTool: { tool in handleDocumentTool(tool) }
         )
+        .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
     }
 
-    private var servedDocumentTools: [ComposerDocumentTool] { [] }
+    /// Ce que le meuble sert — une PROJECTION de la règle, jamais une liste
+    /// écrite ici. Le jour où un outil gagnera sa destination, il suffira de lui
+    /// donner un `effect` : une énumération recopiée ici aurait exigé de penser
+    /// aux DEUX endroits, et le second est celui qu'on oublie.
+    private var servedDocumentTools: [ComposerDocumentTool] { ComposerDocumentTool.servedRow }
+
+    /// Le rappel de la rangée, aiguillé sur l'EFFET et non sur l'outil.
+    ///
+    /// Aiguiller sur l'outil aurait rouvert exactement ce que `effect` referme :
+    /// cinq branches muettes pour cinq outils que rien ne peint, et la dérive
+    /// silencieuse le jour où l'une d'elles cesserait de correspondre à ce que
+    /// la rangée sert. Ici, `nil` est le seul cas inatteignable, et il l'est par
+    /// construction — un outil sans effet n'arrive jamais à l'écran.
+    private func handleDocumentTool(_ tool: ComposerDocumentTool) {
+        switch tool.effect {
+        case .insertsEmojiIntoText:
+            HapticFeedback.light()
+            showsEmojiPicker = true
+        case .none:
+            break
+        }
+    }
+
+    /// **Le sélecteur du dépôt, monté tel quel** — celui que le composer inline
+    /// du fil ouvre déjà, avec ses catégories, sa recherche et ses récents. En
+    /// fabriquer un second ici aurait donné deux listes d'emojis, deux mémoires
+    /// et deux jeux de catégories à faire diverger : le motif que la surface du
+    /// mood a refusé pour `StatusViewModel.moodOptions`.
+    ///
+    /// Il écrit dans `documentText`, et **jamais dans `moodEmoji`** : les deux
+    /// sont des emojis et vivent à quelques lignes l'un de l'autre, mais l'un
+    /// est un caractère glissé dans une phrase et l'autre est la matière
+    /// DÉFINISSANTE d'un mood — celle sans laquelle `ComposerDocumentPublishGate`
+    /// refuse de publier. Les confondre changerait ce qu'un mood EST à chaque
+    /// frappe de son texte.
+    private var emojiPickerSheet: some View {
+        EmojiPickerSheet(quickReactions: Self.quickEmojis) { emoji in
+            documentText += emoji
+            showsEmojiPicker = false
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    /// Les six emojis de tête, ceux que le composer du fil propose déjà. Écrits
+    /// ici plutôt qu'en ligne pour que la liste reste une donnée nommée le jour
+    /// où elle deviendra une mémoire de récents.
+    private static let quickEmojis = ["\u{1F600}", "\u{2764}\u{FE0F}", "\u{1F525}", "\u{1F44D}", "\u{1F602}", "\u{1F389}"]
 
     // MARK: - Le mood
 
@@ -670,8 +809,14 @@ struct MeeshyComposerHost: View {
         ComposerMoodSurface(
             emoji: $moodEmoji,
             text: $documentText,
-            visibility: $moodVisibility,
-            visibilityUserIds: $moodVisibilityUserIds,
+            visibility: $composerVisibility,
+            visibilityUserIds: $composerVisibilityUserIds,
+            // `allowedAudiences:` vient APRÈS `visibilityUserIds:`, comme la
+            // déclaration : Swift n'autorise aucun réordonnancement, et l'ordre
+            // de cet `init` est déjà tenu par une garde côté meuble. Le ruban
+            // REÇOIT son offre — il la décidait, et peignait alors les six
+            // niveaux du SDK jusque sous une republication.
+            allowedAudiences: offeredAudiences,
             references: $moodReferences,
             viaUsername: moodSeed?.viaUsername,
             onClose: onDismiss
@@ -720,8 +865,13 @@ struct MeeshyComposerHost: View {
     /// jamais dit qu'il peignait une commande sans objet — il s'efface déjà
     /// devant l'atelier, qui peint les mêmes zones (`body`, plus haut). Le lot 4
     /// tient la même phrase jusqu'au bout : l'audience n'est pas peinte là où la
-    /// surface porte son propre sélecteur, l'œil n'est pas peint là où il n'y a
-    /// pas de canvas à lire.
+    /// surface porte son propre sélecteur, et l'œil n'est peint NULLE PART —
+    /// aucune des deux surfaces où le socle vit n'a de canvas à lire.
+    ///
+    /// Ce qui RESTE peint, en revanche, tient : l'audience est un vrai
+    /// sélecteur avec sa mémoire, la flèche un vrai bouton avec son gate de
+    /// matière. Un socle qui nomme sans faire est le motif que ce chantier
+    /// retire, pas celui qu'il installe.
     ///
     /// Ce choix appartient à `ComposerChromeOwnership.socleZones`, une règle
     /// PURE et éprouvée. Aucun `if` sur `profile`, sur `origin` ni sur `intent`
@@ -730,7 +880,6 @@ struct MeeshyComposerHost: View {
     private var socle: some View {
         HStack(spacing: 10) {
             if paintedSocleZones.contains(.audience) { audienceChip }
-            if paintedSocleZones.contains(.preview) { previewEye }
             Spacer()
             publishButton
         }
@@ -739,75 +888,126 @@ struct MeeshyComposerHost: View {
         .padding(.bottom, 12)
     }
 
-    /// Un TÉMOIN, jamais un second sélecteur — dupliquer le picker ici ferait
-    /// deux sources pour un même réglage.
+    /// **L'audience du socle CHOISIT — elle ne témoigne plus.**
     ///
-    /// Il n'est peint que là où il a un objet, et il n'en a plus qu'un seul : le
-    /// DOCUMENT. Sous la scène, l'atelier peint son propre picker 6 niveaux et le
-    /// socle tout entier s'efface. Sous le mood, `ComposerMoodSurface` porte le
-    /// sien, avec la mémoire `@AppStorage("lastStatusVisibility")` du format
-    /// (loi 10) — poser ce témoin inerte au-dessus d'un vrai sélecteur aurait été
-    /// exactement la duplication que ce commentaire s'interdit.
+    /// Elle fut un `Label` : un pictogramme et un mot, que rien n'écrivait. Le
+    /// brouillon partait alors sur la visibilité semée par la PORTE, et l'auteur
+    /// n'avait aucun moyen d'en changer sous cette surface. C'était la première
+    /// des deux affordances sans objet qui retenaient l'éventail au lot 4.7 —
+    /// et de l'UI morte au sens strict de la loi 4, puisqu'elle NOMMAIT un
+    /// réglage qu'elle ne réglait pas.
     ///
-    /// **Dette CONSIGNÉE sous le document** : personne n'y écrit l'audience, ce
-    /// témoin n'en est pas un écrivain, et le brouillon part donc sur la
-    /// visibilité que la PORTE a semée (`initialVisibility`). Aucune porte de
-    /// production ne monte le document, et la garde du lot 3 le retient.
+    /// **La FORME est celle de l'atelier** (`StoryComposerView+TopBar.visibilityMenu`),
+    /// pas celle du mood : un menu qui se replie en une capsule. Le socle est une
+    /// RANGÉE — le ruban de six chips du mood y mangerait toute la largeur et
+    /// repousserait la flèche hors de l'écran. Les deux surfaces ne sont jamais
+    /// peintes ensemble (`ComposerChromeOwnership.socleZones`), il n'y a donc pas
+    /// deux contrôles pour un réglage : il y a deux FORMES, une par surface, et
+    /// une seule règle de relecture (`ComposerAudienceMemory`).
+    ///
+    /// Il n'est peint que là où il a un objet, et il n'en a qu'un : le DOCUMENT.
+    /// Sous la scène l'atelier peint le sien ; sous le mood, le ruban du bloc 3.
     private var audienceChip: some View {
-        Label {
-            Text("composer.socle.audience", bundle: .main)
-        } icon: {
-            Image(systemName: "person.2.fill")
-        }
-        .font(.footnote.weight(.semibold))
-        .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-    }
-
-    /// L'œil — et c'est le LECTEUR, pas un aperçu maison (loi 6).
-    ///
-    /// Il n'est peint que là où il a quelque chose à lire, et
-    /// `ComposerChromeOwnership.socleZones` en décide : jamais sous la scène (où
-    /// l'atelier peint le sien), jamais sous le mood (qui n'a pas de canvas — la
-    /// loi 6 interdit d'en fabriquer un aperçu).
-    ///
-    /// **Dette CONSIGNÉE sous le document** : `draftDocument` migre
-    /// `viewModel.currentEffects`, que la surface document ne remplit pas — il
-    /// rendrait donc une scène VIDE. La cause est la même que celle de
-    /// `servedDocumentTools == []` : sans chemin d'ingestion, pas de média, donc
-    /// rien à prévisualiser. Ce n'est pas une raison de retirer l'œil ici, c'en
-    /// est une de ne pas monter le document en production tant que la rangée ne
-    /// se peint pas — ce que la garde du lot 3 retient déjà.
-    private var previewEye: some View {
-        Button {
-            showsPreview = true
+        Menu {
+            ForEach(offeredAudiences) { candidate in
+                Button {
+                    chooseAudience(candidate)
+                } label: {
+                    Label(
+                        candidate.label,
+                        systemImage: composerVisibility == candidate ? "checkmark" : candidate.icon
+                    )
+                }
+            }
         } label: {
-            Image(systemName: "eye")
-                .font(.footnote.weight(.semibold))
-                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+            HStack(spacing: 4) {
+                Image(systemName: composerVisibility.icon)
+                    .accessibilityHidden(true)
+                Text(audienceTitle)
+                    .lineLimit(1)
+            }
+            .font(.footnote.weight(.semibold))
+            .foregroundColor(MeeshyColors.textSecondary(isDark: true))
         }
-        .accessibilityLabel(Text("composer.socle.preview", bundle: .main))
-        .sheet(isPresented: $showsPreview) {
-            previewSheet
+        // Le LIBELLÉ reste « Audience » et ne s'échange pas contre la valeur —
+        // c'est la faute que la flèche évite déjà : un contrôle qui perd son nom
+        // accessible dès qu'il porte un état. La valeur est annoncée comme
+        // valeur, ce que VoiceOver sait lire séparément.
+        .accessibilityLabel(Text("composer.socle.audience", bundle: .main))
+        .accessibilityValue(Text(composerVisibility.label))
+        .sheet(item: $audiencePickerMode) { mode in
+            AudienceUserPickerView(mode: mode, initialSelection: composerVisibilityUserIds) { ids in
+                composerVisibilityUserIds = ids
+            }
         }
     }
 
-    /// Le document de l'aperçu est celui que la publication enverra : depuis la
-    /// règle d'encodage B7 (« encode = toujours le v3 migré du runtime
-    /// courant »), c'est PAR CONSTRUCTION la même fonction sur le même état.
-    /// L'aperçu ne peut donc pas mentir sur ce qui sera publié.
-    private var draftDocument: CanvasV3 {
-        CanvasV3(migrating: viewModel.currentEffects)
+    /// Le compte ne s'affiche que là où il VEUT dire quelque chose : sous un
+    /// `ONLY`/`EXCEPT` déjà renseigné. Partout ailleurs il ferait lire
+    /// « Public (0) », ce qui n'est pas une audience mais une erreur apparente.
+    private var audienceTitle: String {
+        guard composerVisibility.requiresUserSelection, !composerVisibilityUserIds.isEmpty else {
+            return composerVisibility.label
+        }
+        return "\(composerVisibility.label) (\(composerVisibilityUserIds.count))"
     }
 
-    private var previewSheet: some View {
-        MeeshyScenePlayer(
-            document: draftDocument,
-            mode: .preview,
-            sceneIndex: $previewSceneIndex,
-            isPlaying: $previewIsPlaying,
-            accentColorHex: MeeshyColors.indigo400Hex
-        )
+    /// **Choisir écrit la MÉMOIRE dans le même geste** (loi 10). Séparer les deux
+    /// écritures, c'est l'occasion d'oublier la seconde — et l'audience
+    /// repartirait à zéro à chaque ouverture, sans qu'aucun écran ne le dise.
+    ///
+    /// Un mode qui exige une liste nominative ouvre le sélecteur dans la foulée :
+    /// un `ONLY` sans personne est rejeté par le gateway, et le laisser partir
+    /// produirait un refus que rien à l'écran n'annonçait. L'écran historique le
+    /// faisait déjà ; le meuble ne le redécouvre pas.
+    ///
+    /// **Ce refus est réel, et il faut le chercher au bon étage** : il n'est pas
+    /// dans `PostService.createPost` — qui écrit `data.visibilityUserIds ?? []`
+    /// sans rien vérifier — mais UNE COUCHE plus haut, au schéma de la route
+    /// (`CreatePostSchema`, « EXCEPT and ONLY visibility require at least one
+    /// userId in visibilityUserIds », 400 `VALIDATION_ERROR`). Le dire ici évite
+    /// qu'une lecture du seul service conclue que la phrase ci-dessus est fausse.
+    ///
+    /// **L'ouverture ne SUFFIT pas, et c'est ce qui manquait.** Elle ne couvre
+    /// que le chemin INTERACTIF, et même là qu'à moitié : toucher « Annuler »
+    /// dans `AudienceUserPickerView` ne rappelle rien — son en-tête n'appelle
+    /// `onDone` que sur « OK » — et laissait l'audience nominative debout avec
+    /// une liste vide. Le chemin de RELECTURE la court-circuitait entièrement.
+    /// Les deux sont fermés depuis le même lot, chacun à sa place :
+    /// `ComposerAudienceMemory.remembered` ne restaure plus un mode dont la
+    /// portée est une liste qu'elle ne porte pas, et
+    /// `ComposerDocumentPublishGate` refuse d'armer la flèche sur une audience
+    /// nominative vide.
+    ///
+    /// La liste n'est PAS vidée quand l'audience cesse de l'exiger : c'est la
+    /// fabrique du brouillon qui l'écarte (loi 3), et la garder ici laisse
+    /// l'auteur revenir sur `ONLY` sans avoir à re-sélectionner ses personnes.
+    private func chooseAudience(_ candidate: PostVisibility) {
+        composerVisibility = candidate
+        lastDocumentVisibility = candidate.rawValue
+        if candidate.requiresUserSelection { audiencePickerMode = candidate }
     }
+
+    // L'ŒIL DU SOCLE A ÉTÉ RETIRÉ le 2026-08-24 (lot 4.9), avec son lecteur, son
+    // document migré et ses trois états de lecture. Il est écrit ici parce
+    // qu'une session le rebrancherait sinon en croyant réparer un oubli.
+    //
+    // Il montait `MeeshyScenePlayer(mode: .preview)` sur
+    // `CanvasV3(migrating: viewModel.currentEffects)`, et rien ne remplit
+    // `currentEffects` sous les deux surfaces où le socle est peint : le mood n'a
+    // pas de canvas, le document n'a AUCUN outil d'ingestion servi (la rangée
+    // n'en peint qu'un, l'emoji, qui écrit du texte et ne rapporte aucun média —
+    // `ComposerDocumentTool.effect`). L'œil ouvrait donc une scène VIDE — de l'UI
+    // morte au sens de la loi 4, qu'aucune dette consignée n'excuse. La loi 6
+    // fermait l'autre issue : un aperçu maison du texte serait un quatrième
+    // chemin de rendu.
+    //
+    // CONDITION DE RETOUR : que la surface qui le peint ait quelque chose à
+    // lire — un média ingéré côté document, un canvas côté mood. Il revient
+    // alors ENTRE l'audience et la flèche, rang que
+    // `test_socle_peintSesZones_dansLOrdreCanonique` tient déjà pour lui, et
+    // `test_lOeilEtSonLecteur_vivent_etMeurent_ensemble` exige que le lecteur
+    // revienne dans le MÊME commit.
 
     /// **La flèche du socle PUBLIE — sous les surfaces qui n'ont pas d'atelier.**
     ///
@@ -825,9 +1025,12 @@ struct MeeshyComposerHost: View {
     ///   blanche partirait en publication. **Levée** : que l'armement suive ce
     ///   gate, ou que le gate devienne lisible app-side ;
     /// - **le socle ne sait pas CHOISIR l'audience de l'atelier.**
-    ///   `visibilityMenu` en est l'unique écrivain ; passer `chromeOwner: .host`
-    ///   sous la scène retirerait les trois commandes d'un coup, donc l'audience
-    ///   avec. **Levée** : un écrivain d'audience atteignable depuis le meuble.
+    ///   `visibilityMenu` en est l'unique écrivain, et le sélecteur que le socle
+    ///   a gagné au lot 4.9 écrit `composerVisibility`, que l'atelier ne lit
+    ///   jamais (`StoryComposerView.visibility` est un `@State` privé semé à la
+    ///   construction). Passer `chromeOwner: .host` sous la scène retirerait
+    ///   donc `visibilityMenu` en échange d'un contrôle qui ne gouverne rien.
+    ///   **Levée** : que l'atelier prenne son audience en `@Binding`.
     ///
     /// Sous le document et sous le mood, **il n'y a pas d'atelier** : pas de
     /// télécommande à armer, pas de `visibilityMenu` à retirer. Le gate est
@@ -873,14 +1076,32 @@ struct MeeshyComposerHost: View {
             surface: mountedSurface,
             emoji: moodEmoji,
             text: documentText,
+            visibility: composerVisibility,
+            visibilityUserIds: composerVisibilityUserIds,
             isPublishing: isPublishingDocument
         )
     }
 
     /// Ce que VoiceOver annonce quand la flèche refuse. Vide pendant l'envoi :
     /// « choisissez un emoji » serait faux d'un mood qui en a un et qui part.
+    ///
+    /// **Et vide aussi quand c'est l'AUDIENCE qui retient**, pour la même
+    /// raison, une phrase plus loin : un mood peut avoir son emoji et rester
+    /// bloqué par un `ONLY` sans personne. Dicter « choisissez un emoji » y
+    /// prescrirait un geste qui ne débloque rien — un indice FAUX coûte plus
+    /// qu'un indice absent. La condition n'est pas réécrite ici : c'est la même
+    /// règle que le gate lit, `ComposerDocumentPublishGate.audienceIsComplete`.
+    ///
+    /// **Aucune clé neuve, et c'est une contrainte, pas une paresse** : le
+    /// catalogue est à SEPT langues avec un cliquet français à zéro tolérance,
+    /// et aucune phrase existante ne dit « nommez au moins une personne ». Elle
+    /// s'écrira dans le lot qui possède le catalogue.
     private var publishBlockedHint: String {
         guard !canPublishDocument, !isPublishingDocument else { return "" }
+        guard ComposerDocumentPublishGate.audienceIsComplete(
+            composerVisibility,
+            userIds: composerVisibilityUserIds
+        ) else { return "" }
         return ComposerSocleCopy.publishBlockedHint(surface: mountedSurface) ?? ""
     }
 
@@ -903,17 +1124,23 @@ struct MeeshyComposerHost: View {
             return ComposerDocumentDraft.mood(
                 emoji: moodEmoji,
                 text: documentText,
-                visibility: moodVisibility,
-                visibilityUserIds: moodVisibilityUserIds,
+                visibility: composerVisibility,
+                visibilityUserIds: composerVisibilityUserIds,
                 references: moodReferences,
                 repostOfId: intent.origin.repostedPostId,
                 audioUrl: moodSeed?.audioUrl
             )
         case .document:
+            // L'audience est celle du SOCLE, jamais la graine de la porte.
+            // `initialVisibility` la fournissait tant qu'`audienceChip` était un
+            // témoin ; le lire encore ferait publier sous un réglage que
+            // l'auteur vient de changer, en silence. Il ne reste qu'un lecteur :
+            // l'atelier, à qui le SDK l'imposerait par défaut sans lui.
             return ComposerDocumentDraft.document(
                 format: selectedFormat,
                 text: documentText,
-                visibility: PostVisibility(rawValue: initialVisibility) ?? .public
+                visibility: composerVisibility,
+                visibilityUserIds: composerVisibilityUserIds
             )
         }
     }
@@ -923,13 +1150,28 @@ struct MeeshyComposerHost: View {
     /// Il referme le composer sur une ACCEPTATION et le laisse ouvert sur un
     /// refus. Fermer sur un `false` jetterait ce que l'auteur vient d'écrire, et
     /// c'est le seul geste de cette méthode qu'aucune garde de source ne pourrait
-    /// rattraper.
+    /// rattraper — un composer refermé sur un envoi perdu reste PLAUSIBLE : il se
+    /// ferme exactement comme quand tout va bien.
     ///
-    /// **Ce que cette phrase ne dit PAS, et qu'il ne faut pas lire comme
-    /// acquis** : aucun écrivain ne rend `false` sur un échec d'ENVOI
-    /// aujourd'hui (cf. `onPublishDocument`). Le composer se referme donc aussi
-    /// quand la publication a échoué — dette héritée de l'écran historique, non
-    /// refermée par ce lot.
+    /// **Un refus EXISTE depuis le lot 4.10, et il faut lire lequel au mot près.**
+    /// Le `Bool` de `onPublishDocument` a été documenté comme une ACCEPTATION
+    /// pendant deux lots sans qu'aucun écrivain n'émette jamais `false` : un
+    /// commentaire qui annonce ce que le code ne tient pas devient la loi que
+    /// lira la session suivante. Ce n'est plus le cas —
+    /// `DocumentComposerDoor.publish` en émet trois : un plan qui refuse (format
+    /// non-post, brouillon sans matière, chemin non durable), un publieur qui
+    /// refuse la ligne, un publieur MUET. La branche du refus est donc
+    /// atteignable, et `test_lEnvoiDuSocle_neFermeQueSurUneAcceptation_etNeJettePasLaSaisie`
+    /// la garde.
+    ///
+    /// **`MoodComposerDoor`, lui, n'en émet toujours pas sur un échec d'ENVOI**,
+    /// et c'est une dette CONSIGNÉE plutôt qu'un acquis : `StatusViewModel.setStatus`
+    /// ne rend rien — elle avale l'erreur réseau dans un `catch` qui se contente
+    /// d'un toast —, et sa file durable n'est atteinte que si `isOffline()`
+    /// répond oui. Un gateway qui répond 500 referme donc ce composer-là et perd
+    /// l'emoji, la phrase, l'audience et les mentions. **Condition de levée
+    /// nommée** : que `setStatus` rende un résultat, comme `createPost` le fait
+    /// déjà par `publishSuccess` / `publishError`.
     private func publishDocument() {
         guard canPublishDocument, let draft = documentDraft else { return }
         isPublishingDocument = true
