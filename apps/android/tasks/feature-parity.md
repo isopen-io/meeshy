@@ -4045,6 +4045,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       routes to the repository. +18 tests (9 pure merge, 2 socket decode, 5 repository cache-merge, 1 vm
       routing + no-op cases); RED-proof isolated: neutering the entry merge reddened exactly the 5
       transformation tests, the 3 no-op tests stayed green. No wire/production logic outside `apps/android`.
+- [x] Realtime post EDIT merge **shipped** (slice `feed-post-updated-realtime-merge`, 2026-08-24 — the
+      whole-post sibling of `post-translation-updated-realtime-merge`, and the post analog of the
+      `comment:updated` fold). Android had **no** handler for `post:updated`; the gateway rebroadcasts the
+      COMPLETE edited post (`{ post }`) to every feed/post room via `SocialEventsHandler.broadcastPostUpdated`,
+      iOS folds it into the feed preserving the viewer's own `isLiked`, Android left the card stale until a
+      refetch. New `SocketPostUpdatedData(post: ApiPost)` (mirror of iOS, nests the post under `post`) +
+      `SocialSocketManager.postUpdated` flow wired to `listen("post:updated", …)`. New pure
+      `PostUpdateMerge.merge(previous, updated): ApiPost?` — adopts the edit's authoritative fields while
+      preserving the reader's OWN `isLikedByMe`/`isBookmarkedByMe`/`isViewedByMe`/`currentUserReactions`
+      (the broadcast is a single unpersonalized object, so those wire fields are the author's/default view;
+      **strictly more faithful than iOS**, which preserves only `isLiked`), returns `null` on an inert
+      re-broadcast/no-op. `PostRepository.applyPostUpdate(updated): Boolean` folds it into `_feedCache`;
+      `FeedViewModel` subscribes and routes to the repository. +6 tests (PostUpdateMergeTest) + 3 repository
+      + 1 socket decode + 1 vm routing = **+11**; RED-proof isolated: dropping the viewer-state preservation
+      reddened exactly the 4 preservation/discrimination tests, the 2 preservation-independent tests stayed
+      green. No wire/production logic outside `apps/android`.
 - [x] Feed card stats row: like (filled when own) + comment count + repost count,
       mood emoji on the author line, pure `FeedPostPresentation` builder (8 builder
       tests + 1 model Prisme test + 3 repository optimistic/rollback tests, all green)
