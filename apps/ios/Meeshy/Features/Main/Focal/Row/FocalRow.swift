@@ -642,16 +642,11 @@ struct FocalRow: View {
     /// SANS contour (directive 2026-08-24). L'état se lit désormais au fond
     /// seul : dense pour le drapeau affiché (`isActive`), plein pour une
     /// réaction qui est la mienne (`filled`).
-    private func focusChip<Content: View>(
-        isActive: Bool = false,
-        filled: Bool = false,
-        height: CGFloat = FocalMetrics.FocusStrip.chipHeight,
-        @ViewBuilder _ content: () -> Content
-    ) -> some View {
+    private func focusChip<Content: View>(isActive: Bool = false, filled: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
         content()
             .padding(.horizontal, 7)
             .frame(minWidth: FocalMetrics.FocusStrip.chipMinWidth)
-            .frame(height: height)
+            .frame(height: FocalMetrics.FocusStrip.chipHeight)
             .background(
                 Capsule(style: .continuous)
                     .fill(filled ? focusAccent : MeeshyColors.backgroundSecondary(isDark: input.isDark))
@@ -766,37 +761,41 @@ struct FocalRow: View {
     /// précis où le message est le plus regardé. Elle réemploie donc l'en-tête,
     /// à un gabarit plus grand, au lieu d'en réécrire une version amputée.
     ///
-    /// Le toucher mène aux CONDITIONS de l'auteur DANS CETTE CONVERSATION
-    /// (`ParticipantProfileSheet` : droits, lien d'entrée, coordonnées
-    /// consenties). Il ouvrait `onOpenProfile`, qui ne route vers cette fiche
-    /// que pour un visiteur SANS compte ; pour tous les autres il présentait
-    /// une page de profil, sans la moindre action possible depuis le fil.
+    /// **Elle n'a NI fond NI capsule** (directive 2026-08-24) : l'auteur se
+    /// pose HORS de la carte, juste au-dessus d'elle, exactement comme la
+    /// rangée Script affiche le sien. Seule la taille demeure agrandie. La
+    /// capsule opaque la faisait lire comme une pastille posée SUR la bulle,
+    /// alors que l'auteur n'appartient pas au message : il le précède.
+    ///
+    /// Le toucher passe par `onOpenProfile`, le routage que l'hôte tient
+    /// déjà : la feuille de PROFIL pour un compte, la fiche de participation
+    /// pour un visiteur qui n'en a pas — lui n'a pas d'autre identité que
+    /// celle-là. (Cette fiche s'ouvrait pleine d'identifiants bruts : ses 39
+    /// clés étaient au catalogue sans une seule valeur française. Réparé le
+    /// même jour, avec la garde qui manquait.)
     private var focusIdentityChip: some View {
-        focusChip(height: FocalMetrics.FocusStrip.identityChipHeight) {
-            FocalIdentityHeader(
-                isMe: content.isMe,
-                senderDisplayName: input.senderDisplayName,
-                senderUsername: input.senderUsername,
-                senderAvatarURL: input.senderAvatarURL,
-                senderThumbHash: input.senderThumbHash,
-                senderColorHex: input.senderColorHex,
-                senderPresence: input.senderPresence,
-                senderStoryRing: input.senderStoryRing,
-                senderMoodEmoji: input.senderMoodEmoji,
-                senderIsAnonymous: input.senderIsAnonymous,
-                profileUser: input.profileSheetUser,
-                isDark: input.isDark,
-                agentStyle: AgentAuthoredStyle.resolve(
-                    isAgentAuthored: input.isAgentAuthored,
-                    isAgentGrammarEnabled: input.showsAgentGrammar
-                ),
-                avatarDiameter: FocalMetrics.FocusStrip.identityAvatarSize,
-                nameSize: FocalMetrics.FocusStrip.identityNameSize,
-                fillsWidth: false,
-                onTap: { actions.onOpenParticipantProfile?(input.senderId) }
-            )
-            .padding(.leading, -3)
-        }
+        FocalIdentityHeader(
+            isMe: content.isMe,
+            senderDisplayName: input.senderDisplayName,
+            senderUsername: input.senderUsername,
+            senderAvatarURL: input.senderAvatarURL,
+            senderThumbHash: input.senderThumbHash,
+            senderColorHex: input.senderColorHex,
+            senderPresence: input.senderPresence,
+            senderStoryRing: input.senderStoryRing,
+            senderMoodEmoji: input.senderMoodEmoji,
+            senderIsAnonymous: input.senderIsAnonymous,
+            profileUser: input.profileSheetUser,
+            isDark: input.isDark,
+            agentStyle: AgentAuthoredStyle.resolve(
+                isAgentAuthored: input.isAgentAuthored,
+                isAgentGrammarEnabled: input.showsAgentGrammar
+            ),
+            onOpenProfile: actions.onOpenProfile,
+            avatarDiameter: FocalMetrics.FocusStrip.identityAvatarSize,
+            nameSize: FocalMetrics.FocusStrip.identityNameSize,
+            fillsWidth: false
+        )
     }
 
     /// BAS-DROITE : date complète (pré-calculée) + coche d'état de réception
