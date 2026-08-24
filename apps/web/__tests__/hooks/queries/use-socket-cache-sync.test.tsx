@@ -52,6 +52,7 @@ let messageUnpinnedCallback: ((data: { messageId: string; conversationId: string
 let userUpdatedCallback: ((data: { userId: string; changes: Record<string, unknown> }) => void) | null = null;
 let preferencesUpdatedCallback: ((data: { category: string } | { conversationId: string } | { communityId: string; reset: boolean; preferences: unknown }) => void) | null = null;
 let preferencesReorderedCallback: ((data: { userId: string; updates: Array<{ conversationId: string; orderInCategory: number }> }) => void) | null = null;
+let communityPreferencesReorderedCallback: ((data: { userId: string; updates: Array<{ communityId: string; orderInCategory: number }> }) => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -140,6 +141,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     },
     onPreferencesReordered: (callback: (data: { userId: string; updates: Array<{ conversationId: string; orderInCategory: number }> }) => void) => {
       preferencesReorderedCallback = callback;
+      return jest.fn();
+    },
+    onCommunityPreferencesReordered: (callback: (data: { userId: string; updates: Array<{ communityId: string; orderInCategory: number }> }) => void) => {
+      communityPreferencesReorderedCallback = callback;
       return jest.fn();
     },
     onConversationJoined: (callback: (data: { conversationId: string; userId: string }) => void) => {

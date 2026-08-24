@@ -528,6 +528,7 @@ export const SERVER_EVENTS = {
   // --- User Preferences ---
   USER_PREFERENCES_UPDATED: 'user:preferences-updated',
   USER_PREFERENCES_REORDERED: 'user:preferences-reordered',
+  USER_PREFERENCES_COMMUNITY_REORDERED: 'user:preferences-community-reordered',
 
   // --- User Profile (realtime propagation to conversation partners) ---
   USER_UPDATED: 'user:updated',
@@ -1668,6 +1669,41 @@ export interface UserPreferencesReorderedEventData {
 }
 
 /**
+ * Émis par `POST /user-preferences/communities/reorder` après mise à jour batch
+ * de l'ordre des COMMUNAUTÉS dans une catégorie.
+ *
+ * ## Pourquoi un événement à part, et non un élargissement du précédent
+ *
+ * `UserPreferencesReorderedEventData` décrit le même geste sur l'autre table, et
+ * la tentation est d'y ajouter `communityId`. Mesuré sur les décodeurs
+ * existants, cet élargissement casse le cas nominal pour en servir un neuf :
+ *
+ * - iOS — `UserPreferencesReorderedSocketEvent.Update.conversationId` est un
+ *   `String` NON optionnel : un seul item de communauté fait échouer le
+ *   décodage de l'ÉVÉNEMENT ENTIER, emportant les réordonnancements de
+ *   conversation qui voyagent avec lui ;
+ * - web — `applyRemoteReorder` filtre sur `preferencesMap.has(conversationId)`,
+ *   donc les items de communauté disparaissent en silence.
+ *
+ * Un nom neuf est INERTE pour ces deux consommateurs par construction. La règle
+ * générale : la forme d'un événement DIFFUSÉ ne s'élargit qu'après avoir relevé
+ * ses décodeurs sur les trois clients, et un décodeur strict rend l'élargissement
+ * plus cher que le nom neuf.
+ *
+ * Comme son jumeau conversation, il ne porte PAS de version : `orderInCategory`
+ * vit hors du chemin versionné et le client l'applique sans arbitrage. Il ne
+ * nomme que ce qui a été RÉELLEMENT écrit — les communautés dont l'appelant est
+ * membre — jamais ce qu'il a demandé.
+ */
+export interface UserPreferencesCommunityReorderedEventData {
+  readonly userId: string;
+  readonly updates: ReadonlyArray<{
+    readonly communityId: string;
+    readonly orderInCategory: number;
+  }>;
+}
+
+/**
  * Snapshot d'une `UserConversationCategory` envoyé dans
  * `CATEGORY_CREATED` / `CATEGORY_UPDATED`.
  */
@@ -2260,6 +2296,9 @@ export interface ServerToClientEvents {
   // User Preferences
   [SERVER_EVENTS.USER_PREFERENCES_UPDATED]: (data: UserPreferencesUpdatedEventData) => void;
   [SERVER_EVENTS.USER_PREFERENCES_REORDERED]: (data: UserPreferencesReorderedEventData) => void;
+  [SERVER_EVENTS.USER_PREFERENCES_COMMUNITY_REORDERED]: (
+    data: UserPreferencesCommunityReorderedEventData
+  ) => void;
 
   // User Profile
   [SERVER_EVENTS.USER_UPDATED]: (data: UserUpdatedEventData) => void;

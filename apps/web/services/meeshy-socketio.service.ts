@@ -363,6 +363,14 @@ class MeeshySocketIOService {
     return this.orchestrator.onPreferencesReordered(listener);
   }
 
+  public onCommunityPreferencesReordered(
+    listener: (
+      data: import('@meeshy/shared/types/socketio-events').UserPreferencesCommunityReorderedEventData,
+    ) => void,
+  ): () => void {
+    return this.orchestrator.onCommunityPreferencesReordered(listener);
+  }
+
   public onCategoryChanged(listener: () => void): () => void {
     return this.orchestrator.onCategoryChanged(listener);
   }
