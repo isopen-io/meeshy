@@ -211,6 +211,7 @@
       "like": "Me gusta",
       "unlike": "Ya no me gusta",
       "repost": "Repostear",
+      "repostAsPost": "Guardar en mi feed",
       "bookmark": "Guardar",
       "removeBookmark": "Quitar de guardados",
       "translate": "Traducir",

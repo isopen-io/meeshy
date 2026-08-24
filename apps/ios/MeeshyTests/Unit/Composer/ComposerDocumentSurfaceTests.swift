@@ -46,6 +46,13 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
     /// La porte la plus utilisée de l'app ouvre un DOCUMENT. C'est toute la
     /// raison d'être de V2 : sans cette ligne, V3 n'a nulle part où atterrir.
+    ///
+    /// Ce qu'il ne prouve PAS, et c'est pourquoi le lot 3 en écrit un second
+    /// juste en dessous : que la porte ATTEINT cette règle. `surface(opening:
+    /// format:)` est une fonction pure, et l'interroger sur le profil du fil
+    /// reste vert que la porte route vers sa feuille historique ou non. Il dit
+    /// « si le meuble sert cette porte, il lui monte un document » ; il ne dit
+    /// rien du « si ».
     func test_surface_duFeedComposer_estLeDocument() {
         let profil = ComposerProfile.profile(for: .feedComposer)
 
@@ -109,18 +116,73 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         }
     }
 
-    /// Le miroir du précédent : hors capture ET hors reprise, un post et un
-    /// mood sont TOUJOURS des documents.
+    /// Le miroir du précédent : hors capture ET hors reprise, un POST est
+    /// toujours un document.
     ///
-    /// Les quatre tests de cette section couvrent la table ENTIÈRE sans trou :
+    /// **Ce test disait « un post ET un mood » jusqu'au lot 4**, et son nom le
+    /// dit encore dans l'historique. Il a été SCINDÉ, jamais amputé : le mood a
+    /// gagné sa propre surface, et laisser les deux formats dans une même
+    /// boucle aurait obligé à retirer `.status` d'ici — c'est-à-dire à perdre
+    /// silencieusement la moitié de la couverture au lieu de la déplacer.
+    ///
+    /// Les CINQ tests de cette section couvrent la table ENTIÈRE sans trou :
     /// les deux ouvertures de capture (2 × 4 formats) + la reprise (1 × 4) +
-    /// les deux ouvertures restantes (2 × 4) = les 20 combinaisons.
-    func test_surface_postEtMood_horsCaptureEtHorsReprise_sontToujoursUnDocument() {
+    /// les deux ouvertures restantes, séparées par format (2 × 1 pour le post,
+    /// 2 × 1 pour le mood, et 2 × 2 pour story/réel déjà couverts plus haut)
+    /// = les 20 combinaisons.
+    func test_surface_lePost_horsCaptureEtHorsReprise_estToujoursUnDocument() {
         for opening in [ComposerOpening.keyboardOnContent, .moodGrid] {
-            for format in [ComposerFormat.post, .status] {
-                XCTAssertEqual(
-                    ComposerSurfaceRouting.surface(opening: opening, format: format), .document,
-                    "\(nom(format)) sous \(nom(opening)) n'a pas de scène à ouvrir."
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: opening, format: .post), .document,
+                "Un post sous \(nom(opening)) n'a pas de scène à ouvrir, et son texte est long."
+            )
+        }
+    }
+
+    /// **Lot 4 — le mood a QUITTÉ le document.**
+    ///
+    /// Il y était rangé faute de troisième cas, pas par mesure : un mood n'a ni
+    /// pièce jointe (`allowsCapture: false`), ni rangée d'outils à servir, ni
+    /// texte long. Lui monter l'éditeur du document aurait affiché un
+    /// `TextEditor` vide là où l'auteur attend dix emojis.
+    func test_surface_leMood_horsCaptureEtHorsReprise_estSaPropreSurface() {
+        for opening in [ComposerOpening.keyboardOnContent, .moodGrid] {
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: opening, format: .status), .mood,
+                "Un mood sous \(nom(opening)) ouvre SA surface — ni scène, ni document."
+            )
+        }
+    }
+
+    /// **Le cas qui prouve que la règle porte sur le FORMAT, pas sur
+    /// l'ouverture.** Republier un mood n'ouvre pas `.moodGrid` mais
+    /// `.keyboardOnContent` (le profil `.repost` ouvre ainsi, quel que soit le
+    /// format de sa source) — et pourtant la surface montée doit être la même
+    /// que celle de la création. Sans ce cas, écrire la règle sur l'OUVERTURE
+    /// resterait vert ici, et la republication d'un mood (lot 4.7) atterrirait
+    /// sur un éditeur de texte.
+    func test_surface_republierUnMood_ouvreLaMemeSurface_queLeCreer() {
+        XCTAssertEqual(
+            ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .status),
+            ComposerSurfaceRouting.surface(opening: .moodGrid, format: .status),
+            "La republication et la création d'un mood doivent monter la MÊME surface."
+        )
+        XCTAssertEqual(
+            ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .status), .mood
+        )
+    }
+
+    /// Garde NÉGATIVE de la surface neuve : **rien d'autre que le format
+    /// `.status` ne rend `.mood`**. Sans elle, élargir la branche par mégarde —
+    /// à `.post`, ou à l'ouverture `.moodGrid` quel que soit le format —
+    /// resterait vert sous les tests positifs, et un post s'ouvrirait sur une
+    /// grille d'emojis sans champ de pièces jointes.
+    func test_surface_aucunAutreFormat_neRendLeMood() {
+        for opening in Self.toutesLesOuvertures {
+            for format in Self.tousLesFormats where format != .status {
+                XCTAssertNotEqual(
+                    ComposerSurfaceRouting.surface(opening: opening, format: format), .mood,
+                    "\(nom(format)) sous \(nom(opening)) n'est pas un mood : sa matière n'est pas une grille d'emojis."
                 )
             }
         }
@@ -168,6 +230,284 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                     + "et l'écrivain qui devait rebasculer au format du document n'existe pas."
             )
         }
+    }
+
+    /// **Lot 3 — le « si » que le test d'ouverture de cette section ne dit pas.**
+    ///
+    /// `test_surface_duFeedComposer_estLeDocument` interroge une fonction PURE
+    /// sur le profil du fil, et reste vert quoi qu'il arrive au routage. Il
+    /// décrit une surface que, jusqu'au lot 3, aucun utilisateur n'atteignait :
+    /// la porte présentait `FeedComposerSheet` et le meuble n'était jamais
+    /// monté sur ce chemin.
+    ///
+    /// Ce test-ci ferme la chaîne dans l'ordre où elle se parcourt : la porte
+    /// atteint le meuble, PUIS le meuble lui monte un document. Le premier
+    /// maillon est celui que le lot 3 pose ; le second est celui que le lot 2
+    /// avait écrit d'avance.
+    func test_surface_duFeedComposer_estAtteinte_depuisQueLaPorteNeRoutePlus() {
+        let profil = ComposerProfile.profile(for: .feedComposer)
+
+        XCTAssertNil(
+            profil.routesToLegacy,
+            "Lot 3 : tant que la porte du fil route vers sa feuille historique, la surface document décrite "
+                + "par cette suite est une pièce dont personne n'a la clé."
+        )
+        XCTAssertEqual(
+            ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat),
+            .document,
+            "Et ce qu'elle atteint est bien le DOCUMENT — une porte recâblée vers l'atelier de scène aurait "
+                + "quitté sa feuille pour un canvas de story, ce que personne n'a demandé en tapant sur le fil."
+        )
+    }
+
+    /// Les portes que le meuble sert, et la surface que chacune monte —
+    /// écrites en toutes lettres plutôt que comptées.
+    ///
+    /// Un compte serait resté vert le jour où une porte en remplacerait une
+    /// autre. Ce tableau-ci rougit dans les DEUX sens : une porte qui quitterait
+    /// le périmètre du meuble, et une porte qui changerait de surface sous les
+    /// pieds de son auteur. C'est la vue d'ensemble que le lot 3 modifie —
+    /// `feedComposer` y entre, et il est la SEULE ligne à monter un document.
+    ///
+    /// Ce que ce test n'affirme pas : que chacune de ces portes ait un site de
+    /// montage en production. Elles ne l'ont pas toutes (les réels sont hors v1,
+    /// le média de conversation attend le lot G), et ce n'est pas ici que cela
+    /// se mesure — ce tableau parle des PROFILS.
+    ///
+    /// La garde qui parle des SITES existe depuis la revue du lot 3 :
+    /// `MeeshyComposerHostGuardTests`
+    /// `.test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`
+    /// balaie l'arbre de l'app et rougit le jour où un site monte une
+    /// porte-document pendant que le document n'a ni rangée servie, ni issue
+    /// pour sa saisie, ni publieur atteignable. Sans elle, la table du lot 3
+    /// aurait dit « le meuble sert cette porte » à un lot suivant qui l'aurait
+    /// crue, et l'auteur y aurait trouvé un écran sans issue.
+    func test_chaquePorteServieParLeMeuble_monteLaSurfaceQueSonFormatCommande() {
+        let portesDuMeuble: [(nom: String, origine: ComposerOrigin, surface: ComposerSurfaceKind)] = [
+            (nom: "storyTray", origine: .storyTray, surface: .scene),
+            (nom: "feedComposer", origine: .feedComposer, surface: .document),
+            (nom: "reelTab", origine: .reelTab, surface: .scene),
+            // Lot 4.6 / 4.7 : la porte du mood et la republication d'un mood
+            // rejoignent le tableau. La table est ADDITIVE — en retirer une
+            // entrée sans la remplacer perd une porte de la mesure, en silence.
+            (nom: "moodChip", origine: .moodChip, surface: .mood),
+            (nom: "repost(status)",
+             origine: .repost(ofPostId: "mood-source", sourceFormat: .status),
+             surface: .mood),
+            (nom: "draft", origine: .draft(id: "brouillon-42"), surface: .scene),
+            (nom: "share", origine: .share, surface: .scene),
+            (nom: "conversationMedia",
+             origine: .conversationMedia(messageId: "msg-7", attachmentId: "piece-3"),
+             surface: .scene)
+        ]
+
+        for porte in portesDuMeuble {
+            let profil = ComposerProfile.profile(for: porte.origine)
+
+            XCTAssertNil(
+                profil.routesToLegacy,
+                "\(porte.nom) doit être servie par le MEUBLE : une porte qui route vers un composer "
+                    + "historique ne monte aucune de ces deux surfaces."
+            )
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat),
+                porte.surface,
+                "\(porte.nom) doit ouvrir sur \(porte.surface) — changer la surface d'une porte change ce "
+                    + "que son auteur voit au premier tap, sans qu'aucun libellé ne l'annonce."
+            )
+        }
+    }
+
+    /// **RETOURNÉE au lot 4.6, à la condition de levée qu'elle nommait
+    /// elle-même.** Elle affirmait « la surface du mood existe, et AUCUNE porte
+    /// ne l'atteint encore » et disait, en toutes lettres, qu'elle se
+    /// retournerait — jamais qu'elle se supprimerait — le jour où `.moodChip`
+    /// cesserait de router, et pas avant que le socle publie.
+    ///
+    /// Les deux conditions sont remplies : le socle peint la flèche sous le mood
+    /// depuis le lot 4.5, et la porte a cessé de router au lot 4.6.
+    ///
+    /// Ce qu'elle affirme désormais est la MOITIÉ CONSERVÉE de l'ancienne, plus
+    /// son inverse : exactement les portes de format `.status` atteignent la
+    /// surface du mood, et aucune autre. Une porte de story ou de post qui s'y
+    /// mettrait ouvrirait une grille d'emojis sur un contenu qui n'en a pas.
+    func test_surface_leMood_estAtteintParSesDeuxPortes_etParAucuneAutre() {
+        let portesDuMood: [(nom: String, origine: ComposerOrigin)] = [
+            (nom: "moodChip", origine: .moodChip),
+            (nom: "repost(status)", origine: .repost(ofPostId: "mood-source", sourceFormat: .status))
+        ]
+
+        for porte in portesDuMood {
+            let profil = ComposerProfile.profile(for: porte.origine)
+            XCTAssertNil(
+                profil.routesToLegacy,
+                "\(porte.nom) doit être servie par le MEUBLE — une porte qui route n'atteint aucune surface."
+            )
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat), .mood,
+                "\(porte.nom) doit ouvrir sur la surface du mood."
+            )
+        }
+
+        let portesSansMood: [(nom: String, origine: ComposerOrigin)] = [
+            (nom: "storyTray", origine: .storyTray),
+            (nom: "feedComposer", origine: .feedComposer),
+            (nom: "reelTab", origine: .reelTab),
+            (nom: "draft", origine: .draft(id: "brouillon-42")),
+            (nom: "share", origine: .share),
+            (nom: "conversationMedia",
+             origine: .conversationMedia(messageId: "msg-7", attachmentId: "piece-3"))
+        ]
+
+        for porte in portesSansMood {
+            let profil = ComposerProfile.profile(for: porte.origine)
+            XCTAssertNil(profil.routesToLegacy, "\(porte.nom) doit rester servie par le meuble.")
+
+            for format in profil.offeredFormats {
+                XCTAssertNotEqual(
+                    ComposerSurfaceRouting.surface(opening: profil.opensWith, format: format), .mood,
+                    "\(porte.nom) atteint la surface mood en \(nom(format)) : elle ouvrirait une grille d'emojis "
+                        + "sur un contenu qui n'en a pas."
+                )
+            }
+        }
+    }
+
+    /// **La loi 5 est dans la TABLE, et elle n'atteint aucun écran** — dit ici
+    /// plutôt que découvert par un auteur.
+    ///
+    /// Le lot 4.7 fait miroiter la republication d'un mood : `offeredFormats`
+    /// rend `[.status, .post]`, l'ANCRAGE est donc offert. Mais l'éventail
+    /// (`ComposerFormatFan`) vit dans `plateauTools`, et `plateauTools` n'est
+    /// monté que par `composerSurface` — la SCÈNE. Ni la surface du mood ni la
+    /// surface document ne le portent : le chip « Post » n'existe sur aucun
+    /// écran, et `currentFormat` reste sur `.status`.
+    ///
+    /// **Ce n'est pas un oubli, c'est le refus explicite du lot 4.5.** Descendre
+    /// l'éventail sous le mood rendrait la surface document ATTEIGNABLE en
+    /// production, et le socle y peint encore deux affordances sans objet : un
+    /// témoin d'audience INERTE (`audienceChip` est un `Label`, personne n'écrit
+    /// l'audience sous le document) et un œil qui ouvrirait une scène VIDE
+    /// (`viewModel.currentEffects` n'est rempli par personne sous cette surface,
+    /// faute de chemin d'ingestion). Loi 4 : une affordance non offerte est
+    /// ABSENTE, jamais inerte.
+    ///
+    /// **Condition de levée NOMMÉE, et elle est app-side** : que
+    /// `ComposerChromeOwnership.socleZones(for: .document)` cesse de promettre
+    /// ce que le document ne tient pas — ou que le document gagne un écrivain
+    /// d'audience et un canvas. Ce test se RETOURNE alors ; il ne se supprime
+    /// pas. Le jour où il rougira, la question à trancher est celle du socle du
+    /// document, pas celle de l'éventail.
+    func test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint() throws {
+        let profil = ComposerProfile.profile(for: .repost(ofPostId: "mood-source", sourceFormat: .status))
+
+        XCTAssertEqual(
+            profil.offeredFormats, [.status, .post],
+            "La table MIROITE : l'éphémère reste éphémère, et le post est l'ancrage explicite (loi 5)."
+        )
+        XCTAssertEqual(
+            ComposerSurfaceRouting.surface(opening: profil.opensWith, format: .post), .document,
+            "Le chip d'ancrage mènerait à la surface document — c'est là qu'est le blocage."
+        )
+        XCTAssertTrue(
+            ComposerChromeOwnership.socleZones(for: .document).contains(.preview),
+            "Le socle du document peint encore un œil, et il n'a pas de canvas à lire. C'est LA raison pour "
+                + "laquelle l'éventail ne descend pas : rendre le document atteignable livrerait cette "
+                + "affordance sans objet."
+        )
+
+        let source = try sourceDuMeuble()
+        guard let plateau = corpsDeDeclaration(commencantPar: "private var plateauTools", dans: source),
+              let scene = corpsDeDeclaration(commencantPar: "private var composerSurface", dans: source),
+              let mood = corpsDeDeclaration(commencantPar: "private var moodSurface", dans: source),
+              let document = corpsDeDeclaration(commencantPar: "private var documentSurface", dans: source) else {
+            return XCTFail("Les quatre blocs du meuble sont introuvables — la garde ne mesurerait RIEN.")
+        }
+
+        XCTAssertTrue(plateau.contains("ComposerFormatFan("), "Le bloc lu n'est pas celui du plateau.")
+        XCTAssertTrue(scene.contains("plateauTools"), "Le bloc lu n'est pas celui de la scène.")
+        XCTAssertFalse(
+            mood.contains("plateauTools") || mood.contains("ComposerFormatFan("),
+            "La surface du mood peint l'éventail : le chip « Post » devient atteignable, et il mène au socle "
+                + "du document, qui peint encore une audience inerte et un œil sans canvas."
+        )
+        XCTAssertFalse(
+            document.contains("plateauTools") || document.contains("ComposerFormatFan("),
+            "La surface document peint l'éventail : basculer vers `.story` y monterait l'atelier, et "
+                + "`documentText` n'a aucun chemin pour l'y suivre — la saisie disparaîtrait sans un mot."
+        )
+    }
+
+    /// La source du meuble, commentaires RETIRÉS : `plateauTools` et
+    /// `ComposerFormatFan` sont nommés dans plusieurs doc-comments de ce
+    /// fichier, et un `.contains` qui matche un commentaire ne prouve rien.
+    private func sourceDuMeuble() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    /// Le corps d'un BLOC par appariement d'accolades. `nil` quand l'ancre a
+    /// disparu — l'appelant fait alors rougir, jamais passer.
+    private func corpsDeDeclaration(commencantPar ancre: String, dans code: String) -> String? {
+        guard let debut = code.range(of: ancre) else { return nil }
+        var profondeur = 0
+        var corps = ""
+        for caractere in code[debut.lowerBound...] {
+            corps.append(caractere)
+            if caractere == "{" { profondeur += 1 }
+            if caractere == "}" {
+                profondeur -= 1
+                if profondeur == 0 { return corps }
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Le commentaire de règle, gardé comme le code
+
+    /// **La règle 3 disait « un post et un mood sont des documents ».**
+    ///
+    /// Le lot 4 rend cette phrase fausse au moment même où il ajoute `case
+    /// mood`, et elle vivait à trois lignes de la branche modifiée. Un
+    /// commentaire de RÈGLE laissé sous un code qui l'a démenti devient la loi
+    /// que lira la session suivante — celle qui rangerait le prochain format
+    /// « comme le mood », c'est-à-dire dans le document.
+    ///
+    /// **Cette garde lit la source AVEC ses commentaires**, à rebours de toutes
+    /// les autres de cette suite : c'est le commentaire lui-même qui est
+    /// l'objet mesuré. `AppSourceGuard.stripComments` le ferait disparaître, et
+    /// la garde passerait au vert sur une phrase intacte.
+    func test_leCommentaireDeRegle_naffirmePlus_queLeMoodEstUnDocument() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+        let brut = try String(contentsOf: url, encoding: .utf8)
+        // COMPACTÉ : la phrase interdite tient sur deux lignes dans l'historique
+        // du fichier, et une recherche brute l'aurait manquée pour un simple
+        // retour à la ligne — le contournement que la revue a déjà trouvé sur
+        // quatre gardes de ce dépôt.
+        let compacte = brut.split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" }).joined(separator: " ")
+
+        XCTAssertTrue(
+            brut.contains("nonisolated enum ComposerSurfaceKind"),
+            "Source de la règle introuvable — la garde ne mesurerait RIEN."
+        )
+        XCTAssertFalse(
+            compacte.contains("un post et un mood sont des documents"),
+            "La règle 3 affirme encore que le mood est un document, sous un code qui lui donne sa propre surface."
+        )
+        XCTAssertTrue(
+            brut.contains("case mood"),
+            "L'énumération doit porter le cas `mood` — sans lui, la phrase retirée n'aurait été qu'une coupe."
+        )
     }
 
     // MARK: - Le clavier
@@ -386,10 +726,12 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
     /// Le corps du BLOC `struct ComposerDocumentSurface`, et non le fichier.
     ///
-    /// Le fichier porte CINQ autres types (`ComposerSurfaceKind`,
-    /// `ComposerSurfaceRouting`, `ComposerDocumentTool`,
-    /// `ComposerDocumentToolPolicy`, `ComposerDocumentSendPath` +
-    /// `ComposerDocumentSendRouting` + `ComposerDocumentCopy`) : une garde
+    /// Le fichier porte DIX autres types (`ComposerSurfaceKind`,
+    /// `ComposerSurfaceRouting`, `ComposerChromeOwnership`,
+    /// `ComposerDocumentTool`, `ComposerDocumentToolPolicy`,
+    /// `ComposerDocumentSendPath`, `ComposerDocumentSendRouting`,
+    /// `ComposerDocumentPublishGate`, `ComposerDocumentDraft`, et
+    /// `ComposerDocumentCopy`) : une garde
     /// ancrée sur le fichier condamnerait ces voisins en croyant protéger la
     /// vue, et se relâcherait le jour où l'interdit migrerait d'un type à
     /// l'autre. `nil` quand l'ancre a disparu — l'appelant fait alors rougir,

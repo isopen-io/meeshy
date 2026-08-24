@@ -2772,7 +2772,14 @@ export function registerMessagesRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
-      const searchLimit = Math.min(parseInt(limitStr, 10) || 20, 50);
+      // Route the page size through the pagination SSOT (as the paged
+      // `GET .../messages` above already does). The querystring schema declares
+      // `limit` as a bare string with no numeric bounds, so the inline
+      // `parseInt(limitStr) || 20` used to reintroduce the exact defect
+      // `validatePagination` documents killing: `limit=0` falsy-coerced to a
+      // full page instead of the floor of 1, and `limit=-5` flowed through as a
+      // NEGATIVE Prisma `take`. Search is cursor-based, so only the limit is used.
+      const { limit: searchLimit } = validatePagination('0', limitStr, { maxLimit: 50 });
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {

@@ -33,6 +33,42 @@ describe('applyResolvedLanguagesRefresh', () => {
     expect(m.get('u1')!.resolvedLanguages).toEqual(['en']);
   });
 
+  // Cycle 125 — les quatre témoins ci-dessus épinglent tous le RANG 1, où la
+  // lecture directe (`prefs.systemLanguage`) et la descente rendent le même
+  // verdict. Aucun ne pouvait donc voir que `language` était écrit brut pendant
+  // que `resolvedLanguages`, dans la MÊME instruction, descendait le Prisme.
+  it('écrit la langue de cadrage au rang 2 quand le rang 1 est vide', () => {
+    const m = makeMap({ u1: { resolvedLanguages: ['en'], language: 'en' } });
+
+    applyResolvedLanguagesRefresh(m, 'u1', {
+      systemLanguage: null, regionalLanguage: 'es', customDestinationLanguage: null,
+    });
+
+    expect(m.get('u1')!.language).toBe('es');
+    expect(m.get('u1')!.language).toBe(m.get('u1')!.resolvedLanguages[0]);
+  });
+
+  it('normalise la langue de cadrage comme la liste ordonnée', () => {
+    const m = makeMap({ u1: { resolvedLanguages: ['en'], language: 'en' } });
+
+    applyResolvedLanguagesRefresh(m, 'u1', { systemLanguage: 'pt-BR' });
+
+    // Non normalisée, cette valeur ne matche aucune clé de traduction : le
+    // filtre socket la sert à côté de la liste, qui porte déjà « pt ».
+    expect(m.get('u1')!.language).toBe('pt');
+  });
+
+  it('un rafraîchissement qui ne résout RIEN ne détruit pas la langue connue', () => {
+    const m = makeMap({ u1: { resolvedLanguages: ['de'], language: 'de' } });
+
+    applyResolvedLanguagesRefresh(m, 'u1', {
+      systemLanguage: null, regionalLanguage: null, customDestinationLanguage: null,
+    });
+
+    expect(m.get('u1')!.resolvedLanguages).toEqual([]);
+    expect(m.get('u1')!.language).toBe('de');
+  });
+
   it('preserves other entry fields (userId) when updating', () => {
     const m = makeMap({ u1: { resolvedLanguages: ['en'], language: 'en', userId: 'u1' } });
     applyResolvedLanguagesRefresh(m, 'u1', { systemLanguage: 'de' });

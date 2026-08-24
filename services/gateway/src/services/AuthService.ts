@@ -22,6 +22,7 @@ import {
 } from './SessionService';
 import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetService';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { recipientLanguage } from '../utils/recipient-language';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -955,7 +956,7 @@ export class AuthService {
         verificationLink,
         verificationCode,
         expiryHours: tokenExpiryHours,
-        language: user.systemLanguage || 'fr'
+        language: recipientLanguage(user, 'fr')
       });
 
       logger.info(`[AUTH_SERVICE] ✅ Email de vérification renvoyé à user.email=${normalizedEmail}`);

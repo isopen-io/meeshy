@@ -282,6 +282,19 @@
       "empty": "Nadie encontrado",
       "remove": "Quitar"
     },
+    "composer": {
+      "format": {
+        "groupLabel": "Formato de publicación",
+        "post": "Publicación",
+        "story": "Historia",
+        "reel": "Reel",
+        "status": "Estado"
+      },
+      "media": {
+        "limitReached": "Puedes adjuntar hasta {max} archivos multimedia.",
+        "limitPartial": "Puedes adjuntar hasta {max} archivos multimedia. Solo se añadieron {added}."
+      }
+    },
     "postComposer": {
       "contentLabel": "Contenido de la publicación",
       "addPhoto": "Añadir foto",
@@ -327,6 +340,7 @@
         "PINNED": "Fijado"
       }
     },
+    "repost": "Volver a publicar",
     "repostAsPost": "Guardar en mi feed",
     "storyLocationHere": "Aquí"
   },

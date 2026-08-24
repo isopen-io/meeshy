@@ -298,6 +298,20 @@ data class SocketPostCreatedData(
     val clientMutationId: String? = null,
 )
 
+/**
+ * `post:updated` — the author edited a post (caption, media, mood, ...) and the gateway
+ * broadcast the COMPLETE new post to every feed/post room. The broadcast is a single
+ * unpersonalized object shared by all recipients, so its viewer-specific fields
+ * ([ApiPost.isLikedByMe] etc.) are NOT the recipient's own state — the fold preserves
+ * those from the cached copy via [PostUpdateMerge]. Mirror of iOS `SocketPostUpdatedData`
+ * (which nests the post under a `post` key), and the content-edit sibling of
+ * [SocketPostCreatedData] / [SocketPostTranslationUpdatedData].
+ */
+@Serializable
+data class SocketPostUpdatedData(
+    val post: ApiPost,
+)
+
 @Serializable
 data class SocketPostLikedData(
     val postId: String,
@@ -336,6 +350,18 @@ data class SocketCommentAddedData(
     val postId: String,
     val comment: ApiPostComment,
     val commentCount: Int = 0,
+)
+
+/**
+ * `comment:updated` — a comment was edited server-side (content, effects, regenerated
+ * translations). Carries the COMPLETE new comment so the client replaces the matched row
+ * in place, idempotent by id — the edit sibling of [SocketCommentAddedData]. Mirror of iOS
+ * `SocketCommentUpdatedData` (both nest the full [ApiPostComment] under `comment`).
+ */
+@Serializable
+data class SocketCommentUpdatedData(
+    val postId: String,
+    val comment: ApiPostComment,
 )
 
 @Serializable

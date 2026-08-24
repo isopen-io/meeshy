@@ -136,14 +136,28 @@ struct iPadRootView: View {
                     onJoinAnonymously: { deepLinkRouter.requestedGuestJoin = choice.identifier }
                 )
             }
+            // Lot 4.7 — même câblage que `RootView`, et il doit le rester : deux
+            // racines de fenêtre qui republieraient différemment seraient deux
+            // produits. La porte PORTE son format ; le meuble lit `repostOfId`
+            // depuis elle, la graine ne le double pas.
+            //
+            // Même moitié livrée qu'en fenêtre iPhone, et même dette : le
+            // MIROIR part (republication en `STATUS`), l'ANCRAGE en post
+            // n'atteint aucun écran — `ComposerFormatFan` ne vit que dans
+            // `plateauTools`, que seule la SCÈNE monte. Voir le commentaire
+            // jumeau de `RootView` et la garde
+            // `ComposerDocumentSurfaceTests`
+            // `.test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint`.
             .sheet(item: $republishStatusEntry) { entry in
-                StatusComposerView(
-                    viewModel: statusViewModel,
-                    initialEmoji: entry.moodEmoji,
-                    initialText: entry.content,
-                    viaUsername: entry.username,
-                    repostOfId: entry.id,
-                    repostAudioUrl: entry.audioUrl
+                MoodComposerDoor(
+                    intent: ComposerIntent(origin: .repost(ofPostId: entry.id, sourceFormat: .status)),
+                    seed: ComposerMoodSeed(
+                        emoji: entry.moodEmoji,
+                        text: entry.content,
+                        viaUsername: entry.username,
+                        audioUrl: entry.audioUrl
+                    ),
+                    viewModel: statusViewModel
                 )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)

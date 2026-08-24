@@ -343,6 +343,39 @@ describe('PasswordResetService', () => {
         });
       });
 
+      // Cycle 125 — la langue de l'e-mail descend le Prisme du lecteur, comme
+      // toute écriture vers un destinataire NOMMÉ. `user.systemLanguage || 'en'`
+      // servait l'anglais à quiconque n'a renseigné qu'un rang inférieur, et
+      // servait un `'pt-BR'` non normalisé aux autres.
+      it('sert l\'e-mail au rang 2 quand le rang 1 est vide', async () => {
+        mockPrisma.user.findFirst.mockResolvedValue({
+          ...mockUser,
+          systemLanguage: null,
+          regionalLanguage: 'es',
+          customDestinationLanguage: null,
+          deviceLocale: null,
+        });
+
+        await service.requestPasswordReset(validResetRequest);
+
+        expect(mockEmailService.sendPasswordResetEmail).toHaveBeenCalledWith(
+          expect.objectContaining({ language: 'es' })
+        );
+      });
+
+      it('la requête ramène les quatre colonnes du Prisme', async () => {
+        mockPrisma.user.findFirst.mockResolvedValue(mockUser);
+
+        await service.requestPasswordReset(validResetRequest);
+
+        const select = mockPrisma.user.findFirst.mock.calls.at(-1)?.[0]?.select;
+        for (const column of [
+          'systemLanguage', 'regionalLanguage', 'customDestinationLanguage', 'deviceLocale',
+        ]) {
+          expect(select?.[column]).toBe(true);
+        }
+      });
+
       it('should return generic response for unverified email', async () => {
         mockPrisma.user.findFirst.mockResolvedValue({
           ...mockUser,

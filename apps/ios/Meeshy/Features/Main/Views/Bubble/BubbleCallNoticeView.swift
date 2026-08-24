@@ -51,34 +51,48 @@ struct BubbleCallNoticeView: View, Equatable {
         // edge. The side + the glyph's direction chip encode the direction.
         HStack(spacing: 0) {
             if isOutgoing { Spacer(minLength: 48) }
-            Button {
-                onCallBack?(summary)
-            } label: {
-                card
-            }
-            .buttonStyle(.plain)
-            // `.highPriorityGesture` (not `.simultaneousGesture`) so a held
-            // press that recognizes the long-press pre-empts the Button's own
-            // tap recognition — otherwise both fired on finger-lift and a
-            // long-press-to-view-details also silently placed a call-back
-            // (pocket-dial bug, found in audit 2026-07-03). A quick tap still
-            // falls through to the Button action since the long-press gesture
-            // fails to recognize before `minimumDuration` elapses.
-            .highPriorityGesture(
-                LongPressGesture(minimumDuration: 0.35).onEnded { _ in
+            // **Rappeler demande un DOUBLE TAP** (directive 2026-08-24,
+            // second passage : « pour les messages système mettre plutôt le
+            // double tap et pas le tap long ; le longpress doit afficher les
+            // options habituelles »).
+            //
+            // Un tap SIMPLE posait l'appel — l'action la plus lourde du fil,
+            // celle qui sonne chez quelqu'un, sur une carte large posée dans
+            // une liste qui défile. L'audit du 2026-07-03 avait déjà dû la
+            // protéger d'un « pocket-dial ». Le premier correctif du
+            // 2026-08-24 l'a donc déplacée sur l'appui long ; juste sur
+            // l'intention, faux sur le moyen — l'appui long n'était pas
+            // libre. C'est le geste qui ouvre, PARTOUT ailleurs dans le fil,
+            // les options d'un message ; une carte système qui se
+            // l'approprie ne gagne pas un geste, elle en VOLE un.
+            //
+            // Le double tap n'appartient à personne : deux contacts, donc
+            // aucun déclenchement au défilement, et rien de confisqué.
+            // L'appui long retourne au menu du message — d'où les détails
+            // d'appel sont désormais atteignables (`PrimaryAction.callDetail`).
+            // VoiceOver n'a ni double tap ni appui long : les DEUX
+            // destinations lui sont offertes explicitement ci-dessous.
+            card
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
                     HapticFeedback.medium()
+                    onCallBack?(summary)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilityLabel)
+                .accessibilityHint(Text(presentation.isLive
+                    ? String(localized: "bubble.call.join.a11y.hint.doubleTap",
+                             defaultValue: "Touchez deux fois pour rejoindre l'appel", bundle: .main)
+                    : String(localized: "bubble.call.callback.hint.doubleTap",
+                             defaultValue: "Touchez deux fois pour rappeler", bundle: .main)))
+                .accessibilityAction(named: Text(presentation.isLive
+                    ? String(localized: "bubble.call.join.action", defaultValue: "Rejoindre l'appel", bundle: .main)
+                    : String(localized: "bubble.call.callback.action", defaultValue: "Rappeler", bundle: .main))) {
+                    onCallBack?(summary)
+                }
+                .accessibilityAction(named: Text(String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main))) {
                     onLongPress?()
                 }
-            )
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(accessibilityLabel)
-            .accessibilityHint(Text(presentation.isLive
-                ? String(localized: "bubble.call.join.a11y.hint", defaultValue: "Double-tapez pour rejoindre l'appel", bundle: .main)
-                : String(localized: "bubble.call.callback.hint", defaultValue: "Double-tapez pour rappeler", bundle: .main)))
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction(named: Text(String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main))) {
-                onLongPress?()
-            }
             if !isOutgoing { Spacer(minLength: 48) }
         }
         .padding(.horizontal, 16)

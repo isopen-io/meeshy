@@ -282,6 +282,19 @@
       "empty": "Aucun résultat",
       "remove": "Retirer"
     },
+    "composer": {
+      "format": {
+        "groupLabel": "Format de publication",
+        "post": "Post",
+        "story": "Story",
+        "reel": "Reel",
+        "status": "Statut"
+      },
+      "media": {
+        "limitReached": "Vous pouvez joindre jusqu'à {max} médias.",
+        "limitPartial": "Vous pouvez joindre jusqu'à {max} médias. Seuls {added} ont été ajoutés."
+      }
+    },
     "postComposer": {
       "contentLabel": "Contenu du post",
       "addPhoto": "Ajouter une photo",
@@ -327,6 +340,7 @@
         "PINNED": "Épinglé"
       }
     },
+    "repost": "Repartager",
     "repostAsPost": "Garder sur mon fil",
     "storyLocationHere": "Ici"
   },

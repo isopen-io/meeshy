@@ -2,6 +2,11 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { NotificationService } from '../services/notifications/NotificationService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { buildBroadcastRecipientFilter, localizedBroadcastText, type BroadcastTargeting } from './broadcast-recipients';
+import {
+  RECIPIENT_LANG_SELECT,
+  recipientLanguage,
+  type RecipientLanguagePrefs,
+} from '../utils/recipient-language';
 
 const logger = enhancedLogger.child({ module: 'BroadcastInAppSenderJob' });
 
@@ -42,8 +47,12 @@ export class BroadcastInAppSenderJob {
       const translatedSubjects = broadcast.translatedSubjects as Record<string, string> | null;
       const translatedBodies = broadcast.translatedBodies as Record<string, string> | null;
 
-      const deliverTo = async (user: { id: string; systemLanguage: string | null }): Promise<boolean | null> => {
-        const lang = user.systemLanguage || 'en';
+      const deliverTo = async (user: { id: string } & RecipientLanguagePrefs): Promise<boolean | null> => {
+        // La langue sert ici de CLÉ dans `translatedSubjects`/`translatedBodies` :
+        // non normalisée, un `'pt-BR'` persisté verbatim ne matche aucune entrée
+        // et la diffusion retombe sur la langue de l'AUTEUR malgré une
+        // traduction `pt` disponible.
+        const lang = recipientLanguage(user, 'en');
         try {
           const created = await this.notifications.createSystemNotification({
             recipientUserId: user.id,
@@ -64,7 +73,7 @@ export class BroadcastInAppSenderJob {
       for (let skip = 0; skip < totalRecipients; skip += this.BATCH_SIZE) {
         const users = await this.prisma.user.findMany({
           where: filter,
-          select: { id: true, systemLanguage: true },
+          select: { id: true, ...RECIPIENT_LANG_SELECT },
           skip,
           take: this.BATCH_SIZE,
           orderBy: { createdAt: 'asc' },

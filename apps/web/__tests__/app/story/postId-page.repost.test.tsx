@@ -9,7 +9,7 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
 }));
 
-const mockStoryPost = {
+const mockStoryPost: Record<string, unknown> = {
   id: 'story-1',
   authorId: 'author-2',
   type: 'STORY',
@@ -110,7 +110,35 @@ describe('StoryPage — minimal repost', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockStoryPost.visibility = 'PUBLIC';
+    delete mockStoryPost.repostOfId;
     mockRepostMutate.mockImplementation((_vars, opts) => opts?.onSuccess?.());
+  });
+
+  /**
+   * Moitié RÉFÉRENCE — et la borne de sa portée. Le repli vers la racine est
+   * une loi des surfaces de CARTE (`repostTargetId`, jumeau iOS
+   * `RepostTargeting`) ; le viewer de story vise la SCÈNE VUE, comme
+   * `StoryViewerView.repostAsPostDirect` qui envoie `story.id`.
+   *
+   * Deux raisons, chacune suffisante : `repostPost` recopie une source
+   * éphémère dans son repost (donc pas de carte vide à éviter), et il refuse
+   * un original dont l'échéance est passée — une story repartagée survit à sa
+   * racine, donc grimper casserait un geste qui réussit aujourd'hui.
+   */
+  it("vise la SCÈNE VUE, jamais la racine, même quand la story est un repost", async () => {
+    mockStoryPost.repostOfId = 'story-root';
+    render(<StoryPage />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('story-repost'));
+    });
+
+    await waitFor(() =>
+      expect(mockRepostMutate).toHaveBeenCalledWith(
+        { postId: 'story-1', data: { isQuote: false, targetType: 'STORY' } },
+        expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+      ),
+    );
   });
 
   /**

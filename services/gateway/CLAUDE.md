@@ -372,6 +372,38 @@ Errors under `error: { code, message }`, NOT `error: "string"`.
 ALWAYS use `resolveUserLanguage()` from `@meeshy/shared` for language resolution.
 NEVER reimplement the priority order locally.
 
+**Et dans le gateway, passer par `utils/recipient-language.ts`** — jamais
+`resolveUserLanguage` à cru. La descente exige DEUX choses, et rien d'autre ne les
+tient ensemble : la forme du `select` (`RECIPIENT_LANG_SELECT` — les quatre
+colonnes) et l'option `deviceLocale`. Dix-sept sites en avaient sauté au moins une
+au cycle 124.
+
+| besoin | appeler |
+|---|---|
+| langue de **CADRAGE** (l'interface : sujet d'e-mail, titre de notification) | `recipientLanguage(user, fallback)` |
+| liste ordonnée où un **CONTENU** se résout | `recipientLanguages(user)` |
+| étiquette pour `Intl` / `toLocaleString` | `recipientDateLocale(user, fallback)` |
+
+Trois pièges, tous mesurés :
+
+- **Le `select` est le seul des trois qu'aucun témoin de rang ne peut voir.** Un
+  mock Prisma rend ce qu'on lui dit quel que soit le `select` : un témoin de rang
+  passe au VERT sur un site dont la requête ne ramène pas les colonnes du Prisme,
+  et la descente est morte en production. Un témoin de projection assert donc sur
+  la REQUÊTE, pas sur le rendu.
+- **Un témoin de RANG s'écrit sur un rang AUTRE que le premier.** Au rang 1,
+  `user.systemLanguage || 'xx'` et la descente rendent le même verdict — un témoin
+  posé là ne peut pas tomber. Cinq témoins du dépôt étaient dans ce cas, dont un
+  dont le commentaire AFFIRMAIT que le site appelait `resolveUserLanguage`.
+- **Une langue résolue ne suffit pas si la DATE qui l'accompagne ne l'est pas.**
+  `systemLanguage === 'en' ? 'en-US' : 'fr-FR'` et `toLocaleDateString('fr-FR')`
+  vivaient à côté de titres correctement localisés.
+
+Le **repli terminal est un PARAMÈTRE**, pas un défaut partagé : `resolveUserLanguage`
+retombe sur `'fr'`, plusieurs sites sur `'en'`. Le garder au site rend visible la
+question produit — « quelle langue pour un compte sans AUCUNE préférence ? » — sans
+la mêler à un correctif de Prisme.
+
 ## Toute porte qui sort un profil de TIERS filtre sa présence
 
 `select: { isOnline: true, lastActiveAt: true }` sur quelqu'un d'AUTRE que
@@ -625,6 +657,55 @@ que l'exemplaire VIVANT avait de plus.** Le répertoire ignorait
 servi `memberCount: 0` partout. Les témoins qui PASSENT déjà avant la bascule
 valent autant que ceux qui échouent — on les écrit dans le même lot.
 
+## Une garde d'admission se pose sur CHAQUE chemin, pas sur le plus fréquenté
+
+Les trois éventails de `messageNotificationFanOut` poussent la même bannière pour
+le même message. **Un seul demandait si ce message est encore VIVANT.**
+
+`createMessageNotification` relit l'état juste avant de pousser et abandonne quand
+le message a été rappelé ou a expiré dans la fenêtre de l'éventail — sa raison est
+écrite sur place : « we MUST NOT leak the original content via the banner ». Ni la
+réponse ni la mention ne portaient cette garde (cycle 127), si bien qu'un message
+rappelé entre son commit et l'éventail poussait son texte ORIGINAL vers la personne
+VISÉE par la réponse et vers tous les mentionnés — dont la bannière perce jusqu'à
+la sourdine — pendant que les membres ordinaires du fil étaient protégés.
+
+> **Une garde qui protège la population la plus NOMBREUSE peut manquer la plus
+> EXPOSÉE.** Posée sur le chemin le plus fréquenté, elle se lit comme une garde
+> posée sur le SUJET ; elle ne l'est que sur son CHEMIN.
+
+Trois corollaires, tous mesurés dans ce lot :
+
+- **Une compensation en aval ne remplace pas une garde d'admission quand l'effet
+  qu'elle compense est IRRÉVERSIBLE.** Le balayage de rétraction de l'éventail
+  retire les lignes `Notification` d'un message rappelé, et son raisonnement de
+  fenêtre est juste — mais il ferme la BASE quand la bannière est déjà sur
+  l'ÉCRAN. Question à poser à tout nettoyage a-posteriori : *que reste-t-il de
+  fait que ce nettoyage ne défait pas ?*
+
+- **Un verdict de garde a TROIS états, pas deux.** `live`, `gone` (la lecture
+  PROUVE), `unknown` (elle n'a rien prouvé — elle a levé, ou n'a rien rendu). Les
+  deux derniers se ressemblent et s'arbitrent à l'OPPOSÉ : fail-CLOSED sur la
+  preuve, où c'est un secret qui est en jeu ; fail-OPEN sur l'absence de preuve,
+  où c'est une livraison. Sur `Message`, **une ligne ABSENTE est `unknown`** — le
+  dépôt le dit déjà dans le balayage de rétraction (« `deletedAt` non nul est la
+  SEULE preuve d'un rappel ; aucun chemin de la gateway ne supprime un message
+  physiquement »), et une lecture servie par un secondaire en retard sur le jeu de
+  réplicas rend `null` pour un message parfaitement vivant. Source unique :
+  `NotificationService.messageLiveness`.
+
+- **Un doc-comment qui EXEMPTE une unité d'une règle que sa voisine applique se
+  vérifie comme une affirmation.** Celui de `loadMessagePrismSource` disait « pour
+  les éventails dont la lecture n'est PAS un gate d'éligibilité » : vrai du code,
+  et rien de plus. Rien dans « ce n'est pas un gate » ne dit *pourquoi ça ne
+  devrait pas en être un* — mais posé en tête d'une unité, il se relit comme une
+  décision qu'on n'a pas à instruire. La question n'est pas « est-ce exact ? »
+  mais **« qu'est-ce qui justifie l'exemption ? »**.
+
+Et la garde était GRATUITE : les trois éventails relisent la MÊME ligne dans la
+MÊME fenêtre — deux colonnes de plus sur une lecture existante. **Avant de
+conclure qu'une garde coûterait une requête, regarder ce que le site lit déjà.**
+
 ## Cette entité a-t-elle une JUMELLE ?
 
 À poser au moment où l'on corrige, pas des cycles plus tard. Le dépôt est plein
@@ -681,6 +762,44 @@ leur propre enregistrement, dont aucun ne porte ces drapeaux. Même arbitrage
 pour l'échec : les deux relectures sont fail-CLOSED (une lecture qui ne conclut
 pas répond « protégé »), à l'inverse du best-effort qui gouverne le reste de ces
 unités. Une notification appauvrie se rattrape ; un secret poussé, non.
+
+### La jumelle d'une garde peut être un MÉDIUM, pas une entité (cycle 125)
+
+Les formes ci-dessus cherchent la jumelle dans une autre table, un autre site,
+un autre moment. Il en existe une quatrième, et elle est la plus proche : **le
+même site, la même charge, un autre médium.**
+
+Quatre cycles de gardes se sont posées sur ce chemin — `protectedPreview`,
+`previewPrismSource`, `prePersistedMessageFields`, le verrou du cycle 124.
+Toutes justes, toutes testées. **Toutes gardent une chaîne de caractères.**
+Douze lignes sous la dernière, dans le même objet littéral, `firstAttachmentUrl:
+first?.fileUrl` partait sans aucune condition — et la NSE iOS télécharge cette
+URL puis l'attache en `UNNotificationAttachment` sans regarder
+`notificationLocKey`. Une photo à VUE UNIQUE s'affichait ENTIÈRE sur l'écran
+verrouillé sous une bannière disant « 👁️ 🖼️ ».
+
+> **Une protection de CONTENU se mesure sur tout ce que la charge TRANSPORTE,
+> jamais sur sa seule chaîne** — texte, fichier, nom de fichier, taille, durée,
+> vignette, URL. La question se pose AU MOMENT du correctif : « la charge que ce
+> site remet contient-elle autre chose que ce que je viens de garder ? », et
+> elle se répond en lisant l'objet remis LIGNE À LIGNE, sans lire le code qui le
+> construit — c'est le niveau d'abstraction du correctif qui rend l'objet voisin
+> invisible, parce qu'il ne compose aucune chaîne.
+
+Deux corollaires, mesurés dans le même lot :
+
+- **Un champ de protection présent au modèle et absent de toute requête est un
+  piège armé.** `MessageAttachment` déclare `isViewOnce`, `isBlurred` et
+  `effectFlags` ; le `select` de l'éventail n'en lisait aucun. Aucun chemin de
+  création ne les écrit *aujourd'hui* — le jour où une ligne les pose, dans un
+  lot qui parlera d'autre chose, la protection sera tenue pour acquise par tous
+  ceux qui lisent le schéma. Les respecter coûte trois champs dans un `select`.
+- **Le second verrou se pose sur la clé qui DÉCLARE, pas sur celle qui décrit.**
+  `notificationLocKey` a un unique producteur (`protectedPreview`) : sa présence
+  n'est pas un indice, c'est une déclaration de protection qu'aucun appelant ne
+  pose par accident. `createNotification` s'en sert pour vider `attachmentUrl` —
+  un appelant qui masque le corps sans retirer son média perd le rich-push,
+  jamais le secret.
 
 ## Un témoin d'écriture assert sur l'EFFET, jamais sur le statut
 

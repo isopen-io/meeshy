@@ -12107,6 +12107,43 @@ CallEventQueue` non implémenté ; iOS single-peer côté groupe ; gap de hiéra
 nouveau) ; `bun run lint` documenté cassé dans ce conteneur (pré-existant, hors périmètre).
 Aucun nouveau suivi ouvert par cette Vague.
 
+## Mise à jour 2026-08-24 — le garde-fou de promotion CallKit tardive était du code mort
+
+Routine de suivi continu de la feature d'appel (audit iOS ciblé). Trouvé par
+lecture directe du code, pas par un rapport terrain.
+
+**Défaut** : `promoteRingingCallToCallKitIfNeeded()` (`CallManager.swift`)
+promeut à CallKit un appel entrant qui sonne encore EN APP (CallKit sauté
+car l'app était au premier plan à l'arrivée) et qui passe en arrière-plan
+avant d'être décroché — sans quoi iOS peut suspendre l'app en plein sonnage,
+sans carte d'appel verrouillée, et l'appel se perd silencieusement (retombe
+au timeout serveur 60s = manqué). La fonction elle-même est correcte et
+testée, mais son SEUL déclencheur — l'observateur `didEnterBackgroundNotification`
+armé par `startBackgroundMonitoring()` — n'était appelé QUE depuis
+`transitionToConnected()`. Les deux conditions (fonction active seulement si
+`.ringing`, observateur vivant seulement après `.connected`) sont mutuellement
+exclusives : le garde-fou entier était inatteignable en production.
+
+**Correctifs** (`CallManager.swift`) :
+1. `startBackgroundMonitoring()` est désormais aussi armée dans
+   `handleIncomingCallNotification`, au moment où l'appel se met à sonner —
+   pas seulement à la connexion. Idempotent (`startBackgroundMonitoring`
+   commence par `stopBackgroundMonitoring()`).
+2. Défaut latent exposé par le correctif #1 : la promotion réussie ne
+   stoppait pas la boucle `ringbackPlayer` jouée en app, qui aurait sonné
+   par-dessus le `ringtoneSound` de CallKit (même asset) — corrigé en
+   ajoutant `ringbackPlayer.stopRingtone()` dans la branche succès.
+
+**Tests** : `CallManagerAudioSessionTests.swift` — 2 nouveaux tests source-string
+(même idiome que les 3 tests existants sur cette fonction) :
+`test_handleIncomingCallNotification_armsBackgroundMonitoring_soAStillRingingCallCanBePromoted`,
+`test_promoteRingingCallToCallKitIfNeeded_stopsInAppRingtoneOnSuccessfulPromotion`.
+Vérifiés ROUGE avant le correctif (grep direct sur le code source), non
+exécutables localement (pas de toolchain Xcode dans cet environnement) —
+validation finale via CI (« iOS Tests »).
+
+Détail : `tasks/lessons.md` § Leçon 277.
+
 ## Vague 178 — Android `WebRtcCallCoordinator` appliquait tout signal WebRTC entrant sans garde d'époque de négociation (2026-08-24)
 
 Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Branche
@@ -12212,3 +12249,42 @@ CallEventQueue` non implémenté ; iOS single-peer group calls ; gap de rôle
 `conversations/participants.ts` (hors périmètre calling) ; `redirect=` vs `returnUrl=` sur
 `app/links/tracked/[token]/page.tsx` (hors périmètre calling) ; `bun run lint` documenté cassé
 dans ce conteneur (pré-existant, hors périmètre).
+
+## Vague 179 — main était rouge sur `feature:chat` au moment du push de la Vague 178 ; merge-forward pour rebrancher le PR #3477 sur un CI vert (2026-08-24)
+
+Point d'entrée : reprise de routine (`claude/upbeat-dirac-wuf3dx`), consigne « te baser sur le
+précédent développement de ta routine avant d'en démarrer un nouveau ». PR #3477 (Vague 178)
+était ouverte, restée non mergée : son check Android était rouge. Diagnostic avant tout nouveau
+développement (cf. règle « CI red » du babysitting — écarter un échec qui n'est pas celui du PR
+avant de le traiter comme un vrai signal).
+
+### Root cause du rouge
+
+L'échec Android sur la PR #3477 (run `32744086265`) était `:feature:chat:compileDebugKotlin
+FAILED` — `ConversationMembersViewModel.kt:279:72` / `:285:72`, « Argument type mismatch: actual
+type is 'kotlin.String?', but 'kotlin.String' was expected ». Ce fichier n'appartient PAS au
+diff de la Vague 178 (`feature:calls`, 3 fichiers). Vérifié par lecture directe : le run Android
+sur `main` lui-même, au commit `11f0c31e` (celui dont la PR #3477 dérive), est ROUGE avec le
+MÊME symptôme (`git log --oneline main` confirme que `c59a8ac` — base de la PR — descend de
+`11f0c31e`). `main` a depuis été réparé par PR #3479 (`a604d477`), postérieure à la base de la
+PR #3477 — donc absente de sa branche. Le rouge de la Vague 178 était donc un rouge de BASE
+hérité, pas une régression introduite par le garde d'époque de négociation.
+
+### Fix
+
+Merge-forward de `origin/main` (qui contient `a604d477`) dans `claude/upbeat-dirac-3rqtap`
+(branche de la PR #3477), sans toucher au diff calling lui-même. Un seul conflit, purement
+additif : les deux entrées `tasks/calls-fonctionnel-todo.md` (Vague 178 côté PR, « Mise à jour
+2026-08-24 CallKit tardif » côté main) — résolu en conservant les deux, dans l'ordre
+chronologique de merge sur `main`.
+
+### Tests
+
+Le merge ne modifie aucun code de calling — seule la base de compilation change (récupère le
+fix `a604d477`). La preuve réelle reste le job CI Android sur le nouveau head de la PR #3477.
+
+### Risk assessment
+
+Nul sur le diff calling (merge-forward pur, zéro ligne de `WebRtcCallCoordinator.kt` touchée).
+Le seul changement de comportement possible vient de `a604d477` lui-même (déjà validé par son
+propre merge sur `main`).

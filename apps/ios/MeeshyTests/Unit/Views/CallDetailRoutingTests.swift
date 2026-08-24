@@ -12,17 +12,58 @@ final class CallDetailRoutingTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_bubbleCallNoticeView_stillHasHighPriorityGesture_butNoLongerPresentsLocalSheet() throws {
+    /// **Le geste a bougé DEUX FOIS, et la seconde fois pour une raison que la
+    /// première ignorait (directive 2026-08-24, second passage).**
+    ///
+    /// Le 2026-07-03, un audit « pocket-dial » avait protégé le tap. Au premier
+    /// passage du 2026-08-24, le geste a été INVERSÉ — l'appui long rappelait,
+    /// le tap ne faisait plus rien. Correct sur l'intention (l'appel est
+    /// l'action la plus lourde du fil), FAUX sur le moyen : l'appui long
+    /// n'était pas libre. C'est le geste qui ouvre, PARTOUT ailleurs dans le
+    /// fil, les options habituelles d'un message — et une carte système qui se
+    /// l'approprie ne « gagne » pas un geste, elle en VOLE un.
+    ///
+    /// Le double tap n'appartient, lui, à personne : il est délibéré (deux
+    /// contacts, donc pas de déclenchement au défilement) sans rien confisquer.
+    /// L'appui long RETOURNE donc à sa fonction universelle, et le double tap
+    /// prend l'action propre à la carte.
+    ///
+    /// La garde est NÉGATIVE sur `onLongPressGesture` : sans elle, réintroduire
+    /// un appui long ici redeviendrait invisible — la carte marcherait, et
+    /// c'est le menu du message qui disparaîtrait en silence.
+    func test_bubbleCallNoticeView_callsBackOnDoubleTap_andNeverStealsTheLongPress() throws {
         let view = try source("Features/Main/Views/Bubble/BubbleCallNoticeView.swift")
         XCTAssertTrue(
-            view.contains(".highPriorityGesture("),
-            "The 2026-07-03 pocket-dial fix must survive — removing it would let a long-press " +
-            "also fire the card's own Button { onCallBack } tap action."
+            view.contains(".onTapGesture(count: 2)"),
+            "rappeler exige un double tap délibéré"
+        )
+        XCTAssertFalse(
+            view.contains(".onLongPressGesture"),
+            "l'appui long appartient au menu du message — la carte d'appel ne doit pas le capter"
+        )
+        XCTAssertFalse(
+            view.contains("Button {\n                onCallBack?(summary)"),
+            "aucun tap SIMPLE ne doit poser d'appel depuis la carte du fil"
         )
         XCTAssertFalse(
             view.contains("showDetails = true"),
             "BubbleCallNoticeView must no longer present its own local CallSummaryDetailSheet — " +
-            "the long-press now routes through onLongPress to the shared decision point."
+            "the gesture now routes through the shared decision point."
+        )
+    }
+
+    /// L'avis d'arrivée suit la MÊME loi que la carte d'appel : double tap pour
+    /// sa propre action (la fiche de participation — identité ET conditions
+    /// d'entrée), appui long laissé au menu du message.
+    func test_bubbleJoinNoticeView_opensTheParticipantSheetOnDoubleTap() throws {
+        let view = try source("Features/Main/Views/Bubble/BubbleSystemViews.swift")
+        XCTAssertTrue(
+            view.contains(".onTapGesture(count: 2)"),
+            "la fiche de participation s'ouvre au double tap"
+        )
+        XCTAssertFalse(
+            view.contains(".onLongPressGesture"),
+            "l'appui long appartient au menu du message — l'avis d'arrivée ne doit pas le capter"
         )
     }
 
@@ -74,20 +115,56 @@ final class CallDetailRoutingTests: XCTestCase {
     /// à l'équilibrage d'accolades, documenté juste au-dessus : une garde qui
     /// épingle la FORME de la déclaration se périme au premier paramètre
     /// ajouté, alors que ce qu'elle protège n'a pas bougé d'un signe.
-    func test_conversationView_onLongPress_branchesOnCallSummary_notMessageSourceSystem() throws {
+    /// **Recalibré une TROISIÈME fois le 2026-08-24 — et cette fois l'invariant
+    /// lui-même a changé.** Les deux recalibrages précédents (documentés
+    /// ci-dessus) suivaient une SIGNATURE qui bougeait autour d'un routage
+    /// immobile. Ici c'est le routage qui bouge : l'appui long n'aiguille plus
+    /// du tout par type de message.
+    ///
+    /// Il n'aiguillait rien de bon. Un message système SANS résumé d'appel
+    /// tombait dans un no-op silencieux : appuyer longuement sur « X a rejoint
+    /// la conversation » ne faisait rien, nulle part. Un message système reste
+    /// un message — épinglable, favorisable, signalable, supprimable — et le
+    /// geste qui ouvre ces options est le même partout dans le fil.
+    func test_conversationView_onLongPress_opensTheUsualOptions_forEveryMessage() throws {
         let view = try source("Features/Main/Views/ConversationView.swift")
         guard let body = closureBody(after: "onLongPress: { messageId in", in: view) else {
             XCTFail("ConversationView must define the onLongPress closure"); return
         }
         XCTAssertTrue(
-            body.contains("msg.callSummary != nil"),
-            "onLongPress must route call messages via callSummary != nil, not the old blanket " +
-            "messageSource == .system no-op — plain system notices (no callSummary) still no-op."
+            body.contains("overlayState.showOverlayMenu = true"),
+            "l'appui long ouvre les options habituelles, quel que soit le message"
         )
-        XCTAssertTrue(
+        XCTAssertFalse(
+            body.contains("msg.messageSource != .system"),
+            "plus aucun no-op par type : un avis système a les mêmes options que les autres"
+        )
+        XCTAssertFalse(
             body.contains("overlayState.callDetailMessage = msg"),
-            "A call message's long-press must populate overlayState.callDetailMessage — a new, " +
-            "separate property from detailSheetMessage (which stays wired to MessageMoreSheet)."
+            "les détails d'appel ne sont plus une BRANCHE de l'appui long — ils sont une " +
+            "action DANS les options habituelles (voir le témoin du résolveur)"
         )
+    }
+
+    /// **Un geste retiré doit rendre sa destination, pas la perdre.** L'appui
+    /// long ouvrait les détails d'appel ; il ouvre désormais les options
+    /// habituelles. Sans cette entrée, la feuille de détail d'un appel (durée
+    /// précise, données, qualité réseau, transcript) devenait inatteignable au
+    /// doigt — seule l'action VoiceOver de la carte y menait encore.
+    func test_callDetail_isReachable_fromTheUsualOptions() {
+        let withCall = MessageMenuContext(
+            isMine: false, canEdit: false, canDelete: false,
+            hasText: true, hasMedia: false, hasTimebasedMedia: false,
+            isPinned: false, isStarred: false, isEdited: false, hasEditRevisions: false,
+            hasCallSummary: true
+        )
+        XCTAssertEqual(MessageActionResolver.primaryActions(withCall).first, .callDetail)
+
+        let withoutCall = MessageMenuContext(
+            isMine: false, canEdit: false, canDelete: false,
+            hasText: true, hasMedia: false, hasTimebasedMedia: false,
+            isPinned: false, isStarred: false, isEdited: false, hasEditRevisions: false
+        )
+        XCTAssertFalse(MessageActionResolver.primaryActions(withoutCall).contains(.callDetail))
     }
 }

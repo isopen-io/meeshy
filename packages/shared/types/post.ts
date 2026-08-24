@@ -174,6 +174,17 @@ export interface Post {
   readonly deletedAt?: string | Date | null;
   readonly isQuote?: boolean;
   readonly repostOfId?: string | null;
+  /**
+   * La RACINE de la chaîne de reposts, hydratée par le serveur
+   * (`PostService.repostPost` : `original.originalRepostOfId ?? original.repostOfId
+   * ?? original.id`) et servie par `postInclude`. `repostOfId` ne nomme que le
+   * maillon PRÉCÉDENT — un cran, pas la source.
+   *
+   * Le champ voyageait déjà dans les charges utiles sans figurer au contrat :
+   * les clients ne pouvaient donc pas replier une chaîne sur sa racine
+   * (`repostTargetId`, `utils/repost-target.ts`).
+   */
+  readonly originalRepostOfId?: string | null;
   readonly expiresAt?: string | Date | null;
   readonly createdAt: string | Date;
   readonly updatedAt: string | Date;

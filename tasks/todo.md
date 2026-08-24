@@ -1,113 +1,83 @@
-# Cycle 124 bis — le contrat de fil push, mesuré dans les DEUX sens
+# Cycle 126 — note de CONVERGENCE : deux passes ont trouvé le même défaut, séparément
 
-> **Ce lot a CONVERGÉ avec le cycle 124 (PR #3465), mergé sur `main` pendant qu'il était en CI.**
-> Les deux passes ont instruit le même suivi et trouvé le même défaut. Celle de #3465 a atterri
-> la première ; **sa conception est reprise EN ENTIER**. Ce journal ne consigne que ce que cette
-> passe ajoute par-dessus, et pourquoi son propre choix de conception a été abandonné.
+> Ce document ne décrit pas un lot, il décrit une RENCONTRE. Le lot lui-même est
+> `tasks/todo-cycle126-bannieres-jumelles-2026-08-24.md` et
+> `tasks/realtime-sync-audit-2026-08-24-cycle126.md` — ceux de la passe qui a mergé la première.
 
-## Point de départ — le suivi MESURÉ, laissé ouvert par les cycles 122 ET 123
+## Ce qui s'est passé
 
-> `prePersistMessage` (NSE iOS) lit `userInfo["content"]`, une clé que le payload push ne porte
-> pas — la bulle écrite au démarrage à froid a un corps VIDE jusqu'à la synchro REST.
+Deux passes ont instruit le même suivi MESURÉ du cycle 124 en parallèle, sans se voir, et ont
+trouvé le même défaut : **les éventails RÉPONSE et MENTION ne poussaient pas `messageCreatedAt` /
+`messageType`**, donc la bulle que la NSE iOS pré-enregistre au démarrage à froid portait l'horloge
+du DEVICE et se rendait en `text` — un rectangle vide pour une réponse vocale, ces éventails ne
+poussant pas `attachmentMimeType` non plus (décision du cycle 125 bis).
 
-Deux fois nommé, deux fois différé (« Swift, non exerçable ici »). Le motif est réel et il ne
-couvre pas la moitié TypeScript du défaut.
+Les deux correctifs sont **fonctionnellement équivalents**, y compris sur les trois arbitrages qui
+comptent :
 
-## La mesure — clé par clé, dans les DEUX sens
-
-C'est l'apport de MÉTHODE de cette passe, et il va au-delà du suivi. Le payload push est un
-contrat entre deux fichiers qu'aucun type ne relie ; le diff exhaustif rend **six** écarts :
-
-| sens | clés | statut |
+| arbitrage | passe mergée (PR #3483) | cette passe |
 |---|---|---|
-| lu par la NSE, jamais émis | `content`, `originalLanguage` | **clos par #3465** |
-| lu par la NSE, jamais émis | `senderName` (la passerelle émet `senderDisplayName`) | **clos ici** |
-| lu par la NSE, jamais émis | `isEncrypted` | ouvert, nommé |
-| **émis POUR la NSE, jamais lu** | `createdAt`, `messageType` (« GW5 — persistance NSE ») | **clos ici** |
+| une seule requête (colonnes ajoutées au `select` existant) | ✅ | ✅ |
+| l'estampille N'EST PAS gardée comme du contenu (elle survit au placeholder de protection) | ✅ | ✅ |
+| fail-OPEN : relecture en échec ⇒ aucune clé, jamais une horloge inventée | ✅ | ✅ |
+| garde `instanceof Date` sur la colonne | ✅ | ✅ |
 
-> **Un helper à un appelant est un inventaire (leçon 271) ; un CHAMP à zéro lecteur est une
-> intention.** La moitié « émis, jamais lu » n'était nommée par aucun des deux suivis, ni par
-> #3465.
+Elles ne diffèrent que par la FORME du type porteur — `MessageBannerSource` plat contre un
+`MessageNotificationSource { prism, stamp }` imbriqué — et par le site de la projection
+(`messageClockFields` dédié contre un `prePersistedMessageFields` élargi).
 
-## La conception : celle de #3465, et pourquoi la mienne a été abandonnée
+## Ce qui a été retenu, et pourquoi
 
-Les deux passes ont buté sur la même question — **quel texte la NSE a-t-elle le droit
-d'enregistrer ?** — et y ont répondu différemment.
+**L'implémentation de la passe mergée la première**, conformément au précédent posé au cycle 123
+(« Note de convergence — l'implémentation retenue est celle de l'itération 257, la première
+mergée »). Faire cohabiter deux abstractions parallèles pour la même règle est strictement pire que
+l'une des deux : c'est exactement le mécanisme qui a produit les familles divergentes des
+cycles 118 à 122.
 
-| | #3465 (retenue) | cette passe (abandonnée) |
-|---|---|---|
-| ce qui voyage | `content` = l'**ORIGINAL**, `originalLanguage` son étiquette | le texte **SERVI** (déjà traduit) |
-| clé sur le fil | les noms que la NSE lit **déjà** | une clé neuve, dont la présence autorisait l'écriture |
-| changement client | **aucun** | réécriture de `prePersistMessage` |
+**Et elle couvrait PLUS.** La passe mergée a trouvé un second champ resté derrière le cycle 125 bis
+que celle-ci n'avait pas vu : `notificationLocKey` — la clé qui QUALIFIE le placeholder de
+protection et sert de SECOND VERROU à `createNotification`. Sa leçon (§ 279, « un lot qui fait
+CONVERGER une chaîne laisse derrière tout ce qui la QUALIFIE ») généralise mieux que la formulation
+de cette passe, centrée sur le seul helper.
 
-**#3465 a raison, et la raison est le modèle de données** : `MessageRecord.content` EST le champ
-d'origine. Écrire le texte servi dedans produit un enregistrement cohérent mais FAUX sur sa
-propre sémantique.
+## Ce que cette passe a apporté au lot mergé
 
-Mon objection — « émettre `content` rouvre la fuite du cycle 123 » — **était fausse**, et #3465
-le démontre : le couple n'est posé que sous la même base `message-content` + verrou
-`notificationLocKey`, sous `showPreview`, et il est retiré à la seconde coupe du budget APNs.
-La bonne question n'était pas « ce champ peut-il fuir ? » mais « **sous quelle garde ?** », et
-la garde existait déjà.
+Un témoin que le lot mergé n'avait pas, ajouté à son propre fichier
+(`replyMentionBannerClock.test.ts`) :
 
-## Plan
+> **`createMentionNotificationsBatch` — deux mentionnés ⇒ UNE seule relecture du message.**
 
-- [x] Fusion MANUELLE de `origin/main`, conception de #3465 reprise en entier.
-- [x] `prePersistedMessageFields()` — le prédicat de #3465, posé EN LIGNE dans
-      `createMessageNotification`, devient un SITE partagé.
-- [x] **La JUMELLE** : les TROIS éventails poussent un `messageId`, donc les trois
-      pré-enregistrent une bulle. Réponse et mention émettent désormais le couple depuis
-      `MessagePrismSource.originalLanguage`, déjà relue — **aucune lecture de plus**.
-- [x] NSE : `senderDisplayName` (la clé réellement émise), horodatage SERVEUR, `messageType`
-      du fil ; N4 (le mime) reste prioritaire pour le rendu média.
-- [x] Témoins réécrits sur les noms de fil de #3465.
+Les témoins du lot mergé exercent `createMentionNotification` en SOLO. Le chemin de production est
+le BATCH, et c'est lui qui porte le risque que ce correctif introduit : **élargir un `select` est
+exactement le geste qui invite à ouvrir une seconde lecture**, et une lecture PAR DESTINATAIRE ne
+rougit nulle part — elle se paie en latence de fan-out, sur un chemin que personne ne mesure.
 
-## Revue
+Le témoin exige N > 1 : à un seul mentionné, « une lecture » et « une lecture par destinataire »
+rendent le même compte, et l'assertion ne peut pas tomber. C'est la leçon 276 transposée — un
+témoin de rang s'écrit sur un rang autre que le premier ; ici, sur un lot autre que le singleton.
 
-### Gates
+**ROUGE prouvé** : en retirant le `prismSource` que le batch relaie, le témoin tombe (3 lectures au
+lieu d'1) et **aucun autre témoin du dépôt ne bouge**.
+
+## Gates de cette passe
 
 | gate | résultat |
 |---|---|
-| répertoire `notifications/` + `messaging/` | **32 suites, 619 témoins** (dont les deux suites de #3465) |
-| suite gateway complète | **850/850 suites, 19439 témoins** |
+| `replyMentionBannerClock.test.ts` (fichier mergé + témoin ajouté) | **20 témoins verts** ; le nouveau prouvé ROUGE sous mutation |
+| suite gateway complète, sur l'arbre APRÈS merge | **859 suites / 19 539 témoins verts** (exit 0) |
 | `services/gateway` `tsc --noEmit` | 0 erreur |
-| `packages/shared` build (`tsc`) | 0 erreur |
-| mutation « câblage des jumelles retiré » | **6 témoins tombent** |
-| mutation « garde de `prePersistedMessageFields` retirée » | **7 témoins tombent** (3 des miens, 4 de #3465) |
-| Swift | non compilable ici — gardé par la CI (`Build app (app + cibles de test)`) |
 
-La seconde mutation est la mesure qui compte pour le refactor : **la garde de #3465, déplacée
-dans le helper partagé, fait toujours tomber SES témoins.** Un refactor qui déplace une règle
-doit prouver que la règle tombe encore depuis son nouveau site.
+Les 19 539 témoins de l'arbre mergé se comparent aux 19 527 mesurés sur cette passe seule et
+aux 19 538 annoncés par la passe mergée : l'écart de +1 est le témoin de batch ajouté ci-dessus.
 
-### Détail
+## La leçon de la rencontre elle-même
 
-- `tasks/realtime-sync-audit-2026-08-24-cycle124-bis.md`
-- `tasks/lessons.md` § 274 (rédigée 272, renumérotée deux fois — cf. la note dans la leçon)
+C'est la **deuxième** convergence de ce type en quatre cycles (la première : itération 257 ↔
+cycle 123, qui avait câblé COMMENTAIRES et STATUS à l'identique). Les deux fois, le point de départ
+était un **suivi MESURÉ écrit dans le dépôt** — et c'est précisément ce qui rend la collision
+probable : un suivi bien écrit est une piste que n'importe quelle passe suivante saura reprendre.
 
-### Un rouge HÉRITÉ, réparé en passant
-
-`Test web` échouait sur `lentille-tokens.parity` — **identiquement sur `origin/main`**, mesuré
-des deux côtés : le token `thread.row.padding.vertical` vaut `3` dans
-`packages/shared/design/lentille-tokens.json` et `5px` dans `apps/web/styles/lentille-tokens.css`.
-
-La direction du correctif n'est pas une interprétation : elle est écrite dans le commit qui a
-créé l'écart (`97a14dc2`), au mot près — « le token […] lu par iOS **ET** par les composants
-Focal du web […] passe à 3 avec lui, ce qui applique la directive aux DEUX plateformes ». Le
-JSON et iOS sont passés à 3 ; le CSS du web, la seconde plateforme que la phrase nomme, est
-resté à 5.
-
-Porté ici parce qu'il bloque la branche PARTAGÉE, pas ce seul lot. Une ligne, dans le sens que
-son auteur a énoncé.
-
-> **Un rouge hérité se MESURE avant d'être qualifié.** « Rouge sur la base aussi » est une
-> affirmation vérifiable en deux commandes (`git show origin/main:<fichier>`), et c'est elle qui
-> distingue « pas mon défaut » d'une supposition commode.
-
-### Suivi MESURÉ (non hérité)
-
-- `isEncrypted` reste lue et jamais émise — piège armé, pas panne.
-- Les éventails RÉPONSE et MENTION ne poussent ni `createdAt` ni `messageType` : leur bulle
-  reste ordonnée par l'horloge du device. Combler exige d'élargir `MessagePrismSource` — lot à
-  part.
-- La bannière d'un vocal joint toujours le fichier ORIGINAL (hérité du cycle 123).
+> Ce n'est pas du gaspillage à supprimer, c'est le prix d'un backlog LISIBLE — et il se paie en
+> travail dupliqué, jamais en défaut manqué. La contre-mesure n'est pas d'écrire des suivis plus
+> vagues : c'est de **relire `origin/main` avant de committer**, et de converger sur la première
+> implémentation mergée plutôt que de défendre la sienne.

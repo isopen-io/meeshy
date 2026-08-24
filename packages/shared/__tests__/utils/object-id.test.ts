@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { OBJECT_ID_REGEX, isValidObjectId } from '../../utils/object-id.js';
+import { OBJECT_ID_REGEX, OBJECT_ID_PATTERN, isValidObjectId } from '../../utils/object-id.js';
 import { CommonSchemas } from '../../utils/validation.js';
 import { mongoIdSchema } from '../../types/validation.js';
 import { isValidMongoId } from '../../utils/conversation-helpers.js';
@@ -45,6 +45,23 @@ describe('OBJECT_ID_REGEX', () => {
   it('matches exactly the 24-char hex language', () => {
     for (const id of VALID) expect(OBJECT_ID_REGEX.test(id)).toBe(true);
     for (const id of INVALID) expect(OBJECT_ID_REGEX.test(id)).toBe(false);
+  });
+});
+
+// The string form of the SSOT, for consumers that cannot take a compiled RegExp:
+// Fastify/ajv route schemas declare validation as a `pattern` string, and that
+// string `'^[0-9a-fA-F]{24}$'` was hand-inlined across the gateway with no source.
+// It is derived from OBJECT_ID_REGEX.source so the whole package keeps exactly ONE
+// regex literal — string and RegExp can never drift.
+describe('OBJECT_ID_PATTERN (string form of the SSOT)', () => {
+  it('is exactly OBJECT_ID_REGEX.source', () => {
+    expect(OBJECT_ID_PATTERN).toBe(OBJECT_ID_REGEX.source);
+  });
+
+  it('carries its own anchors so it matches the same language as a string pattern', () => {
+    const compiled = new RegExp(OBJECT_ID_PATTERN);
+    for (const id of VALID) expect(compiled.test(id)).toBe(true);
+    for (const id of INVALID) expect(compiled.test(id)).toBe(false);
   });
 });
 

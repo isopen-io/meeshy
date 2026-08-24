@@ -16,9 +16,9 @@ import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { emitServerEvent } from '../serverEmit';
 import type { QueuedPayloadFor } from '../queuedEventContract';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 
 const logger = enhancedLogger.child({ module: 'AttachmentReactionHandler' });
-const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
 
 export interface AttachmentReactionHandlerDependencies {
   io: SocketIOServer;
@@ -75,7 +75,7 @@ export class AttachmentReactionHandler {
       }
       // Garde : un messageId optimiste non réconcilié (cid_*) ferait throw
       // prisma (P2023). Mirror de ReactionHandler._resolveParticipantId.
-      if (!OBJECT_ID.test(data.messageId) || !OBJECT_ID.test(data.attachmentId)) {
+      if (!isValidObjectId(data.messageId) || !isValidObjectId(data.attachmentId)) {
         logger.warn('attachment reaction — invalid/unreconciled id, skipping', {
           messageId: data.messageId, attachmentId: data.attachmentId,
         });

@@ -23,6 +23,7 @@ import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/useI18n';
 import type { Post } from '@meeshy/shared/types/post';
+import { repostTargetId } from '@meeshy/shared/utils/repost-target';
 import { shareLink } from '@/lib/share-utils';
 import { reportService } from '@/services/report.service';
 import { postsService } from '@/services/posts.service';
@@ -200,7 +201,9 @@ export default function ReelPage() {
       // Loi du miroir : un réel repartagé RESTE un réel. Sans `targetType`, le
       // gateway retombait sur `?? POST` et le repost quittait le fil des réels
       // — rétrogradation silencieuse, jamais demandée.
-      { postId: current.id, data: { isQuote: false, targetType: current.type } },
+      // La RÉFÉRENCE remonte la chaîne (`repostTargetId`), le FORMAT reste
+      // celui de la carte agie.
+      { postId: repostTargetId(current), data: { isQuote: false, targetType: current.type } },
       {
         onSuccess: () => {
           setRepostModalOpen(false);
@@ -215,7 +218,7 @@ export default function ReelPage() {
     (quoteContent: string) => {
       if (!current) return;
       repostMutation.mutate(
-        { postId: current.id, data: { content: quoteContent, isQuote: true, targetType: current.type } },
+        { postId: repostTargetId(current), data: { content: quoteContent, isQuote: true, targetType: current.type } },
         {
           onSuccess: () => {
             setRepostModalOpen(false);

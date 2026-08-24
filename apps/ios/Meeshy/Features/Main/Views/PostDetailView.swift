@@ -293,15 +293,23 @@ struct PostDetailView: View {
         guard !isRepostInFlight else { return }
         isPostReposted = true
         isRepostInFlight = true
+        // L'instantané se prend AVANT d'ouvrir le `Task`, donc dans le tour de
+        // boucle du tap : cette fonction est déjà `@MainActor`, mais un `Task`
+        // ne s'exécute pas au tap — il s'ENFILE. Lire la carte à l'intérieur
+        // laissait au socket un tour de boucle pour la retirer du modèle ;
+        // `cardType` rendait alors `nil`, le gateway repliait sur `POST`
+        // (`?? PostType.POST`) et une story repartagée devenait un post
+        // permanent. Le `Task` reçoit une cible déjà résolue : il n'a plus de
+        // lecture à faire.
+        let carte = displayPost
+        let cible = RepostTargeting.target(
+            cardId: postId, cardType: carte?.type,
+            repostOfId: carte?.repost?.id,
+            originalRepostOfId: carte?.repost?.originalRepostOfId
+        )
         Task {
             defer { Task { @MainActor in isRepostInFlight = false } }
             do {
-                let carte = await MainActor.run { displayPost }
-                let cible = RepostTargeting.target(
-                    cardId: postId, cardType: carte?.type,
-                    repostOfId: carte?.repost?.id,
-                    originalRepostOfId: carte?.repost?.originalRepostOfId
-                )
                 _ = try await PostService.shared.repost(
                     postId: cible.postId,
                     targetType: cible.targetType,

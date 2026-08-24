@@ -1622,12 +1622,21 @@ struct ConversationView: View {
                     // active à la fois).
                     guard overlayState.quickReactionMessageId == nil else { return }
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    if msg.callSummary != nil {
-                        overlayState.callDetailMessage = msg
-                    } else if msg.messageSource != .system {
-                        overlayState.overlayMessage = msg
-                        overlayState.showOverlayMenu = true
-                    }
+                    // L'appui long ouvre les options habituelles — pour TOUT
+                    // message, avis système compris (directive 2026-08-24).
+                    //
+                    // Il aiguillait auparavant par type : un résumé d'appel
+                    // ouvrait sa feuille de détail, et tout autre message
+                    // système ne faisait RIEN. Ce no-op était le vrai défaut :
+                    // un avis d'arrivée reste un message du fil — épinglable,
+                    // favorisable, signalable, supprimable — et le geste qui
+                    // ouvre ces options est le même partout.
+                    //
+                    // La feuille de détail d'un appel n'est pas perdue pour
+                    // autant : elle est devenue une ACTION du menu
+                    // (`PrimaryAction.callDetail`, cf. `onShowCallDetail`).
+                    overlayState.overlayMessage = msg
+                    overlayState.showOverlayMenu = true
                 },
                 // iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) des
                 // bulles — mêmes actions que l'overlay custom (SSOT). `nil`
@@ -2487,6 +2496,9 @@ struct ConversationView: View {
                     overlayState.moreSheetInitialItem = nil
                     overlayState.detailSheetMessage = msg
                 },
+                onShowCallDetail: {
+                    overlayState.callDetailMessage = msg
+                },
                 onExpandFullPicker: {
                     overlayState.fullReactionPickerMessage = msg
                 }
@@ -2500,14 +2512,15 @@ struct ConversationView: View {
     /// Contenu du `.contextMenu` natif d'une bulle (iOS 26+, cf. MessageListView
     /// / MessageListViewController). Palette d'emojis rapides (`ControlGroup`,
     /// choix produit 2026-07-14) + actions primaires via `MessageActionResolver`
-    /// — EXACTEMENT les mêmes callbacks que `overlayMenuContent` (SSOT). Menu
-    /// vide pour les messages système / résumés d'appel (parité overlay :
-    /// aucun menu). Reply/Forward restent dans « Plus… » (feuille détail) et
-    /// via le swipe latéral, inchangés.
+    /// — EXACTEMENT les mêmes callbacks que `overlayMenuContent` (SSOT).
+    /// Reply/Forward restent dans « Plus… » (feuille détail) et via le swipe
+    /// latéral, inchangés.
+    ///
+    /// **Plus d'exclusion des messages système depuis le 2026-08-24** : la
+    /// parité qui la justifiait — « l'overlay n'en donne aucun » — a disparu
+    /// avec le no-op de `onLongPress`. Ce chemin doit rendre le MÊME menu que
+    /// l'overlay, résumé d'appel compris (dont l'entrée `.callDetail`).
     private func buildNativeMessageMenu(for msg: Message) -> AnyView {
-        guard msg.callSummary == nil, msg.messageSource != .system else {
-            return AnyView(EmptyView())
-        }
         let hasText = !msg.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let ctx = MessageMenuContext(
             isMine: msg.isMe,
@@ -2522,6 +2535,7 @@ struct ConversationView: View {
             isStarred: viewModel.isStarred(messageId: msg.id),
             isEdited: msg.isEdited,
             hasEditRevisions: true,
+            hasCallSummary: msg.callSummary != nil,
             saveableAttachmentCount: msg.attachments.filter { $0.type != .location }.count,
             showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
         )
@@ -2664,6 +2678,15 @@ struct ConversationView: View {
                 overlayState.deleteConfirmMessageId = msg.id
             } label: {
                 Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+            }
+        case .callDetail:
+            Button {
+                overlayState.callDetailMessage = msg
+            } label: {
+                Label(
+                    String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main),
+                    systemImage: "info.circle"
+                )
             }
         }
     }

@@ -37,6 +37,7 @@ import { reportService } from '@/services/report.service';
 import { postsService } from '@/services/posts.service';
 import type { MobileTranscription } from '@/services/posts.service';
 import type { Post, PostType, PostVisibility } from '@meeshy/shared/types/post';
+import { repostTargetId } from '@meeshy/shared/utils/repost-target';
 import type { PostReferenceInput } from '@meeshy/shared/types/post-reference';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 import { shareLink } from '@/lib/share-utils';
@@ -182,9 +183,13 @@ export function PostsFeedScreen() {
    * cet état que les deux gestes ont émis `undefined` puis rien, et que le fil a
    * fabriqué des POST à partir de réels. Requis, la construction ne peut plus
    * l'oublier — le compilateur tient la loi à la place de la relecture.
+   *
+   * `targetId` se nomme ainsi parce qu'il n'est PAS l'id de la carte : c'est la
+   * racine de sa chaîne de reposts (`repostTargetId`), résolue à l'ouverture
+   * pour la même raison que le format. Le nommer `id` ferait mentir la lecture.
    */
   const [repostingPost, setRepostingPost] = useState<
-    { id: string; author?: string; content?: string; type: PostType } | null
+    { targetId: string; author?: string; content?: string; type: PostType } | null
   >(null);
   const [audioComposerOpen, setAudioComposerOpen] = useState(false);
 
@@ -386,6 +391,12 @@ export function PostsFeedScreen() {
    */
   const repostStory = useCallback(
     (storyId: string, targetType: PostType) => {
+      // La scène VUE, jamais la racine de sa chaîne — même règle que le viewer
+      // de la page `/story/[postId]` et que le jumeau iOS
+      // (`StoryViewerView.repostAsPostDirect` envoie `story.id`, quand les
+      // surfaces de CARTE passent par `RepostTargeting`) : une source éphémère
+      // est recopiée dans son repost, donc autonome, et grimper vers une
+      // racine dont l'échéance est passée ferait échouer le geste.
       repostMutation.mutate(
         { postId: storyId, data: { isQuote: false, targetType } },
         {
@@ -626,7 +637,7 @@ export function PostsFeedScreen() {
       const post = posts.find((p) => p.id === postId);
       if (post)
         setRepostingPost({
-          id: post.id,
+          targetId: repostTargetId(post),
           author: post.author?.displayName ?? post.author?.username,
           content: post.content ?? undefined,
           type: post.type,
@@ -641,7 +652,7 @@ export function PostsFeedScreen() {
       // Loi du miroir : le format suit la CARTE. Le fil sert POST **et** REEL,
       // donc le changement est bien observable — sans ce champ, reposter un réel
       // depuis le fil fabriquait un POST et le sortait du fil des réels.
-      { postId: repostingPost.id, data: { isQuote: false, targetType: repostingPost.type } },
+      { postId: repostingPost.targetId, data: { isQuote: false, targetType: repostingPost.type } },
       {
         onSuccess: () => {
           setRepostingPost(null);
@@ -658,7 +669,7 @@ export function PostsFeedScreen() {
       repostMutation.mutate(
         // La citation publie autant que le repost sec : elle porte la même loi.
         // Les sites réel et post l'envoient déjà sur leurs DEUX gestes.
-        { postId: repostingPost.id, data: { content, isQuote: true, targetType: repostingPost.type } },
+        { postId: repostingPost.targetId, data: { content, isQuote: true, targetType: repostingPost.type } },
         {
           onSuccess: () => {
             setRepostingPost(null);

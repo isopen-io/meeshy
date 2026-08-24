@@ -620,14 +620,37 @@ struct RootView: View {
                 onJoinAnonymously: { deepLinkRouter.requestedGuestJoin = choice.identifier }
             )
         }
+        // Lot 4.7 — la republication d'un mood passe par le MEUBLE. La porte
+        // PORTE son format (`sourceFormat: .status`) au lieu de le deviner : une
+        // entrée de bulle de mood EST un statut par construction, et
+        // `RepostTargeting` n'entre pas ici — son rôle est de lire le type d'une
+        // CARTE de fil, pas d'un type déjà connu.
+        //
+        // `repostOfId` n'est pas dans la graine : la porte le porte déjà
+        // (`ofPostId:`), et le meuble le lit par `ComposerOrigin.repostedPostId`.
+        //
+        // CE QUE CE SITE LIVRE, ET CE QU'IL NE LIVRE PAS. Le MIROIR de la loi 5
+        // est livré : republier un mood repart en `STATUS`, avec son emoji, sa
+        // phrase et son attribution. L'ANCRAGE — le second chip « Post »,
+        // offert par `offeredFormats == [.status, .post]` — n'atteint AUCUN
+        // écran : `ComposerFormatFan` n'est monté que par `plateauTools`, que
+        // seule la SCÈNE porte. Une republication repart donc forcément
+        // éphémère, détruite une heure plus tard par le balayage d'expiration.
+        // Dette NOMMÉE, tenue par `ComposerDocumentSurfaceTests`
+        // `.test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint`, et sa
+        // condition de levée est app-side : que le socle du document cesse de
+        // peindre une audience inerte et un œil sans canvas. Ne pas lire ce site
+        // comme « la loi 5 est câblée » : sa moitié coûteuse ne l'est pas.
         .sheet(item: $republishStatusEntry) { entry in
-            StatusComposerView(
-                viewModel: statusViewModel,
-                initialEmoji: entry.moodEmoji,
-                initialText: entry.content,
-                viaUsername: entry.username,
-                repostOfId: entry.id,
-                repostAudioUrl: entry.audioUrl
+            MoodComposerDoor(
+                intent: ComposerIntent(origin: .repost(ofPostId: entry.id, sourceFormat: .status)),
+                seed: ComposerMoodSeed(
+                    emoji: entry.moodEmoji,
+                    text: entry.content,
+                    viaUsername: entry.username,
+                    audioUrl: entry.audioUrl
+                ),
+                viewModel: statusViewModel
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)

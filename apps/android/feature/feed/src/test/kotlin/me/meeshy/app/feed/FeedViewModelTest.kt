@@ -36,6 +36,7 @@ import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
+import me.meeshy.sdk.model.SocketPostUpdatedData
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
@@ -76,6 +77,7 @@ class FeedViewModelTest {
     private val commentDeleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 64)
     private val postTranslationUpdated =
         MutableSharedFlow<SocketPostTranslationUpdatedData>(extraBufferCapacity = 64)
+    private val postUpdated = MutableSharedFlow<SocketPostUpdatedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun post(id: String) = ApiPost(id = id, content = "Post $id")
@@ -91,6 +93,7 @@ class FeedViewModelTest {
         every { socialSocket.commentAdded } returns commentAdded
         every { socialSocket.commentDeleted } returns commentDeleted
         every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
+        every { socialSocket.postUpdated } returns postUpdated
         return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
     }
 
@@ -418,6 +421,7 @@ class FeedViewModelTest {
         every { socialSocket.commentAdded } returns commentAdded
         every { socialSocket.commentDeleted } returns commentDeleted
         every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
+        every { socialSocket.postUpdated } returns postUpdated
         return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
     }
 
@@ -722,6 +726,16 @@ class FeedViewModelTest {
         )
 
         verify { repository.applyTranslationUpdate("1", "es", entry) }
+    }
+
+    @Test
+    fun `a realtime post-updated folds the edited post onto the feed cache`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        val edited = ApiPost(id = "1", content = "Post 1 (edited)", likeCount = 9)
+
+        postUpdated.emit(SocketPostUpdatedData(post = edited))
+
+        verify { repository.applyPostUpdate(edited) }
     }
 
     @Test

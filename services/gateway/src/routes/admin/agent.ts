@@ -9,8 +9,7 @@ import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError, sendPaginatedSuccess } from '../../utils/response';
 import { AgentHttpClient, AgentUnavailableError } from '../../services/AgentHttpClient';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
-
-const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
+import { OBJECT_ID_REGEX, OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 
 const validateObjectId = (id: string, name: string, reply: FastifyReply): boolean => {
   /* istanbul ignore next -- Fastify schema validates the ObjectId pattern before the handler runs; this branch is defensive dead code */
@@ -39,13 +38,13 @@ const agentConfigSchema = z.object({
   inactivityThresholdHours: z.number().int().min(1).max(720).optional(),
   minHistoricalMessages: z.number().int().min(0).optional(),
   maxControlledUsers: z.number().int().min(1).max(50).optional(),
-  manualUserIds: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/)).optional(),
+  manualUserIds: z.array(z.string().regex(OBJECT_ID_REGEX)).optional(),
   excludedRoles: z.array(z.string()).optional(),
-  excludedUserIds: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/)).optional(),
+  excludedUserIds: z.array(z.string().regex(OBJECT_ID_REGEX)).optional(),
   triggerOnTimeout: z.boolean().optional(),
   timeoutSeconds: z.number().int().min(30).max(3600).optional(),
   triggerOnUserMessage: z.boolean().optional(),
-  triggerFromUserIds: z.array(z.string().regex(/^[0-9a-fA-F]{24}$/)).optional(),
+  triggerFromUserIds: z.array(z.string().regex(OBJECT_ID_REGEX)).optional(),
   triggerOnReplyTo: z.boolean().optional(),
   agentType: z.string().optional(),
   contextWindowSize: z.number().int().min(10).max(250).optional(),
@@ -119,7 +118,7 @@ const llmConfigSchema = z.object({
 
 // ── Reusable JSON Schema fragments ──────────────────────────────────────────
 
-const objectIdParam = { type: 'string', pattern: '^[0-9a-fA-F]{24}$' } as const;
+const objectIdParam = { type: 'string', pattern: OBJECT_ID_PATTERN } as const;
 
 const conversationIdParams = {
   type: 'object',

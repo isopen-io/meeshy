@@ -11,6 +11,7 @@ import {
   updatePasswordSchema,
   updateUsernameSchema
 } from '@meeshy/shared/utils/validation';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import {
   userSchema,
   userMinimalSchema,
@@ -957,7 +958,7 @@ export async function getUserById(fastify: FastifyInstance) {
     try {
       const { id } = request.params;
 
-      const isMongoId = /^[a-f\d]{24}$/i.test(id);
+      const isMongoId = isValidObjectId(id);
 
       fastify.log.info(`[USER_PROFILE] Fetching user profile for: ${id} (isMongoId: ${isMongoId})`);
 
@@ -1187,7 +1188,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
       const { id } = request.params;
 
       /* istanbul ignore next — Fastify params schema (pattern:^[a-fA-F\d]{24}$) rejects invalid ids before handler */
-      if (!/^[a-f\d]{24}$/i.test(id)) {
+      if (!isValidObjectId(id)) {
         return sendBadRequest(reply, 'Invalid ObjectId format');
       }
 

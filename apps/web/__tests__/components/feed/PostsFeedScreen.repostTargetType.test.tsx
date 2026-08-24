@@ -25,14 +25,14 @@ jest.mock('@/hooks/use-i18n', () => ({
   }),
 }));
 
-type PostCardStubProps = { onRepost?: () => void };
+type PostCardStubProps = { content?: string; onRepost?: () => void };
 jest.mock('@/components/v2', () => ({
   Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button onClick={onClick}>{children}</button>
   ),
   useToast: () => ({ addToast: jest.fn() }),
-  PostCard: ({ onRepost }: PostCardStubProps) => (
-    <button data-testid="post-card-open-repost" onClick={onRepost}>Repost</button>
+  PostCard: ({ content, onRepost }: PostCardStubProps) => (
+    <button data-testid={`open-repost-${content}`} onClick={onRepost}>Repost</button>
   ),
   StoryTray: () => null,
   StatusBar: () => null,
@@ -99,6 +99,20 @@ const reelPost = {
   updatedAt: '2026-08-01T00:00:00.000Z',
 };
 
+/**
+ * Un repost-de-story tel qu'il apparaît dans le fil : la CARTE est un POST,
+ * sa RACINE est une story. Les deux ne se confondent pas — la référence
+ * remonte à la racine, le FORMAT reste celui de la carte agie.
+ */
+const repostOfStoryPost = {
+  ...reelPost,
+  id: 'repost-9',
+  type: 'POST',
+  content: 'republie',
+  repostOfId: 'story-root',
+  repostOf: { id: 'story-root', type: 'STORY', content: 'la story d origine' },
+};
+
 jest.mock('@/hooks/queries/use-feed-query', () => ({
   useFeedQuery: () => ({
     data: { pages: [{ data: [] }] },
@@ -112,7 +126,7 @@ jest.mock('@/hooks/queries/use-feed-query', () => ({
     fetchNextPage: jest.fn(),
     refetch: jest.fn(),
   }),
-  useFeedPosts: () => [reelPost],
+  useFeedPosts: () => [reelPost, repostOfStoryPost],
   usePrefetchPost: () => jest.fn(),
 }));
 
@@ -151,7 +165,7 @@ describe('PostsFeedScreen — le repost miroite le type de sa source', () => {
 
   it("republier un REEL envoie targetType 'REEL', jamais le defaut POST", () => {
     render(<PostsFeedScreen />);
-    fireEvent.click(screen.getByTestId('post-card-open-repost'));
+    fireEvent.click(screen.getByTestId('open-repost-clip'));
     fireEvent.click(screen.getByTestId('modal-repost'));
 
     expect(mockRepostMutate).toHaveBeenCalledWith(
@@ -162,11 +176,45 @@ describe('PostsFeedScreen — le repost miroite le type de sa source', () => {
 
   it("citer un REEL porte le meme type que la republication nue", () => {
     render(<PostsFeedScreen />);
-    fireEvent.click(screen.getByTestId('post-card-open-repost'));
+    fireEvent.click(screen.getByTestId('open-repost-clip'));
     fireEvent.click(screen.getByTestId('modal-quote'));
 
     expect(mockRepostMutate).toHaveBeenCalledWith(
       { postId: 'reel-7', data: { content: 'mon commentaire', isQuote: true, targetType: 'REEL' } },
+      expect.anything(),
+    );
+  });
+
+  /**
+   * La RÉFÉRENCE et le FORMAT ne suivent pas le même chemin, et c'est le piège
+   * du lot :
+   *
+   * - la RÉFÉRENCE remonte à la RACINE. `repostPost` écrit `repostOfId` TEL
+   *   QUEL (`PostService.repostPost`), et `repostOfInclude` ne fait qu'UN saut
+   *   à la relecture : viser le maillon donnerait une carte encastrée vide, la
+   *   coquille intermédiaire n'ayant ni contenu ni média propre.
+   * - le FORMAT reste celui de la carte agie. Il ne suit PAS la racine —
+   *   « corriger » `repostingPost.type` en `post.repostOf?.type` fabriquerait
+   *   une story de 20 h dans le tray, jamais demandée.
+   */
+  it("republier un repost-de-story vise la RACINE mais garde le format de la CARTE", () => {
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('open-repost-republie'));
+    fireEvent.click(screen.getByTestId('modal-repost'));
+
+    expect(mockRepostMutate).toHaveBeenCalledWith(
+      { postId: 'story-root', data: { isQuote: false, targetType: 'POST' } },
+      expect.anything(),
+    );
+  });
+
+  it('la citation vise la même racine que la republication nue', () => {
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('open-repost-republie'));
+    fireEvent.click(screen.getByTestId('modal-quote'));
+
+    expect(mockRepostMutate).toHaveBeenCalledWith(
+      { postId: 'story-root', data: { content: 'mon commentaire', isQuote: true, targetType: 'POST' } },
       expect.anything(),
     );
   });

@@ -282,6 +282,19 @@
       "empty": "No one found",
       "remove": "Remove"
     },
+    "composer": {
+      "format": {
+        "groupLabel": "Publication format",
+        "post": "Post",
+        "story": "Story",
+        "reel": "Reel",
+        "status": "Status"
+      },
+      "media": {
+        "limitReached": "You can attach up to {max} media files.",
+        "limitPartial": "You can attach up to {max} media files. Only {added} added."
+      }
+    },
     "postComposer": {
       "contentLabel": "Post content",
       "addPhoto": "Add photo",
@@ -327,6 +340,7 @@
         "PINNED": "Pinned"
       }
     },
+    "repost": "Repost",
     "repostAsPost": "Keep on my feed",
     "storyLocationHere": "Here"
   },

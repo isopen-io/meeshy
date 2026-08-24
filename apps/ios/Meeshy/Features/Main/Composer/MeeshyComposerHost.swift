@@ -121,6 +121,54 @@ nonisolated enum ComposerReelGate {
 /// Depuis V3-2, ce n'est plus une équivalence à tenir « au cas où » : le cover
 /// de création MONTE ce host, et a cessé de poser lui-même ce que le host pose.
 /// Une des trois qui manquerait ici manquerait désormais à l'écran.
+/// Les deux libellés d'ÉTAT de la flèche du socle — ceux que VoiceOver annonce
+/// quand la publication est en vol ou refusée.
+///
+/// Ils ne sont pas dans la vue : un libellé posé en littéral échappe au cliquet
+/// de complétude et n'est jamais traduit. Même idiome que `ComposerDocumentCopy`
+/// et `ComposerMoodCopy`.
+///
+/// **Zéro clé neuve.** Les deux MIGRENT depuis `StatusComposerView`, où elles
+/// n'avaient qu'un lecteur, et elles sont traduites dans les sept locales
+/// livrées. Le socle est leur second lecteur : c'est ce qui les empêche de
+/// devenir orphelines le jour du retrait (lot 4.8).
+///
+/// **Ce que ce déménagement NE règle PAS** : `status.composer.publish` reste
+/// lue par `StatusComposerView` SEULE. Le socle garde `composer.socle.publish`,
+/// qui n'est pas la même phrase — « Publish » contre « Post » en anglais — et
+/// fondre les deux serait une édition de catalogue que ce lot ne possède pas. Au
+/// retrait, c'est donc cette clé-là, et elle seule, qu'il faudra décider de
+/// garder ou de retirer.
+nonisolated enum ComposerSocleCopy {
+
+    /// L'état TRANSITOIRE, porté par `accessibilityValue` et non par le libellé.
+    /// Échanger le libellé contre un `ProgressView` laisserait le bouton sans
+    /// nom accessible à l'instant précis où il est occupé — le défaut que
+    /// `StatusComposerView` a corrigé et qu'il ne faut pas réintroduire ici.
+    static var publishInProgress: String {
+        String(localized: "a11y.status.publish.in-progress",
+               defaultValue: "Publication en cours", bundle: .main)
+    }
+
+    /// Ce qui MANQUE pour publier.
+    ///
+    /// `nil` hors du mood, et c'est une lacune ASSUMÉE, pas un oubli : la seule
+    /// phrase déjà traduite dit « choisissez un emoji », ce qui est faux d'un
+    /// document, dont le gate porte sur le texte. Le lot 4 n'ajoute AUCUNE clé
+    /// au catalogue (sept locales, cliquet français à zéro tolérance), et aucune
+    /// porte de production ne monte le document. Une phrase juste pour lui
+    /// s'écrira le jour où une porte l'atteindra.
+    static func publishBlockedHint(surface: ComposerSurfaceKind) -> String? {
+        switch surface {
+        case .mood:
+            return String(localized: "a11y.status.publish.disabled.hint",
+                          defaultValue: "Choisissez un emoji pour publier votre status", bundle: .main)
+        case .document, .scene:
+            return nil
+        }
+    }
+}
+
 struct MeeshyComposerHost: View {
 
     let intent: ComposerIntent
@@ -146,6 +194,73 @@ struct MeeshyComposerHost: View {
     /// (`publishTargetType`), qui le transmet au hand-off. C'est ce qui fait de
     /// l'éventail un choix réel plutôt qu'un décor.
     let onPublishAllInBackground: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool
+
+    /// **Le canal de publication du DOCUMENT** — le jumeau, pour les surfaces
+    /// sans atelier, de ce que `onPublishAllInBackground` est pour la scène.
+    ///
+    /// Le meuble ne publie pas davantage qu'avant : il assemble un
+    /// `ComposerDocumentDraft` et le tend à une fermeture que le SITE DE MONTAGE
+    /// lui a donnée. Le rendu `Bool` est l'ACCEPTATION, et le socle n'obéit
+    /// qu'à elle : il ne referme le composer que sur un `true`.
+    ///
+    /// **Ce que ce canal NE tient PAS aujourd'hui, et il faut le lire au mot
+    /// près.** Le MÉCANISME du refus existe ; l'ÉCHEC D'ENVOI ne l'emprunte
+    /// pas. Aucun écrivain ne rend `false` sur une erreur réseau :
+    /// `MoodComposerDoor.publish` rend `true` inconditionnellement après son
+    /// `await`, parce que `StatusViewModel.setStatus` ne rend rien — elle avale
+    /// l'erreur dans un `catch` qui se contente d'un toast. Un gateway qui
+    /// répond 500 referme donc le composer et perd l'emoji, la phrase,
+    /// l'audience et les mentions. **Dette IDENTIQUE à celle de l'écran
+    /// historique** (`StatusComposerView` dismisse aussi après un `setStatus`
+    /// muet) et **non refermée par ce lot** : la remontée d'échec reste à
+    /// écrire, et elle commence par faire rendre un résultat à `setStatus`.
+    /// Le seul `false` atteignable depuis la porte du mood est sa garde de
+    /// format, jamais un échec de transport.
+    ///
+    /// **Ce canal appartient au lot 4 et y RESTE.** Il n'est pas confié à un lot
+    /// ultérieur : le plan du lot 7 déclare le dossier `Composer` interdit et
+    /// fait naître son `PublishIntent` sous `Services/`. Écrire ici qu'il sera
+    /// absorbé fabriquerait un travail que chacun croirait chez l'autre.
+    ///
+    /// — Note d'écriture, et ce n'est pas un détail de style : la phrase
+    /// ci-dessus a d'abord été écrite avec le glob du plan, dont la forme
+    /// contient la séquence qui OUVRE un commentaire de bloc. Le dépouilleur de
+    /// `MyStoriesSourceCorpus` l'a lu comme tel, n'a jamais trouvé de fermeture,
+    /// et a jeté les 738 lignes suivantes : toutes les gardes de source lisant
+    /// ce fichier sont devenues aveugles d'un coup, et une seule a rougi.
+    /// N'écris jamais ce glob dans un commentaire de ce dépôt.
+    ///
+    /// **Sans valeur par défaut, et c'est le fond de l'affaire.** Un défaut
+    /// l'aurait fait disparaître en silence d'un site de montage — le mode
+    /// d'échec exact que `ComposerDocumentSurface.onClose` consigne, et que
+    /// `initialVisibility` a déjà coûté un cran plus haut. Un site qui n'a pas de
+    /// publieur de document doit donc l'écrire, et écrire pourquoi.
+    ///
+    /// `@MainActor` sur le TYPE de fonction, et pas seulement sur le site : ce
+    /// que la fermeture touchera est un ViewModel et une file, tous deux au main
+    /// actor. Le poser ici évite qu'un brouillon traverse une frontière
+    /// d'isolation pour rien — et fait dire à la signature où elle s'exécute.
+    let onPublishDocument: @MainActor (ComposerDocumentDraft) async -> Bool
+
+    /// **La graine du MOOD** — ce que la porte a déjà en main quand elle ouvre.
+    ///
+    /// `nil` ⇒ composition fraîche. Non-`nil` ⇒ une republication (lot 4.7) ou
+    /// une reprise hors-ligne, et la surface s'ouvre remplie.
+    ///
+    /// **Elle n'est pas adoptée à la CONSTRUCTION, et c'est mesuré, pas
+    /// stylistique.** La reprise hors-ligne interroge la file durable : sa
+    /// graine arrive une ou plusieurs boucles APRÈS la première image, quand
+    /// l'auteur a déjà pu poser un emoji. L'adoption passe donc par
+    /// `ComposerMoodSeeding.adopt`, une règle pure qui ne remplit que ce qui est
+    /// encore vide — la même que `StatusComposerView` tenait en quatre `if`
+    /// dispersés dans son `.onAppear`, où aucun test ne pouvait la lire.
+    ///
+    /// **Sans valeur par défaut**, pour la raison qui a déjà coûté deux fois
+    /// dans ce fichier : un défaut ferait disparaître la graine d'un site de
+    /// republication sans casser la moindre compilation, et la republication
+    /// deviendrait un mood neuf — sans bandeau, sans `repostOfId`, sans un mot.
+    let moodSeed: ComposerMoodSeed?
+
     let onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     let onDismiss: () -> Void
 
@@ -173,21 +288,51 @@ struct MeeshyComposerHost: View {
     /// `selectedFormat`, qui le ramène dans l'offre quand celle-ci se referme.
     @State private var currentFormat: ComposerFormat
 
-    /// Le contenu du DOCUMENT, quand la surface montée en est un. Il vit dans
+    /// Le texte des surfaces SANS canvas — le document ET le mood. Il vit dans
     /// le meuble et non dans la surface : c'est le meuble qui le remettra au
     /// publieur, et une surface qui posséderait son texte le perdrait à chaque
     /// bascule de format.
+    ///
+    /// **UN seul champ pour les deux, et c'est la raison qui compte** : la loi
+    /// 9 autorise à changer de format, jamais à jeter ce qui est composé.
+    /// Basculer Mood → Post dans l'éventail d'un repost (lot 4.7) doit garder
+    /// la phrase déjà tapée ; deux `@State` jumeaux l'auraient perdue au
+    /// premier tap, sans qu'aucun test ne le dise.
     @State private var documentText = ""
+
+    /// L'emoji du mood — la seule matière SANS laquelle un mood ne part pas
+    /// (`ComposerMoodPolicy.canPublish`). Il vit ici pour la même raison que
+    /// `documentText` : le publieur est le socle, pas la surface.
+    @State private var moodEmoji: String?
+
+    /// L'audience du mood et sa liste nominative. La MÉMOIRE, elle, n'est pas
+    /// ici : `@AppStorage("lastStatusVisibility")` vit dans la surface, parce
+    /// que c'est la mémoire d'audience du FORMAT status (loi 10) et qu'une
+    /// seconde clé posée ici en ferait une seconde mémoire à faire diverger.
+    @State private var moodVisibility: PostVisibility = .public
+    @State private var moodVisibilityUserIds: [String] = []
+
+    /// Les personnes que ce mood nomme sans que son texte le dise. Le meuble
+    /// les porte ; la RÈGLE de ce qu'on en déclare au serveur est
+    /// `ComposerMoodPolicy.declared` (`nil` et jamais `[]`, loi 3).
+    @State private var moodReferences: [ComposerReference] = []
 
     @State private var showsPreview = false
     @State private var previewSceneIndex = 0
     @State private var previewIsPlaying = false
+
+    /// L'envoi EN VOL du socle. Il ferme le gate le temps de l'aller-retour :
+    /// sans lui, un double tap sur la flèche produirait deux publications, ce
+    /// que l'écran historique du mood évitait par le même drapeau.
+    @State private var isPublishingDocument = false
 
     init(
         intent: ComposerIntent,
         initialVisibility: String,
         draftId: String? = nil,
         onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
+        onPublishDocument: @escaping @MainActor (ComposerDocumentDraft) async -> Bool,
+        moodSeed: ComposerMoodSeed?,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -195,6 +340,8 @@ struct MeeshyComposerHost: View {
         self.initialVisibility = initialVisibility
         self.draftId = draftId
         self.onPublishAllInBackground = onPublishAllInBackground
+        self.onPublishDocument = onPublishDocument
+        self.moodSeed = moodSeed
         self.onPreview = onPreview
         self.onDismiss = onDismiss
 
@@ -249,24 +396,49 @@ struct MeeshyComposerHost: View {
         Binding(get: { self.selectedFormat }, set: { self.currentFormat = $0 })
     }
 
-    /// QUI peint la publication — audience, aperçu, flèche. UNE source, lue
-    /// deux fois : passée à l'atelier pour qu'il assemble ou non sa rangée
-    /// haute, et lue ici pour que le socle peigne ou non les mêmes trois zones.
+    /// La surface MONTÉE — l'unique lecture de la règle de routage dans ce
+    /// fichier. Le corps la consomme pour choisir sa vue, le chrome pour savoir
+    /// qui peint la publication, le gate pour savoir ce qui fait matière. Trois
+    /// lectures de la même expression auraient été trois occasions de diverger.
+    private var mountedSurface: ComposerSurfaceKind {
+        ComposerSurfaceRouting.surface(opening: profile.opensWith, format: selectedFormat)
+    }
+
+    /// QUI peint la publication — audience, aperçu, flèche. UNE source, lue deux
+    /// fois : passée à l'atelier pour qu'il assemble ou non sa rangée haute, et
+    /// lue ici pour que le socle peigne ou non les mêmes zones.
     ///
-    /// `.atelier` aujourd'hui, et ce n'est pas un provisoire mou : deux
-    /// blocages MESURÉS l'imposent, tous deux dans `MeeshyUI` donc hors
-    /// d'atteinte d'ici. (1) `visibilityMenu` est l'UNIQUE écrivain de
-    /// `visibility` dans l'atelier — le retirer priverait l'auteur de tout
-    /// moyen de changer son audience. (2) L'œil du socle monte
-    /// `MeeshyScenePlayer` SANS `preloadedImages/VideoURLs/AudioURLs`, qui sont
-    /// `internal` à `MeeshyUI` : il rendrait un aperçu AMPUTÉ de ses médias
-    /// locaux, ce qu'interdit la loi 6 (« l'aperçu ne peut pas mentir »).
+    /// **Ce fut une CONSTANTE `.atelier`, et le lot 4 l'a rendue calculée** —
+    /// pas par confort : les deux blocages qui l'imposaient sont des blocages de
+    /// la SCÈNE, et une constante qui les faisait valoir pour les trois surfaces
+    /// était une constante mal placée. (1) `visibilityMenu` est l'UNIQUE
+    /// écrivain de `visibility` DANS L'ATELIER — le retirer priverait l'auteur
+    /// de tout moyen de changer son audience, sous la scène. (2) L'œil du socle
+    /// monte `MeeshyScenePlayer` SANS `preloadedImages/VideoURLs/AudioURLs`,
+    /// `internal` à `MeeshyUI` : il rendrait un aperçu AMPUTÉ des médias
+    /// LOCAUX de l'atelier, ce qu'interdit la loi 6.
     ///
-    /// Condition de bascule vers `.host`, à remplir côté SDK : un écrivain
-    /// d'audience atteignable par le meuble, un aperçu qui porte les médias
-    /// préchargés, et un déclencheur de publication gaté sur la matière
-    /// (`ComposerPublishTrigger` armé sur `canPublish`, pas sur `onAppear`).
-    private let chromeOwner: ComposerChromeOwner = .atelier
+    /// Sous le document et sous le mood, **il n'y a pas d'atelier** : aucune de
+    /// ces deux raisons n'a d'objet. La règle qui tranche est
+    /// `ComposerChromeOwnership`, éprouvable sans monter une vue ; ce qui suit
+    /// n'en est que la lecture.
+    ///
+    /// **Ce que la bascule NE lève PAS, et qu'il ne faut pas lire comme acquis** :
+    /// la scène reste sur `.atelier`, et ses deux conditions de levée sont
+    /// intactes — un écrivain d'audience atteignable par le meuble, et un aperçu
+    /// qui porte les médias préchargés. Elles se remplissent côté SDK, jamais
+    /// depuis ce fichier.
+    private var chromeOwner: ComposerChromeOwner {
+        ComposerChromeOwnership.owner(for: mountedSurface)
+    }
+
+    /// Les zones que le socle peint sous la surface montée. Une RÈGLE, jamais un
+    /// `if` écrit dans le corps : une condition posée dans un `body` est
+    /// invisible aux tests, et c'est ainsi qu'une règle produit se met à exister
+    /// en deux exemplaires.
+    private var paintedSocleZones: [ComposerTopBarControl] {
+        ComposerChromeOwnership.socleZones(for: mountedSurface)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -280,24 +452,63 @@ struct MeeshyComposerHost: View {
             }
         }
         .background(tint.color.ignoresSafeArea())
+        // `initial: true` couvre la graine SYNCHRONE (la republication, connue
+        // dès la construction) ; le changement couvre la graine ASYNCHRONE (la
+        // reprise hors-ligne, qui arrive quand la file a répondu). Un seul
+        // chemin pour les deux — deux adoptions se seraient corrigées à moitié.
+        .adaptiveOnChange(of: moodSeed, initial: true) { _, graine in
+            adoptMoodSeed(graine)
+        }
     }
 
-    // MARK: - Les deux surfaces (V2)
+    /// La graine entre par la RÈGLE, jamais par quatre affectations écrites
+    /// ici : `ComposerMoodSeeding.adopt` est éprouvable sans monter une vue, et
+    /// c'est elle qui tient l'invariant « une graine ne remplace jamais ce que
+    /// l'auteur a posé ».
+    /// Le `guard` n'est pas une redite de la règle : `adopt(nil, …)` rend la
+    /// composition intacte, mais la RÉÉCRIRE déclencherait une passe de rendu
+    /// pour rien à chaque apparition d'un composer de création — celui qui ne
+    /// sème jamais rien.
+    ///
+    /// L'état COURANT est relu au moment de l'adoption, jamais capturé plus tôt.
+    /// C'est ce qui rend l'ordre indifférent avec le sélecteur d'audience de la
+    /// surface : qu'il ait déjà appliqué la mémoire du format (loi 10) ou non,
+    /// une graine muette sur l'audience rend ce qu'elle trouve.
+    private func adoptMoodSeed(_ graine: ComposerMoodSeed?) {
+        guard let graine else { return }
+        let adoptee = ComposerMoodSeeding.adopt(
+            graine,
+            into: ComposerMoodComposition(
+                emoji: moodEmoji,
+                text: documentText,
+                visibility: moodVisibility,
+                visibilityUserIds: moodVisibilityUserIds
+            )
+        )
+        moodEmoji = adoptee.emoji
+        documentText = adoptee.text
+        moodVisibility = adoptee.visibility
+        moodVisibilityUserIds = adoptee.visibilityUserIds
+    }
 
-    /// Le meuble a DEUX surfaces, et c'est `ComposerSurfaceRouting` qui tranche
+    // MARK: - Les trois surfaces (V2, élargies au mood par le lot 4)
+
+    /// Le meuble a TROIS surfaces, et c'est `ComposerSurfaceRouting` qui tranche
     /// — jamais une condition écrite ici. La règle vit à côté de la surface
     /// document parce qu'elle est éprouvable sans monter la moindre vue ; la
     /// recopier dans le `body` l'aurait rendue muette aux tests.
     ///
-    /// Le socle, lui, ne dépend d'aucune des deux : il reste sous les deux
+    /// Le socle, lui, ne dépend d'aucune des trois : il reste sous toutes
     /// (loi 5 — le socle ne bouge jamais).
     @ViewBuilder
     private var surface: some View {
-        switch ComposerSurfaceRouting.surface(opening: profile.opensWith, format: selectedFormat) {
+        switch mountedSurface {
         case .scene:
             composerSurface
         case .document:
             documentSurface
+        case .mood:
+            moodSurface
         }
     }
 
@@ -354,12 +565,63 @@ struct MeeshyComposerHost: View {
     /// l'ordre de la feuille historique, pour que rien n'ait à être réinventé.
     ///
     /// **Elle ne porte pas non plus l'ÉVENTAIL**, qui vit dans le plateau. Ce
-    /// n'est pas une impasse tant qu'aucune porte ne la monte : le seul appelant
-    /// de production ouvre sur `.cameraReady`, que `ComposerSurfaceRouting`
-    /// route toujours vers la scène, quel que soit le format. Le jour où une
-    /// porte la monte (`.feedComposer`, `.moodChip`), il faudra y porter le
-    /// sélecteur — sans lui, basculer vers le document serait une porte à sens
-    /// unique.
+    /// n'est pas une impasse aujourd'hui — mais la raison a changé au lot 4.6,
+    /// et l'ancienne (« le seul appelant de production ouvre sur
+    /// `.cameraReady` ») est devenue FAUSSE dans le même arbre. Il y a désormais
+    /// DEUX appelants de production du meuble, et le second n'ouvre pas sur une
+    /// capture :
+    ///
+    /// - `StoryTrayActions` — `.storyTray`, ouverture `.cameraReady`, que
+    ///   `ComposerSurfaceRouting` route TOUJOURS vers la scène ;
+    /// - `MoodComposerDoor` — `.moodChip` (`.moodGrid`) et
+    ///   `.repost(sourceFormat: .status)` (`.keyboardOnContent`). Les deux
+    ///   routent vers le MOOD tant que le format vaut `.status` — et le second
+    ///   offre `[.status, .post]`, donc une bascule vers `.post` y monterait
+    ///   cette surface-ci.
+    ///
+    /// Ce qui tient l'impasse fermée n'est donc pas l'ouverture, c'est que
+    /// **l'éventail n'est monté que par `composerSurface`** : ni le mood ni le
+    /// document ne le portent, et sans lui aucun auteur ne peut choisir `.post`.
+    /// Le fait est tenu par `ComposerDocumentSurfaceTests`
+    /// `.test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint`, et NON par
+    /// la garde du lot 3 (`portesDocumentDuMeuble` ne contient que
+    /// `.feedComposer` et filtre sur `profil.initialFormat`, jamais sur le
+    /// format qu'un éventail aurait choisi).
+    ///
+    /// La TABLE de C1 désigne par ailleurs le meuble pour `.feedComposer`
+    /// (`routesToLegacy: nil`) depuis le lot 3, mais aucun site de présentation
+    /// n'a bougé — le fil monte toujours sa feuille et son composer inline
+    /// depuis ses propres booléens. La porte la plus utilisée ne passe donc pas
+    /// encore ici.
+    ///
+    /// Le jour où elle passera, il faudra y porter le sélecteur — sans lui,
+    /// basculer vers le document serait une porte à sens unique. **Et ce jour
+    /// ne se décrète pas depuis ce fichier** : le porter AUJOURD'HUI serait
+    /// pire que ne pas le porter. Mesuré le 2026-08-24 sur les 14 fichiers
+    /// `StoryComposerViewModel*.swift` : ses écrivains publics sont l'adoption
+    /// de brouillon (`adoptDraft(id:)`, `detachFromAdoptedDraft()`,
+    /// `adoptDeclaredReferences(_:)`), la timeline (`loadCurrentSlideIntoTimeline()`,
+    /// `commitTimelineToCurrentSlide()`, `applyPersistedCommandHistory(_:)`,
+    /// `shutdownTimelineIfNeeded()`, et `timelineViewModel` qui rend une
+    /// référence écrivant à son tour) et deux inits de reprise
+    /// (`init(editing:)`, `init(reposting:authorHandle:)`) — **aucun n'écrit du
+    /// TEXTE** : `currentEffects` est `public internal(set)`, et rien dans
+    /// `+Elements.swift` n'expose publiquement la création d'un élément de
+    /// texte. La liste est plus large que le blocage, et c'est le blocage qui
+    /// compte : un `grep` de contrôle doit CONFIRMER cette phrase, jamais la
+    /// démentir — un inventaire faux présenté comme « déjà vérifié » coûte plus
+    /// cher que pas d'inventaire du tout. Un
+    /// auteur qui taperait son post ici puis choisirait « Story » verrait le
+    /// routage lui monter l'atelier, et `documentText` n'aurait aucun chemin
+    /// pour l'y suivre — la saisie disparaîtrait sans un mot, sur la surface de
+    /// création la plus fréquentée de l'app.
+    ///
+    /// Les deux branches sont donc des régressions — sans éventail une porte à
+    /// sens unique, avec éventail une perte de texte — et c'est ce couple qui
+    /// fait que recâbler `.feedComposer` demande plus qu'une ligne de table.
+    /// **Condition de levée, côté SDK** : un écrivain public de texte
+    /// atteignable par le meuble. L'éventail descend alors ici AVEC le
+    /// transfert de la saisie, jamais avant lui.
     ///
     /// **Sa SORTIE est celle du meuble.** `onDismiss` n'était atteignable que
     /// sous la scène, où l'atelier du SDK peint la croix ; le document n'a pas
@@ -380,6 +642,41 @@ struct MeeshyComposerHost: View {
     }
 
     private var servedDocumentTools: [ComposerDocumentTool] { [] }
+
+    // MARK: - Le mood
+
+    /// La surface du mood (lot 4.4), montée par la MÊME règle que les deux
+    /// autres. Le meuble lui remet des valeurs et récupère des événements ; il
+    /// ne lui remet AUCUN chemin d'envoi.
+    ///
+    /// **Elle a une ISSUE depuis le lot 4.5.** Le chrome n'est plus cédé à
+    /// l'atelier sous cette surface (`ComposerChromeOwnership.owner(for: .mood)`
+    /// rend `.host`), donc le socle est peint et sa flèche remet un
+    /// `ComposerDocumentDraft` à `onPublishDocument`. Le mood s'y compose ET s'y
+    /// envoie — à la fermeture que le site de montage a fournie, jamais par un
+    /// chemin que le meuble aurait fabriqué.
+    ///
+    /// **Et des auteurs l'atteignent depuis le lot 4.6.** `.moodChip` ne route
+    /// plus vers son composer historique, et les quatre feuilles qui montaient
+    /// `StatusComposerView` montent `MoodComposerDoor` — le rail Lentille, le
+    /// tray classique, l'accès rapide de la queue de liste, le tray du fil, et
+    /// les deux `onRepublish` des racines de fenêtre.
+    ///
+    /// `viaUsername` vient de la GRAINE, et il n'a de valeur que pour la
+    /// republication (lot 4.7). Il n'est pas porté par un paramètre à défaut :
+    /// `ComposerMoodSeed` est elle-même obligatoire dans l'`init`, si bien qu'un
+    /// site de republication ne peut pas la perdre en silence.
+    private var moodSurface: some View {
+        ComposerMoodSurface(
+            emoji: $moodEmoji,
+            text: $documentText,
+            visibility: $moodVisibility,
+            visibilityUserIds: $moodVisibilityUserIds,
+            references: $moodReferences,
+            viaUsername: moodSeed?.viaUsername,
+            onClose: onDismiss
+        )
+    }
 
     /// Le plateau ne porte plus qu'UNE chose : l'éventail, le seul endroit du
     /// meuble où l'auteur choisit ce qu'il PUBLIE.
@@ -414,12 +711,26 @@ struct MeeshyComposerHost: View {
         .padding(.vertical, 8)
     }
 
-    // MARK: - Le socle — permanent, jamais conditionnel
+    // MARK: - Le socle — jamais conditionnel à la PORTE
 
+    /// Le point fixe du composer, et il l'est resté : ce qui varie n'est pas la
+    /// porte, c'est la SURFACE.
+    ///
+    /// La loi 5 interdit qu'il se réorganise selon la porte d'entrée. Elle n'a
+    /// jamais dit qu'il peignait une commande sans objet — il s'efface déjà
+    /// devant l'atelier, qui peint les mêmes zones (`body`, plus haut). Le lot 4
+    /// tient la même phrase jusqu'au bout : l'audience n'est pas peinte là où la
+    /// surface porte son propre sélecteur, l'œil n'est pas peint là où il n'y a
+    /// pas de canvas à lire.
+    ///
+    /// Ce choix appartient à `ComposerChromeOwnership.socleZones`, une règle
+    /// PURE et éprouvée. Aucun `if` sur `profile`, sur `origin` ni sur `intent`
+    /// n'entre ici : ce serait la loi 5 défaite, et une condition écrite dans un
+    /// `body` est invisible aux tests.
     private var socle: some View {
         HStack(spacing: 10) {
-            audienceChip
-            previewEye
+            if paintedSocleZones.contains(.audience) { audienceChip }
+            if paintedSocleZones.contains(.preview) { previewEye }
             Spacer()
             publishButton
         }
@@ -428,9 +739,20 @@ struct MeeshyComposerHost: View {
         .padding(.bottom, 12)
     }
 
-    /// L'audience se choisit dans l'atelier (le picker 6 niveaux existant) ; le
-    /// socle en montre l'ÉTAT. Dupliquer le picker ici ferait deux sources pour
-    /// un même réglage.
+    /// Un TÉMOIN, jamais un second sélecteur — dupliquer le picker ici ferait
+    /// deux sources pour un même réglage.
+    ///
+    /// Il n'est peint que là où il a un objet, et il n'en a plus qu'un seul : le
+    /// DOCUMENT. Sous la scène, l'atelier peint son propre picker 6 niveaux et le
+    /// socle tout entier s'efface. Sous le mood, `ComposerMoodSurface` porte le
+    /// sien, avec la mémoire `@AppStorage("lastStatusVisibility")` du format
+    /// (loi 10) — poser ce témoin inerte au-dessus d'un vrai sélecteur aurait été
+    /// exactement la duplication que ce commentaire s'interdit.
+    ///
+    /// **Dette CONSIGNÉE sous le document** : personne n'y écrit l'audience, ce
+    /// témoin n'en est pas un écrivain, et le brouillon part donc sur la
+    /// visibilité que la PORTE a semée (`initialVisibility`). Aucune porte de
+    /// production ne monte le document, et la garde du lot 3 le retient.
     private var audienceChip: some View {
         Label {
             Text("composer.socle.audience", bundle: .main)
@@ -442,6 +764,19 @@ struct MeeshyComposerHost: View {
     }
 
     /// L'œil — et c'est le LECTEUR, pas un aperçu maison (loi 6).
+    ///
+    /// Il n'est peint que là où il a quelque chose à lire, et
+    /// `ComposerChromeOwnership.socleZones` en décide : jamais sous la scène (où
+    /// l'atelier peint le sien), jamais sous le mood (qui n'a pas de canvas — la
+    /// loi 6 interdit d'en fabriquer un aperçu).
+    ///
+    /// **Dette CONSIGNÉE sous le document** : `draftDocument` migre
+    /// `viewModel.currentEffects`, que la surface document ne remplit pas — il
+    /// rendrait donc une scène VIDE. La cause est la même que celle de
+    /// `servedDocumentTools == []` : sans chemin d'ingestion, pas de média, donc
+    /// rien à prévisualiser. Ce n'est pas une raison de retirer l'œil ici, c'en
+    /// est une de ne pas monter le document en production tant que la rangée ne
+    /// se peint pas — ce que la garde du lot 3 retient déjà.
     private var previewEye: some View {
         Button {
             showsPreview = true
@@ -474,51 +809,135 @@ struct MeeshyComposerHost: View {
         )
     }
 
-    /// La zone de publication du socle est un TÉMOIN, pas un second bouton.
+    /// **La flèche du socle PUBLIE — sous les surfaces qui n'ont pas d'atelier.**
     ///
-    /// L'unique publieur du composer est la barre du SDK : `publishAllSlides()`
-    /// flush la timeline ouverte, rabat les effets du canvas courant sur la
-    /// diapositive (`handoffSlides`), lit la visibilité et la langue tenues par
-    /// l'atelier, puis rend la main — tout cela vit dans l'état privé de
-    /// `StoryComposerView`, hors d'atteinte du meuble. Recomposer ce paquet
-    /// app-side serait le second chemin de publication que la doctrine, C2 et
-    /// le lot V7 interdisent tous les trois.
+    /// Elle fut un `Label` : un témoin qui nommait la publication sans la
+    /// piloter. Ce n'était pas un provisoire mou mais l'état exact où V3-2 avait
+    /// dû s'arrêter, et le lot 4 ne le lève que là où les raisons de s'arrêter
+    /// n'ont pas d'objet.
     ///
-    /// Le socle NOMME donc la publication sans la piloter, et c'est un état
-    /// TRANSITOIRE que V3-2 rend visible pour la première fois : l'auteur voit
-    /// la flèche vive de l'atelier et, sous elle, ce témoin.
+    /// **Ce qui a changé, et ce qui n'a PAS changé.** Les deux blocages mesurés
+    /// sont des blocages de la SCÈNE, et ils tiennent toujours pour elle :
     ///
-    /// La raison a changé, et il faut qu'elle soit lue pour ce qu'elle est
-    /// aujourd'hui — pas pour ce qu'elle était. V3-1 a livré le déclenchement
-    /// externe (`ComposerPublishTrigger`) : le socle POURRAIT presser
-    /// `publishAllSlides()` sans rien recomposer. Ce qui l'en empêche est
-    /// mesuré, et c'est autre chose :
+    /// - **la télécommande de l'atelier n'a pas de gate de matière.**
+    ///   `ComposerPublishTrigger` entre dans `publishAllSlides()` sans repasser
+    ///   par `canPublish`, `internal` à `MeeshyUI` : une pression sur une page
+    ///   blanche partirait en publication. **Levée** : que l'armement suive ce
+    ///   gate, ou que le gate devienne lisible app-side ;
+    /// - **le socle ne sait pas CHOISIR l'audience de l'atelier.**
+    ///   `visibilityMenu` en est l'unique écrivain ; passer `chromeOwner: .host`
+    ///   sous la scène retirerait les trois commandes d'un coup, donc l'audience
+    ///   avec. **Levée** : un écrivain d'audience atteignable depuis le meuble.
     ///
-    /// - **la télécommande n'a pas de gate de matière.** Elle entre dans
-    ///   `publishAllSlides()` sans repasser par `canPublish` — interne à
-    ///   `MeeshyUI`, illisible d'ici. Une pression sur une page blanche
-    ///   partirait donc en publication, le seul cas que la barre du SDK refuse.
-    ///   **Levée** : que l'armement du déclencheur suive ce gate, ou que le
-    ///   gate devienne lisible app-side ;
-    /// - **le socle ne sait pas encore CHOISIR l'audience.** `visibilityMenu`
-    ///   de l'atelier est l'unique écrivain de sa visibilité ; `audienceChip`
-    ///   n'en montre que l'idée. Passer `chromeOwner: .host` retirerait les
-    ///   trois commandes de la rangée d'un coup (V3-1), donc l'audience avec —
-    ///   l'auteur ne pourrait plus la changer de la session. **Levée** : un
-    ///   écrivain d'audience atteignable depuis le meuble.
+    /// Sous le document et sous le mood, **il n'y a pas d'atelier** : pas de
+    /// télécommande à armer, pas de `visibilityMenu` à retirer. Le gate est
+    /// app-side et pur (`ComposerDocumentPublishGate`), l'audience est celle de
+    /// la surface. Les deux raisons ne s'appliquent pas, et une constante qui les
+    /// faisait valoir pour les trois surfaces était une constante mal placée.
     ///
-    /// Les deux tombées, la flèche du socle devient l'unique publieur visible
-    /// et `chromeOwner: .host` devient sûr. Aucune des deux ne se contourne
-    /// app-side, et brancher la moitié — presser sans gate — publierait des
-    /// pages blanches depuis la porte la plus utilisée de l'app.
+    /// **Ce n'est toujours PAS un second chemin d'envoi.** Le bouton n'appelle ni
+    /// service, ni file, ni endpoint : il assemble un `ComposerDocumentDraft` et
+    /// le tend à `onPublishDocument`, la fermeture que le site de montage a
+    /// fournie — comme `onPublishAllInBackground` pour la scène. Le meuble
+    /// transmet ; il ne publie pas.
+    ///
+    /// **Le libellé ne s'échange pas contre un `ProgressView`** pendant l'envoi.
+    /// C'est le défaut que `StatusComposerView` a dû corriger : le bouton perdait
+    /// son nom accessible à l'instant précis où il était occupé. L'état en vol
+    /// est porté par `accessibilityValue`, et l'auteur le voit à la teinte qui
+    /// retombe.
     private var publishButton: some View {
-        Label {
-            Text("composer.socle.publish", bundle: .main)
-        } icon: {
-            Image(systemName: "arrow.up.circle")
+        Button {
+            publishDocument()
+        } label: {
+            Label {
+                Text("composer.socle.publish", bundle: .main)
+            } icon: {
+                Image(systemName: "arrow.up.circle")
+            }
+            .font(.footnote.weight(.bold))
+            .foregroundColor(canPublishDocument ? MeeshyColors.indigo400 : MeeshyColors.textSecondary(isDark: true))
         }
-        .font(.footnote.weight(.bold))
-        .foregroundColor(MeeshyColors.indigo400)
+        .disabled(!canPublishDocument)
+        .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
+        .accessibilityHint(publishBlockedHint)
+    }
+
+    /// Le gate de MATIÈRE, lu deux fois — pour teindre la flèche et pour la
+    /// désactiver. UNE source : l'écran historique du mood écrivait la même règle
+    /// deux fois (`guard let emoji` dans l'action, `.disabled(selectedEmoji == nil
+    /// || isPublishing)` sur le bouton), et deux écritures d'une règle sont deux
+    /// occasions de la corriger à moitié.
+    private var canPublishDocument: Bool {
+        ComposerDocumentPublishGate.canPublish(
+            surface: mountedSurface,
+            emoji: moodEmoji,
+            text: documentText,
+            isPublishing: isPublishingDocument
+        )
+    }
+
+    /// Ce que VoiceOver annonce quand la flèche refuse. Vide pendant l'envoi :
+    /// « choisissez un emoji » serait faux d'un mood qui en a un et qui part.
+    private var publishBlockedHint: String {
+        guard !canPublishDocument, !isPublishingDocument else { return "" }
+        return ComposerSocleCopy.publishBlockedHint(surface: mountedSurface) ?? ""
+    }
+
+    /// Ce que la flèche remet au site de montage.
+    ///
+    /// `nil` sous la scène — le socle n'y est pas peint, et fabriquer un
+    /// brouillon pour une surface qui publie par l'atelier aurait été le second
+    /// chemin d'envoi que la doctrine, C2 et le lot 7 interdisent tous les trois.
+    private var documentDraft: ComposerDocumentDraft? {
+        switch mountedSurface {
+        case .scene:
+            return nil
+        case .mood:
+            // `repostOfId` vient de la PORTE, pas de la graine : c'est la porte
+            // qui sait quelle publication elle repartage
+            // (`.repost(ofPostId:sourceFormat:)`), et le poser aussi dans la
+            // graine aurait fait deux sources pour un même fait. `audioUrl`,
+            // lui, vient de la graine — c'est une matière de la SOURCE, pas son
+            // identité.
+            return ComposerDocumentDraft.mood(
+                emoji: moodEmoji,
+                text: documentText,
+                visibility: moodVisibility,
+                visibilityUserIds: moodVisibilityUserIds,
+                references: moodReferences,
+                repostOfId: intent.origin.repostedPostId,
+                audioUrl: moodSeed?.audioUrl
+            )
+        case .document:
+            return ComposerDocumentDraft.document(
+                format: selectedFormat,
+                text: documentText,
+                visibility: PostVisibility(rawValue: initialVisibility) ?? .public
+            )
+        }
+    }
+
+    /// Le meuble TRANSMET : il ne connaît ni service, ni file, ni endpoint.
+    ///
+    /// Il referme le composer sur une ACCEPTATION et le laisse ouvert sur un
+    /// refus. Fermer sur un `false` jetterait ce que l'auteur vient d'écrire, et
+    /// c'est le seul geste de cette méthode qu'aucune garde de source ne pourrait
+    /// rattraper.
+    ///
+    /// **Ce que cette phrase ne dit PAS, et qu'il ne faut pas lire comme
+    /// acquis** : aucun écrivain ne rend `false` sur un échec d'ENVOI
+    /// aujourd'hui (cf. `onPublishDocument`). Le composer se referme donc aussi
+    /// quand la publication a échoué — dette héritée de l'écran historique, non
+    /// refermée par ce lot.
+    private func publishDocument() {
+        guard canPublishDocument, let draft = documentDraft else { return }
+        isPublishingDocument = true
+        Task {
+            let accepted = await onPublishDocument(draft)
+            isPublishingDocument = false
+            if accepted { onDismiss() }
+        }
     }
 }
 
