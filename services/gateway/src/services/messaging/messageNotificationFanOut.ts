@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
+  maskedAttachment,
   protectedPreview,
   type NotificationActorProfile,
   type PreviewPrismBasis,
@@ -382,26 +383,53 @@ export async function notifyMessageRecipients(params: {
         // Cycle 123 — les traductions de la TRANSCRIPTION, que la bannière d'un
         // vocal sert : elles vivent ici, jamais sur `Message.translations`.
         translations: true,
+        // Cycle 125 — les drapeaux de masquage de la PIÈCE JOINTE, que ce
+        // `select` ne lisait pas : `MessageAttachment` porte les siens, et ils
+        // ne suivent pas ceux du message qui la porte. Cf. `maskedAttachment`.
+        isViewOnce: true, isBlurred: true, effectFlags: true,
       },
     });
 
     const first = attachments[0];
-    const attachmentInfo = {
-      hasAttachments: attachments.length > 0,
-      attachmentCount: attachments.length,
-      firstAttachmentType: attachmentTypeOf(first?.mimeType),
-      attachments: attachments.map(att => ({
-        type: attachmentTypeOf(att.mimeType),
-        filename: att.fileName,
-      })),
-      firstAttachmentFilename: first?.fileName,
-      firstAttachmentFileSize: first?.fileSize,
-      firstAttachmentDuration: first?.duration,
-      firstAttachmentWidth: first?.width,
-      firstAttachmentHeight: first?.height,
-      firstAttachmentUrl: first?.fileUrl || undefined,
-      firstAttachmentMimeType: first?.mimeType || undefined,
-    };
+
+    // Cycle 125 — le média a-t-il le droit de VOYAGER ?
+    //
+    // Le cycle 124 a refermé le CORPS d'un message protégé ; une ligne plus bas,
+    // dans le même objet, `firstAttachmentUrl` partait sans aucune condition. La
+    // NSE iOS télécharge ce fichier et l'attache en `UNNotificationAttachment`
+    // sans regarder `notificationLocKey` : une photo à VUE UNIQUE, FLOUTÉE,
+    // ÉPHÉMÈRE ou CHIFFRÉE s'affichait donc ENTIÈRE sur l'écran verrouillé, sous
+    // une bannière disant « 👁️ 🖼️ ». Aucun texte n'avait besoin de fuir pour
+    // que le secret parte.
+    //
+    // La protection se lit aux DEUX niveaux qui la déclarent : celui du MESSAGE
+    // (`protectedOverride`, déjà calculé pour le corps) et celui de la PIÈCE
+    // JOINTE (`maskedAttachment`), que ce site ne lisait pas du tout.
+    //
+    // Retenu en BLOC, fichier ET étiquette : le nom de fichier est persisté dans
+    // `metadata.attachments.firstFilename`, donc relu longtemps après que la
+    // bannière a disparu — et le placeholder porte déjà l'icône de type
+    // (`contentTypeIcon`), si bien que le corps ne perd rien à ce silence.
+    const mediaMayTravel = protectedOverride === null && !maskedAttachment(first);
+
+    const attachmentInfo = mediaMayTravel
+      ? {
+          hasAttachments: attachments.length > 0,
+          attachmentCount: attachments.length,
+          firstAttachmentType: attachmentTypeOf(first?.mimeType),
+          attachments: attachments.map(att => ({
+            type: attachmentTypeOf(att.mimeType),
+            filename: att.fileName,
+          })),
+          firstAttachmentFilename: first?.fileName,
+          firstAttachmentFileSize: first?.fileSize,
+          firstAttachmentDuration: first?.duration,
+          firstAttachmentWidth: first?.width,
+          firstAttachmentHeight: first?.height,
+          firstAttachmentUrl: first?.fileUrl || undefined,
+          firstAttachmentMimeType: first?.mimeType || undefined,
+        }
+      : {};
 
     // Phase A — un vocal déjà transcrit affiche son texte sur l'écran verrouillé ;
     // le fichier reste attaché pour la lecture inline.
@@ -424,8 +452,14 @@ export async function notifyMessageRecipients(params: {
     // plus de transcription à ce moment-là. La base retombe sur
     // `protected-placeholder`, et le second verrou (`notificationLocKey`) cesse
     // d'être la seule chose qui retienne la traduction du texte masqué.
+    //
+    // Cycle 125 — et `mediaMayTravel` porte la MÊME question un niveau plus
+    // bas : la parole d'un vocal MASQUÉ à son propre niveau est son contenu,
+    // exactement comme le fichier qui la porte. Un seul prédicat gouverne donc
+    // les deux, sans quoi le texte repartirait par la porte que le fichier
+    // vient de fermer.
     const firstAttachmentTranscript =
-      protectedOverride === null && first?.mimeType?.startsWith('audio/')
+      mediaMayTravel && first?.mimeType?.startsWith('audio/')
         ? extractTranscriptionText(first as { transcription?: unknown })
         : undefined;
     const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;

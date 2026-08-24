@@ -430,6 +430,39 @@ export function protectedPreview(input: {
   return { preview: `${PROTECTION_ICON.encrypted} ${icon}`, locKey: 'notification.encrypted_message' };
 }
 
+/**
+ * La JUMELLE de {@link protectedPreview}, pour le MÉDIA — cycle 125.
+ *
+ * `protectedPreview` dit ce que le CORPS d'une bannière a le droit de montrer.
+ * Rien ne disait ce que sa CHARGE a le droit de transporter, et la charge
+ * transporte un fichier : la NSE iOS télécharge `attachmentUrl` et l'attache en
+ * `UNNotificationAttachment`, que l'écran verrouillé rend en grand. Une photo à
+ * vue unique s'affichait donc ENTIÈRE sous une bannière disant « 👁️ 🖼️ ».
+ *
+ * Elle répond à la protection de la PIÈCE JOINTE elle-même, le niveau que
+ * l'éventail ne lisait pas du tout — `MessageAttachment` porte ses propres
+ * `isViewOnce` / `isBlurred` / `effectFlags`, indépendants de ceux du message
+ * qui la porte. Le niveau MESSAGE reste tranché par `protectedPreview`, qui le
+ * fait déjà pour le corps : une seule lecture, deux conséquences.
+ *
+ * Ne lit PAS `isEncrypted` : le chiffrement d'une pièce jointe est un mode de
+ * TRANSPORT (le chemin de téléchargement le dénoue), pas un masque d'affichage.
+ * Le message chiffré, lui, est bien retenu — par la quatrième branche de
+ * `protectedPreview`.
+ */
+export function maskedAttachment(input: {
+  isViewOnce?: boolean | null;
+  isBlurred?: boolean | null;
+  effectFlags?: number | null;
+} | null | undefined): boolean {
+  if (!input) return false;
+  const flags = input.effectFlags ?? 0;
+  const maskingFlags = MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED;
+  return input.isViewOnce === true
+    || input.isBlurred === true
+    || (flags & maskingFlags) !== 0;
+}
+
 function extractExtension(filename: string | null | undefined): string | null {
   if (!filename) return null;
   const dot = filename.lastIndexOf('.');
@@ -1458,11 +1491,26 @@ export class NotificationService {
                   // Phase A — message media inline (audio waveform, image preview,
                   // video thumb). L'extension iOS lit ces champs pour télécharger le
                   // fichier et l'attacher comme UNNotificationAttachment (UTI typeHint).
-                  attachmentUrl: params.context.firstAttachmentUrl || '',
-                  attachmentMimeType: params.context.firstAttachmentMimeType || '',
-                  attachmentDurationMs: params.context.firstAttachmentDurationMs != null
-                    ? String(params.context.firstAttachmentDurationMs)
-                    : '',
+                  //
+                  // Cycle 125 — SECOND VERROU, même arbitrage que
+                  // `previewPrismSource` et `prePersistedMessageFields` : un
+                  // `notificationLocKey` ne se pose que sur un placeholder de
+                  // protection (`protectedPreview` en est l'unique producteur),
+                  // et la NSE attache `attachmentUrl` sans jamais le regarder.
+                  // Un appelant qui masque le corps sans retirer son média perd
+                  // ici le rich-push, jamais le secret : une garde de
+                  // confidentialité échoue en montrant MOINS.
+                  ...(params.context.notificationLocKey ? {
+                    attachmentUrl: '',
+                    attachmentMimeType: '',
+                    attachmentDurationMs: '',
+                  } : {
+                    attachmentUrl: params.context.firstAttachmentUrl || '',
+                    attachmentMimeType: params.context.firstAttachmentMimeType || '',
+                    attachmentDurationMs: params.context.firstAttachmentDurationMs != null
+                      ? String(params.context.firstAttachmentDurationMs)
+                      : '',
+                  }),
                   encryptedContent: params.context.encryptedContent || '',
                   ...(params.context.translatedContent ? {
                     translatedContent: params.context.translatedContent,
