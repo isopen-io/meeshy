@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Test
 
