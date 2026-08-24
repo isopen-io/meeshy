@@ -1809,3 +1809,42 @@ partage »). Instruire le second a fait tomber le premier.
       ici. Lot séparé, à instruire là où il peut être MESURÉ.
 - [ ] **8 rouges iOS ANTÉRIEURS** (gardes du chantier Lentille) — hérités,
       non touchés par ce train.
+
+
+# Cycle 123 — le Prisme ANNONCÉ sans être APPLIQUÉ (web)
+
+## Point de départ
+Suivi mesuré des cycles 120/122 : trois surfaces web restées au rang 1
+(commentaires, stories, status), qualifiées « CORRECTES, seulement pas encore
+rang-conscientes ». Solder ce suivi EN ENTIER (leçon 265).
+
+## Ce que le suivi décrivait mal
+Deux des trois l'étaient. La troisième — `StoryViewer` — ne l'était pas : son
+corps de story rendait `story.content` (l'ORIGINAL) pendant que la puce de
+`TranslationToggle` (montée `showContent={false}`) annonçait la langue résolue.
+Le relais prévu pour ce cas (`onDisplayedChange`) n'était branché nulle part.
+
+Chercher le motif — `showContent={false}` SANS `onDisplayedChange` — a rendu
+une QUATRIÈME surface : `PostCard`, le corps d'un post dans le FIL, rangé dans
+« fait » depuis le cycle 120. Défaut pire : la zone « traductions disponibles »
+y est cliquable, et cliquer ne changeait RIEN — contrôle inerte.
+
+## Lots
+1. `StoryViewer` corps legacy — relais `onDisplayedChange` + `preferredLanguages`
+2. `StoryViewer` overlays legacy — `resolvePrismeText` délègue à la SSOT
+   `resolvePrismTranslation` (rang 1 seul + préfixe sur-matchant → chaîne ordonnée)
+3. `PostCard` corps du fil — relais `onDisplayedChange`
+4. `CommentItem`/`CommentList`/`CommentReplies`/`CommentThread` + `StatusBar` —
+   prop `preferredLanguages`, câblée chez les 4 hôtes
+5. `TranslationToggle` — effet de notification sur les 3 PRIMITIVES servies
+   (une prop tableau non mémoïsée bouclait sans fin)
+
+## Témoins (9, tous mesurés)
+- 4 de RANG (rang 2 servi quand le rang 1 manque) — StoryViewer corps + overlay,
+  CommentItem, StatusBar
+- 3 anti-régression (original quand aucune langue du prisme n'est servie)
+- 1 de PIXEL (le corps du post sert la traduction, pas seulement la puce)
+- 1 d'INERTIE (cliquer une traduction change le texte lu)
+
+Le témoin StatusBar a été vérifié falsifiable par mutation (retrait de la prop
+→ il tombe), n'ayant jamais tourné proprement en RED.

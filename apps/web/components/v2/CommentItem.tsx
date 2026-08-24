@@ -12,6 +12,13 @@ import type { PostComment } from '@meeshy/shared/types/post';
 export interface CommentItemProps {
   comment: PostComment;
   userLanguage?: string;
+  /**
+   * Prisme ORDONNÉ du lecteur (rangs 1→4 + fallback). Fourni, l'auto-résolution
+   * DESCEND la chaîne et sert la première langue servie ; absent, comportement
+   * historique à une seule langue (`userLanguage`, rang 1 seul). Même patron que
+   * `PostCard` / `PostDetail` depuis le cycle 120.
+   */
+  preferredLanguages?: string[];
   isAuthor?: boolean;
   onLike?: (commentId: string) => void;
   onUnlike?: (commentId: string) => void;
@@ -53,6 +60,7 @@ function translationsToItems(translations: unknown): TranslationItem[] {
 function CommentItem({
   comment,
   userLanguage,
+  preferredLanguages,
   isAuthor = false,
   onLike,
   onUnlike,
@@ -121,6 +129,7 @@ function CommentItem({
               originalLanguage={comment.originalLanguage ?? 'unknown'}
               translations={translationItems}
               userLanguage={userLanguage}
+              preferredLanguages={preferredLanguages}
               variant="inline"
             />
           ) : (

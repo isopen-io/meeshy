@@ -28,6 +28,12 @@ export interface StatusBarProps {
   onStatusPress: (statusId: string) => void;
   onAddStatus: () => void;
   userLanguage?: string;
+  /**
+   * Prisme ORDONNÉ du lecteur (rangs 1→4 + fallback). Fourni, l'auto-résolution
+   * DESCEND la chaîne et sert la première langue servie ; absent, comportement
+   * historique à une seule langue (`userLanguage`, rang 1 seul).
+   */
+  preferredLanguages?: string[];
   isLoading?: boolean;
   className?: string;
 }
@@ -91,10 +97,11 @@ function ClockIcon({ className }: { className?: string }) {
 interface StatusPopoverProps {
   status: StatusItem;
   userLanguage?: string;
+  preferredLanguages?: string[];
   onClose: () => void;
 }
 
-function StatusPopover({ status, userLanguage, onClose }: StatusPopoverProps) {
+function StatusPopover({ status, userLanguage, preferredLanguages, onClose }: StatusPopoverProps) {
   const { t } = useI18n('components');
   const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -151,6 +158,7 @@ function StatusPopover({ status, userLanguage, onClose }: StatusPopoverProps) {
               originalLanguageName={getLanguageName(status.originalLanguage)}
               translations={status.translations}
               userLanguage={userLanguage}
+              preferredLanguages={preferredLanguages}
               className="w-full"
             />
           ) : (
@@ -179,6 +187,7 @@ function StatusBar({
   onStatusPress,
   onAddStatus,
   userLanguage,
+  preferredLanguages,
   isLoading = false,
   className,
 }: StatusBarProps) {
@@ -285,6 +294,7 @@ function StatusBar({
             <StatusPopover
               status={status}
               userLanguage={userLanguage}
+              preferredLanguages={preferredLanguages}
               onClose={handleClosePopover}
             />
           )}
