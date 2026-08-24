@@ -124,5 +124,95 @@ cohérent — noté pour ne pas fabriquer une dette imaginaire.
 
 ## Leçon
 
-`tasks/lessons.md` § Leçon 267 — quand deux valeurs doivent rester d'accord, la question n'est
+`tasks/lessons.md` § Leçon 268 — quand deux valeurs doivent rester d'accord, la question n'est
 pas « les a-t-on gardées pareil ? » mais « peuvent-elles être calculées deux fois ? ».
+(La 267 est celle du cycle 123 WEB parallèle, atterri sur `main` le même jour.)
+
+---
+
+# Cycle 123 bis — la JUMELLE, posée au moment du correctif
+
+## La question, et sa réponse en une mesure
+
+`/services/gateway/CLAUDE.md` porte une règle : « Cette entité a-t-elle une JUMELLE ? — à poser
+au moment où l'on corrige, pas des cycles plus tard. » Posée sur le défaut A ci-dessus, elle rend
+une mesure d'une ligne :
+
+> **`protectedPreview()` n'avait qu'UN SEUL appelant de production dans tout le dépôt** —
+> `messageNotificationFanOut.ts:320`.
+
+Tout ce qui copie le texte d'un message SANS passer par cet éventail le servait donc nu. Trois
+sites, dont deux fuient vers des TIERS.
+
+## Site 1 — `createReactionNotification` (destinataire : l'AUTEUR)
+
+`NotificationService:2064-2070` lisait `select: { content: true, expiresAt: true }` — les
+drapeaux de protection n'étaient pas même CHARGÉS, donc aucun masque n'était possible. L'extrait
+(100 caractères de `Message.content`) partait dans le corps du push (`:1301-1303` →
+`body: pushBody`) et dans `metadata.messageContent`.
+
+Le destinataire est l'auteur du message : il connaît son texte, ce qui rend ce site moins cher
+que les deux suivants. **La protection ne parle pourtant pas de qui SAIT, elle parle de ce qui
+S'AFFICHE** — un message éphémère ou flouté n'a rien à faire sur un écran verrouillé, fût-il
+celui de son auteur, ni dans une ligne `Notification` que l'inbox in-app relit.
+
+Correctif : les drapeaux entrent au `select`, `protectedPreview` tranche, l'extrait est OMIS
+(la branche « pas d'extrait » existait déjà pour un message sans texte). Pas de
+`notificationLocKey` ici, contrairement à l'éventail : les clients s'en servent pour REMPLACER
+le corps, ce qui effacerait « a réagi 🔥 ».
+
+## Site 2 — `notifyNewlyMentioned` (destinataires : des TIERS)
+
+`messageMentions.ts:358` passait `messageContent: content` — le contenu ÉDITÉ brut — à
+`createMentionNotificationsBatch`, sans masque ET sans base de Prisme (donc `message-content` par
+défaut, ce qui laissait en plus le Prisme réinjecter la TRADUCTION du même secret).
+
+Éditer un message à vue unique pour y nommer quelqu'un lui poussait le texte en clair.
+
+Correctif : les drapeaux se relisent ICI (`loadMessageProtection`), pas via `params` —
+`MentionTargetMessage` ne porte que `expiresAt`, et les quatre transports d'édition ne
+construisent pas tous un `Message` complet. La lecture n'a lieu que lorsqu'il y a des entrants.
+
+## Site 3 — `reproduceEditedMessageNotifications` (destinataires : des TIERS)
+
+`:158,181,194` réécrivaient `content` / `metadata.messagePreview` / `metadata.messageContent` de
+TOUTES les lignes du message avec le contenu brut, sur les quatre types ancrés. Le placeholder
+correctement masqué à la création était donc REMPLACÉ par le vrai texte à la première édition,
+puis réannoncé (`notification:deleted` + `notification:new`).
+
+Mesuré au passage : **rien n'interdit d'éditer un message protégé** — `messageEditAdmission` et
+`messageEditContent` ne portent aucune occurrence de `isViewOnce`, `isBlurred`, `effectFlags` ni
+`expiresAt`.
+
+Correctif : ne RIEN réécrire quand le message est protégé. Ce n'est pas seulement la voie
+prudente, c'est la voie JUSTE — le placeholder ne dérive pas du contenu, donc une édition du
+contenu ne le périme pas, et sa seule part variable (la durée d'un éphémère) ne bouge pas non
+plus.
+
+## Fail-CLOSED sur les trois
+
+Les deux relectures ajoutées (`loadMessageProtection`, `isProtectedMessage`) répondent
+« protégé » quand elles ne concluent PAS — message introuvable ou lecture en échec. C'est
+l'inverse de l'arbitrage best-effort qui gouverne le reste de ces unités, et c'est délibéré :
+une notification appauvrie se rattrape, un secret poussé non.
+
+## Témoins
+
+8 témoins, **5 tombent** avant correctif (les 3 verts sont les témoins de NON-régression :
+la réaction reste annoncée, un message ordinaire garde son extrait, une ligne ordinaire est bien
+rafraîchie). Le secret exercé est une chaîne unique cherchée dans la charge SERVIE entière —
+corps du push et blob écrit —, jamais champ par champ : c'est la leçon du défaut A appliquée au
+harnais.
+
+| témoin | ROUGE mesuré |
+|---|---|
+| réaction — corps servi | `a réagi 🔥 à votre message : « le code du coffre est 4242 »` |
+| réaction — `metadata.messageContent` | `{"messageContent":"le code du coffre est 4242"}` |
+| mention entrante — aperçu | `le code du coffre est 4242` |
+| mention entrante — base déclarée | `undefined` |
+| reproduction — ligne masquée | `content` passe de `👁️ 💬` à `le code du coffre est 4242` |
+
+## Leçon
+
+`tasks/lessons.md` § Leçon 269 — un helper de confidentialité à UN SEUL appelant est un
+inventaire, pas une garde.

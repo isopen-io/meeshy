@@ -2066,14 +2066,47 @@ export class NotificationService {
         // `expiresAt` voyage dans la lecture que l'extrait demandait déjà :
         // la notification d'une réaction DÉSIGNE le message réagi, donc elle
         // ne doit pas lui survivre.
-        select: { content: true, expiresAt: true },
+        //
+        // Cycle 123 bis — les drapeaux de PROTECTION voyagent avec, et ce
+        // n'était pas le cas : cette lecture ne les chargeait même pas, si
+        // bien qu'aucun masque n'était possible ici. `protectedPreview` n'avait
+        // qu'UN appelant de production dans tout le dépôt (l'éventail d'un
+        // message) — tout ce qui relit `Message.content` ailleurs le servait nu.
+        select: {
+          content: true, expiresAt: true, messageType: true, createdAt: true,
+          isViewOnce: true, isBlurred: true, isEncrypted: true, effectFlags: true,
+        },
       }),
     ]);
 
     if (!reactor) return null;
 
     const lang = await this.resolveRecipientLang(params.messageAuthorId);
-    const messagePreview = message?.content
+
+    // Cycle 123 bis — un message PROTÉGÉ (éphémère / vue unique / flouté /
+    // chiffré) n'a pas d'extrait, et le corps se réduit à l'action.
+    //
+    // Le destinataire est ici l'AUTEUR du message : il connaît son texte, ce
+    // qui rend la fuite moins chère que celle des trois éventails — mais la
+    // protection ne parle pas de qui SAIT, elle parle de ce qui S'AFFICHE. Un
+    // message éphémère ou flouté n'a rien à faire sur un écran verrouillé, ni
+    // dans une ligne `Notification` que l'inbox in-app relit.
+    //
+    // Pas de `notificationLocKey` ici, contrairement à l'éventail : les clients
+    // s'en servent pour REMPLACER le corps, ce qui effacerait « a réagi 🔥 ».
+    // L'extrait est simplement omis — la branche existait déjà pour un message
+    // sans texte.
+    const isProtected = protectedPreview({
+      messageType: message?.messageType,
+      isEncrypted: message?.isEncrypted,
+      isViewOnce: message?.isViewOnce,
+      isBlurred: message?.isBlurred,
+      effectFlags: message?.effectFlags,
+      expiresAt: message?.expiresAt ?? null,
+      createdAt: message?.createdAt ?? null,
+    }) !== null;
+
+    const messagePreview = message?.content && !isProtected
       ? message.content.length > 100
         ? message.content.substring(0, 100) + '…'
         : message.content

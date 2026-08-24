@@ -61,12 +61,29 @@ du fil — gardées différemment. Le correctif les fond en UNE :
 - Détail raisonné : `tasks/realtime-sync-audit-2026-08-24-cycle123.md`.
 - Leçon : `tasks/lessons.md` § 268.
 
+### Lot 2 (cycle 123 bis) — la JUMELLE, posée dans le MÊME lot
+
+La règle de `services/gateway/CLAUDE.md` appliquée au correctif ci-dessus rend une mesure d'une
+ligne : **`protectedPreview()` n'avait qu'UN appelant de production dans tout le dépôt.** Trois
+autres sites copiaient le texte d'un message sans masque, dont DEUX vers des tiers.
+
+- [x] `createReactionNotification` — les drapeaux entrent au `select` ; extrait OMIS si protégé.
+- [x] `notifyNewlyMentioned` (édition) — masque + `previewBasis` pour les ENTRANTS.
+- [x] `reproduceEditedMessageNotifications` — une édition ne DÉMASQUE plus les lignes déjà
+      notifiées (le placeholder ne dérive pas du contenu : rien à réécrire).
+- [x] Les deux relectures sont fail-CLOSED et se font CHEZ la garde, pas via ses paramètres.
+- [x] 8 témoins, **5 tombent** avant correctif ; le secret est cherché dans la charge ENTIÈRE.
+
 ### Suivi MESURÉ (non hérité)
 
 - `prePersistMessage` (NSE iOS) — corps VIDE au démarrage à froid. Hérité du cycle 122, Swift,
   non exerçable ici. Toujours ouvert.
 - La piste AUDIO traduite d'un vocal n'est pas attachée à la bannière (le fichier joint reste
   l'original) — absence nommée, non instruite.
+- **Un message PROTÉGÉ est librement éditable** (mesuré : `messageEditAdmission` /
+  `messageEditContent` ne portent aucun de ces drapeaux). Ce lot en ferme les conséquences côté
+  notifications ; la question produit — « éditer un éphémère devrait-il être permis ? » — n'est
+  pas tranchée ici.
 
 
 ---

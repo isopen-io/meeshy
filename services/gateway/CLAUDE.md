@@ -640,6 +640,48 @@ entier.** Passer d'`updateMany` à `upsert` EXIGE le filtre d'appartenance —
 `updateMany` empêchait par accident qu'un appelant fabrique des lignes contre
 des ids arbitraires, l'upsert seul retire cette protection.
 
+### La forme OUTILLÉE de la question : compter les appelants du helper
+
+Quand la règle qu'on vient de corriger vit dans un helper, la jumelle se
+cherche par une commande, pas par intuition — **combien de sites de PRODUCTION
+appellent ce helper ?** Un helper à un appelant ne garde pas une règle : il
+documente qu'un site l'applique.
+
+Mesuré au cycle 123 bis : `protectedPreview()` — le masque qui empêche le texte
+d'un message éphémère / à vue unique / flouté / chiffré d'atteindre un écran
+verrouillé — n'avait **qu'un seul appelant de production**
+(`messageNotificationFanOut.ts`). Trois autres sites copiaient le texte sans
+masque, dont deux vers des TIERS :
+
+| site | destinataires | ce qui partait |
+|---|---|---|
+| `createReactionNotification` | l'AUTEUR | 100 car. de `Message.content` (les drapeaux n'étaient pas même `select`és) |
+| `notifyNewlyMentioned` (édition) | les ENTRANTS | le contenu ÉDITÉ brut, sans base de Prisme |
+| `reproduceEditedMessageNotifications` | tous les déjà-notifiés | le placeholder REMPLACÉ par le vrai texte, puis réannoncé |
+
+**Deux des trois sont sur le chemin d'ÉDITION, et ce n'est pas un hasard.** Un
+message protégé est masqué à l'ENVOI, une fois, par l'unité qui le sait ;
+l'édition rejoue la même question dans des unités écrites pour un autre
+problème (réconcilier des mentions, rafraîchir une copie dénormalisée). D'où la
+règle générale : **quand une règle s'applique à une DONNÉE, énumérer ce qui la
+PRODUIT ne suffit pas — il faut énumérer ce qui la RÉÉCRIT.** Une copie
+dénormalisée a deux moments, et le second est écrit par quelqu'un qui pense
+mettre à jour un texte, pas publier un secret.
+
+Et rien n'interdit d'éditer un message protégé (mesuré : `messageEditAdmission`
+et `messageEditContent` ne portent aucune occurrence de `isViewOnce`,
+`isBlurred`, `effectFlags` ni `expiresAt`).
+
+### Une garde de confidentialité se relit CHEZ ELLE, pas dans ses paramètres
+
+Les deux correctifs d'édition relisent les drapeaux depuis la base plutôt que de
+les recevoir de l'appelant. **Un paramètre dont l'absence désactive une garde
+est un demi-correctif** — et les quatre transports d'édition construisent chacun
+leur propre enregistrement, dont aucun ne porte ces drapeaux. Même arbitrage
+pour l'échec : les deux relectures sont fail-CLOSED (une lecture qui ne conclut
+pas répond « protégé »), à l'inverse du best-effort qui gouverne le reste de ces
+unités. Une notification appauvrie se rattrape ; un secret poussé, non.
+
 ## Un témoin d'écriture assert sur l'EFFET, jamais sur le statut
 
 `expect(res.statusCode).toBe(200)` atteste que la route RÉPOND, pas qu'elle
