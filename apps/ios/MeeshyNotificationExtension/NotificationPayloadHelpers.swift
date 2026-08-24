@@ -369,23 +369,30 @@ nonisolated enum NotificationPayloadHelpers {
         return CommunicationFraming(usesGroupFraming: true, groupName: action, intentKey: key)
     }
 
-    // MARK: - Cycle 124 — le message PRÉ-ENREGISTRÉ au démarrage à froid
+    // MARK: - Cycle 124 bis — le message PRÉ-ENREGISTRÉ au démarrage à froid
 
-    /// Les champs que `prePersistMessage` écrit dans la bulle locale, dérivés
-    /// du fil RÉEL — c'est-à-dire des clés que la passerelle émet vraiment.
+    /// Les champs que `prePersistMessage` écrit dans la bulle locale, dérivés du
+    /// fil RÉEL — c'est-à-dire des clés que la passerelle émet vraiment.
     ///
-    /// Trois d'entre eux étaient lus sous des noms que le payload push n'a
-    /// jamais portés (`content`, `senderName`, `originalLanguage`), et deux
-    /// autres étaient recalculés localement alors que la passerelle les émet
-    /// pour ce seul usage (`createdAt`, `messageType`).
+    /// Le cycle 124 a posé `content` et `originalLanguage` sur le fil, sous les
+    /// noms que cette extension lit déjà. Restaient TROIS écarts, mesurés par le
+    /// diff du contrat dans les deux sens :
+    ///
+    ///  - `senderName` — lu ici, jamais émis : la passerelle envoie
+    ///    `senderDisplayName`, que le cadrage Communication du fichier voisin
+    ///    lit correctement depuis toujours ;
+    ///  - `createdAt` et `messageType` — ÉMIS pour cette extension (« GW5 —
+    ///    persistance NSE »), et lus par personne : la bulle était ordonnée par
+    ///    l'horloge du device.
     struct PrePersistedMessageFields: Equatable {
-        /// Le texte à écrire dans la bulle. VIDE quand rien de ce que le fil
-        /// porte n'est le contenu du message (mode privé, placeholder de
-        /// protection, transcription) — une bulle sans texte vaut mieux qu'une
-        /// bulle qui MENT et que la synchro REST pourrait ne jamais corriger.
+        /// Le texte du message, tel que le fil le porte. VIDE quand la
+        /// passerelle n'a rien à donner (mode privé, placeholder de protection,
+        /// transcription) — une bulle sans texte vaut mieux qu'une bulle qui
+        /// MENT et que la synchro REST pourrait ne jamais corriger.
         let content: String
-        /// La langue du texte ci-dessus : celle de la traduction quand une
-        /// traduction a été servie, celle du message sinon.
+        /// L'étiquette de langue de ce texte. Le repli « en » ne vaut que le
+        /// temps que la synchro REST écrase l'enregistrement — mais il ne
+        /// s'applique plus au cas nominal, où le fil la porte.
         let language: String
         /// L'horodatage SERVEUR du message, qui ordonne la bulle dans le fil.
         let createdAt: Date
@@ -393,58 +400,20 @@ nonisolated enum NotificationPayloadHelpers {
         let senderName: String?
     }
 
-    /// Compose ces quatre champs.
-    ///
-    /// La règle de contenu tient en une question : **le fil dit-il que le corps
-    /// affiché EST le contenu du message ?** La passerelle y répond par la
-    /// PRÉSENCE de `messageOriginalLanguage`, qu'elle n'émet que sous cette
-    /// condition (cf. `NotificationService.storableMessageLanguage`). Sans
-    /// cette clé, on n'écrit aucun corps.
-    ///
-    /// Le texte lui-même vient, dans l'ordre :
-    ///  1. `translatedContent` — le texte servi NU, sans cadrage de pièce
-    ///     jointe, quand une traduction a gagné le Prisme ;
-    ///  2. le corps de la bannière, mais SEULEMENT en l'absence de pièce
-    ///     jointe : sinon le corps porte un cadrage composé par la passerelle
-    ///     (« 🎵 Audio · 0:34 », badges `+2📷`) qui n'est pas le texte du
-    ///     message.
+    /// Compose ces quatre champs depuis le payload.
     ///
     /// `fallbackNow` est l'horloge du device, conservée en repli — mais elle
     /// n'est plus le cas nominal : deux appareils qui reçoivent le même message
     /// n'ont aucune raison de l'ordonner pareil.
     nonisolated static func prePersistedMessageFields(
         userInfo: [AnyHashable: Any],
-        notificationBody: String,
         fallbackNow: Date
     ) -> PrePersistedMessageFields {
-        let storableLanguage = nonEmptyString(userInfo["messageOriginalLanguage"])
-        let translated = nonEmptyString(userInfo["translatedContent"])
-        let hasAttachment = nonEmptyString(userInfo["attachmentMimeType"]) != nil
-
-        let content: String
-        let language: String
-        if let storableLanguage {
-            if let translated {
-                content = translated
-                language = nonEmptyString(userInfo["translatedLanguage"]) ?? storableLanguage
-            } else if hasAttachment {
-                content = ""
-                language = storableLanguage
-            } else {
-                content = notificationBody
-                language = storableLanguage
-            }
-        } else {
-            content = ""
+        PrePersistedMessageFields(
+            content: nonEmptyString(userInfo["content"]) ?? "",
             // Repli historique : « en » est un faux moins nuisible que « fr »
-            // pour la résolution du Prisme d'un lecteur non francophone. Il ne
-            // vaut que le temps que la synchro REST écrase l'enregistrement.
-            language = "en"
-        }
-
-        return PrePersistedMessageFields(
-            content: content,
-            language: language,
+            // pour la résolution du Prisme d'un lecteur non francophone.
+            language: nonEmptyString(userInfo["originalLanguage"]) ?? "en",
             createdAt: pushDate(userInfo["createdAt"]) ?? fallbackNow,
             // `senderName` n'a JAMAIS été une clé du payload : la passerelle
             // émet `senderDisplayName`, que le cadrage Communication de ce
@@ -458,8 +427,8 @@ nonisolated enum NotificationPayloadHelpers {
     ///
     /// Le mime de la pièce jointe reste PRIORITAIRE : c'est lui qui décide du
     /// rendu média (N4), et `Message.messageType` vaut `text` pour un vocal
-    /// légendé. Le type du fil ne sert donc qu'en l'absence de pièce jointe,
-    /// où il est plus fin que le repli `text`.
+    /// légendé. Le type du fil ne sert qu'en l'absence de pièce jointe, où il
+    /// est plus fin que le repli `text`.
     nonisolated static func prePersistedMessageTypes(
         userInfo: [AnyHashable: Any]
     ) -> (messageType: String, contentType: String) {

@@ -520,52 +520,66 @@ describe.each([
 });
 
 /**
- * Cycle 124 — la JUMELLE, posée dans le MÊME lot.
+ * Cycle 124 bis — la JUMELLE de la bulle pré-enregistrée.
  *
- * `messageOriginalLanguage` — le droit, pour la NSE iOS, d'enregistrer
- * localement le corps qu'elle affiche — est né sur `createMessageNotification`.
- * La règle de `services/gateway/CLAUDE.md` (« cette entité a-t-elle une
- * JUMELLE ? à poser au moment où l'on corrige ») rend ici la même réponse qu'au
- * cycle 122 pour le Prisme lui-même : les TROIS éventails poussent un
- * `messageId`, donc les trois font pré-enregistrer une bulle. Deux d'entre eux
- * l'auraient laissée sans corps.
+ * Le cycle 124 (PR #3465) a posé le couple `content` / `originalLanguage` sur le
+ * fil push : la NSE iOS écrit une ligne `MessageRecord` dès l'arrivée du push,
+ * et elle lisait deux clés que le fil n'a jamais portées. Son prédicat vit dans
+ * `createMessageNotification`, EN LIGNE.
  *
- * Les deux méthodes tiennent déjà la langue d'origine — `MessagePrismSource`
- * la porte, relue une fois pour tout l'éventail. Aucune lecture de plus.
+ * Or les TROIS éventails de `messageNotificationFanOut` poussent un `messageId`,
+ * donc les trois font pré-enregistrer une bulle. Sans ce couple, celle d'une
+ * RÉPONSE et celle d'une MENTION restaient VIDES pendant que celle d'un message
+ * simple en avait une — le symptôme « deux textes pour un même message » que les
+ * cycles 121 à 123 poursuivent, une couche plus bas.
+ *
+ * Les deux méthodes tiennent déjà la langue d'origine : `MessagePrismSource`,
+ * relue UNE fois pour tout l'éventail depuis le cycle 122. Aucune lecture de
+ * plus.
  */
 describe.each([
   ['createReplyNotification', runReply],
   ['createMentionNotification', runMention],
-] as const)('%s — ce que la NSE a le droit d\'ENREGISTRER', (_name, run) => {
-  it('émet la langue du contenu quand le corps servi EST le contenu du message', async () => {
+] as const)('%s — la bulle PRÉ-ENREGISTRÉE par la NSE', (_name, run) => {
+  it('pousse le contenu du message et sa langue d\'origine', async () => {
     const { data } = await run({
       recipient: { systemLanguage: 'fr' },
       translations: null,
       originalLanguage: 'es',
     });
 
-    expect(data?.messageOriginalLanguage).toBe('es');
+    expect(data?.content).toBe('Hello');
+    expect(data?.originalLanguage).toBe('es');
   });
 
-  it('dit la langue d\'ORIGINE, pas celle servie', async () => {
+  it('pousse l\'ORIGINAL, jamais la traduction servie', async () => {
+    // `MessageRecord.content` EST le champ d'origine et `originalLanguage` son
+    // étiquette ; la traduction a déjà `translatedContent` et son rang. Écrire
+    // le texte servi ici produirait un enregistrement cohérent mais FAUX sur sa
+    // propre sémantique — un message espagnol enregistré comme français.
     const { data } = await run({
       recipient: { systemLanguage: 'fr' },
       translations: { fr: { text: 'Bonjour' } },
       originalLanguage: 'es',
     });
 
+    expect(data?.translatedContent).toBe('Bonjour');
     expect(data?.translatedLanguage).toBe('fr');
-    expect(data?.messageOriginalLanguage).toBe('es');
+    expect(data?.content).toBe('Hello');
+    expect(data?.originalLanguage).toBe('es');
   });
 
-  it('n\'émet rien quand la langue d\'origine est inconnue', async () => {
+  it('pousse le contenu même quand la langue d\'origine est inconnue', async () => {
+    // Les deux clés voyagent ensemble sur le fil ; l'étiquette manquante sort à
+    // vide plutôt que d'empêcher le corps de partir.
     const { data } = await run({
       recipient: { systemLanguage: 'fr' },
       translations: null,
       originalLanguage: null,
     });
 
-    expect(data).not.toHaveProperty('messageOriginalLanguage');
+    expect(data?.content).toBe('Hello');
+    expect(data?.originalLanguage).toBe('');
   });
 });
 
@@ -581,7 +595,7 @@ describe.each([
       previewBasis: p.previewBasis,
     })],
 ] as const)('%s — un placeholder de PROTECTION n\'est pas enregistrable', (_name, invoke) => {
-  it('n\'émet pas la langue du contenu sous une base protégée', async () => {
+  const runProtected = async (previewBasis: unknown, messagePreview: string) => {
     const { service, sendToUser } = makeService({
       recipient: { systemLanguage: 'fr' },
       translations: null,
@@ -593,10 +607,31 @@ describe.each([
       replierUserId: SENDER_ID,
       messageId: MESSAGE_ID,
       conversationId: CONVERSATION_ID,
-      messagePreview: '⏱️ 💬 24h',
-      previewBasis: { kind: 'protected-placeholder' },
+      messagePreview,
+      previewBasis,
     });
 
-    expect(servedPushData(sendToUser)).not.toHaveProperty('messageOriginalLanguage');
+    return servedPushData(sendToUser);
+  };
+
+  it('ne pousse ni corps ni langue sous une base protégée', async () => {
+    // L'écrire planterait « ⏱️ 💬 24h » dans la base locale, où il survivrait à
+    // la bannière si la synchro REST n'arrive jamais — et il relâcherait ce que
+    // la protection masque.
+    const data = await runProtected({ kind: 'protected-placeholder' }, '⏱️ 💬 24h');
+
+    expect(data).not.toHaveProperty('content');
+    expect(data).not.toHaveProperty('originalLanguage');
+  });
+
+  it('ne pousse rien non plus sous une TRANSCRIPTION', async () => {
+    // La parole d'un vocal appartient à la pièce jointe, pas au message qui la
+    // porte : la bulle audio la rendra après la synchro REST.
+    const data = await runProtected(
+      { kind: 'transcript', source: { translations: {}, originalLanguage: 'es' } },
+      'Hola, te llamo esta noche'
+    );
+
+    expect(data).not.toHaveProperty('content');
   });
 });

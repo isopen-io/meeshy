@@ -61,12 +61,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         updateSharedUnreadCount(from: bestAttemptContent.userInfo)
         prefetchMessageData(from: bestAttemptContent.userInfo)
         prefetchSocialData(from: bestAttemptContent.userInfo)
-        // Cycle 124 — le corps est passé EXPRÈS : c'est le texte que la
-        // passerelle a déjà descendu dans le Prisme et masqué s'il fallait
-        // (cycles 121-123), et il n'existe nulle part ailleurs dans la charge.
-        // Appelé AVANT le déchiffrement E2EE ci-dessous, qui réécrit ce corps —
-        // sans effet ici, `prePersistMessage` renonçant sur un push chiffré.
-        prePersistMessage(from: bestAttemptContent.userInfo, notificationBody: bestAttemptContent.body)
+        prePersistMessage(from: bestAttemptContent.userInfo)
         postDeliveryReceipt(from: bestAttemptContent.userInfo)
 
         let userInfo = bestAttemptContent.userInfo
@@ -399,7 +394,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         } catch { return nil }
     }()
 
-    private func prePersistMessage(from userInfo: [AnyHashable: Any], notificationBody: String) {
+    private func prePersistMessage(from userInfo: [AnyHashable: Any]) {
         guard let messageId = userInfo["messageId"] as? String,
               let conversationId = userInfo["conversationId"] as? String,
               let senderId = userInfo["senderId"] as? String,
@@ -424,20 +419,14 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         let isEncryptedPush = (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } ?? false
         if isEncryptedPush { return }
 
-        // Cycle 124 — `userInfo["content"]` n'a JAMAIS été une clé du payload
-        // push : la bulle écrite ici avait un corps VIDE depuis toujours, et
-        // « `content` est absent » se lit exactement comme « le message est
-        // vide ». Le texte enregistrable est celui que la bannière AFFICHE —
-        // déjà descendu dans le Prisme, déjà masqué s'il est protégé — et le
-        // fil dit par `messageOriginalLanguage` s'il a le droit de l'être.
-        //
-        // Émettre `content` aurait été le correctif évident et le mauvais : le
-        // texte NU d'un message éphémère / à vue unique / flouté repartirait
-        // sur le canal push, soit la fuite que le cycle 123 vient de fermer.
+        // Cycle 124 — `content` et `originalLanguage` sont enfin sur le fil,
+        // sous les noms que cette méthode lisait déjà. Restaient trois écarts,
+        // que ce helper ferme : le nom d'expéditeur (émis sous un AUTRE nom),
+        // et l'horodatage serveur + le type du message (émis POUR cette
+        // extension et lus par personne).
         let now = Date()
         let fields = NotificationPayloadHelpers.prePersistedMessageFields(
             userInfo: userInfo,
-            notificationBody: notificationBody,
             fallbackNow: now
         )
 
@@ -452,12 +441,10 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             let record = MessageRecord(
                 localId: messageId, serverId: messageId,
                 conversationId: conversationId, senderId: senderId,
-                // Cycle 124 — le texte SERVI et SA langue, pris ensemble : un
-                // enregistrement qui dirait « ce message est en <langue> » sur
-                // un texte écrit dans une autre ferait résoudre le Prisme du
-                // lecteur contre une fausse déclaration. `originalLanguage` (le
-                // nom lu ici auparavant) n'a jamais été sur le fil non plus, et
-                // son repli « en » réétiquetait donc TOUT message.
+                // Cycle 124 — le texte du message et SON étiquette de langue,
+                // pris ensemble : un enregistrement qui dirait « ce message est
+                // en <langue> » sur un texte écrit dans une autre ferait
+                // résoudre le Prisme du lecteur contre une fausse déclaration.
                 content: fields.content,
                 originalLanguage: fields.language,
                 messageType: media.messageType, messageSource: "user",

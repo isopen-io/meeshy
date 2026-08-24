@@ -492,7 +492,8 @@ describe('createMessageNotification — le Prisme d\'une TRANSCRIPTION', () => {
       },
     });
 
-    expect(data).not.toHaveProperty('messageOriginalLanguage');
+    expect(data).not.toHaveProperty('content');
+    expect(data).not.toHaveProperty('originalLanguage');
   });
 
   it('descend la carte de l\'ATTACHMENT, jamais celle du message', async () => {
@@ -510,133 +511,5 @@ describe('createMessageNotification — le Prisme d\'une TRANSCRIPTION', () => {
     });
 
     expect(push?.body).toBe('Salut, je t\'appelle ce soir');
-  });
-});
-
-/**
- * Cycle 124 — le message PRÉ-ENREGISTRÉ par la NSE, et la troisième projection
- * de `PreviewPrismBasis`.
- *
- * Suivi mesuré des cycles 122 ET 123, laissé ouvert par les deux :
- * `prePersistMessage` (NSE iOS) lit `userInfo["content"]`, une clé que le
- * payload push ne porte pas — la bulle écrite au démarrage à froid a un corps
- * VIDE jusqu'à la synchro REST.
- *
- * Le correctif n'est PAS d'émettre `content` : le texte NU d'un message protégé
- * repartirait sur le fil pendant que la bannière affiche son placeholder — la
- * fuite exacte que le cycle 123 vient de fermer. Le texte que la NSE peut
- * légitimement enregistrer est celui qu'elle s'apprête à AFFICHER : déjà
- * descendu par le Prisme, déjà masqué par la protection. Il ne lui manque que
- * sa LANGUE, et l'autorisation de le prendre pour le contenu du message.
- *
- * `PreviewPrismBasis` répond déjà aux deux — c'est le type qui dit ce que
- * l'aperçu EST. Sa troisième projection, après « qu'est-ce qui le traduit ? »
- * (cycle 123) et « que transporte-t-on à côté ? » (cycle 123), est donc :
- * « peut-il être ENREGISTRÉ comme le message ? ».
- *
- * La PRÉSENCE de `messageOriginalLanguage` est le discriminant. Son absence
- * vaut « n'enregistre pas de corps », sur les quatre familles où le corps servi
- * n'est pas le contenu du message.
- */
-describe('createMessageNotification — ce que la NSE a le droit d\'ENREGISTRER', () => {
-  it('émet la langue du contenu quand le corps servi EST le contenu du message', async () => {
-    const { data } = await runFanOut({
-      recipient: { systemLanguage: 'fr' },
-      translations: null,
-      originalLanguage: 'es',
-      params: { messagePreview: 'Hola, ¿qué tal?' },
-    });
-
-    expect(data?.messageOriginalLanguage).toBe('es');
-  });
-
-  it('dit la langue d\'ORIGINE, pas celle servie — les deux champs ne disent pas la même chose', async () => {
-    // Le mode d'échec du correctif : réutiliser `translatedLanguage` comme
-    // langue de l'enregistrement. Celle-ci décrit le texte SUBSTITUÉ ; la
-    // langue d'origine décrit le message. La NSE a besoin des deux pour écrire
-    // un enregistrement cohérent — le texte servi AVEC la langue de ce texte.
-    const { data } = await runFanOut({
-      recipient: { systemLanguage: 'fr' },
-      translations: { fr: { text: 'Salut, ça va ?' } },
-      originalLanguage: 'es',
-      params: { messagePreview: 'Hola, ¿qué tal?' },
-    });
-
-    expect(data?.translatedLanguage).toBe('fr');
-    expect(data?.messageOriginalLanguage).toBe('es');
-  });
-
-  it('n\'émet RIEN quand la langue d\'origine du message est inconnue', async () => {
-    const { data } = await runFanOut({
-      recipient: { systemLanguage: 'fr' },
-      translations: null,
-      originalLanguage: null,
-      params: { messagePreview: 'Hola, ¿qué tal?' },
-    });
-
-    expect(data).not.toHaveProperty('messageOriginalLanguage');
-  });
-
-  it('n\'autorise PAS l\'enregistrement d\'un placeholder de PROTECTION', async () => {
-    // Le corps servi est « ⏱️ 💬 24h ». L'écrire comme contenu du message
-    // planterait le placeholder dans la base locale, où il survivrait à la
-    // bannière — et resterait pour de bon si la synchro REST n'arrive jamais.
-    const { push, data } = await runFanOut({
-      recipient: { systemLanguage: 'fr' },
-      translations: null,
-      originalLanguage: 'es',
-      params: {
-        messagePreview: '⏱️ 💬 24h',
-        previewBasis: { kind: 'protected-placeholder' },
-      },
-    });
-
-    expect(push?.body).toBe('⏱️ 💬 24h');
-    expect(data).not.toHaveProperty('messageOriginalLanguage');
-  });
-
-  it('n\'autorise pas non plus l\'enregistrement sous le verrou `notificationLocKey`', async () => {
-    // Second verrou, comme pour la descente : un appelant qui compose un
-    // placeholder sans déclarer sa base perd un enregistrement local, jamais le
-    // secret. Une garde de confidentialité échoue en montrant moins.
-    const { data } = await runFanOut({
-      recipient: { systemLanguage: 'fr' },
-      translations: null,
-      originalLanguage: 'es',
-      params: {
-        messagePreview: '🔒 💬',
-        notificationLocKey: 'notification.encrypted_message',
-      },
-    });
-
-    expect(data).not.toHaveProperty('messageOriginalLanguage');
-  });
-
-  it('n\'émet rien en mode privé — aucun champ porteur de contenu sur le fil', async () => {
-    const { data } = await runFanOut({
-      recipient: { systemLanguage: 'fr' },
-      translations: null,
-      originalLanguage: 'es',
-      notificationPrefs: { showPreview: false },
-      params: { messagePreview: 'Hola, ¿qué tal?' },
-    });
-
-    expect(data).not.toHaveProperty('messageOriginalLanguage');
-    expect(data).not.toHaveProperty('translatedContent');
-  });
-
-  it('émet le timestamp SERVEUR et le type du message, que la bulle pré-enregistrée ordonne', async () => {
-    // Ces deux clés existent depuis GW5 et sont documentées « persistance NSE ».
-    // Le témoin les GÈLE : elles n'avaient aucun lecteur, et un champ sans
-    // lecteur se perd au premier nettoyage de payload.
-    const { data } = await runFanOut({
-      recipient: { systemLanguage: 'fr' },
-      translations: null,
-      originalLanguage: 'es',
-      params: { messagePreview: 'Hola, ¿qué tal?' },
-    });
-
-    expect(data?.createdAt).toBe('2026-08-24T10:00:00.000Z');
-    expect(data?.messageType).toBe('text');
   });
 });

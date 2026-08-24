@@ -1,159 +1,181 @@
-# Cycle 124 — le contrat de fil push, mesuré dans les DEUX sens
+# Cycle 124 — la bannière d'un VOCAL, et la bulle qu'un push pré-enregistre
 
-> Suivi MESURÉ des cycles 122 et 123, laissé ouvert par les deux dans les mêmes
-> termes. Instruit ici, et la mesure qui le confirme en découvre trois autres.
+Deux défauts nommés par le suivi MESURÉ du cycle 122, tous deux au même endroit
+du fil push. En instruisant le premier, un TROISIÈME est tombé — et c'est le plus
+grave. Le premier, lui, a été résolu en parallèle par le cycle 123 avec une
+meilleure conception, que ce lot adopte en entier (§ 3).
 
-## 1. Le point de départ
+## 1. Le point de départ : un suivi qui nommait deux absences
 
-Les journaux des cycles 122 et 123 se closent tous deux sur cette ligne :
+Le journal du cycle 122 se clôt ainsi :
 
-> `NotificationService.prePersistMessage` côté NSE lit `userInfo["content"]`, une clé que le
-> payload push ne porte pas (vérifié : `PushNotificationService:785` pose `{...payload.data}`) —
-> le message pré-enregistré au démarrage à froid a donc un corps VIDE jusqu'à la synchro REST,
-> défaut distinct du Prisme.
+> **Reste à câbler (suivi cycle 122, MESURÉ) :** la bannière d'un VOCAL reste
+> dans la langue de l'expéditeur — sa transcription a ses propres traductions
+> (`MessageAttachment.translations`) qu'aucun éventail ne descend ; c'est la
+> raison même du `previewIsMessageContent: false` de ce lot, donc une absence
+> ASSUMÉE. Et `NotificationService.prePersistMessage` côté NSE lit
+> `userInfo["content"]`, une clé que le payload push ne porte pas […] — le
+> message pré-enregistré au démarrage à froid a donc un corps VIDE jusqu'à la
+> synchro REST, défaut distinct du Prisme.
 
-Deux fois nommé, deux fois différé au motif « Swift, non exerçable ici ». Le motif est réel
-(aucune chaîne Swift dans ce conteneur) et il ne couvre pas la moitié TypeScript du défaut, qui
-n'avait jamais été regardée.
+Les deux ont été rouverts et RE-MESURÉS avant d'être traités (leçon 107 : un
+suivi hérité est une affirmation, il se mesure avant d'être recopié). Les deux
+étaient exacts. Le second l'était même au-delà de ce que le cycle 122 avait vu.
 
-## 2. La mesure — clé par clé, dans les deux sens
+## 2. Défaut A — la protection était ANNONCÉE sans être APPLIQUÉE
 
-Le payload push est un contrat entre deux fichiers qu'aucun type ne relie :
+Trouvé en ouvrant le site du suivi, pas en le cherchant.
 
-- **producteur** : `NotificationService.createNotification`, bloc `data:` (TS) ;
-- **consommateur** : les lectures `userInfo[...]` de `MeeshyNotificationExtension` (Swift).
+`messageNotificationFanOut.ts:387` :
 
-Deux listes de chaînes, écrites séparément, jamais confrontées.
+```ts
+const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
+```
 
-### 2.1 Lu par la NSE, JAMAIS émis (4 clés)
+`notificationPreview` est le placeholder que `protectedPreview` vient de composer
+quand le message est ÉPHÉMÈRE / à VUE UNIQUE / FLOUTÉ / CHIFFRÉ. La transcription
+gagnait INCONDITIONNELLEMENT. Un vocal protégé poussait donc **son texte
+transcrit entier sur l'écran verrouillé** — exactement ce que la protection
+masque, et le seul écran où elle a une raison d'être.
 
-| clé | conséquence |
-|---|---|
-| `content` | corps **VIDE** sur la bulle pré-enregistrée — le défaut hérité |
-| `senderName` | **aucun nom d'expéditeur**. La passerelle émet `senderDisplayName` — et `NotificationService.swift:563`, dans le MÊME fichier, le lit correctement pour le cadrage Communication |
-| `originalLanguage` | langue **fabriquée** (`"en"` en repli) sur un enregistrement dont la résolution du Prisme dépend ensuite |
-| `isEncrypted` | second verrou E2EE inerte — le premier (`encryptedContent`) tient, donc pas de panne |
+Ce qui rend le défaut instructif, c'est que les deux gardes du cycle 122 étaient
+en place et JUSTES :
 
-### 2.2 Émis POUR la NSE, jamais lu par elle (2 clés)
-
-| clé | commentaire du producteur | ce que la NSE faisait |
+| garde | état | ce qu'elle gardait |
 |---|---|---|
-| `createdAt` | « GW5 — persistance NSE : timestamp serveur » | `Date()` — l'horloge du device |
-| `messageType` | « GW5 — … + type du message » | dérivé du mime de la pièce jointe |
+| `notificationLocKey` | posé | le repli localisé de la NSE |
+| `previewBasis: 'protected-placeholder'` | posé (cycle 123) | la SUBSTITUTION par une traduction, et la source du fil |
 
-> **Un helper à un appelant est un inventaire (leçon 271) ; un CHAMP à zéro lecteur est une
-> intention.** La mesure du cycle 122 — « `translatedContent` n'est lu par aucun client » —
-> n'était pas un cas isolé : c'est la forme normale d'un contrat dont les deux moitiés vivent
-> dans deux langages qu'aucun type ne relie.
+Elles gardaient la substitution d'un texte que la couche du dessus avait déjà
+remplacé. **La protection était annoncée par deux champs et appliquée par
+aucun** — c'est la forme exacte du défaut du cycle 123 sur `StoryViewer` (« le
+Prisme était ANNONCÉ sans être APPLIQUÉ »), avec l'inversion qui la rend pire :
+ici l'hôte rend PLUS que ce que le résolveur autorise.
 
-## 3. Pourquoi le correctif n'est PAS d'émettre `content`
+Le cycle 123, mergé pendant ce lot, a renforcé ces gardes sans les déplacer :
+`previewBasis: 'protected-placeholder'` vide désormais la source, et
+`notificationLocKey` reste un second verrou. Les deux gouvernent toujours la
+SUBSTITUTION, jamais l'aperçu. Corollaire de forme, non décoratif :
+`pushPreviewBasis` élisait `transcript` AVANT de regarder la protection — sans
+transcription à ce moment-là, la base retombe sur `protected-placeholder` et la
+carte de l'attachment cesse d'être OFFERTE à la descente. **Une garde qui n'a
+qu'un verrou n'a pas de garde ; elle a un pari sur ce verrou.**
 
-C'est le correctif évident, et il rouvrirait exactement la fuite que le cycle 123 vient de
-fermer : le texte NU d'un message protégé (éphémère / vue unique / flouté) repartirait sur le
-canal push pendant que la bannière affiche son placeholder. La passerelle a RAISON de ne pas
-l'émettre, et le mode privé (`showPreview: false`) a raison de retirer tout champ porteur de
-contenu.
+> Un champ de service qui DÉCLARE une restriction ne la fait pas respecter. La
+> question à poser à toute garde n'est pas « est-elle posée ? » mais « le texte
+> qu'elle gouverne est-il bien celui qui part ? ».
 
-Le texte que la NSE peut légitimement enregistrer est celui qu'elle s'apprête à AFFICHER :
+**Correctif** : la transcription n'est extraite que si `protectedOverride ===
+null`. Une ligne, à l'endroit où l'aperçu est composé.
 
-- déjà descendu dans le Prisme du destinataire (cycle 121) ;
-- déjà masqué par la protection s'il y a lieu (cycle 123) ;
-- déjà présent dans la charge, en `aps.alert.body`.
+## 3. Défaut B — CONVERGENCE avec le cycle 123, mené en parallèle le même jour
 
-Il ne lui manque que **la langue de ce texte**, et **l'autorisation** de le prendre pour le
-contenu du message.
+Ce lot a trouvé, et corrigé, une seconde absence : la transcription d'un vocal ne
+descendait aucun Prisme, ses traductions vivant sur `MessageAttachment.translations`
+sous une forme différente de celles du message.
 
-## 4. Le correctif — la troisième projection de `PreviewPrismBasis`
+**Le cycle 123 (PR #3459) l'a trouvée aussi, le même jour, et a été mergé le
+premier.** Sa conception est MEILLEURE, et ce lot la prend en entier :
 
-La passerelle sait déjà répondre aux deux, et depuis le cycle 123 elle le sait sous forme de
-TYPE : `PreviewPrismBasis` dit ce que l'aperçu EST.
-
-| projection | cycle | question |
+| | ce lot (abandonné) | cycle 123 (retenu) |
 |---|---|---|
-| `previewPrismSource` | 123 | qu'est-ce qui TRADUIT cet aperçu ? |
-| garde de `servedTranslationFields` | 123 | que peut-on transporter à côté ? |
-| **`storableMessageLanguage`** | **124** | **peut-il être ENREGISTRÉ comme le message ?** |
+| forme | `previewPrismSource?: MessagePrismSource` **+** `previewIsMessageContent: boolean` | `PreviewPrismBasis`, type SOMME à trois membres |
+| exclusivité | deux paramètres qui **peuvent se contredire** | mutuellement exclusifs par construction |
+| portée | l'éventail `regular` seul | les **trois** éventails |
+| projection du stockage | `transcriptPrismSource()`, local à la passerelle | `transcriptTranslationTexts()`, dans `packages/shared`, à côté du type qu'il projette |
 
-### 4.1 Passerelle
+> **La résolution d'une convergence n'est pas un compromis : c'est PRENDRE la
+> meilleure conception en entier**, puis rejouer par-dessus ce que l'autre avait
+> d'unique. Panacher aurait produit exactement la divergence que la leçon 264
+> dénonce, dans le fichier qui la cite.
 
-`storableMessageLanguage({ basis, originalLanguage, protectedByLocKey })` rend la langue du
-message, ou `undefined` sur les trois formes où le corps servi n'est pas `Message.content` :
+Ce que le cycle 123 n'avait pas vu, et qui reste le contenu propre de ce lot :
+le défaut A ci-dessus (le CORPS, qu'il a laissé ouvert en fermant le FIL) et le
+défaut C ci-dessous.
 
-- `protected-placeholder` — l'écrire planterait « ⏱️ 💬 24h » dans la base locale, où il
-  survivrait à la bannière si la synchro REST n'arrive jamais ;
-- `transcript` — la parole d'un vocal appartient à la pièce jointe, pas au message ;
-- `protectedByLocKey` — second verrou, même arbitrage que la descente : un appelant qui compose
-  un placeholder sans déclarer sa base perd un enregistrement local, jamais le secret.
+## 4. Défaut C — la bulle pré-enregistrée n'avait ni corps ni langue
 
-La quatrième forme — le mode privé — est tenue une couche plus haut, par la garde `showPreview`
-sous laquelle le champ est émis.
+Le second suivi du cycle 122, re-mesuré, et il portait plus loin qu'annoncé.
 
-**Aucun texte neuf ne part sur le fil** : la clé ajoutée est un code de langue de deux à cinq
-octets, et sa PRÉSENCE est le discriminant.
+`prePersistMessage` (NSE, `apps/ios/MeeshyNotificationExtension/NotificationService.swift:422`) :
 
-### 4.2 La JUMELLE, posée dans le MÊME lot
+```swift
+let content = userInfo["content"] as? String ?? ""
+originalLanguage: (userInfo["originalLanguage"] as? String) ?? "en"
+```
 
-`services/gateway/CLAUDE.md` : « Cette entité a-t-elle une JUMELLE ? à poser au moment où l'on
-corrige, pas des cycles plus tard. » Elle en a deux, et la réponse est la même qu'au cycle 122
-pour le Prisme lui-même : **les TROIS éventails de `messageNotificationFanOut` poussent un
-`messageId`, donc les trois font pré-enregistrer une bulle côté NSE.** Sans le champ, celles
-d'une RÉPONSE et d'une MENTION seraient restées sans corps pendant que celle d'un message simple
-en aurait un — l'exact symptôme « deux textes pour un même message » que les cycles 121 à 123
-poursuivent.
+**Aucune des deux clés n'existe sur le fil.** Vérifié sur le seul producteur de
+`data` (`createNotification`) et sur `PushNotificationService:785`, qui pose
+`{ ...payload.data }` sans rien y ajouter. La bulle pré-enregistrée était donc
+vide ET étiquetée « en » pour tout le monde — la seconde moitié n'était pas dans
+le suivi, et elle est celle qui fausse la résolution du Prisme sur la bulle.
 
-`createReplyNotification` et `createMentionNotification` tiennent déjà la langue d'origine :
-`MessagePrismSource.originalLanguage`, relue UNE fois pour tout l'éventail depuis le cycle 122.
-**Aucune lecture de plus.**
+Une ligne pré-enregistrée n'a de raison d'être que dans la fenêtre AVANT la
+synchro REST. Un corps vide y annule le bénéfice entier.
 
-### 4.3 NSE
+**Correctif** : `messageContent` / `messageOriginalLanguage` sur le contexte,
+émis sous les noms `content` / `originalLanguage` que la NSE lit déjà — aucun
+changement client.
 
-`NotificationPayloadHelpers.prePersistedMessageFields(userInfo:notificationBody:fallbackNow:)`
-— helper PUR, déjà compilé dans les deux cibles — rend les quatre champs :
+Ce qui voyage est l'**ORIGINAL**, jamais la traduction : `MessageRecord.content`
+est le champ d'origine et `originalLanguage` son étiquette. Y poser le texte
+servi ferait mentir les deux, et la traduction a déjà son champ
+(`translatedContent`) et son rang. Le couple n'est posé que quand l'aperçu EST
+`Message.content` — même prédicat que la substitution nominale, répondant ici à
+une autre question — et il est retiré sous `showPreview: false` (GW7) puis à la
+seconde coupe du budget APNs, avec `encryptedContent`, dont il est de toute façon
+exclusif.
 
-| champ | source |
-|---|---|
-| `content` | `translatedContent` (texte servi NU) ; sinon le corps de la bannière, **et seulement en l'absence de pièce jointe** (avec, le corps porte un cadrage — « 🎵 Audio · 0:34 », badges `+2📷` — qui n'est pas le texte du message) ; sinon `""` |
-| `language` | `translatedLanguage` quand une traduction a été servie, `messageOriginalLanguage` sinon |
-| `createdAt` | `createdAt` du fil (ISO 8601, avec ou sans fraction), repli horloge device |
-| `senderName` | `senderDisplayName` → `senderUsername` |
+## 5. Les témoins
 
-`prePersistedMessageTypes` garde N4 prioritaire (le mime décide du rendu média ;
-`Message.messageType` vaut `text` pour un vocal légendé) et n'utilise le type du fil qu'en
-l'absence de pièce jointe.
+| fichier | témoins | rouges prouvés |
+|---|---|---|
+| `unit/services/messaging/voiceNoteBannerPrism.test.ts` | 6 | **5** (garde de protection retirée) |
+| `unit/services/notifications/nsePrePersistedMessage.test.ts` | 7 | **3** |
 
-## 5. Gates
+Les quatre témoins ajoutés à `messageNotificationPrism.test.ts` sont retirés : le
+cycle 123 couvre la descente de la transcription par sa propre conception, et
+ses témoins.
+
+Trois points de méthode, tous repris de cycles antérieurs :
+
+1. **Les témoins portent sur ce qui ATTEINT un lecteur** — la charge remise à
+   APNs (`pushService.sendToUser`) ou les paramètres que l'éventail REMET au
+   créateur. Jamais un calcul intermédiaire.
+2. **Les verts ne sont pas du remplissage.** Le témoin « un vocal ORDINAIRE
+   affiche bien sa transcription, et déclare SA source » garde le mode d'échec du
+   CORRECTIF A : refermer la protection ne doit ni supprimer l'inline du cas
+   nominal — la raison d'être d'`extractTranscriptionText` — ni lui retirer la
+   source que le cycle 123 lui a donnée. Côté défaut C, « l'ORIGINAL, jamais la
+   traduction » garde l'erreur qu'un correctif pressé aurait commise : poser dans
+   `content` le texte que la bannière sert, et faire mentir `originalLanguage`.
+3. **Le ROUGE se prouve par la mutation qu'il nomme.** Les cinq témoins de
+   protection ont été vus tomber en retirant la seule condition
+   `protectedOverride === null`.
+
+## 6. Suivi — MESURÉ, pas hérité
+
+**Les éventails RÉPONSE et MENTION ne portent aucune transcription.** Ils
+composent depuis `notificationPreview` (jamais `…ForPush`) : la bannière d'une
+réponse à un vocal, ou d'une mention dans un vocal, affiche `Message.content` —
+vide pour un vocal pur, donc les seuls badges de pièce jointe. Absence
+ANTÉRIEURE à ce lot et distincte de ses trois défauts : ce n'est pas un mauvais
+rang ni une protection relâchée, c'est un aperçu qui n'a jamais été composé.
+Non absorbé ici délibérément — leur donner la transcription change ce que leur
+corps MONTRE, pas la langue dans laquelle il le montre, et c'est une décision
+produit, pas une correction de Prisme.
+
+Vérifié en ouvrant `createReplyNotification` et `createMentionNotification`, pas
+déduit de la forme du lot.
+
+## 7. Gates
 
 | gate | résultat |
 |---|---|
-| `messageNotificationPrism.test.ts` | 29/29 |
-| `replyMentionNotificationPrism.test.ts` | 44/44 |
-| répertoire `notifications/` complet | 18 suites, 266 témoins |
-| mutation « garde de `storableMessageLanguage` retirée » | **3 témoins tombent** (transcription, placeholder, verrou locKey) |
-| mutation « champ hors de la garde `showPreview` » | **1 témoin tombe** (mode privé) |
-| RED initial, message | **2 témoins de présence tombent** |
-| RED initial, jumelles (réponse + mention) | **4 témoins tombent** |
-| `packages/shared` build (`tsc`) | 0 erreur |
-| `services/gateway` `tsc --noEmit` | 0 erreur |
-| suite gateway complète | **848/848 suites, 19431 témoins** |
-| suite shared complète | **108 fichiers, 2578 témoins** |
+| `services/gateway` — suite COMPLÈTE (bun) | **849 suites / 19 408 témoins verts** |
+| `services/gateway` — `tsc --noEmit` | 0 erreur |
+| `packages/shared` — vitest | 108 fichiers / 2 574 témoins verts |
+| `packages/shared` — `tsc --noEmit` | 0 erreur |
 
-**Swift non compilable ici** (aucune chaîne Swift dans le conteneur). Les 14 témoins XCTest sont
-posés dans `MeeshyTests/Unit/Services/NotificationPayloadHelpersTests.swift`, sur le helper PUR
-— la forme qui les rend exerçables sans le runtime `UNNotificationServiceExtension`, et sans
-modification de `project.yml` (le fichier est déjà membre des deux cibles).
-
-Leçon : `tasks/lessons.md` § 273.
-
-## 6. Suivi MESURÉ
-
-- **La bannière d'un vocal joint toujours le fichier ORIGINAL.** Les pistes audio traduites
-  (`url` sur l'entrée `MessageAttachment.translations`) ne sont pas attachées à la notification.
-  Absence nommée au cycle 123, non instruite ; inchangée.
-- **Les éventails RÉPONSE et MENTION ne poussent ni `createdAt` ni `messageType`.** Leur bulle
-  pré-enregistrée est donc ordonnée par l'horloge du device et rendue depuis le mime de la pièce
-  jointe — le comportement que ce lot vient de corriger sur `new_message`. Combler exigerait
-  d'élargir `MessagePrismSource`, un type partagé écrit pour un autre usage : c'est un lot à
-  part, pas une omission. Nommé, mesuré, ouvert.
-- **`isEncrypted` reste une clé lue et jamais émise.** Sans conséquence tant que
-  `encryptedContent` tient le verrou E2EE — piège armé, pas panne : le premier lot qui
-  déciderait de pousser le drapeau sans la charge le désarmerait sans faire tomber de témoin.
+Les deux `tsc` ont été lus par leur CODE DE RETOUR après redirection, jamais à
+travers un pipe (§ « un gate rend DEUX verdicts », `services/gateway/CLAUDE.md`).

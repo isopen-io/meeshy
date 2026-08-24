@@ -257,22 +257,24 @@ export interface NotificationContext {
   /** GW5 — Langue de `translatedContent` (code du Prisme, ex. `en`). */
   readonly translatedLanguage?: string;
   /**
-   * Cycle 124 — la langue d'ORIGINE du message notifié, et le DROIT, pour la
-   * NSE iOS, d'enregistrer localement le corps qu'elle s'apprête à afficher.
+   * Cycle 124 — le CONTENU du message, pour la bulle que la NSE iOS
+   * pré-enregistre avant même que l'application démarre
+   * (`NotificationService.prePersistMessage`). Elle lisait `userInfo["content"]`,
+   * une clé que le fil push n'a jamais portée : la bulle était VIDE jusqu'à la
+   * synchro REST, c'est-à-dire pendant toute la fenêtre où un
+   * pré-enregistrement a une raison d'être.
    *
-   * Sa PRÉSENCE est le discriminant : elle n'est émise que lorsque le corps
-   * servi EST le contenu du message — jamais sous un placeholder de protection,
-   * jamais sous une transcription (qui appartient à la pièce jointe, pas au
-   * message), jamais en mode privé. Sous ces trois formes, la bulle
-   * pré-enregistrée reste sans corps plutôt que de porter un texte qui n'est pas
-   * le message.
-   *
-   * Elle dit la langue du message, pas celle du texte SERVI : quand une
-   * traduction a gagné, c'est `translatedLanguage` qui décrit le texte affiché,
-   * et les deux voyagent alors ensemble.
-   *
-   * @see schema.prisma Message.originalLanguage
+   * L'ORIGINAL, jamais la traduction : c'est le champ d'origine du message, et
+   * `messageOriginalLanguage` en est l'étiquette. La traduction servie a déjà
+   * `translatedContent`. Posé seulement quand l'aperçu EST le contenu du
+   * message — un placeholder de protection ou la transcription d'un vocal n'en
+   * sont pas — et retiré, comme tout champ porteur de contenu, sous
+   * `showPreview: false`.
    */
+  readonly messageContent?: string;
+  /** Cycle 124 — langue de `messageContent`. La NSE repliait sur « en », donc
+   *  étiquetait faux tout message non anglais et faussait la résolution du
+   *  Prisme sur la bulle pré-enregistrée. @see schema.prisma Message.originalLanguage */
   readonly messageOriginalLanguage?: string;
 }
 

@@ -14623,12 +14623,117 @@ commentaires que les gardes appliquent déjà — mais oublié dans le contrôle
 manuel qui les vérifie. **Un écart de comptage se regarde avant d'être cru :
 ici il ne signalait pas un correctif incomplet, mais un grep naïf.**
 
-## Leçon 273 — un contrat entre deux langages dérive dans les DEUX sens, et personne ne le lit jamais en entier (2026-08-24, cycle 124)
+---
 
-> **Renumérotée 272 → 273 le 2026-08-24, à la fusion.** `main` a pris 272 pour la leçon 241i
-> pendant que ce lot était en CI. C'est exactement la fenêtre que le corollaire opératoire de la
-> leçon 272 décrit — l'écart entre « je rédige » et « je committe » — observée ici depuis l'autre
-> bord : ce n'est pas la rédaction qui a collisionné, c'est l'ATTENTE du vert.
+## Leçon 273 — deux gardes JUSTES peuvent garder une opération que la couche du dessus a déjà rendue sans objet (2026-08-24, cycle 124)
+
+Le cycle 123 venait de fermer le FIL d'un message protégé : sa traduction ne part
+plus sur le canal push, et le lot a raison sur tout ce qu'il énonce. Le CORPS,
+lui, était perdu **une couche plus haut que toute déclaration de base** :
+
+```ts
+const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
+```
+
+`notificationPreview` est le placeholder que `protectedPreview` vient de
+composer. La transcription gagnait INCONDITIONNELLEMENT. Un vocal éphémère / à
+vue unique / flouté / chiffré poussait donc **son texte transcrit entier** sur
+l'écran verrouillé — exactement ce que la protection masque, et le seul écran où
+elle a une raison d'être.
+
+Le dépôt portait alors DEUX gardes contre ce relâchement, posées à deux cycles
+différents, toutes deux justes et toutes deux testées :
+`previewBasis: 'protected-placeholder'` (cycle 123, qui vide la source) et
+`notificationLocKey` (le second verrou). Elles gouvernaient la SUBSTITUTION
+d'une traduction dans l'aperçu. Or l'aperçu lui-même n'était plus le
+placeholder : le texte à protéger avait déjà pris sa place.
+
+> **Un champ de service qui DÉCLARE une restriction ne la fait pas respecter.**
+> La question à poser à toute garde n'est pas « est-elle posée ? » mais **« le
+> texte qu'elle gouverne est-il bien celui qui part ? »**.
+
+C'est la forme du cycle 123 (« le Prisme était ANNONCÉ sans être APPLIQUÉ »)
+avec l'inversion qui la rend pire : là, l'hôte rendait MOINS que ce que le
+résolveur annonçait — un texte non traduit, un désagrément. Ici l'hôte rend
+**PLUS** que ce que le résolveur autorise, et ce plus est précisément ce qu'une
+protection existe pour cacher. **Chercher les deux sens** : un écart entre ce
+qu'un résolveur conclut et ce qu'un hôte rend n'est pas toujours une perte, et
+c'est quand c'est un gain qu'il faut s'inquiéter.
+
+Corollaire de forme, et il n'est pas décoratif : `pushPreviewBasis` élisait
+`transcript` AVANT de regarder la protection. Sans transcription à ce moment-là,
+la base retombe sur `protected-placeholder`, et la carte de l'attachment cesse
+d'être OFFERTE à la descente. **Une garde qui n'a qu'un verrou n'a pas de
+garde ; elle a un pari sur ce verrou.**
+
+### Le défaut ne s'est pas laissé chercher — il s'est laissé OUVRIR
+
+Trois cycles consécutifs (122, 123, 124) ont trouvé leur défaut principal dans
+cette méthode, chacun à un étage différent : le rang élu, ce qui l'affiche, ce
+qui voyage à côté, ce qui arrive en entrée. Aucun n'a été trouvé par une
+recherche ; les trois l'ont été en **ouvrant le site qu'un suivi précédent
+désignait pour une autre raison**.
+
+> Un suivi hérité ne vaut pas seulement par ce qu'il affirme. Il vaut par
+> l'ADRESSE qu'il donne. Aller lire l'adresse est plus rentable que d'instruire
+> l'affirmation — c'est la variante productive de « une piste peut être fausse
+> sur son MOTIF et juste sur son ADRESSE » (cycle 107).
+
+### Un défaut « distinct » peut être plus grand que ce que le suivi en disait
+
+Le second suivi du cycle 122 nommait un corps VIDE : `prePersistMessage` (NSE
+iOS) lit `userInfo["content"]`, que le payload push ne porte pas. Exact. En le
+ré-instruisant, la ligne SUIVANTE du même constructeur portait la même absence :
+
+```swift
+originalLanguage: (userInfo["originalLanguage"] as? String) ?? "en"
+```
+
+Ni l'une ni l'autre clé n'existait sur le fil. La bulle pré-enregistrée au
+démarrage à froid était donc vide **et** étiquetée « en » pour tout le monde — et
+c'est la seconde moitié qui fausse la résolution du Prisme sur cette bulle,
+celle que le suivi ne nommait pas.
+
+> **Un suivi hérité se re-mesure avant d'être traité** (leçon 107), et pas
+> seulement pour savoir s'il est encore vrai : pour savoir s'il est COMPLET. Un
+> cycle qui note un défaut en passant note ce qu'il a VU, pas ce qu'il y avait.
+
+Corollaire de contenu, tranché dans le même lot : ce qui voyage sous `content`
+est l'**ORIGINAL**, jamais la traduction servie dans la bannière.
+`MessageRecord.content` est le champ d'origine et `originalLanguage` son
+étiquette ; y poser le texte traduit ferait mentir le couple, et la traduction a
+déjà son champ et son rang. **Deux champs qui s'étiquettent l'un l'autre se
+remplissent ensemble ou pas du tout.**
+
+Et `PreviewPrismBasis` (cycle 123) a répondu à ce lot **sans être modifié** : le
+type somme qui dit « qu'est-ce qui traduit cet aperçu ? » dit aussi, sans
+ambiguïté, « cet aperçu EST-il le contenu du message ? ». Seul `message-content`
+l'est. **Un type somme bien nommé répond aux questions qu'on ne lui a pas
+posées ; un booléen n'en répond qu'une, et mal.**
+
+### Ce que la convergence a coûté, et ce qu'elle a prouvé
+
+Ce lot et le cycle 123 ont été menés en parallèle le même jour, et ont trouvé la
+MÊME absence (la bannière d'un vocal ne descendait aucun Prisme) avec deux
+conceptions différentes : un second paramètre `previewPrismSource` ici, un type
+somme `PreviewPrismBasis` là. Le second est meilleur — il rend les trois formes
+mutuellement exclusives par construction, là où un booléen et une source séparés
+peuvent se contredire — et il était mergé le premier.
+
+**La résolution n'est pas un compromis : c'est PRENDRE la meilleure en entier**
+et rejouer par-dessus ce que l'autre avait d'unique. Ici les deux défauts que le
+cycle 123 n'avait pas vus : la fuite du corps, et les deux clés du fil.
+Panacher les deux conceptions aurait produit exactement la divergence que la
+leçon 264 dénonce, dans le fichier qui la cite.
+
+
+## Leçon 274 — un contrat entre deux langages dérive dans les DEUX sens, et personne ne le lit jamais en entier (2026-08-24, cycle 124)
+
+> **Rédigée 272, renumérotée 274.** Deux fois de suite `main` a pris le numéro visé pendant que
+> ce lot attendait son vert — 272 pour la leçon 241i, puis 273 pour la leçon jumelle du même
+> cycle 124. Le corollaire opératoire de la leçon 272 vise « l'écart entre rédiger et
+> committer » ; la fenêtre réelle est plus large — **c'est l'ATTENTE DU VERT**, invisible depuis
+> la branche, et elle dure aussi longtemps que la CI.
 
 **Le constat.** Deux cycles de suite ont clos leur lot sur la même ligne, mot pour mot :
 `prePersistMessage` (NSE iOS) lit `userInfo["content"]`, une clé que le payload push ne porte
@@ -14733,3 +14838,46 @@ tail -c 20 <fichier> | od -c     # ce que le script a VRAIMENT écrit
 La mesure consolante : le build iOS a rendu **2 erreurs, toutes deux ce caractère** — donc le
 helper et ses quatorze témoins compilent. Un gate rouge qui ne nomme qu'une chose est un gate
 qui a tout le reste au vert.
+
+### Corollaire — deux passes qui divergent sur une CONCEPTION ne divergent pas sur la MESURE
+
+Ce lot a convergé avec le cycle 124 (PR #3465), mergé sur `main` pendant qu'il était en CI. Les
+deux passes ont instruit le même suivi, trouvé le même défaut, et posé **le même prédicat**
+(base `message-content` + verrou `notificationLocKey` + garde `showPreview`). Elles ont divergé
+sur une seule question, et c'est celle qui décidait tout :
+
+> **Quel texte la NSE a-t-elle le droit d'enregistrer — celui qui est SERVI, ou celui qui est
+> le message ?**
+
+Cette passe répondait « le servi », et en tirait qu'il ne fallait PAS émettre `content` : le
+texte nu d'un message protégé repartirait sur le canal push. **L'objection était fausse**, et
+#3465 le démontre — le couple n'est posé que sous la garde qui existait déjà. La bonne question
+n'était pas *« ce champ peut-il fuir ? »* mais *« sous quelle garde ? »*.
+
+Et #3465 a raison sur le fond, pour une raison de MODÈLE : `MessageRecord.content` EST le champ
+d'origine, `originalLanguage` son étiquette. Y écrire le texte servi produit un enregistrement
+cohérent mais **faux sur sa propre sémantique** — un message espagnol traduit en français y
+serait enregistré comme un message français.
+
+> **Quand deux passes divergent, comparer d'abord les MESURES, pas les conclusions.** Ici les
+> mesures étaient identiques ; tout l'écart tenait à ce qu'on croit qu'un champ SIGNIFIE. Une
+> divergence de conception qui survit à une mesure commune est presque toujours une divergence
+> sur le sens d'un nom.
+
+**Ce que la passe perdante garde quand même** — et c'est la seule question utile après une
+convergence :
+
+- **la MÉTHODE** : le diff du contrat dans les DEUX sens, dont la moitié « émis, jamais lu »
+  n'était nommée par personne — ni par les deux suivis, ni par #3465 ;
+- **la JUMELLE** : #3465 pose son prédicat EN LIGNE dans `createMessageNotification`, quand les
+  TROIS éventails pré-enregistrent une bulle. Extrait en site partagé, il sert les trois ;
+- **les trois champs restants** (`senderDisplayName`, horodatage serveur, type du fil).
+
+> **Une passe qui perd sa conception ne perd pas son lot.** Reprendre la conception gagnante EN
+> ENTIER, puis se demander ce qui reste vrai par-dessus — c'est presque toujours non vide, et
+> c'est ce qui distingue une convergence d'un abandon.
+
+**Mesure de refactor obligatoire** : après avoir déplacé la garde de #3465 dans le helper
+partagé, la mutation qui la retire fait tomber **7 témoins, dont les 4 de #3465**. Un refactor
+qui déplace une règle doit prouver qu'elle tombe encore DEPUIS SON NOUVEAU SITE — sans quoi on
+a déplacé le code et perdu la garde.
