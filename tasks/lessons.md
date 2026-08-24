@@ -15452,7 +15452,6 @@ région y porte une information (la voix). Distinguer « même défaut de forme 
 décision produit » avant de généraliser un correctif.
 
 ---
----
 
 ## Leçon 283 — on reprend le correctif d'une jumelle en cherchant la réponse à SA PROPRE question, et on laisse tout le reste (2026-08-24, cycle 128)
 
