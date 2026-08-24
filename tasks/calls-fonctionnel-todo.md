@@ -11752,3 +11752,70 @@ d'atteindre les fichiers de cette Vague, sur un fichier sans rapport — pré-ex
 dead code / god-object `CallManager.swift` (~6372 lignes) ; ADR `actor CallEventQueue` non implémenté ;
 iOS single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors
 périmètre calling).
+
+## Vague 174 — le lien d'appel non-authentifié perdait sa destination au retour de login (web) (2026-08-24)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Branche
+redémarrée depuis `origin/main` (Vague 173, Android, déjà mergée — PR #3428 — aucune PR ouverte).
+Audit dédié sur le reste ouvert de la Vague 172, qui avait repéré le défaut sans le traiter
+(« hors périmètre — pas un défaut de calling », à tort : il se déclenche précisément sur un lien
+d'appel).
+
+### Root cause
+
+`app/call/[callId]/page.tsx` redirige un visiteur non-authentifié vers
+`` /login?redirect=/call/${callId} `` — mais `app/login/page.tsx` ne lit jamais le paramètre
+`redirect` : il lit exclusivement `returnUrl` (`searchParams.get('returnUrl')`), la seule
+convention que portent tous les AUTRES appelants du dépôt (`hooks/use-auth.ts`,
+`components/v2/auth/AuthGuardV2.tsx`, `utils/auth.ts`, le flux magic-link avec sa protection
+anti-open-redirect `safeInternalPath`). `redirect` n'existe nulle part côté lecture — le
+paramètre est un nom orphelin, pas une clé secondaire mal priorisée.
+
+### Impact
+
+Un visiteur non connecté qui ouvre un lien d'appel partagé (favori, lien envoyé par un tiers,
+notification) est redirigé vers `/login`, s'authentifie avec succès, puis atterrit sur
+`/dashboard` au lieu de rejoindre l'appel — sa destination est silencieusement perdue par un
+désaccord de nom de paramètre entre l'émetteur et le lecteur, pas par une fonctionnalité
+manquante. Le même défaut existe sur `app/links/tracked/[token]/page.tsx` (déjà repéré et laissé
+hors périmètre à la Vague 172, un test y verrouille explicitement `redirect=` :
+`__tests__/app/links/tracked/token/page.test.tsx:264`) — non touché ici, toujours hors périmètre
+calling.
+
+### Fix
+
+Un seul geste : `app/call/[callId]/page.tsx` pousse désormais
+`` /login?returnUrl=${encodeURIComponent(`/call/${callId}`)} ``, aligné sur la convention SSOT
+déjà en place partout ailleurs — pas de nouvelle branche de lecture ajoutée à `login/page.tsx`,
+qui reste l'unique lecteur et n'a donc besoin de connaître qu'un seul nom.
+
+### Tests (TDD, RED confirmé — vrai Jest)
+
+Un test ajouté à `CallPage.test.tsx` : « redirects an unauthenticated visitor to login with a
+returnUrl the login page actually reads » — bascule `useAuth` (désormais un `jest.fn()`
+réinitialisé à l'utilisateur authentifié par défaut dans `beforeEach`, pour permettre la
+substitution par test) sur `user: null`, puis vérifie l'appel exact à `router.push`. RED confirmé
+avant le correctif : `Received: "/login?redirect=/call/call-cleanup-1"` contre l'attendu
+`returnUrl=...`. GREEN après correctif : 6/6 sur `CallPage.test.tsx`, 35/35 en incluant
+`login-form.test.tsx`. Séquence complète exécutée dans ce conteneur : `bun install
+--ignore-scripts` + `prisma generate --generator client` + `bun run build` sur
+`packages/shared` (prérequis du CLAUDE.md racine), puis `bun run test` dans `apps/web`.
+
+### Risk assessment
+
+Faible — un seul appel `router.push` modifié, aucun changement de signature, aucune nouvelle
+branche sur le lecteur. Le seul comportement observable qui change : après connexion depuis un
+lien d'appel, l'utilisateur atterrit désormais sur l'appel au lieu du dashboard.
+
+### Non fait volontairement / reste ouvert
+
+Le typecheck du fichier de test porte deux erreurs TS2769 pré-existantes (lignes 129/133,
+`socket.on.mock.calls.find`), vérifiées identiques avant et après ce correctif via `git stash` —
+non introduites ici, hors périmètre. `bun run lint` reste cassé dans ce conteneur
+(`eslint-plugin-react` incompatible avec `eslint@10.1.0` — `TypeError:
+contextOrFilename.getFilename is not a function`), confirmé à nouveau sur les deux fichiers de
+cette Vague, pré-existant (Vague 172), hors périmètre. Le même défaut sur
+`app/links/tracked/[token]/page.tsx` reste ouvert (hors périmètre calling, cf. Impact). Reconduits
+(inchangés) : dead code / god-object `CallManager.swift` (~6372 lignes) ; ADR `actor
+CallEventQueue` non implémenté ; iOS single-peer côté groupe ; même gap de hiérarchie de rôle sur
+`conversations/participants.ts` (hors périmètre calling).

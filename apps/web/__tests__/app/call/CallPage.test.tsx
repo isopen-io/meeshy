@@ -18,12 +18,14 @@
 import { render, waitFor } from '@testing-library/react';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 
+const mockPush = jest.fn();
+
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
-  useAuth: () => ({ user: { id: 'user-1' }, isChecking: false }),
+  useAuth: jest.fn(() => ({ user: { id: 'user-1' }, isChecking: false })),
 }));
 
 jest.mock('@/components/video-calls/VideoCallInterface', () => ({
@@ -43,6 +45,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
 }));
 
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { useAuth } from '@/hooks/use-auth';
 import { useCallStore } from '@/stores/call-store';
 import CallPage from '@/app/call/[callId]/page';
 
@@ -98,6 +101,7 @@ function renderCallPage() {
 describe('CallPage — join effect cleanup', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: 'user-1' }, isChecking: false });
     useCallStore.getState().reset();
   });
 
@@ -206,5 +210,22 @@ describe('CallPage — join effect cleanup', () => {
 
     expect(await findByText('This call has ended')).toBeInTheDocument();
     expect(useCallStore.getState().isInCall).toBe(false);
+  });
+
+  /**
+   * Vague 174 — the unauthenticated redirect named a `redirect` query param
+   * that `app/login/page.tsx` never reads (it only reads `returnUrl`, the
+   * convention every other caller — `use-auth.ts`, `AuthGuardV2`, the
+   * magic-link flow — already uses). A signed-out user who opens a shared
+   * call link got bounced to `/login`, authenticated successfully, and
+   * landed on `/dashboard` instead of back on the call: the destination was
+   * silently dropped by a param-name mismatch, not a missing feature.
+   */
+  it('redirects an unauthenticated visitor to login with a returnUrl the login page actually reads', () => {
+    (useAuth as jest.Mock).mockReturnValue({ user: null, isChecking: false });
+
+    renderCallPage();
+
+    expect(mockPush).toHaveBeenCalledWith(`/login?returnUrl=${encodeURIComponent(`/call/${CALL_ID}`)}`);
   });
 });
