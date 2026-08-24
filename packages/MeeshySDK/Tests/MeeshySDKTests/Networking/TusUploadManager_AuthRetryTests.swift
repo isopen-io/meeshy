@@ -224,6 +224,50 @@ final class TusUploadManager_AuthRetryTests: XCTestCase {
         XCTAssertEqual(refresh.forceParams, [true])
     }
 
+    // MARK: - En-têtes d'identification client
+
+    /// Le téléversement TUS ne posait QUE l'identité (`credential.header`) et
+    /// les en-têtes du protocole : version, appareil et locale n'y entraient
+    /// pas, alors que toute requête `APIClient` les porte
+    /// (`APIClient.swift:603` et `:915`).
+    ///
+    /// `X-Device-Locale` n'est pas décoratif — c'est le signal du Prisme
+    /// Linguistique en 4e priorité, que le middleware gateway lit pour
+    /// persister `User.deviceLocale` (`ClientInfoProvider.swift:30-36`).
+    ///
+    /// Le test porte sur les TROIS verbes : un manque sur le seul POST
+    /// passerait inaperçu si PATCH et HEAD étaient servis.
+    func test_everyTusRequest_carriesTheClientIdentificationHeaders() async throws {
+        let file = try writeFile(bytes: 128)
+        let manager = try makeManager(refresh: RefreshSpy())
+
+        TusAuthRetryStubURLProtocol.exchanges = [
+            .init(status: 201, headers: ["Location": "https://stub.meeshy.test/api/v1/uploads/h"], body: Data()),
+            .init(status: 409, headers: [:], body: Data()),
+            .init(status: 200, headers: ["Upload-Offset": "0"], body: Data()),
+            .init(status: 200, headers: [:], body: finishBody(id: "att-H"))
+        ]
+
+        _ = try? await manager.performTusUpload(
+            fileURL: file, mimeType: "application/octet-stream",
+            credential: .bearer("token")
+        )
+
+        let vus = TusAuthRetryStubURLProtocol.methods
+        XCTAssertTrue(vus.contains("POST") && vus.contains("PATCH") && vus.contains("HEAD"),
+                      "le scénario doit exercer les trois verbes, sinon le test ne prouve rien — vus : \(vus)")
+
+        for (index, method) in vus.enumerated() {
+            let entetes = TusAuthRetryStubURLProtocol.headers[index]
+            XCTAssertNotNil(entetes["X-Device-Locale"],
+                            "\(method) part sans X-Device-Locale : le Prisme perd sa 4e priorité")
+            XCTAssertNotNil(entetes["X-Meeshy-Platform"],
+                            "\(method) part sans les en-têtes statiques du client")
+            XCTAssertEqual(entetes["Tus-Resumable"], "1.0.0",
+                           "\(method) : les en-têtes client ne doivent RIEN écraser du protocole")
+        }
+    }
+
     // MARK: - A second 401 is definitive
 
     func test_patch401_afterOneRetryFailsAgain_isDefinitive_noSecondRefresh() async throws {

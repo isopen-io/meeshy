@@ -11,7 +11,7 @@
   { "id": "s2", "opening": { "type": "fade" }, "objects": [
     { "id": "p1", "kind": "place", "anchor": { "t": "free", "x": 0.3, "y": 0.85 },
       "plane": "fg", "z": 0, "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
-      "payload": { "name": "Douala", "precision": "city" } }
+      "payload": { "place": { "name": "Douala", "latitude": 4.0511, "longitude": 9.7679 } } }
   ] },
   { "id": "s3", "objects": [
     { "id": "t3", "kind": "text", "anchor": { "t": "band", "edge": "bottom" },
