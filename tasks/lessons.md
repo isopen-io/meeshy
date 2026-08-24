@@ -14541,7 +14541,19 @@ vers un fichier et d'y écrire le code soi-même (`; echo "JEST_EXIT=$?" >> log`
 > cycles, dans le fichier que ce lot édite. Un gate ne se lit pas au statut d'un pipeline, et la
 > seule défense qui tienne est de ne jamais construire le pipeline.
 
-## Leçon 269 — Épingler une intention, jamais une graphie ; et un report qu'on rapproche soi-même de la rupture cesse d'être un report
+## Leçon 272 — Épingler une intention, jamais une graphie ; et un report qu'on rapproche soi-même de la rupture cesse d'être un report
+
+> **Renumérotée 269 → 272 le 2026-08-24.** La piste « calling » (Vague 176) a
+> posé SA leçon 269 en parallèle, et 270/271 étaient déjà pris quand la mienne a
+> atterri. **Les collisions de numéro dans ce fichier sont STRUCTURELLES, pas
+> accidentelles** : le dépôt en portait déjà huit (162, 215, 221, 234, 235, 243,
+> 244, 253) avant celle-ci. Deux documents (`realtime-sync-audit-2026-08-15`,
+> `…-cycle123`) citent « leçon 269 » en visant l'AUTRE — un doublon ne fait donc
+> pas que gêner l'œil, il rend des renvois existants ambigus.
+>
+> **Corollaire opératoire** : relire `grep -o '^## Leçon [0-9]*' | sort -n | tail -1`
+> **juste avant de committer**, jamais au moment de rédiger — l'écart entre les
+> deux est exactement la fenêtre où l'essaim insère la sienne.
 
 **Contexte** : itération iOS 241i (PR #3464, mergée `e1522ba0`, 0 échec sur 7803).
 
