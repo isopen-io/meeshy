@@ -14623,3 +14623,26 @@ clés ÉMISES par le producteur   /
 Les deux listes s'obtiennent par `grep`. Le diff est la mesure — et **les deux directions
 comptent** : les clés lues jamais émises sont des pannes, les clés émises jamais lues sont des
 intentions perdues, et rien dans le code ne signale ni les unes ni les autres.
+
+### Corollaire de harnais — ce qu'un script ÉCRIT n'est pas ce qu'on a voulu écrire
+
+Le lot a été poussé avec une erreur de compilation Swift d'un seul caractère : la fin du fichier
+de témoins portait `\n` LITTÉRAL (deux caractères, barre oblique inverse puis « n ») au lieu
+d'une fin de ligne — un `+ "\\n"` d'un script Python lancé en heredoc, où l'échappement est
+consommé DEUX fois (une par le shell pour le heredoc, une par Python).
+
+Elle n'était pas rattrapable ici : aucune chaîne Swift dans le conteneur. Elle l'était en
+revanche par une commande d'une seconde, et c'est elle qu'il fallait passer :
+
+```bash
+tail -c 20 <fichier> | od -c     # ce que le script a VRAIMENT écrit
+```
+
+> **Quand on génère du code par un script plutôt qu'en l'éditant, la relecture ne porte plus sur
+> l'intention mais sur l'OCTET.** Un `Edit` montre son résultat ; un `python3 <<'PY'` ne montre
+> que « appended ». La différence n'est pas cosmétique : c'est la seule couche où l'échappement
+> peut se perdre, et elle est invisible à toute relecture du script lui-même.
+
+La mesure consolante : le build iOS a rendu **2 erreurs, toutes deux ce caractère** — donc le
+helper et ses quatorze témoins compilent. Un gate rouge qui ne nomme qu'une chose est un gate
+qui a tout le reste au vert.

@@ -871,4 +871,3 @@ final class PrePersistedMessageFieldsTests: XCTestCase {
         XCTAssertEqual(types.messageType, "text")
     }
 }
-\n
