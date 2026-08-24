@@ -11,10 +11,11 @@ import {
   NO_SILENT_DOWNGRADE_ISSUE,
 } from './encryption-envelope.js';
 import { MENTIONED_USER_IDS_SHAPE } from './mention-list.js';
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 
 const mongoId = z
   .string()
-  .regex(/^[0-9a-fA-F]{24}$/, 'Invalid MongoDB ObjectId format');
+  .regex(OBJECT_ID_REGEX, 'Invalid MongoDB ObjectId format');
 
 const clientMessageIdSchema = z
   .string()

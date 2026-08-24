@@ -16,6 +16,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../utils/logger';
 import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, createPaginationMeta } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import { CONVERSATION_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
@@ -127,7 +128,7 @@ const updateConversationPreferencesRequestSchema = {
     // `Malformed ObjectID` (P2023), which the handler's catch-all reports as a
     // 500 — a caller mistake filed as a server fault. `null` uncategorizes and
     // is untouched by `pattern`, which only constrains strings.
-    categoryId: { type: 'string', nullable: true, pattern: '^[0-9a-fA-F]{24}$', description: 'Category ID (ObjectId) or null to uncategorize' },
+    categoryId: { type: 'string', nullable: true, pattern: OBJECT_ID_PATTERN, description: 'Category ID (ObjectId) or null to uncategorize' },
     orderInCategory: { type: 'number', nullable: true, description: 'Order within category' },
     customName: { type: 'string', nullable: true, description: 'Custom conversation name' },
     reaction: { type: 'string', nullable: true, description: 'Emoji reaction' },

@@ -22,6 +22,18 @@
 export const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
 /**
+ * Forme CHAÎNE de la même règle, pour les consommateurs qui ne peuvent pas
+ * recevoir une `RegExp` compilée : les schémas de route Fastify/ajv déclarent
+ * la validation par un `pattern` string. Ce littéral `'^[0-9a-fA-F]{24}$'` vivait
+ * recopié à la main sur les schémas JSON du gateway (`routes/calls.ts`,
+ * `routes/conversation-preferences.ts`, `routes/admin/agent.ts`) sans source.
+ *
+ * Dérivée de {@link OBJECT_ID_REGEX}.source : le package ne porte plus qu'UN seul
+ * littéral de regex — la chaîne et la `RegExp` ne peuvent pas diverger.
+ */
+export const OBJECT_ID_PATTERN = OBJECT_ID_REGEX.source;
+
+/**
  * Type guard : `true` uniquement pour une chaîne de 24 caractères hexadécimaux.
  * Rejette d'emblée les entrées non-string (`null`, `undefined`, nombre, objet).
  */

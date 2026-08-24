@@ -10,6 +10,7 @@
 import type { Socket } from 'socket.io';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 
 const logger = enhancedLogger.child({ module: 'SocketHelpers' });
 
@@ -100,7 +101,7 @@ export async function normalizeConversationId(
   prismaFindUnique: (where: { identifier: string }) => Promise<{ id: string; identifier: string } | null>
 ): Promise<string> {
   try {
-    if (/^[0-9a-fA-F]{24}$/.test(conversationId)) return conversationId;
+    if (isValidObjectId(conversationId)) return conversationId;
     const cached = conversationIdCache.get(conversationId);
     if (cached) return cached;
     const conversation = await prismaFindUnique({ identifier: conversationId });
