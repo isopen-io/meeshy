@@ -174,9 +174,25 @@ nonisolated enum FocalScrollPerspective {
     /// en dur dans les fichiers de peau.
     static let focusCardFillOpacityDark: Double = 0.16
     static let focusCardFillOpacityLight: Double = 0.10
-    static let focusCardBorderOpacityDark: Double = 0.55
-    static let focusCardBorderOpacityLight: Double = 0.40
-    static let focusChipRingOpacity: Double = 0.45
+
+    /// Teinte de fond d'une chip posée sur la carte.
+    ///
+    /// **Directive 2026-08-24 — plus de cadre, donc plus d'anneau.** Le trait
+    /// qui encadrait la carte a disparu, et avec lui celui des chips : la
+    /// magnificence tient au FOND à la couleur de la conversation, pas à un
+    /// contour. Restait un point à réparer plutôt qu'à supprimer — le drapeau
+    /// de la langue AFFICHÉE ne se distinguait que par son anneau plus épais.
+    /// Sa marque passe donc au fond : nettement plus dense au repos, sans
+    /// renverser le contraste comme le ferait un fond plein (réservé, lui, à
+    /// « j'ai réagi »).
+    static func focusChipFillOpacity(isDark: Bool, isActive: Bool) -> Double {
+        switch (isDark, isActive) {
+        case (true, false): return 0.18
+        case (false, false): return 0.14
+        case (true, true): return 0.42
+        case (false, true): return 0.34
+        }
+    }
 
     static func focusCardInsets(isFirstInGroup: Bool) -> UIEdgeInsets {
         let top = FocalMetrics.Row.paddingVertical + (isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0) - focusCardInnerMargin
@@ -201,7 +217,6 @@ nonisolated enum FocalScrollPerspective {
             autoresizingMask = [.flexibleWidth, .flexibleHeight]
             layer.cornerRadius = FocalScrollPerspective.focusCardCornerRadius
             layer.cornerCurve = .continuous
-            layer.borderWidth = 1
         }
         required init?(coder: NSCoder) { nil }
     }
@@ -221,8 +236,7 @@ nonisolated enum FocalScrollPerspective {
         }()
         card.frame = contentView.bounds.inset(by: insets)
         card.alpha = 1
-        card.backgroundColor = accent.withAlphaComponent(isDark ? 0.16 : 0.10)
-        card.layer.borderColor = accent.withAlphaComponent(isDark ? 0.55 : 0.40).cgColor
+        card.backgroundColor = accent.withAlphaComponent(isDark ? focusCardFillOpacityDark : focusCardFillOpacityLight)
     }
 
     @MainActor
