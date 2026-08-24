@@ -114,3 +114,69 @@ describe('useParticipantInfo — direct conversation name (SSOT convergence)', (
     expect(result.current.participantInfo.name).toBe('Team Meeshy');
   });
 });
+
+// ─── Le RANG du lecteur ──────────────────────────────────────────────────────
+//
+// `getCurrentUserRole` alimente `canAccessAdminSettings` (onglet de
+// configuration de la conversation) et `canModifyConversationImage`. Il lisait
+// `participant.role` — qui porte le rôle PLATEFORME ('USER', 'ADMIN'…), le rang
+// dans la conversation vivant sous `conversationRole` (cf.
+// `serializeConversationParticipant`, `packages/shared/utils/participant-helpers.ts`).
+//
+// Un créateur de groupe ordinaire obtenait donc 'USER', et
+// `hasMinimumMemberRole('user', MODERATOR)` est faux : l'onglet ne s'ouvrait
+// jamais, et il ne pouvait modifier ni le titre, ni la description, ni l'image
+// de son propre groupe. Seuls les membres du staff plateforme passaient, par
+// coïncidence de taxonomie.
+
+describe('useParticipantInfo — rang du lecteur dans la conversation', () => {
+  const conversationOf = (over: Partial<Conversation> = {}) =>
+    ({ id: 'conv-1', type: 'group', title: 'Team Meeshy', ...over }) as Conversation;
+
+  const participantOf = (over: Record<string, unknown> = {}) =>
+    ({ userId: CURRENT_USER.id, role: 'USER', ...over }) as unknown as Participant;
+
+  it("préfère currentUserRole servi par le serveur", () => {
+    // Autorité serveur : la liste de participants est tronquée à cinq, donc le
+    // lecteur d'un groupe de six n'y figure pas — lui seul ne peut pas trancher.
+    const { result } = renderHook(() =>
+      useParticipantInfo(conversationOf({ currentUserRole: 'creator' } as Partial<Conversation>), CURRENT_USER, [])
+    );
+
+    expect(result.current.getCurrentUserRole()).toBe('creator');
+  });
+
+  it('retombe sur conversationRole, jamais sur le rôle plateforme', () => {
+    const { result } = renderHook(() =>
+      useParticipantInfo(
+        conversationOf(),
+        CURRENT_USER,
+        [participantOf({ role: 'USER', conversationRole: 'admin' })]
+      )
+    );
+
+    expect(result.current.getCurrentUserRole()).toBe('admin');
+  });
+
+  it("ne promeut pas un simple membre au motif qu'il est ADMIN de la plateforme", () => {
+    const { result } = renderHook(() =>
+      useParticipantInfo(
+        conversationOf(),
+        CURRENT_USER,
+        [participantOf({ role: 'ADMIN', conversationRole: 'member' })]
+      )
+    );
+
+    expect(result.current.getCurrentUserRole()).toBe('member');
+  });
+
+  it('retombe sur le rôle plateforme quand la conversation ne dit rien', () => {
+    // Un gateway antérieur, ou une route qui ne calcule pas le rang : on ne
+    // dégrade pas le lecteur, on garde le comportement d'avant.
+    const staff = { id: 'me-1', role: 'BIGBOSS' } as unknown as User;
+
+    const { result } = renderHook(() => useParticipantInfo(conversationOf(), staff, []));
+
+    expect(result.current.getCurrentUserRole()).toBe('BIGBOSS');
+  });
+});

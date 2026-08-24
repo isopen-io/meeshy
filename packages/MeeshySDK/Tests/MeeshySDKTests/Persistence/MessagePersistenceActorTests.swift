@@ -103,6 +103,71 @@ final class MessagePersistenceActorTests: XCTestCase {
     /// `createdAt` to the authoritative server value — otherwise the bubble +
     /// detail sheet display the data-reactivation time as the "sent" time,
     /// contradicting the message's notification ("4h ago") and read receipts.
+    // MARK: - Régression 2026-08-24 : l'avis d'arrivée rendu comme une parole
+
+    /// **Un message déjà en cache comme « user » doit pouvoir redevenir
+    /// « system ».**
+    ///
+    /// Signalé par l'utilisateur : les avis d'arrivée s'affichaient avec
+    /// l'avatar et le nom de l'arrivant, et le texte de REPLI du gateway
+    /// (« … a rejoint la conversation — visiteur sans compte ») tenait lieu de
+    /// bulle. Le serveur, lui, envoie bien `messageSource: "system"` et son
+    /// `metadata.kind = "member-joined"` — vérifié sur l'API de production.
+    ///
+    /// Deux défauts se combinaient, chacun anodin seul :
+    ///  1. `reconcileBatchSync` réinsère en base les messages vus dans le cache
+    ///     mémoire via `IncomingMessageData`, une forme APPAUVRIE qui ne porte
+    ///     pas la source — le record naissait donc `"user"` ;
+    ///  2. `upsertMutatedFieldsEqual` comparait 25 champs mais NI
+    ///     `messageSource` NI `messageType` : la charge canonique arrivait
+    ///     ensuite avec la bonne valeur et l'upsert jugeait la ligne
+    ///     inchangée. Le mensonge devenait donc DÉFINITIF.
+    ///
+    /// C'est le second défaut que ce test verrouille : sans lui, aucune
+    /// correction venue du serveur ne peut plus jamais atteindre la ligne.
+    func test_upsertFromAPIMessages_correctsAStaleMessageSource() async throws {
+        var cachedAsUser = MessageRecordFactory.make(
+            localId: "srv_join",
+            conversationId: "conv_join",
+            senderId: "participant_1",
+            content: "ano_daily_l378 a rejoint la conversation — visiteur sans compte",
+            state: .delivered
+        )
+        cachedAsUser.serverId = "srv_join"
+        cachedAsUser.messageSource = "user"      // ce que le chemin appauvri écrivait
+        cachedAsUser.messageType = "text"
+        try await actor.insertOptimistic(cachedAsUser)
+
+        let canonical = makeAPIMessage(
+            id: "srv_join",
+            conversationId: "conv_join",
+            senderId: "participant_1",
+            content: "ano_daily_l378 a rejoint la conversation — visiteur sans compte",
+            metadata: [
+                "kind": "member-joined",
+                "participantId": "participant_1",
+                "displayName": "ano_daily_l378",
+                "isAnonymous": true,
+                "viaShareLink": true,
+            ],
+            messageSource: "system"
+        )
+        try await actor.upsertFromAPIMessages([canonical])
+
+        let row = try XCTUnwrap(
+            try actor.messages(for: "conv_join", limit: 10).first { $0.serverId == "srv_join" }
+        )
+        XCTAssertEqual(
+            row.messageSource, "system",
+            "sans messageSource dans la comparaison d'upsert, la ligne reste « user » pour toujours "
+            + "et l'avis s'affiche comme une parole ordinaire"
+        )
+        XCTAssertNotNil(
+            row.joinNoticeJson,
+            "et son metadata doit atterrir — c'est lui qui déclenche la bulle dédiée"
+        )
+    }
+
     func test_upsertFromAPIMessages_correctsPlaceholderCreatedAtFromCanonicalPayload() async throws {
         let trueSendTime = Date(timeIntervalSince1970: 1_700_000_000)         // real send
         let pushReceiptTime = trueSendTime.addingTimeInterval(4 * 3600)        // +4h (data re-enabled)

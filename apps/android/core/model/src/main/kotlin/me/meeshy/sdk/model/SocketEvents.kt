@@ -165,18 +165,47 @@ data class ConversationUpdatedSocketEvent(
     val updatedAt: String? = null,
 )
 
+/**
+ * `conversation:participant-left`.
+ *
+ * `userId` est NULLABLE, et ce n'est pas une précaution : un visiteur venu par
+ * un lien partagé n'a aucune ligne `User`, donc la passerelle émet `null`. Tant
+ * que ce champ était déclaré `String`, kotlinx échouait à décoder le document
+ * ENTIER — l'événement n'atteignait aucun collecteur, en silence. Même famille
+ * que `ParticipantRoleUpdatedEvent`, dont le `role` de premier niveau n'a jamais
+ * existé sur le fil.
+ *
+ * `participantId` est la seule identité TOUJOURS servie : c'est sur elle qu'on
+ * retire la bonne ligne. Elle reste optionnelle pour tolérer une passerelle
+ * antérieure au contrat, où seuls les départs de comptes étaient annoncés.
+ */
 @Serializable
 data class ParticipantLeftEvent(
     val conversationId: String,
-    val userId: String,
-)
+    val userId: String? = null,
+    val participantId: String? = null,
+) {
+    /** La personne nommée est-elle [identity] ? Un compte se reconnaît par son
+     *  `User.id`, un visiteur de lien par son `Participant.id`. */
+    fun names(identity: String): Boolean =
+        identity.isNotEmpty() && (identity == userId || identity == participantId)
+}
 
+/** `conversation:participant-banned` — voir [ParticipantLeftEvent] pour la
+ *  nullabilité de `userId`. `closedShareLinkId` nomme le lien que ce
+ *  bannissement a fermé : bannir sort de la conversation ET invalide la porte
+ *  empruntée. `null` quand il n'y avait pas de lien à fermer. */
 @Serializable
 data class ParticipantBannedEvent(
     val conversationId: String,
-    val userId: String,
+    val userId: String? = null,
+    val participantId: String? = null,
     val bannedAt: String? = null,
-)
+    val closedShareLinkId: String? = null,
+) {
+    fun names(identity: String): Boolean =
+        identity.isNotEmpty() && (identity == userId || identity == participantId)
+}
 
 /**
  * `participant:role-updated`.

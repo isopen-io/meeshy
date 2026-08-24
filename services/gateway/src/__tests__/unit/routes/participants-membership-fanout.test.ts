@@ -154,6 +154,27 @@ function actorParticipant(role: string) {
   return { id: 'p-actor', conversationId: CONV_ID, userId: ACTOR_ID, role, isActive: true, user: { id: ACTOR_ID, role: 'USER' } };
 }
 
+/**
+ * La CIBLE du retrait. Ces suites rendaient `null` à la seconde question, ce que
+ * le handler tolérait : il diffusait quand même. Il répond désormais 404 — une
+ * expulsion qui ne trouve pas sa cible ne doit pas prétendre avoir eu lieu — et
+ * le fanout n'existe donc que sur une cible RÉELLE.
+ */
+function targetParticipant(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'p-target',
+    conversationId: CONV_ID,
+    userId: TARGET_ID,
+    role: 'member',
+    isActive: true,
+    leftAt: null,
+    bannedAt: null,
+    displayName: 'Target User',
+    shareLinkId: null,
+    ...overrides,
+  };
+}
+
 describe('POST /conversations/:id/participants — l\'ajout devient comptable', () => {
   let prisma: any;
   let fastify: ReturnType<typeof createMockFastify>;
@@ -178,7 +199,7 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst.mockResolvedValueOnce(actorParticipant('admin')).mockResolvedValue(null);
+    prisma.participant.findFirst.mockResolvedValueOnce(actorParticipant('admin')).mockResolvedValue(targetParticipant());
   });
 
   async function addTarget() {
@@ -263,7 +284,7 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst.mockResolvedValueOnce(actorParticipant('admin')).mockResolvedValue(null);
+    prisma.participant.findFirst.mockResolvedValueOnce(actorParticipant('admin')).mockResolvedValue(targetParticipant());
 
     await addTarget();
 
@@ -298,7 +319,7 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
       }),
     };
     (fastify as any).notificationService = createMockNotificationService();
-    prisma.participant.findFirst.mockResolvedValueOnce(actorParticipant('admin')).mockResolvedValue(null);
+    prisma.participant.findFirst.mockResolvedValueOnce(actorParticipant('admin')).mockResolvedValue(targetParticipant());
 
     await addTarget();
 
@@ -368,7 +389,10 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
     (fastify as any).notificationService = createMockNotificationService();
     prisma.participant.findFirst
       .mockResolvedValueOnce(actorParticipant('creator'))
-      .mockResolvedValue({ id: 'p-removed', displayName: 'Removed User' });
+      // La cible porte le `select` de production : `isActive` (le handler refuse
+      // de retirer quelqu'un déjà sorti), `userId` (room personnelle + payload)
+      // et `shareLinkId`.
+      .mockResolvedValue(targetParticipant({ id: 'p-removed', displayName: 'Removed User' }));
   });
 
   it('chaîne la room du fil et les rooms personnelles des membres restants', async () => {
@@ -422,7 +446,7 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
     (fastify as any).notificationService = createMockNotificationService();
     prisma.participant.findFirst
       .mockResolvedValueOnce(actorParticipant('creator'))
-      .mockResolvedValue({ id: 'p-removed', displayName: 'Removed User' });
+      .mockResolvedValue(targetParticipant({ id: 'p-removed', displayName: 'Removed User' }));
 
     const route = fastify.routes.find((r) => r.method === 'DELETE')!;
     await route.handler(
@@ -461,7 +485,7 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
     (fastify as any).notificationService = createMockNotificationService();
     prisma.participant.findFirst
       .mockResolvedValueOnce(actorParticipant('creator'))
-      .mockResolvedValue({ id: 'p-removed', displayName: 'Removed User' });
+      .mockResolvedValue(targetParticipant({ id: 'p-removed', displayName: 'Removed User' }));
 
     const route = fastify.routes.find((r) => r.method === 'DELETE')!;
     await route.handler(

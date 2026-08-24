@@ -262,6 +262,18 @@ const createMockFastify = () => {
       routes['PATCH'] = routes['PATCH'] || {};
       routes['PATCH'][path] = handler;
     }),
+    // `fastify.route` — l'idiome multi-verbes. Ce double le portait pas, si bien
+    // qu'une route enregistrée ainsi faisait tomber TOUTE la suite sur un
+    // `fastify.route is not a function` : un double partiel perd en silence ce
+    // que le module gagne, et ne se signale qu'au moment où le module grandit.
+    // Il enregistre le handler sous CHAQUE méthode déclarée, comme Fastify.
+    route: jest.fn((opts: any) => {
+      const methods: string[] = Array.isArray(opts.method) ? opts.method : [opts.method];
+      methods.forEach((method) => {
+        routes[method] = routes[method] || {};
+        routes[method][opts.url] = opts.handler;
+      });
+    }),
     socketIOHandler: {
       getManager: mockGetManager,
     },

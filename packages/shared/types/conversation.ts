@@ -357,6 +357,22 @@ export interface Conversation {
    */
   readonly isMember?: boolean;
 
+  /**
+   * Le RANG du lecteur dans cette conversation ('creator' | 'admin' |
+   * 'moderator' | 'member'), calculé serveur et seule autorité sur la question.
+   * Le déduire de `participants` est impossible : le gateway tronque cette
+   * liste à cinq, donc un membre d'un groupe de six n'y figure pas.
+   *
+   * ABSENT = le serveur ne l'a pas dit (route qui ne le calcule pas, ou gateway
+   * antérieur) ; `null` = le lecteur n'est pas membre. Jumeau iOS :
+   * `APIConversation.currentUserRole`
+   * (`packages/MeeshySDK/.../ConversationModels.swift`).
+   */
+  readonly currentUserRole?: string | null;
+
+  /** Date d'adhésion du lecteur — borne son historique visible. */
+  readonly currentUserJoinedAt?: Date | string;
+
   // ===== USER PREFERENCES =====
   readonly userPreferences?: unknown;
 

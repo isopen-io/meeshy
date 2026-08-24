@@ -60,6 +60,12 @@ const BANNED_AT = new Date('2026-06-15T18:00:00.000Z');
 
 type ParticipantRow = {
   id: string;
+  // Le `select` de production demande `userId` et `shareLinkId` depuis que la
+  // cible se résout sous les DEUX colonnes (un visiteur sans compte n'a que son
+  // `Participant.id`). Un double qui ne les porte pas ferait passer pour un
+  // anonyme un membre qui n'en est pas un.
+  userId?: string | null;
+  shareLinkId?: string | null;
   role?: string;
   displayName?: string;
   isActive?: boolean;
@@ -161,7 +167,7 @@ describe('PATCH ban — la cible avait déjà quitté la conversation', () => {
   it("n'écrase pas la date de son départ", async () => {
     const prisma = makeDiscriminatingPrisma({
       caller: ADMIN_CALLER,
-      target: { id: 'part-tgt', role: 'member', displayName: 'Bob', isActive: false, leftAt: LEFT_LONG_AGO, bannedAt: null },
+      target: { id: 'part-tgt', userId: TARGET_ID, role: 'member', displayName: 'Bob', isActive: false, leftAt: LEFT_LONG_AGO, bannedAt: null },
     });
     const socket = makeSocketRecorder();
     const app = await buildApp(prisma, socket);
@@ -177,7 +183,7 @@ describe('PATCH ban — la cible avait déjà quitté la conversation', () => {
   it('annonce que le bannissement ne retire aucune appartenance', async () => {
     const prisma = makeDiscriminatingPrisma({
       caller: ADMIN_CALLER,
-      target: { id: 'part-tgt', role: 'member', displayName: 'Bob', isActive: false, leftAt: LEFT_LONG_AGO, bannedAt: null },
+      target: { id: 'part-tgt', userId: TARGET_ID, role: 'member', displayName: 'Bob', isActive: false, leftAt: LEFT_LONG_AGO, bannedAt: null },
     });
     const socket = makeSocketRecorder();
     const app = await buildApp(prisma, socket);
@@ -196,7 +202,7 @@ describe('PATCH ban — la cible est un membre actif', () => {
   it('la sort de la conversation et le dit', async () => {
     const prisma = makeDiscriminatingPrisma({
       caller: ADMIN_CALLER,
-      target: { id: 'part-tgt', role: 'member', displayName: 'Bob', isActive: true, leftAt: null, bannedAt: null },
+      target: { id: 'part-tgt', userId: TARGET_ID, role: 'member', displayName: 'Bob', isActive: true, leftAt: null, bannedAt: null },
     });
     const socket = makeSocketRecorder();
     const app = await buildApp(prisma, socket);
@@ -218,7 +224,7 @@ describe("PATCH unban — la personne était partie AVANT d'être bannie", () =>
   it('lève le bannissement sans la réintégrer', async () => {
     const prisma = makeDiscriminatingPrisma({
       caller: ADMIN_CALLER,
-      target: { id: 'part-tgt', isActive: false, leftAt: LEFT_LONG_AGO, bannedAt: BANNED_AT },
+      target: { id: 'part-tgt', userId: TARGET_ID, isActive: false, leftAt: LEFT_LONG_AGO, bannedAt: BANNED_AT },
     });
     const socket = makeSocketRecorder();
     const app = await buildApp(prisma, socket);
@@ -234,7 +240,7 @@ describe("PATCH unban — la personne était partie AVANT d'être bannie", () =>
   it('ne rebranche pas ses sockets sur une conversation quittée', async () => {
     const prisma = makeDiscriminatingPrisma({
       caller: ADMIN_CALLER,
-      target: { id: 'part-tgt', isActive: false, leftAt: LEFT_LONG_AGO, bannedAt: BANNED_AT },
+      target: { id: 'part-tgt', userId: TARGET_ID, isActive: false, leftAt: LEFT_LONG_AGO, bannedAt: BANNED_AT },
     });
     const socket = makeSocketRecorder();
     const app = await buildApp(prisma, socket);
@@ -248,7 +254,7 @@ describe("PATCH unban — la personne était partie AVANT d'être bannie", () =>
   it('annonce que rien n\'a été réintégré', async () => {
     const prisma = makeDiscriminatingPrisma({
       caller: ADMIN_CALLER,
-      target: { id: 'part-tgt', isActive: false, leftAt: LEFT_LONG_AGO, bannedAt: BANNED_AT },
+      target: { id: 'part-tgt', userId: TARGET_ID, isActive: false, leftAt: LEFT_LONG_AGO, bannedAt: BANNED_AT },
     });
     const socket = makeSocketRecorder();
     const app = await buildApp(prisma, socket);
@@ -271,7 +277,7 @@ describe('PATCH unban — la mémoire courte du chemin d\'envoi', () => {
     mockInvalidateParticipantLookup.mockClear();
     const prisma = makeDiscriminatingPrisma({
       caller: ADMIN_CALLER,
-      target: { id: 'part-tgt', isActive: false, leftAt: BANNED_AT, bannedAt: BANNED_AT },
+      target: { id: 'part-tgt', userId: TARGET_ID, isActive: false, leftAt: BANNED_AT, bannedAt: BANNED_AT },
     });
     const socket = makeSocketRecorder();
     const app = await buildApp(prisma, socket);
@@ -287,7 +293,7 @@ describe("PATCH unban — le bannissement avait mis fin à l'appartenance", () =
   it('la rend, et rebranche les sockets', async () => {
     const prisma = makeDiscriminatingPrisma({
       caller: ADMIN_CALLER,
-      target: { id: 'part-tgt', isActive: false, leftAt: BANNED_AT, bannedAt: BANNED_AT },
+      target: { id: 'part-tgt', userId: TARGET_ID, isActive: false, leftAt: BANNED_AT, bannedAt: BANNED_AT },
     });
     const socket = makeSocketRecorder();
     const app = await buildApp(prisma, socket);

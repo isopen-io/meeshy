@@ -13,6 +13,7 @@ jest.mock('@/services/api.service', () => ({
   apiService: {
     get: jest.fn(),
     post: jest.fn(),
+    put: jest.fn(),
     patch: jest.fn(),
     delete: jest.fn(),
   },
@@ -527,27 +528,34 @@ describe('ConversationsService', () => {
   });
 
   describe('updateConversation', () => {
+    // `apiService` rend `{ success, data }` où `data` est le corps ENTIER de la
+    // réponse : la conversation vit sous `data.data`. Le double posait la
+    // conversation directement sous `data`, une forme que la couche HTTP ne
+    // produit jamais — le témoin attestait une convention à lui.
     it('should update conversation', async () => {
       const updateData = {
         title: 'Updated Conversation Name',
       };
 
-      mockApiService.patch.mockResolvedValue({
+      mockApiService.put.mockResolvedValue({
         data: {
-          id: 'conv-123',
-          title: 'Updated Conversation Name',
+          success: true,
+          data: {
+            id: 'conv-123',
+            title: 'Updated Conversation Name',
+          },
         },
         success: true,
       });
 
       const result = await conversationsService.updateConversation('conv-123', updateData);
 
-      expect(mockApiService.patch).toHaveBeenCalledWith('/conversations/conv-123', updateData);
+      expect(mockApiService.put).toHaveBeenCalledWith('/conversations/conv-123', updateData);
       expect(result.title).toBe('Updated Conversation Name');
     });
 
     it('should throw on update error', async () => {
-      mockApiService.patch.mockResolvedValue({
+      mockApiService.put.mockResolvedValue({
         data: null,
         success: false,
       });

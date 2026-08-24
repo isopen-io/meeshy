@@ -528,7 +528,7 @@ describe('registerBanRoutes', () => {
       const { prisma, banRoute, reply } = setup();
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'admin' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, role: 'member', bannedAt: new Date(), displayName: 'Bob' });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'member', bannedAt: new Date(), displayName: 'Bob' });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
       expect(mockedSendBadRequest).toHaveBeenCalledWith(reply, expect.any(String));
@@ -538,7 +538,7 @@ describe('registerBanRoutes', () => {
       const { prisma, banRoute, reply } = setup();
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'moderator' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, role: 'moderator', bannedAt: null, displayName: 'Bob' });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'moderator', bannedAt: null, displayName: 'Bob' });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
       expect(mockedSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
@@ -548,7 +548,7 @@ describe('registerBanRoutes', () => {
       const { prisma, banRoute, reply } = setup();
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'member' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, role: 'admin', bannedAt: null, displayName: 'Bob' });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'admin', bannedAt: null, displayName: 'Bob' });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
       expect(mockedSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
@@ -558,7 +558,7 @@ describe('registerBanRoutes', () => {
       const { prisma, banRoute, reply } = setup();
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'admin' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, role: 'member', bannedAt: null, displayName: 'Bob' });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'member', bannedAt: null, displayName: 'Bob' });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
       expect(prisma.participant.update).toHaveBeenCalledWith(
@@ -578,7 +578,7 @@ describe('registerBanRoutes', () => {
       const { fastify, prisma, banRoute, reply } = setup(io);
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'creator' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, role: 'member', bannedAt: null, displayName: 'Bob' });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'member', bannedAt: null, displayName: 'Bob' });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
       expect(io._emit).toHaveBeenCalledWith(
@@ -593,7 +593,7 @@ describe('registerBanRoutes', () => {
       const { prisma, banRoute, reply } = setup();
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'creator' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, role: 'admin', bannedAt: null, displayName: 'Bob' });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'admin', bannedAt: null, displayName: 'Bob' });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
       expect(mockedSendSuccess).toHaveBeenCalled();
@@ -603,7 +603,7 @@ describe('registerBanRoutes', () => {
       const { prisma, banRoute, reply } = setup();
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'admin' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, role: 'moderator', bannedAt: null, displayName: 'Mod' });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'moderator', bannedAt: null, displayName: 'Mod' });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
       expect(mockedSendSuccess).toHaveBeenCalled();
@@ -613,7 +613,7 @@ describe('registerBanRoutes', () => {
       const { prisma, banRoute, reply } = setup();
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'member' }) // level 10
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, role: 'unknown-role', bannedAt: null, displayName: 'X' }); // level 0
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'unknown-role', bannedAt: null, displayName: 'X' }); // level 0
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
       // 10 > 0 → ban succeeds
@@ -626,7 +626,7 @@ describe('registerBanRoutes', () => {
       const { prisma, banRoute, reply } = setup(io);
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'creator' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, role: 'member', bannedAt: null, displayName: 'M' });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'member', bannedAt: null, displayName: 'M' });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
       leaves.forEach(l => expect(l).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`));
@@ -675,7 +675,7 @@ describe('registerBanRoutes', () => {
       const { prisma, unbanRoute, reply } = setup();
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'admin' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, bannedAt: new Date('2026-08-01T00:00:00.000Z') });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await unbanRoute.handler(request, reply);
       expect(prisma.participant.update).toHaveBeenCalledWith(
@@ -684,7 +684,12 @@ describe('registerBanRoutes', () => {
           data: expect.objectContaining({ bannedAt: null, isActive: true, leftAt: null }),
         })
       );
-      expect(mockedSendSuccess).toHaveBeenCalledWith(reply, { userId: TARGET_USER_ID });
+      // La réponse nomme les DEUX faces de l'identité : `participantId` toujours,
+      // `userId` nul pour un visiteur sans compte.
+      expect(mockedSendSuccess).toHaveBeenCalledWith(reply, {
+        participantId: TARGET_PARTICIPANT_ID,
+        userId: TARGET_USER_ID,
+      });
     });
 
     it('emits CONVERSATION_PARTICIPANT_UNBANNED when IO present', async () => {
@@ -692,7 +697,7 @@ describe('registerBanRoutes', () => {
       const { prisma, unbanRoute, reply } = setup(io);
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'creator' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, bannedAt: new Date('2026-08-01T00:00:00.000Z') });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await unbanRoute.handler(request, reply);
       expect(io._emit).toHaveBeenCalledWith(
@@ -705,7 +710,7 @@ describe('registerBanRoutes', () => {
       const { prisma, unbanRoute, reply } = setup();
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'creator' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, bannedAt: new Date('2026-08-01T00:00:00.000Z') });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await unbanRoute.handler(request, reply);
       expect(mockedSendSuccess).toHaveBeenCalled();
@@ -716,7 +721,7 @@ describe('registerBanRoutes', () => {
       mockedResolve.mockResolvedValue(null);
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'admin' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, bannedAt: new Date('2026-08-01T00:00:00.000Z') });
       const request = makeRequest({ id: 'unknown-slug', userId: TARGET_USER_ID }, VALID_USER_ID);
       await unbanRoute.handler(request, reply);
       // Uses raw id 'unknown-slug' as fallback — participant lookup uses it
@@ -733,7 +738,7 @@ describe('registerBanRoutes', () => {
       mockedResolve.mockResolvedValue(null);
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'creator' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, role: 'member', bannedAt: null, displayName: 'Bob' });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'member', bannedAt: null, displayName: 'Bob' });
       const request = makeRequest({ id: 'slug-conv', userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
       expect(prisma.participant.findFirst).toHaveBeenCalledWith(
@@ -747,7 +752,7 @@ describe('registerBanRoutes', () => {
       // currentLevel = 0 (unknown role), targetLevel = 10 (member) → 0 <= 10 → forbidden
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'unknown-role' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, role: 'member', bannedAt: null, displayName: 'Bob' });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'member', bannedAt: null, displayName: 'Bob' });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
       expect(mockedSendForbidden).toHaveBeenCalled();
@@ -757,7 +762,7 @@ describe('registerBanRoutes', () => {
       const { prisma, banRoute, reply } = setup();
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'role-x' })
-        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, role: 'role-y', bannedAt: null, displayName: 'X' });
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'role-y', bannedAt: null, displayName: 'X' });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
       // 0 <= 0 → forbidden

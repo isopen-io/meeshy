@@ -42,8 +42,13 @@ object ConversationPurge {
      * inert (null).
      */
     fun onParticipantLeft(event: ParticipantLeftEvent, currentUserId: String?): String? =
+        // `names(...)` et non `userId == currentUserId` : une identité porte un
+        // `User.id` pour un compte, un `Participant.id` pour un visiteur venu par
+        // un lien partagé — et l'événement nomme les deux faces. Comparer à la
+        // seule `userId` rate systématiquement les seconds, dont le `userId` est
+        // `null`.
         if (!currentUserId.isNullOrBlank() &&
-            event.userId == currentUserId &&
+            event.names(currentUserId) &&
             event.conversationId.isNotBlank()
         ) {
             event.conversationId

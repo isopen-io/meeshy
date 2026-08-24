@@ -17,8 +17,9 @@ export function useHeaderActions(conversationId: string, t: (key: string, fallba
       if (uploadResult.success && uploadResult.attachments.length > 0) {
         const imageUrl = (uploadResult.attachments[0] as unknown).url;
 
+        // `image` n'existe pas côté conversation — seul `avatar` est écrit par
+        // le gateway.
         await conversationsService.updateConversation(conversationId, {
-          image: imageUrl,
           avatar: imageUrl
         });
 

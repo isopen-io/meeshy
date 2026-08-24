@@ -249,20 +249,20 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
         nil
     }
 
-    nonisolated func removeParticipant(conversationId: String, participantId: String) async throws {
+    nonisolated func removeParticipant(conversationId: String, key: String) async throws {
         await MainActor.run {
             removeParticipantCallCount += 1
             lastRemoveParticipantConversationId = conversationId
-            lastRemoveParticipantParticipantId = participantId
+            lastRemoveParticipantParticipantId = key
         }
         try removeParticipantResult.get()
     }
 
-    nonisolated func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws {
+    nonisolated func updateParticipantRole(conversationId: String, userId: String, role: String) async throws {
         await MainActor.run {
             updateParticipantRoleCallCount += 1
             lastUpdateParticipantRoleConversationId = conversationId
-            lastUpdateParticipantRoleParticipantId = participantId
+            lastUpdateParticipantRoleParticipantId = userId
             lastUpdateParticipantRoleRole = role
         }
         try updateParticipantRoleResult.get()
@@ -301,20 +301,20 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
         try leaveResult.get()
     }
 
-    nonisolated func banParticipant(conversationId: String, userId: String) async throws {
+    nonisolated func banParticipant(conversationId: String, key: String) async throws {
         await MainActor.run {
             banParticipantCallCount += 1
             lastBanParticipantConversationId = conversationId
-            lastBanParticipantUserId = userId
+            lastBanParticipantUserId = key
         }
         try banParticipantResult.get()
     }
 
-    nonisolated func unbanParticipant(conversationId: String, userId: String) async throws {
+    nonisolated func unbanParticipant(conversationId: String, key: String) async throws {
         await MainActor.run {
             unbanParticipantCallCount += 1
             lastUnbanParticipantConversationId = conversationId
-            lastUnbanParticipantUserId = userId
+            lastUnbanParticipantUserId = key
         }
         try unbanParticipantResult.get()
     }

@@ -1270,7 +1270,8 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
-                if self.isMe(event.userId) {
+                // Deux faces d'une identité — cf. `ParticipantLeftEvent.names(_:)`.
+                if event.names(self.currentUserId) {
                     self.dropConversationLeftByMe(at: index)
                     return
                 }
@@ -1303,7 +1304,10 @@ class ConversationListViewModel: ObservableObject {
                 // ligne qui s'en va. Un ban qui suit un départ non synchronisé
                 // porte précisément `membershipEnded: false`, et c'est le cas
                 // où la ligne fantôme est encore là.
-                if let self, self.isMe(event.userId),
+                // `names(_:)` et non `isMe(event.userId)` : une identité iOS est un
+                // `User.id` pour un compte et un `Participant.id` pour un
+                // visiteur de lien partagé, et l'événement porte les deux faces.
+                if let self, event.names(self.currentUserId),
                    let index = self.convIndex(for: event.conversationId) {
                     self.dropConversationLeftByMe(at: index)
                     return
