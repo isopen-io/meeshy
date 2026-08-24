@@ -104,3 +104,45 @@ export function computeRecipientCount(
     activeParticipantIds.size - (activeParticipantIds.has(senderParticipantId) ? 1 : 0)
   );
 }
+
+export type ResolveReceivedAtInput = {
+  /** `MessageStatusEntry.receivedAt`, figé write-once. */
+  readonly frozenReceivedAt: Date | null;
+  /** `MessageStatusEntry.deliveredAt`, figé write-once. */
+  readonly frozenDeliveredAt: Date | null;
+  /** `ConversationReadCursor.lastDeliveredAt`, déjà borné au message. */
+  readonly cursorDeliveredAt: Date | null;
+  /** La date de LECTURE déjà résolue pour ce même participant. */
+  readonly readAt: Date | null;
+};
+
+/**
+ * Date de réception d'un message par un participant — **« on ne lit pas ce
+ * qu'on n'a pas reçu »**.
+ *
+ * Les deux dates étaient dérivées côte à côte, sur quatre sites, mais par des
+ * chemins ASYMÉTRIQUES : `readAt` acceptait un repli sur le curseur
+ * (`lastReadAt`), `receivedAt` n'acceptait le sien que si `lastDeliveredAt`
+ * existait ET datait d'après le message. Un participant qui marque « lu » sans
+ * avoir jamais émis d'accusé de livraison comptait donc comme lecteur sans
+ * compter comme destinataire — et le panneau « Qui a vu » annonçait
+ * `Distribué 0` en face de `Lu 2` sur le même message (capture user
+ * 2026-08-24).
+ *
+ * Ce n'est pas un habillage : le compteur de distribution alimente
+ * `DeliveryStatusResolver` (clients), qui exige `deliveredCount >=
+ * recipientCount` pour lever la double coche. Un `deliveredCount` sous-évalué
+ * retenait donc l'indicateur à UNE coche sur un message pourtant lu par tout
+ * le monde.
+ *
+ * La lecture est la preuve la plus forte de la réception ; elle sert donc de
+ * dernier repli. En son absence, rien n'est affirmé : `null`.
+ */
+export function resolveReceivedAt({
+  frozenReceivedAt,
+  frozenDeliveredAt,
+  cursorDeliveredAt,
+  readAt,
+}: ResolveReceivedAtInput): Date | null {
+  return frozenReceivedAt ?? frozenDeliveredAt ?? cursorDeliveredAt ?? readAt;
+}

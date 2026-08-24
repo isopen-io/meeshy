@@ -252,4 +252,52 @@ final class DeliveryStatusResolverTests: XCTestCase {
                 status: .sent, deliveredCount: 3, readCount: 3, recipientCount: 3),
             .read)
     }
+
+    // MARK: - « On ne lit pas ce qu'on n'a pas reçu » (2026-08-24)
+
+    /// Le gateway servait `deliveredCount` et `readCount` par des chemins
+    /// asymétriques : un participant qui marque LU sans avoir jamais émis
+    /// d'accusé de livraison comptait comme lecteur sans compter comme
+    /// destinataire. La source est corrigée (`resolveReceivedAt`), mais
+    /// l'invariant est LOGIQUE et le résolveur doit le tenir seul : un cache
+    /// local, un événement partiel ou un serveur plus ancien peuvent encore
+    /// lui tendre `delivered < read`.
+    ///
+    /// Sans cette tenue, un message lu par TOUS restait à UNE coche : le palier
+    /// « lu » exige `readCount >= recipientCount`, et le palier « distribué »
+    /// juste en dessous exigeait un `deliveredCount` que personne n'avait
+    /// incrémenté.
+    func test_resolve_group_readImpliesDelivered_evenWhenTheServerUndercounts() {
+        XCTAssertEqual(
+            DeliveryStatusResolver.resolve(
+                status: .sent, deliveredCount: 0, readCount: 2, recipientCount: 2),
+            .read,
+            "tout le monde a lu — la double coche de lecture"
+        )
+        XCTAssertEqual(
+            DeliveryStatusResolver.resolve(
+                status: .sent, deliveredCount: 0, readCount: 3, recipientCount: 3,
+                showReadReceipts: false),
+            .delivered,
+            "accusés de lecture coupés : la lecture prouve quand même la distribution à tous"
+        )
+    }
+
+    /// Contre-épreuve : l'invariant ne doit RIEN inventer. Deux lecteurs sur
+    /// trois ne font pas trois destinataires servis.
+    func test_resolve_group_theInvariantNeverInflatesBeyondTheReadCount() {
+        XCTAssertEqual(
+            DeliveryStatusResolver.resolve(
+                status: .sent, deliveredCount: 0, readCount: 2, recipientCount: 3),
+            .sent,
+            "deux lecteurs sur trois : ni distribué à tous, ni lu par tous — le tout-ou-rien tient"
+        )
+    }
+
+    func test_fromCounts_readImpliesDelivered_too() {
+        XCTAssertEqual(
+            DeliveryStatusResolver.fromCounts(deliveredCount: 0, readCount: 2, recipientCount: 2),
+            .read
+        )
+    }
 }
