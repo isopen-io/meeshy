@@ -178,6 +178,27 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `post reposted payload nests the complete repost under repost`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.postReposted.test {
+            handlers.getValue("post:reposted").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"originalPostId":"p0","repost":{"id":"r1","content":"Repartagé",""" +
+                            """"repostOf":{"id":"p0"},"author":{"id":"u9","username":"bob"}}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.originalPostId).isEqualTo("p0")
+            assertThat(event.repost.id).isEqualTo("r1")
+            assertThat(event.repost.content).isEqualTo("Repartagé")
+            assertThat(event.repost.author?.id).isEqualTo("u9")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `a malformed reaction payload is ignored without emitting`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.storyReacted.test {

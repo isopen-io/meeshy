@@ -282,3 +282,65 @@ describe('Prisme ORDONNÉ des posts — parité iOS/Android', () => {
     expect(result.current.isTranslated).toBe(true);
   });
 });
+
+// Cycle 126 — les trois sources comparées (langues du lecteur, langue d'origine,
+// clés de la carte) doivent être canonicalisées par la MÊME SSOT
+// (`normalizeLanguageForDedup` : casse repliée ET région strippée), jamais un
+// simple `.toLowerCase()`. `findTranslation` rapprochait les codes par
+// `.trim().toLowerCase()` : un code région-tagué (`en-US`, `pt-BR`) — produit
+// par le pipeline de traduction ou par un message écrit avant la
+// canonicalisation au write-boundary — ne réduisait jamais à son rang du prisme.
+// Défaut mesuré nommé par le résolveur partagé (conversation-helpers.ts:182-196),
+// que ce hook réécrivait à la main au lieu de le consommer.
+describe('Prisme — codes région-tagués (parité normalizeLanguageForDedup)', () => {
+  const saved = { ...mockConfig };
+  const originalLanguage = navigator.language;
+
+  function setNavigatorLanguage(value: string) {
+    Object.defineProperty(navigator, 'language', { value, configurable: true });
+  }
+
+  afterEach(() => {
+    Object.assign(mockConfig, saved);
+    setNavigatorLanguage(originalLanguage);
+  });
+
+  // La langue d'origine est au RANG 1 mais région-taguée (`en-US`). Le résolveur
+  // ORDONNÉ doit la reconnaître à son rang et laisser l'original gagner. Une
+  // comparaison `'en-us' === 'en'` échoue et le hook servait la traduction
+  // française d'un rang inférieur — la rétrogradation exacte du Prisme #3.
+  it("laisse l'original gagner quand sa langue est région-taguée (en-US) au rang 1", () => {
+    mockConfig.systemLanguage = 'en';
+    mockConfig.regionalLanguage = 'fr';
+    mockConfig.customDestinationLanguage = undefined;
+    setNavigatorLanguage('en-US');
+
+    const translations = { fr: { text: 'Bonjour le monde' } };
+
+    const { result } = renderHook(() =>
+      usePostTranslation('Hello world', 'en-US', translations),
+    );
+
+    expect(result.current.displayContent).toBe('Hello world');
+    expect(result.current.isTranslated).toBe(false);
+  });
+
+  // La CLÉ de la carte est région-taguée (`pt-BR`) et le lecteur préfère `pt`.
+  // La descente doit matcher via la forme canonique — un accès par clé
+  // minusculée (`pt-br`) manque `pt` et retombait sur l'original anglais.
+  it('matche une clé de traduction région-taguée (pt-BR) contre une préférence pt', () => {
+    mockConfig.systemLanguage = 'pt';
+    mockConfig.regionalLanguage = '';
+    mockConfig.customDestinationLanguage = undefined;
+    setNavigatorLanguage('en-US');
+
+    const translations = { 'pt-BR': { text: 'Olá mundo' } };
+
+    const { result } = renderHook(() =>
+      usePostTranslation('Hello world', 'en', translations),
+    );
+
+    expect(result.current.displayContent).toBe('Olá mundo');
+    expect(result.current.isTranslated).toBe(true);
+  });
+});

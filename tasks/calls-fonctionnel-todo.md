@@ -12144,6 +12144,47 @@ validation finale via CI (« iOS Tests »).
 
 Détail : `tasks/lessons.md` § Leçon 277.
 
+## Vague 179 — main était rouge sur `feature:chat` au moment du push de la Vague 178 ; merge-forward pour rebrancher le PR #3477 sur un CI vert (2026-08-24)
+
+Point d'entrée : reprise de routine (`claude/upbeat-dirac-wuf3dx`), consigne « te baser sur le
+précédent développement de ta routine avant d'en démarrer un nouveau ». PR #3477 (Vague 178)
+était ouverte, restée non mergée : son check Android était rouge. Diagnostic avant tout nouveau
+développement (cf. règle « CI red » du babysitting — écarter un échec qui n'est pas celui du PR
+avant de le traiter comme un vrai signal).
+
+### Root cause du rouge
+
+L'échec Android sur la PR #3477 (run `32744086265`) était `:feature:chat:compileDebugKotlin
+FAILED` — `ConversationMembersViewModel.kt:279:72` / `:285:72`, « Argument type mismatch: actual
+type is 'kotlin.String?', but 'kotlin.String' was expected ». Ce fichier n'appartient PAS au
+diff de la Vague 178 (`feature:calls`, 3 fichiers). Vérifié par lecture directe : le run Android
+sur `main` lui-même, au commit `11f0c31e` (celui dont la PR #3477 dérive), est ROUGE avec le
+MÊME symptôme (`git log --oneline main` confirme que `c59a8ac` — base de la PR — descend de
+`11f0c31e`). `main` a depuis été réparé par PR #3479 (`a604d477`), postérieure à la base de la
+PR #3477 — donc absente de sa branche. Le rouge de la Vague 178 était donc un rouge de BASE
+hérité, pas une régression introduite par le garde d'époque de négociation.
+
+### Fix
+
+Merge-forward de `origin/main` (qui contient `a604d477`) dans `claude/upbeat-dirac-3rqtap`
+(branche de la PR #3477), sans toucher au diff calling lui-même. Un seul conflit, purement
+additif : les deux entrées `tasks/calls-fonctionnel-todo.md` (Vague 178 côté PR, « Mise à jour
+2026-08-24 CallKit tardif » côté main) — résolu en conservant les deux, dans l'ordre
+chronologique de merge sur `main`.
+
+### Tests
+
+Le merge ne modifie aucun code de calling — seule la base de compilation change (récupère le
+fix `a604d477`). La preuve réelle reste le job CI Android sur le nouveau head de la PR #3477.
+
+### Risk assessment
+
+Nul sur le diff calling (merge-forward pur, zéro ligne de `WebRtcCallCoordinator.kt` touchée).
+Le seul changement de comportement possible vient de `a604d477` lui-même (déjà validé par son
+propre merge sur `main`). PR #3477 mergée sur `main` (`ca29e1ea`) après repassage vert du CI
+Android (deux correctifs supplémentaires de tests, sans rapport avec cette entrée, poussés par
+la session d'origine : `io.mockk.match` non importable, `engine.createAnswer()` jamais stubbé).
+
 ## Vague 180 — `summarizeCallReliability` diluait sa `qualityDistribution` avec les appels jamais connectés (gateway) (2026-08-24)
 
 Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Branche

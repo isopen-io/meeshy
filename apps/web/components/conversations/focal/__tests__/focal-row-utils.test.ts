@@ -155,6 +155,34 @@ describe('resolveFocalMessageDisplay — texte + langue RÉELLEMENT servie', () 
     };
     expect(resolveFocalMessageDisplay(message, ['gl'])).toEqual({ text: 'Olá', language: 'gl' });
   });
+
+  // Le texte a TOUJOURS été servi (resolveLastMessagePreview normalise déjà les
+  // deux côtés via normalizeLanguageForDedup) : c'est le LIBELLÉ de langue qui
+  // divergeait. `focalServedLanguage` rapprochait les clés par un simple
+  // `.toLowerCase()` — `pt-BR` → `pt-br` ne matchait jamais la préférence `pt`,
+  // et le libellé retombait sur la langue ORIGINALE alors que le texte affiché
+  // était la traduction portugaise. La descente UNIQUE (resolvePrismTranslation)
+  // rend la paire { langue, texte } cohérente, région-taguée comprise.
+  it('nomme la langue SERVIE avec sa clé région-taguée stockée (pt-BR) pour une préférence pt', () => {
+    const message = {
+      content: 'Hello',
+      originalLanguage: 'en',
+      translations: [makeTranslation('pt-BR', 'Olá')],
+    };
+    expect(resolveFocalMessageDisplay(message, ['pt'])).toEqual({ text: 'Olá', language: 'pt-BR' });
+  });
+
+  // Règle 3 du Prisme, direction OPPOSÉE : une langue d'origine région-taguée
+  // (`en-US`) concourt à son rang normalisé (`en`). Au rang 1, l'original gagne —
+  // la traduction française d'un rang inférieur ne le supplante pas.
+  it("laisse l'original gagner à son rang même quand sa langue est région-taguée (en-US)", () => {
+    const message = {
+      content: 'Hello',
+      originalLanguage: 'en-US',
+      translations: [makeTranslation('fr', 'Bonjour')],
+    };
+    expect(resolveFocalMessageDisplay(message, ['en', 'fr'])).toEqual({ text: 'Hello', language: 'en-US' });
+  });
 });
 
 describe('isFirstInFocalGroup', () => {

@@ -312,6 +312,21 @@ data class SocketPostUpdatedData(
     val post: ApiPost,
 )
 
+/**
+ * `post:reposted` — a user reposted (or quote-reposted) a post; the gateway broadcast the
+ * repost as a COMPLETE new post ([repost], authored by the reposter, embedding the original
+ * under [ApiPost.repostOf]) to every visibility-filtered feed room. [originalPostId] names
+ * the post that was reposted. The feed folds [repost] onto the head exactly like a
+ * `post:created` arrival — a repost is itself a new feed post. Mirror of iOS
+ * `SocketPostRepostedData` (`{ originalPostId, repost }`), the arrival sibling of
+ * [SocketPostCreatedData].
+ */
+@Serializable
+data class SocketPostRepostedData(
+    val originalPostId: String,
+    val repost: ApiPost,
+)
+
 @Serializable
 data class SocketPostLikedData(
     val postId: String,
