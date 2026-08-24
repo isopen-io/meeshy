@@ -86,6 +86,50 @@ describe('decodeCursor', () => {
     const result = decodeCursor(cursor);
     expect(result).toEqual({ createdAt: '2024-03-20T08:00:00.000Z', id: 'test-id-123' });
   });
+
+  // ── Confusion de TYPE (durcissement 2026-08-24) ─────────────────────────────
+  //
+  // Le curseur est un paramètre de requête ATTAQUABLE : il arrive base64url et
+  // décode un JSON arbitraire. L'ancien garde ne vérifiait que la VÉRACITÉ des
+  // deux champs (`data.createdAt && data.id`), jamais leur TYPE. Une charge dont
+  // `id` est un objet ou dont `createdAt` ne se parse pas traversait donc jusqu'à
+  // `keysetBeforeClause`, qui la remet à Prisma sous `{ lt: <non-chaîne> }` /
+  // `{ lt: Invalid Date }` — une `PrismaClientValidationError`, donc un **500**
+  // sur une entrée que l'appelant contrôle. Le contrat de `decodeCursor` est
+  // « chaîne opaque → curseur SÛR | null » : une entrée malformée vaut `null`
+  // (reprise depuis le début), jamais une exception un étage plus bas.
+
+  it('returns null when id is not a string (object injection)', () => {
+    const crafted = Buffer.from(JSON.stringify({ createdAt: '2024-01-01T00:00:00.000Z', id: { $lt: '' } })).toString('base64url');
+    expect(decodeCursor(crafted)).toBeNull();
+  });
+
+  it('returns null when id is a number', () => {
+    const crafted = Buffer.from(JSON.stringify({ createdAt: '2024-01-01T00:00:00.000Z', id: 42 })).toString('base64url');
+    expect(decodeCursor(crafted)).toBeNull();
+  });
+
+  it('returns null when createdAt is not a string (number)', () => {
+    const crafted = Buffer.from(JSON.stringify({ createdAt: 1704067200000, id: 'abc' })).toString('base64url');
+    expect(decodeCursor(crafted)).toBeNull();
+  });
+
+  it('returns null when createdAt is a string that is not a parseable date', () => {
+    const crafted = Buffer.from(JSON.stringify({ createdAt: 'not-a-date', id: 'abc' })).toString('base64url');
+    expect(decodeCursor(crafted)).toBeNull();
+  });
+
+  it('returns null when the decoded JSON is not an object (bare number)', () => {
+    const crafted = Buffer.from('42').toString('base64url');
+    expect(decodeCursor(crafted)).toBeNull();
+  });
+
+  it('strips extra attacker-controlled keys, returning only createdAt and id', () => {
+    const crafted = Buffer.from(
+      JSON.stringify({ createdAt: '2024-03-20T08:00:00.000Z', id: 'test-id-123', evil: 'ignored' }),
+    ).toString('base64url');
+    expect(decodeCursor(crafted)).toEqual({ createdAt: '2024-03-20T08:00:00.000Z', id: 'test-id-123' });
+  });
 });
 
 // ─── CreatePostSchema ─────────────────────────────────────────────────────────

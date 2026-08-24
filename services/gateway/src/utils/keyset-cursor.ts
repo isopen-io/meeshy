@@ -28,8 +28,26 @@ export function encodeCursor(createdAt: Date | string, id: string): string {
 export function decodeCursor(cursor: string): CursorData | null {
   try {
     const json = Buffer.from(cursor, 'base64url').toString('utf-8');
-    const data = JSON.parse(json);
-    if (data.createdAt && data.id) return data;
+    const data: unknown = JSON.parse(json);
+    // Le curseur est un paramètre de requête ATTAQUABLE : `data` est un JSON
+    // arbitraire. On ne le rend qu'après avoir prouvé, champ par champ, qu'il a
+    // exactement la forme sûre attendue en aval — vérifier la seule VÉRACITÉ
+    // (`data.createdAt && data.id`) laissait passer un `id` objet ou un
+    // `createdAt` non-datable jusqu'à `keysetBeforeClause`, qui le remet à Prisma
+    // sous `{ lt: <non-chaîne> }` / `{ lt: Invalid Date }` — soit un 500 sur une
+    // entrée contrôlée par l'appelant. On RECONSTRUIT `{ createdAt, id }` plutôt
+    // que de renvoyer `data` tel quel, pour ne jamais laisser filer une clé
+    // excédentaire vers un consommateur en aval.
+    if (
+      typeof data === 'object' &&
+      data !== null &&
+      typeof (data as Record<string, unknown>).createdAt === 'string' &&
+      typeof (data as Record<string, unknown>).id === 'string'
+    ) {
+      const { createdAt, id } = data as CursorData;
+      if (Number.isNaN(new Date(createdAt).getTime())) return null;
+      return { createdAt, id };
+    }
     return null;
   } catch {
     return null;
