@@ -45,7 +45,7 @@ jest.mock('@/hooks/social/use-post-room', () => ({ usePostRoom: jest.fn() }));
 jest.mock('@/hooks/queries/use-post-socket-cache-sync', () => ({
   usePostSocketCacheSync: jest.fn(),
 }));
-jest.mock('@/hooks/use-post-translation', () => ({ usePreferredLanguage: () => 'fr' }));
+jest.mock('@/hooks/use-post-translation', () => ({ usePreferredLanguage: () => 'fr', usePreferredLanguages: () => ['fr'] }));
 jest.mock('@/hooks/use-comment-target', () => ({
   useCommentTarget: () => ({ targetCommentId: null, targetParentCommentId: null }),
 }));

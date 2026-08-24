@@ -33,6 +33,8 @@ export interface PostCardProps {
   content: string;
   translations?: TranslationItem[];
   userLanguage?: string;
+  /** Prisme ordonné (rangs 1→4) pour l'auto-résolution de `TranslationToggle`. */
+  preferredLanguages?: string[];
   time: string;
   likes: number;
   comments: number;
@@ -190,6 +192,7 @@ function PostCard({
   content,
   translations,
   userLanguage,
+  preferredLanguages,
   time,
   likes,
   comments,
@@ -431,6 +434,7 @@ function PostCard({
                 originalLanguageName={getLanguageName(lang)}
                 translations={translations}
                 userLanguage={userLanguage}
+                preferredLanguages={preferredLanguages}
                 variant="block"
                 showContent={false}
               />
@@ -532,6 +536,7 @@ function PostCard({
                     originalLanguageName={repostOf.originalLanguage ? getLanguageName(repostOf.originalLanguage) : undefined}
                     translations={repostTranslations}
                     userLanguage={userLanguage}
+                    preferredLanguages={preferredLanguages}
                     variant="inline"
                   />
                 </div>
