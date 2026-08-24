@@ -1,16 +1,41 @@
 /**
- * Tests for PostsFeedScreen's audio publish wiring (Task 3, point 4).
- * `handleAudioPublish` used to hardcode `visibility: 'PUBLIC'` regardless of
- * the composer's audience choice, and never forwarded `originalLanguage`
- * even when the transcription language was known. This exercises the full
- * mapping from AudioPostComposer's `onPublish` payload through to the
- * `createPost` mutation call.
+ * PostsFeedScreen — audio publish wiring (Task W7, incrément I2).
+ *
+ * Avant W7 : le bouton rond ouvrait `AudioPostComposer`, un dialogue avec sa
+ * PROPRE stratégie de téléversement (`TusUploadService` en deux temps) et son
+ * propre relais (`handleAudioPublish`), distinct de `handlePublish`. Cette
+ * suite pinnait ce relais — audience, `originalLanguage` recopié depuis la
+ * locale du reconnaisseur, `optimisticMedia` avec sa durée brute en ms.
+ *
+ * Après W7 : le micro est un OUTIL de la surface document du meuble
+ * (`AudioCapture`, monté dans `ComposerDocumentSurface`) ; le fichier produit
+ * entre dans le MÊME pool que photo/vidéo et publie par le MÊME `onPublish`
+ * que n'importe quel autre média — `handleAudioPublish` n'existe plus.
+ * `PostsFeedScreen`, désormais, ne fait QUE deux choses de spécifique au
+ * micro : (1) le bouton rond ARME l'outil (un jeton, relayé à
+ * `MeeshyComposer.armCaptureToken` — la moitié « ça ouvre vraiment le
+ * panneau » est prouvée, sans mock de `MeeshyComposer`, par
+ * `composer-document-arm-capture.test.tsx`) ; (2) la charge qu'un `onPublish`
+ * capté transporte ne référence plus jamais `mobileTranscription` ni
+ * `originalLanguage` — Whisper (gateway) produit désormais la transcription
+ * serveur dès que la première clé est absente (`PostService.createPost`).
+ *
+ * La garde de source (« `PostsFeedScreen.tsx` n'importe plus
+ * `TusUploadService`/`MobileTranscription` ») vit dans
+ * `composer-doors-creation.test.tsx` — pas de doublon ici.
+ *
+ * Même patron de harnais que les autres suites `PostsFeedScreen.*` : chaque
+ * dépendance est mockée ; `MeeshyComposer` est un espion qui capture ses
+ * props pour la porte `feedComposer`, ce qui permet d'invoquer `onPublish`
+ * directement avec la forme exacte que la surface produit une fois le
+ * fichier téléversé dans le pool partagé.
  */
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
-import { PostsFeedScreen } from '@/components/feed/PostsFeedScreen';
 
-// ── Static / layout ─────────────────────────────────────────────────────────
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn() }),
+}));
 
 jest.mock('@/components/layout/DashboardLayout', () => ({
   DashboardLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -23,45 +48,40 @@ jest.mock('@/hooks/use-i18n', () => ({
   }),
 }));
 
-const mockAddToast = jest.fn();
 jest.mock('@/components/v2', () => ({
   Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button onClick={onClick}>{children}</button>
   ),
-  useToast: () => ({ addToast: mockAddToast }),
+  useToast: () => ({ addToast: jest.fn() }),
   PostCard: () => null,
   StoryTray: () => null,
   StatusBar: () => null,
   StoryViewer: () => null,
   StoryComposer: () => null,
-  StatusComposer: () => null,
 }));
 
-jest.mock('@/components/v2/PostComposer', () => ({ PostComposer: () => null }));
-jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
-jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
-jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
-
-// ── AudioPostComposer stub — exposes a single "Publish" trigger ────────────
-
-type AudioPublishPayload = {
-  audioFile: File;
-  transcription: { text: string; language: string } | null;
-  content?: string;
-  visibility: string;
-  visibilityUserIds?: string[];
+type CapturedProps = {
+  door: { kind: string };
+  onPublish: (payload: Record<string, unknown>) => void;
+  armCaptureToken?: number;
 };
 
-jest.mock('@/components/v2/AudioPostComposer', () => ({
-  AudioPostComposer: ({ open, onPublish }: { open: boolean; onPublish: (data: AudioPublishPayload) => void }) => {
-    if (!open) return null;
-    return <button data-testid="audio-composer-publish" onClick={() => onPublish(
-      (globalThis as unknown as { __audioPublishPayload: AudioPublishPayload }).__audioPublishPayload,
-    )}>Publish audio</button>;
+let capturedCalls: CapturedProps[] = [];
+jest.mock('@/components/composer/MeeshyComposer', () => ({
+  MeeshyComposer: (props: CapturedProps) => {
+    capturedCalls.push(props);
+    return <div data-testid={`meeshy-composer-${props.door.kind}`} />;
   },
 }));
 
-// ── Stories / statuses / feed hooks ─────────────────────────────────────────
+function latestFeedComposerCall(): CapturedProps {
+  const matches = capturedCalls.filter((c) => c.door.kind === 'feedComposer');
+  return matches[matches.length - 1];
+}
+
+jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
+jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
+jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
 jest.mock('@/hooks/social/use-stories', () => ({
   useStoriesFeedQuery: () => ({ data: [], isLoading: false }),
@@ -138,135 +158,87 @@ jest.mock('@/stores/auth-store', () => ({
     selector({ user: { id: 'user-1', username: 'alice', avatar: null } }),
 }));
 
-// ── Upload service ───────────────────────────────────────────────────────────
+import { PostsFeedScreen } from '@/components/feed/PostsFeedScreen';
 
-const mockUploadFiles = jest.fn();
-jest.mock('@/services/tusUploadService', () => ({
-  TusUploadService: jest.fn().mockImplementation(() => ({
-    uploadFiles: mockUploadFiles,
-  })),
-}));
+beforeEach(() => {
+  jest.clearAllMocks();
+  capturedCalls = [];
+});
 
-// ── Fixtures ──────────────────────────────────────────────────────────────────
-
-function setAudioPublishPayload(overrides: Partial<AudioPublishPayload> = {}) {
-  const payload: AudioPublishPayload = {
-    audioFile: new File(['blob'], 'voice.webm', { type: 'audio/webm' }),
-    transcription: { text: 'Bonjour', language: 'en' },
-    content: 'A caption',
-    visibility: 'FRIENDS',
-    visibilityUserIds: undefined,
-    ...overrides,
-  };
-  (globalThis as unknown as { __audioPublishPayload: AudioPublishPayload }).__audioPublishPayload = payload;
-  return payload;
-}
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
-describe('PostsFeedScreen — audio publish audience wiring', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockUploadFiles.mockResolvedValue([{
-      id: 'media-1',
-      mimeType: 'audio/webm',
-      fileUrl: 'https://cdn.test/media-1.webm',
-      thumbnailUrl: undefined,
-    }]);
-  });
-
-  it('forwards the composer visibility and visibilityUserIds instead of hardcoding PUBLIC', async () => {
-    setAudioPublishPayload({ visibility: 'ONLY', visibilityUserIds: ['friend-1', 'friend-2'] });
+describe("PostsFeedScreen — le bouton rond arme l'outil micro (Task W7)", () => {
+  it("n'ouvre plus de dialogue audio séparé : il pose un armCaptureToken défini", () => {
     render(<PostsFeedScreen />);
+    expect(latestFeedComposerCall().armCaptureToken).toBeUndefined();
 
     fireEvent.click(screen.getByLabelText('Record an audio post'));
 
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('audio-composer-publish'));
-    });
-
-    await waitFor(() => expect(mockCreatePostMutate).toHaveBeenCalled());
-    expect(mockCreatePostMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ visibility: 'ONLY', visibilityUserIds: ['friend-1', 'friend-2'] }),
-      expect.anything(),
-    );
+    expect(latestFeedComposerCall().armCaptureToken).not.toBeUndefined();
   });
 
-  it('forwards originalLanguage from the transcription when known', async () => {
-    setAudioPublishPayload({ transcription: { text: 'Hello', language: 'en' } });
+  it('un second tap change la valeur du jeton (JETON, pas un booléen) — refermer puis re-taper doit pouvoir ré-armer', () => {
     render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByLabelText('Record an audio post'));
+    const first = latestFeedComposerCall().armCaptureToken;
 
     fireEvent.click(screen.getByLabelText('Record an audio post'));
+    const second = latestFeedComposerCall().armCaptureToken;
 
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('audio-composer-publish'));
-    });
-
-    await waitFor(() => expect(mockCreatePostMutate).toHaveBeenCalled());
-    expect(mockCreatePostMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ originalLanguage: 'en' }),
-      expect.anything(),
-    );
+    expect(second).not.toBe(first);
   });
+});
 
-  it('omits originalLanguage when the transcription is unknown', async () => {
-    setAudioPublishPayload({ transcription: null });
+describe('PostsFeedScreen — la charge audio relaie par le MÊME onPublish que tout autre média', () => {
+  it('relaie la visibilité, `visibilityUserIds`, `mediaIds` et `optimisticMedia` (avec sa durée BRUTE en ms)', () => {
     render(<PostsFeedScreen />);
 
-    fireEvent.click(screen.getByLabelText('Record an audio post'));
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('audio-composer-publish'));
+    latestFeedComposerCall().onPublish({
+      content: 'A caption',
+      type: 'POST',
+      visibility: 'ONLY',
+      visibilityUserIds: ['friend-1', 'friend-2'],
+      mediaIds: ['media-1'],
+      optimisticMedia: [
+        { id: 'media-1', mimeType: 'audio/webm', fileUrl: 'https://cdn.test/media-1.webm', duration: 75_000, order: 0 },
+      ],
     });
 
-    await waitFor(() => expect(mockCreatePostMutate).toHaveBeenCalled());
-    const [payload] = mockCreatePostMutate.mock.calls[0];
-    expect(payload.originalLanguage).toBeUndefined();
-  });
-
-  it('includes an optimistic media placeholder built from the upload result', async () => {
-    setAudioPublishPayload();
-    render(<PostsFeedScreen />);
-
-    fireEvent.click(screen.getByLabelText('Record an audio post'));
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('audio-composer-publish'));
-    });
-
-    await waitFor(() => expect(mockCreatePostMutate).toHaveBeenCalled());
     expect(mockCreatePostMutate).toHaveBeenCalledWith(
       expect.objectContaining({
+        visibility: 'ONLY',
+        visibilityUserIds: ['friend-1', 'friend-2'],
         mediaIds: ['media-1'],
-        optimisticMedia: [expect.objectContaining({ id: 'media-1', mimeType: 'audio/webm', fileUrl: 'https://cdn.test/media-1.webm' })],
+        optimisticMedia: [expect.objectContaining({ id: 'media-1', mimeType: 'audio/webm', duration: 75_000 })],
       }),
       expect.anything(),
     );
   });
 
-  it('carries the raw millisecond duration from the upload result into optimisticMedia', async () => {
-    mockUploadFiles.mockResolvedValue([{
-      id: 'media-1',
-      mimeType: 'audio/webm',
-      fileUrl: 'https://cdn.test/media-1.webm',
-      thumbnailUrl: undefined,
-      duration: 75000,
-    }]);
-    setAudioPublishPayload();
+  // Retourné en garde négative (Task W7, §2 du plan) — ce test pinnait
+  // auparavant `originalLanguage: 'en'` recopié depuis la locale DÉCLARÉE du
+  // reconnaisseur vocal, jamais une langue mesurée dans ce qui a été dit.
+  // La clé n'existe plus dans `ComposerDocumentPayload` (voir
+  // `components/composer/payload.ts`, § Aucune langue d'origine n'y figure) :
+  // Whisper (gateway) détecte désormais la langue depuis le texte dès que la
+  // clé est absente — poser une valeur devinée aurait SUPPRIMÉ cette
+  // détection serveur (règle F7d).
+  it('ne transporte plus JAMAIS `originalLanguage` ni `mobileTranscription`, même si le payload les portait', () => {
     render(<PostsFeedScreen />);
 
-    fireEvent.click(screen.getByLabelText('Record an audio post'));
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('audio-composer-publish'));
+    latestFeedComposerCall().onPublish({
+      content: '',
+      type: 'POST',
+      visibility: 'PUBLIC',
+      mediaIds: ['media-1'],
+      optimisticMedia: [{ id: 'media-1', mimeType: 'audio/webm', fileUrl: 'https://cdn.test/media-1.webm', order: 0 }],
+      // Un appelant malveillant ou un défaut de type ne réintroduirait pas la
+      // clé en silence : la garde porte sur ce que `handlePublish` RELAIE,
+      // pas sur ce qu'il reçoit.
+      originalLanguage: 'en',
+      mobileTranscription: { text: 'Hello', language: 'en' },
     });
 
-    await waitFor(() => expect(mockCreatePostMutate).toHaveBeenCalled());
-    expect(mockCreatePostMutate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        optimisticMedia: [expect.objectContaining({ id: 'media-1', duration: 75000 })],
-      }),
-      expect.anything(),
-    );
+    const call = mockCreatePostMutate.mock.calls[0][0];
+    expect(call).not.toHaveProperty('originalLanguage');
+    expect(call).not.toHaveProperty('mobileTranscription');
   });
 });

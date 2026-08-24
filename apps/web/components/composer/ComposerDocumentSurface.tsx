@@ -117,6 +117,16 @@ export interface ComposerDocumentSurfaceProps {
   readonly routableFormats: ReadonlyArray<ComposerFormat>;
   readonly currentUser?: { username: string; avatar?: string | null } | null;
   readonly onPublish: (payload: ComposerDocumentPayload) => void;
+  /**
+   * W7 — relayé tel quel à `AudioCapture.armToken`, et il force en plus
+   * l'EXPANSION de cette surface : l'outil micro n'est monté que dans le
+   * bloc `isExpanded` (voir plus bas), donc l'armer depuis l'extérieur sans
+   * forcer l'expansion n'armerait rien — un composant non monté ne s'arme
+   * pas. `undefined` ⇒ comportement inchangé (W4).
+   */
+  readonly armCaptureToken?: number;
+  /** W7 (correctif R2) — relais de la CONSOMMATION du jeton, voir `AudioCapture.onArmed`. */
+  readonly onCaptureArmed?: () => void;
   readonly disabled?: boolean;
   readonly className?: string;
 }
@@ -149,6 +159,8 @@ export function ComposerDocumentSurface({
   routableFormats,
   currentUser,
   onPublish,
+  armCaptureToken,
+  onCaptureArmed,
   disabled = false,
   className,
 }: ComposerDocumentSurfaceProps) {
@@ -158,6 +170,18 @@ export function ComposerDocumentSurface({
   const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // W7 — l'armement externe force l'expansion : `AudioCapture` n'est monté
+  // que dans le bloc `isExpanded` plus bas, donc un jeton reçu avant que
+  // l'auteur ait touché le champ n'armerait rien tant que la surface reste
+  // repliée. L'effet tourne aussi au MONTAGE (React exécute chaque effet une
+  // première fois) : un jeton déjà défini quand cette surface apparaît force
+  // l'expansion dès la première frame, pas seulement sur un changement
+  // ultérieur.
+  useEffect(() => {
+    if (armCaptureToken === undefined) return;
+    setIsExpanded(true);
+  }, [armCaptureToken]);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [mediaAlt, setMediaAlt] = useState<Record<string, string>>({});
   // `allowSoundExtractionTouched` distingue « jamais touché » (rien envoyé) de
@@ -314,6 +338,13 @@ export function ComposerDocumentSurface({
   // propre locale de configuration, qui ne la mesure pas. Le gateway détecte
   // depuis le texte (`detectLanguage`) dès que la clé est absente, ce qui est
   // exactement la règle F7d. Voir la note d'en-tête d'`AudioCapture.tsx`.
+  //
+  // Ce que cette note ne promet PAS (revue du 2026-08-25) : la transcription
+  // serveur du fichier lui-même. `useAttachmentUpload` rend des ids de
+  // `MessageAttachment`, que `PostService.createPost` ne sait pas réclamer —
+  // il n'attend que des `PostMedia`. Dette mesurée et ANTÉRIEURE à cette
+  // surface (le composer hérité téléversait déjà par ce pool) ; détail et
+  // portée dans la note jumelle de `PostsFeedScreen.tsx`.
   const handleAudioCaptured = useCallback(
     (result: AudioCaptureResult) => {
       handleFilesSelected([result.file], [{ duration: result.durationMs }]);
@@ -542,7 +573,12 @@ export function ComposerDocumentSurface({
                     🎥
                   </button>
 
-                  <AudioCapture disabled={mediaLimitReached} onCaptured={handleAudioCaptured} />
+                  <AudioCapture
+                    disabled={disabled || mediaLimitReached}
+                    onCaptured={handleAudioCaptured}
+                    armToken={armCaptureToken}
+                    onArmed={onCaptureArmed}
+                  />
 
                   <ReferencePicker
                     references={references}

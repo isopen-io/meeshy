@@ -1,23 +1,24 @@
 /**
  * C7-UI — le texte alternatif et l'opt-in `allowSoundExtraction` collectés par
- * `MediaAccessibilityFields` (monté par `PostComposer`) doivent ATTEINDRE le
- * réseau.
+ * `MediaAccessibilityFields` (monté par la surface document du meuble,
+ * `ComposerDocumentSurface`, sur la porte `feedComposer` — Task W7 y a
+ * remplacé `PostComposer`) doivent ATTEINDRE le réseau.
  *
- * `MediaAltCollection.PostComposer.test.tsx` prouve que `PostComposer` les
- * porte dans son `onPublish` ; ce fichier prouve le maillon SUIVANT —
+ * `meeshy-composer-post.test.tsx` prouve que la surface les porte dans son
+ * `onPublish` ; ce fichier prouve le maillon SUIVANT —
  * `PostsFeedScreen.handlePublish`, qui recopiait champ par champ et laissait
  * les deux au bord de la route. Sans lui, la saisie de l'auteur meurt entre le
  * composer et `createPostMutation`, sans aucune erreur visible.
  *
  * Même patron de harnais que
  * `__tests__/components/feed/PostsFeedScreen.handlePublish.test.tsx` :
- * `PostComposer` est remplacé par un stub qui capture `onPublish`, ce qui
- * permet d'appeler `handlePublish` avec exactement la forme que le vrai
- * composer produit.
+ * `MeeshyComposer` est remplacé par un stub qui capture `onPublish` pour la
+ * porte `feedComposer`, ce qui permet d'appeler `handlePublish` avec
+ * exactement la forme que le vrai composer produit.
  */
 import { render } from '@testing-library/react';
 import React from 'react';
-import type { PostPublishPayload } from '@/components/v2/PostComposer';
+import type { ComposerDocumentPayload as PostPublishPayload } from '@/components/composer/payload';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
@@ -44,20 +45,18 @@ jest.mock('@/components/v2', () => ({
   StatusBar: () => <div data-testid="status-bar" />,
   StoryViewer: () => null,
   StoryComposer: () => null,
-  StatusComposer: () => null,
 }));
 
 const capturedOnPublish: { current: ((data: PostPublishPayload) => void) | null } = { current: null };
-jest.mock('@/components/v2/PostComposer', () => ({
-  PostComposer: ({ onPublish }: { onPublish: (data: PostPublishPayload) => void }) => {
-    capturedOnPublish.current = onPublish;
-    return <div data-testid="post-composer-stub" />;
+jest.mock('@/components/composer/MeeshyComposer', () => ({
+  MeeshyComposer: ({ door, onPublish }: { door: { kind: string }; onPublish: (data: PostPublishPayload) => void }) => {
+    if (door.kind === 'feedComposer') capturedOnPublish.current = onPublish;
+    return <div data-testid={`meeshy-composer-${door.kind}`} />;
   },
 }));
 
 jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
 jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
-jest.mock('@/components/v2/AudioPostComposer', () => ({ AudioPostComposer: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
 jest.mock('@/hooks/social/use-stories', () => ({

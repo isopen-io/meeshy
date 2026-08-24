@@ -106,9 +106,34 @@ export interface AudioCaptureResult {
 export interface AudioCaptureProps {
   readonly disabled?: boolean;
   readonly onCaptured: (result: AudioCaptureResult) => void;
+  /**
+   * W7 — le JETON d'armement externe (Task W7, § micro). Le bouton rond du
+   * fil n'ouvre plus `AudioPostComposer` : il incrémente ce compteur, relayé
+   * depuis `MeeshyComposer` via `ComposerDocumentSurface`. Un COMPTEUR, pas
+   * un booléen : refermer le panneau puis re-taper le bouton doit le
+   * RÉ-ouvrir, ce qu'un `true` déjà `true` ne redéclenche jamais (React ne
+   * relance un effet que sur un changement de VALEUR). `undefined` ⇒ jamais
+   * armé de l'extérieur — le comportement inchangé de W4 (bouton propre,
+   * panneau propre).
+   */
+  readonly armToken?: number;
+  /**
+   * W7 (correctif R2) — la CONSOMMATION du jeton. Sans elle l'armement est
+   * rémanent : le panneau n'est monté que sous l'expansion de la surface, et
+   * React ré-exécute chaque effet AU MONTAGE. Publier replie la surface,
+   * changer de format la démonte — au remontage suivant, un jeton toujours
+   * défini rouvrait le panneau que personne n'avait redemandé. Un jeton
+   * s'OBSERVE puis se CONSOMME ; l'observer seul fait de sa durée de vie
+   * celle du montage, ce qu'aucun appelant ne contrôle.
+   *
+   * Appelé UNE fois par ouverture effective, jamais quand l'ouverture est
+   * refusée (`disabled`) : une intention refusée n'est pas une intention
+   * servie, et l'auteur la retrouve dès que l'outil redevient disponible.
+   */
+  readonly onArmed?: () => void;
 }
 
-export function AudioCapture({ disabled = false, onCaptured }: AudioCaptureProps) {
+export function AudioCapture({ disabled = false, onCaptured, armToken, onArmed }: AudioCaptureProps) {
   const { t } = useI18n('common');
   const user = useUser();
   const [open, setOpen] = useState(false);
@@ -135,6 +160,30 @@ export function AudioCapture({ disabled = false, onCaptured }: AudioCaptureProps
   useEffect(() => {
     audioUrlRef.current = audioUrl;
   }, [audioUrl]);
+
+  // Armement externe : toute valeur DÉFINIE ouvre le panneau, y compris au
+  // montage (React exécute chaque effet une première fois, ce qui couvre le
+  // cas « le jeton est déjà posé quand ce composant apparaît » — l'appelant
+  // vient de forcer l'expansion pour la même raison). Un `armToken`
+  // `undefined` ne fait jamais rien : c'est le canal du bouton rond, pas une
+  // ouverture spontanée.
+  //
+  // L'ouverture au montage est CE QUI REND l'armement rémanent si personne ne
+  // consomme le jeton : `onArmed` est donc appelé dans le même souffle, et
+  // c'est le propriétaire du jeton (l'écran) qui l'efface. La référence est
+  // tenue dans un `ref` plutôt que dans les dépendances : un appelant qui
+  // passe une lambda en ligne changerait l'identité à chaque rendu, et
+  // l'effet — qui APPELLE ce callback — se rejouerait sans fin.
+  const onArmedRef = useRef(onArmed);
+  useEffect(() => {
+    onArmedRef.current = onArmed;
+  }, [onArmed]);
+
+  useEffect(() => {
+    if (armToken === undefined || disabled) return;
+    setOpen(true);
+    onArmedRef.current?.();
+  }, [armToken, disabled]);
 
   const cleanup = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {

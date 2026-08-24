@@ -6,12 +6,20 @@
  * `handleStatusPublish`/`handleStoryPublish` hand-pick the fields they
  * forward to `createStatusMutation`/`createStoryMutation`, silently dropping
  * `mentions` — the composer computes the right payload, but it never leaves
- * the client. Every dependency of PostsFeedScreen is mocked; StatusComposer
- * and StoryComposer are stubbed to capture their onPublish callback so the
- * test can invoke it directly with the exact shape the real composers
- * produce.
+ * the client. Every dependency of PostsFeedScreen is mocked.
+ *
+ * The STORY half is untouched by Task W7 (`storyTray` was NOT bascule'd —
+ * `StoryComposer` is still mounted unconditionally, its own `Dialog` gating
+ * visibility internally): `StoryComposer` is stubbed exactly as before.
+ *
+ * The STATUS half changed shape: `StatusComposer` no longer exists in
+ * production (`PostsFeedScreen.tsx` now wraps `MeeshyComposer`'s `moodChip`
+ * door in a `Dialog` it owns itself), so `MeeshyComposer` is mocked instead,
+ * filtered on `door.kind === 'moodChip'`. Unlike the old `StatusComposer`,
+ * that instance only MOUNTS once the dialog opens — the tests now click
+ * "add status" before invoking the captured `onPublishStatus`.
  */
-import { render } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
 jest.mock('next/navigation', () => ({
@@ -39,25 +47,25 @@ jest.mock('@/components/v2', () => ({
   useToast: () => ({ addToast: jest.fn() }),
   PostCard: () => <div data-testid="post-card" />,
   StoryTray: () => <div data-testid="story-tray" />,
-  StatusBar: () => <div data-testid="status-bar" />,
+  StatusBar: ({ onAddStatus }: { onAddStatus?: () => void }) => (
+    <button data-testid="status-bar-add-status" onClick={onAddStatus} />
+  ),
   StoryViewer: () => null,
   StoryComposer: ({ onPublish }: { onPublish: (data: unknown) => void }) => {
     capturedOnStoryPublish.current = onPublish;
     return <div data-testid="story-composer-stub" />;
   },
-  StatusComposer: ({ onPublish }: { onPublish: (data: unknown) => void }) => {
-    capturedOnStatusPublish.current = onPublish;
-    return <div data-testid="status-composer-stub" />;
-  },
 }));
 
-jest.mock('@/components/v2/PostComposer', () => ({
-  PostComposer: () => <div data-testid="post-composer-stub" />,
+jest.mock('@/components/composer/MeeshyComposer', () => ({
+  MeeshyComposer: ({ door, onPublishStatus }: { door: { kind: string }; onPublishStatus?: (data: unknown) => void }) => {
+    if (door.kind === 'moodChip') capturedOnStatusPublish.current = onPublishStatus ?? null;
+    return <div data-testid={`meeshy-composer-${door.kind}`} />;
+  },
 }));
 
 jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
 jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
-jest.mock('@/components/v2/AudioPostComposer', () => ({ AudioPostComposer: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
 const mockCreateStoryMutate = jest.fn();
@@ -134,10 +142,6 @@ jest.mock('@/stores/auth-store', () => ({
     selector({ user: { id: 'user-1', username: 'alice', avatar: null } }),
 }));
 
-jest.mock('@/services/tusUploadService', () => ({
-  TusUploadService: jest.fn(),
-}));
-
 jest.mock('@/lib/clipboard', () => ({ copyToClipboard: jest.fn() }));
 
 import { PostsFeedScreen } from '@/components/feed/PostsFeedScreen';
@@ -149,8 +153,9 @@ describe('PostsFeedScreen — StatusComposer/StoryComposer references relay (Tas
     capturedOnStoryPublish.current = null;
   });
 
-  it('relays mentions from StatusComposer to createStatusMutation', () => {
+  it('relays mentions from the mood surface to createStatusMutation', () => {
     render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('status-bar-add-status'));
     expect(capturedOnStatusPublish.current).not.toBeNull();
 
     capturedOnStatusPublish.current!({
@@ -165,8 +170,9 @@ describe('PostsFeedScreen — StatusComposer/StoryComposer references relay (Tas
     );
   });
 
-  it('omits mentions from createStatusMutation when StatusComposer does not send them', () => {
+  it('omits mentions from createStatusMutation when the mood surface does not send them', () => {
     render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('status-bar-add-status'));
 
     capturedOnStatusPublish.current!({ moodEmoji: '😴', content: undefined });
 

@@ -3,17 +3,20 @@
  *
  * `handlePublish` used to destructure only {content, type, visibility} before
  * calling createPostMutation.mutate(...), silently dropping mediaIds and
- * visibilityUserIds from PostComposer's onPublish payload. This verifies the
+ * visibilityUserIds from the composer's onPublish payload. This verifies the
  * full payload — including a media-only post — reaches the mutation intact.
  *
- * Every dependency of PostsFeedScreen is mocked; PostComposer itself is
- * replaced by a stub that captures the onPublish callback so the test can
- * invoke it directly with a full PostPublishPayload, matching the exact
- * shape PostComposer's real onPublish prop produces.
+ * Every dependency of PostsFeedScreen is mocked; `MeeshyComposer` itself
+ * (Task W7 — it replaced `PostComposer` on the `feedComposer` door) is
+ * replaced by a stub that captures the `onPublish` callback for that door so
+ * the test can invoke it directly with a full `PostPublishPayload`, matching
+ * the exact shape the real `onPublish` prop produces. `PostPublishPayload`
+ * is an alias of `ComposerDocumentPayload` (`components/composer/payload.ts`)
+ * — same type, same shape, only the import path moved with the composer.
  */
 import { render } from '@testing-library/react';
 import React from 'react';
-import type { PostPublishPayload } from '@/components/v2/PostComposer';
+import type { ComposerDocumentPayload as PostPublishPayload } from '@/components/composer/payload';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
@@ -40,20 +43,18 @@ jest.mock('@/components/v2', () => ({
   StatusBar: () => <div data-testid="status-bar" />,
   StoryViewer: () => null,
   StoryComposer: () => null,
-  StatusComposer: () => null,
 }));
 
 const capturedOnPublish: { current: ((data: PostPublishPayload) => void) | null } = { current: null };
-jest.mock('@/components/v2/PostComposer', () => ({
-  PostComposer: ({ onPublish }: { onPublish: (data: PostPublishPayload) => void }) => {
-    capturedOnPublish.current = onPublish;
-    return <div data-testid="post-composer-stub" />;
+jest.mock('@/components/composer/MeeshyComposer', () => ({
+  MeeshyComposer: ({ door, onPublish }: { door: { kind: string }; onPublish: (data: PostPublishPayload) => void }) => {
+    if (door.kind === 'feedComposer') capturedOnPublish.current = onPublish;
+    return <div data-testid={`meeshy-composer-${door.kind}`} />;
   },
 }));
 
 jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
 jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
-jest.mock('@/components/v2/AudioPostComposer', () => ({ AudioPostComposer: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
 jest.mock('@/hooks/social/use-stories', () => ({

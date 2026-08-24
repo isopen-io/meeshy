@@ -5,13 +5,16 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useI18n } from '@/hooks/use-i18n';
-import { Button, useToast, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
+import { Button, useToast, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer } from '@/components/v2';
 import type { StoryVisibility } from '@/components/v2';
-import { PostComposer, type PostPublishPayload } from '@/components/v2/PostComposer';
+import { Dialog, DialogBody, DialogHeader } from '@/components/v2/Dialog';
 import { PostEditor } from '@/components/v2/PostEditor';
 import { RepostModal } from '@/components/v2/RepostModal';
-import { AudioPostComposer } from '@/components/v2/AudioPostComposer';
 import { Skeleton } from '@/components/v2/Skeleton';
+import { MeeshyComposer } from '@/components/composer/MeeshyComposer';
+import type { ComposerDoor } from '@/lib/composer-door';
+import type { ComposerDocumentPayload as PostPublishPayload } from '@/components/composer/payload';
+import type { ComposerStatusPayload } from '@/components/composer/ComposerMoodSurface';
 
 // Stories
 import { useStoriesFeedQuery, useCreateStoryMutation, useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
@@ -32,15 +35,32 @@ import { usePreferredLanguage, usePreferredLanguages } from '@/hooks/use-post-tr
 import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 
 import { useAuthStore } from '@/stores/auth-store';
-import { TusUploadService } from '@/services/tusUploadService';
 import { reportService } from '@/services/report.service';
 import { postsService } from '@/services/posts.service';
-import type { MobileTranscription } from '@/services/posts.service';
 import type { Post, PostType, PostVisibility } from '@meeshy/shared/types/post';
 import { repostTargetId } from '@meeshy/shared/utils/repost-target';
 import type { PostReferenceInput } from '@meeshy/shared/types/post-reference';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 import { shareLink } from '@/lib/share-utils';
+
+// ─── Portes du meuble (Task W7) ─────────────────────────────────────────
+//
+// Identités STABLES, hors composant : `MeeshyComposer` re-sème son format
+// quand la CLÉ de la porte change (`doorKeyOf`, `MeeshyComposer.tsx`), qui
+// ne dépend que de `door.kind` — recréer l'objet à chaque rendu n'aurait
+// donc aucun effet fonctionnel, mais le hisser au module dit, en le lisant,
+// qu'aucun état de CET écran ne doit jamais faire varier ces deux portes.
+const FEED_COMPOSER_DOOR: ComposerDoor = { kind: 'feedComposer' };
+const MOOD_DOOR: ComposerDoor = { kind: 'moodChip' };
+
+/**
+ * La coquille du mood appartient à l'HÔTE : `ComposerMoodSurface` ne peint
+ * aucun titre, là où `StatusComposer` peignait le sien. Sans cet identifiant
+ * relié par `aria-labelledby`, le `role="dialog"` n'aurait AUCUN nom
+ * accessible — et `statusComposer.title`, traduite dans les quatre
+ * catalogues, n'aurait plus aucun site de rendu.
+ */
+const MOOD_DIALOG_TITLE_ID = 'mood-composer-title';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -191,7 +211,20 @@ export function PostsFeedScreen() {
   const [repostingPost, setRepostingPost] = useState<
     { targetId: string; author?: string; content?: string; type: PostType } | null
   >(null);
-  const [audioComposerOpen, setAudioComposerOpen] = useState(false);
+  // Task W7 — le bouton rond du fil n'ouvre plus un dialogue audio séparé :
+  // il ARME l'outil micro de `MeeshyComposer` (`armCaptureToken`). Un JETON,
+  // pas un booléen — refermer le panneau puis re-taper le bouton doit le
+  // RÉ-ouvrir, ce qu'un `true` déjà `true` ne redéclenche jamais. `undefined`
+  // ⇒ jamais armé (état initial, avant tout tap).
+  const [captureArmToken, setCaptureArmToken] = useState<number | undefined>(undefined);
+  // Le jeton se CONSOMME dès que l'outil l'a servi. Sans cet effacement il
+  // reste posé pour toute la vie de l'écran, et comme l'outil n'est monté que
+  // sous l'expansion de la surface, chacun de ses remontages (publier replie
+  // la surface ; changer de format la démonte) rouvrait le panneau
+  // d'enregistrement que personne n'avait redemandé. Repasser par `undefined`
+  // ne coûte rien au ré-armement : le tap suivant repose `1`, et `undefined →
+  // 1` est bien un changement de valeur.
+  const handleCaptureArmed = useCallback(() => setCaptureArmToken(undefined), []);
 
   // Constat 2 (F7c) — état muet du lecteur LOCAL du badge B3.3-6, par post
   // (la carte ne possède aucun lecteur : ce bouton reste cosmétique tant que
@@ -454,7 +487,8 @@ export function PostsFeedScreen() {
           optimisticMedia: data.optimisticMedia,
           ...(data.mentions ? { mentions: data.mentions } : {}),
           // C7-UI — les deux champs d'accessibilité collectés par
-          // `MediaAccessibilityFields` (monté par `PostComposer`) meurent ici
+          // `MediaAccessibilityFields` (monté par `ComposerDocumentSurface`
+          // depuis W7 ; `PostComposer` ne l'est plus par cet écran) meurent ici
           // s'ils ne sont pas relayés : le transport les accepte déjà
           // (`CreatePostRequest.mediaAlt` / `.allowSoundExtraction`,
           // `apps/web/services/posts.service.ts`), mais rien ne les portait
@@ -687,52 +721,33 @@ export function PostsFeedScreen() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  const handleAudioPublish = useCallback(
-    async (data: {
-      audioFile: File;
-      transcription: MobileTranscription | null;
-      content?: string;
-      visibility: PostVisibility;
-      visibilityUserIds?: string[];
-    }) => {
-      try {
-        const tusService = new TusUploadService();
-        const results = await tusService.uploadFiles([data.audioFile], [{ uploadcontext: 'post' }]);
-        const media = results[0];
-        if (!media?.id) throw new Error('Upload failed');
-
-        createPostMutation.mutate(
-          {
-            content: data.content,
-            type: 'POST',
-            visibility: data.visibility,
-            visibilityUserIds: data.visibilityUserIds,
-            mediaIds: [media.id],
-            mobileTranscription: data.transcription ?? undefined,
-            originalLanguage: data.transcription?.language,
-            optimisticMedia: [{
-              id: media.id,
-              mimeType: media.mimeType,
-              fileUrl: media.fileUrl,
-              thumbnailUrl: media.thumbnailUrl,
-              duration: media.duration,
-              order: 0,
-            }],
-          },
-          {
-            onSuccess: () => {
-              setAudioComposerOpen(false);
-              showToast(t('toast.audioPublished', 'Audio post published!'), 'success');
-            },
-            onError: () => showToast(t('toast.error', 'Error'), 'error', t('toast.publishError', "Couldn't publish.")),
-          },
-        );
-      } catch {
-        showToast(t('toast.uploadError', 'Upload error'), 'error', t('toast.uploadErrorDesc', "Couldn't upload the audio."));
-      }
-    },
-    [createPostMutation, showToast, t],
-  );
+  // Task W7 — le micro n'est plus un dialogue séparé avec son PROPRE service
+  // d'upload en deux temps : c'est désormais un OUTIL de
+  // `ComposerDocumentSurface`, dont le fichier produit entre dans le MÊME
+  // pool que photo/vidéo (`useAttachmentUpload`). Le fichier publie donc par
+  // `handlePublish`, comme n'importe quel autre média — l'ancien relais audio
+  // n'a plus de raison d'exister, et avec lui les deux champs qu'il posait
+  // (transcription mobile, langue d'origine devinée) : `ComposerDocumentPayload`
+  // ne les déclare plus (voir la note « Aucune langue d'origine n'y figure »
+  // de `components/composer/payload.ts`).
+  //
+  // DETTE MESURÉE, à ne pas lire comme un acquis (revue du 2026-08-25) : la
+  // phrase « Whisper prend le relais dès que la clé est absente » n'est vraie
+  // que si `mediaIds` désigne des `PostMedia`. Or `useAttachmentUpload` passe
+  // par `POST /attachments/upload`, qui crée des `MessageAttachment`
+  // (`UploadProcessor`), pendant que `PostService.createPost` ne réclame que
+  // des `PostMedia` (`postMedia.updateMany` + `postMedia.findFirst` pour
+  // l'audio). Les deux seuls producteurs de `PostMedia` sont le gestionnaire
+  // TUS (`uploadcontext: 'post'`) et `POST /posts/from-attachment`.
+  // Conséquence : sur CE chemin, aucun média n'est rattaché et aucune
+  // transcription serveur ne part. Le défaut est ANTÉRIEUR et SYSTÉMIQUE —
+  // `PostComposer` (hérité) téléversait déjà par ce même pool pour
+  // photo/vidéo — mais W7 y fait entrer l'audio, qui empruntait jusqu'ici le
+  // canal TUS conforme. Le correctif appartient au TRANSPORT (donner un
+  // contexte de téléversement au pool, ce que réclame déjà
+  // `docs/superpowers/specs/2026-08-15-story-atelier-implementation.md`),
+  // pas au câblage des portes : il ne se fait pas dans un lot de
+  // branchement.
 
   // ─── Status / mood ────────────────────────────────────────────────────
   const [statusComposerOpen, setStatusComposerOpen] = useState(false);
@@ -743,13 +758,15 @@ export function PostsFeedScreen() {
   );
 
   const handleStatusPublish = useCallback(
-    (status: { moodEmoji: string; content?: string; mentions?: readonly PostReferenceInput[] }) => {
+    (status: ComposerStatusPayload) => {
       setStatusComposerOpen(false);
       createStatusMutation.mutate(
         {
           moodEmoji: status.moodEmoji,
           content: status.content,
           originalLanguage: userLanguage,
+          visibility: status.visibility,
+          ...(status.visibilityUserIds ? { visibilityUserIds: status.visibilityUserIds } : {}),
           ...(status.mentions ? { mentions: status.mentions } : {}),
         },
         {
@@ -801,14 +818,29 @@ export function PostsFeedScreen() {
           <h2 className="sr-only">{t('sections.compose', 'Compose a post')}</h2>
           <div className="flex gap-3 items-start mb-6">
             <div className="flex-1">
-              <PostComposer
+              <MeeshyComposer
+                door={FEED_COMPOSER_DOOR}
                 currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
                 onPublish={handlePublish}
+                /* La porte `feedComposer` OFFRE `story` (table partagée) et le
+                   meuble sait la peindre : ces DEUX props ne sont donc pas
+                   optionnelles ICI. Sans `onPublishStory`, le bouton Publier
+                   de la surface story est le no-op silencieux que la doc de
+                   prop de `MeeshyComposer.tsx` décrit — la surface se démonte
+                   et le brouillon part avec elle. Sans
+                   `storyDefaultVisibility`, la MÊME story naît PUBLIC par
+                   cette porte et `storyPrefs.defaultVisibility` par le
+                   dialogue hérité : deux audiences pour un même contenu, sur
+                   le contrôle le plus sensible. */
+                onPublishStory={handleStoryPublish}
+                storyDefaultVisibility={storyPrefs.defaultVisibility}
+                armCaptureToken={captureArmToken}
+                onCaptureArmed={handleCaptureArmed}
                 disabled={createPostMutation.isPending}
               />
             </div>
             <button
-              onClick={() => setAudioComposerOpen(true)}
+              onClick={() => setCaptureArmToken((token) => (token ?? 0) + 1)}
               className="mt-3 flex-shrink-0 w-12 h-12 rounded-full bg-[var(--gp-terracotta)] text-white flex items-center justify-center hover:opacity-90 transition-opacity"
               aria-label={t('audioPostLabel', 'Record an audio post')}
             >
@@ -987,21 +1019,30 @@ export function PostsFeedScreen() {
         defaultVisibility={storyPrefs.defaultVisibility}
       />
 
-      {/* Status Composer */}
-      <StatusComposer
+      {/* Status Composer — porte moodChip (Task W7). L'hôte fournit la
+          coquille (Dialog) ; ComposerMoodSurface peint son propre bouton
+          Publier. `onPublish` reste requis par le contrat mais n'est jamais
+          servi par ce format — voir MeeshyComposer.tsx, § Ce que ce fichier
+          ne peint pas. */}
+      <Dialog
         open={statusComposerOpen}
         onClose={() => setStatusComposerOpen(false)}
-        onPublish={handleStatusPublish}
-      />
-
-      {/* Audio Post Composer */}
-      <AudioPostComposer
-        open={audioComposerOpen}
-        currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
-        onPublish={handleAudioPublish}
-        onClose={() => setAudioComposerOpen(false)}
-        disabled={createPostMutation.isPending}
-      />
+        labelledBy={MOOD_DIALOG_TITLE_ID}
+        /* `ComposerMoodSurface` a grandi par rapport au composer hérité (six
+           puces d'audience, plus un sélecteur de personnes sous EXCEPT/ONLY)
+           et peint son bouton Publier en bas : la coquille doit défiler,
+           comme le note déjà `StoryComposer` sur le dialogue voisin. */
+        className="max-h-[85vh] overflow-y-auto"
+      >
+        <DialogHeader>
+          <h2 id={MOOD_DIALOG_TITLE_ID} className="text-base font-semibold text-[var(--gp-text-primary)]">
+            {t('statusComposer.title')}
+          </h2>
+        </DialogHeader>
+        <DialogBody>
+          <MeeshyComposer door={MOOD_DOOR} onPublish={handlePublish} onPublishStatus={handleStatusPublish} />
+        </DialogBody>
+      </Dialog>
 
       {/* Post Editor */}
       {editingPost && (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { webComposerOpening, type ComposerDoor, type ComposerFormat } from '@/lib/composer-door';
 import { COMPOSER_FORMATS } from '@meeshy/shared/utils/composer-contract';
 import {
@@ -152,6 +152,23 @@ export interface MeeshyComposerProps {
    * défaut, inchangé.
    */
   readonly storyDefaultVisibility?: StoryVisibility;
+  /**
+   * W7 — le jeton d'armement externe de l'outil micro, relayé tel quel à
+   * `ComposerDocumentSurface.armCaptureToken` (donc ignoré des formats story
+   * et mood, qui ne portent pas cet outil). Voir la note de
+   * `ComposerDocumentSurface.tsx` : un COMPTEUR, pas un booléen — refermer
+   * puis re-taper doit ré-armer.
+   */
+  readonly armCaptureToken?: number;
+  /**
+   * W7 (correctif R2) — le canal par lequel l'outil micro AVOUE avoir été
+   * armé, relayé jusqu'à `AudioCapture.onArmed`. Le propriétaire du jeton
+   * (l'écran) l'efface à sa réception : sans quoi le jeton survit à tous les
+   * remontages de la surface et rouvre le panneau à chaque fois. Absent ⇒ le
+   * jeton n'est jamais consommé, ce qui reste correct pour un appelant qui le
+   * pose une fois et ne le change plus.
+   */
+  readonly onCaptureArmed?: () => void;
   readonly disabled?: boolean;
   readonly className?: string;
 }
@@ -165,10 +182,21 @@ export function MeeshyComposer({
   currentStatus,
   onClearStatus,
   storyDefaultVisibility,
+  armCaptureToken,
+  onCaptureArmed,
   disabled,
   className,
 }: MeeshyComposerProps) {
-  const initialFormat = webComposerOpening(door, NO_COMPOSITION).initialFormat;
+  const opening = webComposerOpening(door, NO_COMPOSITION);
+  const initialFormat = opening.initialFormat;
+  /**
+   * Le format DOCUMENT que cette porte sait ouvrir — `undefined` pour une
+   * porte qui n'en offre aucun (`moodChip`). C'est une chaîne, donc une
+   * dépendance d'effet STABLE : dériver la liste `offeredFormats` en
+   * dépendance ferait boucler l'effet à chaque rendu (nouvelle identité de
+   * tableau), le piège que la doctrine nomme sur `preferredLanguages`.
+   */
+  const documentFallback = opening.offeredFormats.find(isDocumentFormat);
   const doorKey = doorKeyOf(door);
   const [format, setFormat] = useState<ComposerFormat>(initialFormat);
   const [seededDoorKey, setSeededDoorKey] = useState(doorKey);
@@ -182,6 +210,25 @@ export function MeeshyComposer({
     setSeededDoorKey(doorKey);
     setFormat(initialFormat);
   }
+
+  /**
+   * Loi 4 — le bouton rond « Enregistrer un post audio » vit HORS du meuble
+   * (`PostsFeedScreen`), donc il reste peint et tapable quand l'auteur a
+   * choisi story ou mood dans l'éventail. L'outil micro, lui, n'existe que
+   * sur la surface document : sans ce ramenage, le geste serait peint,
+   * tapable et sans le moindre effet — ce que la loi 4 interdit.
+   *
+   * Le ramener sur le format document est ce que son LIBELLÉ promet, et c'est
+   * le même geste que choisir « post » dans l'éventail : la surface story se
+   * démonte et son brouillon part avec elle, exactement comme documenté plus
+   * haut. Une porte qui n'offre aucun format document (`moodChip`) ne bouge
+   * pas — elle n'a rien à offrir, et forcer un format hors éventail
+   * contredirait la table partagée.
+   */
+  useEffect(() => {
+    if (armCaptureToken === undefined || documentFallback === undefined) return;
+    setFormat((current) => (isDocumentFormat(current) ? current : documentFallback));
+  }, [armCaptureToken, documentFallback]);
 
   // Publier referme le brouillon : la surface remet le sien à zéro, le meuble
   // remet le format à ce que la porte ouvrait. Sans cela, une publication en
@@ -247,6 +294,8 @@ export function MeeshyComposer({
       routableFormats={ROUTABLE_FORMATS}
       currentUser={currentUser}
       onPublish={handlePublish}
+      armCaptureToken={armCaptureToken}
+      onCaptureArmed={onCaptureArmed}
       disabled={disabled}
       className={className}
     />
