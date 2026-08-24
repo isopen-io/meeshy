@@ -68,7 +68,32 @@ export type MessagePrismSource = {
   readonly originalLanguage: string | null;
 };
 
-const EMPTY_PRISM_SOURCE: MessagePrismSource = { translations: {}, originalLanguage: null };
+/**
+ * Ce qu'UNE relecture de message rend aux éventails qui n'ont pas de gate
+ * d'éligibilité — la source du Prisme, et l'horloge de la bulle.
+ *
+ * Les deux ne se mélangent pas : la première dit ce qui TRADUIT l'aperçu, la
+ * seconde ce qui l'ORDONNE dans la conversation. Elles voyagent ensemble parce
+ * qu'elles viennent de la même lecture, pas parce qu'elles répondent à la même
+ * question — d'où deux types et non un.
+ *
+ * Cycle 126 : la NSE pré-enregistre une bulle pour TOUT éventail qui pousse un
+ * `messageId`. `createMessageNotification` datait la sienne depuis sa relecture
+ * VIVANTE (qui lui sert aussi de gate d'éligibilité) ; la réponse et la mention
+ * n'avaient que celle-ci, qui ne demandait pas ces deux colonnes — leur bulle
+ * était donc datée par l'horloge du DEVICE, et mal ordonnée dans le fil.
+ */
+export type MessageBannerSource = MessagePrismSource & {
+  readonly createdAt: Date | null;
+  readonly messageType: string | null;
+};
+
+const EMPTY_PRISM_SOURCE: MessageBannerSource = {
+  translations: {},
+  originalLanguage: null,
+  createdAt: null,
+  messageType: null,
+};
 
 /**
  * Ce que l'aperçu composé par un éventail EST — donc ce qui le traduit.
@@ -836,15 +861,19 @@ export class NotificationService {
    * que `loadNotificationPrefs` et `filterMutedRecipients` — la traduction est
    * un confort, l'annonce du message une obligation de livraison.
    */
-  private async loadMessagePrismSource(messageId: string): Promise<MessagePrismSource> {
+  private async loadMessagePrismSource(messageId: string): Promise<MessageBannerSource> {
     try {
       const message = await this.prisma.message.findUnique({
         where: { id: messageId },
-        select: { translations: true, originalLanguage: true },
+        // Cycle 126 — `createdAt` et `messageType` dans la lecture qui se faisait
+        // déjà : deux colonnes de plus, aucune requête de plus.
+        select: { translations: true, originalLanguage: true, createdAt: true, messageType: true },
       });
       return {
         translations: this.pushableTranslations(message?.translations),
         originalLanguage: message?.originalLanguage ?? null,
+        createdAt: message?.createdAt instanceof Date ? message.createdAt : null,
+        messageType: message?.messageType ?? null,
       };
     } catch (error) {
       notificationLogger.error('Relecture du Prisme en échec — bannière servie sans traduction', {
@@ -1049,6 +1078,27 @@ export class NotificationService {
       firstAttachmentWidth: params.media?.firstAttachmentWidth,
       firstAttachmentHeight: params.media?.firstAttachmentHeight,
     });
+  }
+
+  /**
+   * L'horloge SERVEUR de la bulle que la NSE PRÉ-ENREGISTRE, et son type.
+   *
+   * Troisième projection partagée par les trois éventails (cycle 126). Le
+   * cycle 125 bis a fait converger leur CORPS ; ces deux champs-ci ne composent
+   * aucun texte, donc ils sont restés en dehors — c'est la forme exacte du
+   * cycle 125, où la garde tenait la chaîne pendant que l'objet voisin partait
+   * seul. Réponse et mention poussent un `messageId`, donc font pré-enregistrer
+   * une bulle exactement comme le message simple : sans eux, la leur porte
+   * l'horloge du DEVICE et se range au mauvais endroit du fil.
+   */
+  private messageClockFields(source: {
+    readonly createdAt: Date | null;
+    readonly messageType: string | null;
+  }): { messageCreatedAt?: string; messageType?: string } {
+    return {
+      messageCreatedAt: source.createdAt ? source.createdAt.toISOString() : undefined,
+      messageType: source.messageType ?? undefined,
+    };
   }
 
   /** Variante batch : un seul findMany, retourne une Map userId → langue (fallback 'fr'). */
@@ -2022,8 +2072,10 @@ export class NotificationService {
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
         // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
-        messageCreatedAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt.toISOString() : undefined,
-        messageType: liveMessage.messageType ?? undefined,
+        ...this.messageClockFields({
+          createdAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt : null,
+          messageType: liveMessage.messageType ?? null,
+        }),
         // Cycle 124 — le corps et la langue de la bulle pré-enregistrée.
         ...prePersisted,
         ...prismContext,
@@ -2075,7 +2127,7 @@ export class NotificationService {
      * du destinataire, donc l'éventail la relit UNE fois plutôt qu'une par
      * mentionné. Absente : relue ici (appel solo).
      */
-    prismSource?: MessagePrismSource;
+    prismSource?: MessageBannerSource;
     /** Cf. `createMessageNotification.previewBasis`. */
     previewBasis?: PreviewPrismBasis;
     /**
@@ -2088,6 +2140,15 @@ export class NotificationService {
     firstAttachmentDuration?: number | null;
     firstAttachmentWidth?: number | null;
     firstAttachmentHeight?: number | null;
+    /**
+     * Cf. `createMessageNotification.notificationLocKey` — cycle 126. La clé de
+     * protection, dont `protectedPreview` est l'unique producteur du dépôt : sa
+     * présence est une DÉCLARATION de protection, jamais un indice. Elle vaut
+     * ici la localisation CLIENT du placeholder (la NSE le rend depuis sa propre
+     * table plutôt que d'afficher la chaîne composée par la passerelle) et le
+     * second verrou de `createNotification`.
+     */
+    notificationLocKey?: string;
   }): Promise<Notification | null> {
     // Anti-spam: rate limit des mentions par paire (sender → recipient)
     if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
@@ -2123,6 +2184,7 @@ export class NotificationService {
       this.previewPrismSource({
         basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
         messageSource: prismSource,
+        protectedByLocKey: !!params.notificationLocKey,
       }),
       prism.ordered
     );
@@ -2175,7 +2237,15 @@ export class NotificationService {
           basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
           preview: params.messagePreview,
           originalLanguage: prismSource.originalLanguage,
+          protectedByLocKey: !!params.notificationLocKey,
         }),
+        // Cycle 126 — le verrou de protection et l'horloge de la bulle. Le
+        // premier est redondant avec la base `protected-placeholder` que
+        // l'éventail pose déjà, et c'est voulu : `protectedPreview` est son
+        // unique producteur, donc sa présence DÉCLARE la protection là où une
+        // base peut être omise par un appelant solo.
+        notificationLocKey: params.notificationLocKey,
+        ...this.messageClockFields(prismSource),
       },
 
       metadata: {
@@ -2206,6 +2276,8 @@ export class NotificationService {
       messageExpiresAt?: Date | null;
       /** Cf. `createMessageNotification.previewBasis`. */
       previewBasis?: PreviewPrismBasis;
+      /** Cf. `createMentionNotification.notificationLocKey`. */
+      notificationLocKey?: string;
       /** Cf. `createMentionNotification.attachments` — cycle 125 bis. */
       attachments?: NotificationBannerMedia['attachments'];
       firstAttachmentFileSize?: number | null;
@@ -2234,25 +2306,19 @@ export class NotificationService {
     // tout l'éventail, la DESCENTE restant par lecteur.
     const prismSource = await this.loadMessagePrismSource(commonData.messageId);
 
+    // Cycle 126 — les deux seuls champs que ce relais RENOMME sont extraits ;
+    // tout ce qui reste se répand. Recopié champ par champ, ce relais retenait
+    // silencieusement chaque champ de bannière ajouté en amont — c'est ainsi que
+    // le verrou de protection n'est jamais arrivé jusqu'ici.
+    const { senderId, messageContent, ...banner } = commonData;
+
     const results = await Promise.all(
       eligibleUserIds.map(userId =>
         this.createMentionNotification({
+          ...banner,
           mentionedUserId: userId,
-          mentionerUserId: commonData.senderId,
-          messageId: commonData.messageId,
-          conversationId: commonData.conversationId,
-          messagePreview: commonData.messageContent,
-          senderProfile: commonData.senderProfile,
-          messageExpiresAt: commonData.messageExpiresAt,
-          previewBasis: commonData.previewBasis,
-          // Cycle 125 bis — le résumé de média voyage jusqu'au créateur, qui
-          // seul compose le corps : il ne dépend pas du destinataire, donc il
-          // est relayé tel quel pour tout l'éventail.
-          attachments: commonData.attachments,
-          firstAttachmentFileSize: commonData.firstAttachmentFileSize,
-          firstAttachmentDuration: commonData.firstAttachmentDuration,
-          firstAttachmentWidth: commonData.firstAttachmentWidth,
-          firstAttachmentHeight: commonData.firstAttachmentHeight,
+          mentionerUserId: senderId,
+          messagePreview: messageContent,
           prismSource,
         })
       )
@@ -3765,6 +3831,15 @@ export class NotificationService {
     firstAttachmentDuration?: number | null;
     firstAttachmentWidth?: number | null;
     firstAttachmentHeight?: number | null;
+    /**
+     * Cf. `createMessageNotification.notificationLocKey` — cycle 126. La clé de
+     * protection, dont `protectedPreview` est l'unique producteur du dépôt : sa
+     * présence est une DÉCLARATION de protection, jamais un indice. Elle vaut
+     * ici la localisation CLIENT du placeholder (la NSE le rend depuis sa propre
+     * table plutôt que d'afficher la chaîne composée par la passerelle) et le
+     * second verrou de `createNotification`.
+     */
+    notificationLocKey?: string;
   }): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
@@ -3795,6 +3870,7 @@ export class NotificationService {
       this.previewPrismSource({
         basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
         messageSource: prismSource,
+        protectedByLocKey: !!params.notificationLocKey,
       }),
       prism.ordered
     );
@@ -3839,7 +3915,15 @@ export class NotificationService {
           basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
           preview: params.messagePreview,
           originalLanguage: prismSource.originalLanguage,
+          protectedByLocKey: !!params.notificationLocKey,
         }),
+        // Cycle 126 — le verrou de protection et l'horloge de la bulle. Le
+        // premier est redondant avec la base `protected-placeholder` que
+        // l'éventail pose déjà, et c'est voulu : `protectedPreview` est son
+        // unique producteur, donc sa présence DÉCLARE la protection là où une
+        // base peut être omise par un appelant solo.
+        notificationLocKey: params.notificationLocKey,
+        ...this.messageClockFields(prismSource),
       },
 
       metadata: {
