@@ -149932,7 +149932,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continuer en tant que \\(accountDisplayName)"
+            "value": "Continuer en tant que %@"
           }
         },
         "it": {
@@ -150308,7 +150308,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "\\(presentation.primaryName) a rejoint la conversation"
+            "value": "%@ a rejoint la conversation"
           }
         },
         "it": {
