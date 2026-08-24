@@ -699,6 +699,20 @@ nonisolated public struct AudioPlayerChromePlan: Equatable, Sendable {
     /// tronquée (un karaoké coupé à 2 lignes n'aurait rien à surligner
     /// passé la coupe).
     public let flatTranscriptionFollowsPlayback: Bool
+    /// Coupe du bloc karaoké, en MOTS — `nil` = pas de coupe (tenue minimale,
+    /// qui n'a pas de karaoké mais une citation statique déjà bornée en
+    /// lignes). Directive 2026-08-24 : « la transcription d'un audio limitée
+    /// à quelques trentaine de mots, et un bouton voir plus qui affiche cela
+    /// en plein écran ». C'est une coupe sur les SEGMENTS, jamais un
+    /// `lineLimit` : le karaoké surligne des segments, borner la hauteur du
+    /// bloc laisserait le surlignage courir hors champ.
+    public let transcriptionWordLimit: Int?
+
+    /// La trentaine de mots — UNE constante, lue par la carte comme par la
+    /// rangée plate élue. Deux coupes différentes pour la même transcription
+    /// seraient deux lois : c'est ce que faisait l'ancien seuil à 255
+    /// caractères, propre à la carte et invisible de la rangée plate.
+    public static let standardTranscriptionWordLimit = 30
 
     public init(
         showsCardBackground: Bool,
@@ -708,7 +722,8 @@ nonisolated public struct AudioPlayerChromePlan: Equatable, Sendable {
         showsTranscribeCTA: Bool,
         rendersFlatTranscription: Bool,
         flatTranscriptionLineLimit: Int?,
-        flatTranscriptionFollowsPlayback: Bool = false
+        flatTranscriptionFollowsPlayback: Bool = false,
+        transcriptionWordLimit: Int? = nil
     ) {
         self.showsCardBackground = showsCardBackground
         self.showsRightChips = showsRightChips
@@ -718,6 +733,7 @@ nonisolated public struct AudioPlayerChromePlan: Equatable, Sendable {
         self.rendersFlatTranscription = rendersFlatTranscription
         self.flatTranscriptionLineLimit = flatTranscriptionLineLimit
         self.flatTranscriptionFollowsPlayback = flatTranscriptionFollowsPlayback
+        self.transcriptionWordLimit = transcriptionWordLimit
     }
 
     public static func plan(for chrome: AudioPlayerChrome) -> AudioPlayerChromePlan {
@@ -730,7 +746,8 @@ nonisolated public struct AudioPlayerChromePlan: Equatable, Sendable {
                 showsRetranscribe: true,
                 showsTranscribeCTA: true,
                 rendersFlatTranscription: false,
-                flatTranscriptionLineLimit: nil
+                flatTranscriptionLineLimit: nil,
+                transcriptionWordLimit: standardTranscriptionWordLimit
             )
         case .flatMinimal:
             return AudioPlayerChromePlan(
@@ -751,7 +768,8 @@ nonisolated public struct AudioPlayerChromePlan: Equatable, Sendable {
                 showsTranscribeCTA: true,
                 rendersFlatTranscription: true,
                 flatTranscriptionLineLimit: nil,
-                flatTranscriptionFollowsPlayback: true
+                flatTranscriptionFollowsPlayback: true,
+                transcriptionWordLimit: standardTranscriptionWordLimit
             )
         }
     }
@@ -847,7 +865,6 @@ public struct AudioPlayerView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var systemReduce
     @Environment(\.meeshyForceReduceMotion) private var userForced
-    @State private var isTranscriptionExpanded = false
     /// Seeded from `initialTranscriptionLanguage` in `init` (Prisme default),
     /// then owned by user interaction (language pill taps, `externalLanguage`)
     /// exactly like before. Internal (not `private`) so `@testable import`
@@ -1036,10 +1053,6 @@ public struct AudioPlayerView: View {
         displaySegments.map(\.text).joined(separator: " ")
     }
 
-    private var isLongTranscription: Bool {
-        fullTranscriptionText.count > 255
-    }
-
     // MARK: - Body
     public var body: some View {
         VStack(spacing: 0) {
@@ -1051,7 +1064,6 @@ public struct AudioPlayerView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTranscriptionExpanded)
         .onAppear {
             // CRITICAL: when an external engine is injected, the parent owns
             // `attachmentId` (it tracks which audio the shared engine is
@@ -1255,17 +1267,11 @@ public struct AudioPlayerView: View {
             VStack(spacing: 0) {
                 slotDivider
 
-                let segments = isLongTranscription && !isTranscriptionExpanded
-                    ? truncatedSegments
-                    : displaySegments
-
-                inlineFlowTranscription(segments: segments)
+                inlineFlowTranscription(segments: renderedSegments)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
 
-                if isLongTranscription {
-                    expandToggleButton
-                }
+                seeMoreButton
                 retranscribeButton
             }
             .padding(.bottom, 6)
@@ -1320,7 +1326,8 @@ public struct AudioPlayerView: View {
         } else if !displaySegments.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
                 if chromePlan.flatTranscriptionFollowsPlayback {
-                    inlineFlowTranscription(segments: displaySegments)
+                    inlineFlowTranscription(segments: renderedSegments)
+                    seeMoreButton
                 } else {
                     Text(Self.flatTranscriptionQuote(fullTranscriptionText))
                         .font(.system(size: 12.5))
@@ -1397,20 +1404,39 @@ public struct AudioPlayerView: View {
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
     }
 
-    // MARK: - Long-transcription chevron toggle
+    // MARK: - « Voir plus » — la suite se lit EN PLEIN ÉCRAN
+
+    /// Remplace le chevron qui dépliait la transcription EN LIGNE (directive
+    /// 2026-08-24). Déplier sur place repoussait tout le fil vers le bas pour
+    /// un texte qui n'a jamais la place d'y tenir ; le plein écran
+    /// (`onFullscreen`, la MÊME destination que la pastille de pourcentage)
+    /// lui donne l'espace, le karaoké déroulant et le bandeau de langues.
+    ///
+    /// Ne se monte QUE s'il y a une suite à lire : `transcriptionIsTruncated`
+    /// exige à la fois la coupe et la destination.
     @ViewBuilder
-    private var expandToggleButton: some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                isTranscriptionExpanded.toggle()
-            }
-            HapticFeedback.light()
-        } label: {
-            Image(systemName: isTranscriptionExpanded ? "chevron.up" : "chevron.down")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundColor(isDark ? .white.opacity(0.35) : .black.opacity(0.25))
+    private var seeMoreButton: some View {
+        if transcriptionIsTruncated, let onFullscreen {
+            Button {
+                HapticFeedback.light()
+                onFullscreen()
+            } label: {
+                HStack(spacing: 4) {
+                    Text(String(localized: "media.audio.transcription.see_more",
+                                defaultValue: "Voir plus", bundle: .module))
+                        .font(.system(size: 10, weight: .semibold))
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .foregroundColor(accent)
                 .frame(maxWidth: .infinity)
-                .frame(height: 20)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "media.audio.transcription.see_more.a11y",
+                                       defaultValue: "Lire la transcription entière en plein écran",
+                                       bundle: .module))
         }
     }
 
@@ -1443,28 +1469,57 @@ public struct AudioPlayerView: View {
         }
     }
 
-    private var truncatedSegments: [TranscriptionDisplaySegment] {
-        var charCount = 0
-        var result: [TranscriptionDisplaySegment] = []
-        for segment in displaySegments {
-            charCount += segment.text.count
-            if charCount > 255 {
-                let overflow = charCount - 255
-                let trimmed = String(segment.text.dropLast(overflow))
-                if !trimmed.isEmpty {
-                    result.append(TranscriptionDisplaySegment(
-                        text: trimmed + "...",
-                        startTime: segment.startTime,
-                        endTime: segment.endTime,
-                        speakerId: segment.speakerId,
-                        speakerColor: segment.speakerColor
-                    ))
-                }
-                break
+    // MARK: - Coupe de la transcription (loi pure, partagée carte / rangée plate)
+
+    /// Nombre de mots portés par une liste de segments.
+    nonisolated static func wordCount(_ segments: [TranscriptionDisplaySegment]) -> Int {
+        segments.reduce(0) { $0 + $1.text.split(whereSeparator: \.isWhitespace).count }
+    }
+
+    /// La transcription dépasse-t-elle la coupe ? `wordLimit <= 0` = pas de
+    /// coupe du tout (garde : une limite nulle ne doit jamais vider le bloc).
+    nonisolated static func exceedsWordLimit(_ segments: [TranscriptionDisplaySegment], wordLimit: Int) -> Bool {
+        wordLimit > 0 && wordCount(segments) > wordLimit
+    }
+
+    /// Les `wordLimit` premiers mots, ellipse posée sur le dernier segment
+    /// gardé. Les TIMINGS du segment coupé sont conservés tels quels : le
+    /// karaoké s'appuie dessus pour surligner et pour le seek au toucher —
+    /// les recalculer au prorata inventerait une donnée que la
+    /// transcription n'a pas.
+    nonisolated static func limitedSegments(_ segments: [TranscriptionDisplaySegment], wordLimit: Int) -> [TranscriptionDisplaySegment] {
+        guard exceedsWordLimit(segments, wordLimit: wordLimit) else { return segments }
+        var remaining = wordLimit
+        var kept: [TranscriptionDisplaySegment] = []
+        for segment in segments {
+            guard remaining > 0 else { break }
+            let words = segment.text.split(whereSeparator: \.isWhitespace)
+            if words.count <= remaining {
+                remaining -= words.count
+                kept.append(segment)
+            } else {
+                kept.append(segment.replacingText(words.prefix(remaining).joined(separator: " ")))
+                remaining = 0
             }
-            result.append(segment)
         }
-        return result
+        guard let last = kept.popLast() else { return kept }
+        kept.append(last.replacingText(last.text + "\u{2026}"))
+        return kept
+    }
+
+    /// Segments effectivement rendus : coupés quand la tenue pose une limite
+    /// ET qu'une destination plein écran existe pour lire la suite. Sans
+    /// cette destination, la coupe ne serait pas une invitation mais une
+    /// perte — la transcription reste entière.
+    private var renderedSegments: [TranscriptionDisplaySegment] {
+        guard let limit = chromePlan.transcriptionWordLimit, onFullscreen != nil else { return displaySegments }
+        return Self.limitedSegments(displaySegments, wordLimit: limit)
+    }
+
+    /// Y a-t-il une suite à lire en plein écran ?
+    private var transcriptionIsTruncated: Bool {
+        guard let limit = chromePlan.transcriptionWordLimit, onFullscreen != nil else { return false }
+        return Self.exceedsWordLimit(displaySegments, wordLimit: limit)
     }
 
     /// Index du segment de transcription en cours de lecture (karaoké), résolu

@@ -148,4 +148,70 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
             "Hors focus, la règle commune reste le révélé de défilement."
         )
     }
+
+    /// **Directive 2026-08-24 — l'heure ET les coches ne vivent que pendant
+    /// le défilement.**
+    ///
+    /// L'heure passait déjà par le révélé (`FocalRevealedTime`) ; les coches,
+    /// elles, restaient inscrites en permanence sur chaque rangée. Une
+    /// conversation immobile portait donc la moitié de ses détails de
+    /// réception — la règle « au repos, rien » n'était vraie que pour une
+    /// des deux informations.
+    func test_theChecks_followTheSameRevealAsTheTime_notOnlyTheTime() throws {
+        let meta = try normalized("Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift")
+        XCTAssertTrue(
+            meta.contains("FocalRevealedDetail { deliveryChecks(deliveryStatus) }"),
+            "les coches passent par le MÊME révélé que l'heure"
+        )
+        XCTAssertTrue(meta.contains("Button(action: onShowReadStatus)"), "elles restent le bouton des détails de lecture")
+    }
+
+    /// Garde NÉGATIVE — un révélé qui ne couperait que l'opacité laisserait
+    /// un bouton INVISIBLE mais tappable au milieu du fil : appuyer dans le
+    /// vide ouvrirait les détails de lecture d'un message qu'on ne voit pas.
+    func test_theReveal_alsoCutsTheTouch_notJustTheOpacity() throws {
+        let reveal = try normalized("Meeshy/Features/Main/Focal/Chrome/FocalTimestampRevealState.swift")
+        XCTAssertTrue(reveal.contains(".allowsHitTesting(reveal.isRevealed)"), "invisible ⇒ intouchable")
+        XCTAssertTrue(reveal.contains("struct FocalRevealedDetail"), "un seul enrobage, deux consommateurs")
+    }
+
+    func test_theGuardAbove_wouldCatchARevealThatOnlyFadesOut() {
+        let opacityOnly = "content().opacity(reveal.isRevealed ? 1 : 0)"
+        XCTAssertFalse(opacityOnly.contains(".allowsHitTesting(reveal.isRevealed)"))
+    }
+
+    /// **Directive 2026-08-24 — plus de CADRE en mode focal.** Le fond garde
+    /// la couleur de la conversation ; le trait qui l'encadrait disparaît, et
+    /// avec lui l'anneau des chips posées sur ses bords.
+    func test_theFocusCard_andItsChips_carryNoBorderAnymore() throws {
+        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        XCTAssertFalse(row.contains("strokeBorder"), "ni la carte ni les chips ne tracent de bord")
+        XCTAssertTrue(
+            row.contains(".fill(focusAccent.opacity(input.isDark ? FocalScrollPerspective.focusCardFillOpacityDark : FocalScrollPerspective.focusCardFillOpacityLight))"),
+            "le fond reste la couleur de la conversation"
+        )
+        let perspective = try normalized("Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift")
+        XCTAssertFalse(perspective.contains("focusCardBorderOpacity"), "la teinte du cadre n'a plus de porteur")
+        XCTAssertFalse(perspective.contains("focusChipRingOpacity"), "ni l'anneau des chips")
+        XCTAssertFalse(perspective.contains("borderWidth"), "la carte UIKit résiduelle n'en trace pas non plus")
+    }
+
+    /// Sans anneau, la chip du drapeau AFFICHÉ ne se distinguait plus que par
+    /// rien du tout : la marque d'état passe au fond, jamais au trait.
+    func test_theActiveChip_isMarkedByItsFill_sinceTheRingIsGone() throws {
+        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        XCTAssertTrue(row.contains("FocalScrollPerspective.focusChipFillOpacity(isDark: input.isDark, isActive: isActive)"), "l'état actif se lit au fond")
+        let perspective = try normalized("Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift")
+        XCTAssertTrue(perspective.contains("static func focusChipFillOpacity(isDark: Bool, isActive: Bool)"), "une seule loi de teinte, dans Core")
+    }
+
+    func test_theActiveChipFill_isDenserThanTheRestingOne_onBothThemes() {
+        for isDark in [true, false] {
+            XCTAssertGreaterThan(
+                FocalScrollPerspective.focusChipFillOpacity(isDark: isDark, isActive: true),
+                FocalScrollPerspective.focusChipFillOpacity(isDark: isDark, isActive: false),
+                "sinon l'actif serait indiscernable du repos"
+            )
+        }
+    }
 }

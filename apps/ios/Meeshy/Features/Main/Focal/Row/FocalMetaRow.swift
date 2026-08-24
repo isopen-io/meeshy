@@ -43,7 +43,10 @@ struct FocalMetaRow: View, Equatable {
     /// Toucher les COCHES ouvre les « détails de lecture ». Cette affordance
     /// vivait dans `FocalIdentityHeader` tant que les têtes de groupe se
     /// dataient par le haut ; elle a suivi les coches en bas (directive
-    /// 2026-08-23) — la date, elle, reste informative.
+    /// 2026-08-23) — la date, elle, reste informative. Le bouton n'est
+    /// touchable que pendant le révélé (`FocalRevealedDetail` coupe le
+    /// hit-test au repos) : sinon le fil immobile serait semé de boutons
+    /// invisibles.
     var onShowReadStatus: (() -> Void)? = nil
 
     /// `==` MANUEL : `onShowReadStatus` est une closure, donc la synthèse
@@ -77,7 +80,12 @@ struct FocalMetaRow: View, Equatable {
             editedIndicator
             stamp
             if isMe, let deliveryStatus {
-                deliveryChecks(deliveryStatus)
+                // Directive 2026-08-24 : les coches ne s'inscrivent plus en
+                // permanence — elles paraissent et s'effacent avec l'heure,
+                // sous la MÊME fenêtre de défilement.
+                FocalRevealedDetail {
+                    deliveryChecks(deliveryStatus)
+                }
             }
         }
         .padding(.leading, indent)
@@ -103,7 +111,7 @@ struct FocalMetaRow: View, Equatable {
         }
     }
 
-    /// L'horodatage de la rangée de suite : `FocalRevealedTime`, masqué au
+    /// L'horodatage de la rangée : `FocalRevealedTime`, masqué au
     /// repos et révélé pendant le défilement. C'est ce qui remplace la pilule
     /// flottante « jour · heure » : l'information est rendue AU MESSAGE
     /// qu'elle date, au lieu de flotter détachée en haut de l'écran.
