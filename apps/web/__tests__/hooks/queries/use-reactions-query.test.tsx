@@ -1209,7 +1209,7 @@ describe('useReactionsQuery', () => {
         capturedAdded({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 1, participantIds: ['user-1'], hasCurrentUser: true },
+          aggregation: { emoji: '❤️', count: 1, participantIds: ['user-1'] },
           participantId: 'user-1',
           userId: 'user-1',
           action: 'add',
@@ -1237,7 +1237,7 @@ describe('useReactionsQuery', () => {
         capturedRemoved({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 0, participantIds: [] },
           participantId: 'user-1',
           userId: 'user-1',
           action: 'remove',
@@ -1272,7 +1272,7 @@ describe('useReactionsQuery', () => {
         capturedAdded({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 1, participantIds: ['user-1'], hasCurrentUser: true },
+          aggregation: { emoji: '❤️', count: 1, participantIds: ['user-1'] },
           participantId: 'user-1',
           userId: 'user-1',
           action: 'add',
@@ -1313,7 +1313,7 @@ describe('useReactionsQuery', () => {
         capturedAdded({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 1, participantIds: ['participant-abc'], hasCurrentUser: true },
+          aggregation: { emoji: '❤️', count: 1, participantIds: ['participant-abc'] },
           participantId: 'participant-abc',
           userId: 'user-1',
           action: 'add',
@@ -1346,7 +1346,7 @@ describe('useReactionsQuery', () => {
         capturedRemoved({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 0, participantIds: [] },
           participantId: 'participant-abc',
           userId: 'user-1',
           action: 'remove',
@@ -1381,7 +1381,7 @@ describe('useReactionsQuery', () => {
         capturedAdded({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '👍',
-          aggregation: { emoji: '👍', count: 1, participantIds: ['participant-xyz'], hasCurrentUser: false },
+          aggregation: { emoji: '👍', count: 1, participantIds: ['participant-xyz'] },
           participantId: 'participant-xyz',
           userId: 'user-2',
           action: 'add',
@@ -1415,7 +1415,7 @@ describe('useReactionsQuery', () => {
         capturedAdded({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 2, participantIds: ['user-2', 'user-3'], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 2, participantIds: ['user-2', 'user-3'] },
           participantId: 'user-3',
           action: 'add',
         });
@@ -1447,7 +1447,7 @@ describe('useReactionsQuery', () => {
         capturedAdded({
           messageId: 'msg-OTHER',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 1, participantIds: [], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 1, participantIds: [] },
           participantId: 'user-2',
           action: 'add',
         });
@@ -1474,7 +1474,7 @@ describe('useReactionsQuery', () => {
         capturedAdded({
           messageId: '507f1f77bcf86cd799439012',
           emoji: '👍',
-          aggregation: { emoji: '👍', count: 1, participantIds: ['user-2'], hasCurrentUser: false },
+          aggregation: { emoji: '👍', count: 1, participantIds: ['user-2'] },
           participantId: 'user-2',
           action: 'add',
         });
@@ -1506,7 +1506,7 @@ describe('useReactionsQuery', () => {
         capturedAdded({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 3, participantIds: [], hasCurrentUser: true },
+          aggregation: { emoji: '❤️', count: 3, participantIds: [] },
           participantId: 'user-1', // same as currentUserId - already in userReactions
           userId: 'user-1',
           action: 'add',
@@ -1540,7 +1540,7 @@ describe('useReactionsQuery', () => {
         capturedRemoved({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 0, participantIds: [] },
           participantId: 'user-1',
           userId: 'user-1',
           action: 'remove',
@@ -1574,7 +1574,7 @@ describe('useReactionsQuery', () => {
         capturedRemoved({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '👍',
-          aggregation: { emoji: '👍', count: 2, participantIds: ['u1', 'u2'], hasCurrentUser: false },
+          aggregation: { emoji: '👍', count: 2, participantIds: ['u1', 'u2'] },
           participantId: 'u3',
           action: 'remove',
         });
@@ -1606,7 +1606,7 @@ describe('useReactionsQuery', () => {
         capturedRemoved({
           messageId: 'msg-OTHER',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 0, participantIds: [] },
           participantId: 'user-1',
           userId: 'user-1',
           action: 'remove',
@@ -1634,7 +1634,7 @@ describe('useReactionsQuery', () => {
         capturedRemoved({
           messageId: '507f1f77bcf86cd799439013',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 0, participantIds: [] },
           participantId: 'user-1',
           userId: 'user-1',
           action: 'remove',
@@ -1644,6 +1644,164 @@ describe('useReactionsQuery', () => {
       const data = queryClient.getQueryData<{ reactions: unknown[]; userReactions: unknown[] }>(['reactions', '507f1f77bcf86cd799439013']);
       expect(data?.reactions).toEqual([]);
       expect(data?.userReactions).toEqual([]);
+    });
+
+    // `hasCurrentUser` est une réponse PAR LECTEUR, et l'agrégat d'une diffusion
+    // n'en a pas : le même objet part vers toute la room. Le recopier tel quel
+    // dans le cache attribue au LECTEUR la réaction de l'ACTEUR — c'est le
+    // défaut que la jumelle commentaire a déjà produit en production côté iOS.
+    // Ici la vérité du lecteur est `userReactions`, qui se dérive de `userId`.
+    it("n'attribue pas au lecteur la réaction d'un TIERS", async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
+        reactions: [],
+        userReactions: [],
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'reader-1' }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(mockOnReactionAdded).toHaveBeenCalled());
+      const capturedAdded = mockOnReactionAdded.mock.calls[mockOnReactionAdded.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedAdded({
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '❤️',
+          aggregation: { emoji: '❤️', count: 1, participantIds: ['participant-other'] },
+          participantId: 'participant-other',
+          userId: 'someone-else',
+          conversationId: '507f1f77bcf86cd7994390c0',
+          timestamp: new Date('2026-08-23T12:00:00.000Z'),
+          action: 'add',
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.reactions.find(r => r.emoji === '❤️')?.count).toBe(1);
+      });
+      expect(result.current.reactions.find(r => r.emoji === '❤️')?.hasCurrentUser).toBe(false);
+      expect(result.current.userReactions).not.toContain('❤️');
+    });
+
+    // La file hors-ligne conserve la charge ENFILÉE jusqu'à 48 h et la rejoue
+    // telle quelle : pendant toute la fenêtre de déploiement, un lecteur qui se
+    // reconnecte reçoit des agrégats de l'ANCIENNE forme, portant encore le
+    // drapeau de l'acteur. Le lecteur doit l'ignorer, pas le croire.
+    it("ignore un `hasCurrentUser` HÉRITÉ que la file rejoue", async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
+        reactions: [],
+        userReactions: [],
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'reader-1' }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(mockOnReactionAdded).toHaveBeenCalled());
+      const capturedAdded = mockOnReactionAdded.mock.calls[mockOnReactionAdded.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedAdded({
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '❤️',
+          // Forme d'AVANT le cycle 115, telle qu'une entrée de file la porte.
+          aggregation: { emoji: '❤️', count: 1, participantIds: ['participant-other'], hasCurrentUser: true } as ReactionUpdateEvent['aggregation'],
+          participantId: 'participant-other',
+          userId: 'someone-else',
+          conversationId: '507f1f77bcf86cd7994390c0',
+          timestamp: new Date('2026-08-23T12:00:00.000Z'),
+          action: 'add',
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.reactions.find(r => r.emoji === '❤️')?.count).toBe(1);
+      });
+      expect(result.current.reactions.find(r => r.emoji === '❤️')?.hasCurrentUser).toBe(false);
+      expect(result.current.userReactions).not.toContain('❤️');
+    });
+
+    // Le miroir : quand le lecteur EST l'acteur, son propre drapeau s'allume —
+    // dérivé de `userReactions`, pas recopié de l'agrégat.
+    it("allume le drapeau du lecteur quand c'est SA réaction", async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
+        reactions: [],
+        userReactions: [],
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'reader-1' }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(mockOnReactionAdded).toHaveBeenCalled());
+      const capturedAdded = mockOnReactionAdded.mock.calls[mockOnReactionAdded.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedAdded({
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '❤️',
+          aggregation: { emoji: '❤️', count: 1, participantIds: ['participant-abc'] },
+          participantId: 'participant-abc',
+          userId: 'reader-1',
+          conversationId: '507f1f77bcf86cd7994390c0',
+          timestamp: new Date('2026-08-23T12:00:00.000Z'),
+          action: 'add',
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.userReactions).toContain('❤️');
+      });
+      expect(result.current.reactions.find(r => r.emoji === '❤️')?.hasCurrentUser).toBe(true);
+    });
+
+    // Et le retrait : un TIERS retire sa réaction, le drapeau du lecteur — qui a
+    // lui aussi réagi — ne doit pas s'éteindre parce que l'agrégat de l'acteur
+    // dit `false`.
+    it("n'éteint pas le drapeau du lecteur quand un TIERS retire la sienne", async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
+        reactions: [{ emoji: '❤️', count: 2, participantIds: ['participant-me', 'participant-other'], hasCurrentUser: true }],
+        userReactions: ['❤️'],
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'reader-1' }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(mockOnReactionRemoved).toHaveBeenCalled());
+      const capturedRemoved = mockOnReactionRemoved.mock.calls[mockOnReactionRemoved.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedRemoved({
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '❤️',
+          aggregation: { emoji: '❤️', count: 1, participantIds: ['participant-me'] },
+          participantId: 'participant-other',
+          userId: 'someone-else',
+          conversationId: '507f1f77bcf86cd7994390c0',
+          timestamp: new Date('2026-08-23T12:00:00.000Z'),
+          action: 'remove',
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.reactions.find(r => r.emoji === '❤️')?.count).toBe(1);
+      });
+      expect(result.current.userReactions).toContain('❤️');
+      expect(result.current.reactions.find(r => r.emoji === '❤️')?.hasCurrentUser).toBe(true);
     });
   });
 
@@ -1680,7 +1838,7 @@ describe('useReactionsQuery', () => {
         capturedAdded({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 3, participantIds: [], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 3, participantIds: [] },
           participantId: 'user-2',
           action: 'add',
         });
@@ -1723,7 +1881,7 @@ describe('useReactionsQuery', () => {
         capturedRemoved({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 0, participantIds: [] },
           participantId: 'user-1',
           userId: 'user-1',
           action: 'remove',
@@ -1873,7 +2031,7 @@ describe('useReactionsQuery', () => {
         capturedAdded({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️', // matches first; '👍' goes through the ternary false branch `: r`
-          aggregation: { emoji: '❤️', count: 3, participantIds: [], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 3, participantIds: [] },
           participantId: 'user-5',
           action: 'add',
         });
@@ -1909,7 +2067,7 @@ describe('useReactionsQuery', () => {
         capturedRemoved({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️', // count > 0 → map path; '👍' goes through false branch `: r`
-          aggregation: { emoji: '❤️', count: 1, participantIds: ['user-2'], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 1, participantIds: ['user-2'] },
           participantId: 'user-1',
           userId: 'user-1',
           action: 'remove',
@@ -2013,7 +2171,7 @@ describe('useReactionsQuery', () => {
         capturedAdded({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 1, participantIds: [], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 1, participantIds: [] },
           participantId: 'user-2',
           action: 'add',
         });
@@ -2052,7 +2210,7 @@ describe('useReactionsQuery', () => {
         capturedAdded({
           messageId: '507f1f77bcf86cd799439011', // NOT present in pages → found stays false
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 1, participantIds: [], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 1, participantIds: [] },
           participantId: 'user-2',
           action: 'add',
         });
@@ -2089,7 +2247,7 @@ describe('useReactionsQuery', () => {
         capturedAdded({
           messageId: '507f1f77bcf86cd799439011',
           emoji: '❤️',
-          aggregation: { emoji: '❤️', count: 1, participantIds: [], hasCurrentUser: false },
+          aggregation: { emoji: '❤️', count: 1, participantIds: [] },
           participantId: 'user-2',
           action: 'add',
         });

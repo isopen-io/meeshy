@@ -37,11 +37,12 @@ function makePayload(overrides: Partial<ReactionMutationPayload> = {}): Reaction
     userId: 'user-A',
     emoji: '👍',
     action: 'add',
+    // Pas de `hasCurrentUser` : une diffusion n'a pas de lecteur, donc pas de
+    // « moi » à résoudre (cycle 115, `ReactionBroadcastAggregation`).
     aggregation: {
       emoji: '👍',
       count: 1,
       participantIds: ['participant-A'],
-      hasCurrentUser: true,
     },
     timestamp: new Date('2026-08-23T10:00:00.000Z'),
     ...overrides,
