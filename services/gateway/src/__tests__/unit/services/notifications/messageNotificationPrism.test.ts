@@ -104,14 +104,20 @@ const baseParams = {
   messagePreview: 'Hello',
 };
 
-/** La charge `data` réellement remise à APNs, ou `undefined` si rien n'est parti. */
+/** La charge réellement remise à APNs, ou `undefined` si rien n'est parti. */
+const servedPush = (sendToUser: jest.Mock): Record<string, any> | undefined =>
+  sendToUser.mock.calls[0]?.[0]?.payload;
+
 const servedPushData = (sendToUser: jest.Mock): Record<string, unknown> | undefined =>
-  sendToUser.mock.calls[0]?.[0]?.payload?.data;
+  servedPush(sendToUser)?.data;
 
 const runFanOut = async (opts: {
   recipient: LangPrefs;
   translations: unknown;
   originalLanguage: string | null;
+  /** Surcharge des paramètres d'envoi — le CADRAGE ne s'observe que sur un
+   *  corps localisé, donc sur un message porteur de pièce jointe. */
+  params?: Record<string, unknown>;
 }) => {
   const prisma = makePrismaMock(opts);
   const sendToUser = jest.fn().mockResolvedValue(undefined);
@@ -119,9 +125,9 @@ const runFanOut = async (opts: {
   service.setSocketIO(makeIO());
   service.setPushNotificationService({ sendToUser } as any);
 
-  const notification = await service.createMessageNotification(baseParams);
+  const notification = await service.createMessageNotification({ ...baseParams, ...opts.params } as any);
 
-  return { notification, data: servedPushData(sendToUser), prisma };
+  return { notification, data: servedPushData(sendToUser), push: servedPush(sendToUser), prisma };
 };
 
 describe('createMessageNotification — le Prisme de la bannière DESCEND les rangs', () => {
@@ -221,16 +227,23 @@ describe('createMessageNotification — ce que la descente ne doit PAS relâcher
     // Deux résolutions distinctes vivent dans cette méthode et ne doivent pas
     // fusionner : le CADRAGE (« Alice vous a envoyé une photo », la langue
     // d'interface du destinataire) reste le rang 1 ; seul le CONTENU descend.
-    // Les confondre localiserait la bannière en portugais pour un lecteur dont
+    // Les confondre localiserait la bannière en français pour un lecteur dont
     // l'application est en allemand.
-    const { data, notification } = await runFanOut({
-      recipient: { systemLanguage: 'de', deviceLocale: 'pt-BR' },
-      translations: { pt: { text: 'Olá' } },
+    //
+    // Le témoin porte sur le CORPS réellement remis à APNs. `Notification.lang`
+    // n'est PAS persisté — il ne pilote que le rendu — si bien que la forme
+    // antérieure de ce témoin (`notification.lang ?? 'de'`) ne pouvait pas
+    // tomber : elle lisait `undefined` puis assertait son propre repli. Le
+    // corps localisé, lui, dirait « 📷 Photo » si les deux fusionnaient.
+    const { data, push } = await runFanOut({
+      recipient: { systemLanguage: 'de', deviceLocale: 'fr-FR' },
+      translations: { fr: { text: 'Bonjour' } },
       originalLanguage: 'en',
+      params: { messagePreview: '', attachments: [{ type: 'image' }] },
     });
 
-    expect(data?.translatedContent).toBe('Olá');
-    expect((notification as any)?.lang ?? 'de').toBe('de');
+    expect(data?.translatedContent).toBe('Bonjour');
+    expect(push?.body).toBe('📷 Foto');
   });
 
   it('tronque la traduction poussée à 200 caractères, quel que soit son rang', async () => {
