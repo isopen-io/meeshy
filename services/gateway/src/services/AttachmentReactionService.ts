@@ -1,6 +1,6 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
-import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { ConflictError } from '../errors/custom-errors';
 
 export interface AddAttachmentReactionOptions {
@@ -54,11 +54,10 @@ export class AttachmentReactionService {
     const existingReactionCount = await this.prisma.attachmentReaction.count({
       where: { attachmentId: o.attachmentId, participantId: o.participantId },
     });
-    if (!isReactionAllowed(existingReactionCount)) {
-      // `ConflictError` — même mécanisme que les autres objets réagissables
-      // (messages, posts, commentaires) : un refus légitime, pas une panne.
-      throw new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED');
-    }
+    // `assertReactionAllowed` jette `ConflictError` — même mécanisme que les autres
+    // objets réagissables (messages, posts, commentaires) : un refus légitime, pas
+    // une panne.
+    assertReactionAllowed(existingReactionCount);
 
     // Multi-réactions (2026-08-18, « du multiple sur tout contenu à
     // réaction ») : la clé unique DB porte le TRIPLET (attachmentId,
