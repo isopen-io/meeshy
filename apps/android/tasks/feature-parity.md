@@ -3994,7 +3994,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       port of the message Prisme rules — Map-keyed translations, Rule 1 honoured) ;
       per-post flag strip **shipped** + request-missing-languages **shipped** (slice
       `feed-post-translation-request`, 2026-08-21 — tap a configured-but-absent language chip to translate
-      the post on demand and switch to it, via `PostRepository.requestOnDemandTranslation` + `PostTranslationMerge`)
+      the post on demand and switch to it, via `PostRepository.requestOnDemandTranslation` + `PostTranslationMerge`) ;
+      **realtime push merge shipped** (slice `post-translation-updated-realtime-merge`, 2026-08-24 — the
+      caption sibling of the story `story:translation-updated` slice). Android had **no** handler for
+      `post:translation-updated`; the gateway translates a post server-side and broadcasts the finished
+      entry (`{ postId, language, translation:{text,translationModel?,confidenceScore?,createdAt?} }`), iOS
+      folds it into the open feed via `FeedViewModel.applyPostTranslation`, Android dropped it on the floor.
+      New `SocketPostTranslationUpdatedData` (reuses `ApiPostTranslationEntry` as its `translation` shape) +
+      `SocialSocketManager.postTranslationUpdated` flow wired to `listen("post:translation-updated", …)`. New
+      entry-preserving `PostTranslationMerge.mergeTranslation(post, lang, entry)` overload (keeps
+      model/confidence/timestamp the string overload dropped; no-op on blank lang/text or the identical
+      entry) + `PostRepository.applyTranslationUpdate(postId, lang, entry): Boolean` folding it into
+      `_feedCache` so the projected card re-renders in the reader's preferred language — no override forced
+      (the reader's chain decides; parity with iOS and the story slice). `FeedViewModel` subscribes and
+      routes to the repository. +18 tests (9 pure merge, 2 socket decode, 5 repository cache-merge, 1 vm
+      routing + no-op cases); RED-proof isolated: neutering the entry merge reddened exactly the 5
+      transformation tests, the 3 no-op tests stayed green. No wire/production logic outside `apps/android`.
 - [x] Feed card stats row: like (filled when own) + comment count + repost count,
       mood emoji on the author line, pure `FeedPostPresentation` builder (8 builder
       tests + 1 model Prisme test + 3 repository optimistic/rollback tests, all green)

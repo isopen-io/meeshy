@@ -427,6 +427,22 @@ data class SocketStoryTranslationUpdatedData(
 )
 
 /**
+ * `post:translation-updated` — the gateway translated a post's text into [language]
+ * server-side and broadcasts the finished entry so an open feed card can switch to it
+ * without a refetch (the caption sibling of [SocketStoryTranslationUpdatedData], which
+ * carries per-overlay maps instead). Mirror of iOS `SocketPostTranslationUpdatedData`.
+ * [translation] has the same shape as [ApiPostTranslationEntry] — text plus optional
+ * model/confidence/timestamp — so it decodes straight into one; a blank text is a no-op
+ * the [PostTranslationMerge] ignores.
+ */
+@Serializable
+data class SocketPostTranslationUpdatedData(
+    val postId: String,
+    val language: String,
+    val translation: ApiPostTranslationEntry,
+)
+
+/**
  * `status:unreacted` — a user removed their reaction from a mood status. Same shape as
  * [SocketStatusReactedData] (mirror of the shared `StatusUnreactedEventData`): it carries
  * no aggregate count, so the bar decrements the emoji by one (clamped ≥0, dropping the

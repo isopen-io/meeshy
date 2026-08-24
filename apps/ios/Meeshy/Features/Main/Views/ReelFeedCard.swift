@@ -595,7 +595,7 @@ struct ReelFeedCard: View, Equatable {
         .contentShape(Rectangle())
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "a11y.feed.post.like", defaultValue: "Aimer", bundle: .main))
-        .accessibilityValue(String(format: String(localized: "a11y.feed.post.like.value", defaultValue: "%d j'aime", bundle: .main), displayLikeCount))
+        .accessibilityValue(PostStatAccessibility.likesLabel(displayLikeCount))
         .accessibilityAddTraits(isLiked ? .isSelected : [])
     }
 

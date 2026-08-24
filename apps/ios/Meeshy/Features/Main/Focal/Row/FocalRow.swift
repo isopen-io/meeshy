@@ -638,8 +638,10 @@ struct FocalRow: View {
 
     /// LA chip du focus — une seule coquille pour l'identité, la date, la
     /// traduction, les drapeaux, le (+) et les réactions : capsule OPAQUE
-    /// (posée sur la ligne de la carte), contour à l'accent de la scène
-    /// (plein quand active / à moi), même langage que l'encoche de la liste.
+    /// (posée sur la ligne de la carte), teintée à l'accent de la scène —
+    /// SANS contour (directive 2026-08-24). L'état se lit désormais au fond
+    /// seul : dense pour le drapeau affiché (`isActive`), plein pour une
+    /// réaction qui est la mienne (`filled`).
     private func focusChip<Content: View>(isActive: Bool = false, filled: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
         content()
             .padding(.horizontal, 7)
@@ -648,8 +650,7 @@ struct FocalRow: View {
             .background(
                 Capsule(style: .continuous)
                     .fill(filled ? focusAccent : MeeshyColors.backgroundSecondary(isDark: input.isDark))
-                    .overlay(Capsule(style: .continuous).fill(filled ? Color.clear : focusAccent.opacity(input.isDark ? 0.18 : 0.14)))
-                    .overlay(Capsule(style: .continuous).strokeBorder(focusAccent.opacity(isActive || filled ? 1 : FocalScrollPerspective.focusChipRingOpacity), lineWidth: isActive || filled ? 1.5 : 1))
+                    .overlay(Capsule(style: .continuous).fill(filled ? Color.clear : focusAccent.opacity(FocalScrollPerspective.focusChipFillOpacity(isDark: input.isDark, isActive: isActive))))
             )
             .contentShape(Capsule(style: .continuous))
     }
@@ -738,7 +739,7 @@ struct FocalRow: View {
         .accessibilityLabel("\(reaction.emoji) \(reaction.count)")
     }
 
-    /// La carte du message en focus, dessinée dans le repère du CONTENU
+    /// Le FOND du message en focus, dessiné dans le repère du CONTENU
     /// (la carte UIKit bornée à la cellule dérivait de ses chips tant que la
     /// cellule n'était pas posée). Mêmes cotes que `focusCardInsets` : elle
     /// dépasse le bloc de `focusCardInnerMargin` en haut et en bas, et
@@ -746,10 +747,6 @@ struct FocalRow: View {
     private var focusCardBackground: some View {
         RoundedRectangle(cornerRadius: FocalScrollPerspective.focusCardCornerRadius, style: .continuous)
             .fill(focusAccent.opacity(input.isDark ? FocalScrollPerspective.focusCardFillOpacityDark : FocalScrollPerspective.focusCardFillOpacityLight))
-            .overlay(
-                RoundedRectangle(cornerRadius: FocalScrollPerspective.focusCardCornerRadius, style: .continuous)
-                    .strokeBorder(focusAccent.opacity(input.isDark ? FocalScrollPerspective.focusCardBorderOpacityDark : FocalScrollPerspective.focusCardBorderOpacityLight), lineWidth: 1)
-            )
             .padding(.horizontal, -(FocalMetrics.Row.paddingHorizontal - FocalScrollPerspective.focusCardHorizontalInset))
             .padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)
     }

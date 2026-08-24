@@ -59,7 +59,7 @@ du fil — gardées différemment. Le correctif les fond en UNE :
 - Gates : gateway **847/847 suites, 19397 témoins** · shared **108 fichiers, 2578 témoins** ·
   `tsc --noEmit` 0 erreur.
 - Détail raisonné : `tasks/realtime-sync-audit-2026-08-24-cycle123.md`.
-- Leçon : `tasks/lessons.md` § 268.
+- Leçon : `tasks/lessons.md` § 270.
 
 ### Lot 2 (cycle 123 bis) — la JUMELLE, posée dans le MÊME lot
 

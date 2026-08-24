@@ -322,7 +322,9 @@ nonisolated public enum FocalMetrics {
     // `FocusChip` a vécu ici quelques heures le 2026-08-22 : j'y avais nommé
     // les opacités de contour des chips de la carte de focus pour satisfaire la
     // garde R15. Le tronc avait fait le MÊME travail au même moment, dans
-    // `FocalScrollPerspective` (`focusChipRingOpacity`,
-    // `focusCardBorderOpacity*`) — c'est SA maison qui fait foi : deux domiciles
+    // `FocalScrollPerspective` — c'est SA maison qui fait foi : deux domiciles
     // pour une même cote, c'est exactement ce que la garde R15 interdit.
+    // Les contours eux-mêmes ont disparu le 2026-08-24 (« plus de cadre en
+    // mode focal ») ; ce qui reste des chips — leur teinte de fond, marque de
+    // l'état actif — vit toujours là-bas (`focusChipFillOpacity`).
 }

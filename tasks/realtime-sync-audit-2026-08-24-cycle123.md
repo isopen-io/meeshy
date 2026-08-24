@@ -124,9 +124,10 @@ cohérent — noté pour ne pas fabriquer une dette imaginaire.
 
 ## Leçon
 
-`tasks/lessons.md` § Leçon 268 — quand deux valeurs doivent rester d'accord, la question n'est
+`tasks/lessons.md` § Leçon 270 — quand deux valeurs doivent rester d'accord, la question n'est
 pas « les a-t-on gardées pareil ? » mais « peuvent-elles être calculées deux fois ? ».
-(La 267 est celle du cycle 123 WEB parallèle, atterri sur `main` le même jour.)
+(267/268/269 sont des lots parallèles atterris sur `main` le même jour — cycle 123 WEB,
+itération 240i, routine calling Vague 176.)
 
 ---
 
@@ -214,7 +215,7 @@ harnais.
 
 ## Leçon
 
-`tasks/lessons.md` § Leçon 269 — un helper de confidentialité à UN SEUL appelant est un
+`tasks/lessons.md` § Leçon 271 — un helper de confidentialité à UN SEUL appelant est un
 inventaire, pas une garde.
 
 ## Gates du lot 2

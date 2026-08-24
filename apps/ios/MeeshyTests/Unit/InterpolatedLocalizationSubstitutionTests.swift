@@ -57,12 +57,16 @@ final class InterpolatedLocalizationSubstitutionTests: XCTestCase {
         )
     }
 
+    /// `feed.post.comment.replies_count` (plate, « %lld réponses ») a été retiré
+    /// en 240i : il gravait « 1 réponses » à l'écran. Le compteur de réponses
+    /// passe maintenant par la clé PLURIELLE `feed.post.stat.replies`, servie par
+    /// `PostStatAccessibility.repliesLabel`. La substitution reste vérifiée ici,
+    /// l'accord CLDR par `PostStatAccessibilityTests`.
+    @MainActor
     func test_repliesCount_substitutesTheReplyCount() {
-        let replies = 12
         assertFullySubstituted(
-            String(localized: "feed.post.comment.replies_count",
-                   defaultValue: "\(replies) réponses", bundle: .main),
-            contains: ["12"], "feed.post.comment.replies_count"
+            PostStatAccessibility.repliesLabel(12),
+            contains: ["12"], "feed.post.stat.replies"
         )
     }
 

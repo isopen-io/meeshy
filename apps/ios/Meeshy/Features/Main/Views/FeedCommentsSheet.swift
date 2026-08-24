@@ -2378,7 +2378,7 @@ struct CommentRowView: View, Equatable {
                             }
                             .frame(minHeight: 44)
                             .accessibilityLabel(String(localized: "a11y.comment.reply", defaultValue: "Répondre", bundle: .main))
-                            .accessibilityValue(comment.replies > 0 ? String(format: String(localized: "a11y.comment.replies.count", defaultValue: "%d réponses", bundle: .main), comment.replies) : "")
+                            .accessibilityValue(comment.replies > 0 ? PostStatAccessibility.repliesLabel(comment.replies) : "")
                             .accessibilityHint(String(format: String(localized: "a11y.comment.reply.hint", defaultValue: "Répondre à %@", bundle: .main), comment.author))
 
                             if showSeeReplies {
@@ -2399,7 +2399,7 @@ struct CommentRowView: View, Equatable {
                                 .accessibilityElement(children: .ignore)
                                 .accessibilityAddTraits(.isButton)
                                 .accessibilityLabel(comment.replies > 0
-                                    ? String(format: String(localized: "a11y.comment.show_replies", defaultValue: "Voir %d réponses", bundle: .main), comment.replies)
+                                    ? String(localized: "a11y.comment.show_replies", defaultValue: "Voir \(comment.replies) réponses", bundle: .main)
                                     : String(localized: "feed.comments.see_replies", defaultValue: "Voir", bundle: .main))
                             }
                         }

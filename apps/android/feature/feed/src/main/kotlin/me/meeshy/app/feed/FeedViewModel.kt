@@ -224,6 +224,17 @@ class FeedViewModel @Inject constructor(
                 realtimeHead.update { FeedRealtimeReducer.comment(it, payload.postId, payload.commentCount) }
             }
         }
+        viewModelScope.launch {
+            // Prisme, push side: the gateway translated a post server-side and broadcast
+            // the finished entry. Fold it into the feed cache so the open card re-renders
+            // in the reader's preferred language the instant it lands — the reader's own
+            // resolution chain (preferences + active override) decides whether to surface
+            // it, so no override is forced here (parity with iOS applyPostTranslation and
+            // the story-viewer realtime merge).
+            socialSocket.postTranslationUpdated.collect { payload ->
+                postRepository.applyTranslationUpdate(payload.postId, payload.language, payload.translation)
+            }
+        }
     }
 
     /**

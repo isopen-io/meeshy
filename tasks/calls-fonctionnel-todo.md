@@ -11924,3 +11924,99 @@ non implémenté ; iOS single-peer côté groupe ; même gap de hiérarchie de r
 cf. Vague 174) ; `bun run lint` reste documenté cassé dans ce conteneur (`eslint-plugin-react`
 incompatible avec `eslint`, pré-existant — non re-tenté ici, conformément à la consigne du
 CLAUDE.md racine).
+
+## Vague 176 — Android `CallStateMachine.reduceOffering` ignorait un `call:missed` réel arrivé après l'early-join du callee (2026-08-24)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Branche
+redémarrée depuis `origin/main` (Vague 175 déjà mergée, PR #3456, aucune branche
+`claude/upbeat-dirac-*` antérieure en avance — vérifié via `git ls-remote` : ~37 branches de
+routine stagnantes existent mais aucune ne porte de PR ouverte liée au calling). Audit délégué
+(lecture seule) sur iOS/Android/web/gateway/shared, cadré pour ne pas rouvrir les items
+« reste ouvert » déjà actés (god-object `CallManager.swift`, ADR `actor CallEventQueue`,
+single-peer groupe iOS, gap de rôle `conversations/participants.ts`, `redirect=` vs
+`returnUrl=` sur le lien tracké, famille `clearRingingTimeout`/`clearHeartbeats` — ré-auditée
+et reconfirmée close).
+
+### Root cause
+
+`CallStateMachine.reduceOffering()` (`apps/android/core/model/.../CallStateMachine.kt:54-57`)
+ne traitait que `RemoteAnswer` ; tout `CallEvent.RingTimeout` y tombait dans le `else ->
+terminal(event) ?: CallState.Offering`, un no-op, avec pour seule justification le commentaire
+du test associé : « cancelled once the peer joined ». Cette prémisse est **fausse** pour le
+gateway actuel : `CallEventsHandler.ts:3062-3069` documente explicitement que le handler
+`call:join` NE nettoie PLUS le timer de sonnerie — le callee early-joint la room d'appel
+PENDANT que ça sonne encore (l'offre SDP doit circuler pendant la sonnerie), et c'est la
+réponse SDP ou un chemin terminal qui possède désormais le clear. `Offering` s'atteint depuis
+`Ringing(isOutgoing=true)` via `ParticipantJoined` — exactement ce moment d'early-join. Un
+`call:missed` du serveur (décodé en `CallEvent.RingTimeout` par `CallSignalMapper.kt:118-206`)
+peut donc légitimement arriver alors que l'état local est déjà `Offering`. iOS — la référence
+que ce FSM porte l'ambition de « fidèlement mirror » — n'a aucun tel garde : `CallManager.swift`
+traite `call:missed` sans condition de phase locale.
+
+### Impact
+
+L'appelant place un appel sortant ; le callee early-joint (flux normal) mais ne répond jamais
+dans la fenêtre de sonnerie serveur. Le serveur force `missed` et diffuse `call:missed`.
+L'appelant Android décode ça en `RingTimeout`, mais l'état local étant déjà `Offering`, le FSM
+l'ignore — l'écran affiche « Appel en cours » alors que l'appel est déjà terminé côté serveur.
+`onRemoteEnded()` (`CallViewModel.kt:503`) appelait déjà `coordinator.end()` inconditionnellement
+sur ce chemin (identité vérifiée), donc la connexion réelle était bien coupée — mais le
+`callState` exposé à l'UI restait `Offering`/`CONNECTING`, désynchronisé de la réalité, jusqu'à
+ce qu'un garde-fou local SANS RAPPORT (`CallConnectingWatchdog`, 45s depuis l'entrée en
+`Offering`) finisse par forcer la fin — avec le MAUVAIS motif (`CallEndReason.Failed`
+« connect-timed-out » au lieu de `CallEndReason.Missed`), jusqu'à 45s plus tard.
+
+### Fix
+
+Un ajout d'une branche `when`, purement additif, miroir de la branche `RingTimeout` déjà
+présente dans `reduceRinging` :
+```kotlin
+private fun reduceOffering(event: CallEvent): CallState = when (event) {
+    CallEvent.RemoteAnswer -> CallState.Connecting
+    CallEvent.RingTimeout -> CallState.Ended(CallEndReason.Missed)   // ajout
+    else -> terminal(event) ?: CallState.Offering
+}
+```
+Vérifié que `syncConnectingWatchdog()` (`CallViewModel.kt:821-835`) stoppe correctement le
+watchdog dès que `callState` quitte `Offering`/`Connecting` — aucun double-teardown, aucune
+émission `emitEnd`/`coordinator.end()` en double : `onRemoteEnded()` appelait déjà
+`coordinator.end()` sur ce chemin avant ce correctif, inchangé.
+
+### Tests (TDD, RED confirmé par lecture — build Gradle indisponible dans ce conteneur)
+
+Deux tests :
+1. `CallStateMachineTest.kt` — le test existant (« offering ignores a ring timeout (cancelled
+   once the peer joined) ») encodait le bug comme comportement voulu ; RENOMMÉ et son
+   assertion INVERSÉE vers `CallState.Ended(CallEndReason.Missed)`.
+2. `CallViewModelTest.kt` — nouveau test bout-en-bout : « a missed teardown for an outgoing
+   call that already early-joined ends it as missed » (`vm.start(outgoingVideo)` →
+   `vm.onSignal(ParticipantJoined())` → `endedCalls.emit(CallEndedSignal("call-1",
+   RingTimeout))` → `status == ENDED`, `endReason == Missed`), à côté du test symétrique déjà
+   présent pour le cas `Ringing` entrant.
+
+**CI reality (documentée par `.github/workflows/android.yml` et répétée aux Vagues 173/174/
+antérieures)** : `dl.google.com` est refusé par la politique réseau de ce conteneur
+(`$HTTPS_PROXY/__agentproxy/status` → `connect_rejected`), donc ni le SDK Android ni Gradle
+n'y tournent — confirmé à nouveau ici (`./gradlew :core:model:testDebugUnitTest` échoue à la
+résolution du plugin AGP, pas sur le code). Le correctif et les deux tests ont été vérifiés
+par lecture directe : types (`CallEndReason.Missed`, `CallState.Ended`) confirmés dans
+`CallState.kt`, callId de fixture (`call-1`) confirmé contre le mock `emitInitiate`, garde du
+watchdog relu ligne à ligne. La preuve réelle de compilation + exécution vient du job GitHub
+Actions `Android` (runner `ubuntu-latest`, accès réel à `dl.google.com`) sur la PR — gate
+effective, pas cette session.
+
+### Risk assessment
+
+Minimal — un ajout de branche `when` (aucune branche existante modifiée), deux tests. Le seul
+comportement qui change : un `call:missed` reçu par l'appelant après l'early-join du callee
+termine désormais l'appel immédiatement avec `CallEndReason.Missed`, au lieu d'attendre jusqu'à
+45s pour un `CallEndReason.Failed` erroné via le watchdog.
+
+### Non fait volontairement / reste ouvert
+
+Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~6372 lignes) ; ADR
+`actor CallEventQueue` non implémenté ; iOS single-peer côté groupe ; gap de hiérarchie de
+rôle sur `conversations/participants.ts` (hors périmètre calling) ; `redirect=` vs
+`returnUrl=` sur `app/links/tracked/[token]/page.tsx` (hors périmètre calling) ; `bun run lint`
+documenté cassé dans ce conteneur (pré-existant, hors périmètre). Aucun nouveau suivi ouvert
+par cette Vague.

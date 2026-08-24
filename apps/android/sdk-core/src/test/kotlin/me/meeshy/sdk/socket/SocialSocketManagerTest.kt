@@ -288,6 +288,43 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `post translation-updated payload is decoded and emitted with its full entry`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.postTranslationUpdated.test {
+            handlers.getValue("post:translation-updated").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"postId":"p1","language":"es","translation":{"text":"Hola","translationModel":"nllb","confidenceScore":0.97}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.language).isEqualTo("es")
+            assertThat(event.translation.text).isEqualTo("Hola")
+            assertThat(event.translation.translationModel).isEqualTo("nllb")
+            assertThat(event.translation.confidenceScore).isEqualTo(0.97)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a post translation-updated payload with only text decodes with null metadata`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.postTranslationUpdated.test {
+            handlers.getValue("post:translation-updated").invoke(
+                arrayOf(JSONObject("""{"postId":"p2","language":"de","translation":{"text":"Hallo"}}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p2")
+            assertThat(event.translation.text).isEqualTo("Hallo")
+            assertThat(event.translation.translationModel).isNull()
+            assertThat(event.translation.confidenceScore).isNull()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `comment reaction-removed payload is decoded and emitted`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.commentReactionRemoved.test {
