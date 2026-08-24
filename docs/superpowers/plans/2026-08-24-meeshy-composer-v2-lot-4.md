@@ -430,6 +430,33 @@ case .repost(_, let sourceFormat):
 
 **DoD :** republier un mood depuis la bulle ouvre le meuble sur la surface mood, l'éventail offre Mood · Post, et les deux chips produisent réellement deux formats différents. Les trois autres formats de repost **n'ont pas bougé d'une ligne** — `UnifiedPostComposer` et le chemin 3 sont intacts.
 
+> **ÉTAT AU 2026-08-24 — 4.7 est livrée À MOITIÉ, et ne se compte PAS comme faite.**
+> Mesuré à l'exécution, puis confirmé par la revue adversariale : le **MIROIR** part
+> (republier un mood ouvre le meuble sur la surface mood, et la republication repart
+> en STATUS), mais l'**ANCRAGE n'atteint aucun écran**. `ComposerFormatFan` n'est
+> monté que par `plateauTools`, lui-même monté par la SCÈNE seule — l'éventail ne
+> descend donc pas sous la surface mood, et le chip « Post » n'existe nulle part.
+> `.repost(.status)` rend pourtant bien `offeredFormats == [.status, .post]` : l'offre
+> est dans la table, pas à l'écran.
+>
+> **Ce que la dette N'EST PAS** : la table ne ment pas. `ComposerIntent.swift`
+> consigne l'écart en toutes lettres, et
+> `ComposerDocumentSurfaceTests.test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint`
+> le tient bloc par bloc — elle rougira le jour où l'éventail descendra.
+>
+> **Les deux raccourcis ont été mesurés puis ÉCARTÉS**, et il faut savoir pourquoi
+> avant de les reproposer : (a) descendre l'éventail livrerait le chip « Post » sur
+> une surface dont le socle peint encore un `audienceChip` inerte et un œil ouvrant
+> une scène VIDE — de l'UI morte, que la loi 4 interdit ; (b) ramener
+> `routesToLegacy` à `.repostComposer` ferait désigner par la table un composer
+> historique qu'**aucun** site ne monte pour un repost de statut, pendant que
+> `RootView` et `iPadRootView` montent le meuble : la table mentirait dans l'autre
+> sens et quatre gardes livrées tomberaient.
+>
+> **Condition de levée** : le socle sait choisir une audience et l'œil sait ce qu'il
+> montre sous une surface sans scène. Tant que ces deux-là manquent, 4.7 reste à
+> moitié, et la planche P0 ne la compte pas.
+
 ---
 
 ### Task 4.8: Le RETRAIT — conditionnel, en dernier, avec un STOP

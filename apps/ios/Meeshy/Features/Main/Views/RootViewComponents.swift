@@ -321,18 +321,23 @@ struct ThemedFeedOverlay: View {
         postRepostedIds.insert(postId)
         postRepostDelta[postId, default: 0] += 1
         postRepostInFlightIds.insert(postId)
+        // L'instantané se prend AVANT d'ouvrir le `Task`, donc dans le tour de
+        // boucle du tap : cette fonction est déjà `@MainActor`, mais un `Task`
+        // ne s'exécute pas au tap — il s'ENFILE. Lire la carte à l'intérieur
+        // laissait au socket un tour de boucle pour la retirer de
+        // `viewModel.posts` ; `cardType` rendait alors `nil`, le gateway
+        // repliait sur `POST` (`?? PostType.POST`) et une story repartagée
+        // devenait un post permanent. Le `Task` reçoit une cible déjà
+        // résolue : il n'a plus de lecture à faire.
+        let carte = viewModel.posts.first(where: { $0.id == postId })
+        let cible = RepostTargeting.target(
+            cardId: postId, cardType: carte?.type,
+            repostOfId: carte?.repost?.id,
+            originalRepostOfId: carte?.repost?.originalRepostOfId
+        )
         Task {
             defer { Task { @MainActor in postRepostInFlightIds.remove(postId) } }
             do {
-                // Instantané pris sur le main actor : le socket peut muter
-                // `viewModel.posts` entre le tap et l'envoi (même précaution
-                // que la sauvegarde de cache voisine).
-                let carte = await MainActor.run { viewModel.posts.first(where: { $0.id == postId }) }
-                let cible = RepostTargeting.target(
-                    cardId: postId, cardType: carte?.type,
-                    repostOfId: carte?.repost?.id,
-                    originalRepostOfId: carte?.repost?.originalRepostOfId
-                )
                 _ = try await PostService.shared.repost(
                     postId: cible.postId,
                     targetType: cible.targetType,
@@ -849,8 +854,16 @@ struct ThemedFeedOverlay: View {
         // Story viewer : présentation unifiée via StoryViewerCoordinator au root
         // (`.fullScreenCover(item:)`). L'ancien cover local `(isPresented:)` +
         // `selectedStoryUserId` séparé est supprimé (capture périmée d'uid → écran noir).
+        // Lot 4.6 — la création d'un mood passe par le MEUBLE. `seed: nil` est
+        // ce qui autorise la reprise hors-ligne : la porte n'a rien à semer,
+        // donc `MoodComposerDoor` interroge la file durable, exactement à la
+        // condition que l'écran historique posait.
         .sheet(isPresented: $showStatusComposer) {
-            StatusComposerView(viewModel: statusViewModel)
+            MoodComposerDoor(
+                intent: ComposerIntent(origin: .moodChip),
+                seed: nil,
+                viewModel: statusViewModel
+            )
                 // `.large` is not decoration: the composer's labels scale with
                 // Dynamic Type while its emoji grid does not, so at accessibility
                 // sizes the content outgrows `.medium`. Offering the larger detent

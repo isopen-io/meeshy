@@ -45,7 +45,18 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
             .joined(separator: "\n")
     }
 
-    private let composerPath = "Meeshy/Features/Main/Views/StatusComposerView.swift"
+    /// **RE-VISÉ au lot 4.6.** Les quatre feuilles montaient
+    /// `StatusComposerView` ; elles montent désormais `MoodComposerDoor`, qui
+    /// ouvre le meuble sur `ComposerMoodSurface`. Les trois propriétés
+    /// ci-dessous appartiennent à la vue qui SCROLLE, et c'est elle : le laisser
+    /// pointer l'écran historique aurait gardé trois tests verts sur un fichier
+    /// que plus aucune feuille ne présente — le mode d'extinction silencieuse
+    /// que cette suite existe pour fuir.
+    ///
+    /// `StatusComposerView.swift` existe encore (son retrait est la tâche 4.8,
+    /// conditionnelle) et garde ses propres suites — `SheetToolbarSemanticsTests`,
+    /// `StatusComposerAccessibilityTests`, `NavigationContainerMigrationTests`.
+    private let composerPath = "Meeshy/Features/Main/Composer/ComposerMoodSurface.swift"
 
     // MARK: - The composer's own side of the contract
 
@@ -75,6 +86,11 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
         // spacer is proposed unbounded height and resolves to zero. Keeping one would
         // express layout intent the container cannot honour — it reads as deliberate
         // bottom padding that does not exist.
+        //
+        // The literal is `Spacer()` — bare, unbounded — and not the word: the mood
+        // surface's header row ends on `Spacer(minLength: 0)`, a HORIZONTAL spacer
+        // inside an HStack that pushes the title left. That one has an object; the
+        // vertical, unbounded one does not.
         let swift = try code(composerPath)
         XCTAssertFalse(
             swift.contains("Spacer()"),
@@ -96,22 +112,33 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
     /// Modifiers are chained on the lines immediately following the initializer, so
     /// a bounded look-ahead captures them without parsing Swift. The window is
     /// generous enough to clear the widest call site (six labelled arguments).
+    /// Les quatre feuilles, nommées. La liste est ADDITIVE : en retirer une
+    /// entrée sans la remplacer perd une présentation de la mesure, en silence.
+    private static let presentationFiles = [
+        "Meeshy/Features/Main/Views/RootView.swift",
+        "Meeshy/Features/Main/Views/iPadRootView.swift",
+        "Meeshy/Features/Main/Views/RootViewComponents.swift",
+        "Meeshy/Features/Main/Views/ConversationListView.swift",
+    ]
+
     private func presentationSites() throws -> [PresentationSite] {
         // `RootView` et `iPadRootView` présentent le composer pré-rempli
         // (republication depuis la bulle de mood) : cet état, mort dans
         // `ConversationListView`, a remonté aux racines de fenêtre avec l'hôte
         // unique de la bulle (2026-07-30). Sans ces deux fichiers ici, deux
         // présentations sur quatre n'étaient plus couvertes du tout.
-        let files = [
-            "Meeshy/Features/Main/Views/RootView.swift",
-            "Meeshy/Features/Main/Views/iPadRootView.swift",
-            "Meeshy/Features/Main/Views/RootViewComponents.swift",
-            "Meeshy/Features/Main/Views/ConversationListView.swift",
-        ]
+        //
+        // **Lot 4.6 — le montage a changé de NOM, pas de nature.** Les quatre
+        // feuilles montent `MoodComposerDoor`, la porte app-side qui ouvre
+        // `MeeshyComposerHost` sur la surface du mood. Chercher encore
+        // `StatusComposerView(` aurait rendu ce tableau VIDE, et les deux tests
+        // qui itèrent ci-dessous seraient passés au vert en ne mesurant plus
+        // rien — c'est précisément ce que leur garde-fou « au moins un site »
+        // interdit désormais.
         var sites: [PresentationSite] = []
-        for file in files {
+        for file in Self.presentationFiles {
             let lines = try code(file).components(separatedBy: "\n")
-            for (index, line) in lines.enumerated() where line.contains("StatusComposerView(") {
+            for (index, line) in lines.enumerated() where line.contains("MoodComposerDoor(") {
                 let window = lines[index..<min(index + 20, lines.count)].joined(separator: "\n")
                 sites.append(PresentationSite(file: file, line: index + 1, modifiers: window))
             }
@@ -122,17 +149,89 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
     func test_allFourEntryPointsAreDiscovered() throws {
         // Guards the look-ahead itself: if a call site is renamed or added and this
         // count is not revisited, the two assertions below would silently stop
-        // covering it.
+        // covering it. C'est un `XCTAssertEqual(…, 4)` : zéro site le fait ROUGIR,
+        // pas verdir — il n'a besoin d'aucun renfort.
         XCTAssertEqual(
             try presentationSites().count, 4,
-            "Expected exactly four StatusComposerView presentations (one in RootView, one in " +
+            "Expected exactly four MoodComposerDoor presentations (one in RootView, one in " +
             "iPadRootView, one in RootViewComponents, one in ConversationListView). Update this " +
             "suite when an entry point is added."
         )
     }
 
+    /// **Le recâblage du lot 4.6, gardé du bon côté.** Les quatre feuilles ne
+    /// montent plus l'écran historique. Sans cette garde, un retour en arrière
+    /// sur une seule d'entre elles laisserait le compte ci-dessus à quatre —
+    /// trois portes sur le meuble, une sur sa feuille — et personne ne le dirait.
+    func test_noEntryPointStillMountsTheLegacyComposer() throws {
+        for file in Self.presentationFiles {
+            let swift = try code(file)
+            XCTAssertTrue(
+                swift.contains("MoodComposerDoor("),
+                "\(file) ne présente plus le composer de mood — la garde ne mesurerait RIEN."
+            )
+            XCTAssertFalse(
+                swift.contains("StatusComposerView("),
+                "\(file) monte encore `StatusComposerView` : le lot 4.6 a fait passer les six déclencheurs " +
+                "du mood par le meuble, et y revenir perdrait le socle, la règle de surface et le gate de matière."
+            )
+        }
+    }
+
+    /// **Chaque présentation donne à la porte ce qu'elle sait, et rien de plus.**
+    ///
+    /// Les deux racines de fenêtre republient : elles SÈMENT. Les deux autres
+    /// créent : elles ne sèment rien, et c'est cette absence — et elle seule —
+    /// qui autorise la reprise hors-ligne. Un site de republication qui perdrait
+    /// sa graine ouvrirait un mood NEUF sans bandeau ni `repostOfId` ; un site de
+    /// création qui en poserait une ferait taire la reprise. Les deux échecs sont
+    /// silencieux, et aucun compilateur ne les voit.
+    func test_everyPresentationSeedsWhatItKnows_andNothingElse() throws {
+        let republication = [
+            "Meeshy/Features/Main/Views/RootView.swift",
+            "Meeshy/Features/Main/Views/iPadRootView.swift",
+        ]
+        for file in republication {
+            let swift = try code(file)
+            XCTAssertTrue(
+                swift.contains("sourceFormat: .status"),
+                "\(file) doit PORTER le format de la republication : une entrée de bulle de mood est un statut " +
+                "par construction, et le deviner ouvrirait le mauvais composer."
+            )
+            XCTAssertTrue(
+                swift.contains("ComposerMoodSeed("),
+                "\(file) republie sans graine : le composer s'ouvrirait vide, sans bandeau « Status de @X », " +
+                "et le mood publié serait une création — pas un repartage."
+            )
+        }
+
+        let creation = [
+            "Meeshy/Features/Main/Views/RootViewComponents.swift",
+            "Meeshy/Features/Main/Views/ConversationListView.swift",
+        ]
+        for file in creation {
+            let swift = try code(file)
+            XCTAssertTrue(
+                swift.contains("origin: .moodChip"),
+                "\(file) doit ouvrir la porte du mood — c'est elle qui décide de la surface montée."
+            )
+            XCTAssertTrue(
+                swift.contains("seed: nil"),
+                "\(file) sème quelque chose sur une CRÉATION : `MoodComposerDoor` ne reprend le mood bloqué " +
+                "hors ligne que si rien n'est semé, exactement comme l'écran historique."
+            )
+        }
+    }
+
     func test_everyPresentationOffersTheLargeDetent() throws {
-        for site in try presentationSites() {
+        let sites = try presentationSites()
+        // Le garde-fou des DEUX tests qui ITÈRENT : `for site in []` ne lève
+        // aucune assertion. Le jour du retrait (tâche 4.8) ou d'un renommage de
+        // montage, ils passeraient au vert en ayant perdu leur objet — le mode
+        // d'extinction silencieuse propre aux gardes négatives.
+        XCTAssertFalse(sites.isEmpty, "Aucune présentation trouvée — cette garde ne mesurerait RIEN.")
+
+        for site in sites {
             guard let detents = site.modifiers.range(of: "presentationDetents(") else {
                 XCTFail("\(site.file):\(site.line) presents the composer without any detent.")
                 continue
@@ -148,7 +247,10 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
     }
 
     func test_everyPresentationShowsTheDragIndicator() throws {
-        for site in try presentationSites() {
+        let sites = try presentationSites()
+        XCTAssertFalse(sites.isEmpty, "Aucune présentation trouvée — cette garde ne mesurerait RIEN.")
+
+        for site in sites {
             XCTAssertTrue(
                 site.modifiers.contains("presentationDragIndicator(.visible)"),
                 "\(site.file):\(site.line) must show the drag indicator — it is the only visible " +
