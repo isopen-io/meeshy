@@ -19,6 +19,7 @@ import { CallService } from '../services/CallService.js';
 import { logger } from '../utils/logger.js';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendUnauthorized, sendInternalError } from '../utils/response.js';
 import { toCallSessionResponse } from '../utils/call-session-response.js';
+import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import {
   initiateCallSchema,
   getCallSchema,
@@ -119,7 +120,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           conversationId: {
             type: 'string',
             description: 'Conversation ID where the call will be initiated (MongoDB ObjectId format)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           },
           type: {
             type: 'string',
@@ -252,7 +253,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           callId: {
             type: 'string',
             description: 'Call session unique identifier (MongoDB ObjectId)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           }
         }
       },
@@ -342,7 +343,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           callId: {
             type: 'string',
             description: 'Call session unique identifier (MongoDB ObjectId)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           }
         }
       },
@@ -464,7 +465,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           callId: {
             type: 'string',
             description: 'Call session unique identifier (MongoDB ObjectId)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           }
         }
       },
@@ -622,7 +623,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           callId: {
             type: 'string',
             description: 'Call session unique identifier (MongoDB ObjectId)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           }
         }
       },
@@ -747,7 +748,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           callId: {
             type: 'string',
             description: 'Call session unique identifier (MongoDB ObjectId)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           },
           participantId: {
             type: 'string',
@@ -985,7 +986,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           conversationId: {
             type: 'string',
             description: 'Conversation unique identifier (MongoDB ObjectId)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           }
         }
       },

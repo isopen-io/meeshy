@@ -1999,6 +1999,91 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             "in-app — Apple's Guideline 5 (MIIT) rejection requires CallKit inactive there unconditionally")
     }
 
+    /// `promoteRingingCallToCallKitIfNeeded()` only fires from the
+    /// `didEnterBackground` observer registered by `startBackgroundMonitoring()`
+    /// — but until this fix that registration happened EXCLUSIVELY inside
+    /// `transitionToConnected()`. A call ringing in-app (CallKit skipped because
+    /// the app was foreground, see `handleIncomingCallNotification`) is by
+    /// definition NOT YET connected, so no observer existed to promote it —
+    /// the entire safety net was unreachable dead code. It must also be armed
+    /// at the RINGING entry point, where the gap actually lives.
+    func test_handleIncomingCallNotification_armsBackgroundMonitoring_soAStillRingingCallCanBePromoted() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "func handleIncomingCallNotification(callId:") else {
+            XCTFail("handleIncomingCallNotification not found in CallManager.swift"); return
+        }
+        let afterFn = String(source[fnRange.upperBound...])
+        guard let fnEnd = afterFn.range(of: "private func performLocalMediaStart")?.lowerBound else {
+            XCTFail("Could not find handleIncomingCallNotification boundary"); return
+        }
+        let fnBody = String(afterFn[..<fnEnd])
+        XCTAssertTrue(
+            fnBody.contains("startBackgroundMonitoring()"),
+            "handleIncomingCallNotification must call startBackgroundMonitoring() while the call is " +
+            "still ringing — waiting for transitionToConnected() means an unanswered call that " +
+            "backgrounds mid-ring has NO observer to promote it to CallKit, and iOS can suspend the " +
+            "app with no lock-screen call card, silently dropping the inbound call")
+    }
+
+    /// `reportIncomingVoIPCall` is the VoIP-push twin of
+    /// `handleIncomingCallNotification` (both deliver an incoming call while
+    /// still `.ringing`), but only the latter was armed with
+    /// `startBackgroundMonitoring()` above. Left unarmed here, a VoIP-push
+    /// call that backgrounds mid-ring has no observer to run the
+    /// `applyCameraSuspension(false, cause: "foreground")` safety net
+    /// documented in `startBackgroundMonitoring()` — if a capture
+    /// interruption's end signal never arrives while backgrounded (Apple's
+    /// own documented risk), the peer stays stuck on the frozen frame straight
+    /// into the connected call, and the peer never learns the call was
+    /// backgrounded/foregrounded while ringing.
+    func test_reportIncomingVoIPCall_armsBackgroundMonitoring_soAStillRingingCallCanRecoverFromBackgrounding() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "func reportIncomingVoIPCall(callId:") else {
+            XCTFail("reportIncomingVoIPCall not found in CallManager.swift"); return
+        }
+        let afterFn = String(source[fnRange.upperBound...])
+        guard let fnEnd = afterFn.range(of: "// MARK: - VoIP Push Freshness Check")?.lowerBound else {
+            XCTFail("Could not find reportIncomingVoIPCall boundary"); return
+        }
+        let fnBody = String(afterFn[..<fnEnd])
+        XCTAssertTrue(
+            fnBody.contains("startBackgroundMonitoring()"),
+            "reportIncomingVoIPCall must call startBackgroundMonitoring() while the call is still " +
+            "ringing, exactly like handleIncomingCallNotification does — otherwise a VoIP-push call " +
+            "that backgrounds mid-ring has no observer armed to recover camera suspension or notify " +
+            "the peer of the background/foreground transition")
+    }
+
+    /// Once `promoteRingingCallToCallKitIfNeeded()` is actually reachable (see
+    /// the test above), its success path exposes a second, previously-latent
+    /// bug: `startRingtone()` (played by `handleIncomingCallNotification` when
+    /// CallKit was skipped) keeps looping through an `AVAudioPlayer` that holds
+    /// the session in `.playAndRecord`/self-activated. CallKit's own
+    /// `config.ringtoneSound` ("Ringtone.caf" — the SAME asset) then plays on
+    /// top of it, and the still-active self-owned session risks CallKit never
+    /// observing `didActivate`. The promotion must stop the in-app loop the
+    /// instant CallKit takes over.
+    func test_promoteRingingCallToCallKitIfNeeded_stopsInAppRingtoneOnSuccessfulPromotion() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func promoteRingingCallToCallKitIfNeeded()") else {
+            XCTFail("promoteRingingCallToCallKitIfNeeded not found in CallManager.swift"); return
+        }
+        let afterFn = String(source[fnRange.upperBound...])
+        guard let fnEnd = afterFn.range(of: "private func startBackgroundMonitoring")?.lowerBound else {
+            XCTFail("Could not find promoteRingingCallToCallKitIfNeeded boundary"); return
+        }
+        let fnBody = String(afterFn[..<fnEnd])
+        guard let successRange = fnBody.range(of: "} else {") else {
+            XCTFail("Could not find the reportNewIncomingCall success branch"); return
+        }
+        let successBranch = String(fnBody[successRange.upperBound...])
+        XCTAssertTrue(
+            successBranch.contains("ringbackPlayer.stopRingtone()"),
+            "on successful late-promotion the in-app ringtone loop must stop — otherwise it plays " +
+            "on top of CallKit's own ringtoneSound (same asset, doubled), and the self-activated " +
+            "AVAudioSession it holds risks blocking CallKit's own didActivate")
+    }
+
     /// Le retour en avant-plan reste un déclencheur — comme GARDE-FOU.
     /// `AVCaptureSession.h` documente la fin d'interruption comme survenant
     /// « when your app comes back to foreground » : un signal de fin peut donc

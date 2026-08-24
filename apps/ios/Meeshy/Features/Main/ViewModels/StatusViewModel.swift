@@ -201,7 +201,11 @@ class StatusViewModel: ObservableObject {
     /// - Parameter mentions: les personnes que ce mood nomme sans que son texte
     ///   le dise. `nil` quand il n'y en a aucune — `[]` serait entendu comme un
     ///   effacement.
-    func setStatus(emoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, viaUsername: String? = nil, audioUrl: String? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil) async {
+    /// - Parameter repostOfId: la publication republiée. **Seul porteur de
+    ///   l'attribution** : il n'y a pas de `viaUsername` sur le fil, le gateway
+    ///   ne l'a jamais lu. Le bandeau « Status de @X » du composer reste, mais
+    ///   c'est un fait local d'affichage, pas une écriture.
+    func setStatus(emoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, audioUrl: String? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil) async {
         // Offline: persist the mood durably through the SAME `.createPost` outbox
         // row as posts/reels (type STATUS) so it is not lost, and survives an app
         // kill. We do NOT insert an optimistic entry — unlike posts, the gateway
@@ -230,7 +234,7 @@ class StatusViewModel: ObservableObject {
         }
 
         do {
-            let post = try await statusService.create(moodEmoji: emoji, content: content, originalLanguage: DefaultComposerLanguage.resolve(), visibility: visibility, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername, audioUrl: audioUrl, repostOfId: repostOfId, mentions: mentions)
+            let post = try await statusService.create(moodEmoji: emoji, content: content, originalLanguage: DefaultComposerLanguage.resolve(), visibility: visibility, visibilityUserIds: visibilityUserIds, audioUrl: audioUrl, repostOfId: repostOfId, mentions: mentions)
 
             if let entry = post.toStatusEntry() {
                 myStatus = entry

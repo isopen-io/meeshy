@@ -814,15 +814,11 @@ input[type="button"] {
    saturés, trait de 2px, et un `hue-rotate` de 360° qui traversait tout le
    cercle chromatique en 3 s. Il clignotait, et il DÉNATURAIT les couleurs
    quand elles viennent de l'auteur.
-   Ici : un spectre de clarté homogène ancré sur l'indigo de la marque, un
-   liseré fin doublé d'un halo (`drop-shadow`), et une rotation du DÉGRADÉ
-   — via `--msg-fx-angle`, qu'il faut déclarer en `@property` pour qu'un
-   angle soit interpolable. */
-@property --msg-fx-angle {
-  syntax: '<angle>';
-  initial-value: 0deg;
-  inherits: false;
-}
+   Ici : un spectre de clarté homogène ancré sur l'indigo de la marque, et un
+   liseré fin doublé d'un halo (`drop-shadow`).
+   Le `@property --msg-fx-angle` qui rendait cet angle interpolable a été
+   retiré avec la rotation qu'il servait : plus rien ne l'animait, il ne
+   restait qu'une mécanique morte au milieu du fichier. */
 .msg-fx-rainbow::after,
 .msg-fx-rainbow-static::after {
   content: '';
@@ -830,7 +826,7 @@ input[type="button"] {
   inset: -1px;
   border-radius: inherit;
   padding: 1px;
-  background: conic-gradient(from var(--msg-fx-angle),
+  background: conic-gradient(
     #818cf8, #e879f9, #fb7185, #fbbf24, #34d399, #38bdf8, #818cf8);
   opacity: 0.75;
   filter: drop-shadow(0 0 6px rgb(129 140 248 / 0.45));
@@ -841,10 +837,64 @@ input[type="button"] {
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
 }
-.msg-fx-rainbow::after { animation: msg-fx-rainbow-kf 6s linear infinite; }
-@keyframes msg-fx-rainbow-kf {
-  from { --msg-fx-angle: 0deg; }
-  to { --msg-fx-angle: 360deg; }
+/* Le spectre est POSÉ : il ne tourne plus (directive 2026-08-24, seconde
+   passe). Faire tourner le dégradé en continu, c'était encore un mouvement
+   sans intention — ça tourne, voilà tout. C'est une comète qui parcourt
+   désormais les couleurs, puis se repose.
+
+   La comète est un SVG et non un `conic-gradient` étroit, pour la même raison
+   que Swift la trace avec `Shape.trim` plutôt qu'avec un `AngularGradient` :
+   un balayage angulaire file vite sur les côtés courts d'une bulle et
+   lentement sur les longs, donc sa vitesse apparente dépendrait de la longueur
+   du message. Un tracé déclaré `pathLength="1"` rend `stroke-dasharray` et
+   `stroke-dashoffset` directement exprimés en fractions du PÉRIMÈTRE — vitesse
+   constante, et le raccord rebouclé sans cas particulier.
+
+   Les fractions viennent de `lib/rainbow-sweep.ts` (jumeau de `RainbowSweep`
+   Swift) via custom properties. Seules les bornes de keyframes sont ici en
+   dur : aucun `var()` ne peut porter un pourcentage de keyframe. Elles sont
+   tenues alignées sur la règle par `__tests__/lib/rainbow-sweep.test.ts`. */
+.msg-fx-rainbow-comet {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.msg-fx-rainbow-comet rect {
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: var(--msg-fx-comet-arc) var(--msg-fx-comet-gap);
+  animation: msg-fx-rainbow-comet-kf var(--msg-fx-comet-cycle) linear infinite;
+}
+/* Deux traits superposés : un renflement du spectre lui-même, qui porte
+   l'effet sur fond clair comme sur fond sombre, et un cœur blanc fin qui lui
+   donne son éclat. Un reflet purement blanc disparaîtrait en mode clair. */
+.msg-fx-rainbow-comet .msg-fx-comet-halo {
+  stroke: rgb(129 140 248);
+  stroke-width: 6;
+  filter: blur(4px);
+}
+.msg-fx-rainbow-comet .msg-fx-comet-core {
+  stroke: #fff;
+  stroke-width: 1.5;
+  opacity: 0.9;
+  filter: blur(0.5px);
+}
+@keyframes msg-fx-rainbow-comet-kf {
+  0% { stroke-dashoffset: 0; opacity: 0; }
+  6.6% { opacity: 1; }
+  48.4% { opacity: 1; }
+  55% { stroke-dashoffset: -1; opacity: 0; }
+  100% { stroke-dashoffset: -1; opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Le message perd son mouvement, pas son intention : le spectre posé reste,
+     la comète ne naît pas. Le composant ne la monte déjà pas sous
+     `reduceMotion` ; ce garde-fou couvre le cas où la préférence bascule
+     pendant que la bulle est à l'écran. */
+  .msg-fx-rainbow-comet { display: none; }
 }
 
 .msg-fx-sparkle { position: relative; }

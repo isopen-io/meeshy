@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   COMPOSER_DOORS,
+  COMPOSER_FORMATS,
   composerOpening,
   buildUpdatePayload,
   type ComposerDoor,
@@ -22,6 +23,52 @@ describe('les portes du composer', () => {
 
   it('chaque porte a un nom unique', () => {
     expect(new Set(COMPOSER_DOORS).size).toBe(COMPOSER_DOORS.length)
+  })
+})
+
+/**
+ * Les quatre formats, ÉNUMÉRABLES à l'exécution.
+ *
+ * `COMPOSER_DOORS` porte déjà cette forme pour les portes ; l'union des formats
+ * ne l'avait pas, et chaque consommateur en réécrivait la liste à la main (le
+ * catalogue i18n du web, sa table d'icônes, ses vecteurs de test). Une liste
+ * réécrite ne rougit pas le jour où un cinquième format entre dans l'union :
+ * elle reste verte en itérant sur quatre.
+ *
+ * Ce compagnon n'AJOUTE aucune loi — c'est la même union, écrite une fois de
+ * manière lisible à l'exécution. La loi 1 tient : aucune affordance ne descend
+ * ici.
+ */
+describe('les formats du composer — la liste vit à l\'exécution, pas seulement au typage', () => {
+  it('les quatre formats sont énumérables sans que personne ne réécrive l\'union', () => {
+    expect([...COMPOSER_FORMATS]).toEqual(['story', 'post', 'reel', 'status'])
+  })
+
+  it('chaque format est unique', () => {
+    expect(new Set(COMPOSER_FORMATS).size).toBe(COMPOSER_FORMATS.length)
+  })
+
+  it('AUCUNE porte n\'ouvre ni n\'offre un format absent de cette liste', () => {
+    const doors: ComposerDoor[] = [
+      { kind: 'storyTray' },
+      { kind: 'feedComposer' },
+      { kind: 'reelTab' },
+      { kind: 'moodChip' },
+      { kind: 'repost', sourceFormat: 'story' },
+      { kind: 'edit', documentFormat: 'reel' },
+      { kind: 'draft' },
+      { kind: 'share' },
+      { kind: 'conversationMedia' },
+    ]
+    expect(doors).toHaveLength(COMPOSER_DOORS.length)
+
+    for (const door of doors) {
+      for (const context of [withReel, withoutReel]) {
+        const opening = composerOpening(door, context)
+        expect(COMPOSER_FORMATS).toContain(opening.initialFormat)
+        opening.offeredFormats.forEach((format) => expect(COMPOSER_FORMATS).toContain(format))
+      }
+    }
   })
 })
 

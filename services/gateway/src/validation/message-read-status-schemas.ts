@@ -1,8 +1,9 @@
 import { z } from 'zod';
+import { OBJECT_ID_REGEX, isValidObjectId } from '@meeshy/shared/utils/object-id';
 
 const mongoId = z
   .string()
-  .regex(/^[0-9a-fA-F]{24}$/, 'Invalid MongoDB ObjectId format');
+  .regex(OBJECT_ID_REGEX, 'Invalid MongoDB ObjectId format');
 
 export const MessageIdParamSchema = z.object({
   messageId: mongoId
@@ -17,7 +18,7 @@ export const ReadStatusesQuerySchema = z.object({
     .string()
     .optional()
     .refine(
-      val => !val || val.split(',').every(id => /^[0-9a-fA-F]{24}$/.test(id.trim())),
+      val => !val || val.split(',').every(id => isValidObjectId(id.trim())),
       'Each messageId must be a valid MongoDB ObjectId'
     )
 }).strict();

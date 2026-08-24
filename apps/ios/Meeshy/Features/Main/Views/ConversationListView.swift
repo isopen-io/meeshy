@@ -1079,8 +1079,18 @@ struct ConversationListView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
+        // Lot 4.6 — LA feuille des trois déclencheurs de cette vue (le rail
+        // Lentille, le tray classique, l'accès rapide « Poser un mood ») monte
+        // le MEUBLE. Une seule feuille pour les trois, comme avant : c'est le
+        // booléen de présentation que `ScrollPillStateTests` compte à trois
+        // écritures — le nommer ici en toutes lettres l'aurait fait quatre pour
+        // toute garde qui ne retire pas les commentaires.
         .sheet(isPresented: $showStatusComposer) {
-            StatusComposerView(viewModel: statusViewModel)
+            MoodComposerDoor(
+                intent: ComposerIntent(origin: .moodChip),
+                seed: nil,
+                viewModel: statusViewModel
+            )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }

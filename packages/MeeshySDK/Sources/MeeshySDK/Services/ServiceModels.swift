@@ -80,7 +80,12 @@ public struct CreatePostRequest: Encodable {
     public let audioDuration: Int?
     public let originalLanguage: String?
     public let mobileTranscription: MobileTranscriptionPayload?
-    public let viaUsername: String?
+    /// La publication que celle-ci repartage. **Seul porteur de l'attribution
+    /// d'une republication dans cette charge** : il n'y a pas de champ
+    /// `viaUsername` ici, et il n'y en a jamais eu qui soit lu —
+    /// `CreatePostSchema` ne le déclare pas, et un `z.object()` écarte
+    /// silencieusement les clés inconnues. Le « via @X » se relit de
+    /// `repostOf.author.username` (`StoryModels.toStatusEntry`).
     public let repostOfId: String?
     /// Lieu partagé (picker → `SharedPlace`) — même clé `location` top-level que
     /// pour un message ou un commentaire, hissée par le gateway depuis
@@ -103,12 +108,12 @@ public struct CreatePostRequest: Encodable {
     /// figure pas (miroir de `CreatePostSchema.mediaAlt`).
     public let mediaAlt: [String: String]?
 
-    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil, mediaAlt: [String: String]? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil, mediaAlt: [String: String]? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
         self.originalLanguage = originalLanguage
-        self.mobileTranscription = mobileTranscription; self.viaUsername = viaUsername
+        self.mobileTranscription = mobileTranscription
         self.repostOfId = repostOfId
         self.location = location
         self.storyEffects = storyEffects

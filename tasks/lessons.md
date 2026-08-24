@@ -15078,3 +15078,339 @@ comportement, y compris ceux qui n'avaient pas le défaut. **Un lot qui répare 
 règle ne tranche pas, dans le même geste, une question qui n'en relève pas.**
 Exiger le repli à l'appel le rend visible au site plutôt que caché dans un
 défaut ; c'est ce qui permet à la prochaine passe de le trancher pour de bon.
+
+---
+
+---
+
+## Leçon 277 — quand N sites appliquent une règle, celui qu'on ajoute EN DERNIER n'est pas le seul à manquer : c'est le PREMIER qui l'avait (2026-08-24, cycle 125 bis)
+
+Le suivi disait, depuis deux cycles :
+
+> Les éventails RÉPONSE et MENTION composent depuis `notificationPreview` (jamais
+> `…ForPush`) et ne reçoivent aucun `attachmentInfo` — la bannière d'une réponse à un vocal
+> affiche `Message.content`, vide pour un vocal pur.
+
+Deux fois qualifié de « décision produit, pas correction de Prisme ». La formule était juste sur
+un point — la langue ne change pas — et fausse sur ce qui compte :
+
+| destinataire du MÊME message | ce qu'il voyait |
+|---|---|
+| les membres du fil | la transcription, ou « 📷 Photo · 1024×768 » |
+| **celui à qui on répond** | **rien** |
+| **celui qu'on mentionne** | **rien** |
+
+> **Un corps VIDE n'est pas « un autre choix de produit », c'est l'absence de la bannière sous
+> la bannière.** La question « est-ce une décision produit ? » se pose sur ce que l'utilisateur
+> VOIT, pas sur la nature du champ manquant. Aucun produit ne préfère un corps vide.
+
+### Le vrai motif — la composition vivait chez UN des trois
+
+`buildMessageNotificationBodyI18n` — le compositeur qui remplace un texte absent par le libellé
+du premier média — n'était appelé que par `createMessageNotification`. Les deux autres posaient
+`content: this.servedPreview(...)`, une projection plus PAUVRE, et rien ne le signalait :
+`servedPreview` est un helper juste, partagé, testé, et les trois éventails l'appellent.
+
+> **Deux sites qui partagent le sous-helper d'une règle ont l'air de partager la règle.** La
+> divergence ne se voit pas dans « qui appelle quoi » mais dans « qui appelle la COMPOSITION
+> COMPLÈTE ». Compter les appelants du helper le plus BAS de la chaîne rassure à tort — c'est
+> le plus HAUT qu'il faut compter.
+
+### Corollaire — séparer une charge par ce qu'elle FAIT, pas par sa provenance
+
+`attachmentInfo` était un objet unique de douze champs, tous issus de la même lecture Prisma.
+Les trois éventails n'en veulent pas la même chose :
+
+- `attachments`, `firstAttachmentFileSize/Duration/Width/Height` **composent un TEXTE** — les
+  trois en ont besoin ;
+- `firstAttachmentUrl`, `firstAttachmentMimeType`, `hasAttachments`, `firstAttachmentFilename`
+  **transportent un fichier** ou alimentent un inventaire persisté — le message simple seul.
+
+C'est exactement la séparation du cycle 125, vue de l'autre côté : là, confondre les deux a fait
+partir un fichier sous une garde écrite pour une chaîne ; ici, les confondre a fait manquer une
+chaîne à deux éventails qui n'avaient pas besoin du fichier. **Une charge se découpe par l'USAGE
+de ses champs, jamais par la requête qui les a produits** — la requête est un fait d'origine, et
+l'origine commune est précisément ce qui rend le mélange invisible.
+
+### Corollaire — un témoin de fan-out a besoin d'un destinataire ORDINAIRE
+
+Le premier jet du harnais posait trois membres : l'expéditeur, celui à qui on répond, celui
+qu'on mentionne. `createMessageNotification` n'a jamais été appelé — `alreadyNotified` les
+absorbe tous les trois, l'éventail régulier n'avait aucun candidat, et l'assertion de RÉFÉRENCE
+(« la réponse reçoit ce que reçoit le message simple ») comparait à rien.
+
+> Quand un témoin compare une branche à une autre, la branche de RÉFÉRENCE doit avoir de quoi
+> exister. Trois rôles dans une conversation à trois membres n'en laissent aucun au quatrième
+> rôle — celui qui n'en a aucun.
+
+## Leçon 278 — un garde-fou câblé au mauvais MOMENT du cycle de vie est du code mort que la forme du test ne peut pas voir (2026-08-24, routine appels)
+
+`promoteRingingCallToCallKitIfNeeded()` (iOS `CallManager.swift`) existe pour
+un cas précis : un appel entrant qui sonne EN APP (CallKit volontairement
+sauté parce que l'app était au premier plan) doit être promu à CallKit s'il
+passe en arrière-plan avant d'être décroché — sinon iOS peut suspendre l'app
+en plein sonnage, sans carte d'appel verrouillée, et l'appel se perd
+silencieusement. La fonction est correcte, testée, bien gardée. Le seul
+endroit qui l'appelle est l'observateur `didEnterBackgroundNotification`, et
+cet observateur n'était armé QUE par `startBackgroundMonitoring()`, appelée
+depuis un SEUL site : `transitionToConnected()`.
+
+Or la fonction ne fait quelque chose QUE quand l'appel sonne encore
+(`callState == .ringing(isOutgoing: false)`) — c'est-à-dire précisément AVANT
+que `transitionToConnected()` n'ait jamais pu s'exécuter. Les deux conditions
+sont mutuellement exclusives par construction : le garde-fou entier était
+inatteignable, une fenêtre de panne qui existait depuis l'introduction de la
+fonction, en production, sans qu'aucun test ne rougisse.
+
+### Pourquoi trois tests corrects n'ont rien vu
+
+Les trois tests existants (`test_backgroundObserver_promotesStillRingingCallToCallKit`,
+`test_promoteRingingCallToCallKitIfNeeded_guardsOnRingingIncomingNotYetOnCallKit`,
+`test_promoteRingingCallToCallKitIfNeeded_neverPromotesInChina_evenWhileRinging`)
+vérifient tous la FORME du code : « l'observateur appelle bien la fonction »,
+« la fonction a bien les bons guards », « le guard régional est bien câblé ».
+Aucun ne vérifie que l'observateur lui-même est un jour ARMÉ pendant que
+l'appel sonne. La fonction et son appelant étaient chacun individuellement
+irréprochables ; c'est la RELATION temporelle entre le moment où on les monte
+et le moment où ils doivent agir qui était rompue — et aucun des trois tests
+ne pose cette question-là.
+
+> **Un test qui vérifie qu'un handler CONTIENT le bon appel ne vérifie pas
+> que le handler est un jour MONTÉ au bon moment.** Pour un garde-fou dont
+> l'utilité dépend d'une fenêtre temporelle (« pendant que X, avant que Y »),
+> le test à écrire n'est pas seulement « la fonction fait-elle le bon geste ? »
+> mais **« le site qui l'arme est-il vivant PENDANT la fenêtre qu'elle
+> couvre ? »** — ici, l'armement au CONNECT ne peut pas couvrir une fenêtre
+> qui se ferme avant le connect.
+
+### Le correctif expose un second défaut latent
+
+Rendre la promotion atteignable a immédiatement révélé un second bug resté
+invisible tant que le premier chemin était mort : `startRingtone()` (jouée en
+app quand CallKit est sauté) ne s'arrêtait jamais au moment de la promotion
+réussie — CallKit joue alors SON PROPRE `ringtoneSound` (même asset
+`Ringtone.caf`) par-dessus la boucle `AVAudioPlayer` encore active, dont la
+session auto-activée (`.playAndRecord`) risque en prime de bloquer le
+`didActivate` de CallKit. **Rendre un chemin mort à nouveau vivant peut
+réveiller un défaut qui dormait DERRIÈRE lui** — le corriger dans le même lot,
+pas dans un suivi, parce que le premier correctif seul aurait été une
+régression (double sonnerie) dans le cas exact qu'il vise à réparer.
+
+## Leçon 279 — un lot qui fait CONVERGER une chaîne laisse derrière tout ce qui la QUALIFIE (2026-08-24, cycle 126)
+
+**Contexte.** Le cycle 125 bis a fait converger le CORPS des trois bannières de
+`messageNotificationFanOut` : réponse et mention reçoivent enfin
+`notificationPreviewForPush`, `pushPreviewBasis` et le résumé de média qui
+compose le texte. Le correctif est juste, testé, et sa leçon (§ 277) nomme
+exactement le motif — « la composition vivait chez UN des trois ».
+
+Deux champs de l'éventail ne l'ont pas suivi, et pour une raison qu'il faut dire
+à voix haute : **ils ne composent aucune chaîne.**
+
+| champ resté derrière | ce qu'il fait | ce que son absence coûtait |
+|---|---|---|
+| `notificationLocKey` | QUALIFIE le placeholder (la NSE le rend depuis sa propre table) et sert de SECOND VERROU à `createNotification` | placeholder non localisé ; le verrou du cycle 125 inapplicable sur ces deux éventails |
+| `messageCreatedAt` / `messageType` | l'horloge SERVEUR de la bulle que la NSE PRÉ-ENREGISTRE | la bulle d'une réponse datée par l'horloge du DEVICE, donc mal rangée dans le fil |
+
+**La règle.**
+
+> **Un lot qui partage une valeur composée doit énumérer ce qui voyage AVEC
+> elle, pas seulement ce qui la compose.** Un champ qui QUALIFIE un texte —
+> une clé de localisation, une horloge, un type, une base — ne se trouve pas en
+> cherchant « qui compose ce texte ? » : par construction, il n'apparaît dans
+> aucune composition.
+
+C'est la forme du cycle 125 (§ 275) rejouée un cran plus haut. Là, quatre gardes
+tenaient une CHAÎNE pendant que le fichier partait dans l'objet voisin ; ici, un
+lot fait converger une CHAÎNE pendant que ce qui la qualifie reste derrière. Le
+même angle mort, la même cause : **le niveau d'abstraction du correctif rend
+invisible ce qui ne participe pas à sa phrase.** La question se pose AU MOMENT du
+correctif, et se répond en lisant l'objet remis LIGNE À LIGNE — pas en relisant le
+code qui le construit.
+
+**Le motif de structure qui l'a rendu possible.** `createMentionNotificationsBatch`
+relayait `commonData` vers `createMentionNotification` **champ par champ** : neuf
+lignes de recopie. Un relais de cette forme retient silencieusement tout ce qu'on
+ajoute en amont — il ne rougit jamais, il ne perd rien de visible, il oublie. Le
+correctif extrait les deux seuls champs RENOMMÉS (`senderId` → `mentionerUserId`,
+`messageContent` → `messagePreview`) et répand le reste :
+
+```ts
+const { senderId, messageContent, ...banner } = commonData;
+… this.createMentionNotification({ ...banner, mentionedUserId, mentionerUserId: senderId, messagePreview: messageContent, prismSource })
+```
+
+> **Un relais qui recopie est un inventaire à tenir à jour ; un relais qui répand
+> n'en est pas un.** Ne recopier que ce qui change de NOM — le reste passe, et un
+> champ ajouté demain arrive à destination sans qu'on ait à s'en souvenir.
+
+**Ce qui n'a PAS été repris, et pourquoi.** Le cycle 125 bis a délibérément gardé
+le rich-push (`firstAttachmentUrl` / `firstAttachmentMimeType` /
+`metadata.attachments`) hors de ces deux éventails : « leur bannière compose
+désormais le bon TEXTE ; y attacher le média inline rouvrirait une surface que le
+cycle 125 vient de resserrer ». Cette décision est CONSERVÉE. Une convergence de
+lots ne se résout pas en prenant l'union des deux : la décision explicite et
+raisonnée du lot mergé en premier l'emporte sur l'argument de cohérence du second
+(§ Note de convergence, `CLAUDE.md`).
+
+**Le témoin qui l'attrape** n'assert ni sur le texte ni sur le rang, mais sur ce
+qui l'accompagne : `replyMentionBannerClock.test.ts` — l'horloge servie, le
+`select` qui la charge (une requête, pas deux), le silence quand la relecture
+fail-open tombe, et les trois choses que le verrou retient (traduction du fil,
+corps pré-enregistré, média).
+
+---
+
+## Leçon 280 — une garde qui protège la population la plus NOMBREUSE peut manquer la plus EXPOSÉE (2026-08-24, cycle 127)
+
+`createMessageNotification` relit l'état du message juste avant de pousser, et
+abandonne quand il a été rappelé ou a expiré dans la fenêtre de l'éventail. Son
+commentaire dit exactement pourquoi, depuis toujours :
+
+```ts
+// If the sender soft-deletes / … / lets the message expire in that window we
+// MUST NOT leak the original content via the banner.
+```
+
+Cette phrase vaut mot pour mot pour les deux autres éventails. Ni
+`createReplyNotification` ni `createMentionNotification` ne portaient la moindre
+garde : un message rappelé entre son commit et l'éventail poussait son texte
+ORIGINAL sur l'écran verrouillé de la personne à qui l'on répond et de tous les
+mentionnés, pendant que les membres ordinaires du fil — protégés — ne voyaient
+rien.
+
+> **Le lot `regular` sert la population la plus NOMBREUSE ; la réponse sert la
+> personne VISÉE, et la mention perce jusqu'à la sourdine.** Une garde posée sur
+> le chemin le plus fréquenté se lit comme une garde posée sur le sujet. Elle ne
+> l'est que sur son chemin.
+
+### La relecture était DÉJÀ LÀ, et c'est ce qui rend le défaut invisible
+
+Les trois éventails relisent la MÊME ligne, dans la MÊME fenêtre. Le lot
+`regular` le fait par `prisma.message.findUnique` ; les deux autres par
+`loadMessagePrismSource`, dont le `select` demandait `translations`,
+`originalLanguage`, `createdAt`, `messageType` — et passait à côté de `deletedAt`
+et `expiresAt`, les deux colonnes qui disent la vie du message.
+
+La garde ne coûtait donc pas une requête : **deux colonnes sur une lecture qui se
+faisait déjà.** Même forme qu'au cycle 126, une question plus loin.
+
+Ce qui a tenu le défaut hors de vue est une phrase de doc-comment, écrite comme
+un contrat alors qu'elle DÉCRIVAIT un défaut :
+
+```ts
+// … pour les éventails dont la lecture n'est PAS un gate d'éligibilité
+```
+
+Elle est vraie du code, et c'est tout ce qu'elle est. Rien dans « ce n'est pas un
+gate » ne dit *pourquoi ça ne devrait pas en être un* — mais posée en tête d'une
+unité, elle se relit comme une décision qu'on n'a pas à instruire. Même famille
+que le commentaire du cycle 91 bis qui scellait la 2FA en l'annonçant.
+
+> Devant un doc-comment qui EXEMPTE une unité d'une règle que sa voisine
+> applique, la question n'est pas « est-ce exact ? » mais **« qu'est-ce qui
+> justifie l'exemption ? »**. Ici : rien.
+
+### Le balayage de rétraction ne rattrape pas ce cas — il ferme la BASE, pas l'ÉCRAN
+
+L'éventail relit le message APRÈS ses trois lots et retire les lignes
+`Notification` d'un message rappelé. Sa démonstration est juste et son raisonnement
+de fenêtre est exact — pour ce qu'il vise. Il retire une LIGNE ; la bannière, elle,
+est déjà sur l'écran verrouillé, et rien ne la rappelle.
+
+> **Une compensation en aval ne remplace pas une garde d'admission quand l'effet
+> qu'elle compense est IRRÉVERSIBLE.** La question à poser à tout nettoyage
+> a-posteriori : *que reste-t-il de fait que ce nettoyage ne défait pas ?*
+
+### Ce qui a été mesuré et NON corrigé, et pourquoi c'est la moitié la plus utile
+
+Le premier correctif traitait une ligne ABSENTE comme une preuve de rappel. Deux
+témoins existants sont tombés — dont un, explicite, qui asserte que la bannière
+d'un message VOLATILISÉ part quand même. Il avait raison, et le dépôt disait déjà
+pourquoi, dans le balayage de rétraction du même éventail :
+
+> `deletedAt` non nul est la SEULE preuve d'un rappel. Une ligne absente ne prouve
+> rien, et aucun chemin de la gateway ne supprime un message physiquement.
+
+Le mécanisme est réel : le message vient d'être committé, et une lecture servie
+par un secondaire en retard sur le jeu de réplicas rend `null` pour un message
+parfaitement vivant. En faire une preuve ferait perdre des annonces qu'aucun
+réessai ne rattrape.
+
+> **Un verdict de garde a trois états, pas deux** : `live`, `gone` (la lecture
+> PROUVE), `unknown` (elle n'a rien prouvé — elle a levé, ou n'a rien rendu). Les
+> deux derniers se ressemblent et s'arbitrent à l'opposé : fail-CLOSED sur la
+> preuve, où c'est un secret qui est en jeu ; fail-OPEN sur l'absence de preuve,
+> où c'est une livraison. C'est la leçon 112 (« un `catch` fail-open couvre aussi
+> la question qu'on a mal posée ») lue dans l'autre sens.
+
+**Et un témoin qui tombe n'a pas forcément tort.** Deux tests rouges ont fait
+CHANGER LA CONCEPTION, pas la fixture : ils portaient une décision antérieure,
+raisonnée et écrite. Le réflexe d'ajuster le double pour retrouver le vert aurait
+retiré une garantie de livraison sans que rien ne le dise. La décision est
+désormais gardée en POSITIF, des deux côtés — les lots qui annoncent quand même,
+et celui qui se tait — pour qu'elle cesse de dépendre de la mémoire d'un cycle.
+
+### Un select mort nommait une garde qui n'a jamais existé
+
+Le commentaire du lot `regular` énumérait TROIS causes d'abandon — rappelé, brûlé,
+expiré — et `isViewOnce` / `viewOnceCount` étaient SÉLECTIONNÉS pour la deuxième.
+Aucune ligne ne les lisait : `NotificationService` était le seul site du dépôt à
+demander `Message.viewOnceCount`, et il n'en faisait rien.
+
+Le correctif est de RETIRER le select, pas d'ajouter la garde, et la raison se
+mesure : `viewOnceCount > 0` dit que QUELQU'UN a consommé, jamais que CE
+destinataire l'a fait — s'y fier ferait taire l'annonce pour tous les autres. Et
+le contenu d'un message à vue unique est de toute façon masqué en amont par
+`protectedPreview`.
+
+> **Une garde ANNONCÉE par un commentaire et PROVISIONNÉE par un `select` se lit
+> comme une garde en place.** C'est la forme du cycle 124 (« annoncée par deux
+> champs, appliquée par aucun ») dans sa variante la plus discrète : ici, le
+> champ provisionné donne au lecteur la preuve matérielle que quelqu'un y a
+> pensé. Vérifier que le champ est LU, pas qu'il est demandé.
+
+## Leçon 281 — un correctif câblé sur UN point d'entrée laisse son JUMEAU exactement où il était (2026-08-24, routine appels)
+
+**Contexte.** La leçon 278 (même jour) a armé `startBackgroundMonitoring()` dans
+`handleIncomingCallNotification()` — le chemin socket d'un appel entrant — parce
+que l'observateur `didEnterBackground` n'était armé qu'à `transitionToConnected()`,
+rendant `promoteRingingCallToCallKitIfNeeded()` inatteignable pendant toute la
+fenêtre de sonnage. Le correctif a été posé au SEUL site inspecté.
+
+**Le défaut.** `reportIncomingVoIPCall()` (`CallManager.swift`) est le JUMEAU exact
+de `handleIncomingCallNotification()` — même forme (`.ringing(isOutgoing: false)`,
+`configureAudioSession()` + `startReliabilityMonitor()` au même endroit), même
+raison d'exister (l'entrée d'un appel entrant via push VoIP plutôt que socket) —
+et n'appelait PAS `startBackgroundMonitoring()`. `promoteRingingCallToCallKitIfNeeded()`
+y est un no-op (`callUsesCallKit = true` inconditionnellement pour ce chemin,
+Apple l'exige), mais l'observateur porte DEUX autres effets, tous les deux vivants
+pour un appel encore sonnant : `applyCameraSuspension(false, cause: "foreground")`
+— le filet de sécurité documenté pour le cas où le signal de fin d'interruption
+caméra n'arrive jamais tant que l'app est en arrière-plan — et l'émission
+`call:backgrounded`/`call:foregrounded` vers le pair. Sans observateur armé, un
+appel vidéo reçu par push VoIP qui se met en arrière-plan avant d'être décroché
+peut entrer en appel connecté avec la caméra restée suspendue, et le pair
+n'apprend jamais que l'appelé est passé en arrière-plan puis revenu.
+
+**Pourquoi ça a survécu au correctif du jour même.** La leçon 278 nommait déjà le
+motif — « l'armement au CONNECT ne peut pas couvrir une fenêtre qui se ferme avant
+le connect » — mais l'a vérifié sur UN SEUL des deux points d'entrée d'appel
+entrant. Le test qui l'a fixé (`test_handleIncomingCallNotification_armsBackgroundMonitoring_...`)
+n'inspecte que le corps de cette fonction ; rien n'énumérait « quels autres sites
+ont la même forme et ont donc besoin du même correctif ».
+
+> **Un correctif vérifié par un test qui n'inspecte QUE le site corrigé ne peut
+> pas voir son jumeau.** Avant de clore un correctif de lifecycle/timing, chercher
+> les AUTRES points d'entrée qui partagent la même forme (`grep` la fonction
+> voisine appelée juste avant/après dans le site corrigé — ici `configureAudioSession()`
+> + `startReliabilityMonitor()`) et vérifier qu'ils reçoivent le même geste. C'est
+> la forme de la leçon 279 (« un lot qui converge une chaîne laisse derrière ce qui
+> la qualifie ») rejouée sur un armement au lieu d'un champ de charge.
+
+**Le correctif.** `startBackgroundMonitoring()` ajouté dans `reportIncomingVoIPCall()`,
+au même point relatif que dans `handleIncomingCallNotification()` (après
+`startReliabilityMonitor()`, avant `joinCallRoomReliably()`). Témoin :
+`test_reportIncomingVoIPCall_armsBackgroundMonitoring_soAStillRingingCallCanRecoverFromBackgrounding`
+(`CallManagerAudioSessionTests.swift`), même forme d'assertion source-string que
+son jumeau.

@@ -172,6 +172,51 @@ final class StatusServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.bodyJSON?["repostOfId"] as? String, "source-status-1")
     }
 
+    // MARK: - `viaUsername` ne voyage plus : le serveur ne l'a JAMAIS lu
+
+    /// Le champ a traversé trois versions du client sans rien porter.
+    /// `CreatePostSchema` (`services/gateway/src/routes/posts/types.ts`) ne le
+    /// déclare pas, et un `z.object()` écarte **silencieusement** les clés
+    /// inconnues : rien n'a jamais cassé, et rien n'a jamais été lu. Mesuré
+    /// par grep le 2026-08-24 — `viaUsername` a ZÉRO occurrence dans
+    /// `services/gateway` et dans `packages/shared`, `schema.prisma` compris.
+    ///
+    /// Ce qui porte réellement l'attribution d'une republication est
+    /// `repostOfId`, et le SDK le dit lui-même dans `StoryModels.swift` :
+    /// « pas de colonne `viaUsername` », `via = viaUsername ?? repostOf?.author.username`.
+    ///
+    /// **La garde est STRUCTURELLE, et c'est délibéré.** Un champ optionnel
+    /// laissé à `nil` est déjà absent du JSON — l'encodage synthétisé passe par
+    /// `encodeIfPresent` —, si bien qu'une assertion sur le corps encodé serait
+    /// verte AVANT comme APRÈS le retrait : elle ne mesurerait rien. Ce qui se
+    /// mesure ici est que le modèle de requête ne DÉCLARE plus le champ. Le
+    /// versant comportemental — le corps porte bien `repostOfId` — est tenu par
+    /// `testCreateForwardsAudioUrlAndRepostOfIdForRepublish` ci-dessus.
+    ///
+    /// L'ancre POSITIVE sur `repostOfId` n'est pas décorative : sans elle,
+    /// vider ou renommer `CreatePostRequest` rendrait cette garde verte en lui
+    /// retirant toute cible.
+    ///
+    /// **Dette consignée, PAS refermée ici.** Le jumeau de LECTURE survit :
+    /// `APIPost.viaUsername` (`PostModels.swift`) se décode encore, et comme le
+    /// gateway ne l'émet jamais non plus, il vaut toujours `nil` — le « via @X »
+    /// affiché vient déjà de `repostOf?.author.username`. Le retirer touche les
+    /// constructeurs d'`APIPost` de huit suites et les modèles Android, et cela
+    /// n'appartient pas à cette tâche, qui ne traite que le chemin d'ÉCRITURE.
+    /// Le noter ici plutôt que de laisser croire que le champ a disparu partout.
+    func testCreatePostRequestDeclaresNoViaUsername() {
+        let champs = Mirror(reflecting: CreatePostRequest()).children.compactMap { $0.label }
+
+        XCTAssertFalse(
+            champs.contains("viaUsername"),
+            "`CreatePostRequest` déclare `viaUsername` : le gateway ne l'a jamais lu. Un champ mort sur le fil est gratuit ; gravé dans une charge persistée, il coûte une migration pour être défait."
+        )
+        XCTAssertTrue(
+            champs.contains("repostOfId"),
+            "`repostOfId` a disparu du modèle de requête — c'est LUI qui porte l'attribution d'une republication, et sans lui la garde ci-dessus ne protège plus rien."
+        )
+    }
+
     // MARK: - delete
 
     func testDeleteCallsDeleteOnPostEndpoint() async throws {

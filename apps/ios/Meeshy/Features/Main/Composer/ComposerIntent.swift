@@ -33,6 +33,29 @@ nonisolated enum ComposerOrigin: Equatable {
     case conversationMedia(messageId: String, attachmentId: String)
 }
 
+nonisolated extension ComposerOrigin {
+    /// **La publication que cette porte REPARTAGE**, quand elle en repartage
+    /// une — sinon `nil`.
+    ///
+    /// C'est la lecture de la graine, et elle vit ici plutôt qu'au site de
+    /// montage pour la raison que le commentaire de `ComposerOrigin` donne
+    /// déjà : la graine n'a pas de champ à elle, elle est matérialisée par les
+    /// valeurs associées. Un site qui recopierait l'identifiant dans un
+    /// paramètre séparé en ferait une SECONDE source — deux « quel post
+    /// republie-t-on » à faire diverger, alors que la porte le sait.
+    ///
+    /// Le `switch` est exhaustif : une dixième porte casse la compilation ici
+    /// avant de pouvoir répondre `nil` par omission.
+    var repostedPostId: String? {
+        switch self {
+        case .repost(let postId, _):
+            return postId
+        case .storyTray, .feedComposer, .reelTab, .moodChip, .edit, .draft, .share, .conversationMedia:
+            return nil
+        }
+    }
+}
+
 /// Les quatre contenus que Meeshy publie. Le format reste CHANGEABLE après
 /// l'ouverture — c'est un champ, pas une identité (loi 9 de la spec).
 nonisolated enum ComposerFormat: Equatable { case story, post, reel, status }
@@ -66,13 +89,21 @@ nonisolated enum ComposerOpening: Equatable { case cameraReady, keyboardOnConten
 
 /// Les composers historiques que ce lot ROUTE sans les migrer (périmètre v1).
 ///
-/// `feedComposer` n'y est plus routé depuis le lot 3, et il RESTE dans l'énum :
-/// ce n'est pas un cas mort à balayer. `FeedComposerSheet` existe toujours et
-/// le fil la monte encore ; surtout, la garde négative qui interdit à toute
-/// porte d'y retomber (`ComposerIntentTests.test_aucunePorte_neRetombeSurLaFeuilleDuFil`)
-/// doit pouvoir NOMMER son interdit. La supprimer rendrait cette garde
-/// inécrivable, et le retour du routage passerait alors sans un mot — le mode
-/// d'extinction silencieuse propre aux gardes négatives.
+/// **DEUX cas n'y sont plus routés, et les deux RESTENT dans l'énum.** Ce ne
+/// sont pas des cas morts à balayer.
+///
+/// - `feedComposer` depuis le lot 3 : `FeedComposerSheet` existe toujours et le
+///   fil la monte encore ;
+/// - `statusComposer` depuis le lot 4.6 : `StatusComposerView.swift` existe
+///   toujours — son retrait est la tâche 4.8, conditionnelle et séparée — mais
+///   plus aucune porte ne le désigne, et plus aucune feuille ne le monte.
+///
+/// Surtout : les deux gardes négatives qui interdisent à toute porte d'y
+/// retomber (`ComposerIntentTests.test_aucunePorte_neRetombeSurLaFeuilleDuFil`
+/// et `.test_aucunePorte_neRetombeSurLeComposerDeMood`) doivent pouvoir NOMMER
+/// leur interdit. Supprimer l'un de ces cas rendrait sa garde inécrivable, et le
+/// retour du routage passerait alors sans un mot — le mode d'extinction
+/// silencieuse propre aux gardes négatives.
 nonisolated enum LegacyComposer: Equatable { case statusComposer, repostComposer, storyEdit, feedComposer }
 
 /// Ce que la porte décide, et rien de plus.
@@ -189,13 +220,23 @@ nonisolated extension ComposerProfile {
             // place.
             //
             // Et cette dette n'est pas qu'écrite : elle est GARDÉE. Un site de
-            // production qui construirait cette intention pendant que le
-            // document n'a ni rangée servie, ni issue pour sa saisie, ni
-            // publieur atteignable fait rougir
+            // production qui construirait cette intention pendant qu'il manque
+            // au document l'UNE des trois — rangée servie, issue pour sa
+            // saisie, publieur atteignable — fait rougir
             // `MeeshyComposerHostGuardTests`
             // `.test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`.
             // Sans elle, la valeur `nil` posée ici aurait promis au lot suivant
             // une surface que le meuble ne sait pas encore tenir.
+            //
+            // ÉTAT AU LOT 4.5 : DEUX des trois sont tombées, et il faut le lire
+            // au mot près. Le socle est peint sous le document
+            // (`ComposerChromeOwnership.owner(for: .document)` rend `.host`),
+            // sa flèche est un vrai bouton gaté sur la matière, et le texte a
+            // une issue — `MeeshyComposerHost.onPublishDocument`. Reste la
+            // PREMIÈRE : `servedDocumentTools` rend toujours `[]`. C'est elle,
+            // seule, qui retient encore la porte — et la lire comme « il ne
+            // reste plus rien » serait précisément l'erreur que cette garde
+            // existe pour empêcher.
             return ComposerProfile(
                 initialFormat: .post,
                 offeredFormats: plusReel([.post, .story]),
@@ -221,6 +262,34 @@ nonisolated extension ComposerProfile {
             )
 
         case .moodChip:
+            // Rév. 7 (lot 4.6, 2026-08-24) : la porte du mood cesse de router.
+            // Les trois conditions que le lot 3 exigeait d'une porte-document
+            // avant de la recâbler — une surface, une issue pour sa saisie, un
+            // publieur atteignable — sont TOUTES tenues pour le mood, et par
+            // des choses qui existent, pas par des promesses :
+            //
+            // - la SURFACE est `ComposerMoodSurface` (lot 4.4), et
+            //   `ComposerSurfaceRouting` fait atterrir `.moodGrid` + `.status`
+            //   dessus (lot 4.3) ;
+            // - l'ISSUE est `onClose`, que le meuble lui remet ;
+            // - le PUBLIEUR est le socle : `ComposerChromeOwnership.owner(for:
+            //   .mood)` rend `.host`, sa flèche est un vrai bouton gaté sur
+            //   `ComposerMoodPolicy.canPublish`, et son brouillon part par
+            //   `MeeshyComposerHost.onPublishDocument` (lot 4.5).
+            //
+            // Ce que cette ligne change, EXACTEMENT : la table cesse de
+            // désigner `StatusComposerView`. Les quatre feuilles qui le
+            // montaient montent désormais `MoodComposerDoor` — c'est le geste
+            // du même lot, et non une promesse laissée au suivant. La
+            // différence avec `.feedComposer` est là : le fil a vu sa TABLE
+            // bouger sans que ses portes suivent, faute d'une rangée d'outils ;
+            // le mood n'a pas de pièce jointe, donc pas de rangée, donc rien
+            // qui le retienne.
+            //
+            // `StatusComposerView.swift` EXISTE ENCORE, et ce n'est pas un
+            // oubli : son retrait est la tâche 4.8, conditionnelle, qui exige
+            // d'abord de confronter la parité bloc par bloc. Le laisser en
+            // place ne coûte rien — plus personne ne le monte.
             return ComposerProfile(
                 initialFormat: .status,
                 offeredFormats: [.status],
@@ -228,7 +297,7 @@ nonisolated extension ComposerProfile {
                 showsTimeline: false,
                 opensWith: .moodGrid,
                 allowsCapture: false,
-                routesToLegacy: .statusComposer
+                routesToLegacy: nil
             )
 
         case .repost(_, let sourceFormat):
@@ -239,6 +308,43 @@ nonisolated extension ComposerProfile {
             // ajoutée. Reposter un post ne le propose pas deux fois : il est
             // déjà son propre ancrage, et un éventail à une entrée n'affiche
             // aucun sélecteur (loi 4).
+            //
+            // Rév. 7 (lot 4.7) : le routage de cette porte devient fonction du
+            // FORMAT PORTÉ, ce que la doctrine de la table autorise en toutes
+            // lettres plus haut — « le FORMAT qu'une porte porte fait partie de
+            // son identité ». Faire passer `.repost` à `nil` en bloc aurait fait
+            // dire à la table que le meuble sert AUSSI les reposts de story, de
+            // post et de réel, ce qui est faux et mesuré :
+            //
+            // - le meuble n'a aucune graine `StoryItem` (son `init` n'en prend
+            //   pas), là où `StoryComposerViewModel(reposting:authorHandle:)` en
+            //   vit ;
+            // - son canal de scène (`onPublishAllInBackground`) ne porte pas
+            //   `repostOfId` — comparer `StoryTrayActions` à
+            //   `StoryViewerView.publishStoryInBackground(repostOfId:)` ;
+            // - il ne passe ni `allowedVisibilities` ni `initialVisibilityUserIds`
+            //   à l'atelier, si bien que le plafond d'audience du repost
+            //   (`StoryRepostAudience.allowed`, loi 10) tomberait EN SILENCE.
+            //
+            // Le mood, lui, n'a aucun de ces trois besoins : sa graine est un
+            // emoji et une phrase, son envoi est celui du mood
+            // (`StatusViewModel.setStatus`, qui prend déjà `repostOfId`), et son
+            // audience est celle que sa propre surface choisit.
+            //
+            // DETTE CONSIGNÉE, et à ne pas lire comme acquise : l'ANCRAGE en
+            // post est bien OFFERT par `offeredFormats` ci-dessous, et il
+            // n'atteint AUCUN écran. L'éventail (`ComposerFormatFan`) vit dans
+            // `plateauTools`, que seule la scène monte — ni la surface mood ni
+            // la surface document ne le portent. Le porter sous elles est un
+            // geste que le lot 4.5 a explicitement refusé de préparer : le socle
+            // du document peint encore une audience INERTE et un œil qui
+            // ouvrirait une scène VIDE, et le rendre atteignable livrerait ces
+            // deux affordances mortes. Condition de levée nommée, et elle est
+            // app-side : que `ComposerChromeOwnership.socleZones(for: .document)`
+            // cesse de promettre ce que le document ne tient pas. La garde
+            // `ComposerDocumentSurfaceTests`
+            // `.test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint` tient
+            // ce constat et rougira le jour où l'éventail descendra.
             return ComposerProfile(
                 initialFormat: sourceFormat,
                 offeredFormats: sourceFormat == .post ? [.post] : [sourceFormat, .post],
@@ -246,7 +352,7 @@ nonisolated extension ComposerProfile {
                 showsTimeline: true,
                 opensWith: .keyboardOnContent,
                 allowsCapture: false,
-                routesToLegacy: .repostComposer
+                routesToLegacy: sourceFormat == .status ? nil : .repostComposer
             )
 
         case .edit(_, let documentFormat):

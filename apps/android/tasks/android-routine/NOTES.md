@@ -5,6 +5,27 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-24 — a broadcast fold of a WHOLE entity must preserve the reader's OWN per-viewer fields (slice `feed-post-updated-realtime-merge`)
+`post:updated` rebroadcasts the COMPLETE edited post `{ post }` to every feed/post room — ONE object, shared
+by all recipients, so it cannot be personalized. Its viewer-owned fields (`isLikedByMe`, `isBookmarkedByMe`,
+`isViewedByMe`, `currentUserReactions`) are therefore the broadcaster's/default view, NOT the reader's.
+Folding it in wholesale would silently un-like/un-bookmark/un-view the card on any unrelated edit. The pure
+`PostUpdateMerge.merge(previous, updated)` adopts every AUTHORITATIVE field from the edit while carrying those
+four personal fields across from the cached copy. **iOS preserves only `isLiked`; Android preserves all four
+its model exposes — do-better parity, not a copy.** The witness that catches a regression here is NOT "content
+updated" (that passes even with zero preservation) but "the reader's like survives an edit whose wire payload
+says un-liked" — RED-proof: dropping the preservation reddened exactly the 4 preservation/inert-discrimination
+tests, the 2 content-only tests stayed green. General rule for ANY realtime fold of a broadcast entity: **list
+the per-viewer fields the wire cannot personalize, and preserve every one — the diff a content-only test can't
+see.** No-op guard: `merge` returns `null` when the result equals `previous` (re-broadcast / nothing visible
+changed), so `_feedCache` never re-emits for free.
+
+**SDK bootstrap this run: `dl.google.com` 200; pristine `android-37.0` auto-installed but the first `./gradlew`
+HASH-ERRORED on `android-37`.** The four-edit copy→patch (`source.properties` ApiLevel, `package.xml`
+`<api-level>` + `path=`, BOTH `build.prop` `ro.build.version.sdk_full` AND `ro.system.build.version.sdk_full`),
+keeping android-37.0 alongside, resolved it (NOTES "THIRD mode"). The recipe still flips per container — read
+the first `./gradlew` outcome, don't assume last run's branch.
+
 ## 2026-08-24 — the caption sibling landed exactly where the last note predicted; reuse an existing model type as a socket-payload field (slice `post-translation-updated-realtime-merge`)
 The prior note ended "Caption has the same shape (`post:translation-updated`), a likely next Android viewer
 gap." It was — the scout confirmed iOS wires it (`FeedViewModel.applyPostTranslation`), the gateway broadcasts
@@ -1850,3 +1871,34 @@ died `Failed to find target with hash string 'android-37'` and gradle auto-insta
 then patch all four (`source.properties` ApiLevel=37, `package.xml` `<api-level>`, `package.xml` `path=`,
 `build.prop` `ro.build.version.sdk_full=37`), keep BOTH dirs. Green on the next run. Try the copy→patch first
 on this image family rather than betting on pristine.
+
+## 2026-08-24 — `main` was RED before the slice; the bootstrap check is what caught it, and the fix came first (slice `comment-updated-realtime-merge`)
+
+`meeshy.sh check` on a fresh branch off `origin/main` failed to compile `:feature:chat` —
+`ConversationMembersViewModel` passed `event.userId: String?` into `MemberRoster.withoutUser(String)`.
+Root cause: `bb99e9bd` made `ParticipantLeftEvent`/`ParticipantBannedEvent.userId` nullable but never
+updated the one consumer. `actions_list(android.yml, branch=main)` confirmed **Android CI red on main
+since `11f0c31e`** (last green `fb7afd47`). Because `assembleDebug` compiles ALL modules, no android PR —
+including this routine's — could go green until fixed.
+
+Three lessons:
+- **The local `check` is a main-health probe, not just a slice probe.** A red compile in a module you never
+  touched means `main` is broken; verify against `origin/main` CI (`actions_list`) rather than assuming your
+  diff caused it, then fix it FIRST — a red main blocks every merge.
+- **Fix it as a dedicated hotfix PR, not folded into the feature slice.** Kept `comment-updated` clean:
+  hotfix = `fix-members-nullable-participant` (#3479), merged before the feature. Verify the feature locally
+  by merging the hotfix branch in temporarily, then reset the feature branch to comment-only and rebase after
+  the hotfix lands.
+- **The right fix often COMPLETES the intent of the change that broke compilation.** `bb99e9bd`'s title was
+  "un visiteur sans compte expulsable"; making `userId` nullable was step one, and the missing step was for
+  the VM to remove by `userId ?: participantId`. So the compile fix and the product intent were the same edit.
+
+## 2026-08-24 — before taking a "Next" pointer, scout that its render surface EXISTS (media field killed `comment:media-updated`)
+
+The Next pointer named `comment:media-updated` as the thin fold. A read-only scout killed it: Android's
+`ApiPostComment` has **no `media` field** (iOS's `APIPostComment` does), and no comment-audio render surface
+exists — wiring the event would store media nothing reads and render nothing, i.e. orphan/dead-end code the
+routine forbids. Rule: a realtime-fold slice is only thin when the merged data already has a place to live AND
+a surface that displays it. When it doesn't, the fold is blocked on a UI slice (here: add `ApiPostComment.media`
++ a comment audio player), and the cheaper sibling is the next in the same family — `comment:updated` (a full
+in-place row replace, no new model field, existing thread host).

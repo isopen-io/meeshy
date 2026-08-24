@@ -1,106 +1,83 @@
-# Cycle 125 — la protection masquait le TEXTE et laissait partir le FICHIER
+# Cycle 126 — note de CONVERGENCE : deux passes ont trouvé le même défaut, séparément
 
-## Point de départ
+> Ce document ne décrit pas un lot, il décrit une RENCONTRE. Le lot lui-même est
+> `tasks/todo-cycle126-bannieres-jumelles-2026-08-24.md` et
+> `tasks/realtime-sync-audit-2026-08-24-cycle126.md` — ceux de la passe qui a mergé la première.
 
-Le cycle 124 a refermé le CORPS d'un message protégé : la transcription d'un vocal ÉPHÉMÈRE / à
-VUE UNIQUE / FLOUTÉ / CHIFFRÉ ne gagne plus sur le placeholder que `protectedPreview` compose.
+## Ce qui s'est passé
 
-La question posée à ce correctif — celle que la leçon 275 formule — est :
+Deux passes ont instruit le même suivi MESURÉ du cycle 124 en parallèle, sans se voir, et ont
+trouvé le même défaut : **les éventails RÉPONSE et MENTION ne poussaient pas `messageCreatedAt` /
+`messageType`**, donc la bulle que la NSE iOS pré-enregistre au démarrage à froid portait l'horloge
+du DEVICE et se rendait en `text` — un rectangle vide pour une réponse vocale, ces éventails ne
+poussant pas `attachmentMimeType` non plus (décision du cycle 125 bis).
 
-> **la charge que ce site remet contient-elle autre chose que ce que je viens de garder ?**
+Les deux correctifs sont **fonctionnellement équivalents**, y compris sur les trois arbitrages qui
+comptent :
 
-Elle se répond en lisant l'objet remis, ligne à ligne. Douze lignes sous la garde du cycle 124,
-dans le même objet littéral :
+| arbitrage | passe mergée (PR #3483) | cette passe |
+|---|---|---|
+| une seule requête (colonnes ajoutées au `select` existant) | ✅ | ✅ |
+| l'estampille N'EST PAS gardée comme du contenu (elle survit au placeholder de protection) | ✅ | ✅ |
+| fail-OPEN : relecture en échec ⇒ aucune clé, jamais une horloge inventée | ✅ | ✅ |
+| garde `instanceof Date` sur la colonne | ✅ | ✅ |
 
-```ts
-firstAttachmentUrl: first?.fileUrl || undefined,
-firstAttachmentMimeType: first?.mimeType || undefined,
-```
+Elles ne diffèrent que par la FORME du type porteur — `MessageBannerSource` plat contre un
+`MessageNotificationSource { prism, stamp }` imbriqué — et par le site de la projection
+(`messageClockFields` dédié contre un `prePersistedMessageFields` élargi).
 
-`createNotification` les recopie dans `data.attachmentUrl` (sous la seule garde `showPreview`),
-et la NSE iOS — `NotificationService.swift:171`, mesuré — télécharge cette URL puis l'attache en
-`UNNotificationAttachment` **sans jamais regarder `notificationLocKey`**.
+## Ce qui a été retenu, et pourquoi
 
-> **Une photo à VUE UNIQUE s'affichait ENTIÈRE, en grand, sur l'écran verrouillé, sous une
-> bannière disant « 👁️ 🖼️ ».** Aucun texte n'avait besoin de fuir pour que le secret parte.
+**L'implémentation de la passe mergée la première**, conformément au précédent posé au cycle 123
+(« Note de convergence — l'implémentation retenue est celle de l'itération 257, la première
+mergée »). Faire cohabiter deux abstractions parallèles pour la même règle est strictement pire que
+l'une des deux : c'est exactement le mécanisme qui a produit les familles divergentes des
+cycles 118 à 122.
 
-Second constat, distinct : `MessageAttachment` porte SES PROPRES drapeaux de masquage
-(`isViewOnce`, `isBlurred`, `effectFlags`) et le `select` de l'éventail n'en lisait **aucun**.
+**Et elle couvrait PLUS.** La passe mergée a trouvé un second champ resté derrière le cycle 125 bis
+que celle-ci n'avait pas vu : `notificationLocKey` — la clé qui QUALIFIE le placeholder de
+protection et sert de SECOND VERROU à `createNotification`. Sa leçon (§ 279, « un lot qui fait
+CONVERGER une chaîne laisse derrière tout ce qui la QUALIFIE ») généralise mieux que la formulation
+de cette passe, centrée sur le seul helper.
 
-## Plan
+## Ce que cette passe a apporté au lot mergé
 
-- [x] TDD — 15 témoins RED d'abord (`protectedMediaLeaks.test.ts`) : 13 rouges, 2 verts
-      (les deux témoins du cas NOMINAL, qui prouvent que le harnais mesure la bonne chose).
-- [x] `maskedAttachment()` — la JUMELLE de `protectedPreview`, posée juste à côté d'elle.
-      Ne lit pas `isEncrypted` : le chiffrement d'une pièce jointe est un mode de TRANSPORT,
-      pas un masque d'affichage — et le message chiffré reste retenu par `protectedPreview`.
-- [x] L'éventail — `mediaMayTravel` gouverne `attachmentInfo` EN BLOC (fichier **et**
-      étiquettes : le nom de fichier est PERSISTÉ, donc relu) **et** `firstAttachmentTranscript`,
-      qui posait déjà la même question un niveau plus bas.
-- [x] `createNotification` — SECOND VERROU sur `notificationLocKey`, dont `protectedPreview` est
-      l'unique producteur du dépôt : sa présence est une DÉCLARATION, jamais un indice.
-- [x] Aucun changement iOS, et c'est délibéré — cf. § « Ce qu'on n'a pas fait ».
+Un témoin que le lot mergé n'avait pas, ajouté à son propre fichier
+(`replyMentionBannerClock.test.ts`) :
 
-## Revue
+> **`createMentionNotificationsBatch` — deux mentionnés ⇒ UNE seule relecture du message.**
 
-### Gates
+Les témoins du lot mergé exercent `createMentionNotification` en SOLO. Le chemin de production est
+le BATCH, et c'est lui qui porte le risque que ce correctif introduit : **élargir un `select` est
+exactement le geste qui invite à ouvrir une seconde lecture**, et une lecture PAR DESTINATAIRE ne
+rougit nulle part — elle se paie en latence de fan-out, sur un chemin que personne ne mesure.
+
+Le témoin exige N > 1 : à un seul mentionné, « une lecture » et « une lecture par destinataire »
+rendent le même compte, et l'assertion ne peut pas tomber. C'est la leçon 276 transposée — un
+témoin de rang s'écrit sur un rang autre que le premier ; ici, sur un lot autre que le singleton.
+
+**ROUGE prouvé** : en retirant le `prismSource` que le batch relaie, le témoin tombe (3 lectures au
+lieu d'1) et **aucun autre témoin du dépôt ne bouge**.
+
+## Gates de cette passe
 
 | gate | résultat |
 |---|---|
-| `protectedMediaLeaks.test.ts` (nouveau) | **13 rouges avant → 15/15 verts après** |
-| suites voisines (`notifications/` + éventail + `voiceNoteBannerPrism`) | **24 suites, 366 témoins** |
-| suite gateway complète | **854/854 suites, 19476 témoins** |
-| `services/gateway` `tsc --noEmit` | **0 erreur** |
-| mutation « `mediaMayTravel` retiré de l'éventail » | **17 témoins tombent** (dont les 14 du cycle 124) |
-| mutation « second verrou retiré de `createNotification` » | **1 témoin tombe** |
-| Swift | non modifié |
+| `replyMentionBannerClock.test.ts` (fichier mergé + témoin ajouté) | **20 témoins verts** ; le nouveau prouvé ROUGE sous mutation |
+| suite gateway complète, sur l'arbre APRÈS merge | **859 suites / 19 539 témoins verts** (exit 0) |
+| `services/gateway` `tsc --noEmit` | 0 erreur |
 
-**La première mutation est la mesure qui compte.** `mediaMayTravel` ne se contente pas de
-gouverner le média : il a REPRIS `firstAttachmentTranscript`, la garde du cycle 124. Les 14
-témoins de ce cycle tombent donc DEPUIS SON NOUVEAU SITE — un refactor qui déplace une règle
-doit prouver qu'elle tombe encore de là où on l'a mise, sans quoi on a déplacé le code et perdu
-la garde.
+Les 19 539 témoins de l'arbre mergé se comparent aux 19 527 mesurés sur cette passe seule et
+aux 19 538 annoncés par la passe mergée : l'écart de +1 est le témoin de batch ajouté ci-dessus.
 
-### Une régression de test, et ce qu'elle dit
+## La leçon de la rencontre elle-même
 
-La suite complète a rendu **3 rouges dans `MessageProcessor.test.ts`** — trois témoins de
-l'éventail à ZÉRO appel. Le fichier fabrique le module `NotificationService` à la main
-(`jest.mock(..., () => ({ NotificationService, protectedPreview }))`) : `maskedAttachment`
-n'y figurait pas, donc l'éventail mourait sur `maskedAttachment is not a function`, silencieux
-dans son propre `catch`.
+C'est la **deuxième** convergence de ce type en quatre cycles (la première : itération 257 ↔
+cycle 123, qui avait câblé COMMENTAIRES et STATUS à l'identique). Les deux fois, le point de départ
+était un **suivi MESURÉ écrit dans le dépôt** — et c'est précisément ce qui rend la collision
+probable : un suivi bien écrit est une piste que n'importe quelle passe suivante saura reprendre.
 
-> Un quatrième témoin du même bloc — `skips regular notification for users with mentionsOnly` —
-> est resté VERT, parce qu'il assert `not.toHaveBeenCalled()`. **Un témoin d'absence passe au
-> vert quand l'unité entière meurt** : c'est un mode de panne que le lot voisin masquait.
-
-### Ce qu'on n'a pas fait
-
-La NSE pourrait refuser d'attacher un média quand `notificationLocKey` est présent. Elle n'a pas
-été touchée :
-
-- la fuite est fermée **à la source**, et la source est le seul endroit qui CONNAISSE l'état de
-  protection du message ;
-- pour le seul cas où la NSE révèle légitimement un contenu protégé (E2EE déchiffré localement),
-  la passerelle ne pousse plus d'URL du tout : la garde cliente serait **inerte** ;
-- une édition Swift non compilable ici achèterait un risque de build (leçon 274, corollaire de
-  harnais) contre zéro comportement observable.
-
-> **Une garde qu'aucun témoin ne peut faire échouer est une ligne de commentaire déguisée.**
-
-### Détail
-
-- `tasks/realtime-sync-audit-2026-08-24-cycle125.md`
-- `tasks/lessons.md` § Leçon 275
-
-### Suivi MESURÉ
-
-- **Les éventails RÉPONSE et MENTION ne composent aucun aperçu de média** — ils reçoivent
-  `notificationPreview` (jamais `…ForPush`) et aucun `attachmentInfo`. Répondre par un vocal
-  pousse donc une bannière au corps VIDE pendant que les autres membres reçoivent la
-  transcription. Reporté du cycle 124, toujours ouvert.
-- Aucun chemin de création n'écrit `isViewOnce` / `isBlurred` sur une `MessageAttachment` :
-  le second niveau de `maskedAttachment` est **armé, pas encore atteignable**.
-- `isEncrypted` reste lue par la NSE et jamais émise (cycle 124) — piège armé, pas panne.
-- Réponse et mention ne poussent ni `createdAt` ni `messageType` : leur bulle reste ordonnée par
-  l'horloge du device.
-- La bannière d'un vocal joint toujours le fichier ORIGINAL, jamais la piste traduite du Prisme.
+> Ce n'est pas du gaspillage à supprimer, c'est le prix d'un backlog LISIBLE — et il se paie en
+> travail dupliqué, jamais en défaut manqué. La contre-mesure n'est pas d'écrire des suivis plus
+> vagues : c'est de **relire `origin/main` avant de committer**, et de converger sur la première
+> implémentation mergée plutôt que de défendre la sienne.

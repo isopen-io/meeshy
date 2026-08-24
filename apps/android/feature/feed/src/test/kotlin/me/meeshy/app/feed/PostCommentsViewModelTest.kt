@@ -23,6 +23,7 @@ import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.SocketCommentAddedData
+import me.meeshy.sdk.model.SocketCommentUpdatedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.model.SocketCommentReactionUpdateData
 import me.meeshy.sdk.model.SocketCommentTranslationUpdatedData
@@ -48,6 +49,7 @@ class PostCommentsViewModelTest {
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val commentAdded = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 64)
+    private val commentUpdated = MutableSharedFlow<SocketCommentUpdatedData>(extraBufferCapacity = 64)
     private val commentDeleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 64)
     private val commentReactionAdded = MutableSharedFlow<SocketCommentReactionUpdateData>(extraBufferCapacity = 64)
     private val commentReactionRemoved = MutableSharedFlow<SocketCommentReactionUpdateData>(extraBufferCapacity = 64)
@@ -67,6 +69,7 @@ class PostCommentsViewModelTest {
     ): PostCommentsViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
         every { socialSocket.commentAdded } returns commentAdded
+        every { socialSocket.commentUpdated } returns commentUpdated
         every { socialSocket.commentDeleted } returns commentDeleted
         every { socialSocket.commentReactionAdded } returns commentReactionAdded
         every { socialSocket.commentReactionRemoved } returns commentReactionRemoved
@@ -1333,6 +1336,61 @@ class PostCommentsViewModelTest {
         commentTranslationUpdated.emit(translationUpdated("ghost", "es", "Hola"))
 
         assertThat(contentOf(vm, "c1")).isEqualTo("Bonjour")
+    }
+
+    // --- Realtime comment edit merge (`comment:updated`) ---
+
+    private fun commentUpdatedEvent(comment: ApiPostComment, postId: String = "p1") =
+        SocketCommentUpdatedData(postId = postId, comment = comment)
+
+    @Test
+    fun `a pushed comment edit repaints a top-level comment in place with no refetch`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("c1", content = "original")))
+        val vm = viewModel()
+        assertThat(contentOf(vm, "c1")).isEqualTo("original")
+
+        commentUpdated.emit(commentUpdatedEvent(comment("c1", content = "edited")))
+
+        assertThat(contentOf(vm, "c1")).isEqualTo("edited")
+        coVerify(exactly = 1) { repository.getComments("p1", null, any()) } // no refetch
+    }
+
+    @Test
+    fun `a pushed comment edit repaints a loaded reply in place`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("c1").copy(replyCount = 1)))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("r1", content = "original", parentId = "c1")))
+        val vm = viewModel()
+        vm.toggleReplies("c1")
+        assertThat(replyContentOf(vm, "c1", "r1")).isEqualTo("original")
+
+        commentUpdated.emit(commentUpdatedEvent(comment("r1", content = "edited", parentId = "c1")))
+
+        assertThat(replyContentOf(vm, "c1", "r1")).isEqualTo("edited")
+    }
+
+    @Test
+    fun `a pushed comment edit for another post is ignored`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("c1", content = "original")))
+        val vm = viewModel()
+
+        commentUpdated.emit(commentUpdatedEvent(comment("c1", content = "edited"), postId = "other"))
+
+        assertThat(contentOf(vm, "c1")).isEqualTo("original")
+    }
+
+    @Test
+    fun `a pushed edit for an unknown comment is inert`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("c1", content = "original")))
+        val vm = viewModel()
+
+        commentUpdated.emit(commentUpdatedEvent(comment("ghost", content = "edited")))
+
+        assertThat(contentOf(vm, "c1")).isEqualTo("original")
     }
 
     // --- Composer @-mention autocomplete ---

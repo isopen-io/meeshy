@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { isMsRangeStrictlyOrdered } from '@meeshy/shared/utils/time-range';
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
+import { MAX_CONTENT_BYTES } from './content-limits.js';
 
 const mongoId = z
   .string()
-  .regex(/^[0-9a-fA-F]{24}$/, 'Invalid MongoDB ObjectId format');
+  .regex(OBJECT_ID_REGEX, 'Invalid MongoDB ObjectId format');
 
 /**
  * Code de langue tel qu'il arrive du fil, AVANT normalisation serveur.
@@ -115,9 +117,17 @@ export const AttachmentStatusDetailsQuerySchema = z.object({
 // ============================================
 
 export const UpdateMessageBodySchema = z.object({
+  // `.max(MAX_CONTENT_BYTES)` — même plafond de sécurité que les transports
+  // SOCKET d'écriture (`content-limits.ts`). Ce transport REST d'édition
+  // (`PUT /messages/:messageId`) était le SEUL chemin d'écriture de contenu de
+  // message sans borne haute : un corps démesuré traversait le gate, était
+  // PERSISTÉ puis diffusé en `message:edited` à toute la conversation. Le garde
+  // aval (`messageEditContent.ts`) ne rejette que le contenu VIDE, jamais le
+  // démesuré.
   content: z
     .string()
     .trim()
+    .max(MAX_CONTENT_BYTES)
     .optional(),
 
   isEdited: z

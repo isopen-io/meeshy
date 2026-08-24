@@ -17,46 +17,24 @@ import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { removingHandle } from '@meeshy/shared/utils/composer-references';
 import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import { PUBLICATION_VISIBILITY_OPTIONS } from './publication-visibility';
-import type { PostMedia, PostType, PostVisibility } from '@meeshy/shared/types/post';
-import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/types/post-reference';
+import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
+import type { PostReferenceDisplay } from '@meeshy/shared/types/post-reference';
+import type { ComposerDocumentPayload } from '@/components/composer/payload';
 
 const REFERENCE_MODES: readonly Exclude<PostReferenceDisplay, 'INLINE'>[] = ['NOTE', 'SILENT'];
 
-export interface PostPublishPayload {
-  content: string;
-  type: PostType;
-  visibility: PostVisibility;
-  visibilityUserIds?: string[];
-  mediaIds?: string[];
-  /**
-   * Client-only echo of the already-uploaded media (id/mimeType/fileUrl are
-   * known before the post exists server-side), built from `uploadedAttachments`.
-   * Consumed by `useCreatePostMutation` to seed the optimistic post's `media`
-   * so a media-only publish never flashes an empty card — never sent to the
-   * wire (the mutation strips it before calling `postsService.createPost`).
-   */
-  optimisticMedia?: readonly PostMedia[];
-  /** Declared, non-INLINE references only — absent (not `[]`) when no one is referenced. */
-  mentions?: readonly PostReferenceInput[];
-  /**
-   * Alt text per media (accessibility, `PostMedia.alt`) — key is one of the
-   * ids in `mediaIds`. Absent (not `{}`) when the author touched none —
-   * mirrors `CreatePostRequest.mediaAlt` (`apps/web/services/posts.service.ts`).
-   */
-  mediaAlt?: Record<string, string>;
-  /**
-   * Author opt-in for the WHOLE post (`Post.allowSoundExtraction`,
-   * `schema.prisma:3125`) — not a per-media field. Absent (not `false`)
-   * until the author explicitly touches the toggle, so a partial update
-   * never overwrites a different server-side value with an untouched
-   * default.
-   */
-  allowSoundExtraction?: boolean;
-}
+/**
+ * La charge de publication est déclarée UNE fois, dans
+ * `components/composer/payload.ts` — la surface unifiée rend exactement la même
+ * au même appelant, et deux déclarations jumelles auraient pu diverger sans
+ * qu'aucun gate ne rougisse (aucun ne type-vérifie `apps/web`). Ce nom reste le
+ * nom historique de la charge pour les appelants existants.
+ */
+export type { ComposerDocumentPayload as PostPublishPayload };
 
 export interface PostComposerProps {
   currentUser?: { username: string; avatar?: string | null } | null;
-  onPublish: (data: PostPublishPayload) => void;
+  onPublish: (data: ComposerDocumentPayload) => void;
   disabled?: boolean;
   className?: string;
 }
