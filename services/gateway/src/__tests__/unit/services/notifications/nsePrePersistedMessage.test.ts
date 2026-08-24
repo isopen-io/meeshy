@@ -200,3 +200,99 @@ describe('push data — ce que la NSE pré-enregistre au démarrage à froid', (
     expect(data?.content).toBeUndefined();
   });
 });
+
+/**
+ * Cycle 125 — les clés que la NSE LIT pour composer cette ligne, et la famille
+ * de push qui n'a jamais eu le droit d'en composer une.
+ *
+ * `prePersistMessage` n'a d'autre entrée que ce `data`. Les témoins ci-dessous
+ * gèlent le contrat CROISÉ des deux côtés :
+ *
+ *  - les NOMS de clé. La NSE lisait `userInfo["senderName"]`, qu'aucun
+ *    producteur n'émet — la bulle pré-enregistrée était anonyme — pendant que
+ *    `applyCommunicationIntent`, cent lignes plus bas dans le MÊME fichier,
+ *    lisait les bons noms. Et GW5 émet `createdAt` / `messageType` en les
+ *    nommant « champs de persistance NSE » : ni l'un ni l'autre n'était lu, si
+ *    bien que la bulle était horodatée à l'instant de la REMISE.
+ *  - la FAMILLE. Quatre types de push portent un `messageId` ; le quatrième,
+ *    `message_reaction`, désigne le message RÉAGI — celui que le destinataire a
+ *    le plus souvent écrit lui-même — et porte le `senderId` du RÉACTEUR. La
+ *    NSE écrivait par `save()`, un UPSERT sur la clé primaire `localId` : une
+ *    réaction VIDAIT le texte du message en base, lui réassignait son auteur et
+ *    le rehorodatait.
+ */
+describe('push data — le contrat croisé de la bulle pré-enregistrée', () => {
+  it('porte les clés d\'identité et de persistance que la NSE lit, sous LEURS noms', async () => {
+    const data = await run({ originalLanguage: 'fr' });
+
+    expect(data?.type).toBe('new_message');
+    expect(data?.messageId).toBe('msg_xyz');
+    expect(data?.conversationId).toBe('conv_x');
+    expect(data?.senderId).toBe(SENDER_ID);
+    // GW5 — l'horodatage SERVEUR : sans lui la bulle prend l'heure de la
+    // remise, et un push remis en retard se range au bas de la conversation.
+    expect(data?.createdAt).toBe('2026-08-24T10:00:00.000Z');
+    // GW5 — le type AUTORITATIF : la pièce jointe ne voyage pas sous
+    // `showPreview: false`, et un `location` n'a pas de MIME à déduire.
+    expect(data?.messageType).toBe('text');
+    // Le nom de l'expéditeur, sous les clés RÉELLES.
+    expect(data?.senderDisplayName).toBe('Alice');
+    expect(data?.senderUsername).toBe('alice');
+  });
+
+  it('n\'a jamais porté « senderName » — la clé que la NSE lisait', async () => {
+    // Piège armé : ce témoin tombera le jour où quelqu'un ajoutera la clé au
+    // fil, et l'obligera à constater que la NSE ne la lit plus.
+    const data = await run({ originalLanguage: 'fr' });
+
+    expect(data).not.toHaveProperty('senderName');
+  });
+
+  it('un push de RÉACTION nomme le message RÉAGI et l\'acteur qui a réagi', async () => {
+    // La PRÉMISSE du gate de type côté NSE. Ce `messageId` n'est pas celui
+    // d'un message qui arrive : c'est celui d'un message DÉJÀ en base chez le
+    // destinataire, et `senderId` n'est pas son auteur.
+    const REACTOR_ID = 'reactor_id';
+    const prisma = makePrismaMock({});
+    prisma.message.findUnique.mockResolvedValue({
+      content: 'Le message auquel on réagit',
+      expiresAt: null,
+      messageType: 'text',
+      createdAt: new Date('2026-08-24T10:00:00Z'),
+      isViewOnce: false,
+      isBlurred: false,
+      isEncrypted: false,
+      effectFlags: 0,
+    });
+    prisma.user.findUnique.mockImplementation(({ where }: any) =>
+      Promise.resolve(
+        where?.id === REACTOR_ID
+          ? { id: REACTOR_ID, username: 'bob', displayName: 'Bob', avatar: null }
+          : { id: RECIPIENT_ID, systemLanguage: 'fr' }
+      )
+    );
+
+    const sendToUser = jest.fn().mockResolvedValue(undefined);
+    const service = new NotificationService(prisma);
+    service.setSocketIO(makeIO());
+    service.setPushNotificationService({ sendToUser } as any);
+
+    await service.createReactionNotification({
+      messageAuthorId: RECIPIENT_ID,
+      reactorUserId: REACTOR_ID,
+      messageId: 'msg_xyz',
+      conversationId: 'conv_x',
+      reactionEmoji: '🔥',
+    });
+
+    const data = sendToUser.mock.calls[0]?.[0]?.payload?.data as Record<string, unknown>;
+    expect(data?.type).toBe('message_reaction');
+    expect(data?.messageId).toBe('msg_xyz');
+    expect(data?.senderId).toBe(REACTOR_ID);
+    // Aucun couple `content` / `originalLanguage` : le champ d'origine du
+    // message réagi n'a rien à faire sur ce fil, et une bulle composée depuis
+    // ce push n'aurait ni corps ni langue.
+    expect(data).not.toHaveProperty('content');
+    expect(data).not.toHaveProperty('originalLanguage');
+  });
+});

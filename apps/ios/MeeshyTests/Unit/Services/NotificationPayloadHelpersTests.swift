@@ -710,3 +710,203 @@ final class NotificationCommunicationFramingTests: XCTestCase {
         XCTAssertEqual(f.intentKey, "n42")
     }
 }
+
+/// Cycle 125 — la bulle que la NSE pré-enregistre : sur QUELLE ligne, et avec
+/// quels champs.
+///
+/// `prePersistMessage` n'avait AUCUN gate de type alors que son frère
+/// (`postDeliveryReceipt`) en porte un, et que le commentaire de ce frère nomme
+/// exactement le cas exclu : « Reactions and social events also carry a
+/// messageId, but they do not constitute message delivery ». Les quatre
+/// familles de push qui portent un `messageId` sont mesurées côté passerelle
+/// (les quatre seuls sites qui posent `context.messageId`) ; la quatrième,
+/// `message_reaction`, désigne le message RÉAGI et porte le `senderId` du
+/// RÉACTEUR.
+///
+/// Les témoins portent sur ce qui ATTEINT la base : le plan d'écriture, pas un
+/// calcul intermédiaire. Le site d'écriture ne garde plus que le verrou qui ne
+/// se décide pas hors de la base (« cette ligne existe-t-elle déjà ? »).
+final class NSEPrePersistedMessagePlanTests: XCTestCase {
+
+    private static let deliveredAt = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func makePush(
+        type: String? = "new_message",
+        messageId: String? = "msg-1",
+        conversationId: String? = "conv-1",
+        senderId: String? = "user-sender",
+        content: String? = nil,
+        originalLanguage: String? = nil,
+        messageType: String? = nil,
+        createdAt: String? = nil,
+        attachmentMimeType: String? = nil,
+        encryptedContent: String? = nil,
+        senderDisplayName: String? = nil,
+        senderUsername: String? = nil,
+        senderAvatar: String? = nil
+    ) -> [AnyHashable: Any] {
+        var info: [AnyHashable: Any] = [:]
+        if let type { info["type"] = type }
+        if let messageId { info["messageId"] = messageId }
+        if let conversationId { info["conversationId"] = conversationId }
+        if let senderId { info["senderId"] = senderId }
+        if let content { info["content"] = content }
+        if let originalLanguage { info["originalLanguage"] = originalLanguage }
+        if let messageType { info["messageType"] = messageType }
+        if let createdAt { info["createdAt"] = createdAt }
+        if let attachmentMimeType { info["attachmentMimeType"] = attachmentMimeType }
+        if let encryptedContent { info["encryptedContent"] = encryptedContent }
+        if let senderDisplayName { info["senderDisplayName"] = senderDisplayName }
+        if let senderUsername { info["senderUsername"] = senderUsername }
+        if let senderAvatar { info["senderAvatar"] = senderAvatar }
+        return info
+    }
+
+    private func plan(_ info: [AnyHashable: Any]) -> NotificationPayloadHelpers.PrePersistedMessagePlan? {
+        NotificationPayloadHelpers.prePersistedMessagePlan(userInfo: info, now: Self.deliveredAt)
+    }
+
+    // MARK: - Verrou 1 : le TYPE
+
+    func test_reactionPush_writesNothing() {
+        // Le défaut du cycle : `message_reaction` porte le `messageId` du
+        // message RÉAGI (que le destinataire a le plus souvent écrit) et le
+        // `senderId` du réacteur. `save()` étant un UPSERT sur `localId`,
+        // réagir VIDAIT le texte du message en base, lui réassignait son auteur
+        // et le rehorodatait.
+        XCTAssertNil(plan(makePush(type: "message_reaction", senderId: "user-reactor")))
+    }
+
+    func test_socialPush_writesNothing() {
+        XCTAssertNil(plan(makePush(type: "post_comment")))
+        XCTAssertNil(plan(makePush(type: "missed_call")))
+        XCTAssertNil(plan(makePush(type: "friend_request")))
+    }
+
+    func test_pushWithoutType_writesNothing() {
+        // Un push d'une version voisine, sans `type` reconnu, n'autorise
+        // aucune écriture : la garde échoue FERMÉ.
+        XCTAssertNil(plan(makePush(type: nil)))
+        XCTAssertNil(plan(makePush(type: "")))
+        XCTAssertNil(plan(makePush(type: "un_type_inconnu")))
+    }
+
+    func test_messageArrivalTypes_writeTheBubble() {
+        // Les verts ne sont pas du remplissage : ils gardent le mode d'échec du
+        // correctif — refermer le gate ne doit pas supprimer la bulle des trois
+        // familles qui, elles, annoncent bien un message qui arrive.
+        for type in ["new_message", "message_reply", "user_mentioned"] {
+            XCTAssertNotNil(plan(makePush(type: type)), "\(type) doit pré-enregistrer sa bulle")
+        }
+    }
+
+    // MARK: - Identités
+
+    func test_incompleteIdentity_writesNothing() {
+        XCTAssertNil(plan(makePush(messageId: nil)))
+        XCTAssertNil(plan(makePush(conversationId: nil)))
+        XCTAssertNil(plan(makePush(senderId: nil)))
+        // Le payload push est un Record<string,string> : une clé « absente » y
+        // voyage sous la forme d'une chaîne VIDE (les `|| ''` de
+        // `createNotification`). La lire comme une valeur écrirait une ligne
+        // sans conversation.
+        XCTAssertNil(plan(makePush(messageId: "")))
+        XCTAssertNil(plan(makePush(conversationId: "")))
+        XCTAssertNil(plan(makePush(senderId: "")))
+    }
+
+    func test_encryptedPush_writesNothing() {
+        XCTAssertNil(plan(makePush(encryptedContent: "base64==")))
+        // Une chaîne vide n'est PAS un chiffré : c'est la forme sous laquelle
+        // la clé voyage quand il n'y en a pas.
+        XCTAssertNotNil(plan(makePush(encryptedContent: "")))
+    }
+
+    // MARK: - Champs de persistance GW5
+
+    func test_createdAt_comesFromThePayload_notFromDeliveryTime() {
+        // GW5 émet `createdAt` en le nommant « champ de persistance NSE », et
+        // `prePersistMessage` ne le lisait pas : la bulle était horodatée à
+        // l'instant de la REMISE. Un push remis en retard — appareil rallumé,
+        // arriéré APNs — plaçait donc le message au bas de la conversation.
+        let sut = plan(makePush(createdAt: "2026-08-24T09:15:30.123Z"))
+        XCTAssertEqual(
+            sut?.createdAt.timeIntervalSince1970 ?? 0,
+            1_787_562_930.123,
+            accuracy: 0.01
+        )
+    }
+
+    func test_createdAt_acceptsAnIsoStampWithoutFractionalSeconds() {
+        let sut = plan(makePush(createdAt: "2026-08-24T09:15:30Z"))
+        XCTAssertEqual(sut?.createdAt.timeIntervalSince1970 ?? 0, 1_787_562_930, accuracy: 0.01)
+    }
+
+    func test_createdAt_fallsBackToDeliveryTime_whenAbsentOrUnparsable() {
+        XCTAssertEqual(plan(makePush())?.createdAt, Self.deliveredAt)
+        XCTAssertEqual(plan(makePush(createdAt: ""))?.createdAt, Self.deliveredAt)
+        XCTAssertEqual(plan(makePush(createdAt: "pas une date"))?.createdAt, Self.deliveredAt)
+    }
+
+    func test_messageType_prefersTheGatewayDeclaration_overTheMime() {
+        // La pièce jointe ne voyage PAS sous `showPreview: false`, et un
+        // `location` n'a pas de MIME du tout : la déduction par MIME seule
+        // rendait « text » pour tout ce qui n'a pas de fichier.
+        XCTAssertEqual(plan(makePush(messageType: "location"))?.messageType, "location")
+        XCTAssertEqual(plan(makePush(messageType: "file"))?.messageType, "file")
+        XCTAssertEqual(
+            plan(makePush(messageType: "audio", attachmentMimeType: "image/jpeg"))?.messageType,
+            "audio"
+        )
+    }
+
+    func test_messageType_fallsBackToTheMime_whenTheDeclarationIsUnusable() {
+        // N4 reste en place : sans déclaration exploitable, le MIME décide.
+        XCTAssertEqual(
+            plan(makePush(attachmentMimeType: "audio/m4a"))?.messageType,
+            "audio"
+        )
+        XCTAssertEqual(
+            plan(makePush(messageType: "un_type_dune_version_voisine", attachmentMimeType: "video/mp4"))?.messageType,
+            "video"
+        )
+        XCTAssertEqual(plan(makePush())?.messageType, "text")
+    }
+
+    func test_senderName_readsTheKeysThatProducersActuallyEmit() {
+        // `userInfo["senderName"]` — la clé lue jusqu'ici — n'est émise par
+        // AUCUN producteur : la bulle pré-enregistrée était anonyme. Les vraies
+        // clés sont celles qu'`applyCommunicationIntent` lit dans le même
+        // fichier.
+        let sut = plan(makePush(
+            senderDisplayName: "Windie Nh",
+            senderUsername: "windie",
+            senderAvatar: "/api/v1/attachments/file/a.jpg"
+        ))
+        XCTAssertEqual(sut?.senderName, "Windie Nh")
+        XCTAssertEqual(sut?.senderUsername, "windie")
+        XCTAssertEqual(sut?.senderAvatarURL, "/api/v1/attachments/file/a.jpg")
+    }
+
+    func test_senderName_fallsBackToTheUsername_thenToNothing() {
+        XCTAssertEqual(plan(makePush(senderDisplayName: "", senderUsername: "windie"))?.senderName, "windie")
+        XCTAssertNil(plan(makePush())?.senderName)
+        XCTAssertNil(plan(makePush(senderAvatar: ""))?.senderAvatarURL)
+    }
+
+    func test_originalLanguage_treatsTheEmptyStringAsAbsent() {
+        // La passerelle émet `originalLanguage: ''` quand elle n'a pas de
+        // couple à poser, et la colonne est NOT NULL : une chaîne vide y vaut
+        // une langue que le Prisme ne sait pas classer.
+        XCTAssertEqual(plan(makePush(originalLanguage: ""))?.originalLanguage, "en")
+        XCTAssertEqual(plan(makePush())?.originalLanguage, "en")
+        XCTAssertEqual(plan(makePush(originalLanguage: "fr"))?.originalLanguage, "fr")
+    }
+
+    func test_content_travelsVerbatim_includingEmpty() {
+        // Un vocal pur n'a pas de `content` : la bulle existe quand même, et
+        // c'est la bulle audio qui la rendra.
+        XCTAssertEqual(plan(makePush(content: "Bonjour"))?.content, "Bonjour")
+        XCTAssertEqual(plan(makePush())?.content, "")
+    }
+}

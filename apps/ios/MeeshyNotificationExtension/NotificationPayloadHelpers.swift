@@ -205,6 +205,151 @@ nonisolated enum NotificationPayloadHelpers {
         return ("text", "text")
     }
 
+    // MARK: - Bulle pré-enregistrée par la NSE
+
+    /// Les types de push dont le `messageId` désigne un message qui ARRIVE chez
+    /// ce destinataire — les seuls pour lesquels une bulle pré-enregistrée a un
+    /// sens.
+    ///
+    /// Quatre familles de push portent un `messageId` (`new_message`,
+    /// `message_reply`, `user_mentioned`, `message_reaction` — mesuré sur les
+    /// quatre seuls sites qui posent `context.messageId` côté passerelle), et
+    /// la quatrième ne désigne PAS un message qui arrive : elle désigne le
+    /// message RÉAGI, que le destinataire a le plus souvent écrit lui-même.
+    /// Son `senderId` est celui du RÉACTEUR.
+    ///
+    /// La même distinction est déjà écrite trente lignes plus bas dans
+    /// `NotificationService`, sur `deliveryReceiptTypes` : « Reactions and
+    /// social events also carry a messageId, but they do not constitute
+    /// message delivery, so they are excluded ». Elle gardait l'accusé de
+    /// remise et pas l'écriture — la plus destructrice des deux.
+    nonisolated static let messageArrivalTypes: Set<String> = [
+        "new_message", "message_reply", "reply", "message_forwarded", "user_mentioned"
+    ]
+
+    /// Ce push annonce-t-il l'ARRIVÉE du message qu'il nomme ?
+    nonisolated static func announcesMessageArrival(_ type: String?) -> Bool {
+        guard let type = type?.trimmingCharacters(in: .whitespaces), !type.isEmpty else {
+            return false
+        }
+        return messageArrivalTypes.contains(type)
+    }
+
+    /// Ce que la NSE écrit dans la bulle pré-enregistrée, ou `nil` quand elle
+    /// n'a rien à écrire.
+    ///
+    /// Toute la décision vit ici, en Foundation pur : le site d'écriture ne
+    /// garde plus que le verrou qui ne se décide pas hors de la base (« cette
+    /// ligne existe-t-elle déjà ? »).
+    nonisolated struct PrePersistedMessagePlan: Equatable {
+        let messageId: String
+        let conversationId: String
+        let senderId: String
+        let content: String
+        let originalLanguage: String
+        let messageType: String
+        let contentType: String
+        /// Horodatage SERVEUR du message quand le payload le porte (`createdAt`,
+        /// posé par GW5), sinon l'instant de la remise. Un push remis en retard
+        /// — appareil rallumé, arriéré APNs — placerait sinon la bulle au bas de
+        /// la conversation, à l'heure de la REMISE et non de l'ENVOI.
+        let createdAt: Date
+        let senderName: String?
+        let senderUsername: String?
+        let senderAvatarURL: String?
+    }
+
+    /// Les valeurs que `MeeshyMessage.MessageType` sait rendre. Un type
+    /// d'un autre vocabulaire (une version voisine de la passerelle) retombe
+    /// sur la déduction par MIME plutôt que de produire une bulle que rien ne
+    /// sait afficher.
+    private nonisolated static let renderableMessageTypes: Set<String> = [
+        "text", "image", "file", "audio", "video", "location"
+    ]
+
+    /// Décide de la bulle à pré-enregistrer depuis le payload push.
+    ///
+    /// - Parameters:
+    ///   - userInfo: le `userInfo` du push, tel quel.
+    ///   - now: l'instant de la remise, repli d'horodatage et seule source
+    ///     d'impureté — passée en paramètre pour que la décision reste testable.
+    /// - Returns: le plan d'écriture, ou `nil` quand rien ne doit être écrit
+    ///   (push d'un autre type, identités incomplètes, message E2EE).
+    nonisolated static func prePersistedMessagePlan(
+        userInfo: [AnyHashable: Any],
+        now: Date
+    ) -> PrePersistedMessagePlan? {
+        guard announcesMessageArrival(userInfo["type"] as? String) else { return nil }
+
+        let messageId = nonEmptyString(userInfo["messageId"])
+        let conversationId = nonEmptyString(userInfo["conversationId"])
+        let senderId = nonEmptyString(userInfo["senderId"])
+        guard let messageId, let conversationId, let senderId else { return nil }
+
+        // Audit 2026-05-11 : un message E2EE ne se pré-enregistre pas — son
+        // `content` de payload n'est qu'un placeholder, et écrire
+        // `isEncrypted: false` laisserait un texte fourni par le push s'afficher
+        // dans la bulle. `NSEDataSync` rapporte la ligne canonique.
+        if nonEmptyString(userInfo["encryptedContent"]) != nil { return nil }
+
+        let mimeTypes = mediaMessageTypes(forAttachmentMimeType: userInfo["attachmentMimeType"] as? String)
+        // Le TYPE que la passerelle affirme (GW5) prime sur la déduction par
+        // MIME : la pièce jointe ne voyage pas sous `showPreview: false`, et un
+        // `location` / `file` n'a pas de MIME du tout.
+        let declaredType = nonEmptyString(userInfo["messageType"])?.lowercased()
+        let resolvedType: String
+        if let declaredType, renderableMessageTypes.contains(declaredType) {
+            resolvedType = declaredType
+        } else {
+            resolvedType = mimeTypes.messageType
+        }
+
+        return PrePersistedMessagePlan(
+            messageId: messageId,
+            conversationId: conversationId,
+            senderId: senderId,
+            content: (userInfo["content"] as? String) ?? "",
+            // `originalLanguage` voyage à `''` quand la passerelle n'a pas de
+            // couple à poser : la colonne est NOT NULL, et une chaîne vide y
+            // vaut une langue que le Prisme ne sait pas classer.
+            originalLanguage: nonEmptyString(userInfo["originalLanguage"]) ?? "en",
+            messageType: resolvedType,
+            contentType: resolvedType,
+            createdAt: iso8601Date(userInfo["createdAt"]) ?? now,
+            senderName: nonEmptyString(userInfo["senderDisplayName"])
+                ?? nonEmptyString(userInfo["senderUsername"]),
+            senderUsername: nonEmptyString(userInfo["senderUsername"]),
+            senderAvatarURL: nonEmptyString(userInfo["senderAvatar"])
+        )
+    }
+
+    /// Une valeur de payload lue comme chaîne NON VIDE, ou `nil`.
+    ///
+    /// Le payload push est un `Record<string, string>` : une clé « absente »
+    /// y voyage presque toujours sous la forme `''` (cf. les `|| ''` de
+    /// `createNotification`). Distinguer les deux au moment de la lecture est
+    /// ce qui empêche une chaîne vide d'être prise pour une valeur.
+    private nonisolated static func nonEmptyString(_ raw: Any?) -> String? {
+        guard let value = raw as? String else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Un horodatage ISO 8601 du payload, avec ou sans fraction de seconde.
+    ///
+    /// `Date.toISOString()` (la passerelle) rend toujours des millisecondes ;
+    /// la seconde passe couvre les émetteurs qui n'en mettent pas, plutôt que
+    /// de rendre `nil` et de restamper le message à l'heure de la remise.
+    nonisolated static func iso8601Date(_ raw: Any?) -> Date? {
+        guard let value = nonEmptyString(raw) else { return nil }
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let parsed = withFraction.date(from: value) { return parsed }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: value)
+    }
+
     /// R3 — social push types whose banner exposes the inline « Commenter »
     /// text action. A type is commentable when the produced comment has an
     /// unambiguous target:
