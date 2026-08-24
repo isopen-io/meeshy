@@ -14436,3 +14436,19 @@ dans la charge SERVIE entière — corps du push, blob écrit — plutôt que ch
 leçon 268 appliquée au harnais : le défaut qu'elle nomme venait précisément d'un témoin qui
 observait le bon champ et un seul. **Pour une règle qui dit « ceci ne doit être NULLE PART »,
 l'assertion doit porter sur le tout ; « nulle part » ne se vérifie pas clé par clé.**
+
+### Corollaire d'outillage — le piège du `| tail` s'est refermé, et il est déjà écrit
+
+`services/gateway/CLAUDE.md` porte la règle depuis le cycle ~103 : « ne jamais passer un gate par
+un pipe quand c'est son code de sortie qu'on interroge — le code de retour d'un pipeline est
+celui de sa DERNIÈRE commande ». Ce lot l'a rejouée : `bun run test:coverage 2>&1 | tail -30`
+lancé en arrière-plan a été rapporté **exit 0** alors que la suite portait **3 fichiers et
+16 témoins ROUGES**. Le `0` était celui de `tail`.
+
+Ce qui l'a rattrapé n'est pas la vigilance mais une HABITUDE : ouvrir le fichier de sortie et
+chercher la ligne `Test Suites:` plutôt que de croire le statut. La forme robuste est de rediriger
+vers un fichier et d'y écrire le code soi-même (`; echo "JEST_EXIT=$?" >> log`).
+
+> **Une règle écrite dans le dépôt n'est pas une règle appliquée.** Celle-ci l'était depuis vingt
+> cycles, dans le fichier que ce lot édite. Un gate ne se lit pas au statut d'un pipeline, et la
+> seule défense qui tienne est de ne jamais construire le pipeline.
