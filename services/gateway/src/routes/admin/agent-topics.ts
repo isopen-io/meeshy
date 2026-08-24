@@ -5,6 +5,7 @@ import { getCacheStore } from '../../services/CacheStore';
 import { AgentHttpClient } from '../../services/AgentHttpClient';
 import { submittedKeysOnly } from '../../utils/partial-update';
 import { AGENT_ADMIN_EVENT_CHANNEL, type AgentAdminEventData } from '@meeshy/shared/types/socketio-events';
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 
 /**
  * Routes admin CRUD pour le catalogue de topics dynamiques utilisé par le
@@ -19,8 +20,6 @@ import { AGENT_ADMIN_EVENT_CHANNEL, type AgentAdminEventData } from '@meeshy/sha
  *   DELETE /admin/agent/topics/:id?hard=true — soft (isActive=false) or hard delete
  *   POST   /admin/agent/topics/:id/test     — test regex contre sampleText
  */
-
-const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
 const requireAgentAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const user = (request as FastifyRequest & { user?: { role?: string } }).user;

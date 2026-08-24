@@ -210,11 +210,22 @@ data class StoryAudioPlayerObject(
     val sourceLanguage: String? = null,
 )
 
-/** An emoji sticker on a story canvas — port of StorySticker (StoryModels.swift). */
+/**
+ * A sticker on a story canvas — port of StorySticker (StoryModels.swift).
+ *
+ * [postMediaId]/[provider] carry an image sticker as an INTEGRATED asset —
+ * same id space as any post media, never a third-party URL — port of iOS's
+ * `StorySticker.postMediaId`/`.provider`. Both are optional with a neutral
+ * default so a document from before this field existed still decodes: the
+ * codebase has already paid for a stricter-than-the-wire model on this exact
+ * type of field (keyframes, transitions) making the WHOLE document fail.
+ */
 @Serializable
 data class StorySticker(
     val id: String,
     val emoji: String = "",
+    val postMediaId: String = "",
+    val provider: String? = null,
     val x: Double = 0.5,
     val y: Double = 0.5,
     val scale: Double = 1.0,
@@ -226,7 +237,10 @@ data class StorySticker(
     val duration: Double? = null,
     val fadeIn: Double? = null,
     val fadeOut: Double? = null,
-)
+) {
+    /** True once an integrated image backs this sticker — the renderer's cue to paint it over the emoji. */
+    val hasImage: Boolean get() = postMediaId.isNotBlank()
+}
 
 /** Inter-slide transition effect — port of StoryTransitionEffect (StoryModels.swift). */
 @Serializable

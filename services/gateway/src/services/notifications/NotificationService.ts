@@ -32,9 +32,14 @@ import {
 } from '@meeshy/shared/types/preferences';
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
-import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import {
+  resolveUserLanguage,
+  resolveUserLanguagesOrdered,
+  resolvePrismTranslation,
+} from '@meeshy/shared/utils/conversation-helpers';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
+import { recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { filterMutedRecipients } from './mutedRecipients';
@@ -49,6 +54,98 @@ import { loadPostAcl, canUserConsumePost } from '../posts/postVisibility';
 function formatDuration(ms: number): string {
   return formatClock(Math.round(ms / 1000));
 }
+
+/**
+ * La SOURCE du Prisme d'un message : ses traductions SERVABLES sur le canal
+ * push, plus sa langue d'origine — qui concourt à son propre rang (règle #3) et
+ * n'est donc jamais un court-circuit.
+ *
+ * Elle ne dépend PAS du destinataire : un même message se relit une fois pour
+ * tout un éventail, et c'est la DESCENTE qui est par lecteur.
+ */
+export type MessagePrismSource = {
+  readonly translations: Readonly<Record<string, string>>;
+  readonly originalLanguage: string | null;
+};
+
+/**
+ * Ce qu'UNE relecture de message rend aux éventails qui n'ont pas de gate
+ * d'éligibilité — la source du Prisme, et l'horloge de la bulle.
+ *
+ * Les deux ne se mélangent pas : la première dit ce qui TRADUIT l'aperçu, la
+ * seconde ce qui l'ORDONNE dans la conversation. Elles voyagent ensemble parce
+ * qu'elles viennent de la même lecture, pas parce qu'elles répondent à la même
+ * question — d'où deux types et non un.
+ *
+ * Cycle 126 : la NSE pré-enregistre une bulle pour TOUT éventail qui pousse un
+ * `messageId`. `createMessageNotification` datait la sienne depuis sa relecture
+ * VIVANTE (qui lui sert aussi de gate d'éligibilité) ; la réponse et la mention
+ * n'avaient que celle-ci, qui ne demandait pas ces deux colonnes — leur bulle
+ * était donc datée par l'horloge du DEVICE, et mal ordonnée dans le fil.
+ */
+export type MessageBannerSource = MessagePrismSource & {
+  readonly createdAt: Date | null;
+  readonly messageType: string | null;
+};
+
+const EMPTY_PRISM_SOURCE: MessageBannerSource = {
+  translations: {},
+  originalLanguage: null,
+  createdAt: null,
+  messageType: null,
+};
+
+/**
+ * Ce que l'aperçu composé par un éventail EST — donc ce qui le traduit.
+ *
+ * `Message.translations` ne traduit que `Message.content` : la question « peut-on
+ * substituer une traduction dans ce texte ? » n'a de réponse qu'au site qui a
+ * COMPOSÉ l'aperçu, jamais chez le résolveur, qui verrait trois textes de même
+ * type. Le cycle 122 la posait par un booléen (`previewIsMessageContent`) ; le
+ * cycle 123 en fait un type SOMME, pour une raison mesurée : la transcription
+ * d'un vocal n'est pas « non substituable », elle est substituable par une AUTRE
+ * carte (`MessageAttachment.translations`). Un booléen et une source séparés
+ * pourraient se contredire ; ces trois formes s'excluent par construction.
+ *
+ *  - `message-content` — cas nominal : l'aperçu EST le contenu du message ;
+ *  - `protected-placeholder` — éphémère / vue unique / flouté / chiffré :
+ *    l'aperçu est un placeholder. Rien ne le traduit, et rien de la traduction
+ *    du texte masqué ne doit partir sur le fil (cycle 123) ;
+ *  - `transcript` — la transcription d'un vocal, avec SA carte.
+ */
+export type PreviewPrismBasis =
+  | { readonly kind: 'message-content' }
+  | { readonly kind: 'protected-placeholder' }
+  | { readonly kind: 'transcript'; readonly source: MessagePrismSource };
+
+const MESSAGE_CONTENT_BASIS: PreviewPrismBasis = { kind: 'message-content' };
+
+/**
+ * Ce qu'il faut d'un média pour COMPOSER le corps d'une bannière — cycle 125 bis.
+ *
+ * `buildMessageNotificationBodyI18n` remplace un texte ABSENT par le libellé
+ * détaillé de la première pièce jointe (« 🎵 Audio · 0:07 », « 📷 Photo ·
+ * 1024×768 ») et suffixe les badges des suivantes. Les TROIS éventails de
+ * `messageNotificationFanOut` en ont besoin : sans ces champs, la bannière
+ * d'une RÉPONSE ou d'une MENTION portant un vocal ou une photo sans légende a
+ * un corps VIDE, pendant que celle d'un message simple porte le libellé.
+ *
+ * Distinct des champs de RICH-PUSH (`firstAttachmentUrl`, `firstAttachmentMimeType`)
+ * et de l'inventaire persisté (`hasAttachments`, `firstAttachmentFilename`),
+ * que seule la bannière d'un message simple porte : ceux-ci composent un TEXTE,
+ * ceux-là transportent un fichier. La séparation est celle du cycle 125 — une
+ * charge ne se garde pas comme une chaîne.
+ */
+export type NotificationBannerMedia = {
+  readonly attachments?: ReadonlyArray<NotificationAttachmentSummary>;
+  readonly firstAttachmentFileSize?: number | null;
+  readonly firstAttachmentDuration?: number | null;
+  readonly firstAttachmentWidth?: number | null;
+  readonly firstAttachmentHeight?: number | null;
+};
+
+/** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
+const PUSHED_TRANSLATION_MAX_CHARS = 200;
 
 /**
  * Lit une clé de metadata comme chaîne non vide pour le payload push (les
@@ -383,6 +480,39 @@ export function protectedPreview(input: {
   return { preview: `${PROTECTION_ICON.encrypted} ${icon}`, locKey: 'notification.encrypted_message' };
 }
 
+/**
+ * La JUMELLE de {@link protectedPreview}, pour le MÉDIA — cycle 125.
+ *
+ * `protectedPreview` dit ce que le CORPS d'une bannière a le droit de montrer.
+ * Rien ne disait ce que sa CHARGE a le droit de transporter, et la charge
+ * transporte un fichier : la NSE iOS télécharge `attachmentUrl` et l'attache en
+ * `UNNotificationAttachment`, que l'écran verrouillé rend en grand. Une photo à
+ * vue unique s'affichait donc ENTIÈRE sous une bannière disant « 👁️ 🖼️ ».
+ *
+ * Elle répond à la protection de la PIÈCE JOINTE elle-même, le niveau que
+ * l'éventail ne lisait pas du tout — `MessageAttachment` porte ses propres
+ * `isViewOnce` / `isBlurred` / `effectFlags`, indépendants de ceux du message
+ * qui la porte. Le niveau MESSAGE reste tranché par `protectedPreview`, qui le
+ * fait déjà pour le corps : une seule lecture, deux conséquences.
+ *
+ * Ne lit PAS `isEncrypted` : le chiffrement d'une pièce jointe est un mode de
+ * TRANSPORT (le chemin de téléchargement le dénoue), pas un masque d'affichage.
+ * Le message chiffré, lui, est bien retenu — par la quatrième branche de
+ * `protectedPreview`.
+ */
+export function maskedAttachment(input: {
+  isViewOnce?: boolean | null;
+  isBlurred?: boolean | null;
+  effectFlags?: number | null;
+} | null | undefined): boolean {
+  if (!input) return false;
+  const flags = input.effectFlags ?? 0;
+  const maskingFlags = MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED;
+  return input.isViewOnce === true
+    || input.isBlurred === true
+    || (flags & maskingFlags) !== 0;
+}
+
 function extractExtension(filename: string | null | undefined): string | null {
   if (!filename) return null;
   const dot = filename.lastIndexOf('.');
@@ -664,14 +794,311 @@ export class NotificationService {
     deviceLocale: true,
   } as const;
 
-  /** Langue de notification d'un destinataire (Prisme-first, fallback 'fr'). */
-  private async resolveRecipientLang(userId: string): Promise<string> {
+  /**
+   * Le PRISME d'un destinataire, sous ses DEUX formes — elles ne servent pas la
+   * même chose et les confondre coûte dans les deux sens :
+   *
+   * - `lang` est la langue de **CADRAGE** : l'interface. « Alice vous a envoyé
+   *   une photo » se dit dans la langue applicative du lecteur, et une seule.
+   *   C'est le rang le plus haut renseigné, ce que rend `resolveUserLanguage`.
+   * - `ordered` est la liste dans laquelle le **CONTENU** se résout. Le contenu
+   *   n'a pas de langue d'interface : il a des traductions, et le Prisme dit de
+   *   les chercher rang par rang (cf. `resolvePrismTranslation`).
+   *
+   * Les rendre ensemble depuis UNE lecture est ce qui empêche un appelant de
+   * réutiliser la langue de cadrage comme clé de contenu — le défaut du
+   * cycle 121, qui appariait la carte `Message.translations` au seul rang 1 et
+   * servait donc l'original chaque fois qu'une traduction n'existait qu'à un
+   * rang inférieur. La ligne de liste de la même application, elle, descendait.
+   */
+  private async resolveRecipientPrism(
+    userId: string
+  ): Promise<{ readonly lang: string; readonly ordered: readonly string[] }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: this.LANG_SELECT,
     });
-    if (!user) return 'fr';
-    return resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined });
+    if (!user) return { lang: 'fr', ordered: [] };
+    const opts = { deviceLocale: user.deviceLocale ?? undefined };
+    return {
+      lang: resolveUserLanguage(user, opts),
+      ordered: resolveUserLanguagesOrdered(user, opts),
+    };
+  }
+
+  /** Langue de CADRAGE d'un destinataire (Prisme-first, fallback 'fr'). */
+  private async resolveRecipientLang(userId: string): Promise<string> {
+    return (await this.resolveRecipientPrism(userId)).lang;
+  }
+
+  /**
+   * Les traductions d'un message SERVABLES sur le canal push, débarrassées de
+   * leur enveloppe de stockage.
+   *
+   * Le filtre de servabilité précède la descente et ne l'INTERROMPT pas : une
+   * entrée chiffrée n'est pas une raison de priver le lecteur du rang suivant
+   * (la NSE déchiffre `encryptedContent`, jamais les traductions). Filtrer la
+   * CARTE plutôt que l'élue est ce qui évite de transformer un refus en abandon
+   * de la recherche.
+   */
+  private pushableTranslations(raw: unknown): Readonly<Record<string, string>> {
+    if (!raw || typeof raw !== 'object') return {};
+    const entries = raw as Record<string, { text?: unknown; isEncrypted?: unknown } | null>;
+    return Object.fromEntries(
+      Object.entries(entries)
+        .filter(([, t]) => typeof t?.text === 'string' && !t.isEncrypted)
+        .map(([lang, t]) => [lang, t!.text as string])
+    );
+  }
+
+  /**
+   * Relire la source du Prisme d'un message pour les éventails dont la lecture
+   * n'est PAS un gate d'éligibilité — la mention et la réponse, qui tiennent
+   * leur échéance de l'appelant (`messageExpiresAt`).
+   *
+   * Fail-OPEN par décision : une lecture en échec rend une source vide, donc
+   * une bannière sans traduction, jamais une bannière supprimée. Même arbitrage
+   * que `loadNotificationPrefs` et `filterMutedRecipients` — la traduction est
+   * un confort, l'annonce du message une obligation de livraison.
+   */
+  private async loadMessagePrismSource(messageId: string): Promise<MessageBannerSource> {
+    try {
+      const message = await this.prisma.message.findUnique({
+        where: { id: messageId },
+        // Cycle 126 — `createdAt` et `messageType` dans la lecture qui se faisait
+        // déjà : deux colonnes de plus, aucune requête de plus.
+        select: { translations: true, originalLanguage: true, createdAt: true, messageType: true },
+      });
+      return {
+        translations: this.pushableTranslations(message?.translations),
+        originalLanguage: message?.originalLanguage ?? null,
+        createdAt: message?.createdAt instanceof Date ? message.createdAt : null,
+        messageType: message?.messageType ?? null,
+      };
+    } catch (error) {
+      notificationLogger.error('Relecture du Prisme en échec — bannière servie sans traduction', {
+        error,
+        messageId,
+      });
+      return EMPTY_PRISM_SOURCE;
+    }
+  }
+
+  /**
+   * La source qui traduit l'APERÇU — celle du texte que la bannière affiche,
+   * jamais « celle du message » par défaut.
+   *
+   * Elle et elle seule alimente la descente : le corps servi et les champs du
+   * fil en sont deux projections. C'était la faille du cycle 122 — deux
+   * résolutions parallèles vivaient dans chaque éventail, l'une gardée par
+   * `previewIsMessageContent` (le corps) et l'autre pas (le fil) — si bien que
+   * la traduction EN CLAIR d'un message à vue unique partait sur le canal push
+   * pendant que la bannière affichait son placeholder.
+   *
+   * `notificationLocKey` reste un second verrou, et il n'est pas redondant : un
+   * appelant qui compose un placeholder de protection sans déclarer sa base
+   * perd une traduction, jamais le secret. Une garde de confidentialité échoue
+   * en montrant moins.
+   */
+  private previewPrismSource(params: {
+    basis: PreviewPrismBasis;
+    messageSource: MessagePrismSource;
+    protectedByLocKey?: boolean;
+  }): MessagePrismSource {
+    if (params.protectedByLocKey) return EMPTY_PRISM_SOURCE;
+    switch (params.basis.kind) {
+      case 'protected-placeholder':
+        return EMPTY_PRISM_SOURCE;
+      case 'transcript':
+        return params.basis.source;
+      case 'message-content':
+        return params.messageSource;
+    }
+  }
+
+  /**
+   * Le COUPLE que la NSE iOS pré-enregistre — le corps de la bulle et son
+   * étiquette de langue — ou RIEN.
+   *
+   * Troisième projection de {@link PreviewPrismBasis}, après « qu'est-ce qui
+   * TRADUIT cet aperçu ? » ({@link previewPrismSource}) et « que peut-on
+   * transporter à côté ? » (la garde de {@link servedTranslationFields}) : ce
+   * type dit ce que l'aperçu EST, donc il est le seul à pouvoir dire s'il peut
+   * être pris pour le message.
+   *
+   * Elle répond `{}` — donc « n'enregistre rien » — sur les trois formes où
+   * l'aperçu n'est pas `Message.content` :
+   *
+   *  - `protected-placeholder` — l'écrire planterait « ⏱️ 💬 24h » dans la base
+   *    locale, où il survivrait à la bannière si la synchro REST n'arrive pas ;
+   *  - `transcript` — la parole d'un vocal appartient à la pièce jointe, pas au
+   *    message qui la porte ; la bulle audio la rendra après la synchro ;
+   *  - `protectedByLocKey` — second verrou, comme pour la descente : un appelant
+   *    qui compose un placeholder sans déclarer sa base perd un enregistrement
+   *    local, jamais le secret.
+   *
+   * La quatrième — le mode privé — est tenue une couche plus haut, par la garde
+   * `showPreview` qui retire TOUT champ porteur de contenu de `data`.
+   *
+   * Ce qui voyage est l'ORIGINAL, jamais la traduction : `MessageRecord.content`
+   * est le champ d'origine et `messageOriginalLanguage` son étiquette, quand la
+   * traduction servie a déjà `translatedContent` et son rang (cycle 121).
+   *
+   * **Pourquoi un helper et non le prédicat en ligne** : les TROIS éventails de
+   * `messageNotificationFanOut` poussent un `messageId`, donc les trois font
+   * pré-enregistrer une bulle. Écrit une fois par site, ce prédicat finirait par
+   * manquer à l'un d'eux — c'est exactement ce qui distingue une règle d'un
+   * site qui l'applique (leçon 271).
+   */
+  private prePersistedMessageFields(params: {
+    basis: PreviewPrismBasis;
+    preview: string;
+    originalLanguage: string | null;
+    protectedByLocKey?: boolean;
+  }): { messageContent?: string; messageOriginalLanguage?: string } {
+    if (params.protectedByLocKey) return {};
+    if (params.basis.kind !== 'message-content') return {};
+    // Un aperçu VIDE ne dit rien de plus que son absence et coûte du budget APNs.
+    if (params.preview.trim() === '') return {};
+    return {
+      messageContent: params.preview,
+      ...(params.originalLanguage ? { messageOriginalLanguage: params.originalLanguage } : {}),
+    };
+  }
+
+  /**
+   * La DESCENTE du Prisme, sous la forme que le contexte de notification
+   * attend : `translatedContent` et `translatedLanguage` côte à côte, ou RIEN.
+   *
+   * Prend la traduction DÉJÀ ÉLUE plutôt qu'une source, et c'est le correctif
+   * du cycle 123 : ces deux champs décrivent ce que la bannière SERT, ils ne
+   * peuvent donc pas venir d'une seconde descente. Site UNIQUE de la projection
+   * pour les trois éventails de `messageNotificationFanOut` — la leçon 264 en
+   * donne la raison : quand un consommateur a besoin d'un peu plus que ce que
+   * rend le résolveur existant, l'issue par défaut est de réécrire la boucle,
+   * et c'est ainsi que naissent les familles divergentes des cycles 118 à 122.
+   *
+   * Un contexte VIDE ⇒ servir l'original (règle #1), jamais une traduction
+   * quelconque.
+   */
+  private servedTranslationFields(
+    matched: { readonly language: string; readonly text: string } | null
+  ): { translatedContent?: string; translatedLanguage?: string } {
+    if (!matched) return {};
+    return {
+      translatedContent: matched.text.substring(0, PUSHED_TRANSLATION_MAX_CHARS),
+      // La clé TELLE QUE STOCKÉE, pas sa forme canonique : elle repart sur le
+      // fil APNs et le client la rapproche de sa propre carte.
+      translatedLanguage: matched.language,
+    };
+  }
+
+  /**
+   * La descente NUE — le couple `{ language, text }` élu, ou `null` ⇒ servir
+   * l'original. Les deux consommateurs en sont des projections :
+   * {@link servedPreview} pour le corps affiché (cycle 122) et
+   * {@link servedTranslationFields} pour les champs du fil push. Une descente,
+   * deux projections — c'est ce qui les empêche de diverger (cycle 123).
+   */
+  private prismTranslation(
+    source: MessagePrismSource,
+    preferredLanguages: readonly string[]
+  ): { readonly language: string; readonly text: string } | null {
+    return resolvePrismTranslation({
+      translations: source.translations,
+      originalLanguage: source.originalLanguage,
+      preferredLanguages,
+    });
+  }
+
+  /**
+   * Le texte que la bannière AFFICHE — cycle 122.
+   *
+   * Le Prisme ne s'arrête pas aux champs `translatedContent` /
+   * `translatedLanguage` du fil push : ils voyagent depuis le cycle 121 et
+   * AUCUN client ne les lit — ni la NSE iOS, ni l'application, ni Android, ni
+   * le service worker web. Le seul texte que les trois plateformes rendent est
+   * `payload.body`, composé depuis ce `content` : tant qu'il portait l'aperçu
+   * ORIGINAL, la bannière restait dans la langue de l'expéditeur pendant que la
+   * ligne de liste de la même application servait la traduction. Un contenu
+   * RÉSOLU n'est pas un contenu SERVI.
+   *
+   * La condition de substitution vit en amont, dans le choix de la SOURCE
+   * (`previewPrismSource`) : `Message.translations` ne traduit que
+   * `Message.content`, un placeholder de protection n'a pas de source, et une
+   * transcription a la sienne. Ici il ne reste qu'à servir ce qui a été élu.
+   */
+  private servedPreview(params: {
+    preview: string;
+    translation: { readonly text: string } | null;
+  }): string {
+    if (!params.translation) return params.preview;
+    // Un aperçu VIDE n'a rien à substituer : le corps se compose alors
+    // entièrement des badges de pièce jointe, localisés dans la langue de
+    // CADRAGE. Y injecter la traduction remplacerait « 📷 Foto » par un texte
+    // dont `Message.content` — vide — n'est pas la source.
+    if (params.preview.trim() === '') return params.preview;
+    return params.translation.text;
+  }
+
+  /**
+   * Le corps AFFICHÉ d'une bannière de message — cycle 125 bis.
+   *
+   * Deux compositions en une, et c'est leur ORDRE qui compte : le texte servi
+   * par le Prisme ({@link servedPreview}), puis le passage par
+   * `buildMessageNotificationBodyI18n`, qui remplace un texte ABSENT par le
+   * libellé de la première pièce jointe et suffixe les badges des suivantes.
+   *
+   * **Site UNIQUE pour les trois éventails**, et la raison est mesurée :
+   * `createMessageNotification` était le seul des trois à composer, si bien que
+   * la bannière d'une RÉPONSE ou d'une MENTION portant un vocal ou une photo
+   * sans légende arrivait avec un corps VIDE — le symptôme « deux textes pour
+   * un même message » (cycles 121-124) dans sa forme extrême, le second étant
+   * vide. C'est la leçon 271 : une règle écrite une fois par site finit par
+   * manquer à l'un d'eux.
+   *
+   * Sans média (`media` absent ou vide), le résultat est exactement le texte
+   * servi — les deux éventails qui n'en portaient pas gardent leur corps au
+   * caractère près.
+   */
+  private servedBannerBody(params: {
+    lang: string;
+    preview: string;
+    translation: { readonly text: string } | null;
+    media?: NotificationBannerMedia;
+  }): string {
+    return buildMessageNotificationBodyI18n(params.lang, {
+      messagePreview: this.servedPreview({
+        preview: params.preview,
+        translation: params.translation,
+      }),
+      attachments: params.media?.attachments,
+      firstAttachmentFileSize: params.media?.firstAttachmentFileSize,
+      firstAttachmentDuration: params.media?.firstAttachmentDuration,
+      firstAttachmentWidth: params.media?.firstAttachmentWidth,
+      firstAttachmentHeight: params.media?.firstAttachmentHeight,
+    });
+  }
+
+  /**
+   * L'horloge SERVEUR de la bulle que la NSE PRÉ-ENREGISTRE, et son type.
+   *
+   * Troisième projection partagée par les trois éventails (cycle 126). Le
+   * cycle 125 bis a fait converger leur CORPS ; ces deux champs-ci ne composent
+   * aucun texte, donc ils sont restés en dehors — c'est la forme exacte du
+   * cycle 125, où la garde tenait la chaîne pendant que l'objet voisin partait
+   * seul. Réponse et mention poussent un `messageId`, donc font pré-enregistrer
+   * une bulle exactement comme le message simple : sans eux, la leur porte
+   * l'horloge du DEVICE et se range au mauvais endroit du fil.
+   */
+  private messageClockFields(source: {
+    readonly createdAt: Date | null;
+    readonly messageType: string | null;
+  }): { messageCreatedAt?: string; messageType?: string } {
+    return {
+      messageCreatedAt: source.createdAt ? source.createdAt.toISOString() : undefined,
+      messageType: source.messageType ?? undefined,
+    };
   }
 
   /** Variante batch : un seul findMany, retourne une Map userId → langue (fallback 'fr'). */
@@ -1178,15 +1605,39 @@ export class NotificationService {
                   // Phase A — message media inline (audio waveform, image preview,
                   // video thumb). L'extension iOS lit ces champs pour télécharger le
                   // fichier et l'attacher comme UNNotificationAttachment (UTI typeHint).
-                  attachmentUrl: params.context.firstAttachmentUrl || '',
-                  attachmentMimeType: params.context.firstAttachmentMimeType || '',
-                  attachmentDurationMs: params.context.firstAttachmentDurationMs != null
-                    ? String(params.context.firstAttachmentDurationMs)
-                    : '',
+                  //
+                  // Cycle 125 — SECOND VERROU, même arbitrage que
+                  // `previewPrismSource` et `prePersistedMessageFields` : un
+                  // `notificationLocKey` ne se pose que sur un placeholder de
+                  // protection (`protectedPreview` en est l'unique producteur),
+                  // et la NSE attache `attachmentUrl` sans jamais le regarder.
+                  // Un appelant qui masque le corps sans retirer son média perd
+                  // ici le rich-push, jamais le secret : une garde de
+                  // confidentialité échoue en montrant MOINS.
+                  ...(params.context.notificationLocKey ? {
+                    attachmentUrl: '',
+                    attachmentMimeType: '',
+                    attachmentDurationMs: '',
+                  } : {
+                    attachmentUrl: params.context.firstAttachmentUrl || '',
+                    attachmentMimeType: params.context.firstAttachmentMimeType || '',
+                    attachmentDurationMs: params.context.firstAttachmentDurationMs != null
+                      ? String(params.context.firstAttachmentDurationMs)
+                      : '',
+                  }),
                   encryptedContent: params.context.encryptedContent || '',
                   ...(params.context.translatedContent ? {
                     translatedContent: params.context.translatedContent,
                     translatedLanguage: params.context.translatedLanguage || '',
+                  } : {}),
+                  // Cycle 124 — le couple que la NSE PRÉ-ENREGISTRE. Les DEUX
+                  // clés portent le nom que `prePersistMessage` lit, et elles
+                  // voyagent ensemble : un contenu sans son étiquette de langue
+                  // serait résolu par le Prisme comme de l'anglais, le repli
+                  // que la NSE applique faute de mieux.
+                  ...(params.context.messageContent ? {
+                    content: params.context.messageContent,
+                    originalLanguage: params.context.messageOriginalLanguage || '',
                   } : {}),
                 } : {}),
               },
@@ -1201,7 +1652,16 @@ export class NotificationService {
           const APNS_SAFE_PAYLOAD_BYTES = 3800;
           const payloadBytes = (p: unknown): number => Buffer.byteLength(JSON.stringify(p), 'utf8');
           const { translatedContent: _tc, translatedLanguage: _tl, ...dataWithoutTranslation } = pushPayload.data;
-          const { encryptedContent: _ec, ...dataWithoutContentFields } = dataWithoutTranslation;
+          // `content` part avec `encryptedContent` : les deux portent le texte
+          // du message, et un push REJETÉ ne pré-enregistre rien du tout. Ils
+          // sont de toute façon exclusifs — un message chiffré n'a pas d'aperçu
+          // de base `message-content`, donc jamais de `content`.
+          const {
+            encryptedContent: _ec,
+            content: _mc,
+            originalLanguage: _ol,
+            ...dataWithoutContentFields
+          } = dataWithoutTranslation;
           const boundedPayload = [
             pushPayload,
             { ...pushPayload, data: dataWithoutTranslation },
@@ -1268,15 +1728,21 @@ export class NotificationService {
             if (canSend) {
               const user = await this.prisma.user.findUnique({
                 where: { id: params.userId },
-                select: { email: true, systemLanguage: true, username: true }
+                select: { email: true, username: true, ...this.LANG_SELECT }
               });
               if (user?.email) {
+                // Cycle 125 — le CADRAGE d'un e-mail immédiat descend le même
+                // Prisme que la bannière push du même destinataire. Les trois
+                // envois ci-dessous lisaient `systemLanguage` en direct, donc
+                // servaient le repli à tout lecteur dont le rang 1 est vide —
+                // et servaient un `'pt-BR'` non normalisé aux autres.
+                const emailLang = recipientLanguage(user, 'fr');
                 if (params.type === 'login_new_device' && (params as any)._loginAlertData) {
                   const alertData = (params as any)._loginAlertData;
                   this.emailService.sendLoginAlertEmail({
                     to: user.email,
                     name: user.username || 'User',
-                    language: user.systemLanguage || 'fr',
+                    language: emailLang,
                     ...alertData,
                   }).catch(err => {
                     notificationLogger.error('Login alert email failed', { error: err, userId: params.userId });
@@ -1285,7 +1751,7 @@ export class NotificationService {
                   this.emailService.sendSecurityAlertEmail({
                     to: user.email,
                     name: user.username || 'User',
-                    language: user.systemLanguage || 'fr',
+                    language: emailLang,
                     alertType: params.type,
                     details: params.content.substring(0, 500),
                   }).catch(err => {
@@ -1299,7 +1765,7 @@ export class NotificationService {
                   this.emailService.sendNotificationEmail({
                     to: user.email,
                     name: user.username || 'User',
-                    language: user.systemLanguage || 'fr',
+                    language: emailLang,
                     notificationType: params.type,
                     details: params.content.substring(0, 500),
                   }).catch(err => {
@@ -1454,6 +1920,12 @@ export class NotificationService {
     firstAttachmentMimeType?: string;
     encryptedContent?: string;
     notificationLocKey?: string;
+    /**
+     * Ce que `messagePreview` EST, donc ce qui le traduit — cf.
+     * {@link PreviewPrismBasis}. Défaut : `message-content` (cas nominal).
+     * L'éventail, qui a COMPOSÉ l'aperçu, est le seul à savoir le dire.
+     */
+    previewBasis?: PreviewPrismBasis;
     /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
     senderProfile?: NotificationActorProfile;
   }): Promise<Notification | null> {
@@ -1469,7 +1941,7 @@ export class NotificationService {
     // pipeline at fan-out time (Message.translations JSON, keyed by language).
     const liveMessage = await this.prisma.message.findUnique({
       where: { id: params.messageId },
-      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true, createdAt: true, messageType: true, translations: true },
+      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true, createdAt: true, messageType: true, translations: true, originalLanguage: true },
     });
     if (!liveMessage) {
       notificationLogger.info('Skipping message notification (message vanished)', {
@@ -1517,28 +1989,51 @@ export class NotificationService {
       return null;
     }
 
-    const recipientLang = await this.resolveRecipientLang(params.recipientUserId);
+    const { lang: recipientLang, ordered: recipientPrism } =
+      await this.resolveRecipientPrism(params.recipientUserId);
 
-    // GW5 — Prisme : sélectionner la traduction qui matche EXACTEMENT la
-    // langue résolue du destinataire (même résolution que le framing). Pas de
-    // fallback translations.first : aucune correspondance = le contenu est
-    // déjà dans la langue du destinataire. Les traductions chiffrées ne sont
-    // jamais poussées (la NSE déchiffre encryptedContent, pas les traductions).
-    const translationsJson = liveMessage.translations as Record<string, { text?: unknown; isEncrypted?: unknown }> | null | undefined;
-    const matchedTranslation = translationsJson
-      ? Object.entries(translationsJson).find(([lang, t]) =>
-          lang.toLowerCase() === recipientLang.toLowerCase()
-          && typeof t?.text === 'string'
-          && !t.isEncrypted)
-      : undefined;
+    // Cycle 121 — Prisme : DESCENDRE les langues du destinataire dans l'ordre,
+    // la première servie gagne. `recipientLang` est la langue de CADRAGE et ne
+    // convient PAS ici : appariée seule, elle ratait toute traduction d'un rang
+    // inférieur — cas nominal dès que la locale appareil (rang 4) diffère de la
+    // langue applicative. La source vient de la relecture VIVANTE ci-dessus,
+    // qui sert déjà de gate d'éligibilité : aucune lecture de plus.
+    // Cycle 123 — UNE descente par destinataire, sur la source qui traduit
+    // l'APERÇU. Le corps affiché et les champs du fil en sont deux projections :
+    // c'est ce qui garantit que la charge remise à APNs décrit le texte que la
+    // bannière montre, et rien d'autre.
+    const servedTranslation = this.prismTranslation(
+      this.previewPrismSource({
+        basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+        messageSource: {
+          translations: this.pushableTranslations(liveMessage.translations),
+          originalLanguage: liveMessage.originalLanguage,
+        },
+        protectedByLocKey: !!params.notificationLocKey,
+      }),
+      recipientPrism
+    );
+    const prismContext = this.servedTranslationFields(servedTranslation);
 
-    const content = buildMessageNotificationBodyI18n(recipientLang, {
-      messagePreview: params.messagePreview,
-      attachments: params.attachments,
-      firstAttachmentFileSize: params.firstAttachmentFileSize,
-      firstAttachmentDuration: params.firstAttachmentDuration,
-      firstAttachmentWidth: params.firstAttachmentWidth,
-      firstAttachmentHeight: params.firstAttachmentHeight,
+    // Cycle 124 — le corps de la bulle que la NSE PRÉ-ENREGISTRE au démarrage à
+    // froid, et son étiquette de langue. Le prédicat vit dans
+    // `prePersistedMessageFields` — un SEUL site pour les trois éventails.
+    const prePersisted = this.prePersistedMessageFields({
+      basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+      preview: params.messagePreview,
+      originalLanguage: liveMessage.originalLanguage,
+      protectedByLocKey: !!params.notificationLocKey,
+    });
+
+    // Cycle 122 — le corps AFFICHÉ descend le Prisme, pas seulement les champs
+    // de service ci-dessus : c'est lui que les trois plateformes rendent.
+    // Cycle 125 bis — et la composition vit dans `servedBannerBody`, que les
+    // TROIS éventails partagent désormais.
+    const content = this.servedBannerBody({
+      lang: recipientLang,
+      preview: params.messagePreview,
+      translation: servedTranslation,
+      media: params,
     });
 
     return this.createNotification({
@@ -1577,12 +2072,13 @@ export class NotificationService {
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
         // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
-        messageCreatedAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt.toISOString() : undefined,
-        messageType: liveMessage.messageType ?? undefined,
-        ...(matchedTranslation ? {
-          translatedContent: (matchedTranslation[1].text as string).substring(0, 200),
-          translatedLanguage: matchedTranslation[0],
-        } : {}),
+        ...this.messageClockFields({
+          createdAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt : null,
+          messageType: liveMessage.messageType ?? null,
+        }),
+        // Cycle 124 — le corps et la langue de la bulle pré-enregistrée.
+        ...prePersisted,
+        ...prismContext,
       },
 
       metadata: {
@@ -1626,6 +2122,33 @@ export class NotificationService {
      * comportement de toujours.
      */
     messageExpiresAt?: Date | null;
+    /**
+     * Source du Prisme déjà relue — cf. `MessagePrismSource`. Elle ne dépend pas
+     * du destinataire, donc l'éventail la relit UNE fois plutôt qu'une par
+     * mentionné. Absente : relue ici (appel solo).
+     */
+    prismSource?: MessageBannerSource;
+    /** Cf. `createMessageNotification.previewBasis`. */
+    previewBasis?: PreviewPrismBasis;
+    /**
+     * Le média qui COMPOSE le corps quand l'aperçu est vide — cf.
+     * {@link NotificationBannerMedia}. Sans lui, mentionner quelqu'un sous une
+     * photo sans légende poussait une bannière au corps VIDE.
+     */
+    attachments?: NotificationBannerMedia['attachments'];
+    firstAttachmentFileSize?: number | null;
+    firstAttachmentDuration?: number | null;
+    firstAttachmentWidth?: number | null;
+    firstAttachmentHeight?: number | null;
+    /**
+     * Cf. `createMessageNotification.notificationLocKey` — cycle 126. La clé de
+     * protection, dont `protectedPreview` est l'unique producteur du dépôt : sa
+     * présence est une DÉCLARATION de protection, jamais un indice. Elle vaut
+     * ici la localisation CLIENT du placeholder (la NSE le rend depuis sa propre
+     * table plutôt que d'afficher la chaîne composée par la passerelle) et le
+     * second verrou de `createNotification`.
+     */
+    notificationLocKey?: string;
   }): Promise<Notification | null> {
     // Anti-spam: rate limit des mentions par paire (sender → recipient)
     if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
@@ -1636,7 +2159,7 @@ export class NotificationService {
       return null;
     }
 
-    const [mentioner, conversation] = await Promise.all([
+    const [mentioner, conversation, prism, prismSource] = await Promise.all([
       params.senderProfile
         ? Promise.resolve(params.senderProfile)
         : this.prisma.user.findUnique({
@@ -1647,16 +2170,41 @@ export class NotificationService {
         where: { id: params.conversationId },
         select: { title: true, type: true, avatar: true },
       }),
+      this.resolveRecipientPrism(params.mentionedUserId),
+      params.prismSource
+        ? Promise.resolve(params.prismSource)
+        : this.loadMessagePrismSource(params.messageId),
     ]);
 
     if (!mentioner) return null;
+
+    // Cycle 123 — UNE descente, deux projections : le corps et les champs du
+    // fil. Cf. `createMessageNotification`.
+    const servedTranslation = this.prismTranslation(
+      this.previewPrismSource({
+        basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+        messageSource: prismSource,
+        protectedByLocKey: !!params.notificationLocKey,
+      }),
+      prism.ordered
+    );
 
     return this.createNotification({
       userId: params.mentionedUserId,
       type: 'user_mentioned',
       priority: 'high',
-      content: params.messagePreview,
+      // Cycle 122 — le corps AFFICHÉ porte le texte du Prisme : c'est lui que
+      // les trois plateformes rendent, pas les champs de service du fil push.
+      // Cycle 125 bis — et il se compose comme celui d'un message simple : le
+      // libellé de la pièce jointe prend la place d'un texte absent.
+      content: this.servedBannerBody({
+        lang: prism.lang,
+        preview: params.messagePreview,
+        translation: servedTranslation,
+        media: params,
+      }),
       collapseId: `conv-${params.conversationId}`,
+      lang: prism.lang,
       expiresAt: params.messageExpiresAt ?? undefined,
 
       actor: {
@@ -1674,6 +2222,30 @@ export class NotificationService {
         conversationAvatar: conversation?.avatar ?? undefined,
         conversationType: conversation?.type as any,
         messageId: params.messageId,
+        // Cycle 122 — le Prisme s'applique à TOUT le contenu poussé vers un
+        // destinataire NOMMÉ, pas au seul `new_message` : sans cette descente,
+        // la bannière d'une mention restait dans la langue de l'expéditeur
+        // pendant que celle d'un message simple servait la traduction.
+        ...this.servedTranslationFields(servedTranslation),
+        // Cycle 124 — la JUMELLE : cette bannière pousse un `messageId`, donc
+        // elle fait pré-enregistrer une bulle côté NSE, exactement comme celle
+        // d'un message simple. Sans ce couple, la bulle d'une MENTION restait
+        // vide pendant que celle d'un message en avait une — le symptôme « deux
+        // textes pour un même message » que les cycles 121 à 123 poursuivent.
+        // La langue vient de la source déjà relue : aucune lecture de plus.
+        ...this.prePersistedMessageFields({
+          basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+          preview: params.messagePreview,
+          originalLanguage: prismSource.originalLanguage,
+          protectedByLocKey: !!params.notificationLocKey,
+        }),
+        // Cycle 126 — le verrou de protection et l'horloge de la bulle. Le
+        // premier est redondant avec la base `protected-placeholder` que
+        // l'éventail pose déjà, et c'est voulu : `protectedPreview` est son
+        // unique producteur, donc sa présence DÉCLARE la protection là où une
+        // base peut être omise par un appelant solo.
+        notificationLocKey: params.notificationLocKey,
+        ...this.messageClockFields(prismSource),
       },
 
       metadata: {
@@ -1702,6 +2274,16 @@ export class NotificationService {
       messageId: string;
       /** Échéance du message mentionnant — cf. `createMentionNotification`. */
       messageExpiresAt?: Date | null;
+      /** Cf. `createMessageNotification.previewBasis`. */
+      previewBasis?: PreviewPrismBasis;
+      /** Cf. `createMentionNotification.notificationLocKey`. */
+      notificationLocKey?: string;
+      /** Cf. `createMentionNotification.attachments` — cycle 125 bis. */
+      attachments?: NotificationBannerMedia['attachments'];
+      firstAttachmentFileSize?: number | null;
+      firstAttachmentDuration?: number | null;
+      firstAttachmentWidth?: number | null;
+      firstAttachmentHeight?: number | null;
     },
     memberIds: string[]
   ): Promise<number> {
@@ -1718,16 +2300,26 @@ export class NotificationService {
       return true;
     });
 
+    if (eligibleUserIds.length === 0) return 0;
+
+    // La source du Prisme ne dépend pas du destinataire : une relecture pour
+    // tout l'éventail, la DESCENTE restant par lecteur.
+    const prismSource = await this.loadMessagePrismSource(commonData.messageId);
+
+    // Cycle 126 — les deux seuls champs que ce relais RENOMME sont extraits ;
+    // tout ce qui reste se répand. Recopié champ par champ, ce relais retenait
+    // silencieusement chaque champ de bannière ajouté en amont — c'est ainsi que
+    // le verrou de protection n'est jamais arrivé jusqu'ici.
+    const { senderId, messageContent, ...banner } = commonData;
+
     const results = await Promise.all(
       eligibleUserIds.map(userId =>
         this.createMentionNotification({
+          ...banner,
           mentionedUserId: userId,
-          mentionerUserId: commonData.senderId,
-          messageId: commonData.messageId,
-          conversationId: commonData.conversationId,
-          messagePreview: commonData.messageContent,
-          senderProfile: commonData.senderProfile,
-          messageExpiresAt: commonData.messageExpiresAt,
+          mentionerUserId: senderId,
+          messagePreview: messageContent,
+          prismSource,
         })
       )
     );
@@ -1774,14 +2366,47 @@ export class NotificationService {
         // `expiresAt` voyage dans la lecture que l'extrait demandait déjà :
         // la notification d'une réaction DÉSIGNE le message réagi, donc elle
         // ne doit pas lui survivre.
-        select: { content: true, expiresAt: true },
+        //
+        // Cycle 123 bis — les drapeaux de PROTECTION voyagent avec, et ce
+        // n'était pas le cas : cette lecture ne les chargeait même pas, si
+        // bien qu'aucun masque n'était possible ici. `protectedPreview` n'avait
+        // qu'UN appelant de production dans tout le dépôt (l'éventail d'un
+        // message) — tout ce qui relit `Message.content` ailleurs le servait nu.
+        select: {
+          content: true, expiresAt: true, messageType: true, createdAt: true,
+          isViewOnce: true, isBlurred: true, isEncrypted: true, effectFlags: true,
+        },
       }),
     ]);
 
     if (!reactor) return null;
 
     const lang = await this.resolveRecipientLang(params.messageAuthorId);
-    const messagePreview = message?.content
+
+    // Cycle 123 bis — un message PROTÉGÉ (éphémère / vue unique / flouté /
+    // chiffré) n'a pas d'extrait, et le corps se réduit à l'action.
+    //
+    // Le destinataire est ici l'AUTEUR du message : il connaît son texte, ce
+    // qui rend la fuite moins chère que celle des trois éventails — mais la
+    // protection ne parle pas de qui SAIT, elle parle de ce qui S'AFFICHE. Un
+    // message éphémère ou flouté n'a rien à faire sur un écran verrouillé, ni
+    // dans une ligne `Notification` que l'inbox in-app relit.
+    //
+    // Pas de `notificationLocKey` ici, contrairement à l'éventail : les clients
+    // s'en servent pour REMPLACER le corps, ce qui effacerait « a réagi 🔥 ».
+    // L'extrait est simplement omis — la branche existait déjà pour un message
+    // sans texte.
+    const isProtected = protectedPreview({
+      messageType: message?.messageType,
+      isEncrypted: message?.isEncrypted,
+      isViewOnce: message?.isViewOnce,
+      isBlurred: message?.isBlurred,
+      effectFlags: message?.effectFlags,
+      expiresAt: message?.expiresAt ?? null,
+      createdAt: message?.createdAt ?? null,
+    }) !== null;
+
+    const messagePreview = message?.content && !isProtected
       ? message.content.length > 100
         ? message.content.substring(0, 100) + '…'
         : message.content
@@ -3194,6 +3819,27 @@ export class NotificationService {
      * `createMentionNotification.messageExpiresAt`.
      */
     messageExpiresAt?: Date | null;
+    /** Cf. `createMessageNotification.previewBasis`. */
+    previewBasis?: PreviewPrismBasis;
+    /**
+     * Le média qui COMPOSE le corps quand l'aperçu est vide — cf.
+     * {@link NotificationBannerMedia}. Sans lui, répondre par un vocal poussait
+     * une bannière au corps VIDE.
+     */
+    attachments?: NotificationBannerMedia['attachments'];
+    firstAttachmentFileSize?: number | null;
+    firstAttachmentDuration?: number | null;
+    firstAttachmentWidth?: number | null;
+    firstAttachmentHeight?: number | null;
+    /**
+     * Cf. `createMessageNotification.notificationLocKey` — cycle 126. La clé de
+     * protection, dont `protectedPreview` est l'unique producteur du dépôt : sa
+     * présence est une DÉCLARATION de protection, jamais un indice. Elle vaut
+     * ici la localisation CLIENT du placeholder (la NSE le rend depuis sa propre
+     * table plutôt que d'afficher la chaîne composée par la passerelle) et le
+     * second verrou de `createNotification`.
+     */
+    notificationLocKey?: string;
   }): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
@@ -3201,7 +3847,7 @@ export class NotificationService {
       return null;
     }
 
-    const [replier, conversation] = await Promise.all([
+    const [replier, conversation, prism, prismSource] = await Promise.all([
       params.senderProfile
         ? Promise.resolve(params.senderProfile)
         : this.prisma.user.findUnique({
@@ -3212,16 +3858,38 @@ export class NotificationService {
         where: { id: params.conversationId },
         select: { title: true, type: true },
       }),
+      this.resolveRecipientPrism(params.recipientUserId),
+      this.loadMessagePrismSource(params.messageId),
     ]);
 
     if (!replier) return null;
+
+    // Cycle 123 — UNE descente, deux projections : le corps et les champs du
+    // fil. Cf. `createMessageNotification`.
+    const servedTranslation = this.prismTranslation(
+      this.previewPrismSource({
+        basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+        messageSource: prismSource,
+        protectedByLocKey: !!params.notificationLocKey,
+      }),
+      prism.ordered
+    );
 
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'message_reply',
       priority: 'normal',
-      content: params.messagePreview,
+      // Cycle 122 — cf. `createMentionNotification` : le corps servi descend le
+      // Prisme, les champs du fil push ne suffisent pas.
+      // Cycle 125 bis — et il se compose comme celui d'un message simple.
+      content: this.servedBannerBody({
+        lang: prism.lang,
+        preview: params.messagePreview,
+        translation: servedTranslation,
+        media: params,
+      }),
       collapseId: `conv-${params.conversationId}`,
+      lang: prism.lang,
       expiresAt: params.messageExpiresAt ?? undefined,
 
       actor: {
@@ -3237,6 +3905,25 @@ export class NotificationService {
         conversationType: conversation?.type as any,
         messageId: params.messageId,
         originalMessageId: params.originalMessageId,
+        // Cycle 122 — le Prisme de la RÉPONSE, celle que cette bannière annonce
+        // et ouvre : jamais celle du message cité.
+        ...this.servedTranslationFields(servedTranslation),
+        // Cycle 124 — cf. `createMentionNotification` : la bulle pré-enregistrée
+        // est celle de la RÉPONSE, le message que cette bannière annonce et
+        // ouvre — jamais celle du message cité.
+        ...this.prePersistedMessageFields({
+          basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+          preview: params.messagePreview,
+          originalLanguage: prismSource.originalLanguage,
+          protectedByLocKey: !!params.notificationLocKey,
+        }),
+        // Cycle 126 — le verrou de protection et l'horloge de la bulle. Le
+        // premier est redondant avec la base `protected-placeholder` que
+        // l'éventail pose déjà, et c'est voulu : `protectedPreview` est son
+        // unique producteur, donc sa présence DÉCLARE la protection là où une
+        // base peut être omise par un appelant solo.
+        notificationLocKey: params.notificationLocKey,
+        ...this.messageClockFields(prismSource),
       },
 
       metadata: {
@@ -4078,10 +4765,14 @@ export class NotificationService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: params.recipientUserId },
-      select: { systemLanguage: true }
+      select: this.LANG_SELECT
     });
-    const lang = user?.systemLanguage ?? 'fr';
-    const locale = user?.systemLanguage === 'en' ? 'en-US' : 'fr-FR';
+    const lang = recipientLanguage(user, 'fr');
+    // Cycle 125 — l'horodatage se lit DANS la notification, donc dans la langue
+    // de la notification. `systemLanguage === 'en' ? 'en-US' : 'fr-FR'` était un
+    // binaire codé en dur : un lecteur allemand recevait « Neue Anmeldung
+    // erkannt » — `notificationString` normalise, lui — daté à la française.
+    const locale = recipientDateLocale(user, 'fr');
 
     const bodyParts: string[] = [];
     if (location) bodyParts.push(location);

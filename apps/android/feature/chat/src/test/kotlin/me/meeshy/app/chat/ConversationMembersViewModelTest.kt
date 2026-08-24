@@ -450,6 +450,55 @@ class ConversationMembersViewModelTest {
     }
 
     @Test
+    fun `a participant-left event drops an accountless visitor by participant id`() = runTest {
+        // A link visitor with no account: the event names them by participantId only (userId null).
+        val events = MutableSharedFlow<ParticipantLeftEvent>()
+        val vm = viewModel(
+            repo(NetworkResult.Success(page(listOf(member("p1").copy(userId = null), member("p2", userId = "u2"))))),
+            socketManager = socket(left = events),
+        )
+        vm.load("c1")
+        advanceUntilIdle()
+
+        events.emit(ParticipantLeftEvent(conversationId = "c1", userId = null, participantId = "p1"))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p2")
+    }
+
+    @Test
+    fun `a participant-banned event drops an accountless visitor by participant id`() = runTest {
+        val events = MutableSharedFlow<ParticipantBannedEvent>()
+        val vm = viewModel(
+            repo(NetworkResult.Success(page(listOf(member("p1").copy(userId = null), member("p2", userId = "u2"))))),
+            socketManager = socket(banned = events),
+        )
+        vm.load("c1")
+        advanceUntilIdle()
+
+        events.emit(ParticipantBannedEvent(conversationId = "c1", userId = null, participantId = "p1"))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p2")
+    }
+
+    @Test
+    fun `a participant-left event naming neither id leaves the roster untouched`() = runTest {
+        val events = MutableSharedFlow<ParticipantLeftEvent>()
+        val vm = viewModel(
+            repo(NetworkResult.Success(page(listOf(member("p1", userId = "u1"), member("p2", userId = "u2"))))),
+            socketManager = socket(left = events),
+        )
+        vm.load("c1")
+        advanceUntilIdle()
+
+        events.emit(ParticipantLeftEvent(conversationId = "c1", userId = null, participantId = null))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.members.map { it.id }).containsExactly("p1", "p2").inOrder()
+    }
+
+    @Test
     fun `rebinding to another conversation stops the previous one's events from landing`() = runTest {
         val events = MutableSharedFlow<ParticipantLeftEvent>()
         val repository = repo(NetworkResult.Success(page(listOf(member("p1", userId = "u1")))))

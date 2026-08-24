@@ -161,40 +161,112 @@ final class AppInitWireupTests: XCTestCase {
     }
 
     /// S5 — mêmes causes, mêmes effets : la caméra (AVCaptureSession,
-    /// permissions) et la pellicule (PhotoKit) restent app-side, le composer
-    /// SDK expose deux points d'injection. Un site de présentation qui les
+    /// permissions), la pellicule (PhotoKit) et la lecture du presse-papier
+    /// (`NSItemProvider`, autorisation sandbox) restent app-side, le composer
+    /// SDK expose TROIS points d'injection. Un site de présentation qui les
     /// oublie fait disparaître les amorces de la page blanche SANS le moindre
     /// signal — c'est exactement ce que ce jumeau du garde-fou « Lieu »
     /// interdit.
+    ///
+    /// C5b l'a vérifié dans le mauvais sens : `storyPasteProvided()` a été
+    /// écrit, testé, et n'a JAMAIS été appelé — donc `\.storyPaste` restait
+    /// `nil` partout, donc `BlankCanvasPasteStarter` ne rendait rien sur aucun
+    /// écran. Cette garde ne connaissait que deux des trois injections : c'est
+    /// l'omission qu'elle couvre désormais.
     func test_everyStoryComposerPresentation_injectsTheBlankCanvasStarters() throws {
+        let injections = [
+            ".storyCameraCaptureProvided()":
+                "sans injection caméra, l'amorce « Caméra » n'est pas rendue.",
+            ".storyRecentCameraRollProvided()":
+                "sans injection pellicule, la vignette « dernière photo » n'est pas rendue.",
+            ".storyPasteProvided()":
+                "sans injection presse-papier, la capsule « Coller » n'est pas rendue — "
+                    + "`\\.storyPaste` reste nil et `BlankCanvasPasteStarter` rend un corps vide."
+        ]
         for path in Self.storyComposerPresentationSites {
             let src = try appSource(path)
             let presentations = occurrences(of: "StoryComposerView(", in: src)
                 + occurrences(of: "UnifiedPostComposer(", in: src)
             XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
-            XCTAssertEqual(
-                occurrences(of: ".storyCameraCaptureProvided()", in: src), presentations,
-                "\(path) : sans injection caméra, l'amorce « Caméra » n'est pas rendue."
-            )
-            XCTAssertEqual(
-                occurrences(of: ".storyRecentCameraRollProvided()", in: src), presentations,
-                "\(path) : sans injection pellicule, la vignette « dernière photo » n'est pas rendue."
-            )
+            for (modifier, why) in injections {
+                XCTAssertEqual(
+                    occurrences(of: modifier, in: src), presentations,
+                    "\(path) : \(why)"
+                )
+            }
         }
     }
 
-    /// Tous les fichiers qui MONTENT un composer de story. `StoryTrayActions`
-    /// s'y est ajouté quand le cover de création est remonté au niveau racine :
-    /// un site oublié par ce garde-fou est un site où les amorces de page
-    /// blanche disparaissent sans le moindre signal. `MeeshyComposerHost` (C3)
-    /// s'y ajoute pour la même raison — c'est le meuble qui enveloppe l'atelier,
-    /// donc un site de présentation à part entière.
+    /// Tous les fichiers qui MONTENT un composer de story eux-mêmes : un site
+    /// oublié par ce garde-fou est un site où les amorces de page blanche
+    /// disparaissent sans le moindre signal. `MeeshyComposerHost` (C3) en fait
+    /// partie — c'est le meuble qui enveloppe l'atelier, donc un site de
+    /// présentation à part entière.
+    ///
+    /// V3-2 — `StoryTrayActions` en est SORTI, et c'est un acquis, pas un
+    /// oubli : la porte de création délègue désormais au meuble, qui pose les
+    /// fournisseurs au plus près de l'atelier. Les reposer sur le cover en
+    /// empilerait DEUX couches — la dernière gagne, en silence, et le compte
+    /// « injections == présentations » cesserait de mesurer quoi que ce soit.
+    /// L'invariant côté porte est tenu par
+    /// `test_theStoryCreationDoor_mountsTheComposerHost_andLetsItPoseTheProviders`.
     private static let storyComposerPresentationSites = [
         "Meeshy/Features/Main/Views/StoryTrayView.swift",
-        "Meeshy/Features/Main/Views/StoryTrayActions.swift",
         "Meeshy/Features/Main/Views/StoryViewerView.swift",
         "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"
     ]
+
+    // MARK: - V3-2 : la porte de création monte le MEUBLE, pas l'atelier nu
+
+    /// La porte de création du tray ouvre `MeeshyComposerHost`, qui construit
+    /// le ViewModel, adopte le brouillon désigné et pose les fournisseurs
+    /// d'environnement. Trois doublons guettaient, tous SILENCIEUX :
+    ///
+    /// - un second `StoryComposerViewModel` — le host en construit déjà un et
+    ///   lui fait adopter le brouillon (`MeeshyComposerHost.init`). En
+    ///   fabriquer un ici en laisserait vivre deux : le composer
+    ///   s'autosauvegarderait sous un id NEUF et le brouillon repris resterait
+    ///   intact à côté, en double — exactement le défaut que l'adoption existe
+    ///   pour éviter ;
+    /// - un second montage de `StoryComposerView` — la porte cesserait de
+    ///   passer par le meuble sans que rien ne rougisse, et le chantier
+    ///   redeviendrait invisible ;
+    /// - un second jeu de fournisseurs — deux couches se recouvrent sans
+    ///   erreur, la dernière gagne, et le compte de la garde de câblage devient
+    ///   faux.
+    ///
+    /// Les trois assertions à zéro tiennent chacune leur objet PARCE QUE la
+    /// première, positive, exige que le meuble soit bien là : une porte qui ne
+    /// monterait plus rien du tout les rendrait toutes vertes, et
+    /// `MeeshyComposerHostGuardTests.test_theHost_hasAtLeastOneProductionCaller`
+    /// ferme la dernière issue.
+    func test_theStoryCreationDoor_mountsTheComposerHost_andLetsItPoseTheProviders() throws {
+        let path = "Meeshy/Features/Main/Views/StoryTrayActions.swift"
+        let src = try appSource(path)
+
+        XCTAssertEqual(
+            occurrences(of: "MeeshyComposerHost(", in: src), 1,
+            "\(path) : la porte de création monte le meuble, une fois et une seule."
+        )
+        XCTAssertEqual(
+            occurrences(of: "StoryComposerViewModel(", in: src), 0,
+            "\(path) : le ViewModel du composer appartient au meuble. Un second ici dédoublerait le brouillon repris."
+        )
+        XCTAssertEqual(
+            occurrences(of: "StoryComposerView(", in: src), 0,
+            "\(path) : la porte n'ouvre plus l'atelier nu — elle passe par le meuble, sans quoi V3-2 est défait."
+        )
+        for provider in [".storyLocationPickerProvided()",
+                         ".storyCameraCaptureProvided()",
+                         ".storyRecentCameraRollProvided()",
+                         ".storyPasteProvided()",
+                         ".storyStickerLibraryProvided()"] {
+            XCTAssertEqual(
+                occurrences(of: provider, in: src), 0,
+                "\(path) : \(provider) est posé par le meuble. L'empiler ici superpose deux fournisseurs — le dernier gagne, en silence."
+            )
+        }
+    }
 
     // MARK: - Composer de CRÉATION : l'audience mémorisée ne s'évapore pas
 
@@ -212,19 +284,26 @@ final class AppInitWireupTests: XCTestCase {
     /// donc un site d'édition qui le passerait ne changerait rien. Une garde
     /// qui l'exigerait quand même ferait rougir du code correct — et serait
     /// désactivée à la première occasion.
-    private static let storyComposerCreationSites = [
-        "Meeshy/Features/Main/Views/StoryTrayActions.swift",
-        "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"
+    ///
+    /// V3-2 — la chaîne de création compte désormais DEUX maillons, et
+    /// l'audience doit traverser les deux : la porte la donne au meuble
+    /// (`MeeshyComposerHost(`), le meuble la donne à l'atelier
+    /// (`StoryComposerView(`). Le site seul ne suffit donc plus à nommer ce
+    /// qu'on y cherche — d'où le montage attendu, écrit fichier par fichier.
+    /// Un maillon qui l'oublie retombe sur `PostVisibility.friends` sans un mot.
+    private static let storyComposerCreationMounts: [(path: String, mount: String)] = [
+        ("Meeshy/Features/Main/Views/StoryTrayActions.swift", "MeeshyComposerHost("),
+        ("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift", "StoryComposerView(")
     ]
 
     func test_everyCreationComposerPresentation_passesTheMemorisedAudience() throws {
-        for path in Self.storyComposerCreationSites {
+        for (path, mount) in Self.storyComposerCreationMounts {
             let src = try appSource(path)
-            let mounts = src.components(separatedBy: "StoryComposerView(").dropFirst()
-            XCTAssertGreaterThan(mounts.count, 0, "\(path) ne présente plus de composer de création ?")
-            for mount in mounts {
+            let mounts = src.components(separatedBy: mount).dropFirst()
+            XCTAssertGreaterThan(mounts.count, 0, "\(path) ne monte plus `\(mount)` — le maillon de création a disparu ?")
+            for montage in mounts {
                 XCTAssertTrue(
-                    String(mount.prefix(600)).contains("initialVisibility:"),
+                    String(montage.prefix(600)).contains("initialVisibility:"),
                     "\(path) : une présentation du composer de CRÉATION ne passe pas `initialVisibility`. "
                         + "Le SDK retombe alors sur `PostVisibility.friends` sans rien dire, et le dernier "
                         + "choix d'audience de l'auteur est perdu (loi 10)."

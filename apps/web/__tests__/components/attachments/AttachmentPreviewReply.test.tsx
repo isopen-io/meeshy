@@ -109,6 +109,7 @@ const createMockAttachment = (overrides: Partial<Attachment> = {}): Attachment =
   isAnonymous: false,
   createdAt: new Date().toISOString(),
   isForwarded: false,
+  capturedInApp: false,
   isViewOnce: false,
   viewOnceCount: 0,
   isBlurred: false,

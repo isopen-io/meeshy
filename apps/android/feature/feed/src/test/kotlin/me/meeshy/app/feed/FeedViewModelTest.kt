@@ -6,6 +6,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -33,7 +34,9 @@ import me.meeshy.sdk.model.SocketPostBookmarkedData
 import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
+import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
+import me.meeshy.sdk.model.SocketPostUpdatedData
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
@@ -72,6 +75,9 @@ class FeedViewModelTest {
     private val postBookmarked = MutableSharedFlow<SocketPostBookmarkedData>(extraBufferCapacity = 64)
     private val commentAdded = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 64)
     private val commentDeleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 64)
+    private val postTranslationUpdated =
+        MutableSharedFlow<SocketPostTranslationUpdatedData>(extraBufferCapacity = 64)
+    private val postUpdated = MutableSharedFlow<SocketPostUpdatedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun post(id: String) = ApiPost(id = id, content = "Post $id")
@@ -86,6 +92,8 @@ class FeedViewModelTest {
         every { socialSocket.postBookmarked } returns postBookmarked
         every { socialSocket.commentAdded } returns commentAdded
         every { socialSocket.commentDeleted } returns commentDeleted
+        every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
+        every { socialSocket.postUpdated } returns postUpdated
         return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
     }
 
@@ -412,6 +420,8 @@ class FeedViewModelTest {
         every { socialSocket.postBookmarked } returns postBookmarked
         every { socialSocket.commentAdded } returns commentAdded
         every { socialSocket.commentDeleted } returns commentDeleted
+        every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
+        every { socialSocket.postUpdated } returns postUpdated
         return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
     }
 
@@ -704,6 +714,28 @@ class FeedViewModelTest {
         val card = vm.state.value.posts.single()
         assertThat(card.likeCount).isEqualTo(7)
         assertThat(card.isLiked).isFalse()
+    }
+
+    @Test
+    fun `a realtime post-translation-updated folds the pushed entry into the feed cache`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        val entry = ApiPostTranslationEntry(text = "Hola", translationModel = "nllb", confidenceScore = 0.97)
+
+        postTranslationUpdated.emit(
+            SocketPostTranslationUpdatedData(postId = "1", language = "es", translation = entry),
+        )
+
+        verify { repository.applyTranslationUpdate("1", "es", entry) }
+    }
+
+    @Test
+    fun `a realtime post-updated folds the edited post onto the feed cache`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        val edited = ApiPost(id = "1", content = "Post 1 (edited)", likeCount = 9)
+
+        postUpdated.emit(SocketPostUpdatedData(post = edited))
+
+        verify { repository.applyPostUpdate(edited) }
     }
 
     @Test

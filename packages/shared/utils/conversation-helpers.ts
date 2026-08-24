@@ -3,6 +3,7 @@
  * Logique métier réutilisable entre Gateway et Frontend
  */
 import { normalizeLanguageCode, normalizeLanguageForDedup } from './language-normalize.js';
+import { OBJECT_ID_REGEX } from './object-id.js';
 
 /**
  * Options de résolution de langue. La locale appareil intervient en 4e priorité
@@ -207,26 +208,70 @@ export function resolveLastMessagePreview(params: {
 
   if (!translations || typeof translations !== 'object') return preview;
 
+  const resolved = resolvePrismTranslation({
+    translations,
+    originalLanguage,
+    preferredLanguages,
+  });
+
+  return resolved ? resolved.text : preview;
+}
+
+/**
+ * La DESCENTE du Prisme elle-même, rendue avec la langue qui a gagné.
+ *
+ * `resolveLastMessagePreview` n'en est qu'une projection : il rend un texte, ce
+ * qui suffit à une ligne de liste. Les consommateurs qui doivent DIRE dans
+ * quelle langue ils servent — la bannière de notification, qui pousse
+ * `translatedContent` et `translatedLanguage` côte à côte sur le fil APNs — ont
+ * besoin de la paire. Sans cette unité ils réécriraient la boucle chez eux :
+ * c'est exactement ce qu'ont produit les cycles 118 à 120, où chaque famille de
+ * contenu portait sa propre descente et où trois d'entre elles ne descendaient
+ * pas.
+ *
+ * `null` ⇒ **servir l'original**, jamais « pas de résultat » : soit la langue
+ * d'origine a gagné à son rang, soit aucune langue du lecteur n'est servie —
+ * et dans les deux cas la règle #1 du Prisme dit que le contenu original est
+ * ce qu'il faut montrer. Ne JAMAIS y substituer une traduction quelconque.
+ *
+ * La clé rendue est celle **STOCKÉE dans la carte**, pas sa forme canonique :
+ * la comparaison se normalise, la valeur rendue non (cycle 119). Elle repart
+ * sur le fil et sert de clé à des lecteurs qui rapprochent par égalité stricte.
+ *
+ * `preferredLanguages` doit être ordonnée — c'est la sortie de
+ * {@link resolveUserLanguagesOrdered}, jamais une liste reconstruite à la main.
+ */
+export function resolvePrismTranslation(params: {
+  translations?: Readonly<Record<string, string>> | null;
+  originalLanguage?: string | null;
+  preferredLanguages: readonly string[];
+}): { readonly language: string; readonly text: string } | null {
+  const { translations, originalLanguage, preferredLanguages } = params;
+
+  if (!translations || typeof translations !== 'object') return null;
+
   const preferred = preferredLanguages
     .filter((lang): lang is string => typeof lang === 'string' && lang.trim() !== '')
     .map(normalizeLanguageForDedup);
-  if (preferred.length === 0) return preview;
+  if (preferred.length === 0) return null;
 
   const original = originalLanguage ? normalizeLanguageForDedup(originalLanguage) : undefined;
 
-  const byCanonicalKey = new Map<string, string>();
+  const byCanonicalKey = new Map<string, { readonly language: string; readonly text: string }>();
   for (const [lang, text] of Object.entries(translations)) {
     if (typeof text !== 'string' || text.trim() === '') continue;
-    byCanonicalKey.set(normalizeLanguageForDedup(lang), text);
+    const canonical = normalizeLanguageForDedup(lang);
+    if (byCanonicalKey.has(canonical)) continue;
+    byCanonicalKey.set(canonical, { language: lang, text });
   }
 
   for (const lang of preferred) {
-    if (original && lang === original) return preview;
+    if (original && lang === original) return null;
     const translated = byCanonicalKey.get(lang);
     if (translated !== undefined) return translated;
   }
 
-  return preview;
+  return null;
 }
 
 /**
@@ -395,10 +440,14 @@ export function resolveParticipantLanguage(participant: LanguageResolvable): str
 }
 
 /**
- * Vérifie si un identifiant est un ObjectID MongoDB valide
+ * Vérifie si un identifiant est un ObjectID MongoDB valide.
+ *
+ * Délègue à la SSOT {@link OBJECT_ID_REGEX} (`utils/object-id.ts`) — ne PAS
+ * réinliner la regex ici. Nom conservé pour ses consommateurs (gateway
+ * `routes/users/blocking.ts`).
  */
 export function isValidMongoId(id: string): boolean {
-  return /^[0-9a-fA-F]{24}$/.test(id);
+  return OBJECT_ID_REGEX.test(id);
 }
 
 /**

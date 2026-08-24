@@ -282,11 +282,32 @@
       "empty": "Ninguém encontrado",
       "remove": "Remover"
     },
+    "composer": {
+      "format": {
+        "groupLabel": "Formato de publicação",
+        "post": "Publicação",
+        "story": "Story",
+        "reel": "Reel",
+        "status": "Status"
+      },
+      "media": {
+        "limitReached": "Pode anexar até {max} arquivos de mídia.",
+        "limitPartial": "Pode anexar até {max} arquivos de mídia. Apenas {added} foram adicionados."
+      }
+    },
     "postComposer": {
       "contentLabel": "Conteúdo da publicação",
       "addPhoto": "Adicionar foto",
       "addVideo": "Adicionar vídeo",
       "changeVisibility": "Alterar visibilidade",
+      "mediaAlt": {
+        "label": "Texto alternativo",
+        "placeholder": "Descreva este conteúdo para os leitores de ecrã"
+      },
+      "soundExtraction": {
+        "label": "Permitir a reutilização do som",
+        "caption": "Outras pessoas poderão reutilizar o áudio dos vídeos desta publicação nas suas próprias publicações."
+      },
       "reelToggle": {
         "groupLabel": "Tipo de publicação",
         "reel": "Reel",
@@ -319,6 +340,7 @@
         "PINNED": "Fixado"
       }
     },
+    "repost": "Republicar",
     "repostAsPost": "Guardar no meu feed",
     "storyLocationHere": "Aqui"
   },

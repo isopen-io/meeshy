@@ -25,11 +25,12 @@ import {
 } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePostRoom } from '@/hooks/social/use-post-room';
-import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { usePreferredLanguage, usePreferredLanguages } from '@/hooks/use-post-translation';
 import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/use-i18n';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Post } from '@meeshy/shared/types/post';
+import { repostTargetId } from '@meeshy/shared/utils/repost-target';
 import { isHeartLikedByMe } from '@/lib/reactions';
 import { shareLink } from '@/lib/share-utils';
 import { reportService } from '@/services/report.service';
@@ -53,6 +54,7 @@ export function ReelsFeedScreen() {
   const router = useRouter();
   const { t } = useI18n('reel');
   const userLanguage = usePreferredLanguage();
+  const preferredLanguages = usePreferredLanguages();
   const toastCtx = useToast();
 
   usePostSocketCacheSync();
@@ -180,7 +182,11 @@ export function ReelsFeedScreen() {
   const handleRepost = useCallback(() => {
     if (!current) return;
     repostMutation.mutate(
-      { postId: current.id, data: { isQuote: false } },
+      // Loi du miroir : un réel repartagé RESTE un réel. Sans `targetType`, le
+      // gateway retombait sur `?? POST` et le repost quittait le fil des réels.
+      // Le format vient de la CARTE agie — ce fil affiche aussi des reposts, et
+      // `current.repostOf` porterait le format de la RACINE, pas celui-ci.
+      { postId: repostTargetId(current), data: { isQuote: false, targetType: current.type } },
       {
         onSuccess: () => {
           setRepostModalOpen(false);
@@ -195,7 +201,8 @@ export function ReelsFeedScreen() {
     (quoteContent: string) => {
       if (!current) return;
       repostMutation.mutate(
-        { postId: current.id, data: { content: quoteContent, isQuote: true } },
+        // La citation publie autant que le repost sec : elle porte la même loi.
+        { postId: repostTargetId(current), data: { content: quoteContent, isQuote: true, targetType: current.type } },
         {
           onSuccess: () => {
             setRepostModalOpen(false);
@@ -316,6 +323,7 @@ export function ReelsFeedScreen() {
                   currentUserId={authUser?.id ?? null}
                   currentUser={authUser ? { username: authUser.username, avatar: authUser.avatar } : null}
                   userLanguage={userLanguage}
+                  preferredLanguages={preferredLanguages}
                   isLoading={commentsQuery.isLoading}
                   hasMore={commentsQuery.hasNextPage}
                   onLoadMore={() => commentsQuery.fetchNextPage()}

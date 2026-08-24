@@ -860,6 +860,21 @@ model MessageAttachment {
   isForwarded               Boolean @default(false)
 
   // =====================================================
+  // PROVENANCE
+  // =====================================================
+  /// Le fichier sort de la caméra ou du micro DE L'APPLICATION — il n'a donc
+  /// encore été vu par personne d'autre que celui qui l'a pris.
+  ///
+  /// Rien dans un fichier ne distingue une photo prise à l'instant d'une photo
+  /// choisie dans la galerie : seul le client qui a ouvert la caméra le sait, et
+  /// il ne le sait qu'AU MOMENT de la capture. C'est pourquoi la valeur est
+  /// écrite ici, à l'envoi, et jamais recalculée ensuite — publier ce média des
+  /// jours plus tard depuis la feuille de partage doit encore pouvoir demander
+  /// confirmation.
+  /// @see packages/shared/utils/forward-to-publication.ts
+  capturedInApp             Boolean @default(false)
+
+  // =====================================================
   // SECRET / VIEW-ONCE / BLUR FIELDS
   // =====================================================
   /// View-once attachment (disappears after user views it)

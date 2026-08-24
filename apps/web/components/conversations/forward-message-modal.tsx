@@ -421,8 +421,7 @@ export function ForwardMessageModal({
   // La PREMIÈRE pièce jointe décide : le fil rend un média par publication, et
   // une feuille qui proposerait « publier » sur un lot hétérogène mentirait sur
   // ce qui partirait réellement.
-  const primaryAttachment = (message as { attachments?: Array<{ id: string; mimeType?: string; capturedInApp?: boolean }> })
-    .attachments?.[0];
+  const primaryAttachment = message.attachments?.[0];
   const publicationTargets = publicationTargetsFor(primaryAttachment?.mimeType);
 
   const [pendingCapture, setPendingCapture] = useState<PublicationTarget | null>(null);

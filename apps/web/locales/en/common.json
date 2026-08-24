@@ -282,11 +282,32 @@
       "empty": "No one found",
       "remove": "Remove"
     },
+    "composer": {
+      "format": {
+        "groupLabel": "Publication format",
+        "post": "Post",
+        "story": "Story",
+        "reel": "Reel",
+        "status": "Status"
+      },
+      "media": {
+        "limitReached": "You can attach up to {max} media files.",
+        "limitPartial": "You can attach up to {max} media files. Only {added} added."
+      }
+    },
     "postComposer": {
       "contentLabel": "Post content",
       "addPhoto": "Add photo",
       "addVideo": "Add video",
       "changeVisibility": "Change visibility",
+      "mediaAlt": {
+        "label": "Alt text",
+        "placeholder": "Describe this media for screen readers"
+      },
+      "soundExtraction": {
+        "label": "Allow others to reuse this sound",
+        "caption": "Other people will be able to reuse the soundtrack of this post's videos in their own publications."
+      },
       "reelToggle": {
         "groupLabel": "Post type",
         "reel": "Reel",
@@ -319,6 +340,7 @@
         "PINNED": "Pinned"
       }
     },
+    "repost": "Repost",
     "repostAsPost": "Keep on my feed",
     "storyLocationHere": "Here"
   },

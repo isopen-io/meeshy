@@ -1,6 +1,5 @@
 import CoreGraphics
 import Foundation
-import MeeshyUI
 
 /// Pure formatter for the author "reach line" (`@pseudo · 👁 vues · 📊 impressions`),
 /// shared by the inline author block (`authorReachLine`) and the collapsed header
@@ -12,28 +11,27 @@ import MeeshyUI
 /// but is no longer the displayed "views" label.
 enum PostReachFormatter {
 
+    /// Ce que la ligne de portée doit AFFICHER — plus les nombres eux-mêmes.
+    ///
+    /// Elle a porté `views` / `impressions` sous forme de chaînes déjà abrégées
+    /// jusqu'à 239i. Depuis que chaque métrique se rend par `ReachMetricLabel`
+    /// — qui doit recevoir le COMPTE, pour pouvoir en dire l'abrégé à l'écran et
+    /// la valeur exacte à VoiceOver — ces deux chaînes n'étaient plus lues que
+    /// pour leur nullité. Les garder aurait laissé un second chemin de formatage
+    /// vivant et non rendu : exactement la branche morte que 238i a trouvée dans
+    /// `StatRing`.
+    ///
+    /// Il reste donc à ce type ce que lui seul décide : le pseudo, et le fait
+    /// que les statistiques soient **réservées à l'auteur**.
     struct Components: Equatable {
-        let pseudo: String?       // "@marie" or nil
-        let views: String?        // compact count, or nil (author-only)
-        let impressions: String?  // compact count, or nil (author-only)
+        let pseudo: String?     // "@marie" or nil
+        let showsStats: Bool    // author-only
     }
 
-    /// `locale` is a parameter rather than a hard-coded `.current`: the counts are
-    /// rendered by `CompactCountLabel` from CLDR data, so a suite that omitted it
-    /// would be judging the SIMULATOR's locale — green locally, red in CI.
-    static func components(
-        username: String?,
-        isAuthor: Bool,
-        viewCount: Int,
-        impressionCount: Int,
-        locale: Locale = .current
-    ) -> Components {
-        let pseudo = username.flatMap { $0.isEmpty ? nil : "@\($0)" }
-        guard isAuthor else { return Components(pseudo: pseudo, views: nil, impressions: nil) }
-        return Components(
-            pseudo: pseudo,
-            views: CompactCountLabel.text(viewCount, locale: locale),
-            impressions: CompactCountLabel.text(impressionCount, locale: locale)
+    static func components(username: String?, isAuthor: Bool) -> Components {
+        Components(
+            pseudo: username.flatMap { $0.isEmpty ? nil : "@\($0)" },
+            showsStats: isAuthor
         )
     }
 }

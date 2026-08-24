@@ -770,6 +770,60 @@ final class StoryUploadQueueTests: XCTestCase {
         }
     }
 
+    // MARK: - S3 — l'image d'un sticker devient un PostMedia du post
+
+    /// Le code du publish, commentaires retirés. `runStoryUpload` construit un
+    /// `TusUploadManager` concret depuis `MeeshyConfig.shared` : rien n'y est
+    /// injectable, donc aucun test ne peut observer l'upload lui-même. Ces
+    /// gardes vérifient le CÂBLAGE — que la décision pure (testée dans
+    /// `StoryStickerUploadTests`) a bien un appelant en production — et rien de
+    /// plus.
+    private func storyViewModelSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/ViewModels
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/ViewModels/StoryViewModel.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    /// Rougit si la publication cesse de téléverser les images de stickers :
+    /// le post partirait avec des stickers dont l'image n'existe nulle part
+    /// côté serveur, réduits à leur emoji de repli.
+    ///
+    /// Formulée en POSITIF — « la décision a un appelant » — parce qu'une
+    /// garde qui vérifierait l'absence d'un motif interdit resterait verte le
+    /// jour où ce motif change simplement de nom.
+    func test_publish_uploadsStickerImagesThroughTheCommonPath() throws {
+        let code = try storyViewModelSource()
+        XCTAssertTrue(code.contains("private func runStoryUpload"),
+                      "Pipeline de publication introuvable — la garde ne mesurerait rien.")
+        XCTAssertTrue(code.contains("StoryStickerUpload.pendingUploadIds("),
+                      "Le publish ne demande plus quelles images de stickers restent à téléverser.")
+        XCTAssertTrue(code.contains("StoryStickerUpload.applying("),
+                      "Le publish téléverse sans reporter les postMediaId sur les stickers.")
+    }
+
+    /// Le PUT d'édition supprime tout média original absent de l'ensemble
+    /// conservé. Rougit si les images des stickers gardés en sortent : éditer
+    /// une story effacerait alors côté serveur l'image de chaque sticker
+    /// qu'elle affiche pourtant encore.
+    func test_edit_keepsThePostMediaOfTheStickersItStillShows() throws {
+        let code = try storyViewModelSource()
+        XCTAssertTrue(code.contains("StoryStickerUpload.attachedPostMediaIds("),
+                      "L'édition ne conserve plus les PostMedia des stickers de la composition.")
+    }
+
+    /// Rougit si la mise en file cesse de nommer les stickers : leurs images
+    /// repartiraient en JPEG, transparence aplatie, et c'est ce fichier-là que
+    /// le drain téléverse.
+    func test_enqueue_declaresStickerImagesAsAlphaPreserving() throws {
+        let code = try storyViewModelSource()
+        XCTAssertTrue(code.contains("alphaPreservingIds:"),
+                      "L'intent write-ahead n'annonce plus quelles images doivent garder leur alpha.")
+    }
+
     private static func makeStoryAPIPost(id: String = "story-1") -> APIPost {
         JSONStub.decode("""
         {

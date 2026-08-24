@@ -71,4 +71,26 @@ object LanguageCodeNormalizer {
         // Unknown 2-letter code: preserved (historical behaviour; won't match a translation).
         return primary
     }
+
+    /**
+     * The canonical key under which two language identifiers are considered THE SAME.
+     *
+     * Faithful port of `normalizeLanguageForDedup`
+     * (`packages/shared/utils/language-normalize.ts`) — `normalize` first, then the
+     * primary subtag lowercased, then the raw string lowercased. Unlike [normalize] it
+     * is TOTAL: it never returns `null`, because a comparison has to yield something
+     * for every token it is handed.
+     *
+     * Why it exists separately, and why the TS twin is the one mirrored rather than the
+     * Swift one: the gateway builds the wire map's KEYS with this exact function
+     * (`buildLastMessagePreviewTranslations` → `normalizeLanguageForDedup`). Matching it
+     * is what guarantees a reader language canonicalises onto the key that is actually
+     * on the wire. [normalize] alone rejects what it does not recognise (`"fil-PH"` →
+     * `null`), which would silently drop a comparison instead of making it.
+     */
+    fun normalizeForDedup(code: String): String {
+        normalize(code)?.let { return it }
+        val primary = code.trim().split('-', '_').firstOrNull()?.lowercase()
+        return if (!primary.isNullOrEmpty()) primary else code.lowercase()
+    }
 }

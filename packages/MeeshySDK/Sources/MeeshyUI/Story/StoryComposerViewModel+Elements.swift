@@ -409,10 +409,10 @@ extension StoryComposerViewModel {
     /// Décalage en cascade pour que des ajouts successifs ne s'empilent pas
     /// exactement au même point.
     @discardableResult
-    func addSticker(emoji: String) -> StorySticker {
+    func addSticker(emoji: String, provider: String? = nil) -> StorySticker {
         let count = currentEffects.stickerObjects?.count ?? 0
         let offset = Double(count % 5) * 0.04
-        let sticker = StorySticker(emoji: emoji, x: 0.5 + offset, y: 0.5 + offset)
+        let sticker = StorySticker(emoji: emoji, provider: provider, x: 0.5 + offset, y: 0.5 + offset)
         var effects = currentEffects
         var stickers = effects.stickerObjects ?? []
         stickers.append(sticker)
@@ -420,6 +420,26 @@ extension StoryComposerViewModel {
         currentEffects = effects
         bringToFront(id: sticker.id)
         return currentEffects.stickerObjects?.first { $0.id == sticker.id } ?? sticker
+    }
+
+    /// Pose une image de « Mes stickers ». Le placement, la cascade et le
+    /// z-order restent ceux de `addSticker(emoji:)` — seule la charge diffère.
+    ///
+    /// Le bitmap est retenu sous l'id de l'ÉLÉMENT, dans `loadedImages` : c'est
+    /// là que le composer tient tout média importé qu'aucun upload n'a encore
+    /// adressé (`StoryMediaObject` naît avec un `postMediaId` vide et son
+    /// bitmap sous `loadedImages[obj.id]`). Écrire un identifiant local dans
+    /// `postMediaId` publierait une référence morte : la publication lit
+    /// justement `postMediaId.isEmpty` pour savoir ce qui reste à téléverser.
+    ///
+    /// L'emoji de repli est écrit ICI, pas à la publication : un brouillon relu
+    /// par une version antérieure — qui ne sait rien de l'image — doit déjà
+    /// montrer un glyphe.
+    @discardableResult
+    func addSticker(image: UIImage, provider: String) -> StorySticker {
+        let sticker = addSticker(emoji: StorySticker.imageFallbackEmoji, provider: provider)
+        registerLoadedImage(image, for: sticker.id)
+        return sticker
     }
 
     @discardableResult

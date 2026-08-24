@@ -298,6 +298,20 @@ data class SocketPostCreatedData(
     val clientMutationId: String? = null,
 )
 
+/**
+ * `post:updated` — the author edited a post (caption, media, mood, ...) and the gateway
+ * broadcast the COMPLETE new post to every feed/post room. The broadcast is a single
+ * unpersonalized object shared by all recipients, so its viewer-specific fields
+ * ([ApiPost.isLikedByMe] etc.) are NOT the recipient's own state — the fold preserves
+ * those from the cached copy via [PostUpdateMerge]. Mirror of iOS `SocketPostUpdatedData`
+ * (which nests the post under a `post` key), and the content-edit sibling of
+ * [SocketPostCreatedData] / [SocketPostTranslationUpdatedData].
+ */
+@Serializable
+data class SocketPostUpdatedData(
+    val post: ApiPost,
+)
+
 @Serializable
 data class SocketPostLikedData(
     val postId: String,
@@ -336,6 +350,18 @@ data class SocketCommentAddedData(
     val postId: String,
     val comment: ApiPostComment,
     val commentCount: Int = 0,
+)
+
+/**
+ * `comment:updated` — a comment was edited server-side (content, effects, regenerated
+ * translations). Carries the COMPLETE new comment so the client replaces the matched row
+ * in place, idempotent by id — the edit sibling of [SocketCommentAddedData]. Mirror of iOS
+ * `SocketCommentUpdatedData` (both nest the full [ApiPostComment] under `comment`).
+ */
+@Serializable
+data class SocketCommentUpdatedData(
+    val postId: String,
+    val comment: ApiPostComment,
 )
 
 @Serializable
@@ -439,6 +465,53 @@ data class SocketStoryUnreactedData(
     val storyId: String,
     val userId: String,
     val emoji: String,
+)
+
+/**
+ * `story:translation-updated` — the gateway translated a story's on-canvas text
+ * overlay and broadcasts the new translations for the object at [textObjectIndex]
+ * (the flat index into the story's translatable texts). Mirror of iOS
+ * `SocketStoryTranslationUpdatedData`. [translations] is a language→text map;
+ * an empty map is a no-op the merge ignores.
+ */
+@Serializable
+data class SocketStoryTranslationUpdatedData(
+    val postId: String,
+    val textObjectIndex: Int,
+    val translations: Map<String, String> = emptyMap(),
+)
+
+/**
+ * `post:translation-updated` — the gateway translated a post's text into [language]
+ * server-side and broadcasts the finished entry so an open feed card can switch to it
+ * without a refetch (the caption sibling of [SocketStoryTranslationUpdatedData], which
+ * carries per-overlay maps instead). Mirror of iOS `SocketPostTranslationUpdatedData`.
+ * [translation] has the same shape as [ApiPostTranslationEntry] — text plus optional
+ * model/confidence/timestamp — so it decodes straight into one; a blank text is a no-op
+ * the [PostTranslationMerge] ignores.
+ */
+@Serializable
+data class SocketPostTranslationUpdatedData(
+    val postId: String,
+    val language: String,
+    val translation: ApiPostTranslationEntry,
+)
+
+/**
+ * `comment:translation-updated` — the gateway translated a comment's text into [language]
+ * server-side and broadcasts the finished entry so an open comment thread can switch that
+ * row to it without a refetch (the comment-keyed sibling of
+ * [SocketPostTranslationUpdatedData], one rung over: it carries [commentId] too). Mirror of
+ * iOS `SocketCommentTranslationUpdatedData`. [translation] has the same shape as
+ * [ApiPostTranslationEntry] — text plus optional model/confidence/timestamp — so it decodes
+ * straight into one; a blank text is a no-op the [PostTranslationMerge] ignores.
+ */
+@Serializable
+data class SocketCommentTranslationUpdatedData(
+    val postId: String,
+    val commentId: String,
+    val language: String,
+    val translation: ApiPostTranslationEntry,
 )
 
 /**

@@ -76,6 +76,11 @@ jest.mock('../../../../services/notifications/NotificationService', () => ({
     createMentionNotificationsBatch: (...a: any[]) => mockCreateMentionNotificationsBatch(...a),
   })),
   protectedPreview: jest.fn().mockReturnValue(null),
+  // Cycle 125 — la JUMELLE de `protectedPreview`, pour le MÉDIA : l'éventail
+  // l'appelle pour décider si le FICHIER d'une pièce jointe a le droit de
+  // voyager sur le canal push. Absente de cette fabrique, elle rend la fonction
+  // `undefined` et l'éventail entier meurt dans son `catch`.
+  maskedAttachment: jest.fn().mockReturnValue(false),
 }));
 
 jest.mock('../../../../services/message-translation/MessageTranslationService', () => ({

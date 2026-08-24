@@ -33,7 +33,12 @@ extension View {
                 // vide, ne prouve rien : `mentions: []` signifie « plus aucune
                 // référence déclarée » côté gateway, et révoquerait celles que
                 // l'auteur n'a jamais vues.
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references in
+                // Le dernier terme est le format à publier (V3-3). L'ÉDITION ne
+                // le lit pas : cet atelier n'a pas d'éventail (il est monté sans
+                // meuble, donc sur le défaut `.story`), et changer le format d'un
+                // contenu déjà publié est le rôle du repost, pas de l'édition —
+                // `UpdatePostSchema.type` n'accepte d'ailleurs que POST et REEL.
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, _ in
                     let edit = StoryViewModel.StoryEditContext(
                         postId: current.composer.editingPostId ?? current.story.id,
                         originalMediaIds: current.composer.editingOriginalMediaIds,
@@ -52,7 +57,9 @@ extension View {
                         visibilityUserIds: visibilityUserIds,
                         draftId: draftId,
                         references: references,
-                        declaredReferencesAreKnown: current.composer.editingKnowsDeclaredReferences
+                        declaredReferencesAreKnown: current.composer.editingKnowsDeclaredReferences,
+                        composerMediaAlt: accessibility.mediaAlt ?? [:],
+                        allowSoundExtraction: accessibility.allowSoundExtraction
                     )
                     // Hors-ligne : le composer reste ouvert, rien n'est perdu —
                     // et le `false` remonté relâche son loquet de publication.
@@ -75,6 +82,8 @@ extension View {
             .storyLocationPickerProvided()
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()
+            .storyPasteProvided()
+            .storyStickerLibraryProvided()
         }
     }
 }

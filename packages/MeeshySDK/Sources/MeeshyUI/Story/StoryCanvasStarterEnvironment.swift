@@ -1,4 +1,6 @@
+import Foundation
 import SwiftUI
+import UIKit
 import MeeshySDK
 
 // MARK: - Amorces de page blanche — points d'injection app-side
@@ -136,5 +138,131 @@ extension EnvironmentValues {
     public var storyRecentCameraRollAsset: StoryRecentCameraRollProvider? {
         get { self[StoryRecentCameraRollAssetKey.self] }
         set { self[StoryRecentCameraRollAssetKey.self] = newValue }
+    }
+}
+
+// MARK: - Collage (C5b) — le presse-papier entre dans le composer
+
+/// Ce qu'un collage rend au composer, une fois le presse-papier résolu.
+///
+/// Le SDK ne référence JAMAIS les types du pipeline app-side (`ComposerIngest`,
+/// `ComposerDropResolver`, `PasteDestination`) : la frontière est cette valeur,
+/// exactement comme `StoryCameraCapture` l'est pour la caméra.
+///
+/// **Trois cas, et pas quatre.** Un DOCUMENT collé n'apparaît pas ici : la
+/// scène de story n'héberge aucune pièce jointe. Il n'est pas pour autant
+/// avalé — l'app l'annonce (règle O12 : « document ⇒ pièce jointe, jamais un
+/// rejet muet »), et le jour où une surface sait en héberger, c'est elle qui le
+/// reçoit. Faire passer par ici un cas que la scène ne sait pas poser
+/// obligerait le SDK à le jeter en silence, soit exactement ce que la directive
+/// produit du 2026-08-23 interdit.
+public nonisolated enum StoryPastedItem: @unchecked Sendable {
+    case image(UIImage)
+    case video(URL)
+    case audio(URL)
+}
+
+/// Résolution app-side d'un collage, **injectée par l'app**.
+///
+/// Même doctrine que `StoryCameraCaptureProvider` : le presse-papier iOS est
+/// une dépendance SYSTÈME dont la lecture (représentation fichier vs données,
+/// refus des dossiers, autorisation sandbox, nom d'origine) vit déjà app-side
+/// dans `ComposerDropResolver` / `ComposerIngestRouter`, branchés sur six sites
+/// de production. Le SDK ne réécrit pas ce lecteur — il lui passe les
+/// `NSItemProvider` que `PasteButton` lui remet et pose ce qui revient.
+///
+/// Le défaut `nil` est la règle produit, pas un détail : sans injection, la
+/// capsule « Coller » n'est pas rendue. Une amorce qui ouvre le vide est pire
+/// que pas d'amorce.
+public nonisolated struct StoryPasteProvider {
+    public typealias Resolve = @MainActor ([NSItemProvider]) async -> [StoryPastedItem]
+
+    private let resolve: Resolve
+
+    public init(resolve: @escaping Resolve) {
+        self.resolve = resolve
+    }
+
+    @MainActor
+    public func items(from providers: [NSItemProvider]) async -> [StoryPastedItem] {
+        await resolve(providers)
+    }
+}
+
+public struct StoryPasteKey: EnvironmentKey {
+    public static let defaultValue: StoryPasteProvider? = nil
+}
+
+extension EnvironmentValues {
+    public var storyPaste: StoryPasteProvider? {
+        get { self[StoryPasteKey.self] }
+        set { self[StoryPasteKey.self] = newValue }
+    }
+}
+
+// MARK: - « Mes stickers » (V3-5) — bibliothèque personnelle, injectée par l'app
+
+/// Une vignette de la bibliothèque personnelle « Mes stickers ». Le SDK
+/// n'interprète pas `id` — il ne sert qu'à la stabilité de la grille
+/// (`ForEach(id:)`) ; le magasin qui lui donne un sens (budget, éviction,
+/// persistance) est app-side.
+public nonisolated struct StoryStickerLibraryItem: Identifiable, Equatable, @unchecked Sendable {
+    /// Provenance à écrire dans `StorySticker.provider` quand c'est CETTE
+    /// bibliothèque qui a fourni l'image. Métadonnée d'ORIGINE : rien ne s'en
+    /// déduit au chargement, elle évite seulement que le mot « library » soit
+    /// réécrit à la main au site de pose et dans les tests qui le vérifient.
+    public static let provider = "library"
+
+    public let id: String
+    public let thumbnail: UIImage
+
+    public init(id: String, thumbnail: UIImage) {
+        self.id = id
+        self.thumbnail = thumbnail
+    }
+
+    public static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+}
+
+/// Accès à « Mes stickers », **injecté par l'app**. Même doctrine que
+/// `StoryPasteProvider` : la bibliothèque (budget, éviction LRU, persistance
+/// disque) est une dépendance app-side, le SDK ne fait que peindre ce qu'elle
+/// rend et lui remettre les `NSItemProvider` que `PasteButton` lui remet.
+///
+/// Le défaut `nil` est la règle produit, pas un détail : sans injection, la
+/// section « Mes stickers » n'est pas rendue — même doctrine que la capsule
+/// « Coller » des amorces de page blanche (loi 4 : un outil non offert est
+/// absent, jamais grisé).
+public nonisolated struct StoryStickerLibraryProvider {
+    public typealias Recents = @MainActor () async -> [StoryStickerLibraryItem]
+    public typealias Paste = @MainActor ([NSItemProvider]) async -> [StoryStickerLibraryItem]
+
+    private let recentsProvider: Recents
+    private let pasteProvider: Paste
+
+    public init(recents: @escaping Recents, paste: @escaping Paste) {
+        self.recentsProvider = recents
+        self.pasteProvider = paste
+    }
+
+    @MainActor
+    public func recents() async -> [StoryStickerLibraryItem] {
+        await recentsProvider()
+    }
+
+    @MainActor
+    public func paste(_ providers: [NSItemProvider]) async -> [StoryStickerLibraryItem] {
+        await pasteProvider(providers)
+    }
+}
+
+public struct StoryStickerLibraryKey: EnvironmentKey {
+    public static let defaultValue: StoryStickerLibraryProvider? = nil
+}
+
+extension EnvironmentValues {
+    public var storyStickerLibrary: StoryStickerLibraryProvider? {
+        get { self[StoryStickerLibraryKey.self] }
+        set { self[StoryStickerLibraryKey.self] = newValue }
     }
 }

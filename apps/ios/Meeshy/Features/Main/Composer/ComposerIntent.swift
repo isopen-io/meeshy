@@ -65,6 +65,14 @@ nonisolated extension ComposerFormat {
 nonisolated enum ComposerOpening: Equatable { case cameraReady, keyboardOnContent, videoCameraReady, moodGrid, resume }
 
 /// Les composers historiques que ce lot ROUTE sans les migrer (périmètre v1).
+///
+/// `feedComposer` n'y est plus routé depuis le lot 3, et il RESTE dans l'énum :
+/// ce n'est pas un cas mort à balayer. `FeedComposerSheet` existe toujours et
+/// le fil la monte encore ; surtout, la garde négative qui interdit à toute
+/// porte d'y retomber (`ComposerIntentTests.test_aucunePorte_neRetombeSurLaFeuilleDuFil`)
+/// doit pouvoir NOMMER son interdit. La supprimer rendrait cette garde
+/// inécrivable, et le retour du routage passerait alors sans un mot — le mode
+/// d'extinction silencieuse propre aux gardes négatives.
 nonisolated enum LegacyComposer: Equatable { case statusComposer, repostComposer, storyEdit, feedComposer }
 
 /// Ce que la porte décide, et rien de plus.
@@ -144,11 +152,50 @@ nonisolated extension ComposerProfile {
             )
 
         case .feedComposer:
-            // Rév. 4 (revue totale C4) : le meuble n'a pas de surface « document
-            // sans scène » — clavier sur `content`, rangée
-            // photo·caméra·emoji·document·lieu·micro, envoi durable offline,
-            // bascule réel `forcePlainPost`. Recâbler la porte la plus utilisée
-            // sans elle serait une régression sèche : la bascule est post-v1.
+            // Rév. 6 (lot 3, 2026-08-24) : la porte la plus utilisée cesse de
+            // router. Le motif de la rév. 4 — « le meuble n'a pas de surface
+            // *document sans scène* » — est TOMBÉ au lot 2 :
+            // `ComposerDocumentSurface` existe, `MeeshyComposerHost` la monte,
+            // et `ComposerSurfaceRouting` fait atterrir `.keyboardOnContent` +
+            // `.post` sur elle. Une porte ne reste pas sur sa feuille
+            // historique par habitude : elle y reste tant qu'une raison la
+            // retient, et celle-là n'existe plus.
+            //
+            // Ce que cette ligne change, EXACTEMENT : la table cesse de
+            // désigner `FeedComposerSheet`. Elle ne recâble aucun écran, et il
+            // ne faut pas la lire comme si elle l'avait fait. Aucun site de
+            // production ne construit `ComposerIntent(origin: .feedComposer)` :
+            // les trois montages de la feuille (`RootViewComponents` pour le
+            // fil et la citation, `FeedView` pour la citation iPad) et le
+            // composer INLINE de l'iPad (`FeedView.composerOverlay`, que
+            // `LegacyComposer` ne nomme même pas) partent chacun de leur propre
+            // booléen. Le jour où une porte lira cette table, elle trouvera le
+            // meuble ; aujourd'hui, sur ce chemin, personne ne la lit.
+            //
+            // DETTE CONSIGNÉE, jamais acquis : la surface ainsi désignée tient
+            // UNE des quatre capacités que la rév. 4 énumérait. Le clavier sur
+            // `content` est tenu de bout en bout. Ne le sont pas — la rangée
+            // photo·caméra·emoji·document·lieu·micro, qui ne se peint pas
+            // (`servedDocumentTools` rend `[]`, le meuble n'ayant pas de chemin
+            // d'ingestion, loi 4) ; l'envoi durable offline, dont la table
+            // (`ComposerDocumentSendRouting`) n'a aucun appelant et qu'une
+            // garde de source exige de n'en avoir aucun ; la bascule réel
+            // `forcePlainPost`, absente du dossier `Composer/`. L'éventail des
+            // formats, lui, ne descend pas non plus sous le document — le
+            // paragraphe de `MeeshyComposerHost.documentSurface` dit le blocage
+            // SDK qui l'y retient. Basculer les écrans du fil AVANT ces
+            // capacités serait la régression sèche que la rév. 4 retenait ; ce
+            // lot déplace la TABLE et laisse les portes de présentation en
+            // place.
+            //
+            // Et cette dette n'est pas qu'écrite : elle est GARDÉE. Un site de
+            // production qui construirait cette intention pendant que le
+            // document n'a ni rangée servie, ni issue pour sa saisie, ni
+            // publieur atteignable fait rougir
+            // `MeeshyComposerHostGuardTests`
+            // `.test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`.
+            // Sans elle, la valeur `nil` posée ici aurait promis au lot suivant
+            // une surface que le meuble ne sait pas encore tenir.
             return ComposerProfile(
                 initialFormat: .post,
                 offeredFormats: plusReel([.post, .story]),
@@ -156,7 +203,7 @@ nonisolated extension ComposerProfile {
                 showsTimeline: true,
                 opensWith: .keyboardOnContent,
                 allowsCapture: true,
-                routesToLegacy: .feedComposer
+                routesToLegacy: nil
             )
 
         case .reelTab:
@@ -225,10 +272,28 @@ nonisolated extension ComposerProfile {
             )
 
         case .draft, .share:
-            // Rév. 3 (revue d'intégration I5) : `.post` est un état TRANSITOIRE.
-            // Le host rebascule au format du document une fois celui-ci chargé —
-            // la table reste une fonction de l'origine, elle n'ouvre pas le
+            // Rév. 3 (revue d'intégration I5) : `.post` est un état TRANSITOIRE
+            // — la table reste une fonction de l'origine, elle n'ouvre pas le
             // document pour le deviner.
+            //
+            // Rév. 5 (revue adversariale du 2026-08-23) : la rév. 3 promettait
+            // ici que « le host rebascule au format du document une fois
+            // celui-ci chargé ». **Cet écrivain n'existe pas.** Rien ne
+            // réaffecte `currentFormat` après la construction du host, et un
+            // commentaire qui énonce un invariant que le code ne tient pas
+            // devient la loi que lira la session suivante — celle qui aurait
+            // monté `.draft` en confiance.
+            //
+            // Ce qui tient VRAIMENT la conséquence est ailleurs, et c'est
+            // volontaire : `ComposerSurfaceRouting` fait de `.resume` une
+            // SCÈNE quel que soit le format, parce que le seul mécanisme de
+            // reprise du meuble (`adoptDraft`) repeuple l'atelier. Le `.post`
+            // transitoire ne décide donc plus d'aucune surface, et reprendre un
+            // brouillon ne peut plus ouvrir un éditeur de texte vide pendant
+            // que le brouillon adopté attend derrière.
+            //
+            // La bascule au format du document reste À ÉCRIRE (V3+) ; elle est
+            // consignée comme dette, plus promise comme acquise.
             return ComposerProfile(
                 initialFormat: .post,
                 offeredFormats: plusReel([.post, .story]),

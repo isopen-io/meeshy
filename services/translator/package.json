@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/translator",
-  "version": "1.30.0",
+  "version": "1.31.1",
   "description": "Meeshy Translator Service - ASR, Translation, TTS",
   "private": true,
   "type": "module",

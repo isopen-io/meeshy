@@ -85,6 +85,18 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       );
     });
 
+    it('includes capturedInApp — la provenance voyage avec le média, pas à côté', () => {
+      // La feuille de partage propose de PUBLIER une pièce jointe reçue, et une
+      // capture (caméra/micro de l'app) n'a encore été vue par personne :
+      // l'ouvrir à un fil entier se confirme. Cette confirmation lit le drapeau
+      // sur l'attachement que la LISTE de messages a livré — pas sur une
+      // requête de détail. Absent d'ici, le drapeau est indéfini côté client et
+      // la garde ne se déclenche JAMAIS.
+      expect(attachmentMediaSelect).toEqual(
+        expect.objectContaining({ capturedInApp: true }),
+      );
+    });
+
     it('keeps the full file + audio/video codec set', () => {
       expect(attachmentMediaSelect).toEqual(
         expect.objectContaining({
@@ -126,7 +138,7 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       });
     });
 
-    it('selects exactly 28 documented fields — guards against silent omission', () => {
+    it('selects exactly 29 documented fields — guards against silent omission', () => {
       const expectedKeys = [
         'id',
         'messageId',
@@ -155,10 +167,11 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
         'createdAt',
         'transcription',
         'translations',
+        'capturedInApp',
         'reactions',
       ];
       expect(Object.keys(attachmentMediaSelect).sort()).toEqual(expectedKeys.sort());
-      expect(Object.keys(attachmentMediaSelect)).toHaveLength(28);
+      expect(Object.keys(attachmentMediaSelect)).toHaveLength(29);
     });
   });
 

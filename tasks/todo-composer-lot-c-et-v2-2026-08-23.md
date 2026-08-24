@@ -489,3 +489,101 @@ DoD globale (`spec:491-493`) : « Après le dernier merge : clean build depuis m
 en silence par `XCTSkip` et le gate reste VERT**. Tous les gates récents de ce
 chantier ont sauté la phase 3. Ce n'est pas une régression, c'est un angle mort
 qu'il faut nommer chaque fois qu'on écrit « gate vert ».
+
+---
+
+## Arbitrages APPROPRIÉS — décisions prises par l'agent, 2026-08-23
+
+> Directive du porteur produit : *« Les lignes qui ne sont pas à toi tu te les
+> appropries. Prends les décisions à prendre et consigne-les clairement avec un
+> warning, et décris les autres possibilités écartées. »*
+>
+> Chaque décision ci-dessous est RÉVERSIBLE et nommée. Les options écartées sont
+> écrites pour qu'un désaccord puisse se formuler sans re-instruire le dossier.
+
+### A1 — Le réglage d'envoi → **un ÉCRAN des envois en attente**
+
+**Décidé** : le réglage prend la forme d'un écran listant ce qui n'est pas parti,
+avec « réessayer maintenant ». C'est l'affordance que le glyphe ⟳ promettait sans
+la tenir.
+
+**Pourquoi** : retirer ⟳ a supprimé une INFORMATION, pas un mécanisme —
+l'outbox rejoue déjà seule (FIFO à la reconnexion). Ce qui manque est de VOIR et
+d'AGIR, pas de régler.
+
+**Écarté — une politique de renvoi** (toujours / Wi-Fi seul / à la demande) :
+ajoute un mode de défaillance que personne n'a demandé. « Wi-Fi seul » retarde
+silencieusement des messages, ce qui est PIRE que le glyphe qu'on vient de retirer.
+**Écarté — les préférences de notifications APNs** : le mot « push » est un
+homonyme. Elles existent déjà ailleurs et n'ont aucun rapport avec l'outbox.
+
+### A2 — Le golden `story-3-slides.json` → **corriger la FIXTURE**
+
+**Décidé** : l'objet `place` du golden passe de `payload: {name, precision}` à
+`payload: {place: {...}}`, la forme qu'iOS émet réellement
+(`CanvasV3Migration.swift:269`, confirmée par `v1-legacy-full.v3.json`).
+
+**Pourquoi** : un golden PARTAGÉ qui décrit une forme qu'aucun écrivain ne produit
+n'est pas un oracle, c'est un piège. Sa scène 2 ne peint rien au web, et le golden
+ment donc sur la parité qu'il est censé prouver.
+
+**Écarté — faire lire les deux formes au web** : graverait dans le lecteur une
+forme du fil que personne n'émet, pour un bug de fixture. Une branche permanente
+payée éternellement pour une erreur ponctuelle.
+**Écarté — ne rien faire** : laisse un oracle faux dans un fichier partagé par les
+suites Swift ET web.
+**Coût assumé** : rejouer `CanvasV3DecodingTests` et `ScenePlayerIdentityRootTests`.
+
+### A3 — La clé EN DOUBLE du catalogue → **garder « Sprechblasen »**
+
+⚠️ **AVERTISSEMENT — CE N'EST PAS COSMÉTIQUE, ET C'EST VISIBLE PAR L'UTILISATEUR.**
+
+`reading_mode.bubbles.subtitle` existe DEUX fois dans
+`apps/ios/Meeshy/Localizable.xcstrings`, avec deux valeurs `de` divergentes :
+
+| entrée | ligne | valeur `de` |
+|---|---|---|
+| #1 | ~17 620 | **« Die klassischen Sprechblasen »** |
+| #2 | ~149 121 | « Die klassischen Blasen » |
+
+**Décidé** : #1 fait foi, #2 est supprimée.
+
+**Pourquoi** : *Sprechblasen* est le mot allemand pour les bulles de DIALOGUE.
+*Blasen* seul désigne des bulles physiques — et, en allemand courant, le terme est
+surtout connu comme argot vulgaire. Un lecteur germanophone lit donc, sur un écran
+de réglages, un mot que personne n'a voulu y mettre.
+**Aggravant** : un analyseur JSON qui rencontre une clé en double retient
+généralement la DERNIÈRE. La valeur servie aujourd'hui est donc probablement #2 —
+la mauvaise.
+
+**Écarté — garder #2** : aucun argument, c'est une traduction fautive.
+**Écarté — trancher plus tard** : chaque jour d'attente est un jour où un
+utilisateur allemand lit ce mot.
+**Contrainte de méthode** : la suppression est TEXTUELLE. Un `json.load`/`json.dump`
+détruirait une entrée en silence — c'est le piège même que cette clé incarne.
+
+### A4 — `TusUploadManager` hors du funnel d'en-têtes → **garantie CLIENT**
+
+**Décidé** : le chemin d'upload tus passe par `ClientInfoProvider.buildHeaders()`,
+et une garde de source interdit les requêtes construites à la main dans le SDK.
+
+**Pourquoi** : l'alternative — « le funnel est une convention » — est exactement ce
+qui a produit l'écart. Trois sites construisent leurs requêtes à la main et ne
+portent ni `X-App-Version`, ni `X-App-Platform`, ni `X-Canvas-Caps`. Une convention
+que rien ne vérifie n'est pas une convention, c'est un souhait.
+
+**Écarté — attendre qu'une porte serveur soit posée sur la route d'upload** : parie
+que la porte arrivera avant qu'un binaire périmé passe au travers. Le jour où elle
+arrive, l'écart est déjà en production sur tous les binaires installés.
+
+### A5 — Les 5 gardes Lentille perdues → **GREFFER**
+
+**Décidé** : les 5 témoins restants de `LentilleRowSourceGuardTests` (17 à
+`35f28209d`, 12 à HEAD) sont restaurés depuis le commit de leur auteur.
+
+**Pourquoi** : elles ont été écrites, revues, puis perdues dans une fusion — pas
+retirées par décision. Personne n'a jamais montré qu'elles étaient obsolètes.
+
+**Écarté — les déclarer périmées** : demanderait de prouver, une par une, que
+l'invariant qu'elles protègent n'existe plus. Personne ne l'a fait, et le coût de
+la greffe est inférieur au coût de cette démonstration.

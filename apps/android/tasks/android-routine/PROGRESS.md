@@ -2,6 +2,578 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-24 **the feed folds realtime post EDITS pushed over `post:updated`** (slice
+> `feed-post-updated-realtime-merge`, feature-parity Feed) — the WHOLE-POST sibling of the
+> `post-translation-updated` fold and the post analog of the `comment:updated` fold, both shipped the same day.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3481 (gateway anonymous IP-range),
+> #3477 (`claude/upbeat-dirac-*`, the SEPARATE calls routine — `tasks/calls-fonctionnel-todo.md`, left
+> untouched), #3475/#3474/#3470 (web/ios/gateway Prisme/i18n cycles): none is a `claude/apps/android/*` slice,
+> all touch production logic outside `apps/android`, none in this routine's scope. Prior slice
+> (`comment-updated-realtime-merge`, #3482) already merged into main. **Main's Android CI green** at 756e7b9d
+> (last android-touching commit; later main commits — cycle 126, web composer — touch no `apps/android` file,
+> so android.yml did not re-run and could not have reddened it). Branched off freshly-fetched `origin/main`
+> (`f79ed42f`).
+>
+> **The gap — the whole-post twin of the two content-folds Android already ships.** The gateway rebroadcasts an
+> edited post (caption / media / mood) as the COMPLETE new object `{ post }` to every feed/post room via
+> `SocialEventsHandler.broadcastPostUpdated`. iOS folds it into the feed, preserving the viewer's own `isLiked`
+> across the swap (`FeedViewModel` post:updated sink). On Android the event decoded nowhere: `SocialSocketManager`
+> had no `postUpdated` flow, `SocketEvents.kt` no DTO, `FeedViewModel` no subscriber — an edited post stayed
+> stale on the card until a full refetch, while `post:translation-updated` (the caption-only twin) already folded.
+>
+> **The fix — a DTO + a socket flow + a PURE viewer-state-preserving merge + a cache fold + a VM subscriber.**
+> (1) New `SocketPostUpdatedData(post: ApiPost)` in `:core:model` (mirror of iOS, nests the post under `post`).
+> (2) New pure `PostUpdateMerge.merge(previous, updated): ApiPost?` — adopts every AUTHORITATIVE field from the
+> edit (content, counts, translations, reactionSummary, media) while carrying the reader's OWN
+> `isLikedByMe`/`isBookmarkedByMe`/`isViewedByMe`/`currentUserReactions` across the swap. The broadcast is ONE
+> unpersonalized object shared by all recipients, so its viewer fields are the broadcaster's/default view;
+> adopting them wholesale would silently un-like/un-bookmark/un-view the card on any unrelated edit. iOS preserves
+> only `isLiked`; Android preserves all four — **strictly more faithful**. Returns `null` (inert, caller skips the
+> re-emit) when the merged result equals `previous` (a re-broadcast, or an edit that changed nothing visible).
+> (3) `SocialSocketManager.postUpdated` flow + `listen("post:updated", …)`. (4)
+> `PostRepository.applyPostUpdate(updated): Boolean` folds via `PostUpdateMerge` into `_feedCache` (the whole-post
+> sibling of `applyTranslationUpdate`). (5) `FeedViewModel` subscribes and routes to the repository (the
+> content-edit sibling of the `post:translation-updated` sink).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200).** Pristine `android-37.0` auto-installed by AGP but the
+> first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch (`source.properties` ApiLevel +
+> `package.xml` `<api-level>` + `path=` + BOTH `build.prop` `sdk_full` fields), keeping both dirs, resolved it
+> (per NOTES "THIRD mode").
+>
+> **Tests: +11** — 6 `PostUpdateMergeTest` (adopts edited content/counts; preserves the reader's like state
+> against an unpersonalized broadcast; preserves bookmark/viewed/reactions; inert when nothing visible changed;
+> inert on an identical re-broadcast; a reactionSummary-only change is NOT a no-op), 3 `PostRepositoryTest`
+> (folds the edit preserving the reader's like state; inert for an unknown post; inert on an identical
+> re-broadcast), 1 `SocialSocketManagerTest` (decodes the nested edited post), 1 `FeedViewModelTest` (a
+> `post:updated` routes to `applyPostUpdate`). **RED-proof isolated**: dropping the viewer-state preservation
+> (`merge` → `updated.takeIf { it != previous }`) reddened EXACTLY the 4 preservation/discrimination tests
+> (2968 completed, 4 failed) — the 2 preservation-independent tests (`adopts edited content`, `inert
+> re-broadcast`) stayed green: genuine discrimination, not an assertion echo.
+>
+> **Verified**: targeted `:core:model`/`:sdk-core`/`:feature:feed` unit tests **BUILD SUCCESSFUL**; full
+> `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) — **BUILD SUCCESSFUL in 4m
+> 10s (973 tasks)**. Reviewer
+> PASS. Diff is `apps/android` only (3 prod files edited in :core:model + :sdk-core + :feature:feed, 1 new pure
+> file, +11 tests across 4 files, tracking docs). Verdict: **PASS** — a DTO mirroring an existing type, a pure
+> viewer-state-preserving merge, a cache fold reusing the established `_feedCache` seam, a socket event mirroring
+> the existing social events, and a VM subscriber reusing the `post:translation-updated` pattern; behavioural
+> tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: Feed realtime is now honoured for POST caption (translation), POST body (edit), STORY overlay, and
+> COMMENT (add/edit/delete/translation/like). The remaining social realtime channels iOS folds that Android's
+> `SocialSocketManager` still ignores: **`post:reaction-added`/`-removed`/`-sync`** and
+> **`comment:reaction-sync`** (both need scouting first — Android models post/comment reactions as a like/heart
+> count + `reactionSummary`, but whether the feed/thread RENDERS the emoji summary decides orphan risk),
+> **`post:reposted`** (a repost landing live — scout whether the feed head accepts it), and `comment:media-updated`
+> (still BLOCKED on a comment-audio render surface). Scout read-only before committing to any.
+
+> On 2026-08-24 **the comment thread folds realtime EDITS pushed over `comment:updated`** (slice
+> `comment-updated-realtime-merge`, feature-parity Feed) — AND a required hotfix that **restored a red `main`**.
+>
+> **Step 0 — main was RED, and the fix came first.** `list_pull_requests` (open) → one android PR, #3477
+> (`claude/upbeat-dirac-*`, "Vague 178" calls routine), which belongs to the SEPARATE `tasks/calls-fonctionnel-todo.md`
+> routine, NOT this one (its slices are `claude/apps/android/<slice-id>`); left untouched. But bootstrapping the SDK
+> (dl.google.com **200**; pristine `android-37.0` hash-errored → four-edit copy→patch `android-37`, both dirs, per NOTES)
+> and running `meeshy.sh check` surfaced a **compile error on `origin/main`**: `bb99e9bd` made
+> `ParticipantLeftEvent`/`ParticipantBannedEvent.userId` nullable but never updated `ConversationMembersViewModel`, which
+> still passed `event.userId: String?` into `MemberRoster.withoutUser(String)`. **Android CI red on main since
+> `11f0c31e`** (last green `fb7afd47`, confirmed via `actions_list`). Since `assembleDebug` compiles all modules, NO
+> android PR could go green until this was fixed. Shipped as a dedicated hotfix PR **#3479**
+> (`claude/apps/android/fix-members-nullable-participant`): remove by `userId ?: participantId ?: return@collect` — which
+> also **completes `bb99e9bd`'s own intent** ("un visiteur sans compte expulsable": a link visitor with no account is now
+> expellable by participantId; the roster already matches either id). +3 tests (accountless visitor dropped by
+> participantId on left AND banned; neither-id event inert). RED-proof: dropping the participantId fallback fails exactly
+> the 2 accountless-visitor tests (28 completed, 2 failed). Full `meeshy.sh check` BUILD SUCCESSFUL (973 tasks).
+>
+> **The slice — the EDIT sibling of the comment folds already shipped.** The Next pointer named `comment:media-updated`,
+> but a read-only scout killed it as a thin slice: Android's `ApiPostComment` has **no `media` field at all** (iOS's
+> `APIPostComment` does), and no comment audio/media render surface exists — wiring the realtime event would be
+> orphan/dead-end code (routine forbids it; same orphan risk the pointer flagged for §E). Turned instead to
+> `comment:updated`: iOS folds it (`FeedCommentsSheet.applyCommentEdit`), Android had no handler — an edited comment
+> stayed stale until a full refetch. New `SocketCommentUpdatedData(postId, comment)` (mirror of iOS, nests the full
+> `ApiPostComment`) + `SocialSocketManager.commentUpdated` + `listen("comment:updated", …)`. New
+> `CommentThreadState.replaced(comment)` / `CommentRepliesState.replacedReply(reply)` reducers swap the whole row in
+> place by id (adopt every field — the payload is complete; the heart lives in a separate `CommentLikeState` keyed by id,
+> so a full-row swap never disturbs the viewer's like). `PostCommentsViewModel.onCommentUpdated` filters by `postId` and
+> applies both reducers (each inert for the collection it doesn't hold) — mirror of the `onCommentTranslationUpdated`
+> dual-update pattern.
+>
+> **Tests: +9** — 3 `CommentThreadStateTest` (replace swaps the row preserving position; leaves other rows untouched;
+> inert unknown), 3 `CommentRepliesStateTest` (replace swaps a reply in place; finds it in whichever thread; inert
+> unknown), 1 `SocialSocketManagerTest` (decodes the full edited comment), 2 `PostCommentsViewModelTest` (an edit
+> repaints a top-level comment AND a loaded reply in place with NO refetch; inert for another post; inert for an unknown
+> comment). **RED-proof isolated**: neutering both reducers to `return this` reddened EXACTLY the 5 transformation tests
+> (193 completed, 5 failed) — every inert/ignored test stayed green: genuine discrimination.
+>
+> **Verified**: full `meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) with hotfix+slice — **BUILD
+> SUCCESSFUL**. Reviewer PASS. Both diffs `apps/android` only. Verdict: **PASS** — the hotfix restores a red main and
+> completes the intent of the change that broke it; the slice is a DTO mirroring an existing type, two in-place-replace
+> reducers, a socket event mirroring the existing social events, and a dual-update VM fold reusing the established
+> pattern; behavioural tests through the public API; no production logic outside apps/android.
+>
+> **Next**: The realtime comment channels Android folds are now `added` / `deleted` / `translation-updated` / `updated`.
+> The remaining social realtime events iOS folds that Android's `SocialSocketManager` still ignores (existing host
+> surfaces, low orphan risk): **`comment:reaction-sync`** (authoritative reaction resync for a comment — Android already
+> wires `comment:reaction-added`/`-removed`, so the host exists), **`post:updated`** (a post edited — the feed VM already
+> handles posts), **`post:reposted`** and the **`post:reaction-*`** family (scout whether Android renders post emoji
+> reactions first — likes only may mean a missing surface). `comment:media-updated` stays BLOCKED on a comment-audio
+> render surface (add `ApiPostComment.media` + a comment audio player first — a larger UI slice, not a thin fold).
+
+> On 2026-08-24 **the comment thread folds realtime translations pushed over `comment:translation-updated`**
+> (slice `comment-translation-updated-realtime-merge`, feature-parity Feed/Prisme — the previous entry's `Next`
+> pointer named this exact candidate: "the adjacent sibling the scout flagged is `comment:translation-updated`…
+> same shape, one rung over (comment-keyed)"). It IS the COMMENT sibling of the POST caption realtime merge
+> shipped the same day.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3465 (gateway/ios cycle 124), #3464
+> (ios i18n 241i), #3463 (gateway search pagination): none is a `claude/apps/android/*` slice, all touch
+> production logic outside `apps/android`, none in this routine's scope, none touched. Prior slice
+> (`post-translation-updated-realtime-merge`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`edaec937`).
+>
+> **The gap — the comment-keyed twin of the post channel Android never wired.** The gateway's
+> `PostTranslationService` translates a comment server-side and broadcasts `comment:translation-updated`
+> `{ postId, commentId, language, translation:{text, translationModel?, confidenceScore?, createdAt?} }` via
+> `SocialEventsHandler.broadcastCommentTranslationUpdated`. iOS folds it into the open thread
+> (`PostDetailViewModel`/`FeedViewModel.applyCommentTranslation` + `SocketCommentTranslationUpdatedData`). On
+> Android the event decoded nowhere: `SocialSocketManager` had no comment-translation flow, `SocketEvents.kt`
+> no DTO, and `PostCommentsViewModel` no subscriber — a comment the reader could see translated on iOS stayed
+> in its source language on Android until a full refetch. (`PostTranslationMerge` had a comment STRING overload
+> from the on-demand slice, but no entry-preserving one, and it was unwired to any socket.)
+>
+> **The fix — reuse the entry upsert + a metadata-preserving comment overload + socket wiring + a thread fold.**
+> (1) New `SocketCommentTranslationUpdatedData(postId, commentId, language, translation)` in `:core:model` whose
+> `translation` field IS an `ApiPostTranslationEntry` (the comment-keyed sibling of
+> `SocketPostTranslationUpdatedData`, one rung over) — decodes straight into one, no bespoke payload struct.
+> (2) New entry-preserving comment overload `PostTranslationMerge.mergeTranslation(comment, lang, entry): ApiPostComment?`
+> reusing the existing private entry `upsert` (the string comment overload stored `ApiPostTranslationEntry(text=…)`
+> only, dropping the model/confidence the push carries; metadata-only change is NOT a no-op). (3)
+> `SocialSocketManager.commentTranslationUpdated` flow + `listen("comment:translation-updated", …)`. (4)
+> `PostCommentsViewModel.onCommentTranslationUpdated` subscribes, filters by `postId`, finds the comment (top-level
+> or a loaded reply), merges the entry, and folds via the existing `thread.retranslated`/`replies.retranslated`
+> reducers — **no `activeLanguages` override forced** (the reader did not tap; their own Prisme chain decides, parity
+> with iOS `applyCommentTranslationUpdate` and with the post slice).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200); pristine `android-37.0` via `--channel=3` WORKED alone.**
+>
+> **Tests: +13** — 7 `PostTranslationMergeTest` (comment entry overload: appends preserving model/confidence/timestamp;
+> appends order-preserving; replaces in place under a case-insensitively matched key; stores a metadata-only change;
+> no-op identical entry; no-op blank lang; no-op blank text), 2 `SocialSocketManagerTest` (decodes+emits the full
+> entry; text-only payload → null metadata), 4 `PostCommentsViewModelTest` (an es reader on a fr/en-only comment sees
+> the pushed `es` translation repaint the row with NO tap; the same repaints a loaded REPLY; an event for another post
+> is ignored; an unknown comment is inert). **RED-proof, surgical per piece**: neutering the comment entry
+> `mergeTranslation`→`return null` reddened EXACTLY the 4 transformation merge tests (3 no-op tests green); commenting
+> the socket `listen` reddened the 2 socket tests; neutering the VM fold reddened EXACTLY the 2 repaint tests while
+> the 2 inert tests stayed green — genuine discrimination, not assertion echo.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) locally —
+> **BUILD SUCCESSFUL in 6m 17s** (973 tasks). Reviewer PASS. Diff is `apps/android` only (4 prod files edited in
+> :core:model + :sdk-core + :feature:feed, +13 tests across 3 files, tracking docs). Verdict: **PASS** — a DTO reusing
+> an existing type, a metadata-preserving merge overload reusing the entry upsert, a socket event mirroring the
+> existing social events, and a thread fold reusing the on-demand reducers; behavioural tests through the public API;
+> no production logic outside apps/android.
+>
+> **Next**: Feed/Prisme realtime is now honoured end to end for POST caption, STORY overlay, and COMMENT. The
+> remaining realtime social channel Android may not fold is **`comment:media-updated`** (gateway emits it, iOS wires it
+> at `PostDetailViewModel.commentMediaUpdated`/`FeedCommentsSheet` — a comment's audio transcription/translations
+> landing) — scout whether Android's `SocialSocketManager` decodes it and whether `PostCommentsViewModel` routes it into
+> the thread. Else turn to the §E editor-side candidates (clip-inspector reducer / timeline transport) — both still need
+> a timeline/selection host surface first (orphan risk), so scout read-only before committing.
+
+> On 2026-08-24 **the feed folds realtime post translations pushed over `post:translation-updated`**
+> (slice `post-translation-updated-realtime-merge`, feature-parity Feed/Prisme — the previous entry's `Next`
+> pointer named this exact candidate: "the caption sibling of THIS slice — iOS wires it too, Android's viewer
+> likely doesn't"). It IS the POST caption sibling of the STORY overlay realtime merge shipped the same day.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3458 (web Prisme cycle 123), #3426
+> (ios i18n 240i): neither is a `claude/apps/android/*` slice, both touch production logic outside
+> `apps/android`, none in this routine's scope, none touched. Prior slice
+> (`story-text-object-translation-realtime-merge`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`c65d44cd`).
+>
+> **The gap — a realtime Prisme channel Android never wired (a scout confirmed it before a line was written).**
+> The gateway's `PostTranslationService` translates a post server-side and broadcasts `post:translation-updated`
+> `{ postId, language, translation:{text, translationModel?, confidenceScore?, createdAt?} }` to the author's
+> feed room (`SocialEventsHandler.broadcastPostTranslationUpdated`). iOS folds it into the open feed
+> (`FeedViewModel.applyPostTranslation` + `SocketPostTranslationUpdatedData`). On Android the event decoded
+> nowhere: `SocialSocketManager` had no post-translation flow, `SocketEvents.kt` no DTO, no VM subscriber. A
+> post the reader could see translated on iOS stayed in its source language on Android until a full refetch.
+>
+> **The fix — reuse the entry type + a metadata-preserving merge + socket wiring + a cache fold.**
+> (1) New `SocketPostTranslationUpdatedData(postId, language, translation)` in `:core:model` whose
+> `translation` field IS an `ApiPostTranslationEntry` — the payload's `{text, model, confidence, createdAt}`
+> object matches that type exactly, so it decodes straight into one (no bespoke payload struct).
+> (2) New entry-preserving `PostTranslationMerge.mergeTranslation(post, lang, entry): ApiPost?` overload: the
+> existing string overload stored `ApiPostTranslationEntry(text=…)` only, dropping the model/confidence the
+> push carries; the new overload folds the whole entry. No-op on blank lang / blank text / the identical entry
+> already present (a metadata-only change is NOT a no-op — richer server data is never silently dropped).
+> (3) `SocialSocketManager.postTranslationUpdated` flow + `listen("post:translation-updated", …)`.
+> (4) `PostRepository.applyTranslationUpdate(postId, lang, entry): Boolean` folds the merge into `_feedCache`
+> (the push sibling of `requestOnDemandTranslation`, minus the translator call), so the projected card
+> re-renders in the reader's preferred language — **no override forced** (the reader's own chain decides,
+> parity with iOS `applyPostTranslation` which only sets `translatedContent` when the language is preferred,
+> and with the story slice). (5) `FeedViewModel` subscribes and routes the event to the repository.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200); pristine `android-37.0` via `--channel=3` WORKED alone**
+> (no copy→patch, no both-dirs). compileSdk 37; AGP 8.13.0 mapped it to `android-37.0` on the first
+> `./gradlew`. (NOTES' "try pristine first" held again.)
+>
+> **Tests: +18** — 9 `PostTranslationMergeTest` (entry overload: appends preserving model/confidence/timestamp;
+> appends order-preserving; replaces in place under a case-insensitively matched key; no-op on identical entry;
+> **stores a metadata-only change** so richer data is never dropped; no-op blank lang; no-op blank text; trims
+> the target), 2 `SocialSocketManagerTest` (decodes+emits the full entry; text-only payload → null metadata),
+> 5 `PostRepositoryTest` (`applyTranslationUpdate` folds into cache preserving metadata AND calls no translator;
+> inert on unknown post / blank target / blank text / identical entry), 1 `FeedViewModelTest` (a
+> `post:translation-updated` event routes to `repository.applyTranslationUpdate` with the payload). **RED-proof,
+> surgical**: neutering the entry `mergeTranslation` → `return null` reddened EXACTLY the 5 transformation
+> merge tests while the 3 no-op tests stayed green (and the 8 string-overload tests untouched) — genuine
+> discrimination, not assertion echo.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) locally
+> — **BUILD SUCCESSFUL in 4m 26s** (973 tasks). Reviewer PASS. Diff is `apps/android` only (4 prod files
+> edited in :core:model + :sdk-core + :feature:feed, +18 tests across 4 files, tracking docs). Verdict:
+> **PASS** — a DTO reusing an existing type, a metadata-preserving merge overload reusing the string overload's
+> upsert shape, a socket event mirroring the existing social events, and a cache fold mirroring the on-demand
+> path; behavioural tests through the public API; no production logic outside apps/android.
+>
+> **Next**: Feed/Prisme — the POST caption realtime merge is now honoured end to end. The adjacent sibling the
+> scout flagged is **`comment:translation-updated`** (gateway emits it, iOS wires it at
+> `FeedViewModel.commentTranslationUpdated`; Android's `PostTranslationMerge` already has the comment overload
+> but it is UNWIRED to any socket). That is the natural next slice — same shape, one rung over
+> (comment-keyed). Before building it, scout whether the comment thread surface (`PostCommentsSection` /
+> `PostDetailViewModel`) subscribes to a comment stream to route it into, or whether comments live in the feed
+> cache too. Else turn to the §E editor-side candidates (clip-inspector reducer / timeline transport) — both
+> still need a timeline/selection host surface first (orphan risk), so scout read-only before committing.
+
+> On 2026-08-24 **the story viewer merges realtime overlay translations pushed over `story:translation-updated`**
+> (slice `story-text-object-translation-realtime-merge`, feature-parity §E — the previous entry's `Next` pointer
+> flagged that `requestStoryTranslation` translates only the CAPTION and asked to scout iOS overlay parity
+> first. The scout found the missing half: iOS does NOT pull overlays on demand — the **gateway** translates a
+> canvas overlay server-side and BROADCASTS it via `story:translation-updated` (`{postId, textObjectIndex,
+> translations}`), which iOS merges into the open viewer (`StoryItem.mergingTextObjectTranslations`). Android
+> had no handler for this event at all — a whole realtime Prisme channel was on the floor).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3453..#3434 are all Dependabot, plus
+> #3429 (shared ObjectId), #3426 (ios i18n): none is a `claude/apps/android/*` slice, all touch production
+> logic outside `apps/android`, none in this routine's scope, none touched. Prior slice
+> (`story-language-bar-text-object-translations`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`cba70d47`).
+>
+> **The gap — a realtime Prisme channel Android never wired.** The gateway's `StoryTextObjectTranslationService`
+> persists a translated overlay and broadcasts `story:translation-updated` to the author's feed room. iOS folds
+> it into the cached story so the reader — who resolves overlays via the preferred chain — switches to the
+> requested language the instant it lands. On Android the event decoded nowhere, so an overlay the reader asked
+> to translate stayed in its source language until a full refetch.
+>
+> **The fix — pure merge + socket wiring + one emit generalisation.**
+> (1) New pure `StoryTextObjectTranslationMerge.merge(item, textObjectIndex, translations)` in `:core:model`
+> (canvas sibling of `StoryTranslationMerge`): upserts the languages into the targeted text object (existing
+> overwritten, new added) via immutable `copy`; empty map / no `storyEffects` / out-of-range or negative index
+> → story returned unchanged (iOS `mergingTextObjectTranslations` parity, minus its memberwise-init field-drop
+> hazard — `copy` preserves every other field for free).
+> (2) New `SocketStoryTranslationUpdatedData` + `SocialSocketManager.storyTranslationUpdated` flow, wired with
+> `listen("story:translation-updated", …)`.
+> (3) `StoryViewerViewModel.observeTranslationUpdates()` subscribes, merges into `rawItems` (inert on unknown
+> `postId` or no-op merge), and calls `emit()`. `emit()` now re-projects the current slide from `rawItems`
+> **unconditionally** — it was gated behind an active exploration override, which meant a realtime merge with
+> no override never reached the view. With no override and no runtime merge the unconditional path reproduces
+> `toSlideView` exactly (same `StoryContentResolver`/`StoryTextObjectProjection` calls, override=null), so
+> non-current slides and no-change emits are byte-identical to before. No forced override (iOS parity — the
+> reader's own chain resolves the merged language).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE; pristine `android-37.0` via `--channel=3` WORKED alone this run**
+> (no copy→patch, no both-dirs). `platforms;android-37` is not a downloadable package; `sdkmanager --channel=3
+> "platforms;android-37.0"` installed the preview platform and AGP 8.13.0 mapped compileSdk 37 → android-37.0
+> on the first `./gradlew`. (NOTES' "recipe is image-dependent, try pristine first" held — pristine was right.)
+>
+> **Tests: +12** — 8 `StoryTextObjectTranslationMergeTest` (adds to target; preserves+overwrites same
+> language; targets only the indexed object; out-of-range → unchanged; negative → unchanged; empty map →
+> unchanged; no storyEffects → unchanged; every other story/effects field survives), 2
+> `SocialSocketManagerTest` (decodes+emits the payload; missing `translations` → empty map), 2
+> `StoryViewerViewModelTest` (a realtime merge repaints the current overlay in the reader's language with NO
+> tap; the merged language surfaces as a present content chip) + a reused inert case (unknown `postId` leaves
+> the overlay untouched). **RED-proof, surgical per piece**: neutering `merge`→`return item` reddened the 4
+> transformation merge tests (4 no-op tests stayed green — correct); commenting the socket `listen` reddened
+> the 2 socket tests (other 15 green); with merge+subscription intact, reverting ONLY the `emit()`
+> re-projection reddened EXACTLY the repaint test while the chip test (reads `rawItems` via
+> `availableLanguagesFor`) and the inert test stayed green — isolating the emit generalisation's necessity.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest) locally — see run log
+> below for the result. Reviewer PASS. Diff is `apps/android` only (3 prod files edited/added in :core:model +
+> :sdk-core + :feature:stories, +12 tests across 3 files, tracking docs). Verdict: **PASS** — a pure merge
+> reusing the caption-merge shape, a socket event mirroring the existing story events, and one behaviour-
+> preserving emit generalisation; behavioural tests through the public API; no production logic outside
+> apps/android; no wire/shared/model change beyond a new Android socket DTO.
+>
+> **Next**: §E (Stories) — realtime AND on-demand overlay translation are both now honoured end to end (the
+> viewer offers overlay languages, resolves them per the chain and per a tapped override, and now folds in
+> pushed overlay translations). Remaining reader-side loose end: `requestStoryTranslation` still pulls only the
+> CAPTION on demand (`translateStory` → `StoryTranslationMerge` on `item.content`); iOS does NOT pull overlays
+> on demand either (they arrive via the realtime channel this slice wired), so this is **parity-complete, not a
+> gap** — do not build an N-call overlay pull. Turn instead to the editor-side candidates that resurface each
+> cycle: (a) the **clip-inspector editor reducer** (pure per-clip volume/fade/loop/background/delete) or (b)
+> the **timeline transport** pure state (play/pause/scrub/zoom 0.25×–4×/mute) — both still need a
+> timeline/selection host surface first (orphan risk), so scout that surface read-only before committing; else
+> take the highest-value non-editor §E box (e.g. `post:translation-updated` CAPTION realtime merge into the
+> viewer, the caption sibling of THIS slice — iOS wires it too, Android's viewer likely doesn't).
+
+> On 2026-08-24 **the story language bar descends the Prisme over ALL slide content, not the caption alone**
+> (slice `story-language-bar-text-object-translations`, feature-parity §E — the previous entry's `Next`
+> pointer's scout arm: "worth a scout to confirm a pulled-then-displayed text object resolves." The scout
+> found the gap one rung earlier than the pull: the **language bar itself** never offered overlay languages).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3431 (gateway/shared notif Prisme
+> cycle 121), #3429 (shared ObjectId it. 259), #3426 (ios i18n 240i), #3424 (gateway ObjectId 258), #3418
+> (web/admin 257): none is a `claude/apps/android/*` slice, all touch production logic outside `apps/android`,
+> none in this routine's scope, none touched. Prior slice (`story-text-object-exploration-override`) already
+> merged into main. Branched off freshly-fetched `origin/main` (`7fdd6b64`).
+>
+> **The gap — the exploration strip was blind to overlay translations.** `availableLanguagesFor` built its
+> "present" content chips from `item.translations` alone (the CAPTION). But CLAUDE.md §Cohérence: the Prisme
+> applies to ALL content, and the two prior cycles wired text overlays as first-class translatable content
+> (`StoryTextObject.translations`, resolved by `StoryTextObjectProjection`). A slide whose overlays carried a
+> translation the caption lacked (nominal once the device locale, rank 4, differs from the app language)
+> offered the reader NO chip to reach it — the overlay's translation existed but was unreachable. Same shape
+> as the caption/overlay disagreement the last two cycles fixed, one rung earlier: the strip that OFFERS the
+> languages, not the resolver that renders them.
+>
+> **The fix — union caption + overlay languages, caption-first, deduped case-insensitively.**
+> `availableLanguagesFor` now unions `item.translations` languages (in caption order) with every language key
+> across `storyEffects.textObjects[].translations` (blank values filtered, mirroring the caption's
+> `content.isNotBlank()`), `distinctBy { lowercase() }`. The empty-gate (`present.isEmpty()` ⇒ no strip) and
+> the translatable-request arm's `presentLower` exclusion both now account for overlay languages, so an
+> overlay-only-translated story (a) shows its overlay languages as present content chips and (b) still offers
+> a configured-absent language as a translatable request chip. Consumer path unchanged: tapping a present
+> overlay-language chip sets the ephemeral override, `emit()` re-projects the overlays into it (proven by the
+> toggle test). One pure private method edited; zero screen/model/wire change.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE; gradle auto-installed pristine `android-37.0` which HASH-ERRORED
+> (`Failed to find target with hash string 'android-37'`); the four-edit copy→patch `android-37` + keep-both-dirs
+> recipe worked** (source.properties ApiLevel=37, package.xml `<api-level>`+`path=`, build.prop `sdk_full=37`;
+> both `android-37` and `android-37.0` kept). Matches the immediately-prior slice's finding — this image family
+> wants the patched integer-hash dir. (NOTES' "recipe is image-dependent" still holds.)
+>
+> **Tests: +5** (`StoryViewerViewModelTest`) — overlay-only translation surfaces as a present content chip;
+> caption+overlay unioned caption-first with no duplicate (`.inOrder()` es,de); a blank overlay translation
+> value is not offered; an overlay-only-translated story still offers a configured-absent language as
+> translatable; tapping an overlay-only present chip re-resolves the overlays into it (the full offer→act
+> loop). **RED proven against unmodified production**: exactly these 5 failed, the other 56
+> `StoryViewerViewModelTest` cases stayed green — genuine discrimination on the fixture, not the assertion.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest) locally — **BUILD
+> SUCCESSFUL** (973 tasks, 6m34s). Reviewer PASS. Diff is `apps/android` only (1 prod file, +5 tests in 1
+> file, tracking docs). Verdict: **PASS** — one pure method extended to union overlay translations into the
+> exploration strip, reusing the existing chip/override machinery, behavioural tests through the public API,
+> no production logic outside apps/android, no wire/shared/model change.
+>
+> **Next**: §E (Stories) — the exploration strip now offers every present content language across caption +
+> overlays, and both reader-side resolvers (caption + overlays) honour the tapped override. One reader-side
+> loose end remains: **`requestStoryTranslation` translates only the CAPTION** (`translateStory` →
+> `StoryTranslationMerge.mergeTranslation` on `item.content`), so a pulled on-demand language repaints the
+> caption but leaves overlays on their own chain — worth a scout to confirm whether iOS translates overlays
+> on demand (parity) before building an N-call overlay pull. Otherwise the editor-side candidates resurface:
+> (a) the **clip-inspector editor reducer** (pure per-clip volume/fade/loop/background/delete; needs a
+> timeline/selection host surface first — orphan risk until then, two iOS fields
+> `mutedVolumeMemento`/`isDuckingDisabled` still undecoded on Android), or (b) the **timeline transport**
+> pure state (play/pause/scrub/zoom 0.25×–4×/mute, modelled on chat's `OverlayMediaTransport`, ephemeral
+> editor state no wire backing — also needs a host surface). Prefer the candidate with the cleanest pure core
+> AND a real consumer surface; scout read-only first.
+
+> On 2026-08-24 **a text overlay re-resolves into the "Exploration" language the reader taps** (slice
+> `story-text-object-exploration-override`, feature-parity §E — the previous entry's `Next` pointer
+> candidate (c): folding the exploration language override into text-object re-resolution, chosen over
+> the clip-inspector editor reducer (needs a timeline/selection host surface first) and the timeline
+> transport (ephemeral editor state, no wire backing) because it has BOTH the cleanest pure core AND a
+> real consumer surface — the viewer we wired text objects into the run before). The caption already
+> re-resolved on a language-bar tap (`StoryContentResolver.resolve(item, prefs, override)` in `emit()`),
+> but the freshly-shipped text overlays did **not**: `toSlideView` projected them once with the default
+> `preferredLanguages` and `emit()`'s override branch copied only the caption's `text`/`isTranslated`/
+> `languageCode` — so tapping "es" translated the slide's caption but left every text overlay stuck in the
+> chain language. The overlay and the caption disagreed on the very language the user had just chosen.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3425 (web/audio cycle 119),
+> #3424 (gateway ObjectId it. 258), #3418 (web/admin it. 257): none is a `claude/apps/android/*` slice,
+> all touch production logic outside `apps/android`, none in this routine's scope, none touched. Prior
+> iteration (`story-text-object-viewer-projection`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`924c8618`).
+>
+> **One pure param, threaded to a real consumer, mirroring the caption's own override contract.**
+> `StoryTextObjectProjection.resolveText`/`project` gain an optional `overrideLanguage` (default `null` —
+> the 2-arg call sites are byte-identical). The override is tried FIRST without removing the preference
+> chain, exactly as `StoryContentResolver` documents its own `overrideLanguage`: implemented by prepending
+> the override to the language list the existing exact-then-normalised loop already walks
+> (`listOf(override) + preferredLanguages`), so the override inherits the text-object resolver's own
+> case/region-insensitive matching (iOS `resolvedText` parity) and an override with no matching translation
+> falls straight through to the normal Prisme resolution. A blank/null override is inert. The empty-guard
+> moved from `preferredLanguages.isEmpty()` to the effective `languages.isEmpty()` so an override still
+> resolves for a reader with no configured chain.
+>
+> **Real wiring (not orphan logic)**: `emit()`'s override branch now re-projects the current slide's text
+> objects from the raw item — `item.storyEffects.textObjects.map { project(it, preferredLanguages, override) }`
+> — alongside the caption re-resolution, and the Compose `StoryTextObjectLayer` already reads
+> `slide.textObjects`, so a tapped language now repaints caption AND overlays together. Zero screen edit.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE, but pristine `android-37.0` HASH-ERRORED this image; the
+> four-edit copy→patch `android-37` + keep-both-dirs recipe worked.** `sdkmanager "platforms;android-35"…`
+> installed fine, `:feature:stories:help`/`testDebugUnitTest` died `Failed to find target with hash string
+> 'android-37'`. Applied the documented copy→patch (source.properties ApiLevel, package.xml `<api-level>` +
+> `path=`, build.prop both `sdk_full` keys) then kept BOTH `android-37` and pristine `android-37.0` — next
+> run green. (NOTES' "recipe is image-dependent, flips between runs" held again; pristine-first cost one run.)
+>
+> **Tests: +9** — 7 `StoryTextObjectProjectionTest` (override tried FIRST ahead of chain, override with no
+> match falls back to chain, override matched case/region-insensitively, override resolves with no
+> configured chain, blank override inert ≡ no override, neither override nor chain matches → original,
+> `project` resolves via override), +2 `StoryViewerViewModelTest` (toggling the override re-resolves the
+> current slide's text objects then a re-tap restores the automatic resolution; an override with no
+> text-object translation falls back to the reader's chain). **Mutation RED-proof (isolated, restored
+> after)**: neutering the override (`val languages = preferredLanguages`) failed EXACTLY the 5
+> override-dependent tests (4 pure + 1 viewmodel toggle) while the 4 fallback/inert tests
+> (no-match-falls-back, blank-inert, neither-matches, viewmodel-fallback) stayed green — genuine
+> discrimination on the FIXTURE, not the assertion; production restored clean, no stray `.bak`.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest) locally, **BUILD
+> SUCCESSFUL** (973 tasks, 4m). Reviewer PASS. Diff is `apps/android` only (2 prod files edited, +9 tests
+> across 2 files, tracking docs). Verdict: **PASS** — one pure optional param threaded to the one existing
+> consumer, reusing the resolver's own matching, mirroring the caption's documented override contract,
+> behavioural tests through the public API, no production logic outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) — the two remaining reader-side overrides now both honour Exploration (caption +
+> text objects); the on-demand story translation (`requestStoryTranslation`) already merges the pulled
+> translation into the raw item so text objects will pick it up on the next `emit()` — worth a scout to
+> confirm a pulled-then-displayed text object resolves. Otherwise the editor-side candidates resurface:
+> (a) the **clip-inspector editor reducer** (pure per-clip volume/fade/loop/background/delete derivation —
+> rich pure core, still needs a timeline/selection host surface, two iOS fields
+> `mutedVolumeMemento`/`isDuckingDisabled` not yet decoded on Android), or (b) the **timeline transport**
+> pure state (play/pause/scrub/zoom 0.25×–4×/mute, modelled on chat's `OverlayMediaTransport`, ephemeral
+> editor state no wire backing). Prefer the candidate with the cleanest pure core AND a real consumer
+> surface; scout read-only first.
+
+> On 2026-08-24 **a slide's text overlays render and animate on the viewer canvas** (slice
+> `story-text-object-viewer-projection`, feature-parity §E — the previous entry's `Next` pointer's
+> preferred candidate: the scout ranked the text-object viewer projection first, cleanest pure core with
+> the wire fully backed, reusing the two already-tested reader resolvers, chosen over the clip-inspector
+> editor reducer, which lands editor-side with no host surface yet, and the timeline transport, which has
+> no wire backing at all). The viewer decoded `storyEffects.textObjects` on the wire (`Story.kt`) and the
+> v3→v1 projection already produced them, but `StoryViewerViewModel.toSlideView` projected background +
+> foreground **media** only — a text overlay authored on a slide was dropped on the floor.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3418 (web/admin it. 257):
+> not a `claude/apps/android/*` slice, out of this routine's scope, untouched. Prior iteration
+> (`story-media-fade-envelope`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`5cb8ce45`).
+>
+> **One pure view + one pure projection, ported from iOS's canonical paths.** New `StoryTextObjectView`
+> mirrors `StoryForegroundMediaView`: `animated(atSeconds)` folds the keyframe transform
+> (`StoryKeyframeResolver`) with the object's own fadeIn/fadeOut envelope (`StoryMediaFadeResolver`) at
+> iOS render precedence `fade ?? keyframeOpacity ?? base` — a live envelope OVERRIDES a keyframe opacity;
+> a text object never participates in a clip transition (iOS parity), so unlike the media layer no
+> transition ramp is folded, and `animated()` returns `this` unchanged when neither a keyed channel nor a
+> live envelope acts. New `StoryTextObjectProjection.resolveText` ports iOS
+> `StoryTextObject.resolvedText(preferredLanguages:)` (`StoryModels.swift`): per preferred language, an
+> exact `translations[lang]` key first, then a case/region-insensitive `base()` match (via the shared
+> `LanguageCodeNormalizer`), before the next language — else the original text (Prisme rule 1: absent
+> target ⇒ show the original). `project()` maps transform/timing/keyframe fields into the view.
+>
+> **Real wiring (not orphan logic)**: `StorySlideView` gains `textObjects`; `toSlideView` projects
+> `storyEffects.textObjects` through `LanguageResolver.preferredContentLanguages(prefs)`. Compose
+> `StoryTextObjectLayer` renders each overlay at its center anchor with `.alpha(animated.opacity)`,
+> `fontSize × scale` mapped from the 1080-referential design space (iOS `StoryTextSize` parity) onto the
+> real canvas width, and a `graphicsLayer` rotation — so a fading, keyframed text overlay now paints and
+> animates where before it was invisible.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE, pristine `android-37.0` worked (NOTES' cheapest recipe).**
+> `sdkmanager "platforms;android-35" …` then `--channel=3 "platforms;android-37.0"`; `:feature:stories:help`
+> resolved `android-37` on the first run — no copy→patch, no both-dirs mode.
+>
+> **Tests: +19** — 6 `StoryTextObjectViewTest` (no-fade-no-kf → identity, fade-in folds, fade-out folds,
+> envelope OVERRIDES keyframe opacity while position keeps animating, outside-window → identity,
+> keyframes animate position while opacity holds base + un-keyed scale holds base), 11
+> `StoryTextObjectProjectionTest` (no-translations→original, empty-preferred→original, exact-key match,
+> case/region-insensitive match, normalized 3-letter key ↔ 2-letter preference, exact-key wins over
+> normalized sibling, preferred-priority first-match-wins, no-match→original, project carries
+> transform/timing/keyframe fields + animates, project resolves text via prisme, project defaults absent
+> timing to 0), +1 `StoryViewerViewModelTest` (a slide's text objects project into the view and ramp
+> their fade). **Mutation RED-proof (isolated, restored after)**: dropping the envelope override
+> (`fadeEnvelope ?: base.opacity` → `base.opacity`) failed EXACTLY the 4 fade-value tests (fade-in,
+> fade-out, override, viewmodel fade), the identity/keyframe-only/outside-window/projection tests stayed
+> green — genuine discrimination; production restored clean, no stray `.bak`.
+>
+> **Verified**: `:feature:stories:testDebugUnitTest` for the three files **BUILD SUCCESSFUL** (60 tests,
+> 3m15s); full `assembleDebug testDebugUnitTest` gate run for the PR. Reviewer PASS. Diff is
+> `apps/android` only (2 new pure files, 1 view-model data-class field + projection, 1 Compose layer +
+> render loop, +19 tests across 3 files, tracking docs). Verdict: **PASS** — pure app-side view + projection
+> reading existing wire fields, reusing two tested resolvers + the shared normalizer, behavioural tests
+> through the public API, no production logic outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) — with the reader now honouring text objects, either (a) the **clip-inspector
+> editor reducer** (pure per-clip volume/fadeIn/fadeOut/loop/background/delete derivation over a selected
+> object — rich pure core, but needs a timeline/selection host surface first, and two iOS fields
+> `mutedVolumeMemento`/`isDuckingDisabled` are not yet decoded on Android), or (b) the **timeline transport**
+> pure state (play/pause/scrub/zoom 0.25×–4×/mute — clean reducer modelled on chat's `OverlayMediaTransport`,
+> but ephemeral editor state with no wire backing), or (c) folding the **exploration language override**
+> into text-object re-resolution (the caption re-resolves on override today; text objects use default prefs).
+> Prefer the candidate with the cleanest pure core AND a real consumer surface; scout read-only first.
+
+> On 2026-08-23 **a timed foreground clip fades in/out on the viewer canvas** (slice
+> `story-media-fade-envelope`, feature-parity §E — the previous entry's `Next` pointer's clip-inspector
+> candidate, taken on its reader side first: the wire-backed fade envelope is a clean pure core, chosen
+> over the text-keyframe alternative which would need a whole new text-object projection + Compose
+> rendering it doesn't have yet). iOS ramps a clip's opacity over its own `fadeIn`/`fadeOut`
+> (`StoryRenderer.fadeOpacity(item:at:)`); the Android foreground projection **dropped** both fields, so a
+> clip authored with a fade snapped on/off instead of ramping.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3414 (ios cycle 114 bis), #3409
+> (shared/gateway it. 256), #3395 (iOS 239i), #3392 (gateway it. 254): none is a `claude/apps/android/*`
+> slice, none in this routine's scope, none touched. Prior iteration (`story-clip-transition-opacity`)
+> already merged into main. Branched off freshly-fetched `origin/main` (`9be98e15`).
+>
+> **One pure resolver, ported 1:1 from iOS's canonical path** (`StoryRenderer.fadeOpacity`): new
+> `StoryMediaFadeResolver.fadeOpacity(fadeIn, fadeOut, startTime, duration, currentTime)` — `null` when the
+> clip authors no fade (both ≤0) OR the playhead is outside `[start, end)`; inside, fade-in ramps
+> `(t−start)/fadeIn` clamped `[0,1]`, then a steady `1.0`, then fade-out `(end−t)/fadeOut`; a `null`
+> duration → `end = +∞` so the fade-out edge (which needs a finite end) never fires; fade-in is evaluated
+> before fade-out so a clip shorter than `fadeIn+fadeOut` reports the fade-in ramp at the overlap
+> (iOS parity).
+>
+> **Real wiring (not orphan logic)**: `StoryForegroundMediaView` now carries `fadeIn`/`fadeOut` (threaded
+> through `toForegroundMediaView`, previously discarded). `animated()` computes the envelope and folds it at
+> **iOS render precedence** `fade ?? keyframeOpacity ?? base`, then `× transitionOpacity` — so a live
+> envelope OVERRIDES an authored keyframe opacity (not multiplied) and still multiplies with a
+> crossfade/dissolve ramp. The early-return now also accounts for a lone fade envelope
+> (`resolved == null && transitions.isEmpty() && fadeEnvelope == null → this`). **Zero Compose glue
+> change**: the viewer already applied `.alpha(animated.opacity)`, so a fading clip now ramps with no
+> screen edit.
+>
+> **SDK bootstrap — pristine `android-37.0` worked this image** (cheapest recipe; NOTES' "try pristine
+> first" held). `sdkmanager --channel=3 "platforms;android-37.0"` alone; `./gradlew :feature:stories:help`
+> resolved the target on the first run — no copy→patch, no both-dirs mode needed.
+>
+> **Tests: +23** — 16 `StoryMediaFadeResolverTest` (no-fade→null, zero-fade→null, before-window→null,
+> at/after-end→null, fade-in start=0/mid=0.5/past=1.0/boundary=1.0, fade-out mid=0.5/near-end=0.25/
+> boundary=1.0, fade-in-only-no-duration fades then holds forever, fade-out-only-no-finite-end never fades,
+> fade-in-precedence on overlap, shifted-clip start-relative clock, absent-startTime≡0), 6
+> `StoryForegroundFadeTest` (fade-in folds, fade-out folds, envelope OVERRIDES keyframe opacity while
+> position keyframes still animate, envelope × transition multiply to 0.05, outside-window identity,
+> no-fade-no-kf-no-transition identity), +1 `StoryViewerViewModelTest` (projection carries
+> fadeIn/fadeOut and ramps in/out). **Mutation RED-proof (isolated, restored after)**: dropping the
+> override (`fadeEnvelope ?: base.opacity` → `base.opacity`) failed EXACTLY the 5 envelope-value tests
+> (2 foreground fade + 1 viewer projection + fade-in/fade-out folds), the identity/outside-window tests
+> stayed green — genuine discrimination; production verified clean after restore, no stray `.bak`.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, **BUILD SUCCESSFUL** (973 tasks, 4m11s, no
+> test failures). Reviewer PASS. Diff is `apps/android` only (1 new pure file, 1 view-model data-class +
+> projection threading + `animated()` opacity fold, +23 tests across 3 files, tracking docs). Verdict:
+> **PASS** — pure app-side resolver reading existing wire fields + `animated()` folding at iOS precedence,
+> behavioural tests through the public API, no production logic outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) — the clip-inspector **editor** side now that the reader honours fades: a pure
+> per-clip inspector reducer (volume/fadeIn/fadeOut/loop/background/delete derivation over a selected
+> `StoryMediaObject`, wire-backed), OR the **timeline transport** pure state (play/pause/scrub/zoom
+> 0.25×–4×/mute), OR the text-object viewer projection (prerequisite for text keyframes/fades). Prefer the
+> candidate with the cleanest pure core; scout read-only first to confirm the wire fields and avoid
+> glue-only work.
+
 > On 2026-08-23 **story clip transitions fade the foreground on the viewer canvas** (slice
 > `story-clip-transition-opacity`, feature-parity §E — the previous entry's `Next` pointer's preferred
 > candidate: the wire-backed clip-transition reader resolver, chosen over the text-keyframe alternative for

@@ -70,16 +70,41 @@ final class ComposerIntentTests: XCTestCase {
         XCTAssertNil(profil.routesToLegacy, "La porte du tray est celle que le nouveau meuble sert.")
     }
 
-    func test_profile_feedComposer_resteSurSaFeuilleHistorique() {
+    /// **Lot 3 — la porte la plus utilisée cesse de router** (spec v2 §E).
+    ///
+    /// La rév. 4 justifiait le routage par un manque : « le meuble n'a pas de
+    /// surface *document sans scène* ». Ce motif est TOMBÉ avec le lot 2 — la
+    /// surface existe (`ComposerDocumentSurface`), le meuble la monte
+    /// (`MeeshyComposerHost.documentSurface`), et `ComposerSurfaceRouting` fait
+    /// atterrir cette porte dessus. Une porte ne reste pas sur sa feuille
+    /// historique par habitude : elle y reste tant qu'une raison la retient, et
+    /// celle-là n'existe plus.
+    ///
+    /// Les trois assertions sont CHAÎNÉES à dessein. Éprouver le seul `nil`
+    /// laisserait passer un recâblage qui enverrait le fil sur l'atelier de
+    /// SCÈNE — un canvas de story à la place d'un champ de texte, exactement la
+    /// régression sèche que `routesToLegacy` retenait. Ce qui compte n'est pas
+    /// que la porte quitte la feuille : c'est qu'elle atterrisse sur un
+    /// document.
+    func test_profile_feedComposer_estServiParLeMeuble_surSaSurfaceDocument() {
         let profil = profil(.feedComposer)
 
-        XCTAssertEqual(
-            profil.routesToLegacy, .feedComposer,
-            "Rév. 4 : le meuble n'a pas de surface « document sans scène » (clavier sur content, rangée "
-            + "photo·caméra·emoji·document·lieu·micro, envoi durable offline). Recâbler la porte la plus "
-            + "utilisée sans elle serait une régression sèche — la bascule est post-v1."
+        XCTAssertNil(
+            profil.routesToLegacy,
+            "Lot 3 : `.feedComposer` cesse de router. Tant que cette table rend `.feedComposer`, la porte "
+            + "présente sa feuille historique et le meuble ne voit jamais l'ombre d'un utilisateur sur la "
+            + "surface de création la plus fréquentée de l'app."
         )
-        XCTAssertEqual(profil.initialFormat, .post)
+        XCTAssertEqual(
+            profil.initialFormat, .post,
+            "Le composer du fil écrit un post : le lot 3 change son ROUTAGE, jamais ce qu'il produit."
+        )
+        XCTAssertEqual(
+            ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat),
+            .document,
+            "Et ce que le meuble lui monte est la surface DOCUMENT. Une porte recâblée qui atterrirait sur "
+            + "l'atelier de scène aurait quitté sa feuille pour pire qu'elle."
+        )
     }
 
     func test_profile_reelTab_ouvreLaCameraVideoSansDiapositives() {
@@ -123,13 +148,25 @@ final class ComposerIntentTests: XCTestCase {
         XCTAssertEqual(profil.initialFormat, .post)
     }
 
+    /// Rév. 5 (revue adversariale du 2026-08-23) : la rév. 3 justifiait ce
+    /// `.post` transitoire par « c'est le host qui rebascule au format du
+    /// brouillon une fois le document chargé ». **Cet écrivain n'existe pas** —
+    /// `MeeshyComposerHostGuardTests.test_host_neReaffectePasLeFormatCourant_…`
+    /// le grave, avec sa condition de levée.
+    ///
+    /// Ce qui rend le transitoire INOFFENSIF est ailleurs, et vérifié ailleurs :
+    /// `ComposerSurfaceRouting` fait d'une `.resume` une SCÈNE quel que soit le
+    /// format, donc reprendre un brouillon montre l'atelier qui l'a adopté et
+    /// non un éditeur de texte vide
+    /// (`ComposerDocumentSurfaceTests.test_surface_desDeuxPortesQuiReprennentSansLegacy_estLAtelier`).
     func test_profile_draft_reprendUnDocumentAuFormatPost() {
         let profil = profil(.draft(id: "brouillon-42"))
 
         XCTAssertEqual(
             profil.initialFormat, .post,
-            "Rév. 3 : `.draft` ouvre en état TRANSITOIRE `.post` ; c'est le host qui rebascule au format du "
-            + "brouillon une fois le document chargé (loi 9 — les capacités suivent le format courant)."
+            "Rév. 3 : `.draft` ouvre en état TRANSITOIRE `.post` — la table reste une fonction de l'origine et "
+            + "n'ouvre pas le document pour le deviner. Ce que ce format d'ouverture NE décide pas, c'est la "
+            + "surface montée : la reprise monte l'atelier."
         )
         XCTAssertEqual(profil.opensWith, .resume)
         XCTAssertNil(profil.routesToLegacy)
@@ -352,14 +389,23 @@ final class ComposerIntentTests: XCTestCase {
 
     // MARK: - Règle : ce qui route vers l'historique ne prétend pas ouvrir le neuf
 
-    /// L'unique porte de chaque composer historique. Le `switch` est exhaustif :
-    /// un cinquième composer historique casse la compilation de cette suite.
-    private func origine(routantVers legacy: LegacyComposer) -> ComposerOrigin {
+    /// L'unique porte de chaque composer historique — **et `nil` pour celui que
+    /// le meuble a repris**. Le `switch` reste exhaustif : un cinquième composer
+    /// historique casse la compilation de cette suite.
+    ///
+    /// `.feedComposer` y répond `nil` depuis le lot 3. Le cas ne se supprime PAS
+    /// de `LegacyComposer` pour autant, et c'est délibéré : une garde négative
+    /// ne rougit que si elle sait NOMMER son interdit. Retirer le cas rendrait
+    /// `test_aucunePorte_neRetombeSurLaFeuilleDuFil` inécrivable, et le retour
+    /// du routage passerait alors sans un mot — le mode d'extinction silencieux
+    /// propre aux gardes négatives. La feuille `FeedComposerSheet`, elle, est
+    /// toujours montée par le fil : le cas nomme donc un composer qui EXISTE.
+    private func origine(routantVers legacy: LegacyComposer) -> ComposerOrigin? {
         switch legacy {
         case .statusComposer: return .moodChip
         case .repostComposer: return .repost(ofPostId: "post-source", sourceFormat: .story)
         case .storyEdit: return .edit(postId: "story-a-moi", documentFormat: .post)
-        case .feedComposer: return .feedComposer
+        case .feedComposer: return nil
         }
     }
 
@@ -367,9 +413,26 @@ final class ComposerIntentTests: XCTestCase {
         .statusComposer, .repostComposer, .storyEdit, .feedComposer
     ]
 
-    func test_chaqueComposerHistorique_aExactementUnePorte() {
+    /// REFORMULÉE au lot 3, jamais affaiblie. Elle affirmait « chaque composer
+    /// historique a EXACTEMENT une porte » ; elle affirme désormais la même
+    /// chose pour les trois qui en gardent une, **et l'ABSENCE de porte pour
+    /// celui que le meuble a repris**.
+    ///
+    /// Ses deux moitiés rougissent, chacune pour une régression différente :
+    /// une porte qui disparaîtrait d'un composer encore routé (cas mort), et le
+    /// fil qui reviendrait sur sa feuille (régression produit). Le compte final
+    /// est écrit en dur — `Self.composersHistoriques.count` aurait suivi la
+    /// disparition du cas et se serait tu.
+    func test_chaqueComposerHistorique_aExactementUnePorte_saufCeluiQueLeMeubleAAbsorbe() {
         for legacy in Self.composersHistoriques {
-            let origin = origine(routantVers: legacy)
+            guard let origin = origine(routantVers: legacy) else {
+                XCTAssertFalse(
+                    Self.toutesLesOrigines.contains { profil($0).routesToLegacy == legacy },
+                    "\(legacy) n'a plus de porte depuis le lot 3 : une origine qui y retomberait renverrait "
+                    + "la surface de création la plus utilisée de l'app sur sa feuille historique."
+                )
+                continue
+            }
 
             XCTAssertEqual(
                 profil(origin).routesToLegacy, legacy,
@@ -381,22 +444,51 @@ final class ComposerIntentTests: XCTestCase {
         let routes = Self.toutesLesOrigines.compactMap { profil($0).routesToLegacy }
 
         XCTAssertEqual(
-            routes.count, Self.composersHistoriques.count,
-            "Exactement quatre portes routent vers l'historique — les cinq autres sont servies par le meuble."
+            routes.count, 3,
+            "Lot 3 : exactement TROIS portes routent encore vers l'historique — le mood, le repost et "
+            + "l'édition. Les six autres sont servies par le meuble."
         )
     }
 
-    func test_leMeuble_neSertQueLesCinqPortesDeSonPerimetre() {
+    /// REFORMULÉE au lot 3 : la porte du fil rejoint le périmètre du meuble.
+    ///
+    /// L'ensemble est écrit en toutes lettres plutôt que compté — un compte
+    /// resterait vert le jour où une porte en remplacerait une autre, et ce
+    /// test-ci est le seul endroit qui dise QUI le meuble sert.
+    func test_leMeuble_sertLesSixPortesDeSonPerimetre_dontLaPlusUtilisee() {
         let serviesParLeMeuble = Set(
             Self.toutesLesOrigines.filter { profil($0).routesToLegacy == nil }.map(nom(de:))
         )
 
         XCTAssertEqual(
             serviesParLeMeuble,
-            ["storyTray", "reelTab", "draft", "share", "conversationMedia"],
-            "Périmètre v1 : le tray, les réels (profil défini, câblage hors v1), le brouillon, le partage "
-            + "et le média de conversation (câblage lot G). Tout le reste garde son composer actuel."
+            ["storyTray", "feedComposer", "reelTab", "draft", "share", "conversationMedia"],
+            "Périmètre après le lot 3 : le tray, LE FIL, les réels (profil défini, câblage hors v1), le "
+            + "brouillon, le partage et le média de conversation (câblage lot G). Le mood, le repost et "
+            + "l'édition gardent leur composer actuel."
         )
+    }
+
+    /// **La garde NÉGATIVE du lot 3 — celle qui rougit si le routage revient.**
+    ///
+    /// Elle ne se contente pas d'interroger la porte du fil : elle balaie les
+    /// NEUF origines. Le retour du routage ne se ferait pas nécessairement sur
+    /// la ligne qu'on vient de modifier — une porte voisine pourrait se mettre à
+    /// pointer la feuille du fil, et le contrat « la surface de création la plus
+    /// utilisée de l'app est servie par le meuble » tomberait par un autre
+    /// chemin, sans que le test de la porte du fil bronche.
+    ///
+    /// Elle exige que `LegacyComposer.feedComposer` RESTE dans l'enum : une
+    /// garde négative privée du symbole qu'elle cherche passe au vert en
+    /// perdant sa protection.
+    func test_aucunePorte_neRetombeSurLaFeuilleDuFil() {
+        for origin in Self.toutesLesOrigines {
+            XCTAssertNotEqual(
+                profil(origin).routesToLegacy, LegacyComposer.feedComposer,
+                "\(nom(de: origin)) route vers `FeedComposerSheet` : le lot 3 a fait cesser ce routage, et "
+                + "y revenir renverrait la porte la plus utilisée de l'app sur sa feuille historique."
+            )
+        }
     }
 
     /// Annoncer un format qu'un composer historique ne sait pas produire, ce
@@ -424,9 +516,16 @@ final class ComposerIntentTests: XCTestCase {
     /// sur le CÂBLAGE de C2-C3, pas sur le modèle : les portes de présentation
     /// ne devront pas ouvrir un repost sur son format tant que le repli du
     /// gateway n'aura pas basculé sur `?? original.type`.
+    ///
+    /// **Rév. lot 3** : `.feedComposer` a QUITTÉ ce test, et son assertion n'est pas
+    /// perdue — elle vit dans
+    /// `test_profile_feedComposer_estServiParLeMeuble_surSaSurfaceDocument`.
+    /// Ce test-ci parle des portes qui annoncent le format de leur composer
+    /// HISTORIQUE ; le fil n'en a plus, et l'y laisser aurait fait dire à son
+    /// nom une chose fausse. C'est le vieillissement exact que la rév. 4 de
+    /// `ComposerIntent` a laissé courir un lot durant.
     func test_formatAnnonce_desPortesQuiFixentLeurFormat_estCeluiDuComposerHistorique() {
         XCTAssertEqual(profil(.moodChip).initialFormat, .status, "statusComposer ne produit qu'un statut.")
-        XCTAssertEqual(profil(.feedComposer).initialFormat, .post, "feedComposer ne produit qu'un post.")
     }
 
     func test_formatAnnonce_desPortesQuiPortentLeurFormat_estLeFormatPorte() {
@@ -672,6 +771,26 @@ final class ComposerIntentTests: XCTestCase {
 
     func test_moodChip_nOffreQueLeStatut() {
         XCTAssertEqual(eventail(.moodChip, reel: true), [.status])
+    }
+
+    /// Le gate du réel gouverne l'ÉVENTAIL, jamais le ROUTAGE. C'est ce qui
+    /// autorise `ComposerIntent.routesToLegacy` à trancher sans composition
+    /// sous la main — la porte doit savoir quoi présenter AVANT que quoi que
+    /// ce soit soit composé, et une supposition à cet endroit-là ouvrirait le
+    /// mauvais composer.
+    ///
+    /// Sans ce test, la propriété se supposerait : le jour où une porte se
+    /// mettrait à router différemment selon la qualification, `routesToLegacy`
+    /// répondrait faux en silence, et la porte présenterait le meuble là où le
+    /// legacy était attendu.
+    func test_routageLegacy_neDependJamaisDeLaQualificationEnReel() {
+        for origin in Self.toutesLesOrigines {
+            XCTAssertEqual(
+                ComposerProfile.profile(for: origin, compositionQualifiesAsReel: false).routesToLegacy,
+                ComposerProfile.profile(for: origin, compositionQualifiesAsReel: true).routesToLegacy,
+                "\(nom(de: origin)) change de composer historique selon la composition — le routage doit être stable."
+            )
+        }
     }
 
     // MARK: - Règle : ce que vise un repost — la racine, au format de la carte

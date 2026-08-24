@@ -290,6 +290,10 @@ export const messageAttachmentSchema = {
     forwardedFromAttachmentId: { type: 'string', nullable: true, description: 'Original attachment ID if forwarded' },
     isForwarded: { type: 'boolean', description: 'Whether this is a forwarded attachment' },
 
+    // Provenance — declared by the capturing client, read back by the share
+    // sheet to decide whether publishing this media needs confirmation.
+    capturedInApp: { type: 'boolean', description: "Media came from the app's own camera or microphone" },
+
     // View-once / Secret
     isViewOnce: { type: 'boolean', description: 'View-once attachment' },
     maxViewOnceCount: { type: 'number', nullable: true, description: 'Max unique viewers' },

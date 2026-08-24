@@ -564,16 +564,38 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
       (c) => (c as { truncated?: boolean }).truncated === true,
     );
 
-    // Une page TRONQUÉE n'a pas livré toute la fenêtre, et le reste est un
-    // ARRIÉRÉ : ses `updatedAt` sont ANTÉRIEURS au checkpoint. Avancer le
-    // watermark ici affirmerait une couverture non démontrée, et le client qui
-    // l'adopterait perdrait tout l'arriéré d'un coup — définitivement, la
-    // borne serveur étant stricte. Le watermark reste donc où il est : la
-    // suite se réclame par `nextCursor`, et seule la page qui CLÔT le parcours
-    // (`hasMore: false`) rend un checkpoint adoptable. Même règle que
-    // `SyncWatermark.advancedAfterDeltaPage` côté SDK iOS.
+    // Le checkpoint AFFIRME une couverture — « tout ce qui a changé jusqu'ici
+    // t'a été livré » — et le client la croit sur parole : il le renvoie en
+    // `since`, où la borne serveur est STRICTE. Une affirmation non démontrée
+    // creuse donc un trou DÉFINITIF (docblock de `SYNC_CHECKPOINT_LAG_MS`).
+    //
+    // Il n'est avançable que par une réponse qui a démontré cette couverture,
+    // et il y a TROIS façons de ne pas la démontrer. Une seule était vérifiée :
+    //
+    // 1. `hasMore` — page TRONQUÉE : le reste est un ARRIÉRÉ dont les
+    //    `updatedAt` sont ANTÉRIEURS au checkpoint. La suite se réclame par
+    //    `nextCursor`, et seule la page qui CLÔT le parcours est adoptable.
+    // 2. `hasGap` — le serveur a REFUSÉ de calculer le delta et court-circuité
+    //    la requête : la fenêtre n'a pas été partiellement livrée, elle n'a pas
+    //    été LUE. C'est le maximum exact du cas que (1) protège, et il avançait
+    //    le watermark. `gapAction: 'full_resync_required'` ne rattrape rien :
+    //    c'est une INSTRUCTION, et une réponse ne peut pas dépendre de ce que
+    //    son destinataire en fera pour rester sûre — la resync peut être
+    //    différée, échouer hors ligne, ou n'être lue par personne (`hasGap` n'a
+    //    aujourd'hui aucun consommateur sur les trois clients).
+    // 3. Aucune collection servie — `collections=','` franchit le
+    //    `z.string().min(1)`, se réduit à `[]`, ne lève aucun
+    //    `UNSUPPORTED_COLLECTION`, et `hasMore` sur zéro collection vaut
+    //    `false`. Rien n'a été lu, et le watermark avançait quand même.
+    //
+    // Retenir le watermark ne coûte qu'une RELECTURE bornée ; l'avancer à tort
+    // est irréversible. La règle est donc écrite en POSITIF — une nouvelle
+    // façon de ne rien couvrir doit s'ajouter ici, pas s'oublier. Même règle
+    // que `SyncWatermark.advancedAfterDeltaPage` côté SDK iOS.
+    const coveredTheWindow = !hasMore && !hasGap && Object.keys(collectionsResult).length > 0;
+
     const payload = {
-      checkpoint: (hasMore ? sinceDate : checkpoint).toISOString(),
+      checkpoint: (coveredTheWindow ? checkpoint : sinceDate).toISOString(),
       checkpointSeq,
       collections: collectionsResult,
       hasMore,

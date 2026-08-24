@@ -970,14 +970,13 @@ struct ReelPageView: View {
     }
 
     private func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon).font(MeeshyFont.relative(10, weight: .semibold))
-            Text(CompactCountLabel.text(count)).font(.caption2.weight(.medium))
-        }
-        .foregroundColor(.white.opacity(0.85))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(a11yLabel)
-        .accessibilityValue("\(count)")
+        ReachMetricLabel(
+            icon: icon,
+            count: count,
+            label: a11yLabel,
+            tint: .white.opacity(0.85),
+            iconFont: MeeshyFont.relative(10, weight: .semibold)
+        )
     }
 
     /// Légende du reel rendue par `MessageTextRenderer` pour teinter `@mention`
@@ -1418,7 +1417,7 @@ private struct ReelScrubBar: View {
             .accessibilityLabel(String(localized: "reels.scrub", defaultValue: "Avancer ou reculer", bundle: .main))
             // No on-screen time numbers (Instagram-reels style), but VoiceOver
             // still announces playback position as a percentage.
-            .accessibilityValue("\(Int((progress * 100).rounded()))%")
+            .accessibilityValue(LocalizedNumber.percent(Int((progress * 100).rounded())))
     }
 
     private var track: some View {
@@ -1793,7 +1792,13 @@ private struct ReelImageView: View {
         // announcing each anonymous circle.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "reels.carousel.image", defaultValue: "Image", bundle: .main))
-        .accessibilityValue("\((images.firstIndex { $0.id == currentImageId } ?? 0) + 1) / \(images.count)")
+        // Le séparateur « / » reste : sa forme EST la donnée (« 3 / 10 » se lit
+        // comme une seule position), et 239i l'a explicitement distingué de la
+        // puce de mise en page qu'elle bannissait. Seuls les CHIFFRES changent.
+        .accessibilityValue(
+            LocalizedNumber.exact((images.firstIndex { $0.id == currentImageId } ?? 0) + 1)
+            + " / " + LocalizedNumber.exact(images.count)
+        )
     }
 }
 

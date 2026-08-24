@@ -5,6 +5,96 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-24 — a broadcast fold of a WHOLE entity must preserve the reader's OWN per-viewer fields (slice `feed-post-updated-realtime-merge`)
+`post:updated` rebroadcasts the COMPLETE edited post `{ post }` to every feed/post room — ONE object, shared
+by all recipients, so it cannot be personalized. Its viewer-owned fields (`isLikedByMe`, `isBookmarkedByMe`,
+`isViewedByMe`, `currentUserReactions`) are therefore the broadcaster's/default view, NOT the reader's.
+Folding it in wholesale would silently un-like/un-bookmark/un-view the card on any unrelated edit. The pure
+`PostUpdateMerge.merge(previous, updated)` adopts every AUTHORITATIVE field from the edit while carrying those
+four personal fields across from the cached copy. **iOS preserves only `isLiked`; Android preserves all four
+its model exposes — do-better parity, not a copy.** The witness that catches a regression here is NOT "content
+updated" (that passes even with zero preservation) but "the reader's like survives an edit whose wire payload
+says un-liked" — RED-proof: dropping the preservation reddened exactly the 4 preservation/inert-discrimination
+tests, the 2 content-only tests stayed green. General rule for ANY realtime fold of a broadcast entity: **list
+the per-viewer fields the wire cannot personalize, and preserve every one — the diff a content-only test can't
+see.** No-op guard: `merge` returns `null` when the result equals `previous` (re-broadcast / nothing visible
+changed), so `_feedCache` never re-emits for free.
+
+**SDK bootstrap this run: `dl.google.com` 200; pristine `android-37.0` auto-installed but the first `./gradlew`
+HASH-ERRORED on `android-37`.** The four-edit copy→patch (`source.properties` ApiLevel, `package.xml`
+`<api-level>` + `path=`, BOTH `build.prop` `ro.build.version.sdk_full` AND `ro.system.build.version.sdk_full`),
+keeping android-37.0 alongside, resolved it (NOTES "THIRD mode"). The recipe still flips per container — read
+the first `./gradlew` outcome, don't assume last run's branch.
+
+## 2026-08-24 — the caption sibling landed exactly where the last note predicted; reuse an existing model type as a socket-payload field (slice `post-translation-updated-realtime-merge`)
+The prior note ended "Caption has the same shape (`post:translation-updated`), a likely next Android viewer
+gap." It was — the scout confirmed iOS wires it (`FeedViewModel.applyPostTranslation`), the gateway broadcasts
+it, Android had no handler. Shipped as the POST caption sibling of the story overlay merge.
+
+Two reusable moves from this slice: **(a) when a socket payload's object field has the SAME shape as an
+existing `@Serializable` model, decode straight into that type — don't mint a bespoke payload struct.** The
+`post:translation-updated` `translation` object is `{text, translationModel?, confidenceScore?, createdAt?}`,
+byte-identical to `ApiPostTranslationEntry`, so `SocketPostTranslationUpdatedData.translation:
+ApiPostTranslationEntry`. Fewer types, and the merge takes the entry directly. **(b) A push-side merge must
+PRESERVE the metadata the pull-side string merge drops.** The existing `PostTranslationMerge.mergeTranslation(
+post, lang, text:String)` stored `ApiPostTranslationEntry(text=…)` only — fine for the on-demand pull (the
+translator returns a bare string), but the PUSH carries model/confidence. Added an entry overload; a
+metadata-only change is deliberately NOT a no-op (else richer server data silently vanishes). Test that with a
+"same text, different model → stored" case — it's the witness that the overload isn't just the string one.
+
+**No override forced on a realtime push** (same as the story slice, same as iOS): merging into `_feedCache` is
+enough; the projection's preferred-language chain surfaces it iff the language is in the reader's prisme. An
+override is for an EXPLICIT user tap (`requestOnDemandTranslation` sets it), never for a server push.
+
+**SDK bootstrap this run: `dl.google.com` 200; pristine `sdkmanager --channel=3 "platforms;android-37.0"`
+alone worked** (AGP 8.13.0 mapped compileSdk 37 → android-37.0 first `./gradlew`). "Try pristine first" held.
+
+## 2026-08-24 — a Prisme resolver lives SERVER-SIDE too: realtime pushed translations, not just on-demand pulls (slice `story-text-object-translation-realtime-merge`)
+When a §E "Next" pointer says "X translates only the caption on demand — scout iOS parity before building an
+N-call overlay pull", the scout's real question is **"where does the OTHER content get its translation from?"**
+For story text overlays the answer was NOT an on-demand pull at all: the **gateway** translates the overlay
+server-side and BROADCASTS it via `story:translation-updated` (`{postId, textObjectIndex, translations}`). iOS
+merges it into the open viewer; Android had no handler — a whole realtime Prisme channel on the floor. Lesson:
+before assuming a missing feature is an on-demand-pull gap, grep the gateway for a `*:translation-updated`
+broadcast for that content type — the pull may not exist because a PUSH already covers it. Caption has the
+same shape (`post:translation-updated`), a likely next Android viewer gap.
+
+Mechanics that recurred and are worth reusing verbatim: (a) a realtime merge into `rawItems` only repaints if
+`emit()` re-projects the current slide **unconditionally** — the viewer had gated re-projection behind an
+active exploration override, so a no-override realtime merge never reached the view; generalising it is safe
+because the override=null path reproduces `toSlideView`'s own resolver calls exactly. (b) Kotlin `copy` on the
+`StoryItem`/`StoryEffects`/`StoryTextObject` data classes makes the iOS "preserve every field" regression pin
+trivially true — no memberwise-init field-drop hazard to guard, though a field-preservation test is still cheap
+insurance. (c) RED-proof a multi-part slice PER PIECE: neuter the pure fn (`return item`) for the logic tests,
+comment the socket `listen` for the wiring tests, and revert ONLY the emit change to isolate that the chip test
+(reads `rawItems` directly) does NOT depend on it while the repaint test does.
+
+SDK bootstrap THIS run: `dl.google.com` **200**; `platforms;android-37` is not downloadable; `sdkmanager
+--channel=3 "platforms;android-37.0"` installed the preview and AGP mapped compileSdk 37 → android-37.0 on the
+first `./gradlew` — **pristine alone, no copy→patch, no both-dirs** (matches the 2026-08-23 entry below).
+
+## 2026-08-23 — this container: `dl.google.com` REACHABLE, pristine `android-37.0` alone worked (slice `story-media-fade-envelope`)
+Egress to `dl.google.com` returned **200** this run (unlike the containers the CI-reality note describes,
+where it's 403), so the local gate WAS available. Full bootstrap ran clean: `commandlinetools`, then
+`sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"`, then
+`sdkmanager --channel=3 "platforms;android-37.0"` for the preview compileSdk 37 — **pristine alone**, no
+copy→patch, no both-dirs mode. `./gradlew :feature:stories:help` resolved `android-37` on the first run;
+full `assembleDebug testDebugUnitTest` **BUILD SUCCESSFUL** (973 tasks, 4m11s). Confirms the "try pristine
+first" net rule. Practical timing on this image: config ~1m40s cold, targeted module test ~2m30s, full
+check ~4m10s — background the gradle invocations and wait on a `grep -qE 'BUILD (SUCCESSFUL|FAILED)'`
+until-loop; `--console=plain … | tail -N` buffers, so the output file stays empty until the run exits.
+
+## 2026-08-23 — opacity fold precedence for foreground clips is `fade ?? keyframeOpacity ?? base`, THEN × transition (NOT all-multiply)
+Porting `StoryRenderer.fadeOpacity`: iOS composes the media layer's opacity as
+`base = fade ?? kfOverrides.opacity ?? 1.0; layer.opacity = base × transitionFactor`
+(`StoryRenderer.swift:246-247`, comment "fade envelope (écrase) > opacité keyframes > 1"). So a live
+fadeIn/fadeOut envelope **overrides** an authored keyframe opacity — it does NOT multiply with it — and
+only the clip-transition factor multiplies. Android `StoryForegroundMediaView.animated()` mirrors this:
+`opacityBase = fadeEnvelope ?: base.opacity; opacity = opacityBase * transitionOpacity`. Easy to get wrong
+by multiplying all three; the mutation `fadeEnvelope ?: base.opacity → base.opacity` (drop the override)
+is the RED-proof for it. Same not-in-ItemSignature reasoning as the transition factor: the envelope is a
+per-tick post-pass, so on Android it belongs in the pure `animated()` fold, never baked into the projection.
+
 ## 2026-08-23 — SDK recipe THIRD mode: NEITHER dir alone works, BOTH `android-37` + `android-37.0` present does
 
 Slice `story-clip-transition-opacity`. On this image *both* single-dir recipes the earlier notes record
@@ -1716,3 +1806,99 @@ gateway serializes it — and Android is simply dropping it. That turns an "unve
 risk into a pure Android model+projection gap (add the `@Serializable` field, project it, render it), diff stays
 `apps/android`-only. Applied for `feed-repost-embed-mood-emoji` (iOS `PostModels.swift:87,281`). The mirror still
 open — `ApiRepostOf.location` — is confirmable the same way (`APIRepostOf.location: SharedPlace?` is on the wire).
+
+## 2026-08-24 — a viewer layer that ports iOS's canvas render should reuse the SAME two reader resolvers; only the transition arm differs (slice `story-text-object-viewer-projection`)
+Text objects and media clips share iOS's canvas render precedence `fade ?? keyframeOpacity ?? base`, so the
+Android `StoryTextObjectView.animated()` is `StoryForegroundMediaView.animated()` minus one arm: text objects
+never join a `StoryClipTransition`, so there is no transition ramp to fold and no `duration==0` degenerate-window
+guard to carry — the whole `clipTransitions`/`transitionOpacity` block simply drops out. Reusing `StoryKeyframeResolver`
++ `StoryMediaFadeResolver` verbatim meant the pure core was two small files and the mutation proof reused the same
+"drop the fade override" trick. Lesson: when a second canvas layer arrives, diff its iOS render against the layer
+already ported and port only the *delta* — don't re-derive keyframe/fade math that a shared resolver already owns.
+
+Prisme for a `Map<String,String>` translations field (text objects) is NOT the list-based `LanguageResolver.preferredTranslation`
+(that keys on `TranslationLike.targetLanguage`). iOS `StoryTextObject.resolvedText` walks preferred languages and, per
+language, tries an exact map key then a normalized-key match. Port `base(code)` as `LanguageCodeNormalizer.normalize(code)
+?: code.split('-','_').first().lowercase()` (the shared normalizer IS the Android mirror of `MeeshyUser.normalizeLanguageCode`),
+and apply it to BOTH the preferred code and the map key so `"fr-FR"`/`"FR"`/`"fra"` collapse onto `"fr"`. Exact-key-before-normalized
+preserves a `"pt-BR"` override over its `"pt"` sibling.
+
+## 2026-08-24 — SDK recipe flipped AGAIN: pristine `android-37.0` hash-errored, copy→patch `android-37` + keep-both worked (slice `story-text-object-exploration-override`)
+`dl.google.com` **200** again this run, so the local gate was available. But the cheapest path (pristine
+`android-37.0` alone) HASH-ERRORED here: `sdkmanager "platforms;android-35" "build-tools;35.0.0"
+"platform-tools"` installed fine, then `:feature:stories:testDebugUnitTest` died `Failed to find target
+with hash string 'android-37'` (AGP even re-materialised `android-37.0` on that first run, then still
+failed). The four-edit copy→patch fixed it: `cp -r android-37.0 android-37`, then patch
+`source.properties` `AndroidVersion.ApiLevel=37`, `package.xml` `<api-level>37</api-level>` + `path=
+"platforms;android-37"`, `build.prop` both `ro.build.version.sdk_full=37` and
+`ro.system.build.version.sdk_full=37`; KEEP the pristine `android-37.0` alongside the patched `android-37`
+(both dirs present). `./gradlew --stop` then re-run → BUILD SUCCESSFUL (973 tasks). Net: the "recipe is
+image-dependent and flips between runs" rule holds — try pristine first (cost one failed run here), fall
+back to copy→patch+keep-both when it hash-errors.
+
+## 2026-08-24 — the exploration override is a PREPEND, not a new resolver (slice `story-text-object-exploration-override`)
+When a reader-side view already resolves content through an ordered preferred-language chain, the ephemeral
+"Exploration" language pick is NOT a separate code path — it is the chain with the override prepended
+(`listOf(override) + preferredLanguages`). This mirrors `StoryContentResolver`'s documented contract
+("tried FIRST, without removing the preference chain") and gives the override, for free, whatever matching
+the base resolver already does (here the text-object resolver's exact-then-normalized per-language walk),
+plus automatic fall-through to normal Prisme resolution when the override has no matching translation. Keep
+the empty-guard on the EFFECTIVE list (`languages.isEmpty()`), not `preferredLanguages.isEmpty()`, so an
+override still resolves for a reader with no configured chain (e.g. anonymous). A blank/null override must
+be inert. Wire it by threading an optional `overrideLanguage` param (default `null`) so 2-arg call sites
+stay byte-identical, and re-project from the RAW item in `emit()`'s override branch — the projected view
+was built once with default prefs.
+
+## 2026-08-24 — a Prisme gap can live one rung EARLIER than the resolver: the OFFER surface (slice `story-language-bar-text-object-translations`)
+
+Cycles 118-120 (and the two prior Android story slices) all fixed *resolvers* — the code that RENDERS
+content in the reader's language. This slice's gap was upstream of any resolver: the story language bar
+(`StoryViewerViewModel.availableLanguagesFor`) derived its "present" chips from the CAPTION
+(`item.translations`) alone, so an overlay translation the caption lacked was fully resolvable
+(`StoryTextObjectProjection` already honoured the override, wired the prior slice) but **the strip never
+offered a chip to trigger it**. The rendering was correct; the *affordance to reach it* was missing.
+Net rule: when a §Cohérence "Prisme applies to ALL content" audit turns up a resolver family, also ask
+**"what OFFERS the languages, and does the offer enumerate the same content set the resolver can render?"**
+A resolver that can render N languages behind a strip that only lists M<N of them is a silent gap — the
+missing languages look like "not translated" when they are translated-but-unoffered. Fix: union caption +
+`storyEffects.textObjects[].translations` keys (blank-filtered, case-insensitive dedup), caption-first.
+
+## 2026-08-24 — SDK recipe: pristine `android-37.0` auto-installed by gradle STILL hash-errors; four-edit copy→patch + keep-both worked again (same slice)
+
+Confirms the immediately-prior slice on this image family. First `./gradlew` (after only `platforms;android-35`)
+died `Failed to find target with hash string 'android-37'` and gradle auto-installed pristine `android-37.0`
+(channel 3) on the way — which by itself still hash-errored. The fix that worked: `cp -r android-37.0 android-37`
+then patch all four (`source.properties` ApiLevel=37, `package.xml` `<api-level>`, `package.xml` `path=`,
+`build.prop` `ro.build.version.sdk_full=37`), keep BOTH dirs. Green on the next run. Try the copy→patch first
+on this image family rather than betting on pristine.
+
+## 2026-08-24 — `main` was RED before the slice; the bootstrap check is what caught it, and the fix came first (slice `comment-updated-realtime-merge`)
+
+`meeshy.sh check` on a fresh branch off `origin/main` failed to compile `:feature:chat` —
+`ConversationMembersViewModel` passed `event.userId: String?` into `MemberRoster.withoutUser(String)`.
+Root cause: `bb99e9bd` made `ParticipantLeftEvent`/`ParticipantBannedEvent.userId` nullable but never
+updated the one consumer. `actions_list(android.yml, branch=main)` confirmed **Android CI red on main
+since `11f0c31e`** (last green `fb7afd47`). Because `assembleDebug` compiles ALL modules, no android PR —
+including this routine's — could go green until fixed.
+
+Three lessons:
+- **The local `check` is a main-health probe, not just a slice probe.** A red compile in a module you never
+  touched means `main` is broken; verify against `origin/main` CI (`actions_list`) rather than assuming your
+  diff caused it, then fix it FIRST — a red main blocks every merge.
+- **Fix it as a dedicated hotfix PR, not folded into the feature slice.** Kept `comment-updated` clean:
+  hotfix = `fix-members-nullable-participant` (#3479), merged before the feature. Verify the feature locally
+  by merging the hotfix branch in temporarily, then reset the feature branch to comment-only and rebase after
+  the hotfix lands.
+- **The right fix often COMPLETES the intent of the change that broke compilation.** `bb99e9bd`'s title was
+  "un visiteur sans compte expulsable"; making `userId` nullable was step one, and the missing step was for
+  the VM to remove by `userId ?: participantId`. So the compile fix and the product intent were the same edit.
+
+## 2026-08-24 — before taking a "Next" pointer, scout that its render surface EXISTS (media field killed `comment:media-updated`)
+
+The Next pointer named `comment:media-updated` as the thin fold. A read-only scout killed it: Android's
+`ApiPostComment` has **no `media` field** (iOS's `APIPostComment` does), and no comment-audio render surface
+exists — wiring the event would store media nothing reads and render nothing, i.e. orphan/dead-end code the
+routine forbids. Rule: a realtime-fold slice is only thin when the merged data already has a place to live AND
+a surface that displays it. When it doesn't, the fold is blocked on a UI slice (here: add `ApiPostComment.media`
++ a comment audio player), and the cheaper sibling is the next in the same family — `comment:updated` (a full
+in-place row replace, no new model field, existing thread host).

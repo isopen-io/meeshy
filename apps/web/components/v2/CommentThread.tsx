@@ -13,6 +13,9 @@ export interface CommentThreadProps {
   replies: PostComment[];
   currentUserId?: string | null;
   userLanguage?: string;
+  /** Prisme ORDONNÉ du lecteur (rangs 1→4 + fallback), descendu par chaque
+   *  réponse. Cf. `CommentItemProps.preferredLanguages`. */
+  preferredLanguages?: string[];
   likedCommentIds?: Set<string>;
   isLoading?: boolean;
   hasMore?: boolean;
@@ -37,6 +40,7 @@ function CommentThread({
   replies,
   currentUserId,
   userLanguage,
+  preferredLanguages,
   likedCommentIds = new Set(),
   isLoading = false,
   hasMore = false,
@@ -105,6 +109,7 @@ function CommentThread({
           key={reply.id}
           comment={reply}
           userLanguage={userLanguage}
+          preferredLanguages={preferredLanguages}
           isAuthor={currentUserId === reply.authorId}
           isLiked={likedCommentIds.has(reply.id) || isHeartLikedByMe(reply)}
           onLike={onLikeComment}

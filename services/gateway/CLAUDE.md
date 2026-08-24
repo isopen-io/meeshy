@@ -372,6 +372,38 @@ Errors under `error: { code, message }`, NOT `error: "string"`.
 ALWAYS use `resolveUserLanguage()` from `@meeshy/shared` for language resolution.
 NEVER reimplement the priority order locally.
 
+**Et dans le gateway, passer par `utils/recipient-language.ts`** — jamais
+`resolveUserLanguage` à cru. La descente exige DEUX choses, et rien d'autre ne les
+tient ensemble : la forme du `select` (`RECIPIENT_LANG_SELECT` — les quatre
+colonnes) et l'option `deviceLocale`. Dix-sept sites en avaient sauté au moins une
+au cycle 124.
+
+| besoin | appeler |
+|---|---|
+| langue de **CADRAGE** (l'interface : sujet d'e-mail, titre de notification) | `recipientLanguage(user, fallback)` |
+| liste ordonnée où un **CONTENU** se résout | `recipientLanguages(user)` |
+| étiquette pour `Intl` / `toLocaleString` | `recipientDateLocale(user, fallback)` |
+
+Trois pièges, tous mesurés :
+
+- **Le `select` est le seul des trois qu'aucun témoin de rang ne peut voir.** Un
+  mock Prisma rend ce qu'on lui dit quel que soit le `select` : un témoin de rang
+  passe au VERT sur un site dont la requête ne ramène pas les colonnes du Prisme,
+  et la descente est morte en production. Un témoin de projection assert donc sur
+  la REQUÊTE, pas sur le rendu.
+- **Un témoin de RANG s'écrit sur un rang AUTRE que le premier.** Au rang 1,
+  `user.systemLanguage || 'xx'` et la descente rendent le même verdict — un témoin
+  posé là ne peut pas tomber. Cinq témoins du dépôt étaient dans ce cas, dont un
+  dont le commentaire AFFIRMAIT que le site appelait `resolveUserLanguage`.
+- **Une langue résolue ne suffit pas si la DATE qui l'accompagne ne l'est pas.**
+  `systemLanguage === 'en' ? 'en-US' : 'fr-FR'` et `toLocaleDateString('fr-FR')`
+  vivaient à côté de titres correctement localisés.
+
+Le **repli terminal est un PARAMÈTRE**, pas un défaut partagé : `resolveUserLanguage`
+retombe sur `'fr'`, plusieurs sites sur `'en'`. Le garder au site rend visible la
+question produit — « quelle langue pour un compte sans AUCUNE préférence ? » — sans
+la mêler à un correctif de Prisme.
+
 ## Toute porte qui sort un profil de TIERS filtre sa présence
 
 `select: { isOnline: true, lastActiveAt: true }` sur quelqu'un d'AUTRE que
@@ -639,6 +671,86 @@ Corollaire quand on reprend le correctif d'une jumelle : **on le prend en
 entier.** Passer d'`updateMany` à `upsert` EXIGE le filtre d'appartenance —
 `updateMany` empêchait par accident qu'un appelant fabrique des lignes contre
 des ids arbitraires, l'upsert seul retire cette protection.
+
+### La forme OUTILLÉE de la question : compter les appelants du helper
+
+Quand la règle qu'on vient de corriger vit dans un helper, la jumelle se
+cherche par une commande, pas par intuition — **combien de sites de PRODUCTION
+appellent ce helper ?** Un helper à un appelant ne garde pas une règle : il
+documente qu'un site l'applique.
+
+Mesuré au cycle 123 bis : `protectedPreview()` — le masque qui empêche le texte
+d'un message éphémère / à vue unique / flouté / chiffré d'atteindre un écran
+verrouillé — n'avait **qu'un seul appelant de production**
+(`messageNotificationFanOut.ts`). Trois autres sites copiaient le texte sans
+masque, dont deux vers des TIERS :
+
+| site | destinataires | ce qui partait |
+|---|---|---|
+| `createReactionNotification` | l'AUTEUR | 100 car. de `Message.content` (les drapeaux n'étaient pas même `select`és) |
+| `notifyNewlyMentioned` (édition) | les ENTRANTS | le contenu ÉDITÉ brut, sans base de Prisme |
+| `reproduceEditedMessageNotifications` | tous les déjà-notifiés | le placeholder REMPLACÉ par le vrai texte, puis réannoncé |
+
+**Deux des trois sont sur le chemin d'ÉDITION, et ce n'est pas un hasard.** Un
+message protégé est masqué à l'ENVOI, une fois, par l'unité qui le sait ;
+l'édition rejoue la même question dans des unités écrites pour un autre
+problème (réconcilier des mentions, rafraîchir une copie dénormalisée). D'où la
+règle générale : **quand une règle s'applique à une DONNÉE, énumérer ce qui la
+PRODUIT ne suffit pas — il faut énumérer ce qui la RÉÉCRIT.** Une copie
+dénormalisée a deux moments, et le second est écrit par quelqu'un qui pense
+mettre à jour un texte, pas publier un secret.
+
+Et rien n'interdit d'éditer un message protégé (mesuré : `messageEditAdmission`
+et `messageEditContent` ne portent aucune occurrence de `isViewOnce`,
+`isBlurred`, `effectFlags` ni `expiresAt`).
+
+### Une garde de confidentialité se relit CHEZ ELLE, pas dans ses paramètres
+
+Les deux correctifs d'édition relisent les drapeaux depuis la base plutôt que de
+les recevoir de l'appelant. **Un paramètre dont l'absence désactive une garde
+est un demi-correctif** — et les quatre transports d'édition construisent chacun
+leur propre enregistrement, dont aucun ne porte ces drapeaux. Même arbitrage
+pour l'échec : les deux relectures sont fail-CLOSED (une lecture qui ne conclut
+pas répond « protégé »), à l'inverse du best-effort qui gouverne le reste de ces
+unités. Une notification appauvrie se rattrape ; un secret poussé, non.
+
+### La jumelle d'une garde peut être un MÉDIUM, pas une entité (cycle 125)
+
+Les formes ci-dessus cherchent la jumelle dans une autre table, un autre site,
+un autre moment. Il en existe une quatrième, et elle est la plus proche : **le
+même site, la même charge, un autre médium.**
+
+Quatre cycles de gardes se sont posées sur ce chemin — `protectedPreview`,
+`previewPrismSource`, `prePersistedMessageFields`, le verrou du cycle 124.
+Toutes justes, toutes testées. **Toutes gardent une chaîne de caractères.**
+Douze lignes sous la dernière, dans le même objet littéral, `firstAttachmentUrl:
+first?.fileUrl` partait sans aucune condition — et la NSE iOS télécharge cette
+URL puis l'attache en `UNNotificationAttachment` sans regarder
+`notificationLocKey`. Une photo à VUE UNIQUE s'affichait ENTIÈRE sur l'écran
+verrouillé sous une bannière disant « 👁️ 🖼️ ».
+
+> **Une protection de CONTENU se mesure sur tout ce que la charge TRANSPORTE,
+> jamais sur sa seule chaîne** — texte, fichier, nom de fichier, taille, durée,
+> vignette, URL. La question se pose AU MOMENT du correctif : « la charge que ce
+> site remet contient-elle autre chose que ce que je viens de garder ? », et
+> elle se répond en lisant l'objet remis LIGNE À LIGNE, sans lire le code qui le
+> construit — c'est le niveau d'abstraction du correctif qui rend l'objet voisin
+> invisible, parce qu'il ne compose aucune chaîne.
+
+Deux corollaires, mesurés dans le même lot :
+
+- **Un champ de protection présent au modèle et absent de toute requête est un
+  piège armé.** `MessageAttachment` déclare `isViewOnce`, `isBlurred` et
+  `effectFlags` ; le `select` de l'éventail n'en lisait aucun. Aucun chemin de
+  création ne les écrit *aujourd'hui* — le jour où une ligne les pose, dans un
+  lot qui parlera d'autre chose, la protection sera tenue pour acquise par tous
+  ceux qui lisent le schéma. Les respecter coûte trois champs dans un `select`.
+- **Le second verrou se pose sur la clé qui DÉCLARE, pas sur celle qui décrit.**
+  `notificationLocKey` a un unique producteur (`protectedPreview`) : sa présence
+  n'est pas un indice, c'est une déclaration de protection qu'aucun appelant ne
+  pose par accident. `createNotification` s'en sert pour vider `attachmentUrl` —
+  un appelant qui masque le corps sans retirer son média perd le rich-push,
+  jamais le secret.
 
 ## Un témoin d'écriture assert sur l'EFFET, jamais sur le statut
 
@@ -1877,6 +1989,52 @@ du tout. Toute la suite `_drainPendingMessages` attestait un drain dont la
 requête d'appartenance aurait levé en production. Le correctif est un double qui
 REFUSE ce que le vrai client refuse (`strictMembership`), et des ids de fixture
 de la forme de production (`convId('kept')`).
+
+#### Gouverner ce que la file CONTIENT ne dit rien de la façon dont on l'ATTEINT
+
+Tout ce qui précède porte sur des entrées DÉJÀ ÉCRITES. L'écriture, elle, était
+sur les DEUX producteurs de `message:new` suspendue au succès de
+synchronisations que le code qualifie lui-même de non-bloquantes (cycle 116) :
+
+- **REST/ZMQ** — l'enfilage était la DERNIÈRE instruction du `try` `[CONV_SYNC]`,
+  dont tout le reste est cosmétique (`conversation:updated` par destinataire,
+  badges non-lus) et dont le `catch` journalise « non-bloquant ». Or
+  `io.to(room).emit(...)` LÈVE quand l'adaptateur ou l'encodeur est en défaut
+  (le dépôt l'écrit lui-même dans `emitWithSeq`) : une seule levée dans la
+  boucle par destinataire annulait le rejeu pour TOUS les absents.
+- **WS** — la requête participants avait son `try` dédié, mais retombait sur
+  `[]`. `enqueueForOfflineParticipants` lit `params.participants ?? sa propre
+  requête` : `[]` n'est pas nullish, donc l'unité partagée recevait
+  l'AFFIRMATION « aucun participant » et n'enfilait pour personne. La requête
+  qui tombe est le SUPERSET (Prisme + `joinedAt`) dont seule la cosmétique a
+  besoin ; la file, elle, ne demande que `{id, userId}`.
+
+Trois règles, et la première est la générale :
+
+> **Pour toute garantie DURABLE, la question n'est pas seulement « ce qu'elle
+> stocke est-il correct ? » mais « de quoi son EXÉCUTION dépend-elle, et ces
+> dépendances ont-elles le droit d'échouer ? »** Ici les deux dépendances
+> avaient ce droit, écrit et journalisé ; la garantie ne l'avait pas.
+
+> **`[]` par défaut décide à la place du consommateur.** Il rend le code d'après
+> plus court (`.map`, `.length` sans garde) et transforme une IGNORANCE en
+> AFFIRMATION. Rendre `undefined` est ce qui laisse chaque consommateur choisir
+> — c'est la même distinction que `bridgeComputed(undefined)` /
+> `bridgeNotComputed()`, un étage plus bas.
+
+> **Une étiquette de `catch` ne qualifie que ce que son auteur avait en tête.**
+> « non-bloquant » était vrai des deux premières instructions du `try` et faux
+> de la troisième. Une portée grandit toute seule à chaque instruction ajoutée
+> au bloc, et c'est l'étiquette qu'on relit, pas le bloc.
+
+L'ordre juste est donc, sur les deux producteurs : charger la liste → **enfiler
+(durable)** → diffuser la cosmétique. C'est la règle que `_emitPresenceSnapshot`
+applique déjà en plaçant le drain HORS de son `try` ; elle n'avait jamais été
+portée aux chemins d'ENVOI. Gardée par
+`socketio/__tests__/message-new-producer-parity.test.ts` (§ « la file hors ligne
+ne dépend pas de la synchro de liste »), qui fait lever `emit` PAR NOM
+d'événement — un double qui lève sur tout ne prouverait que la survie à un
+harnais mort.
 
 ### Une clé venue d'un SPREAD est invisible au contrôle des propriétés excédentaires
 

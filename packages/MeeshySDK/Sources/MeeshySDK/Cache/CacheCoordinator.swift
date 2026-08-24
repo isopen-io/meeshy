@@ -312,7 +312,7 @@ public actor CacheCoordinator {
         // task. Le corps est sans await : une fois planifié sur l'actor il
         // s'exécute d'un bloc, et un lecteur arrivé avant retombe sur les
         // traductions du payload REST puis la demande à la volée.
-        translationHydrationTask = Task { await self.hydrateTranslationCachesFromDisk() }
+        translationHydrationTask = Task { self.hydrateTranslationCachesFromDisk() }
         subscribeToLifecycle()
         subscribeToPostEngagement()
         Task { await self.backfillSearchIndexIfNeeded() }

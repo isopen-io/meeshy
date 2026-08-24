@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useCallStore } from '@/stores/call-store';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type { CallInitiatedEvent, CallParticipantJoinedEvent } from '@meeshy/shared/types/video-call';
+import type { CallInitiatedEvent, CallParticipantJoinedEvent, CallJoinAck } from '@meeshy/shared/types/video-call';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -40,7 +40,7 @@ export default function CallPage({ params }: CallPageProps) {
     if (!user) {
       logger.warn('[CallPage]', 'User not authenticated, redirecting to login');
       toast.error('Please sign in to join the call');
-      router.push(`/login?redirect=/call/${callId}`);
+      router.push(`/login?returnUrl=${encodeURIComponent(`/call/${callId}`)}`);
       return;
     }
 
@@ -112,18 +112,37 @@ export default function CallPage({ params }: CallPageProps) {
     socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
     socket.on(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
 
-    // Emit join event. Apply the server-provided ICE servers (STUN +
-    // time-limited TURN) returned in the ack so the RTCPeerConnection is
-    // built with TURN credentials instead of falling back to STUN-only.
+    // Emit join event. The ack is this page's ONLY completion signal for
+    // THIS user's own join — `CALL_PARTICIPANT_JOINED` is a broadcast the
+    // gateway deliberately never sends back to the socket that just joined
+    // (CallEventsHandler.ts: `if (remoteSocket.id === socket.id) continue;`
+    // in its call:join handler) — it exists to tell OTHER participants
+    // someone new arrived, not to confirm this join. Relying on it here
+    // meant a user landing directly on an already-active call (bookmarked
+    // link, shared URL) always hit the 10s timeout and a spurious "Call
+    // Error" screen even though the join had already succeeded server-side.
+    // `handleParticipantJoined`/`handleCallInitiated` above stay registered
+    // for later participants; they're just no longer this page's own
+    // completion path. Mirrors `acceptOrJoinCall` in CallManager.tsx, which
+    // already treats its own call:join ack as authoritative.
     socket.emit(CLIENT_EVENTS.CALL_JOIN, {
       callId,
       settings: {
         audioEnabled: true,
         videoEnabled: true,
       },
-    }, (ack: { success?: boolean; data?: { iceServers?: RTCIceServer[] } }) => {
-      if (ack?.success && ack.data?.iceServers?.length) {
-        setIceServers(ack.data.iceServers);
+    }, (ack: CallJoinAck) => {
+      clearTimeout(timeout);
+      if (ack?.success && ack.data?.callSession) {
+        if (ack.data.iceServers?.length) {
+          setIceServers(ack.data.iceServers);
+        }
+        setCurrentCall(ack.data.callSession);
+        setInCall(true);
+        setIsJoining(false);
+      } else {
+        setError(ack?.error?.message || 'Failed to join call. The call may not exist or has ended.');
+        setIsJoining(false);
       }
     });
 

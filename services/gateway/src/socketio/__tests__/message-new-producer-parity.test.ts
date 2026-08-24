@@ -793,3 +793,207 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
     expect(contractKeepsIndexSignature()).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// La TROISIÈME porte de sortie du même message : la file hors ligne
+// ---------------------------------------------------------------------------
+
+/**
+ * `message:new` a trois portes de sortie, et une seule est DURABLE.
+ *
+ * Le salon de conversation ne sert que les sockets connectés ; les rooms
+ * personnelles ne servent que ce qui est connecté aussi. Un destinataire
+ * DÉCONNECTÉ n'apprend l'existence de ce message que par `RedisDeliveryQueue`,
+ * rejouée à sa reconnexion (`_drainPendingMessages`). Rien d'autre ne le
+ * rattrape : aucun client ne re-demande spontanément un message qu'il n'a
+ * jamais vu passer.
+ *
+ * Les témoins ci-dessous ne portent donc pas sur la FORME de ce qui est enfilé
+ * (le fichier au-dessus s'en charge pour la charge utile) mais sur une
+ * propriété de STRUCTURE des deux producteurs :
+ *
+ * > la garantie durable ne doit dépendre d'aucune des synchronisations
+ * > COSMÉTIQUES qui l'entourent — ni de leur succès, ni de leur liste.
+ *
+ * C'est la règle que le dépôt applique déjà à l'instantané de reconnexion
+ * (`_emitPresenceSnapshot` place le drain APRÈS son `try`, « pour qu'un accroc
+ * Mongo sur l'instantané (cosmétique) n'échoue jamais le rejeu (destructif) »,
+ * cf. `services/gateway/CLAUDE.md`). Les deux producteurs d'envoi la violaient
+ * en sens inverse, chacun à sa façon.
+ */
+describe('message:new — la file hors ligne ne dépend pas de la synchro de liste', () => {
+  let manager: any;
+  let messageHandler: any;
+  let prisma: ReturnType<typeof makePrisma>;
+  let ioState: ReturnType<typeof getIoState>;
+  let queue: { enqueue: jest.Mock };
+
+  /**
+   * Deux participants ACTIFS : l'expéditeur (exclu de la file — il a déjà son
+   * message) et un pair hors ligne (la carte `connectedUsers` du manager reste
+   * vide dans ce harnais, donc tout le monde est absent).
+   *
+   * La forme rendue est celle du SUPERSET que les deux producteurs demandent
+   * pour la ligne de liste ; `select` est inspecté pour que le témoin de panne
+   * puisse ne faire tomber QUE cette requête-là.
+   */
+  function seedParticipants(): void {
+    (prisma.participant.findMany as any).mockImplementation(async (args: any) => {
+      const wantsSuperset = Boolean(args?.select?.joinedAt);
+      return [
+        {
+          id: 'sender-participantId',
+          userId: 'sender-userId',
+          ...(wantsSuperset
+            ? {
+                joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+                user: { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+              }
+            : {}),
+        },
+        {
+          id: 'peer-participantId',
+          userId: 'peer-userId',
+          ...(wantsSuperset
+            ? {
+                joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+                user: { systemLanguage: 'en', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+              }
+            : {}),
+        },
+      ];
+    });
+  }
+
+  /** L'entrée réellement déposée pour ce destinataire, si elle existe. */
+  function queuedFor(queueKey: string): Record<string, unknown> | undefined {
+    const call = (queue.enqueue.mock.calls as any[]).find((c) => c[0] === queueKey);
+    return call?.[1] as Record<string, unknown> | undefined;
+  }
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    ioState = getIoState();
+    ioState.to.mockClear();
+    ioState.toEmit.mockClear();
+    // `jest.clearAllMocks()` efface les APPELS, jamais les IMPLÉMENTATIONS :
+    // sans cette ligne, un témoin qui fait lever `emit` le ferait lever pour
+    // tous les suivants.
+    ioState.toEmit.mockImplementation(() => undefined);
+    ioState.sockets.sockets.clear();
+    ioState.sockets.adapter.rooms.clear();
+
+    prisma = makePrisma();
+    manager = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);
+    await manager.initialize();
+    messageHandler = manager.messageHandler;
+
+    queue = { enqueue: jest.fn().mockResolvedValue(undefined) as jest.Mock };
+    manager.setDeliveryQueue(queue as any);
+
+    seedParticipants();
+  });
+
+  afterEach(() => {
+    ioState.toEmit.mockImplementation(() => undefined);
+  });
+
+  it("le producteur REST/ZMQ enfile même quand `conversation:updated` LÈVE", async () => {
+    // `io.to(room).emit(...)` lève quand l'adaptateur ou l'encodeur est en
+    // défaut — le dépôt le dit lui-même à l'endroit où il s'en garde
+    // (`emitWithSeq`). Ce n'est donc pas une panne hypothétique.
+    ioState.toEmit.mockImplementation((event: string) => {
+      if (event === SERVER_EVENTS.CONVERSATION_UPDATED) throw new Error('adapter down');
+      return undefined;
+    });
+
+    await manager.broadcastMessage(makeContractMessage() as any, CONVERSATION_ID);
+
+    // Le re-tri de la liste est perdu — c'est cosmétique, le client le retrouve
+    // au prochain chargement. Le message, lui, n'a pas d'autre voie.
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
+  });
+
+  it('le producteur WS enfile même quand `conversation:updated` LÈVE', async () => {
+    ioState.toEmit.mockImplementation((event: string) => {
+      if (event === SERVER_EVENTS.CONVERSATION_UPDATED) throw new Error('adapter down');
+      return undefined;
+    });
+
+    await messageHandler.broadcastNewMessage(makeContractMessage() as any, CONVERSATION_ID);
+
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
+  });
+
+  it("le producteur REST/ZMQ enfile même quand la requête SUPERSET tombe", async () => {
+    // La requête qui échoue est celle du PRISME de la ligne de liste
+    // (`user` + `joinedAt`) ; la file, elle, n'a besoin que de `{id, userId}`
+    // et sait la faire elle-même. Faire dépendre la seconde de la première,
+    // c'est perdre le message pour une préférence de langue illisible.
+    (prisma.participant.findMany as any).mockImplementation(async (args: any) => {
+      if (args?.select?.joinedAt) throw new Error('superset select unavailable');
+      return [
+        { id: 'sender-participantId', userId: 'sender-userId' },
+        { id: 'peer-participantId', userId: 'peer-userId' },
+      ];
+    });
+
+    await manager.broadcastMessage(makeContractMessage() as any, CONVERSATION_ID);
+
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
+  });
+
+  it('le producteur WS enfile même quand la requête SUPERSET tombe', async () => {
+    (prisma.participant.findMany as any).mockImplementation(async (args: any) => {
+      if (args?.select?.joinedAt) throw new Error('superset select unavailable');
+      return [
+        { id: 'sender-participantId', userId: 'sender-userId' },
+        { id: 'peer-participantId', userId: 'peer-userId' },
+      ];
+    });
+
+    await messageHandler.broadcastNewMessage(makeContractMessage() as any, CONVERSATION_ID);
+
+    expect(queuedFor('peer-userId')).toEqual(
+      expect.objectContaining({ messageId: 'msg-123456789012' })
+    );
+  });
+
+  it("aucun producteur n'enfile pour l'EXPÉDITEUR", async () => {
+    await manager.broadcastMessage(makeContractMessage() as any, CONVERSATION_ID);
+    expect(queuedFor('sender-userId')).toBeUndefined();
+
+    queue.enqueue.mockClear();
+    await messageHandler.broadcastNewMessage(makeContractMessage() as any, CONVERSATION_ID);
+    expect(queuedFor('sender-userId')).toBeUndefined();
+  });
+
+  it('les DEUX producteurs enfilent la MÊME entrée de file', async () => {
+    // Parité sur les champs que le DRAIN lit — le nom rejoué (`eventType`),
+    // l'identité de dédup (`messageId` / `dedupKey`) et l'adresse
+    // (`conversationId`). La charge utile est gardée par les témoins de
+    // parité au-dessus ; ici c'est le contrat de la FILE qui est en jeu.
+    const contractOf = (entry: Record<string, unknown> | undefined) => ({
+      messageId: entry?.messageId,
+      conversationId: entry?.conversationId,
+      eventType: entry?.eventType,
+      dedupKey: entry?.dedupKey,
+    });
+
+    await manager.broadcastMessage(makeContractMessage() as any, CONVERSATION_ID);
+    const rest = contractOf(queuedFor('peer-userId'));
+
+    queue.enqueue.mockClear();
+    await messageHandler.broadcastNewMessage(makeContractMessage() as any, CONVERSATION_ID);
+    const socket = contractOf(queuedFor('peer-userId'));
+
+    expect(rest).toEqual(socket);
+    expect(socket.eventType).toBe('new');
+  });
+});

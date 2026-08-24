@@ -106,6 +106,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationCategoryPicker
@@ -115,6 +116,7 @@ import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.currentUserRole
 import me.meeshy.sdk.model.isMeaningful
+import me.meeshy.sdk.model.resolvedLastMessagePreview
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.sdk.theme.accentColorPalette
 import me.meeshy.sdk.theme.displayTitle
@@ -675,6 +677,16 @@ private fun ConversationRowContent(
             showSender = conversation.type != "direct",
             labels = previewLabels,
             nowMillis = System.currentTimeMillis(),
+            // Prisme Linguistique on the row itself. The hard-press preview card two
+            // hundred lines below already resolved it per message from this very
+            // `currentUserPrefs`; the row behind it rendered the sender's language.
+            // `null` prefs (session not hydrated yet) ⇒ empty prism ⇒ the raw preview,
+            // which is exactly what the row showed before.
+            resolvedContent = conversation.resolvedLastMessagePreview(
+                currentUserPrefs
+                    ?.let(LanguageResolver::preferredContentLanguages)
+                    .orEmpty(),
+            ),
         ),
     )
     // Deterministic per-conversation palette — computed once so the avatar's primary fill

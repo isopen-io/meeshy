@@ -98,7 +98,7 @@
   /* ========== THREAD SECTION ========== */
 
   /* thread.row */
-  --lentille-thread-row-padding-vertical: 5px;
+  --lentille-thread-row-padding-vertical: 3px;
   --lentille-thread-row-padding-horizontal: 16px;
 
   /* thread.avatar */

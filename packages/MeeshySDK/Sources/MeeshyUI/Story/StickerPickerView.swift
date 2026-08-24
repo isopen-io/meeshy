@@ -1,17 +1,31 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import MeeshySDK
 
 // MARK: - Sticker Picker View
 
 public struct StickerPickerView: View {
     public var onStickerSelected: (String) -> Void
+    /// Ce que fait un tap sur une vignette de « Mes stickers ». Requis, sans
+    /// défaut : une bibliothèque peinte dont les vignettes ne mènent nulle part
+    /// est une affordance inerte (loi 4). La section reste, elle, gouvernée par
+    /// la seule présence du magasin (`\.storyStickerLibrary`).
+    public var onLibraryStickerSelected: (StoryStickerLibraryItem) -> Void
 
     @State private var selectedCategory: StickerCategory = .smileys
     @State private var searchText = ""
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(onStickerSelected: @escaping (String) -> Void) {
+    /// V3-5 — « Mes stickers ». `nil` tant que l'app n'a pas injecté
+    /// `.storyStickerLibraryProvided()` : la section entière est alors ABSENTE
+    /// (loi 4), jamais un rail grisé sans magasin derrière.
+    @Environment(\.storyStickerLibrary) private var stickerLibrary
+    @State private var libraryItems: [StoryStickerLibraryItem] = []
+
+    public init(onStickerSelected: @escaping (String) -> Void,
+                onLibraryStickerSelected: @escaping (StoryStickerLibraryItem) -> Void) {
         self.onStickerSelected = onStickerSelected
+        self.onLibraryStickerSelected = onLibraryStickerSelected
     }
 
     private var filteredEmojis: [String] {
@@ -30,11 +44,82 @@ public struct StickerPickerView: View {
                 .padding(.bottom, 8)
             categoryTabs
             emojiGrid
+            if stickerLibrary != nil {
+                myStickersSection
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+            }
         }
         .padding(16)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal, 16)
+        // L'identité (`nil` ou non) ne change pas après le montage — seul le
+        // PREMIER rendu doit charger les récents ; les pastes suivants mettent
+        // `libraryItems` à jour directement depuis leur propre résultat.
+        .task(id: stickerLibrary == nil) {
+            guard let stickerLibrary else { return }
+            libraryItems = await stickerLibrary.recents()
+        }
+    }
+
+    // MARK: - « Mes stickers » (V3-5)
+
+    /// Le déclencheur naturel de C8 : coller une image PENDANT que ce panneau
+    /// est ouvert la retient, plutôt que de laisser 126 lignes de magasin sans
+    /// aucun appelant. Depuis S1, `StorySticker` porte une image intégrée
+    /// (`postMediaId`) : taper une vignette la POSE sur le canevas, la
+    /// bibliothèque n'est plus une collection sans sortie.
+    private var myStickersSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(String(localized: "story.sticker.library.title", defaultValue: "Mes stickers", bundle: .module))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.85) : MeeshyColors.indigo950.opacity(0.85))
+                Spacer()
+                if let stickerLibrary {
+                    PasteButton(supportedContentTypes: StoryComposerView.pasteStarterContentTypes) { providers in
+                        Task { libraryItems = await stickerLibrary.paste(providers) }
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonBorderShape(.capsule)
+                    .frame(minHeight: 32)
+                }
+            }
+            if libraryItems.isEmpty {
+                Text(String(
+                    localized: "story.sticker.library.empty",
+                    defaultValue: "Collez une image pour commencer votre bibliothèque",
+                    bundle: .module
+                ))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(libraryItems) { item in
+                            Button {
+                                onLibraryStickerSelected(item)
+                                HapticFeedback.medium()
+                            } label: {
+                                Image(uiImage: item.thumbnail)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 52, height: 52)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                            .buttonStyle(.plain)  // cf. note des onglets
+                            .accessibilityLabel(String(
+                                localized: "story.sticker.library.a11y",
+                                defaultValue: "Autocollant de votre bibliothèque",
+                                bundle: .module
+                            ))
+                        }
+                    }
+                }
+                .frame(height: 52)
+            }
+        }
     }
 
     // MARK: - Panel Header
@@ -101,7 +186,11 @@ public struct StickerPickerView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
-        .frame(maxHeight: 260)
+        // Cède de la place à la section « Mes stickers » quand elle est
+        // rendue — sans quoi les deux réclament leur plein espace sur une
+        // sheet en `.medium` (hauteur fixe, pas de detent `.large` de repli)
+        // et la seconde déborderait sur les petits écrans.
+        .frame(maxHeight: stickerLibrary == nil ? 260 : 200)
     }
 }
 

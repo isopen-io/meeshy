@@ -1795,6 +1795,19 @@ final class CallManager: ObservableObject {
         applyNegotiationRole()
         configureAudioSession()
         startReliabilityMonitor()
+        // Audit fix (calling-stack audit 2026-08-24) — arm the background
+        // observer HERE, at ring time, not only from transitionToConnected().
+        // promoteRingingCallToCallKitIfNeeded() is only ever invoked by the
+        // observer startBackgroundMonitoring() registers; gating that
+        // registration on the call already being connected made the whole
+        // promotion path permanently unreachable for the exact case it exists
+        // to cover — a call ringing in-app (CallKit skipped because the app
+        // was foreground) that backgrounds before being answered. Without a
+        // live observer, iOS can suspend the app mid-ring with no lock-screen
+        // call card, silently dropping the inbound call. Safe to call twice
+        // per call (once here, once at connect): startBackgroundMonitoring()
+        // starts with stopBackgroundMonitoring() to stay idempotent.
+        startBackgroundMonitoring()
 
         // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY so the caller receives
         // PARTICIPANT_JOINED while we initialize media in parallel. See
@@ -3554,6 +3567,12 @@ final class CallManager: ObservableObject {
                     self.callUsesCallKit = false
                     self.ringbackPlayer.shouldSelfActivateSession = true
                 } else {
+                    // CallKit now owns ringing (its own `config.ringtoneSound`,
+                    // same "Ringtone.caf" asset). Stop the in-app loop or it
+                    // plays doubled on top of CallKit's, and the self-activated
+                    // AVAudioSession it was holding (`shouldSelfActivateSession`,
+                    // just cleared above) risks blocking CallKit's `didActivate`.
+                    self.ringbackPlayer.stopRingtone()
                     Logger.calls.info("Promoted ringing call to CallKit on background entry")
                 }
             }
@@ -6270,12 +6289,20 @@ extension CallManager: VideoSurvivalActuating {
         // resume causes SDP glare. The survival controller will re-evaluate once
         // the call reaches .connected and stats start flowing again.
         if case .reconnecting = callState { return false }
-        // Do NOT resume video if an OS-level suspension is active: a CallKit hold
-        // (cellular pre-emption) or background entry both signal "no camera" to the
-        // peer. A network-quality recovery must not override either of those signals
-        // — the peer would see a false "camera active" even though iOS is either
-        // blocking camera access or has suspended capture for the held call.
-        if enabled && (isVideoSuspendedByHold || isVideoSuspendedByCaptureInterruption) { return false }
+        // Do NOT act — in EITHER direction — while an OS-level suspension is
+        // active: a CallKit hold (cellular pre-emption) or background/capture
+        // interruption both signal "no camera" to the peer, and `handleHold`
+        // already owns the media transition for that window. Resume must not
+        // override the signal (the peer would see a false "camera active"
+        // while iOS is still blocking camera access). Suspend is just as
+        // unsafe here: a redundant network-quality suspend firing mid-hold
+        // sets `isVideoSuspended = true`, and `handleHold(false)`'s restore
+        // guard trusts that flag as "the link is still genuinely degraded" —
+        // so it wrongly skips re-acquiring the camera on unhold even once the
+        // link has recovered, leaving video dark until the survival
+        // controller's own recovery timer independently fires (up to
+        // `videoSurvivalResumeAfterSeconds` later).
+        if isVideoSuspendedByHold || isVideoSuspendedByCaptureInterruption { return false }
 
         let previousToggle = videoToggleTask
         let previousHold = holdVideoTask
@@ -6302,7 +6329,10 @@ extension CallManager: VideoSurvivalActuating {
             // was queued behind a concurrent manual toggle or CallKit hold.
             guard self.isVideoEnabled, self.currentCallId == callId else { return false }
             if case .reconnecting = self.callState { return false }
-            if enabled && (self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption) { return false }
+            // Mirrors the pre-flight guard above — re-validated because state
+            // may have changed (e.g. a hold started) while this transition
+            // was queued behind a concurrent task.
+            if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption { return false }
             return await self.actuateSurvivalVideoSend(enabled: enabled, callId: callId)
         }
         survivalVideoTask = task

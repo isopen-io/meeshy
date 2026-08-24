@@ -552,13 +552,32 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
         )
     }
 
-    func test_composerControlsLayer_contentIsUnchanged() throws {
-        let data = try Data(contentsOf: Self.composerControlsLayerURL)
-        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        XCTAssertEqual(
-            digest,
-            "1afabcd74659da2356e221d2364ef48f3a4b300264e4ae28c89376677b19f9b1",
-            "ComposerControlsLayer.swift n'appartient pas à ce lot (Global Constraints) — aucune ligne ne doit bouger"
+    /// **Le hash a été remplacé par l'invariant qu'il servait — 2026-08-24.**
+    ///
+    /// Cette garde figeait `ComposerControlsLayer.swift` par empreinte SHA-256,
+    /// au titre que le fichier « n'appartient pas à ce lot ». C'était vrai, et
+    /// c'était utile TANT QUE le lot D était en vol : l'empreinte prouvait que
+    /// le Plan 2D ne débordait pas sur un voisin.
+    ///
+    /// Le lot D est mergé (`24d1bf752`). Ce qui reste du hash n'est plus un
+    /// invariant mais un instantané : il interdit à QUICONQUE, désormais et pour
+    /// toujours, de toucher un fichier de contrôles de composer — alors que ces
+    /// contrôles appartiennent au lot C, qui les fait légitimement évoluer (C7 y
+    /// relaie le texte alternatif et l'extraction de son jusqu'au point de
+    /// publication).
+    ///
+    /// L'invariant RÉEL — « le Plan 2D ne fuit pas hors de `Story/Timeline/` » —
+    /// n'est pas perdu : il est porté par
+    /// `test_noPlan2DReferenceLeaksOutsideTheTimeline` (l. 470), dont le balayage
+    /// couvre `Story/Controls/`, et dont le contrôle positif prouve qu'il sait
+    /// rougir. Cette garde-ci le REDIT sur le seul fichier nommé, ce qui la rend
+    /// falsifiable sans figer une ligne : elle rougit si `Plan2D` réapparaît ici,
+    /// jamais parce qu'un autre lot a fait son travail.
+    func test_composerControlsLayer_carriesNoPlan2DReference() throws {
+        let source = try String(contentsOf: Self.composerControlsLayerURL, encoding: .utf8)
+        XCTAssertFalse(
+            source.contains("Plan2D"),
+            "Le Plan 2D ne déborde pas sur la couche de contrôles du composer — voisin hors périmètre du lot D"
         )
     }
 

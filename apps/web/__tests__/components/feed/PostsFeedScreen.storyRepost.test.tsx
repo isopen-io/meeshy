@@ -100,12 +100,17 @@ jest.mock('@/services/report.service', () => ({
 // default story visibility is FRIENDS (`user-preferences-store.ts`), so the
 // "onRepost withheld" branch below covers the actual common case.
 const mockStoryVisibility = { current: 'PUBLIC' as 'PUBLIC' | 'FRIENDS' };
+// La story du tray peut ELLE-MÊME être un repost : c'est la seule forme qui
+// discrimine la loi de la référence, `repostTargetId` rendant l'id de la carte
+// sur une story plate.
+const mockStoryRepostOfId = { current: undefined as string | undefined };
 jest.mock('@/hooks/social/use-stories', () => ({
   useStoriesFeedQuery: () => ({
     data: [{
       id: 'story-1',
       authorId: 'author-2',
       type: 'STORY',
+      repostOfId: mockStoryRepostOfId.current,
       visibility: mockStoryVisibility.current,
       content: 'A story',
       likeCount: 0,
@@ -201,7 +206,7 @@ jest.mock('@/hooks/queries/use-comment-mutations', () => ({
 jest.mock('@/hooks/queries/use-post-socket-cache-sync', () => ({
   usePostSocketCacheSync: jest.fn(),
 }));
-jest.mock('@/hooks/use-post-translation', () => ({ usePreferredLanguage: () => 'fr' }));
+jest.mock('@/hooks/use-post-translation', () => ({ usePreferredLanguage: () => 'fr', usePreferredLanguages: () => ['fr'] }));
 jest.mock('@/hooks/use-impression-tracking', () => ({
   useImpressionTracking: () => ({ observe: jest.fn() }),
 }));
@@ -217,8 +222,54 @@ describe('PostsFeedScreen — minimal story repost', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockStoryVisibility.current = 'PUBLIC';
+    mockStoryRepostOfId.current = undefined;
     mockFeedPosts.current = [];
     mockRepostMutate.mockImplementation((_vars, opts) => opts?.onSuccess?.());
+  });
+
+  /**
+   * Borne de la moitié RÉFÉRENCE. Le repli vers la racine (`repostTargetId`,
+   * jumeau iOS `RepostTargeting`) est une loi des surfaces de CARTE ; le
+   * viewer de story vise la SCÈNE VUE, exactement comme
+   * `StoryViewerView.repostAsPostDirect` envoie `story.id`.
+   *
+   * Deux raisons, chacune suffisante : `repostPost` recopie une source
+   * éphémère dans son repost (donc aucune carte vide à éviter), et il refuse
+   * un original dont l'échéance est passée — une story repartagée survit à sa
+   * racine, donc grimper casserait un geste qui réussit aujourd'hui.
+   */
+  it("republier un repost-de-story depuis le tray vise la SCÈNE VUE", async () => {
+    mockStoryRepostOfId.current = 'story-root';
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('story-tray-open'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('story-viewer-repost'));
+    });
+
+    await waitFor(() =>
+      expect(mockRepostMutate).toHaveBeenCalledWith(
+        { postId: 'story-1', data: { isQuote: false, targetType: 'STORY' } },
+        expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+      ),
+    );
+  });
+
+  it("l'ancrage vise la même scène que le miroir", async () => {
+    mockStoryRepostOfId.current = 'story-root';
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('story-tray-open'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('story-viewer-repost-as-post'));
+    });
+
+    await waitFor(() =>
+      expect(mockRepostMutate).toHaveBeenCalledWith(
+        { postId: 'story-1', data: { isQuote: false, targetType: 'POST' } },
+        expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
+      ),
+    );
   });
 
   /**
@@ -331,6 +382,27 @@ describe('PostsFeedScreen — la loi du miroir depuis une carte du fil', () => {
 
     expect(mockRepostMutate).toHaveBeenCalledWith(
       { postId: 'reel-9', data: { content: 'mon commentaire', isQuote: true, targetType: 'REEL' } },
+      expect.anything(),
+    );
+  });
+
+  /**
+   * Le scénario exact que la moitié RÉFÉRENCE existe pour empêcher : un réel
+   * repartagé ne porte AUCUN média propre (`repostPost` ne duplique les médias
+   * que pour une source éphémère), il n'est qu'un pointeur. Viser ce pointeur
+   * produirait un réel plein écran sans image — un dégradé portant un nom.
+   */
+  it("republier un réel DÉJÀ repartagé vise la racine, jamais le pointeur vide", async () => {
+    mockFeedPosts.current = [{ ...reelPost(), id: 'reel-shell', originalRepostOfId: 'reel-root' }];
+    render(<PostsFeedScreen />);
+    fireEvent.click(screen.getByTestId('post-card-repost'));
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('repost-modal-repost'));
+    });
+
+    expect(mockRepostMutate).toHaveBeenCalledWith(
+      { postId: 'reel-root', data: { isQuote: false, targetType: 'REEL' } },
       expect.anything(),
     );
   });

@@ -55,6 +55,7 @@ import {
   PREVIEW_PRISM_PARTICIPANT_SELECT,
   resolveLastMessagePreviewPrism,
   toIsoOrNull,
+  type PreviewPrismParticipant,
 } from './utils/lastMessagePreviewPrism';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
@@ -99,6 +100,7 @@ import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -1113,7 +1115,7 @@ export class MeeshySocketIOManager {
    */
   private async normalizeConversationId(conversationId: string): Promise<string> {
     try {
-      if (/^[0-9a-fA-F]{24}$/.test(conversationId)) return conversationId;
+      if (isValidObjectId(conversationId)) return conversationId;
       const cached = this.conversationIdCache.get(conversationId);
       if (cached) return cached;
       const conversation = await this.prisma.conversation.findUnique({
@@ -2936,112 +2938,134 @@ export class MeeshySocketIOManager {
         const senderId = message.senderId;
         if (senderId) {
           // Une seule requête : superset (id + userId + joinedAt) pour les deux signaux
-          const allParticipants = await this.prisma.participant.findMany({
-            where: {
-              conversationId: normalizedId,
-              isActive: true
-            },
-            // `user` (préférences de langue) : le Prisme de la ligne de liste,
-            // résolu par destinataire ci-dessous. `joinedAt` reste requis par
-            // `emitUnreadCountsToRecipients`, qui partage cette requête.
-            select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
-          });
-
-          // CONVERSATION_UPDATED → room user de CHAQUE participant (re-tri liste).
-          // `updatedBy` est requis par ConversationUpdatedEventData (this.io est typé,
-          // contrairement à MessageHandler) : c'est l'auteur du message qui déclenche
-          // le bump (resolvedSenderId = User.id du sender, fallback participant id).
-          const updatePayload = {
-            conversationId: normalizedId,
-            updatedBy: { id: resolvedSenderId ?? message.senderId ?? '' },
-            // Chaîne ISO — voir `toIsoOrNull`. `|| new Date()` conservé : ce
-            // chemin sert aussi des messages fabriqués (agent, traducteur) dont
-            // le `createdAt` peut manquer, et la ligne de liste a besoin d'un
-            // rang pour se trier.
-            lastMessageAt: toIsoOrNull(message.createdAt || new Date()),
-            lastMessageId: message.id,
-            // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism`
-            // avec le reste de la paire, sous le même plafond qu'elle.
-            // Un message position-seule a un `content` vide, donc un aperçu
-            // vide : `location` est alors la SEULE chose dont la ligne de liste
-            // dispose pour composer son libellé. Hissée ici comme les deux
-            // autres émetteurs de ce payload le font déjà (`MessageHandler.ts`,
-            // `emitConversationPreviewUpdate.ts`) — sans elle, ce chemin-ci
-            // (REST/ZMQ, celui par lequel passe justement l'envoi d'un lieu)
-            // laissait la ligne littéralement blanche.
-            //
-            // Clé ABSENTE quand le message n'a pas de position, jamais présente
-            // à `null` : les clients écrivent `location` AVEC l'identité du
-            // message, donc une clé nulle sur le chemin le plus fréquenté du
-            // service effacerait une épingle correcte à chaque message texte.
-            ...((): Record<string, unknown> => {
-              const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
-              return place ? { location: place } : {};
-            })(),
-            senderId: message.senderId,
-            updatedAt: new Date().toISOString()
-          };
-          // `userId ?? id` (participantUserRoomTargets) : parité avec le chemin
-          // socket de MessageHandler. Un participant sans compte a une room
-          // personnelle nommée d'après son `Participant.id` — la sauter privait un
-          // invité de lien partagé de tout re-tri de sa liste de conversations.
           //
-          // Le Prisme est résolu PAR destinataire, depuis le MÊME `message` qui
-          // alimente `message:new` ci-dessus : les deux événements portent donc
-          // toujours la même carte, et le `conversation:updated` jumeau ne peut pas
-          // arriver derrière pour effacer ce que `message:new` vient d'installer.
-          for (const { room, participant } of participantUserRoomTargets(allParticipants)) {
-            this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
-              ...updatePayload,
-              ...resolveLastMessagePreviewPrism(participant, message)
+          // Dans son PROPRE `try`, et rendue `undefined` — jamais `[]` — quand
+          // elle tombe. Les deux formes se lisent pareil au site d'appel et ne
+          // disent pas la même chose : `[]` affirme « la conversation n'a aucun
+          // participant », `undefined` avoue « je ne sais pas ». La file hors
+          // ligne ci-dessous traite les deux différemment, et c'est la seule des
+          // trois consommatrices dont l'abandon soit DESTRUCTIF (cf. son bloc).
+          let allParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> | undefined;
+          try {
+            allParticipants = await this.prisma.participant.findMany({
+              where: {
+                conversationId: normalizedId,
+                isActive: true
+              },
+              // `user` (préférences de langue) : le Prisme de la ligne de liste,
+              // résolu par destinataire ci-dessous. `joinedAt` reste requis par
+              // `emitUnreadCountsToRecipients`, qui partage cette requête.
+              select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
             });
+          } catch (err) {
+            logger.warn('participant fetch failed — la file hors ligne fera sa propre requête', { error: err });
           }
 
-          // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process).
-          // Délégué à l'unité partagée par les trois transports d'envoi : la copie
-          // inline qui vivait ici n'excluait l'expéditeur que par `Participant.id`,
-          // correct sur CE chemin mais faux pour tout appelant portant un `User.id`.
-          // La liste déjà chargée lui est passée — pas de seconde requête.
-          const participants = allParticipants.filter((p) => p.id !== senderId);
-
-          await emitUnreadCountsToRecipients({
-            io: this.io,
-            prisma: this.prisma,
-            readStatusService: this.readStatusService,
-            bridgeService: this.bridgeService,
+          // File hors ligne — la TROISIÈME porte de sortie de ce message, et la
+          // seule DURABLE. `message:new` ci-dessus ne sert que les sockets du
+          // salon ; un destinataire déconnecté n'apprend jamais l'existence de
+          // ce message autrement que par le rejeu de `_drainPendingMessages`.
+          //
+          // Elle passe AVANT les deux signaux cosmétiques qui suivent, et c'est
+          // tout l'objet de sa place : elle en était l'AVAL, dans le même `try`,
+          // sous un `catch` qui journalise « non-bloquant ». Un `emit` qui lève
+          // (adaptateur ou encodeur en défaut) annulait alors le rejeu pour TOUS
+          // les absents, en annonçant une perte cosmétique. Même règle qu'à
+          // l'instantané de reconnexion, où le drain est placé HORS du `try`
+          // pour qu'un accroc Mongo cosmétique n'échoue jamais le rejeu.
+          //
+          // `participants` reçoit `undefined` quand le superset est tombé :
+          // l'unité partagée refait alors SA requête, qui ne demande que
+          // `{id, userId}`. Lui passer `[]` la ferait enfiler pour personne —
+          // perdre le message parce qu'une préférence de langue est illisible.
+          //
+          // Délègue à l'unité partagée (comme les trois autres transports) : la
+          // copie inline qui vivait ici était le dernier appelant direct de
+          // `deliveryQueue.enqueue` du dépôt, et son `payload as Record<string,
+          // unknown>` le dernier endroit où une charge pouvait être ENFILÉE sous
+          // une forme que le fil ne diffuse pas.
+          await this._enqueueForOfflineParticipants({
             conversationId: normalizedId,
-            senderId,
+            // Les DEUX identités, comme le chemin WS : `message.senderId` porte
+            // un `Participant.id` ici, un `User.id` ailleurs, et les deux
+            // espaces d'ids ne se croisent jamais.
+            actorParticipantId: senderId,
+            actorUserId: senderId,
+            eventType: 'new',
+            messageId: message.id,
+            // Le corps DESTINATAIRE (cid-strippé), identique à l'émission live :
+            // un rejeu portant le `clientMessageId` de l'auteur ferait fuiter son
+            // espace d'ids optimistes dans celui d'un autre utilisateur.
+            payload: broadcastPayload,
             participants: allParticipants,
-            onError: (error) => logger.warn('unread count update failed', { error }),
           });
 
-          const connectedUserIds = new Set(this.getConnectedUsers());
-
-          for (const participant of participants) {
-            const roomTarget = participant.userId || participant.id;
-
-            // 5.3 SCOPE — le filtre SOCKET_LANG_FILTER s'applique au message:new
-            // ONLINE uniquement. L'enqueue offline ci-dessous stocke le payload
-            // complet (multi-traduit), NON filtré par langue. Acceptable car les
-            // DEUX transports d'envoi enqueuent le payload complet offline de façon
-            // identique : le chemin WS `message:send` (MessageHandler.broadcastNewMessage,
-            // qui enqueue son `broadcastPayload` cid-strippé) et ce chemin REST/ZMQ.
-            // Un message ne traverse qu'un seul transport, donc pas de double-enqueue.
-            // Le drain (`_drainPendingMessages`) EST câblé : il s'exécute sur
-            // connexion (post-auth, post-room-join) — voir l'appel ~ligne 521.
-            // Le destinataire reconnecté rejoue donc ces messages au prochain login.
-            // Le rejeu porte le corps DESTINATAIRE (cid-strippé), identique à
-            // l'émission live — même règle que `enqueueOfflineLinkMessage` : un
-            // rejeu portant le `clientMessageId` de l'auteur ferait fuiter son
-            // espace d'ids optimistes dans celui d'un autre utilisateur.
-            if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
-              this.deliveryQueue.enqueue(roomTarget, {
-                messageId: message.id,
-                conversationId: normalizedId,
-                payload: broadcastPayload as Record<string, unknown>,
-                enqueuedAt: new Date().toISOString(),
-              }).catch(err => logger.warn('Failed to enqueue message for offline user', { userId: roomTarget, error: err }));
+          if (allParticipants) {
+            // CONVERSATION_UPDATED → room user de CHAQUE participant (re-tri liste).
+            // `updatedBy` est requis par ConversationUpdatedEventData (this.io est typé,
+            // contrairement à MessageHandler) : c'est l'auteur du message qui déclenche
+            // le bump (resolvedSenderId = User.id du sender, fallback participant id).
+            const updatePayload = {
+              conversationId: normalizedId,
+              updatedBy: { id: resolvedSenderId ?? message.senderId ?? '' },
+              // Chaîne ISO — voir `toIsoOrNull`. `|| new Date()` conservé : ce
+              // chemin sert aussi des messages fabriqués (agent, traducteur) dont
+              // le `createdAt` peut manquer, et la ligne de liste a besoin d'un
+              // rang pour se trier.
+              lastMessageAt: toIsoOrNull(message.createdAt || new Date()),
+              lastMessageId: message.id,
+              // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism`
+              // avec le reste de la paire, sous le même plafond qu'elle.
+              // Un message position-seule a un `content` vide, donc un aperçu
+              // vide : `location` est alors la SEULE chose dont la ligne de liste
+              // dispose pour composer son libellé. Hissée ici comme les deux
+              // autres émetteurs de ce payload le font déjà (`MessageHandler.ts`,
+              // `emitConversationPreviewUpdate.ts`) — sans elle, ce chemin-ci
+              // (REST/ZMQ, celui par lequel passe justement l'envoi d'un lieu)
+              // laissait la ligne littéralement blanche.
+              //
+              // Clé ABSENTE quand le message n'a pas de position, jamais présente
+              // à `null` : les clients écrivent `location` AVEC l'identité du
+              // message, donc une clé nulle sur le chemin le plus fréquenté du
+              // service effacerait une épingle correcte à chaque message texte.
+              ...((): Record<string, unknown> => {
+                const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
+                return place ? { location: place } : {};
+              })(),
+              senderId: message.senderId,
+              updatedAt: new Date().toISOString()
+            };
+            // `userId ?? id` (participantUserRoomTargets) : parité avec le chemin
+            // socket de MessageHandler. Un participant sans compte a une room
+            // personnelle nommée d'après son `Participant.id` — la sauter privait un
+            // invité de lien partagé de tout re-tri de sa liste de conversations.
+            //
+            // Le Prisme est résolu PAR destinataire, depuis le MÊME `message` qui
+            // alimente `message:new` ci-dessus : les deux événements portent donc
+            // toujours la même carte, et le `conversation:updated` jumeau ne peut pas
+            // arriver derrière pour effacer ce que `message:new` vient d'installer.
+            for (const { room, participant } of participantUserRoomTargets(allParticipants)) {
+              this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+                ...updatePayload,
+                ...resolveLastMessagePreviewPrism(participant, message)
+              });
             }
+
+            // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process).
+            // Délégué à l'unité partagée par les trois transports d'envoi : la copie
+            // inline qui vivait ici n'excluait l'expéditeur que par `Participant.id`,
+            // correct sur CE chemin mais faux pour tout appelant portant un `User.id`.
+            // La liste déjà chargée lui est passée — pas de seconde requête.
+            await emitUnreadCountsToRecipients({
+              io: this.io,
+              prisma: this.prisma,
+              readStatusService: this.readStatusService,
+              bridgeService: this.bridgeService,
+              conversationId: normalizedId,
+              senderId,
+              participants: allParticipants,
+              onError: (error) => logger.warn('unread count update failed', { error }),
+            });
           }
         }
       } catch (syncError) {
@@ -3080,7 +3104,7 @@ export class MeeshySocketIOManager {
   public refreshUserResolvedLanguages(
     userId: string,
     prefs: {
-      systemLanguage: string;
+      systemLanguage?: string | null;
       regionalLanguage?: string | null;
       customDestinationLanguage?: string | null;
       deviceLocale?: string | null;

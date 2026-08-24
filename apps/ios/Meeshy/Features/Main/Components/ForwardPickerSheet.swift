@@ -42,8 +42,21 @@ struct ForwardPickerSheet: View {
     /// même pour un contact dont la conversation vient d'être créée.
     @State private var firstServedConversation: Conversation?
     @State private var successToastFired = false
+    /// La destination retenue dont la CONFIRMATION de capture est en attente.
+    /// `nil` = aucune question posée. Retient la destination, jamais un booléen :
+    /// la confirmation doit republier vers ce que l'utilisateur a touché.
+    @State private var pendingCapture: PublicationTarget?
+    @State private var isPublishing = false
+    /// La destination effectivement PUBLIÉE, retenue pour que le toast posé à la
+    /// fermeture sache quoi annoncer. `nil` tant que rien n'a abouti.
+    @State private var publishedTarget: PublicationTarget?
+    /// La raison du dernier échec de publication, affichée SOUS les boutons.
+    /// `nil` = rien à signaler. Un échec laisse la feuille montée pour qu'on
+    /// puisse réessayer sans la rouvrir.
+    @State private var publishFailure: String?
 
     private var forwardService: MessageForwardServiceProviding { MessageForwardService.shared }
+    private var postService: PostServiceProviding { PostService.shared }
 
     /// La conversation SOURCE du message ne doit jamais apparaître comme
     /// cible — transférer un message dans sa propre conversation n'a pas de
@@ -109,7 +122,16 @@ struct ForwardPickerSheet: View {
                 }
             }
             .background(theme.backgroundPrimary)
-            .safeAreaInset(edge: .bottom) { batchSendBar }
+            .safeAreaInset(edge: .bottom) {
+                // Transférer à quelqu'un et PUBLIER sont deux gestes voisins et
+                // un seul point de départ : la feuille offre donc les deux, la
+                // publication sous la liste des conversations.
+                VStack(spacing: 0) {
+                    publicationSection
+                    batchSendBar
+                }
+                .background(.ultraThinMaterial)
+            }
             .navigationTitle(String(localized: "forward.title", defaultValue: "Forward", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -259,6 +281,199 @@ struct ForwardPickerSheet: View {
         .equatable()
     }
 
+    // MARK: - Publication
+
+    /// La PREMIÈRE pièce jointe décide — comme sur le web. Le fil rend un média
+    /// par publication, et une feuille qui proposerait « publier » sur un lot
+    /// hétérogène mentirait sur ce qui partirait réellement.
+    private var primaryAttachment: MessageAttachment? { message.attachments.first }
+
+    /// Les destinations publiques offertes pour ce média, vides quand il n'en a
+    /// aucune (document, PDF, code) — la section n'est alors pas montée du tout,
+    /// plutôt que montée vide.
+    private var publicationTargets: [PublicationTarget] {
+        PublicationTargetRule.targets(forMimeType: primaryAttachment?.mimeType)
+    }
+
+    @ViewBuilder
+    private var publicationSection: some View {
+        if !publicationTargets.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(String(localized: "forward.publish-section", defaultValue: "Publier", bundle: .main))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+
+                // Défilement horizontal plutôt qu'un `HStack` nu : aux tailles
+                // Dynamic Type accessibles, deux pilules et un indicateur
+                // dépassent la largeur d'un iPhone, et un `HStack` les
+                // COMPRIMERAIT jusqu'à tronquer les libellés.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(publicationTargets, id: \.self) { target in
+                            Button {
+                                handlePublishTap(target)
+                            } label: {
+                                Text(publicationLabel(for: target))
+                                    .font(MeeshyFont.relative(13, weight: .medium))
+                                    .foregroundColor(Color(hex: accentColor))
+                                    .padding(.horizontal, 14)
+                                    // 44pt : plancher de cible tactile (HIG). Il
+                                    // se pose ici, et non par du padding
+                                    // vertical, pour que la pilule garde sa
+                                    // hauteur quand le corps GRANDIT sous
+                                    // Dynamic Type.
+                                    .frame(minHeight: 44)
+                                    .background(
+                                        Capsule().stroke(Color(hex: accentColor).opacity(0.4), lineWidth: 1)
+                                    )
+                                    .contentShape(Capsule())
+                            }
+                            .disabled(isPublishing)
+                        }
+
+                        if isPublishing {
+                            ProgressView().tint(Color(hex: accentColor))
+                        }
+                    }
+                    .padding(.vertical, 1)
+                }
+
+                if let pending = pendingCapture {
+                    captureConfirmation(for: pending)
+                }
+
+                if let publishFailure {
+                    Text(publishFailure)
+                        .font(MeeshyFont.relative(11))
+                        .foregroundColor(MeeshyColors.error)
+                        .lineLimit(2)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+    }
+
+    /// La confirmation posée avant d'ouvrir une CAPTURE au-delà de la
+    /// conversation. Elle n'apparaît que pour un média que cette application a
+    /// elle-même pris (`capturedInApp`, déclaré à l'envoi par le client qui a
+    /// ouvert la caméra ou le micro) : lui seul n'a encore été vu par personne.
+    @ViewBuilder
+    private func captureConfirmation(for target: PublicationTarget) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(String(
+                localized: "forward.publish-capture-warning",
+                defaultValue: "Ce média vient d'être capturé par l'application. Le publier le rendra visible au-delà de cette conversation.",
+                bundle: .main
+            ))
+            .font(MeeshyFont.relative(12))
+            .foregroundColor(theme.textPrimary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Button {
+                    pendingCapture = nil
+                    publish(target)
+                } label: {
+                    Text(String(localized: "forward.publish-confirm", defaultValue: "Publier", bundle: .main))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 44)
+                        .background(Capsule().fill(Color(hex: accentColor)))
+                        .contentShape(Capsule())
+                }
+
+                Button {
+                    pendingCapture = nil
+                } label: {
+                    Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
+                        .font(MeeshyFont.relative(13))
+                        .foregroundColor(theme.textMuted)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(theme.textMuted.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    private func publicationLabel(for target: PublicationTarget) -> String {
+        switch target {
+        case .story:
+            return String(localized: "forward.publish-story", defaultValue: "Ma story", bundle: .main)
+        case .reel:
+            return String(localized: "forward.publish-reel", defaultValue: "Nouveau réel", bundle: .main)
+        case .post:
+            return String(localized: "forward.publish-post", defaultValue: "Nouveau post", bundle: .main)
+        }
+    }
+
+    /// Publier une capture est irréversible du point de vue de qui l'a prise :
+    /// une photo sortie de la caméra n'a encore été vue par personne. On demande
+    /// donc, une fois, avant d'ouvrir le média à un fil entier.
+    private func handlePublishTap(_ target: PublicationTarget) {
+        guard let attachment = primaryAttachment else { return }
+        if PublicationTargetRule.needsCaptureConfirmation(
+            capturedInApp: attachment.capturedInApp,
+            target: target
+        ) {
+            pendingCapture = target
+            return
+        }
+        publish(target)
+    }
+
+    private func publish(_ target: PublicationTarget) {
+        guard !isPublishing else { return }
+        publishFailure = nil
+        isPublishing = true
+        Task { await performPublish(target) }
+    }
+
+    /// Même forme que `perform(_:)` pour un transfert : une méthode `async` qui
+    /// mute l'état directement, jamais un `MainActor.run` imbriqué — la vue est
+    /// déjà isolée sur le main actor.
+    private func performPublish(_ target: PublicationTarget) async {
+        guard let attachment = primaryAttachment else {
+            isPublishing = false
+            return
+        }
+        do {
+            _ = try await postService.publishAttachment(
+                attachmentId: attachment.id,
+                target: target,
+                content: nil,
+                capturedInApp: attachment.capturedInApp
+            )
+            isPublishing = false
+            HapticFeedback.success()
+            // Le toast part à la FERMETURE, pas ici : présenté sous la feuille
+            // encore montée il serait invisible. Même raison — et même
+            // mécanisme — que le toast de transfert.
+            publishedTarget = target
+            dismiss()
+            onDismiss()
+        } catch {
+            isPublishing = false
+            HapticFeedback.error()
+            // L'échec s'affiche IN-SHEET, comme les échecs de transfert ligne par
+            // ligne : la feuille reste montée, et le toast racine qu'elle
+            // RECOUVRE serait invisible — c'est la raison déjà écrite sur
+            // `fireDeferredSuccessToast`.
+            publishFailure = String(
+                localized: "forward.publish-failed",
+                defaultValue: "La publication a échoué",
+                bundle: .main
+            )
+        }
+    }
+
     // MARK: - Batch Send Bar
 
     @ViewBuilder
@@ -351,6 +566,16 @@ struct ForwardPickerSheet: View {
     /// fois la feuille partie. Un seul toast par ouverture, sur la PREMIÈRE
     /// cible servie.
     private func fireDeferredSuccessToast() {
+        // Une publication et un transfert ne peuvent pas aboutir dans la même
+        // ouverture — publier ferme la feuille — mais l'ordre reste explicite :
+        // la publication d'abord, puisqu'elle est ce qui vient de fermer.
+        if publishedTarget != nil {
+            publishedTarget = nil
+            FeedbackToastManager.shared.showSuccess(
+                String(localized: "forward.published", defaultValue: "Publié", bundle: .main)
+            )
+            return
+        }
         guard !successToastFired, let conv = firstServedConversation else { return }
         successToastFired = true
         let title = String(localized: "forward.success", defaultValue: "Message transféré", bundle: .main)

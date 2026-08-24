@@ -1037,11 +1037,9 @@ struct PostDetailView: View {
                             .lineLimit(1)
                         let reach = PostReachFormatter.components(
                             username: post.authorUsername,
-                            isAuthor: isPostAuthor,
-                            viewCount: post.viewCount,
-                            impressionCount: post.impressionCount
+                            isAuthor: isPostAuthor
                         )
-                        if reach.pseudo != nil || reach.views != nil {
+                        if reach.pseudo != nil || reach.showsStats {
                             HStack(spacing: 4) {
                                 if let pseudo = reach.pseudo {
                                     Text(pseudo)
@@ -1051,18 +1049,27 @@ struct PostDetailView: View {
                                         .truncationMode(.tail)
                                         .layoutPriority(0)
                                 }
-                                if let views = reach.views, let impressions = reach.impressions {
+                                if reach.showsStats {
                                     if reach.pseudo != nil {
                                         Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                                            .accessibilityHidden(true)
                                     }
                                     HStack(spacing: 3) {
-                                        Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                                        Text(views).font(.caption2.weight(.medium))
-                                        Text("·").font(.caption2)
-                                        Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
-                                        Text(impressions).font(.caption2.weight(.medium))
+                                        ReachMetricLabel(
+                                            icon: "eye.fill",
+                                            count: post.viewCount,
+                                            label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
+                                            tint: theme.textMuted
+                                        )
+                                        Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                                            .accessibilityHidden(true)
+                                        ReachMetricLabel(
+                                            icon: "chart.bar.fill",
+                                            count: post.impressionCount,
+                                            label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
+                                            tint: theme.textMuted
+                                        )
                                     }
-                                    .foregroundColor(theme.textMuted)
                                     // Stats must always print in full (up to "2.3M") —
                                     // they're the values the user cross-checks against the
                                     // inline reach line. Pin their size + priority so the
@@ -1072,9 +1079,6 @@ struct PostDetailView: View {
                                     .layoutPriority(1)
                                 }
                             }
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(String(localized: "feed.post.reach", defaultValue: "Vues et impressions", bundle: .main))
-                            .accessibilityValue("\(post.viewCount) · \(post.impressionCount)")
                         }
                     }
                 }
@@ -1200,16 +1204,21 @@ struct PostDetailView: View {
                         Text("·").font(.caption2).foregroundColor(theme.textMuted)
                     }
                     HStack(spacing: 3) {
-                        Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                        Text(CompactCountLabel.text(post.viewCount)).font(.caption2.weight(.medium))
-                        Text("·").font(.caption2)
-                        Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
-                        Text(CompactCountLabel.text(post.impressionCount)).font(.caption2.weight(.medium))
+                        ReachMetricLabel(
+                            icon: "eye.fill",
+                            count: post.viewCount,
+                            label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
+                            tint: theme.textMuted
+                        )
+                        Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                            .accessibilityHidden(true)
+                        ReachMetricLabel(
+                            icon: "chart.bar.fill",
+                            count: post.impressionCount,
+                            label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
+                            tint: theme.textMuted
+                        )
                     }
-                    .foregroundColor(theme.textMuted)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(String(localized: "feed.post.reach", defaultValue: "Vues et impressions", bundle: .main))
-                    .accessibilityValue("\(post.viewCount) · \(post.impressionCount)")
                 }
             }
         }
@@ -1630,7 +1639,7 @@ struct PostDetailView: View {
                     .foregroundColor(theme.accentText(repost.authorColor).opacity(0.7))
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
-                    .accessibilityValue("\(repost.likes)")
+                    .accessibilityValue(LocalizedNumber.exact(repost.likes))
                 }
                 Spacer()
             }
@@ -1760,7 +1769,7 @@ struct PostDetailView: View {
             .accessibilityLabel(detailIsLiked
                 ? String(localized: "a11y.post.unlike", defaultValue: "Je n'aime plus", bundle: .main)
                 : String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
-            .accessibilityValue("\(detailLikeCount)")
+            .accessibilityValue(LocalizedNumber.exact(detailLikeCount))
             .accessibilityHint(String(localized: "a11y.post.like.hint", defaultValue: "Aimer cette publication", bundle: .main))
 
             Spacer()
@@ -2252,7 +2261,7 @@ struct PostDetailView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isHeader)
         .accessibilityLabel(String(localized: "a11y.comment.section_header", defaultValue: "Commentaires", bundle: .main))
-        .accessibilityValue("\(displayPost?.commentCount ?? 0)")
+        .accessibilityValue(LocalizedNumber.exact(displayPost?.commentCount ?? 0))
     }
 
     // MARK: - Composer

@@ -100,7 +100,7 @@ import type {
 } from './post.js';
 
 // La ligne de réaction persistée — ce que l'accusé de `reaction:add` porte.
-import type { ReactionData } from './reaction.js';
+import type { ReactionData, ReactionUpdateEvent } from './reaction.js';
 
 // ===== ROOM HELPERS =====
 // Convention: entity:${id} (colons, jamais underscores)
@@ -1172,29 +1172,15 @@ export interface ConversationUnreadUpdatedEventData {
 }
 
 /**
- * Données pour l'événement de mise à jour de réaction
+ * Données pour l'événement de mise à jour de réaction.
+ *
+ * C'est `ReactionUpdateEvent` (`./reaction`), pas une seconde déclaration : les
+ * deux ont vécu comme jumelles structurelles dans deux fichiers qui ne se citent
+ * pas, avec le risque de DÉRIVE que ça porte — `ReactionService.createUpdateEvent`
+ * rend l'une, le contrat de diffusion déclarait l'autre, et rien n'obligeait les
+ * deux à rester d'accord. Un alias supprime la question.
  */
-export interface ReactionUpdateEventData {
-  readonly messageId: string;
-  readonly conversationId: string;
-  readonly participantId: string;
-  /**
-   * User.id du réacteur (distinct de `participantId`, un Participant.id scopé
-   * conversation). Requis pour que les autres appareils du même utilisateur
-   * reconnaissent leur propre réaction — un Participant.id n'égale jamais un
-   * User.id. Toujours émis ; optionnel pour la compat des payloads rejoués.
-   */
-  readonly userId?: string;
-  readonly emoji: string;
-  readonly action: 'add' | 'remove';
-  readonly aggregation: {
-    readonly emoji: string;
-    readonly count: number;
-    readonly participantIds: readonly string[];
-    readonly hasCurrentUser: boolean;
-  };
-  readonly timestamp: Date;
-}
+export type ReactionUpdateEventData = ReactionUpdateEvent;
 
 /**
  * Données pour l'événement de synchronisation des réactions

@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
+import { MediaAccessibilityFields } from './MediaAccessibilityFields';
 import { ReferencePicker } from '@/components/composer/ReferencePicker';
 import { ReferenceChipRow } from '@/components/composer/ReferenceChipRow';
 import { useReferences } from '@/hooks/composer/useReferences';
@@ -16,32 +17,24 @@ import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { removingHandle } from '@meeshy/shared/utils/composer-references';
 import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import { PUBLICATION_VISIBILITY_OPTIONS } from './publication-visibility';
-import type { PostMedia, PostType, PostVisibility } from '@meeshy/shared/types/post';
-import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/types/post-reference';
+import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
+import type { PostReferenceDisplay } from '@meeshy/shared/types/post-reference';
+import type { ComposerDocumentPayload } from '@/components/composer/payload';
 
 const REFERENCE_MODES: readonly Exclude<PostReferenceDisplay, 'INLINE'>[] = ['NOTE', 'SILENT'];
 
-export interface PostPublishPayload {
-  content: string;
-  type: PostType;
-  visibility: PostVisibility;
-  visibilityUserIds?: string[];
-  mediaIds?: string[];
-  /**
-   * Client-only echo of the already-uploaded media (id/mimeType/fileUrl are
-   * known before the post exists server-side), built from `uploadedAttachments`.
-   * Consumed by `useCreatePostMutation` to seed the optimistic post's `media`
-   * so a media-only publish never flashes an empty card — never sent to the
-   * wire (the mutation strips it before calling `postsService.createPost`).
-   */
-  optimisticMedia?: readonly PostMedia[];
-  /** Declared, non-INLINE references only — absent (not `[]`) when no one is referenced. */
-  mentions?: readonly PostReferenceInput[];
-}
+/**
+ * La charge de publication est déclarée UNE fois, dans
+ * `components/composer/payload.ts` — la surface unifiée rend exactement la même
+ * au même appelant, et deux déclarations jumelles auraient pu diverger sans
+ * qu'aucun gate ne rougisse (aucun ne type-vérifie `apps/web`). Ce nom reste le
+ * nom historique de la charge pour les appelants existants.
+ */
+export type { ComposerDocumentPayload as PostPublishPayload };
 
 export interface PostComposerProps {
   currentUser?: { username: string; avatar?: string | null } | null;
-  onPublish: (data: PostPublishPayload) => void;
+  onPublish: (data: ComposerDocumentPayload) => void;
   disabled?: boolean;
   className?: string;
 }
@@ -80,6 +73,14 @@ function PostComposer({
   const [postType, setPostType] = useState<PostType>('REEL');
   const [isExpanded, setIsExpanded] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  // C7-UI — collecte du texte alternatif par média + de l'opt-in
+  // `allowSoundExtraction` (post entier, cf. `MediaPublishPayload` ci-dessus).
+  // `allowSoundExtractionTouched` distingue « jamais touché » (rien envoyé)
+  // de « explicitement désactivé » (envoie `false`) — même sémantique que
+  // `MediaAccessibilityStore.allowSoundExtractionPayload()` côté iOS.
+  const [mediaAlt, setMediaAlt] = useState<Record<string, string>>({});
+  const [allowSoundExtraction, setAllowSoundExtraction] = useState(false);
+  const [allowSoundExtractionTouched, setAllowSoundExtractionTouched] = useState(false);
   const { references, pick, drop, clear: clearReferences, payload: referencesPayload } = useReferences();
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -185,6 +186,35 @@ function PostComposer({
     setMediaError(null);
   }, [handleRemoveFile]);
 
+  // Un média RETIRÉ (bouton x avant upload, ou upload en échec) ne doit pas
+  // laisser un id orphelin dans `mediaAlt` — même garde que
+  // `MediaAccessibilityStore.remove(mediaId:)` côté iOS. Pruning déclenché
+  // par `uploadedAttachments` (source des ids réels), pas `selectedFiles`
+  // (qui n'a pas encore d'id avant upload).
+  useEffect(() => {
+    const validIds = new Set(uploadedAttachments.map((att) => att.id));
+    setMediaAlt((prev) => {
+      const next = Object.fromEntries(Object.entries(prev).filter(([id]) => validIds.has(id)));
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }, [uploadedAttachments]);
+
+  const handleMediaAltChange = useCallback((mediaId: string, text: string) => {
+    setMediaAlt((prev) => {
+      if (text.length === 0) {
+        if (!(mediaId in prev)) return prev;
+        const { [mediaId]: _removed, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [mediaId]: text };
+    });
+  }, []);
+
+  const handleAllowSoundExtractionChange = useCallback((allowed: boolean) => {
+    setAllowSoundExtraction(allowed);
+    setAllowSoundExtractionTouched(true);
+  }, []);
+
   // A person typed as `@handle` in the caption is INLINE server-side (the
   // gateway derives it from the text — Task 1). Moving her to a declared
   // mode from the picker only makes sense once her handle leaves the
@@ -229,6 +259,15 @@ function PostComposer({
       // Never `mentions: []` — absence means "not touched", `[]` erases the
       // declared references server-side (tri-state, Non-régression table).
       ...(referencesPayload.length > 0 ? { mentions: referencesPayload } : {}),
+      // Only ids still present among `mediaIds` survive — a media removed
+      // after its alt was typed must not resurrect an orphaned key.
+      ...(() => {
+        const prunedAlt = Object.fromEntries(
+          Object.entries(mediaAlt).filter(([id]) => mediaIds.includes(id)),
+        );
+        return Object.keys(prunedAlt).length > 0 ? { mediaAlt: prunedAlt } : {};
+      })(),
+      ...(allowSoundExtractionTouched ? { allowSoundExtraction } : {}),
     });
 
     setContent('');
@@ -236,9 +275,12 @@ function PostComposer({
     setIsExpanded(false);
     setMediaError(null);
     setPostType('REEL');
+    setMediaAlt({});
+    setAllowSoundExtraction(false);
+    setAllowSoundExtractionTouched(false);
     clearAttachments();
     clearReferences();
-  }, [content, disabled, isUploading, onPublish, visibility, visibilityUserIds, uploadedAttachments, effectivePostType, clearAttachments, referencesPayload, clearReferences]);
+  }, [content, disabled, isUploading, onPublish, visibility, visibilityUserIds, uploadedAttachments, effectivePostType, clearAttachments, referencesPayload, clearReferences, mediaAlt, allowSoundExtraction, allowSoundExtractionTouched]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -339,6 +381,16 @@ function PostComposer({
               <p className="mt-2 text-xs text-red-500" role="alert" data-testid="post-composer-media-error">
                 {mediaError}
               </p>
+            )}
+
+            {isExpanded && uploadedAttachments.length > 0 && (
+              <MediaAccessibilityFields
+                attachments={uploadedAttachments}
+                altById={mediaAlt}
+                onAltChange={handleMediaAltChange}
+                allowSoundExtraction={allowSoundExtraction}
+                onAllowSoundExtractionChange={handleAllowSoundExtractionChange}
+              />
             )}
 
             {isExpanded && (

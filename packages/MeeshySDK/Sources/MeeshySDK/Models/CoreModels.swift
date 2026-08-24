@@ -1405,6 +1405,18 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public var caption: String?
     public var forwardedFromAttachmentId: String?
     public var isForwarded: Bool = false
+    /// Le fichier sort de la caméra ou du micro DE L'APPLICATION.
+    ///
+    /// Déclaré par le client qui a capturé, à l'envoi — lui seul le sait, et
+    /// seulement à cet instant — puis rendu par la passerelle sur la pièce
+    /// jointe. La feuille de partage le lit pour décider si PUBLIER ce média
+    /// demande confirmation : une capture n'a encore été vue par personne.
+    ///
+    /// Défaut `false` : les blobs `attachmentsJson` en cache écrits avant ce
+    /// champ décodent donc en « pas une capture », ce qui est la lecture juste
+    /// — l'absence ne peut pas valoir capture.
+    /// @see `PublicationTargetRule.needsCaptureConfirmation`
+    public var capturedInApp: Bool = false
     public var isViewOnce: Bool = false
     public var maxViewOnceCount: Int?
     public var viewOnceCount: Int = 0
@@ -1513,6 +1525,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 filePath: String = "", fileUrl: String = "",
                 title: String? = nil, alt: String? = nil, caption: String? = nil,
                 forwardedFromAttachmentId: String? = nil, isForwarded: Bool = false,
+                capturedInApp: Bool = false,
                 isViewOnce: Bool = false, maxViewOnceCount: Int? = nil, viewOnceCount: Int = 0, isBlurred: Bool = false,
                 width: Int? = nil, height: Int? = nil, thumbnailPath: String? = nil, thumbnailUrl: String? = nil, thumbHash: String? = nil,
                 duration: Int? = nil, bitrate: Int? = nil, sampleRate: Int? = nil, codec: String? = nil, channels: Int? = nil,
@@ -1534,6 +1547,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         self.mimeType = mimeType; self.fileSize = fileSize; self.filePath = filePath; self.fileUrl = fileUrl
         self.title = title; self.alt = alt; self.caption = caption
         self.forwardedFromAttachmentId = forwardedFromAttachmentId; self.isForwarded = isForwarded
+        self.capturedInApp = capturedInApp
         self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount
         self.viewOnceCount = viewOnceCount; self.isBlurred = isBlurred
         self.width = width; self.height = height; self.thumbnailPath = thumbnailPath; self.thumbnailUrl = thumbnailUrl; self.thumbHash = thumbHash

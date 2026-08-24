@@ -419,27 +419,34 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         let isEncryptedPush = (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } ?? false
         if isEncryptedPush { return }
 
-        let content = userInfo["content"] as? String ?? ""
+        // Cycle 124 — `content` et `originalLanguage` sont enfin sur le fil,
+        // sous les noms que cette méthode lisait déjà. Restaient trois écarts,
+        // que ce helper ferme : le nom d'expéditeur (émis sous un AUTRE nom),
+        // et l'horodatage serveur + le type du message (émis POUR cette
+        // extension et lus par personne).
+        let now = Date()
+        let fields = NotificationPayloadHelpers.prePersistedMessageFields(
+            userInfo: userInfo,
+            fallbackNow: now
+        )
 
         // N4 — derive the media kind from the attachment mime so the
         // pre-persisted bubble renders as audio/image/video instead of an
         // empty text bubble until the canonical REST fetch overwrites it.
-        let media = NotificationPayloadHelpers.mediaMessageTypes(
-            forAttachmentMimeType: userInfo["attachmentMimeType"] as? String
-        )
+        // Cycle 124 — hors pièce jointe, le `messageType` du fil est plus fin
+        // que le repli `text` (la passerelle l'émet pour cet usage précis).
+        let media = NotificationPayloadHelpers.prePersistedMessageTypes(userInfo: userInfo)
 
         do {
-            let now = Date()
             let record = MessageRecord(
                 localId: messageId, serverId: messageId,
                 conversationId: conversationId, senderId: senderId,
-                // Don't hardcode "fr" — read from push payload if present, else
-                // default to "en" (the safer fake for an unknown language than
-                // the previous "fr" which guaranteed wrong Prisme Linguistique
-                // resolution for non-French speakers). The NSEDataSync API
-                // fetch will overwrite with the canonical value seconds later.
-                content: content,
-                originalLanguage: (userInfo["originalLanguage"] as? String) ?? "en",
+                // Cycle 124 — le texte du message et SON étiquette de langue,
+                // pris ensemble : un enregistrement qui dirait « ce message est
+                // en <langue> » sur un texte écrit dans une autre ferait
+                // résoudre le Prisme du lecteur contre une fausse déclaration.
+                content: fields.content,
+                originalLanguage: fields.language,
                 messageType: media.messageType, messageSource: "user",
                 contentType: media.contentType,
                 // Incoming messages are .delivered (received by us), not
@@ -455,11 +462,15 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 maxViewOnceCount: nil, viewOnceCount: 0,
                 isEdited: false, editedAt: nil, deletedAt: nil,
                 pinnedAt: nil, pinnedBy: nil,
-                senderName: userInfo["senderName"] as? String,
+                senderName: fields.senderName,
                 senderUsername: nil, senderColor: nil, senderAvatarURL: nil,
                 deliveredCount: 0, readCount: 0,
                 deliveredToAllAt: nil, readByAllAt: nil,
-                createdAt: now, sentAt: nil,
+                // Cycle 124 — l'horodatage SERVEUR, que la passerelle émet
+                // depuis GW5 « pour la persistance NSE » et que personne ne
+                // lisait : l'horloge du device ordonnait la bulle, et deux
+                // appareils n'ont aucune raison de l'ordonner pareil.
+                createdAt: fields.createdAt, sentAt: nil,
                 deliveredAt: nil, readAt: nil, updatedAt: now,
                 attachmentsJson: nil, reactionsJson: nil,
                 reactionCount: 0, currentUserReactionsJson: nil,

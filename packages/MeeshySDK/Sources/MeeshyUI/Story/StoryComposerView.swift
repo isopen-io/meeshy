@@ -14,6 +14,18 @@ public struct StoryComposerView: View {
 
     @StateObject var viewModel = StoryComposerViewModel()
 
+    /// V3-4 — la collecte d'accessibilité média (texte alternatif par média,
+    /// opt-in d'extraction de son), POSSÉDÉE ici et injectée dans la couche de
+    /// contrôles.
+    ///
+    /// Le composer est le seul niveau qui survive à la fois au repli de la
+    /// band, au changement d'outil ET qui tienne le point de publication : lire
+    /// la saisie au moment de publier exige de la posséder au-dessus des vues
+    /// qui la collectent. Sans cette injection, `ComposerControlsLayer`
+    /// retombait sur son propre store — la saisie fonctionnait, se conservait,
+    /// et ne quittait jamais l'écran.
+    @StateObject var accessibilityStore = MediaAccessibilityStore()
+
     // MARK: - System environment
 
     @Environment(\.colorScheme) var colorScheme
@@ -255,21 +267,58 @@ public struct StoryComposerView: View {
         /// Les personnes que l'auteur a choisi de nommer, avec leur mode. La
         /// publication les DÉCLARE au serveur ; elle ne devine plus les
         /// `@handle` des objets texte, que le serveur relit lui-même.
-        _ references: [ComposerReference]
+        _ references: [ComposerReference],
+        /// Le texte alternatif par média et l'opt-in d'extraction de son, tels
+        /// que l'auteur les a saisis. `mediaAlt` y est keyé par id d'élément du
+        /// COMPOSER : au hand-off, aucun média n'a encore d'id serveur.
+        _ accessibility: ComposerMediaAccessibility,
+        /// Le format que l'auteur a choisi de PUBLIER (V3-3). L'atelier ne s'en
+        /// sert pas : il le transmet, parce que l'hôte est le seul à savoir sous
+        /// quel type envoyer. Sans lui, un composer offrant « Post » publiait une
+        /// story quand même — un choix qui a l'air de marcher.
+        _ targetType: PostType
     ) -> Bool
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
+
+    /// Qui peint l'audience, l'œil et la flèche de publication (V3-1).
+    /// `.atelier` par défaut : un appelant qui ne sait rien d'un meuble garde
+    /// exactement la barre qu'il avait.
+    public let chromeOwner: ComposerChromeOwner
+
+    /// La télécommande de publication du meuble, quand il y en a un. `nil` =
+    /// personne ne presse de l'extérieur, et l'atelier publie par sa barre.
+    public let publishTrigger: ComposerPublishTrigger?
+
+    /// Le format sous lequel la FLÈCHE DE L'ATELIER publie (V3-3).
+    ///
+    /// `.story` par défaut : un appelant qui ne sait rien des formats compose
+    /// et publie exactement ce qu'il publiait. L'hôte qui monte un éventail y
+    /// pose le format courant, et il est relu à chaque rendu du corps — donc au
+    /// moment du tap.
+    ///
+    /// Ce n'est PAS le carrier du chemin télécommande : le corps armé est
+    /// capturé au montage (`onAppear`), et une propriété `let` lue là dedans
+    /// serait celle du montage. C'est pourquoi la pression du meuble apporte
+    /// son propre format (`ComposerPublishTrigger.requestPublish(as:)`).
+    public let publishTargetType: PostType
 
     public init(
         initialVisibility: String = PostVisibility.friends.rawValue,
         initialVisibilityUserIds: [String] = [],
         allowedVisibilities: [PostVisibility]? = nil,
+        chromeOwner: ComposerChromeOwner = .atelier,
+        publishTrigger: ComposerPublishTrigger? = nil,
+        publishTargetType: PostType = .story,
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference]) -> Bool,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
         self.allowedVisibilities = allowedVisibilities
+        self.chromeOwner = chromeOwner
+        self.publishTrigger = publishTrigger
+        self.publishTargetType = publishTargetType
         self._visibility = State(initialValue: initialVisibility)
         self._visibilityUserIds = State(initialValue: initialVisibilityUserIds)
         self.onPublishSlide = onPublishSlide
@@ -290,13 +339,19 @@ public struct StoryComposerView: View {
         initialVisibility: String = PostVisibility.friends.rawValue,
         initialVisibilityUserIds: [String] = [],
         allowedVisibilities: [PostVisibility]? = nil,
+        chromeOwner: ComposerChromeOwner = .atelier,
+        publishTrigger: ComposerPublishTrigger? = nil,
+        publishTargetType: PostType = .story,
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference]) -> Bool,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void
     ) {
         self._viewModel = StateObject(wrappedValue: viewModel)
         self.allowedVisibilities = allowedVisibilities
+        self.chromeOwner = chromeOwner
+        self.publishTrigger = publishTrigger
+        self.publishTargetType = publishTargetType
         self._visibility = State(initialValue: initialVisibility)
         self._visibilityUserIds = State(initialValue: initialVisibilityUserIds)
         self.onPublishSlide = onPublishSlide
@@ -426,6 +481,11 @@ public struct StoryComposerView: View {
                 viewModel.seedHistory()
             }
         }
+        // V3-1 — l'atelier arme la télécommande du meuble avec sa PROPRE
+        // publication. Le meuble presse, il ne recompose rien : le rabattement
+        // des effets du canvas, la visibilité et la langue restent lus ici.
+        .onAppear { publishTrigger?.arm { publishAllSlides() } }
+        .onDisappear { publishTrigger?.disarm() }
         // Le bandeau de reprise ne flotte au-dessus de RIEN : dès que le chrome
         // plein cède la place (panneau d'outil, éditeur texte, dessin, timeline),
         // il se range. La règle est pure et testée

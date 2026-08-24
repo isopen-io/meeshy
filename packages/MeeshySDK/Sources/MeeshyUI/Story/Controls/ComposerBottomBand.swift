@@ -5,6 +5,12 @@ import MeeshySDK
 struct ComposerBottomBand: View {
     let state: BandState
     @ObservedObject var viewModel: StoryComposerViewModel
+    /// C7-UI — store d'accessibilité média, TRAVERSÉ (jamais créé ici).
+    /// Ce band démonte `ComposerToolPanelHost` à chaque bascule vers
+    /// `.hidden` / `.formatPanel` : le store doit vivre PLUS HAUT
+    /// (`ComposerControlsLayer`) pour que fermer puis rouvrir le panneau
+    /// Média ne perde pas le texte alternatif déjà saisi.
+    @ObservedObject var accessibilityStore: MediaAccessibilityStore
 
     @Binding var selectedFilter: StoryFilter?
     @Binding var fgMediaItem: PhotosPickerItem?
@@ -22,6 +28,14 @@ struct ComposerBottomBand: View {
     var onOpenStickerPicker: (() -> Void)? = nil
     var onOpenLocationPicker: (() -> Void)? = nil
     var onOpenMentionPicker: (() -> Void)? = nil
+    /// C7-UI — relais du texte alternatif commité (id du média, texte)
+    /// jusqu'au point de publication. Sans ce maillon, `ComposerToolPanelHost`
+    /// exposait un rappel que PERSONNE ne passait : l'auteur pouvait saisir un
+    /// texte qui n'atteignait jamais le réseau.
+    var onMediaAltCommitted: ((String, String) -> Void)? = nil
+    /// C7-UI — relais de l'opt-in `allowSoundExtraction` (flag UNIQUE du post,
+    /// pas par média). Même trou que `onMediaAltCommitted` avant ce lot.
+    var onAllowSoundExtractionChanged: ((Bool) -> Void)? = nil
 
     /// Non-nil (mode dessin) → le grabber devient un handle de RESIZE : drag vertical
     /// ajuste cette hauteur de panneau (clampée), pilotée via `panelHeight`. Le canvas
@@ -93,6 +107,7 @@ struct ComposerBottomBand: View {
                     ComposerToolPanelHost(
                         tool: tool,
                         viewModel: viewModel,
+                        accessibilityStore: accessibilityStore,
                         selectedFilter: $selectedFilter,
                         fgMediaItem: $fgMediaItem,
                         showAudioDocumentPicker: $showAudioDocumentPicker,
@@ -118,6 +133,8 @@ struct ComposerBottomBand: View {
                         onOpenMentionPicker: onOpenMentionPicker,
                         onDeleteText: onDeleteText,
                         onShowInTimeline: onShowInTimeline,
+                        onMediaAltCommitted: onMediaAltCommitted,
+                        onAllowSoundExtractionChanged: onAllowSoundExtractionChanged,
                         panelHeightOverride: resizableHeight?.wrappedValue
                     )
                 case .formatPanel(.text, let elementId):

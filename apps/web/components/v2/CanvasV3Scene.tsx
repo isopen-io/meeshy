@@ -82,6 +82,10 @@ export interface CanvasV3MediaResolution {
   url: string;
   mimeType: string;
   aspectRatio?: number;
+  /// Texte alternatif — clé par le MÊME `postMediaId` que `url`, jamais
+  /// dérivé côté rendu : `MediaObject`/`StickerObject` le SERVENT, ils ne
+  /// l'inventent pas (contrat S4-web, alt vide si le document n'en porte pas).
+  alt?: string;
 }
 
 /// Gestionnaires de mise en mémoire tampon du lecteur hôte — le legacy les
@@ -388,6 +392,7 @@ type ResolvedMedia = {
   kind: 'image' | 'video';
   aspectRatio?: number;
   isBackground: boolean;
+  alt?: string;
 };
 
 function resolveMedia(o: ObjectV3, mediaById?: Map<string, CanvasV3MediaResolution>): ResolvedMedia {
@@ -400,6 +405,7 @@ function resolveMedia(o: ObjectV3, mediaById?: Map<string, CanvasV3MediaResoluti
     kind: declared === 'video' || (declared === undefined && mimeType.startsWith('video')) ? 'video' : 'image',
     aspectRatio: numeric(o.payload.aspectRatio) ?? entry?.aspectRatio,
     isBackground: o.payload.isBackground === true,
+    alt: entry?.alt,
   };
 }
 
@@ -574,16 +580,41 @@ function AudioObject({
   );
 }
 
-function StickerObject({ o, anim }: ObjectRenderProps) {
+/// S4-web — un sticker importé (S1) est une IMAGE INTÉGRÉE au post, résolue
+/// par `postMediaId` dans le MÊME `mediaById` que `MediaObject` : aucun
+/// second résolveur d'URL. Le repli ne rend `null` QUE si le payload ne
+/// porte NI image résolvable NI emoji — un sticker image sans emoji au fil
+/// (client neuf, S1) doit rester visible, jamais retomber sur le vide qui
+/// faisait disparaître ce cas avant ce lot.
+function StickerObject({ o, anim, mediaById }: ObjectRenderProps & { mediaById?: Map<string, CanvasV3MediaResolution> }) {
   const emoji = str(o.payload.emoji);
-  if (!emoji) return null;
+  const media = resolveMedia(o, mediaById);
   const size = numeric(o.payload.baseSize) ?? DEFAULT_STICKER_SIZE;
+  const style: React.CSSProperties = {
+    ...objectStyle(o, anim),
+    fontSize: `${((size / STORY_DESIGN_WIDTH) * 100).toFixed(4)}cqw`,
+  };
+
+  if (media.url) {
+    return (
+      <img
+        data-testid={`canvas-v3-object-${o.id}`}
+        data-kind="sticker"
+        src={media.url}
+        alt={media.alt ?? ''}
+        className={cn('pointer-events-none select-none', bandClass(o.anchor))}
+        style={{ ...style, width: '1em', height: '1em', objectFit: 'contain' }}
+      />
+    );
+  }
+
+  if (!emoji) return null;
   return (
     <div
       data-testid={`canvas-v3-object-${o.id}`}
       data-kind="sticker"
       className={cn('pointer-events-none select-none leading-none', bandClass(o.anchor))}
-      style={{ ...objectStyle(o, anim), fontSize: `${((size / STORY_DESIGN_WIDTH) * 100).toFixed(4)}cqw` }}
+      style={style}
     >
       {emoji}
     </div>
@@ -767,7 +798,7 @@ function CanvasV3Object({
     );
   }
   if (o.kind === 'audio') return <AudioObject o={o} anim={anim} mediaById={mediaById} muted={muted} />;
-  if (o.kind === 'sticker') return <StickerObject o={o} anim={anim} />;
+  if (o.kind === 'sticker') return <StickerObject o={o} anim={anim} mediaById={mediaById} />;
   if (o.kind === 'place') return <PlaceObject o={o} anim={anim} hereLabel={hereLabel} />;
   if (o.kind === 'drawing') return <DrawingObject o={o} anim={anim} />;
   return null;

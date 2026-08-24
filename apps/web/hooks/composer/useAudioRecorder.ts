@@ -198,8 +198,14 @@ export function useAudioRecorder({
         hasTimeline: !!metadata?.audioEffectsTimeline
       });
 
-      // Upload le fichier
-      await onAudioReady([audioFile], metadata ? [metadata] : undefined);
+      // Ce son sort du MICRO de l'application : il n'a encore été entendu par
+      // personne. Rien dans le fichier ne le distingue d'un son importé — seul
+      // ce chemin le sait, et seulement à cet instant. Non déclarée ici, la
+      // provenance est perdue pour toujours, et la feuille de partage qui
+      // proposera de PUBLIER cette note vocale des jours plus tard n'aura plus
+      // rien à quoi demander confirmation.
+      // @see packages/shared/utils/forward-to-publication.ts
+      await onAudioReady([audioFile], [{ ...(metadata ?? {}), capturedInApp: true }]);
     }
   }, [onAudioReady]);
 

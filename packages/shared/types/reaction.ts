@@ -24,13 +24,37 @@ export interface ReactionData {
 }
 
 /**
- * Agrégation des réactions par emoji pour un message
- * Optimisé pour l'affichage et les performances
+ * Agrégation des réactions par emoji, dans la forme qu'elle peut prendre sur une
+ * DIFFUSION — c'est-à-dire sans aucune réponse par-lecteur.
+ *
+ * Une diffusion de room n'a pas de lecteur : le même objet part vers tous les
+ * participants. Un champ dont la valeur dépend de « qui regarde » n'y a donc
+ * aucune valeur juste, et le calculer quand même ne peut le calculer que pour
+ * l'ACTEUR. Les deux familles de réaction écrites APRÈS celle-ci l'énoncent
+ * déjà — `PostReactionAggregation` (« NO userIds, NO hasCurrentUser ») et
+ * `AttachmentReactionUpdateEventData.reactionSummary` (des comptes, l'état
+ * « ma réaction » restant maintenu côté client).
+ *
+ * Ce que le lecteur peut en dériver lui-même est ici : `count` est absolu,
+ * `participantIds` est la liste des réacteurs, et l'événement porteur nomme
+ * l'acteur (`participantId` + `userId`).
  */
-export interface ReactionAggregation {
+export interface ReactionBroadcastAggregation {
   readonly emoji: string;
   readonly count: number;
   readonly participantIds: readonly string[];
+}
+
+/**
+ * La même agrégation, résolue POUR UN LECTEUR donné.
+ *
+ * `hasCurrentUser` n'est calculable qu'à un endroit où l'on sait à qui l'on
+ * répond : la lecture REST (`getMessageReactions`, `getEmojiAggregation` avec
+ * son `currentParticipantId`) et la reconstruction locale d'un client. Jamais
+ * une diffusion — d'où la séparation en deux types plutôt qu'un champ optionnel,
+ * qui aurait laissé chaque site décider seul s'il a le droit de le remplir.
+ */
+export interface ReactionAggregation extends ReactionBroadcastAggregation {
   readonly hasCurrentUser: boolean;
 }
 
@@ -64,7 +88,13 @@ export interface ReactionUpdateEvent {
   readonly userId?: string;
   readonly emoji: string;
   readonly action: 'add' | 'remove';
-  readonly aggregation: ReactionAggregation;
+  /**
+   * L'état ABSOLU de cet emoji après la mutation, sans réponse par-lecteur —
+   * cf. `ReactionBroadcastAggregation`. Un client dérive « ma réaction » de
+   * `userId` (le User.id de l'acteur) confronté au sien, jamais d'un drapeau
+   * porté par l'agrégat : celui-ci décrirait l'acteur, pas lui.
+   */
+  readonly aggregation: ReactionBroadcastAggregation;
   readonly timestamp: Date;
 }
 

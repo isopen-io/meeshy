@@ -68,11 +68,9 @@ class WebRtcEngine @Inject constructor(
     private val _iceConnectionState = MutableStateFlow(PeerConnection.IceConnectionState.NEW)
     val iceConnectionState: StateFlow<PeerConnection.IceConnectionState> = _iceConnectionState.asStateFlow()
 
-    private val _remoteAudioTracks = MutableSharedFlow<AudioTrack>(extraBufferCapacity = 8)
-    val remoteAudioTracks: SharedFlow<AudioTrack> = _remoteAudioTracks.asSharedFlow()
-
-    private val _remoteVideoTracks = MutableSharedFlow<VideoTrack>(replay = 1, extraBufferCapacity = 8)
-    val remoteVideoTracks: SharedFlow<VideoTrack> = _remoteVideoTracks.asSharedFlow()
+    private val remoteTracks = RemoteTrackRegistry()
+    val remoteAudioTracks: SharedFlow<AudioTrack> = remoteTracks.audio
+    val remoteVideoTracks: SharedFlow<VideoTrack> = remoteTracks.video
 
     /** Opens a fresh peer connection configured with the gateway's per-user ICE servers. */
     fun createConnection(iceServers: List<SocketIceServer>, enableVideo: Boolean = false) {
@@ -196,6 +194,11 @@ class WebRtcEngine @Inject constructor(
         localAudioTrack = null
         audioSource = null
         _iceConnectionState.value = PeerConnection.IceConnectionState.NEW
+        // The peer connection dies above with the call's remote tracks, but this
+        // engine is a @Singleton reused by the NEXT call — without forgetting them
+        // here, a fresh remoteVideoTracks subscriber (e.g. CallScreen recomposing)
+        // would be replayed the disposed VideoTrack from the call that just ended.
+        remoteTracks.reset()
     }
 
     private fun buildFactory(): PeerConnectionFactory {
@@ -216,11 +219,7 @@ class WebRtcEngine @Inject constructor(
         }
 
         override fun onAddTrack(receiver: RtpReceiver, streams: Array<out MediaStream>) {
-            when (val track = receiver.track()) {
-                is AudioTrack -> _remoteAudioTracks.tryEmit(track)
-                is VideoTrack -> _remoteVideoTracks.tryEmit(track)
-                else -> Unit
-            }
+            remoteTracks.onAddTrack(receiver.track())
         }
 
         override fun onSignalingChange(state: PeerConnection.SignalingState?) = Unit

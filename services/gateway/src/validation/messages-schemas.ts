@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import { isMsRangeStrictlyOrdered } from '@meeshy/shared/utils/time-range';
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 
 const mongoId = z
   .string()
-  .regex(/^[0-9a-fA-F]{24}$/, 'Invalid MongoDB ObjectId format');
+  .regex(OBJECT_ID_REGEX, 'Invalid MongoDB ObjectId format');
 
 /**
  * Code de langue tel qu'il arrive du fil, AVANT normalisation serveur.
@@ -34,17 +36,20 @@ const playbackStretch = z.object({
   startMs: z.number().int().nonnegative(),
   endMs: z.number().int().nonnegative(),
   endedBy: z.enum(['pause', 'seek', 'muted', 'completed', 'dismissed', 'superseded'])
-}).refine((s) => s.endMs > s.startMs, {
+}).refine(isMsRangeStrictlyOrdered, {
   /**
-   * `endMs > startMs` STRICT (pas `>=`) : miroir explicite du filtre `isUsable`
-   * dans `services/gateway/src/utils/playback-trace.ts:78`, qui jette silencieusement
-   * une entrée de durée nulle ou inversée à la persistance. Rejeter au wire
+   * `endMs > startMs` STRICT (pas `>=`), via la brique partagée
+   * {@link isMsRangeStrictlyOrdered} (`@meeshy/shared/utils/time-range`) : le
+   * MÊME prédicat que les filtres `isUsable` de `utils/playback-trace.ts` et
+   * `utils/playback-segments.ts`, qui jettent silencieusement une entrée de
+   * durée nulle ou inversée à la persistance et à la fusion. Rejeter au wire
    * transforme une perte silencieuse en `400 Validation Error` — le client peut
    * loguer et retenter au lieu de croire son rapport persisté.
    *
-   * Décision produit distincte des refines 234/236 (`>=`, segment ponctuel admis) :
-   * ici la sémantique documentée est « une écoute réellement CONTINUE »
-   * (`playback-trace.ts:7`) — une durée nulle n'est pas une écoute.
+   * Régime STRICT distinct des refines 234/236 (`>=`, segment ponctuel admis,
+   * `isMsRangeOrdered`) : ici la sémantique documentée est « une écoute
+   * réellement CONTINUE » (`playback-trace.ts:7`) — une durée nulle n'est pas
+   * une écoute.
    */
   path: ['endMs'],
   message: 'STRETCH_END_MUST_EXCEED_START'

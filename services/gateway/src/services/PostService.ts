@@ -2243,8 +2243,9 @@ export class PostService {
     // Reposter crée un POST, quel que soit le type de l'original (2026-08-19).
     //
     // Le défaut était `?? original.type` : le repost HÉRITAIT du type de sa
-    // source. Or presque aucun site d'appel ne renseigne `targetType` — seul
-    // le viewer de story passe `.post` —, si bien que republier une story
+    // source. À l'époque (2026-08-19), presque aucun site d'appel ne
+    // renseignait `targetType` — seul le viewer de story passait `.post` —,
+    // si bien que republier une story
     // depuis le fil, le profil ou le détail fabriquait une STORY : elle
     // atterrissait dans le tray du reposteur et jamais dans son fil, alors
     // que le geste demandait « partager dans mon fil ». Et comme
@@ -2260,6 +2261,20 @@ export class PostService {
     // (`POST /posts/:postId/republish`), auteur uniquement, type STORY, date
     // fraîche. `targetType` reste au protocole : ce chemin-là et un futur
     // « reposter en story » en dépendent.
+    //
+    // ÉTAT AU 2026-08-24 — à lire avant de toucher au `??` ci-dessous. La
+    // prémisse « presque aucun site ne renseigne `targetType` » ne vaut PLUS,
+    // et le repli a changé de NATURE sans changer de valeur. iOS le passe
+    // partout depuis `92529dac5` (loi du miroir, `RepostTargeting`) — zéro
+    // site de production n'écrit `targetType: nil`, une garde de source le
+    // vérifie (`ComposerIntentTests.swift:553-584`) — et le web depuis
+    // `1214afbcb` : ses dix sites de repost le passent tous.
+    //
+    // `?? PostType.POST` n'est donc plus le chemin NORMAL : c'est le FILET des
+    // clients anciens, et rien d'autre. Deux conséquences pour la suite : ne
+    // pas le durcir en `throw` tant que le parc n'est pas à jour, et ne pas le
+    // relire comme une intention produit — l'intention arrive maintenant
+    // explicitement, et c'est l'appelant qui la porte.
     const targetType = opts.targetType ?? PostType.POST;
     const content = opts.content;
     const isQuote = opts.isQuote ?? false;

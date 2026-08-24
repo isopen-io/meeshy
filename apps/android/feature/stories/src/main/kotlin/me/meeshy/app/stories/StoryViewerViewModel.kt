@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.StoryTextObjectTranslationMerge
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
@@ -52,22 +53,30 @@ data class StoryForegroundMediaView(
     val opacity: Double = 1.0,
     val startTime: Double = 0.0,
     val duration: Double = 0.0,
+    val fadeIn: Double = 0.0,
+    val fadeOut: Double = 0.0,
     val keyframes: List<StoryKeyframe> = emptyList(),
     val clipTransitions: List<StoryClipTransition> = emptyList(),
 ) {
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
-     * unchanged when nothing animates — no keyframes that key a channel AND no
-     * clip transition this layer takes part in. Otherwise a copy whose
-     * [x]/[y]/[scale] follow the interpolated keyframe animation (un-keyed channels
-     * holding their static base) and whose [opacity] additionally folds in the
-     * crossfade/dissolve ramp of any transition naming this clip. Keyframe times are
-     * offsets from [startTime], per the timeline spec.
+     * unchanged when nothing animates — no keyframes that key a channel, no clip
+     * transition this layer takes part in, AND no fadeIn/fadeOut envelope active at
+     * this instant. Otherwise a copy whose [x]/[y]/[scale] follow the interpolated
+     * keyframe animation (un-keyed channels holding their static base) and whose
+     * [opacity] folds together, in iOS render order, the clip's own fade envelope,
+     * its keyframe opacity, and any clip-transition ramp.
+     *
+     * Opacity precedence mirrors iOS `StoryRenderer` (`fade ?? keyframeOpacity ??
+     * base`): a live [fadeIn]/[fadeOut] envelope value OVERRIDES the keyframe/static
+     * opacity, and the result is then multiplied by the crossfade/dissolve ramp of
+     * any transition naming this clip. Keyframe and fade times are offsets from
+     * [startTime], per the timeline spec.
      *
      * A layer that participates in a transition but carries no [duration] is left
-     * untouched: window-clipping on a zero-length window (`end == start`) would hide
-     * the clip at almost every instant. Pure — the Compose canvas ticks a clock in
-     * and renders the result.
+     * untouched for the transition ramp: window-clipping on a zero-length window
+     * (`end == start`) would hide the clip at almost every instant. Pure — the
+     * Compose canvas ticks a clock in and renders the result.
      */
     fun animated(atSeconds: Float): StoryForegroundMediaView {
         val resolved = StoryKeyframeResolver.resolve(
@@ -84,7 +93,14 @@ data class StoryForegroundMediaView(
         } else {
             emptyList()
         }
-        if (resolved == null && transitions.isEmpty()) return this
+        val fadeEnvelope = StoryMediaFadeResolver.fadeOpacity(
+            fadeIn = fadeIn.takeIf { it > 0.0 },
+            fadeOut = fadeOut.takeIf { it > 0.0 },
+            startTime = startTime,
+            duration = duration.takeIf { it > 0.0 },
+            currentTime = atSeconds.toDouble(),
+        )
+        if (resolved == null && transitions.isEmpty() && fadeEnvelope == null) return this
 
         val base = resolved ?: ResolvedKeyframeTransform(x = x, y = y, scale = scale, opacity = opacity)
         val transitionOpacity = if (transitions.isEmpty()) {
@@ -98,11 +114,12 @@ data class StoryForegroundMediaView(
                 currentTime = atSeconds.toDouble(),
             )
         }
+        val opacityBase = fadeEnvelope ?: base.opacity
         return copy(
             x = base.x,
             y = base.y,
             scale = base.scale,
-            opacity = base.opacity * transitionOpacity,
+            opacity = opacityBase * transitionOpacity,
         )
     }
 }
@@ -128,6 +145,7 @@ data class StorySlideView(
     val backgroundVideoUrl: String? = null,
     val backgroundLoop: Boolean = true,
     val foregroundMedia: List<StoryForegroundMediaView> = emptyList(),
+    val textObjects: List<StoryTextObjectView> = emptyList(),
     val backgroundAudioUrl: String? = null,
     val foregroundAudioUrl: String? = null,
     val languageCode: String? = null,
@@ -225,6 +243,28 @@ class StoryViewerViewModel @Inject constructor(
     init {
         load()
         observeReactionDeltas()
+        observeTranslationUpdates()
+    }
+
+    /**
+     * Fold realtime overlay translations into the open viewer. The gateway
+     * broadcasts `story:translation-updated` after translating a story's on-canvas
+     * text object; the pure [StoryTextObjectTranslationMerge.merge] upserts the new
+     * languages into the cached item, and [emit] re-projects the current slide so a
+     * reader whose preferred language just became available reads it at once — no
+     * tap, no refetch (parity with iOS `storyTranslationUpdated`). An event for an
+     * unknown story, or one whose merge is a no-op, changes nothing.
+     */
+    private fun observeTranslationUpdates() {
+        viewModelScope.launch {
+            socialSocket.storyTranslationUpdated.collect { event ->
+                val item = rawItems[event.postId] ?: return@collect
+                val merged = StoryTextObjectTranslationMerge.merge(item, event.textObjectIndex, event.translations)
+                if (merged == item) return@collect
+                rawItems[event.postId] = merged
+                emit()
+            }
+        }
     }
 
     /**
@@ -398,15 +438,25 @@ class StoryViewerViewModel @Inject constructor(
         if (languageOverride != null && languageOverride?.first != currentId) languageOverride = null
         val override = languageOverride?.second
         val reaction = playback.currentSlide?.let { reactionStateFor(it) } ?: StoryReactionState()
-        val slides = if (override == null) playback.slides else playback.slides.map { slideView ->
+        // The current slide is always re-projected from its raw item: [rawItems] is the
+        // single source of truth for translated content and can change at runtime (a
+        // tapped exploration [override], an on-demand pull, or a realtime
+        // `story:translation-updated` merge). With no override and no runtime merge this
+        // reproduces the projection [toSlideView] already computed, so non-current slides
+        // pass through untouched.
+        val slides = playback.slides.map { slideView ->
             if (slideView.id != currentId) return@map slideView
             val item = rawItems[slideView.id] ?: return@map slideView
             val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
             val resolved = StoryContentResolver.resolve(item, prefs, override)
+            val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
+            val textObjects = item.storyEffects?.textObjects.orEmpty()
+                .map { StoryTextObjectProjection.project(it, preferredLanguages, override) }
             slideView.copy(
                 text = resolved.content,
                 isTranslated = resolved.isTranslated,
                 languageCode = resolved.languageCode,
+                textObjects = textObjects,
             )
         }
         _state.value = StoryViewerUiState(
@@ -435,20 +485,32 @@ class StoryViewerViewModel @Inject constructor(
      * pure-original story (no translations) from dumping every preferred language as
      * a request affordance; an anonymous/logged-out viewer (no prefs) sees only the
      * present translations.
+     *
+     * The Prisme applies to ALL of a slide's content (CLAUDE.md §Cohérence), so a
+     * present language is any language a translation exists for across the caption
+     * **and** the on-canvas text overlays — not the caption alone. A slide whose
+     * overlays are translated but whose caption is not would otherwise expose no way
+     * to explore them. Caption languages lead (in caption order), then each
+     * overlay-only language, all deduped case-insensitively.
      */
     private fun availableLanguagesFor(storyId: String?): List<StoryLanguageOption> {
         val item = storyId?.let { rawItems[it] } ?: return emptyList()
-        val present = item.translations.orEmpty()
+        val captionCodes = item.translations.orEmpty()
             .filter { it.language.isNotBlank() && it.content.isNotBlank() }
-            .distinctBy { it.language.lowercase() }
-            .map { languageOption(it.language, storyId, isTranslatable = false) }
+            .map { it.language }
+        val overlayCodes = item.storyEffects?.textObjects.orEmpty()
+            .flatMap { it.translations.orEmpty().entries }
+            .filter { it.key.isNotBlank() && it.value.isNotBlank() }
+            .map { it.key }
+        val presentCodes = (captionCodes + overlayCodes).distinctBy { it.lowercase() }
+        val present = presentCodes.map { languageOption(it, storyId, isTranslatable = false) }
         if (present.isEmpty()) return emptyList()
 
         val user = sessionRepository.currentUser.value ?: return present
-        val presentCodes = present.mapTo(mutableSetOf()) { it.code.lowercase() }
+        val presentLower = presentCodes.mapTo(mutableSetOf()) { it.lowercase() }
         val translatable = LanguageResolver.preferredContentLanguages(user)
             .distinctBy { it.lowercase() }
-            .filter { it.lowercase() !in presentCodes }
+            .filter { it.lowercase() !in presentLower }
             .map { languageOption(it, storyId, isTranslatable = true) }
         return present + translatable
     }
@@ -526,6 +588,9 @@ class StoryViewerViewModel @Inject constructor(
         val foreground = storyEffects?.mediaObjects.orEmpty()
             .filterNot { it.isBackground }
             .mapNotNull { it.toForegroundMediaView(clipTransitions) }
+        val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
+        val textObjects = storyEffects?.textObjects.orEmpty()
+            .map { StoryTextObjectProjection.project(it, preferredLanguages) }
         return StorySlideView(
             id = id,
             text = resolved.content,
@@ -537,6 +602,7 @@ class StoryViewerViewModel @Inject constructor(
             backgroundVideoUrl = background.videoUrl,
             backgroundLoop = background.loop,
             foregroundMedia = foreground,
+            textObjects = textObjects,
             backgroundAudioUrl = resolveAudioUrl(preferBackground = true),
             foregroundAudioUrl = resolveAudioUrl(preferBackground = false),
         )
@@ -587,6 +653,8 @@ class StoryViewerViewModel @Inject constructor(
             aspectRatio = aspectRatio,
             startTime = startTime ?: 0.0,
             duration = duration ?: 0.0,
+            fadeIn = fadeIn ?: 0.0,
+            fadeOut = fadeOut ?: 0.0,
             keyframes = keyframes.orEmpty(),
             clipTransitions = clipTransitions,
         )

@@ -828,16 +828,21 @@ struct FeedPostCard: View {
                     if isAuthor {
                         Text("·").font(.caption).foregroundColor(theme.textMuted)
                         HStack(spacing: 3) {
-                            Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
-                            Text(CompactCountLabel.text(post.impressionCount)).font(.caption2.weight(.medium))
-                            Text("·").font(.caption2)
-                            Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                            Text(CompactCountLabel.text(post.viewCount)).font(.caption2.weight(.medium))
+                            ReachMetricLabel(
+                                icon: "chart.bar.fill",
+                                count: post.impressionCount,
+                                label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
+                                tint: theme.textMuted
+                            )
+                            Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                                .accessibilityHidden(true)
+                            ReachMetricLabel(
+                                icon: "eye.fill",
+                                count: post.viewCount,
+                                label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
+                                tint: theme.textMuted
+                            )
                         }
-                        .foregroundColor(theme.textMuted)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
-                        .accessibilityValue("\(post.impressionCount) · \(post.viewCount)")
                     }
                 }
             }
@@ -1080,7 +1085,7 @@ struct FeedPostCard: View {
             .disabled(isHeartInFlight)
             .animation(.easeOut(duration: 0.2), value: effectiveIsLiked)
             .accessibilityLabel(String(localized: "a11y.feed.post.like", defaultValue: "Aimer", bundle: .main))
-            .accessibilityValue(String(format: String(localized: "a11y.feed.post.like.value", defaultValue: "%d j'aime", bundle: .main), effectiveLikeCount))
+            .accessibilityValue(PostStatAccessibility.likesLabel(effectiveLikeCount))
             .accessibilityAddTraits(effectiveIsLiked ? .isSelected : [])
 
             Spacer()
@@ -1414,7 +1419,7 @@ struct FeedPostCard: View {
                                     .font(.caption2)
                                     .foregroundColor(theme.accentText(accentColor).opacity(0.7))
                                     .accessibilityHidden(true)
-                                Text(String(localized: "feed.post.comment.replies_count", defaultValue: "\(comment.replies) réponses", bundle: .main))
+                                Text(PostStatAccessibility.repliesLabel(comment.replies))
                                     .font(.caption.weight(.medium))
                                     .foregroundColor(theme.textMuted)
                             }

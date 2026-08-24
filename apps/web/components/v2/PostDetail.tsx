@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
 import { formatDuration } from '@/utils/audio-formatters';
-import { Download, Repeat2 } from 'lucide-react';
+import { ArrowDownToLine, Download, Repeat2 } from 'lucide-react';
 import { useI18n } from '@/hooks/use-i18n';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
@@ -142,6 +142,8 @@ export interface PostDetailProps {
   currentUserId?: string | null;
   currentUser?: { username: string; avatar?: string | null } | null;
   userLanguage?: string;
+  /** Prisme ordonné (rangs 1→4) pour l'auto-résolution de `TranslationToggle`. */
+  preferredLanguages?: string[];
   /**
    * L'annonce du fond + bouton 🔇 (B3.3-6) — n'existe (n'est rendue) QUE si
    * une piste `sound` v3 existe (B3.5). Mêmes props que `PostCard` (constat 2,
@@ -167,6 +169,15 @@ export interface PostDetailProps {
   onUnbookmark?: () => void;
   onShare?: () => void;
   onRepost?: () => void;
+  /**
+   * L'ANCRAGE — « garder ça pour de bon » : republier la carte en POST
+   * permanent, à côté du repost qui, lui, miroite le format de la source.
+   * Jumeau de `StoryViewer.onRepostAsPost`.
+   *
+   * C'est l'HÔTE qui décide de le câbler ou non : la carte ne sait pas si le
+   * miroir mènerait à de l'éphémère sans recours.
+   */
+  onRepostAsPost?: () => void;
   onDelete?: () => void;
   onEdit?: () => void;
   onReport?: () => void;
@@ -199,6 +210,7 @@ function PostDetail({
   currentUserId,
   currentUser,
   userLanguage,
+  preferredLanguages,
   backgroundSound,
   backgroundSoundMeta,
   backgroundSoundMuted = true,
@@ -217,6 +229,7 @@ function PostDetail({
   onUnbookmark,
   onShare,
   onRepost,
+  onRepostAsPost,
   onDelete,
   onEdit,
   onReport,
@@ -390,6 +403,7 @@ function PostDetail({
                     originalLanguageName={post.originalLanguage ? getLanguageName(post.originalLanguage) : undefined}
                     translations={translationItems}
                     userLanguage={userLanguage}
+                    preferredLanguages={preferredLanguages}
                     variant="flags"
                     showContent={false}
                     onDisplayedChange={handleDisplayedChange}
@@ -493,6 +507,7 @@ function PostDetail({
                       originalLanguageName={repostOf.originalLanguage ? getLanguageName(repostOf.originalLanguage) : undefined}
                       translations={repostTranslationItems}
                       userLanguage={userLanguage}
+                      preferredLanguages={preferredLanguages}
                       variant="inline"
                     />
                   </div>
@@ -630,6 +645,19 @@ function PostDetail({
               </button>
             )}
 
+            {onRepostAsPost && (
+              <button
+                data-testid="post-detail-repost-as-post"
+                onClick={onRepostAsPost}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)] transition-colors"
+                aria-label={t('post.repostAsPost', 'Keep on my feed')}
+                title={t('post.repostAsPost', 'Keep on my feed')}
+              >
+                <ArrowDownToLine className="w-5 h-5" />
+                {t('post.repostAsPost', 'Keep on my feed')}
+              </button>
+            )}
+
             <button
               onClick={handleBookmarkToggle}
               className={cn(
@@ -660,6 +688,7 @@ function PostDetail({
           currentUserId={currentUserId}
           currentUser={currentUser}
           userLanguage={userLanguage}
+          preferredLanguages={preferredLanguages}
           likedCommentIds={likedCommentIds}
           isLoading={commentsLoading}
           hasMore={commentsHasMore}

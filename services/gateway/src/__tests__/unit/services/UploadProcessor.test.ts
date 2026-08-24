@@ -404,6 +404,37 @@ describe('UploadProcessor', () => {
       expect(createCall.data.imageVariants).toBeUndefined();
     });
 
+    it('persiste la provenance quand le client DÉCLARE une capture', async () => {
+      // Rien dans un fichier ne distingue une photo prise à l'instant d'une
+      // photo importée : seul le client qui a ouvert la caméra le sait, et il ne
+      // le sait qu'à cet instant. Non écrite ici, la provenance est perdue pour
+      // toujours — et la feuille de partage qui propose de PUBLIER ce média des
+      // jours plus tard n'a plus rien à quoi demander confirmation.
+      const file = createTestFile({ mimeType: 'image/jpeg' });
+
+      await processor.uploadFile(file, testUserId, false, testMessageId, { capturedInApp: true });
+
+      expect(mockPrismaClient.messageAttachment.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ capturedInApp: true }),
+        })
+      );
+    });
+
+    it("n'affirme une capture que sur un booléen VRAI — jamais sur une valeur véridique", async () => {
+      // `providedMetadata` est un canal `any` alimenté par un corps multipart :
+      // une chaîne « false » y est véridique en JavaScript. Une garde de
+      // confidentialité qui se laisse ouvrir par une coercition ne garde rien —
+      // et ici l'erreur va dans le sens dangereux, en déclarant capture ce qui
+      // n'en est pas une. La lecture est donc stricte.
+      const file = createTestFile({ mimeType: 'image/jpeg' });
+
+      await processor.uploadFile(file, testUserId, false, testMessageId, { capturedInApp: 'false' });
+
+      const createCall = mockPrismaClient.messageAttachment.create.mock.calls[0][0] as any;
+      expect(createCall.data.capturedInApp).toBe(false);
+    });
+
     it('should handle anonymous upload', async () => {
       const file = createTestFile();
 

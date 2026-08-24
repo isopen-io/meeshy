@@ -301,7 +301,12 @@ extension StoryComposerView {
                 onDismissActivePanel: dismissActiveBandPanel,
                 onOpenStickerPicker: { showStickerPicker = true },
                 onOpenLocationPicker: { showLocationPicker = true },
-                onOpenMentionPicker: { showMentionPicker = true }
+                onOpenMentionPicker: { showMentionPicker = true },
+                // V3-4 — le store de collecte vient du composer, pas de la
+                // couche : c'est le composer qui le relira au moment de
+                // publier. Sans cette ligne la couche retombe sur le sien,
+                // la saisie reste possible et la publication lit un objet vide.
+                accessibilityStore: accessibilityStore
             )
         }
     }
@@ -361,28 +366,83 @@ extension StoryComposerView {
         // modificateurs sans effet sur la question.
         ZStack {
             if offersContentStarters {
-                // `BlankCanvasStarterSurface` occupe TOUTE la place offerte :
-                // c'est ce qui rend le geste de la directive user disponible
-                // depuis n'importe quel pixel de la page blanche. Un `VStack` nu
-                // ne s'étire que sur son axe majeur — sa largeur aurait valu
-                // celle de la plus large capsule (~200 pt sur 393), et le même
-                // swipe aurait marché ou non selon 80 pt d'écart latéral. Aucun
-                // geste n'est volé au canvas : sur une slide vierge il n'y a, par
-                // définition, aucun élément à sélectionner, et le tap y route
-                // vers EXACTEMENT la même politique.
-                BlankCanvasStarterSurface {
-                    blankCanvasTypeHint
-                    blankCanvasStarterRow
+                ZStack {
+                    // LE FOND, et lui SEUL, porte les trois gestes de la page
+                    // blanche. Il est posé DERRIÈRE les capsules, jamais autour
+                    // d'elles : un `highPriorityGesture(…, including: .all)`
+                    // monté sur un conteneur prime sur les gestes de SES
+                    // SOUS-VUES — l'appui long ouvrait donc la caméra depuis les
+                    // capsules « Photo », « Caméra » et « Coller » au lieu de
+                    // l'action de la capsule touchée. Le masque `including:` est
+                    // une déclaration de PRIORITÉ, pas de PORTÉE : seule la
+                    // superposition met les contrôles hors d'atteinte du fond,
+                    // parce qu'en `ZStack` la couche de dessus reçoit la touche
+                    // et les couches du dessous ne la voient jamais.
+                    //
+                    // `Color.clear` occupe TOUTE la place offerte : c'est ce qui
+                    // rend le geste de la directive user disponible depuis
+                    // n'importe quel pixel LIBRE de la page blanche. Aucun geste
+                    // n'est volé au canvas : sur une slide vierge il n'y a, par
+                    // définition, aucun élément à sélectionner, et le tap y route
+                    // vers EXACTEMENT la même politique.
+                    Color.clear
+                        .contentShape(Rectangle())
+                        // Dégage le rail de FABs (48 pt + marge + safe area).
+                        .padding(.bottom, ComposerControlMetrics.bottomOverlayClearance)
+                        .onTapGesture { handleCanvasBackgroundTap() }
+                        .simultaneousGesture(blankCanvasTextSwipe)
+                        // C6a — l'appui long ouvre la caméra. Trois DÉCLARATIONS
+                        // DE PRIORITÉ, jamais une action posée à côté des autres :
+                        //
+                        //  1. `highPriorityGesture` et NON `simultaneousGesture`
+                        //     — en simultané, l'appui long ET le tap se
+                        //     reconnaissent : la caméra s'ouvrirait avec
+                        //     l'éditeur de texte derrière (`TapGesture` de
+                        //     SwiftUI n'a pas de plafond de durée, un appui long
+                        //     se termine toujours par un relâchement) ;
+                        //  2. `maximumDistance` STRICTEMENT sous le
+                        //     `minimumDistance` du swipe : dès que le doigt
+                        //     glisse, l'appui long échoue et le
+                        //     swipe-vers-le-bas reste maître de son geste ;
+                        //  3. le masque : sans fournisseur de caméra, le geste
+                        //     n'est pas seulement inutile, il VOLERAIT le tap au
+                        //     profit de rien. `.subviews` le désactive sans
+                        //     toucher au tap posé plus haut, qui appartient au
+                        //     contenu.
+                        .highPriorityGesture(
+                            blankCanvasCaptureLongPress,
+                            including: offersCameraStarter ? .all : .subviews
+                        )
+                    blankCanvasStarterContent
                 }
-                // Dégage le rail de FABs (48 pt + marge + safe area).
-                .padding(.bottom, ComposerControlMetrics.bottomOverlayClearance)
-                .onTapGesture { handleCanvasBackgroundTap() }
-                .simultaneousGesture(blankCanvasTextSwipe)
                 .transition(.opacity)
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: offersContentStarters)
         .environment(\.colorScheme, canvasChromeScheme)
+    }
+
+    /// Les CONTRÔLES de la page blanche — l'indice « Touchez pour écrire » et la
+    /// rangée de capsules — dans une couche SÉPARÉE du fond gestuel.
+    ///
+    /// Cette séparation EST la règle de portée : les trois gestes de la page
+    /// blanche répondent au fond, jamais aux contrôles qu'ils recouvrent. Tant
+    /// que capsules et gestes vivaient sur la MÊME vue, `including: .all` faisait
+    /// primer l'appui long sur les gestes des sous-vues, et un appui long sur
+    /// « Photo » ouvrait la caméra. Aucun masque `GestureMask` ne corrige cela :
+    /// il ordonne des priorités, il ne délimite pas une zone. La superposition,
+    /// elle, le fait — en `ZStack`, la couche du dessus reçoit la touche.
+    ///
+    /// D'où l'absence de tout modificateur de geste ICI : un seul suffirait à
+    /// remettre les capsules sous une surface gestuelle, et
+    /// `StoryComposerCaptureLongPressTests` le refuse.
+    private var blankCanvasStarterContent: some View {
+        BlankCanvasStarterSurface {
+            blankCanvasTypeHint
+            blankCanvasStarterRow
+        }
+        // Même dégagement que le fond : le rail de FABs reste hors de la couche.
+        .padding(.bottom, ComposerControlMetrics.bottomOverlayClearance)
     }
 
     /// Directive user 2026-07-31 : sur l'état vide, un SWIPE VERS LE BAS range les
@@ -393,7 +453,7 @@ extension StoryComposerView {
     /// Plus de garde `offersContentStarters` dans la closure : le geste n'existe
     /// que monté avec la surface, et elle ne l'est que sur une page blanche.
     private var blankCanvasTextSwipe: some Gesture {
-        DragGesture(minimumDistance: 20)
+        DragGesture(minimumDistance: Self.blankCanvasSwipeMinDistance)
             .onEnded { value in
                 guard value.translation.height > 40,
                       abs(value.translation.height) > abs(value.translation.width)
@@ -423,7 +483,7 @@ extension StoryComposerView {
     @ViewBuilder
     private var blankCanvasStarterRow: some View {
         HStack(spacing: 10) {
-            if storyCameraCapture != nil, viewModel.canAddMedia {
+            if offersCameraStarter {
                 blankCanvasStarterCapsule(
                     icon: "camera.fill",
                     title: String(localized: "story.composer.start.camera",
@@ -435,6 +495,111 @@ extension StoryComposerView {
             }
             if viewModel.canAddMedia {
                 blankCanvasGalleryStarter
+            }
+            // C5b — le presse-papier entre dans le composer. La capsule lit
+            // `\.storyPaste` elle-même : `StoryComposerView` n'a pas à porter une
+            // quatrième `@Environment` pour une amorce.
+            BlankCanvasPasteStarter(
+                canAddMedia: viewModel.canAddMedia,
+                onItems: { posePastedItems($0) }
+            )
+        }
+    }
+
+    // MARK: - C6a — la capture par appui long, C5b — le collage
+
+    /// Vrai quand la caméra peut répondre : fournisseur injecté par l'app ET
+    /// plafond média non atteint.
+    ///
+    /// **Lue par les DEUX chemins** — la capsule « Caméra » et l'appui long sur
+    /// la page blanche. Deux conditions retapées à deux endroits finissent par
+    /// diverger, et le jour où elles divergent, l'appui long ouvre un plein
+    /// écran vide (le fournisseur n'est pas là) ou passe le plafond média.
+    var offersCameraStarter: Bool {
+        Self.offersCameraCapture(hasProvider: storyCameraCapture != nil,
+                                 canAddMedia: viewModel.canAddMedia)
+    }
+
+    /// Règle PURE de l'offre de capture. Deux conditions, jamais une seule :
+    /// l'injection est la CAPACITÉ de répondre (une amorce qui ouvre le vide est
+    /// pire que pas d'amorce, même doctrine que le chip « Lieu »), le plafond
+    /// média est le droit de poser un objet de plus.
+    nonisolated static func offersCameraCapture(hasProvider: Bool, canAddMedia: Bool) -> Bool {
+        hasProvider && canAddMedia
+    }
+
+    /// Règle PURE de l'offre de collage — jumelle de `offersCameraCapture`.
+    /// `hasResolver` est l'injection app-side (`\.storyPaste`) : sans elle,
+    /// personne ne sait lire le presse-papier et la capsule n'est pas rendue.
+    nonisolated static func offersPasteStarter(hasResolver: Bool, canAddMedia: Bool) -> Bool {
+        hasResolver && canAddMedia
+    }
+
+    /// Ce que la capsule « Coller » accepte.
+    ///
+    /// **Cette liste EST la directive produit du 2026-08-23** — « on doit
+    /// pouvoir coller des images, des documents dont les stickers, et ça doit
+    /// être pris en compte et propagé ». La réduire aux images ne rendrait pas
+    /// le collage d'un document impossible : elle rendrait la capsule INERTE
+    /// devant lui, et le presse-papier ne dit jamais pourquoi rien ne s'est
+    /// passé. `.item` ferme la liste, comme sur la cible de dépôt de la barre de
+    /// conversation : ce que le composer ne sait pas peindre est ANNONCÉ
+    /// app-side, jamais avalé.
+    nonisolated static let pasteStarterContentTypes: [UTType] = [
+        .image, .movie, .audio, .pdf, .item
+    ]
+
+    /// Durée au-delà de laquelle l'appui devient un appui LONG.
+    nonisolated static let blankCanvasLongPressDuration: TimeInterval = 0.45
+
+    /// Distance au-delà de laquelle l'appui long ABANDONNE.
+    ///
+    /// STRICTEMENT inférieure à `blankCanvasSwipeMinDistance` : c'est toute la
+    /// déclaration de priorité entre les deux gestes de la page blanche. Si elle
+    /// l'égalait ou la dépassait, un doigt qui commence à glisser resterait
+    /// candidat à l'appui long pendant que le swipe démarre — l'un des deux
+    /// volerait l'autre, et lequel dépendrait du matériel.
+    nonisolated static let blankCanvasLongPressMaxDistance: CGFloat = 12
+
+    /// Distance minimale du swipe-vers-le-bas qui ouvre l'éditeur de texte.
+    nonisolated static let blankCanvasSwipeMinDistance: CGFloat = 20
+
+    /// C6a — l'appui long sur la page blanche ouvre la CAMÉRA.
+    ///
+    /// Geste COMPLÉMENTAIRE, jamais unique (D4) : la capsule « Caméra » de la
+    /// même rangée le double, sous EXACTEMENT la même condition
+    /// (`offersCameraStarter`), et le rail d'outils la double encore.
+    ///
+    /// Le point d'arrivée n'est pas neuf : `showCameraCapture` ouvre le cover
+    /// app-side, dont le résultat passe par `addCapturedMedia` →
+    /// `insertForegroundImage` / `insertForegroundVideo`, extraits en leur temps
+    /// POUR un futur point d'entrée caméra. C'est celui-là.
+    private var blankCanvasCaptureLongPress: some Gesture {
+        LongPressGesture(minimumDuration: Self.blankCanvasLongPressDuration,
+                         maximumDistance: Self.blankCanvasLongPressMaxDistance)
+            .onEnded { _ in
+                guard offersCameraStarter else { return }
+                HapticFeedback.medium()
+                showCameraCapture = true
+            }
+    }
+
+    /// C5b — pose ce que le collage a rendu. **Aucun pipeline neuf** : chaque
+    /// famille emprunte le chemin d'insertion qui existe déjà, celui de la
+    /// caméra pour l'image et la vidéo, celui de l'enregistrement pour le son.
+    ///
+    /// Le DOCUMENT n'arrive jamais ici : la scène de story n'héberge aucune
+    /// pièce jointe, et c'est l'app qui l'annonce (règle O12). Le faire
+    /// transiter par ce point l'obligerait à être jeté en silence.
+    func posePastedItems(_ items: [StoryPastedItem]) {
+        items.forEach { item in
+            switch item {
+            case .image(let image):
+                addCapturedMedia(.photo(image))
+            case .video(let url):
+                addCapturedMedia(.video(url))
+            case .audio(let url):
+                addRecordingToBackground(url: url)
             }
         }
     }
@@ -1486,16 +1651,23 @@ extension StoryComposerView {
 // MARK: - Amorces de page blanche : surface d'accueil et libellé partagé
 
 /// Surface d'accueil des amorces de page blanche. Sa seule responsabilité est
-/// GÉOMÉTRIQUE : occuper l'intégralité de la place offerte et rendre ce
-/// rectangle tapable/glissable. Un `VStack` ne s'étire QUE sur son axe majeur —
-/// sa largeur vaut celle de son plus large enfant, soit ~200 pt sur les 393
-/// d'un iPhone 16 Pro : le swipe-down de la directive user (2026-07-31) n'aurait
-/// répondu que dans une colonne centrale, et le même geste, sur des pixels
-/// d'apparence identique, aurait marché ou non selon 80 pt d'écart.
+/// GÉOMÉTRIQUE : occuper l'intégralité de la place offerte, pour que ce qu'on y
+/// centre soit centré sur le canvas entier. Un `VStack` ne s'étire QUE sur son
+/// axe majeur — sa largeur vaut celle de son plus large enfant, soit ~200 pt sur
+/// les 393 d'un iPhone 16 Pro : le swipe-down de la directive user (2026-07-31)
+/// n'aurait répondu que dans une colonne centrale, et le même geste, sur des
+/// pixels d'apparence identique, aurait marché ou non selon 80 pt d'écart.
 ///
-/// Feuille de vue autonome (comme `BlankCanvasStarterLabel`) pour que cette
-/// propriété soit prouvée par un RENDU mesuré et non par un `contains` dans un
-/// fichier de 1 400 lignes.
+/// **Elle ne déclare AUCUN `contentShape`, et c'est la correction du 2026-08-23.**
+/// Un rectangle de contact plein cadre posé ici transformait la couche des
+/// contrôles en écran opaque aux touches : le fond gestuel monté DERRIÈRE elle
+/// n'aurait plus rien reçu, et l'appui long serait resté sur les capsules. La
+/// zone de contact est donc déclarée par l'APPELANT, sur la couche qui doit
+/// vraiment la porter — le fond.
+///
+/// Feuille de vue autonome (comme `BlankCanvasStarterLabel`) pour que la
+/// propriété géométrique soit prouvée par un RENDU mesuré et non par un
+/// `contains` dans un fichier de 1 400 lignes.
 struct BlankCanvasStarterSurface<Content: View>: View {
     let content: Content
 
@@ -1510,7 +1682,6 @@ struct BlankCanvasStarterSurface<Content: View>: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
     }
 }
 
@@ -1541,5 +1712,46 @@ struct BlankCanvasStarterLabel: View {
         .frame(minHeight: 44)
         .contentShape(Capsule())
         .adaptiveGlass(in: Capsule())
+    }
+}
+
+/// C5b — la capsule « Coller » des amorces de page blanche.
+///
+/// Feuille de vue autonome, comme `BlankCanvasStarterLabel`, et pour la même
+/// raison portée à sa conclusion : elle lit `\.storyPaste` ELLE-MÊME. Ses
+/// entrées sont primitives (`Bool`, une closure), donc elle ne s'abonne à aucun
+/// graphe global — c'est la granularité que « Zero Unnecessary Re-render »
+/// demande d'une feuille.
+///
+/// **`PasteButton` et non un `Button` qui lirait `UIPasteboard.general`.** Deux
+/// propriétés qu'un bouton maison n'a pas : le système accorde l'accès au
+/// presse-papier SANS la bannière « Coller depuis … » (celle que le chemin
+/// `ingestPastedFileURLs` de la barre de conversation doit subir), et le bouton
+/// se désactive de lui-même quand le presse-papier ne porte rien d'acceptable —
+/// donc jamais d'affordance qui ne ferait rien. Son libellé vient du système :
+/// il est déjà traduit dans les sept langues de l'app, sans clé de catalogue.
+struct BlankCanvasPasteStarter: View {
+    let canAddMedia: Bool
+    let onItems: ([StoryPastedItem]) -> Void
+
+    @Environment(\.storyPaste) private var provider
+
+    var body: some View {
+        if StoryComposerView.offersPasteStarter(hasResolver: provider != nil,
+                                                canAddMedia: canAddMedia),
+           let resolver = provider {
+            PasteButton(supportedContentTypes: StoryComposerView.pasteStarterContentTypes) { providers in
+                HapticFeedback.light()
+                // Résolution SÉQUENTIELLE app-side, dans une tâche qui HÉRITE de
+                // l'isolation MainActor : `NSItemProvider` n'est pas `Sendable`,
+                // le confier à une tâche détachée est refusé net par Swift 6.
+                // C'est le patron exact de la cible de dépôt de la barre de
+                // conversation, pour la même raison.
+                Task { onItems(await resolver.items(from: providers)) }
+            }
+            .labelStyle(.titleAndIcon)
+            .buttonBorderShape(.capsule)
+            .frame(minHeight: 44)
+        }
     }
 }

@@ -520,18 +520,100 @@ describe('GET /sync — checkpoint watermark', () => {
     await app.close();
   });
 
-  it('applies the same watermark on the gap path, which returns no items at all', async () => {
+});
+
+// ─── Cycle 117 ───────────────────────────────────────────────────────────────
+//
+// Le `checkpoint` n'est pas un horodatage, c'est une AFFIRMATION : « tout ce
+// qui a changé jusqu'ici t'a été livré ». Le client le renvoie en `since`, et
+// la borne serveur est STRICTE (`updatedAt > since`) — une affirmation fausse
+// creuse donc un trou DÉFINITIF, ce que le docblock de `SYNC_CHECKPOINT_LAG_MS`
+// écrit déjà mot pour mot.
+//
+// Le dépôt tenait cette règle pour la TRONCATURE (§ checkpoint vs truncation,
+// juste en dessous) et l'énonçait dans son commentaire : une page qui n'a livré
+// qu'une PARTIE de la fenêtre tient le watermark à `since`, sans quoi le client
+// « perdrait tout l'arriéré d'un coup, définitivement ».
+//
+// Elle ne la tenait sur AUCUNE des deux réponses qui n'en livrent RIEN. Une
+// couverture partielle retenait le watermark, une couverture NULLE l'avançait —
+// deux `describe` voisins, deux règles contraires sur le même invariant.
+describe('GET /sync — le checkpoint AFFIRME une couverture', () => {
+  // Le témoin que ce bloc remplace s'intitulait « applies the same watermark on
+  // the gap path, which returns no items at all » : il NOMMAIT le défaut
+  // (« returns no items at all ») et le gelait sous une uniformité qui n'a pas
+  // lieu d'être — la seule chose que le chemin de gap partage avec les autres
+  // est de ne rien avoir couvert.
+  it('holds the watermark at `since` on the gap path, which served nothing at all', async () => {
     const prisma = makePrisma({
       userEventSeq: { findUnique: jest.fn<any>().mockResolvedValue({ lastSeq: 50_000 }) },
     });
     const app = await buildApp(prisma);
 
-    const beforeMs = Date.now();
     const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages&seq=1` });
-    const afterMs = Date.now();
     const body = res.json().data;
 
     expect(body.hasGap).toBe(true);
+    expect(body.gapAction).toBe('full_resync_required');
+    // La fenêtre `since → now` n'a JAMAIS été lue : sur le chemin de gap la
+    // route court-circuite la requête messages. Avancer le watermark ici est
+    // strictement pire que sur une page tronquée — celle-là laissait un
+    // arriéré, celle-ci laisse la fenêtre ENTIÈRE.
+    expect(body.checkpoint).toBe(new Date(SINCE).toISOString());
+    await app.close();
+  });
+
+  // `gapAction` est une INSTRUCTION. Une réponse ne doit pas dépendre de ce que
+  // son destinataire en fera pour rester sûre : la resync complète peut être
+  // différée, échouer hors ligne, ou — c'est l'état du dépôt aujourd'hui —
+  // n'être lue par AUCUN client (`hasGap` / `gapAction` n'ont zéro
+  // consommateur sur les trois clients). Le watermark tenu est ce qui rend
+  // l'oubli rattrapable.
+  it('leaves the gap response re-askable — the same `since` comes back untouched', async () => {
+    const prisma = makePrisma({
+      userEventSeq: { findUnique: jest.fn<any>().mockResolvedValue({ lastSeq: 50_000 }) },
+    });
+    const app = await buildApp(prisma);
+
+    const first = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages&seq=1` });
+    const second = await app.inject({
+      method: 'GET',
+      url: `/sync?since=${encodeURIComponent(first.json().data.checkpoint)}&collections=messages&seq=1`,
+    });
+
+    expect(second.json().data.checkpoint).toBe(new Date(SINCE).toISOString());
+    await app.close();
+  });
+
+  // Deuxième façon de ne rien couvrir, et elle ne passe pas par `hasGap` :
+  // `collections` est validé par `z.string().min(1)`, donc `','` franchit la
+  // validation, se réduit à `[]` après `filter(Boolean)`, ne déclenche aucun
+  // `UNSUPPORTED_COLLECTION` — et `hasMore` sur zéro collection vaut `false`.
+  it('holds the watermark at `since` when not one collection was served', async () => {
+    const app = await buildApp(makePrisma());
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=,` });
+    const body = res.json().data;
+
+    expect(res.statusCode).toBe(200);
+    expect(body.collections).toEqual({});
+    expect(body.checkpoint).toBe(new Date(SINCE).toISOString());
+    await app.close();
+  });
+
+  // Le pendant NÉGATIF : la règle ne doit pas geler le watermark en général.
+  // Une page complète, servie, sans gap, l'avance — sans quoi le client ne
+  // progresserait jamais et relirait la même fenêtre indéfiniment.
+  it('still advances on a served, complete, gap-free page', async () => {
+    const app = await buildApp(makePrisma());
+
+    const beforeMs = Date.now();
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const afterMs = Date.now();
+    const body = res.json().data;
+
+    expect(body.hasGap).toBe(false);
+    expect(body.hasMore).toBe(false);
     const checkpointMs = new Date(body.checkpoint).getTime();
     expect(checkpointMs).toBeLessThanOrEqual(afterMs - SYNC_CHECKPOINT_LAG_MS);
     expect(checkpointMs).toBeGreaterThanOrEqual(beforeMs - SYNC_CHECKPOINT_LAG_MS);

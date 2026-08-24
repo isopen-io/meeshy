@@ -215,6 +215,18 @@ export interface Attachment {
   readonly forwardedFromAttachmentId?: string;
   readonly isForwarded: boolean;
 
+  // ===== PROVENANCE =====
+  /**
+   * Le fichier sort de la caméra ou du micro DE L'APPLICATION.
+   *
+   * Déclaré par le client à l'envoi — lui seul le sait, et seulement à cet
+   * instant — puis relu tel quel par les feuilles qui proposent de PUBLIER le
+   * média : une capture n'a encore été vue par personne, l'ouvrir à un fil
+   * entier se confirme.
+   * @see packages/shared/utils/forward-to-publication.ts
+   */
+  readonly capturedInApp: boolean;
+
   // ===== VIEW-ONCE & BLUR =====
   readonly isViewOnce: boolean;
   readonly maxViewOnceCount?: number;
