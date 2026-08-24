@@ -24,6 +24,9 @@ export interface CommentListProps {
   currentUserId?: string | null;
   currentUser?: { username: string; avatar?: string | null } | null;
   userLanguage?: string;
+  /** Prisme ORDONNÉ du lecteur (rangs 1→4 + fallback), descendu par chaque
+   *  commentaire et réponse. Cf. `CommentItemProps.preferredLanguages`. */
+  preferredLanguages?: string[];
   likedCommentIds?: Set<string>;
   isLoading?: boolean;
   hasMore?: boolean;
@@ -56,6 +59,7 @@ interface CommentRepliesProps {
   expanded: boolean;
   currentUserId?: string | null;
   userLanguage?: string;
+  preferredLanguages?: string[];
   likedCommentIds: Set<string>;
   highlightedReplyId: string | null;
   /** Réponse à atteindre dans ce thread (déjà filtrée sur le bon parent). */
@@ -74,6 +78,7 @@ function CommentReplies({
   expanded,
   currentUserId,
   userLanguage,
+  preferredLanguages,
   likedCommentIds,
   highlightedReplyId,
   targetReplyId,
@@ -147,6 +152,7 @@ function CommentReplies({
       replies={replies}
       currentUserId={currentUserId}
       userLanguage={userLanguage}
+      preferredLanguages={preferredLanguages}
       likedCommentIds={likedCommentIds}
       isLoading={expanded && isLoading}
       hasMore={hasNextPage ?? false}
@@ -172,6 +178,7 @@ function CommentList({
   currentUserId,
   currentUser,
   userLanguage,
+  preferredLanguages,
   likedCommentIds = new Set(),
   isLoading = false,
   hasMore = false,
@@ -319,6 +326,7 @@ function CommentList({
           <CommentItem
             comment={comment}
             userLanguage={userLanguage}
+            preferredLanguages={preferredLanguages}
             isAuthor={currentUserId === comment.authorId}
             isLiked={likedCommentIds.has(comment.id) || isHeartLikedByMe(comment)}
             onLike={onLikeComment}
@@ -335,6 +343,7 @@ function CommentList({
               expanded={expandedThreads.has(comment.id)}
               currentUserId={currentUserId}
               userLanguage={userLanguage}
+              preferredLanguages={preferredLanguages}
               likedCommentIds={likedCommentIds}
               highlightedReplyId={highlightedId}
               targetReplyId={
