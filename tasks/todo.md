@@ -119,7 +119,8 @@ sens : **4 clés lues jamais émises** (`content`, `senderName`, `originalLangua
 | Swift | **non compilable ici** (aucune chaîne Swift dans le conteneur) — 14 témoins XCTest posés sur le helper pur, déjà membre des deux cibles |
 
 Détail raisonné : `tasks/realtime-sync-audit-2026-08-24-cycle124.md`.
-Leçon : `tasks/lessons.md` § 272.
+Leçon : `tasks/lessons.md` § 273 (rédigée en 272, renumérotée à la fusion — `main` a pris 272
+pendant que ce lot était en CI).
 
 ### Suivi MESURÉ (non hérité)
 

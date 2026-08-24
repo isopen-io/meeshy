@@ -142,6 +142,8 @@ posés dans `MeeshyTests/Unit/Services/NotificationPayloadHelpersTests.swift`, s
 — la forme qui les rend exerçables sans le runtime `UNNotificationServiceExtension`, et sans
 modification de `project.yml` (le fichier est déjà membre des deux cibles).
 
+Leçon : `tasks/lessons.md` § 273.
+
 ## 6. Suivi MESURÉ
 
 - **La bannière d'un vocal joint toujours le fichier ORIGINAL.** Les pistes audio traduites
