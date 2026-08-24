@@ -35,6 +35,7 @@ let capturedLinkMessageNewListener: ((data: any) => void) | null = null;
 // Capture the preferences listener — `user:preferences-updated` is a three-scope union
 let capturedPreferencesListener: ((data: any) => void) | null = null;
 let capturedPreferencesReorderedListener: ((data: any) => void) | null = null;
+let capturedCommunityPreferencesReorderedListener: ((data: any) => void) | null = null;
 // Capture the unread-updated listener — REV-5/B1, maillon 3 (le pont ✦ voyage sur cet événement)
 let capturedUnreadUpdatedListener: ((data: any) => void) | null = null;
 
@@ -81,6 +82,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onPreferencesReordered: jest.fn((listener: (data: any) => void) => {
       capturedPreferencesReorderedListener = listener;
       return () => { capturedPreferencesReorderedListener = null; };
+    }),
+    onCommunityPreferencesReordered: jest.fn((listener: (data: any) => void) => {
+      capturedCommunityPreferencesReorderedListener = listener;
+      return () => { capturedCommunityPreferencesReorderedListener = null; };
     }),
     onConversationJoined: jest.fn(() => () => {}),
     onConversationLeft: jest.fn(() => () => {}),
@@ -1102,6 +1107,90 @@ describe('useSocketCacheSync — user:preferences-updated', () => {
     });
 
     expect(applyRemotePreferencesMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * `user:preferences-community-reordered` — le glisser-déposer d'une COMMUNAUTÉ
+ * fait sur un autre appareil.
+ *
+ * Les préférences de communauté vivent dans React Query (`staleTime: Infinity`,
+ * socket en source primaire), pas dans le magasin Zustand des conversations :
+ * l'invalidation est donc le levier, exactement comme pour le scope communauté
+ * de `user:preferences-updated` quelques lignes plus haut.
+ *
+ * `orderInCategory` appartient AUSSI à la ligne de détail, d'où l'invalidation
+ * de chaque communauté nommée en plus de la liste — c'est ce qui rend la charge
+ * utile de l'événement nécessaire, et pas seulement le fait qu'il ait eu lieu.
+ */
+describe('useSocketCacheSync — user:preferences-community-reordered', () => {
+  beforeEach(() => {
+    capturedCommunityPreferencesReorderedListener = null;
+    jest.clearAllMocks();
+  });
+
+  it('invalidates the community preferences list and every named community', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    act(() => {
+      capturedCommunityPreferencesReorderedListener!({
+        userId: 'current-user',
+        updates: [
+          { communityId: 'comm-1', orderInCategory: 0 },
+          { communityId: 'comm-2', orderInCategory: 1 },
+        ],
+      });
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.communities.preferences.list(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.communities.preferences.detail('comm-1'),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.communities.preferences.detail('comm-2'),
+    });
+  });
+
+  /**
+   * Un événement sans rien d'écrit n'a rien à invalider. Le gateway ne l'émet
+   * pas dans ce cas ; le client ne doit pas non plus déclencher un refetch sur
+   * une charge vide venue d'une version voisine.
+   */
+  it('invalidates nothing on an empty update list', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    act(() => {
+      capturedCommunityPreferencesReorderedListener!({ userId: 'current-user', updates: [] });
+    });
+
+    expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Garde de CONTRAT : le réordonnancement de communauté ne touche jamais le
+   * magasin des préférences de CONVERSATION. Les deux gestes ont des événements
+   * distincts précisément parce que leurs charges ne sont pas interchangeables.
+   */
+  it('never reaches the conversation preferences store', () => {
+    const { wrapper } = createTestHarness('conv-1');
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedCommunityPreferencesReorderedListener!({
+        userId: 'current-user',
+        updates: [{ communityId: 'comm-1', orderInCategory: 0 }],
+      });
+    });
+
+    expect(applyRemoteReorderMock).not.toHaveBeenCalled();
   });
 });
 

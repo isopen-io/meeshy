@@ -721,6 +721,69 @@ entier.** Passer d'`updateMany` à `upsert` EXIGE le filtre d'appartenance —
 `updateMany` empêchait par accident qu'un appelant fabrique des lignes contre
 des ids arbitraires, l'upsert seul retire cette protection.
 
+### On reprend une jumelle en cherchant la réponse à SA PROPRE question
+
+Le corollaire ci-dessus (« on le prend en entier ») dit quoi faire. Le cycle 128
+mesure pourquoi on ne le fait pas, et ce n'est pas une inattention.
+
+`POST /user-preferences/communities/reorder` persistait `orderInCategory` sans
+rien émettre, quand `reorderConversationPreferences` diffuse
+`USER_PREFERENCES_REORDERED` sur la room personnelle — la ligne étant par
+UTILISATEUR, un glisser-déposer fait sur un appareil n'atteignait aucun autre.
+**Et le handler fautif CITAIT le jumeau**, sur dix lignes, pour lui emprunter son
+filtre d'appartenance. La jumelle avait donc été ouverte, lue, et à moitié
+reprise : la question du jour était « comment borner cet upsert ? », et la
+réponse trouvée y répondait exactement.
+
+> La question juste n'est pas *« que fait la jumelle pour mon problème ? »* mais
+> **« que fait la jumelle, tout court, APRÈS cette écriture ? »** — et elle se
+> répond en lisant sa suite ligne à ligne, jamais par un mot-clé, qui ne rend
+> par construction que ce qu'on savait déjà chercher.
+
+**Toute écriture d'une ligne de préférences PAR UTILISATEUR doit trois choses**
+(le doc-comment de `conversationPreferencesSync.ts` les énonce) : persister,
+incrémenter `version` quand la table en a une, et DIFFUSER sur `user:{id}`.
+Cliquet d'inventaire des écrivains des deux tables :
+`src/__tests__/preference-writer-sweep.ts` — il fige les sites d'ÉCRITURE, pas
+les diffusions, et sa valeur est de forcer la question « celui-là, il
+diffuse ? » au lot qui en ajoute un.
+
+Corollaire d'inventaire, et c'est la leçon 261 vue d'un autre côté : **un lot
+ferme une classe dans SA langue.** Le lot F71 avait fermé « les verbes qui
+CHANGENT une préférence de communauté » ; le réordonnancement n'en est pas un
+dans cette langue-là — c'est un geste d'ORDRE — et il écrit pourtant la même
+ligne, dans le même fichier. Devant un inventaire de sites, demander : *ce que je
+viens de nommer est-il la propriété, ou seulement le mot par lequel je l'ai
+trouvée ?*
+
+### Relever les consommateurs sert à décider s'il faut changer la forme DU TOUT
+
+La règle « avant de changer la forme d'un événement DIFFUSÉ, relever ses
+consommateurs sur les trois clients » (cycle 105) a une suite. Le relevé ne sert
+pas seulement à mettre les clients à jour : il sert à décider s'il faut toucher
+à la forme.
+
+Cycle 128 — admettre `communityId` dans `UserPreferencesReorderedEventData`
+était la forme naturelle (même geste, un discriminant de plus, exactement ce que
+fait `USER_PREFERENCES_UPDATED` avec ses trois scopes). Le relevé l'a interdit :
+le décodeur iOS déclare `Update.conversationId` NON optionnel, si bien qu'un
+item de communauté fait échouer le décodage de l'ÉVÉNEMENT ENTIER — emportant
+les réordonnancements de conversation qui voyagent avec lui — pendant que le web
+les filtre en silence.
+
+> **Un décodeur STRICT rend l'élargissement plus cher que le nom neuf**, et
+> c'est une mesure, pas un goût. Un événement multi-scope l'est parce qu'il a
+> été CONÇU ainsi ; il ne le devient pas rétroactivement sans casser son cas
+> nominal, et il le casse par le mécanisme le plus discret qui soit — un `catch`
+> de décodage côté client (cycle 92 bis).
+
+`USER_PREFERENCES_COMMUNITY_REORDERED` est INERTE pour les deux consommateurs
+existants par construction. Et sa charge **nomme ce qui a été ÉCRIT, jamais ce
+qui a été DEMANDÉ** : le filtre d'appartenance borne les deux ensemble, sans quoi
+la diffusion enverrait les autres appareils appliquer un ordre que la base ne
+porte pas — en confirmant au passage l'existence d'une communauté que l'appelant
+n'a pas le droit de nommer.
+
 ### La forme OUTILLÉE de la question : compter les appelants du helper
 
 Quand la règle qu'on vient de corriger vit dans un helper, la jumelle se

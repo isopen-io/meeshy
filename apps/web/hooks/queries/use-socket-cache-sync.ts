@@ -1679,6 +1679,31 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribePreferencesReordered = meeshySocketIOService.onPreferencesReordered((data) => {
       useConversationPreferencesStore.getState().applyRemoteReorder(data?.updates ?? []);
     });
+    // `user:preferences-community-reordered` — le MÊME geste sur l'autre table.
+    //
+    // Les préférences de communauté n'ont pas de magasin Zustand : elles vivent
+    // dans React Query, donc le levier est l'invalidation — comme pour le scope
+    // communauté de `user:preferences-updated` ci-dessus. `orderInCategory`
+    // appartenant aussi à la ligne de DÉTAIL, chaque communauté nommée est
+    // invalidée en plus de la liste ; c'est ce qui rend la charge utile
+    // nécessaire, et pas seulement le fait que l'événement ait eu lieu.
+    //
+    // Rien d'écrit ⇒ rien à relire : le gateway n'émet pas sur un lot vide, et
+    // un lot vide venu d'une version voisine ne doit pas déclencher de refetch.
+    const unsubscribeCommunityPreferencesReordered =
+      meeshySocketIOService.onCommunityPreferencesReordered((data) => {
+        const updates = data?.updates ?? [];
+        if (updates.length === 0) return;
+
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.communities.preferences.list(),
+        });
+        updates.forEach(({ communityId }) => {
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.communities.preferences.detail(communityId),
+          });
+        });
+      });
     const unsubscribeJoined = meeshySocketIOService.onConversationJoined(handleConversationJoined);
     const unsubscribeLeft = meeshySocketIOService.onConversationLeft(handleConversationLeft);
     const unsubscribeParticipantRole = meeshySocketIOService.onParticipantRoleUpdated(handleParticipantRoleUpdated);
@@ -1711,6 +1736,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeAttachmentStatus?.();
       unsubscribePreferences?.();
       unsubscribePreferencesReordered?.();
+      unsubscribeCommunityPreferencesReordered?.();
       unsubscribeJoined?.();
       unsubscribeLeft?.();
       unsubscribeParticipantRole?.();
