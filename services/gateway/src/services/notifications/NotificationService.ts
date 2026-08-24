@@ -828,24 +828,26 @@ export class NotificationService {
    * ligne de liste de la même application servait la traduction. Un contenu
    * RÉSOLU n'est pas un contenu SERVI.
    *
-   * `previewIsMessageContent` est la condition de substitution, et elle n'est
-   * pas décorative : `Message.translations` ne traduit QUE `Message.content`.
+   * `substitutable` est la condition de substitution, et elle n'est pas
+   * décorative : une traduction ne remplace un aperçu que si elle traduit CE
+   * texte-là.
    *  - aperçu PROTÉGÉ (éphémère / vue unique / flouté / chiffré) → un
    *    placeholder ; y substituer la traduction relâcherait le texte que la
-   *    protection masque ;
-   *  - transcription d'un vocal → un AUTRE texte, dont les traductions vivent
-   *    sur `MessageAttachment.translations` ; la substituer afficherait un
-   *    contenu sans rapport.
+   *    protection masque. Jamais substituable, quelle que soit la source ;
+   *  - `Message.content` → substituable par `Message.translations` ;
+   *  - transcription d'un vocal → un AUTRE texte, substituable seulement par SA
+   *    source (`previewPrismSource`, cycle 124). Sans elle, l'appariement
+   *    afficherait un contenu sans rapport.
    *
    * Seul l'éventail, qui a COMPOSÉ l'aperçu, sait laquelle des trois formes il
-   * porte — d'où un paramètre explicite plutôt qu'une devinette ici.
+   * porte — d'où des paramètres explicites plutôt qu'une devinette ici.
    */
   private servedPreview(params: {
     preview: string;
     translation: { readonly text: string } | null;
-    previewIsMessageContent: boolean;
+    substitutable: boolean;
   }): string {
-    if (!params.translation || !params.previewIsMessageContent) return params.preview;
+    if (!params.translation || !params.substitutable) return params.preview;
     // Un aperçu VIDE n'a rien à substituer : le corps se compose alors
     // entièrement des badges de pièce jointe, localisés dans la langue de
     // CADRAGE. Y injecter la traduction remplacerait « 📷 Foto » par un texte
@@ -1644,6 +1646,20 @@ export class NotificationService {
      * savoir le dire.
      */
     previewIsMessageContent?: boolean;
+    /**
+     * La source du Prisme qui traduit `messagePreview` quand celui-ci n'est PAS
+     * `Message.content` — cycle 124.
+     *
+     * Exclusive de `previewIsMessageContent` par construction : l'aperçu est
+     * soit le contenu du message (sa source est relue ici), soit un autre texte,
+     * et l'éventail — seul à savoir lequel — remet alors la source qui traduit
+     * CE texte-là. Aujourd'hui la transcription d'un vocal, dont les traductions
+     * vivent sur `MessageAttachment.translations`.
+     *
+     * Ce n'est pas une seconde descente : la descente reste
+     * `resolvePrismTranslation`, appelée ici avec une source de plus.
+     */
+    previewPrismSource?: MessagePrismSource;
     /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
     senderProfile?: NotificationActorProfile;
   }): Promise<Notification | null> {
@@ -1716,22 +1732,32 @@ export class NotificationService {
     // inférieur — cas nominal dès que la locale appareil (rang 4) diffère de la
     // langue applicative. La source vient de la relecture VIVANTE ci-dessus,
     // qui sert déjà de gate d'éligibilité : aucune lecture de plus.
-    const prismSource: MessagePrismSource = {
+    //
+    // Cycle 124 — et c'est la source de l'aperçu SERVI, pas celle du message,
+    // quand les deux diffèrent : un aperçu qui est la transcription d'un vocal
+    // se traduit par `MessageAttachment.translations`, que l'éventail remet dans
+    // `previewPrismSource`. Les champs de service décrivent alors le texte
+    // réellement servi, comme le corps.
+    const messagePrismSource: MessagePrismSource = {
       translations: this.pushableTranslations(liveMessage.translations),
       originalLanguage: liveMessage.originalLanguage,
     };
-    const prismContext = this.prismTranslationContext(prismSource, recipientPrism);
+    const servedPrismSource = params.previewPrismSource ?? messagePrismSource;
+    const prismContext = this.prismTranslationContext(servedPrismSource, recipientPrism);
 
     // Cycle 122 — le corps AFFICHÉ descend le Prisme, pas seulement les champs
     // de service ci-dessus : c'est lui que les trois plateformes rendent.
     // `notificationLocKey` est présent exactement quand l'aperçu est un
-    // placeholder de protection — jamais substituable.
+    // placeholder de protection — jamais substituable, quelle que soit la
+    // source remise : une garde de relâchement ne se délègue pas à la
+    // discipline de ses appelants.
     const content = buildMessageNotificationBodyI18n(recipientLang, {
       messagePreview: this.servedPreview({
         preview: params.messagePreview,
-        translation: this.prismTranslation(prismSource, recipientPrism),
-        previewIsMessageContent:
-          params.previewIsMessageContent !== false && !params.notificationLocKey,
+        translation: this.prismTranslation(servedPrismSource, recipientPrism),
+        substitutable:
+          !params.notificationLocKey &&
+          (params.previewPrismSource !== undefined || params.previewIsMessageContent !== false),
       }),
       attachments: params.attachments,
       firstAttachmentFileSize: params.firstAttachmentFileSize,
@@ -1868,7 +1894,7 @@ export class NotificationService {
       content: this.servedPreview({
         preview: params.messagePreview,
         translation: this.prismTranslation(prismSource, prism.ordered),
-        previewIsMessageContent: params.previewIsMessageContent !== false,
+        substitutable: params.previewIsMessageContent !== false,
       }),
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
@@ -3459,7 +3485,7 @@ export class NotificationService {
       content: this.servedPreview({
         preview: params.messagePreview,
         translation: this.prismTranslation(prismSource, prism.ordered),
-        previewIsMessageContent: params.previewIsMessageContent !== false,
+        substitutable: params.previewIsMessageContent !== false,
       }),
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,

@@ -352,3 +352,105 @@ describe('createMessageNotification — le CORPS servi descend le Prisme', () =>
     expect(push?.body).toBe('Salut, je te rappelle ce soir');
   });
 });
+
+/**
+ * Cycle 124 — un aperçu qui n'est PAS `Message.content` a le droit de descendre
+ * SA source.
+ *
+ * Le cycle 122 avait posé la bonne condition de substitution — « la
+ * transcription d'un vocal est un AUTRE texte » — et s'était arrêté là : la
+ * bannière d'un vocal restait donc dans la langue de l'expéditeur, seule surface
+ * du produit à ne pas descendre le Prisme sur ce contenu. La règle n'était pas
+ * « ne pas traduire », elle était « ne pas traduire avec la MAUVAISE source ».
+ *
+ * `previewPrismSource` est cette source-là : l'éventail, seul à savoir ce que
+ * l'aperçu montre, remet celle qui traduit CE texte. La descente, elle, reste le
+ * site unique (`resolvePrismTranslation`).
+ */
+describe('createMessageNotification — un aperçu non-`content` descend SA source', () => {
+  const TRANSCRIPT = 'Salut, je te rappelle ce soir';
+
+  it('sert la traduction de la TRANSCRIPTION au rang atteint', async () => {
+    const { push, data } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+      params: {
+        messagePreview: TRANSCRIPT,
+        previewIsMessageContent: false,
+        previewPrismSource: {
+          translations: { es: 'Te llamo esta noche' },
+          originalLanguage: 'fr',
+        },
+      },
+    });
+
+    // `Message.translations` porte « Hola » au MÊME rang : un correctif qui
+    // aurait simplement rouvert la substitution servirait ce texte-là, sans
+    // rapport avec l'audio. Le témoin ne peut passer que si la source remise
+    // l'emporte sur celle du message.
+    expect(push?.body).toBe('Te llamo esta noche');
+    expect(data?.translatedContent).toBe('Te llamo esta noche');
+    expect(data?.translatedLanguage).toBe('es');
+  });
+
+  it('sert la transcription ORIGINALE quand sa langue gagne à son rang (règle #3)', async () => {
+    const { push, data } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'fr' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+      params: {
+        messagePreview: TRANSCRIPT,
+        previewIsMessageContent: false,
+        previewPrismSource: {
+          translations: { es: 'Te llamo esta noche' },
+          originalLanguage: 'fr',
+        },
+      },
+    });
+
+    expect(push?.body).toBe(TRANSCRIPT);
+    expect(data?.translatedContent).toBeUndefined();
+  });
+
+  it('sert la transcription ORIGINALE quand rien ne matche le prisme (règle #1)', async () => {
+    const { push } = await runFanOut({
+      recipient: { systemLanguage: 'de' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+      params: {
+        messagePreview: TRANSCRIPT,
+        previewIsMessageContent: false,
+        previewPrismSource: {
+          translations: { it: 'Ti chiamo stasera' },
+          originalLanguage: 'fr',
+        },
+      },
+    });
+
+    expect(push?.body).toBe(TRANSCRIPT);
+  });
+
+  it('ne substitue RIEN sous un aperçu protégé, même avec une source remise', async () => {
+    // Fail-closed : la protection prime sur toute source. Aucun appelant ne
+    // devrait composer ce couple — l'éventail refuse la transcription d'un
+    // message protégé en amont — mais une garde de relâchement ne se délègue
+    // pas à la discipline de ses appelants.
+    const { push } = await runFanOut({
+      recipient: { systemLanguage: 'de', regionalLanguage: 'es' },
+      translations: { es: { text: 'Hola' } },
+      originalLanguage: 'en',
+      params: {
+        messagePreview: '👁️ 🎵',
+        notificationLocKey: 'notification.view_once_message',
+        previewIsMessageContent: false,
+        previewPrismSource: {
+          translations: { es: 'Te llamo esta noche' },
+          originalLanguage: 'fr',
+        },
+      },
+    });
+
+    expect(push?.body).toBe('👁️ 🎵');
+  });
+});
