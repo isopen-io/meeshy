@@ -1,16 +1,24 @@
 import Foundation
 
-/// VoiceOver labels for the like / comment / repost stat controls shared by
-/// `TextPostCell` and `MediaPostCell`. The visible button title shows only the
-/// bare count (e.g. "5"); without these labels VoiceOver announces "5, button"
-/// with no indication of what the number means.
+/// La source unique des libellés « N j'aime / N commentaires / N repartages /
+/// N réponses » du fil. Chaque clé (`feed.post.stat.*`) porte une
+/// `variations.plural` complète — 2 formes dans les 6 locales latines, **6 en
+/// arabe** — donc l'accord est celui du CATALOGUE, jamais du code.
 ///
-/// The singular/plural form is resolved explicitly in the development language
-/// (en). Inline Automatic Grammar Agreement markup (`^[…](inflect: true)`) is
-/// NOT used here: without a String Catalog entry the localized lookup falls
-/// back to `defaultValue`, and that fallback path does not resolve the inflect
-/// markup at runtime on iOS 18.x — the raw markup would leak into VoiceOver.
-/// Proper multi-language plurals would require a `.xcstrings` plural variant.
+/// ## Ce n'est pas un pis-aller réservé à UIKit
+///
+/// Les cellules `TextPostCell` / `MediaPostCell` (UIKit) posent ces chaînes en
+/// `accessibilityLabel` — leur bouton n'affiche que le nombre nu (« 5 »), et
+/// sans libellé VoiceOver annonce « 5, bouton » sans dire de quoi. Mais les
+/// écrans SwiftUI du fil rendaient les MÊMES compteurs par **quatre clés plates**
+/// (`a11y.feed.post.like.value`, `a11y.comment.replies.count`,
+/// `feed.post.comment.replies_count`, `a11y.comment.show_replies`), qui gravaient
+/// « %d réponses » : « **1 réponses** » en français, « **1 replies** » en
+/// anglais — l'une VISIBLE à l'écran (`FeedPostCard`). Une clé plate ne peut pas
+/// accorder ; l'arabe n'en recevait jamais qu'une forme sur six. 240i les a
+/// toutes rebranchées ici. L'AGA inline `^[…](inflect: true)` reste proscrite
+/// (cf. `ExplicitPluralLabelTests`) : sans entrée catalogue, le markup fuit en
+/// brut sur iOS 18.x — mais ces entrées existent, ce sont ces `variations.plural`.
 ///
 /// `bundle` et `locale` sont des paramètres plutôt que des valeurs en dur, pour
 /// une raison de testabilité — et ils vont par PAIRE :
@@ -49,6 +57,17 @@ enum PostStatAccessibility {
         String(
             localized: "feed.post.stat.reposts",
             defaultValue: "\(count) \(count == 1 ? "repost" : "reposts")",
+            bundle: bundle,
+            locale: locale
+        )
+    }
+
+    static func repliesLabel(_ count: Int,
+                             bundle: Bundle = .main,
+                             locale: Locale = .current) -> String {
+        String(
+            localized: "feed.post.stat.replies",
+            defaultValue: "\(count) \(count == 1 ? "reply" : "replies")",
             bundle: bundle,
             locale: locale
         )
