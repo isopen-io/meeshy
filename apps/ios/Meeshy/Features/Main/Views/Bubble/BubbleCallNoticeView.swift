@@ -51,34 +51,44 @@ struct BubbleCallNoticeView: View, Equatable {
         // edge. The side + the glyph's direction chip encode the direction.
         HStack(spacing: 0) {
             if isOutgoing { Spacer(minLength: 48) }
-            Button {
-                onCallBack?(summary)
-            } label: {
-                card
-            }
-            .buttonStyle(.plain)
-            // `.highPriorityGesture` (not `.simultaneousGesture`) so a held
-            // press that recognizes the long-press pre-empts the Button's own
-            // tap recognition — otherwise both fired on finger-lift and a
-            // long-press-to-view-details also silently placed a call-back
-            // (pocket-dial bug, found in audit 2026-07-03). A quick tap still
-            // falls through to the Button action since the long-press gesture
-            // fails to recognize before `minimumDuration` elapses.
-            .highPriorityGesture(
-                LongPressGesture(minimumDuration: 0.35).onEnded { _ in
+            // **Rappeler demande un APPUI LONG** (directive 2026-08-24 :
+            // « dans les messages système d'appel, transformer le tap pour
+            // relancer en longpress pour relancer »).
+            //
+            // Un tap posait l'appel. C'est l'action la plus lourde du fil —
+            // elle sonne chez quelqu'un — et elle était la plus facile à
+            // déclencher par mégarde, sur une carte large posée dans une liste
+            // qui défile. L'audit du 2026-07-03 avait déjà dû protéger ce
+            // bouton d'un « pocket-dial » venu du long-press ; la conclusion
+            // était que le geste bref ne convient pas à cette action.
+            //
+            // Le geste est donc INVERSÉ : l'appui long rappelle, le tap ne
+            // fait plus rien. Les détails, qui vivaient sur l'appui long,
+            // restent atteignables — par l'appui long de la RANGÉE, hors de
+            // la carte, qui ouvre le menu du message, et par l'action
+            // VoiceOver dédiée ci-dessous (VoiceOver n'a pas d'appui long :
+            // les DEUX actions doivent lui être offertes explicitement).
+            card
+                .contentShape(Rectangle())
+                .onLongPressGesture(minimumDuration: 0.35) {
                     HapticFeedback.medium()
+                    onCallBack?(summary)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(accessibilityLabel)
+                .accessibilityHint(Text(presentation.isLive
+                    ? String(localized: "bubble.call.join.a11y.hint.longPress",
+                             defaultValue: "Maintenez pour rejoindre l'appel", bundle: .main)
+                    : String(localized: "bubble.call.callback.hint.longPress",
+                             defaultValue: "Maintenez pour rappeler", bundle: .main)))
+                .accessibilityAction(named: Text(presentation.isLive
+                    ? String(localized: "bubble.call.join.action", defaultValue: "Rejoindre l'appel", bundle: .main)
+                    : String(localized: "bubble.call.callback.action", defaultValue: "Rappeler", bundle: .main))) {
+                    onCallBack?(summary)
+                }
+                .accessibilityAction(named: Text(String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main))) {
                     onLongPress?()
                 }
-            )
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(accessibilityLabel)
-            .accessibilityHint(Text(presentation.isLive
-                ? String(localized: "bubble.call.join.a11y.hint", defaultValue: "Double-tapez pour rejoindre l'appel", bundle: .main)
-                : String(localized: "bubble.call.callback.hint", defaultValue: "Double-tapez pour rappeler", bundle: .main)))
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction(named: Text(String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main))) {
-                onLongPress?()
-            }
             if !isOutgoing { Spacer(minLength: 48) }
         }
         .padding(.horizontal, 16)

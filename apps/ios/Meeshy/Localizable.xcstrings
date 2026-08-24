@@ -30926,6 +30926,100 @@
         }
       }
     },
+    "bubble.call.join.a11y.hint.longPress": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط مطولاً للانضمام إلى المكالمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gedrückt halten, um dem Anruf beizutreten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Press and hold to join the call"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantén pulsado para unirte a la llamada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenez pour rejoindre l'appel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tieni premuto per partecipare alla chiamata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantenha pressionado para entrar na chamada"
+          }
+        }
+      }
+    },
+    "bubble.call.join.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الانضمام إلى المكالمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anruf beitreten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Join the call"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unirse a la llamada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rejoindre l'appel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partecipa alla chiamata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrar na chamada"
+          }
+        }
+      }
+    },
     "bubble.call.join.ended": {
       "extractionState": "manual",
       "localizations": {
@@ -30969,53 +31063,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "A chamada terminou"
-          }
-        }
-      }
-    },
-    "bubble.call.join.a11y.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اضغط مرتين للانضمام إلى المكالمة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zweimal tippen, um dem Anruf beizutreten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Double-tap to join the call"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toca dos veces para unirte a la llamada"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Double-tapez pour rejoindre l'appel"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tocca due volte per partecipare alla chiamata"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toque duas vezes para entrar na chamada"
           }
         }
       }
@@ -31067,6 +31114,53 @@
         }
       }
     },
+    "bubble.call.callback.hint.longPress": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اضغط مطولاً لمعاودة الاتصال"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gedrückt halten, um zurückzurufen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Press and hold to call back"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantén pulsado para devolver la llamada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenez pour rappeler"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tieni premuto per richiamare"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantenha pressionado para ligar de volta"
+          }
+        }
+      }
+    },
     "bubble.call.cancelled": {
       "extractionState": "manual",
       "localizations": {
@@ -31114,49 +31208,49 @@
         }
       }
     },
-    "bubble.call.callback.hint": {
+    "bubble.call.callback.action": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اضغط مرتين لإعادة الاتصال"
+            "value": "معاودة الاتصال"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zweimal tippen, um zurückzurufen"
+            "value": "Zurückrufen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Double-tap to call back"
+            "value": "Call back"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca dos veces para devolver la llamada"
+            "value": "Devolver la llamada"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Double-tapez pour rappeler"
+            "value": "Rappeler"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca due volte per richiamare"
+            "value": "Richiama"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque duas vezes para retornar a chamada"
+            "value": "Ligar de volta"
           }
         }
       }

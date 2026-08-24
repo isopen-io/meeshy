@@ -12,12 +12,24 @@ final class CallDetailRoutingTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_bubbleCallNoticeView_stillHasHighPriorityGesture_butNoLongerPresentsLocalSheet() throws {
+    /// **Le geste a été INVERSÉ le 2026-08-24** : l'appui long RAPPELLE, le
+    /// tap ne fait plus rien.
+    ///
+    /// Le correctif « pocket-dial » du 2026-07-03 protégeait le tap contre un
+    /// appui long qui le déclenchait AUSSI. Cette protection n'a plus d'objet :
+    /// il n'y a plus de tap du tout. La conclusion de cet audit, elle, est
+    /// poussée à son terme — passer un appel est l'action la plus lourde du
+    /// fil, sur la carte la plus large d'une liste qui défile ; elle exige un
+    /// geste délibéré.
+    func test_bubbleCallNoticeView_callsBackOnLongPressOnly_andNeverOnTap() throws {
         let view = try source("Features/Main/Views/Bubble/BubbleCallNoticeView.swift")
         XCTAssertTrue(
-            view.contains(".highPriorityGesture("),
-            "The 2026-07-03 pocket-dial fix must survive — removing it would let a long-press " +
-            "also fire the card's own Button { onCallBack } tap action."
+            view.contains(".onLongPressGesture(minimumDuration: 0.35)"),
+            "rappeler exige un appui long délibéré"
+        )
+        XCTAssertFalse(
+            view.contains("Button {\n                onCallBack?(summary)"),
+            "aucun tap ne doit plus poser d'appel depuis la carte du fil"
         )
         XCTAssertFalse(
             view.contains("showDetails = true"),
