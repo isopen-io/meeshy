@@ -109,4 +109,60 @@ final class EffectOverlayMountingSourceGuardTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - Directive 2026-08-24 — « quelque chose de visuellement plus esthétique »
+
+    /// Le spectre boucle sur sa première couleur : un `AngularGradient` dont
+    /// les deux extrémités diffèrent montre une COUTURE — un trait net là où
+    /// la dernière couleur retombe sur la première. C'est ce qui donnait à
+    /// l'ancien cadre son air d'autocollant.
+    func test_theSpectrum_loopsBackToItsFirstColor_soTheGradientHasNoSeam() {
+        let spectrum = RainbowEffect.spectrum(from: nil)
+        XCTAssertGreaterThan(spectrum.count, 2)
+        XCTAssertEqual(spectrum.first, spectrum.last, "sans bouclage, la roue a une couture visible")
+    }
+
+    /// **`rainbowColors` était décodé, testé côté modèle, et JAMAIS rendu.**
+    /// L'auteur pouvait choisir ses couleurs : le rendu affichait les siennes.
+    /// Lecture morte — la garde suivante l'empêche de le redevenir.
+    func test_theAuthorsOwnColors_areUsed_notJustDecoded() {
+        let spectrum = RainbowEffect.spectrum(from: ["#112233", "#445566"])
+        XCTAssertEqual(spectrum, ["#112233", "#445566", "#112233"], "les couleurs de l'auteur, bouclées")
+    }
+
+    func test_aSingleAuthorColor_stillMakesAUsableGradient() {
+        XCTAssertEqual(RainbowEffect.spectrum(from: ["#ABCDEF"]), ["#ABCDEF", "#ABCDEF"])
+    }
+
+    func test_anEmptyAuthorPalette_fallsBackToTheHouseSpectrum() {
+        XCTAssertEqual(RainbowEffect.spectrum(from: []), RainbowEffect.spectrum(from: nil))
+    }
+
+    /// Le spectre de la maison s'ancre sur la marque et n'emploie que des
+    /// teintes de MÊME clarté — c'est ce qui sépare une aurore d'un arc-en-ciel
+    /// d'école. Les trois tokens déjà nommés par la charte doivent s'y trouver.
+    func test_theHouseSpectrum_isAnchoredOnTheBrandTokens() {
+        let spectrum = RainbowEffect.spectrum(from: nil).map { $0.uppercased() }
+        XCTAssertEqual(spectrum.first, "#818CF8", "l'indigo de la marque ouvre et ferme la roue")
+        XCTAssertTrue(spectrum.contains("#34D399"), "success")
+        XCTAssertTrue(spectrum.contains("#FBBF24"), "warning")
+    }
+
+    /// Garde de source — le rendu ne doit plus DÉNATURER les couleurs qu'on
+    /// vient de lui confier : `hueRotation` faisait tourner la teinte, donc un
+    /// auteur qui choisissait du bleu voyait passer du rouge. Le mouvement est
+    /// désormais une rotation du dégradé lui-même.
+    func test_theEffect_rotatesTheGradient_neverTheHue() throws {
+        let source = try String(contentsOf: effectModifiersSource, encoding: .utf8)
+        let rainbow = try XCTUnwrap(source.range(of: "struct RainbowEffect"))
+        let body = String(source[rainbow.lowerBound...].prefix(3600))
+        XCTAssertFalse(body.contains("hueRotation"), "la teinte de l'auteur n'est plus tournée")
+        XCTAssertTrue(body.contains("angle: .degrees("), "le dégradé lui-même tourne")
+        XCTAssertTrue(body.contains(".blur("), "un halo diffus, pas seulement un trait")
+        XCTAssertTrue(body.contains("cornerRadius: cornerRadius"), "le liseré épouse la forme qu'on lui donne")
+    }
+
+    func test_theGuardAbove_wouldCatchAHueRotationComingBack() {
+        XCTAssertTrue("… .hueRotation(.degrees(rotation)) …".contains("hueRotation"))
+    }
 }
