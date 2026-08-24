@@ -7,6 +7,9 @@ struct StatusComposerView: View {
     @ObservedObject var viewModel: StatusViewModel
     var initialEmoji: String? = nil
     var initialText: String? = nil
+    /// AFFICHAGE seul — le bandeau « Status de @X » et le titre de la feuille.
+    /// Ce champ ne part JAMAIS sur le fil : le gateway ne l'a jamais lu, et
+    /// c'est `repostOfId` qui porte l'attribution d'une republication.
     var viaUsername: String? = nil
     /// When republishing an existing status: id of the source post (links the
     /// repost → attribution resolves from repostOf.author) and the source voice
@@ -270,7 +273,6 @@ struct StatusComposerView: View {
                     content: statusText.isEmpty ? nil : statusText,
                     visibility: selectedVisibility.rawValue,
                     visibilityUserIds: selectedVisibility.requiresUserSelection ? selectedUserIds : nil,
-                    viaUsername: viaUsername,
                     audioUrl: repostAudioUrl,
                     repostOfId: repostOfId,
                     mentions: declaredReferences

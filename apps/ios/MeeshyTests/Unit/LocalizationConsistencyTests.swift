@@ -101,6 +101,14 @@ final class LocalizationConsistencyTests: XCTestCase {
     /// its path here so the screen can never silently regress to French-only.
     private static let fullyLocalizedScreens = [
         "apps/ios/Meeshy/Features/Main/Views/StatusComposerView.swift",
+        // Lot 4.6 — la surface qui SERT désormais les six déclencheurs du mood.
+        // Ajoutée ici dès qu'elle est présentée, et non au retrait de l'écran
+        // historique : la liste est ADDITIVE, et l'écran que les auteurs voient
+        // ne doit à aucun moment sortir du cliquet. La ligne au-dessus reste
+        // jusqu'au retrait du fichier (tâche 4.8, conditionnelle) — l'amputer
+        // maintenant perdrait un écran déclaré intégralement traduit sans que
+        // rien ne le dise.
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerMoodSurface.swift",
         // 225i — the registration step flow: the first screens a new account ever
         // sees, and the largest single-file gap in the catalog when it was pinned.
         "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift",

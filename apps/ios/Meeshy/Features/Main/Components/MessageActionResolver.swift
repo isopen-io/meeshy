@@ -3,6 +3,11 @@ import Foundation
 /// Action affichée dans la liste verticale de l'overlay appui-long.
 enum PrimaryAction: String, Equatable {
     case edit, translate, copy, saveMedia, pin, unpin, star, unstar, more, delete
+    /// Feuille de détail d'un appel (durée précise, données, qualité réseau,
+    /// transcript). Elle vivait sur l'appui long de la CARTE d'appel jusqu'au
+    /// 2026-08-24 ; l'appui long étant rendu au menu du message, la
+    /// destination entre ICI plutôt que d'être perdue.
+    case callDetail
 }
 
 /// Item d'une section de la feuille « Plus… ».
@@ -40,6 +45,10 @@ struct MessageMenuContext: Equatable {
     let isStarred: Bool
     let isEdited: Bool
     let hasEditRevisions: Bool
+    /// Le message porte un résumé d'appel (`Message.callSummary`). Seul fait
+    /// qui ouvre `.callDetail` — le résolveur ne connaît ni `Message` ni
+    /// `messageSource`, il reçoit le verdict.
+    var hasCallSummary: Bool = false
     /// Nombre d'attachments enregistrables (hors location). L'action
     /// « Enregistrer » n'apparaît que pour EXACTEMENT UN attachment —
     /// le multi-attachment passe par la galerie (qui a son propre save).
@@ -68,6 +77,7 @@ enum MessageActionResolver {
     /// routés vers « Plus… » (`moreSections`), jamais affichés ici.
     static func primaryActions(_ ctx: MessageMenuContext) -> [PrimaryAction] {
         var out: [PrimaryAction] = []
+        if ctx.hasCallSummary { out.append(.callDetail) }
         if ctx.isMine && ctx.canEdit && ctx.hasText { out.append(.edit) }
         if ctx.hasText { out.append(.translate) }
         if ctx.hasText { out.append(.copy) }

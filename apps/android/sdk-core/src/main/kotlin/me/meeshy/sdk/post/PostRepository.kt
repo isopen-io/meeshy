@@ -34,6 +34,7 @@ import me.meeshy.sdk.net.api.TranslateRequest
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.api.UpdatePostRequest
 import me.meeshy.sdk.model.PostTranslationMerge
+import me.meeshy.sdk.model.PostUpdateMerge
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.rawApiCall
 import javax.inject.Inject
@@ -434,6 +435,25 @@ class PostRepository @Inject constructor(
         val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
         val merged = PostTranslationMerge.mergeTranslation(post, language, entry) ?: return false
         _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
+        return true
+    }
+
+    /**
+     * Realtime post edit (`post:updated`, push side): the author edited a post and the
+     * gateway broadcast the whole new post. Folds it onto the cached copy via
+     * [PostUpdateMerge] — adopting the edit's authoritative fields while preserving the
+     * reader's own like/bookmark/view/reaction state (the broadcast is unpersonalized) —
+     * so an open card shows the edit in place. The whole-post sibling of
+     * [applyTranslationUpdate].
+     *
+     * Returns `true` only when the cache actually changed. Inert (`false`, nothing stored)
+     * when the post is not in the cache, or the merge is a no-op (a re-broadcast, or an
+     * edit that changed nothing the reader can see).
+     */
+    fun applyPostUpdate(updated: ApiPost): Boolean {
+        val previous = _feedCache.value?.firstOrNull { it.id == updated.id } ?: return false
+        val merged = PostUpdateMerge.merge(previous, updated) ?: return false
+        _feedCache.value = _feedCache.value?.map { if (it.id == updated.id) merged else it }
         return true
     }
 

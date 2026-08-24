@@ -69,4 +69,41 @@ final class CharacterCountLabelTests: XCTestCase {
         let label = CharacterCountLabel.accessibilityLabel(count: 158, limit: 500)
         XCTAssertFalse(label.contains("158/500"))
     }
+
+    // MARK: - normalForeground (lot 4 — le compteur monté sur le plateau)
+
+    /// **Un jeton de thème posé sur un fond qui n'est pas celui du thème n'est
+    /// pas un jeton, c'est un pari.**
+    ///
+    /// Le composer monte ce compteur sur le PLATEAU, sombre par construction
+    /// quel que soit le thème de l'app. `theme.textMuted` y mesure 1,68:1 en
+    /// thème clair — illisible. Le site de montage peut donc imposer son
+    /// premier plan, et c'est ce que fait `ComposerMoodSurface`.
+    func test_normalForeground_letsTheMountingSiteImposeItsForeground() {
+        let impose = MeeshyColors.textSecondary(isDark: true)
+
+        XCTAssertTrue(
+            WCAGContrast.rendersIdentically(
+                CharacterCountLabel.normalForeground(mutedColor: impose, themeMuted: MeeshyColors.error),
+                impose
+            ),
+            "Le premier plan donné par le site doit primer : c'est lui qui connaît son fond."
+        )
+    }
+
+    /// Et sans override, RIEN ne change pour les appelants existants —
+    /// `ReportUserView` et l'écran de status historique n'ont pas bougé d'une
+    /// ligne. Un défaut qui change le rendu des appelants d'origine ne serait
+    /// pas un défaut, ce serait une migration silencieuse.
+    func test_normalForeground_fallsBackToTheThemeTokenForEveryExistingCaller() {
+        let jetonDuTheme = MeeshyColors.textMuted(isDark: true)
+
+        XCTAssertTrue(
+            WCAGContrast.rendersIdentically(
+                CharacterCountLabel.normalForeground(mutedColor: nil, themeMuted: jetonDuTheme),
+                jetonDuTheme
+            ),
+            "Sans override, le compteur reste sur le jeton du thème — le comportement de tous ses appelants."
+        )
+    }
 }

@@ -1,7 +1,8 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
-/// Les DEUX surfaces du meuble (V2).
+/// Les TROIS surfaces du meuble (V2, élargi au mood par le lot 4).
 ///
 /// Le composer unifié n'a jamais eu qu'une surface : l'atelier de scène du SDK
 /// (`StoryComposerView`). C'est ce qui interdisait de recâbler `.feedComposer`,
@@ -10,11 +11,21 @@ import MeeshyUI
 /// régression sèche. La spec v1 le pose mot pour mot : « le host n'a pas de
 /// surface document sans scène, et recâbler la porte la plus utilisée sans elle
 /// serait une régression ».
+///
+/// **Le mood a quitté le document le 2026-08-24 (lot 4).** Il y était rangé
+/// par défaut, faute de troisième cas — et l'énumération n'en portait que deux.
+/// Ce que la mesure a rendu : un mood n'a NI pièce jointe (`allowsCapture:
+/// false`, `ComposerIntent.swift`), NI rangée d'outils à servir, NI texte long.
+/// Sa matière est une grille de dix emojis et 122 caractères. Lui monter
+/// l'éditeur du document aurait affiché un `TextEditor` vide là où l'auteur
+/// attend des emojis — la régression que ce dossier évite ailleurs.
 nonisolated enum ComposerSurfaceKind: Equatable {
     /// L'atelier : un canvas, des diapositives, une timeline.
     case scene
-    /// Le document : un texte, des pièces jointes, aucune scène.
+    /// Le document : un texte long, des pièces jointes, aucune scène.
     case document
+    /// Le mood : une grille d'emojis, 122 caractères, aucune pièce jointe.
+    case mood
 }
 
 /// Quelle surface le meuble monte — et c'est une fonction PURE de ce que la
@@ -39,9 +50,24 @@ nonisolated enum ComposerSurfaceKind: Equatable {
 ///    juste derrière. **Condition de levée nommée** : le jour où le meuble sait
 ///    adopter un brouillon de DOCUMENT (et non plus seulement de scène),
 ///    `.resume` redescend sous la règle 3.
-/// 3. **Sinon le format décide.** Une story et un réel SONT des scènes (des
-///    pages, une prise continue) ; un post et un mood sont des documents — du
-///    texte et des pièces, sans canvas.
+/// 3. **Sinon le format décide, et il décide à TROIS issues.** Une story et un
+///    réel SONT des scènes (des pages, une prise continue) ; un post est un
+///    document — du texte long et des pièces, sans canvas ; un mood est sa
+///    PROPRE surface — dix emojis, 122 caractères, aucune pièce.
+///
+///    Jusqu'au 2026-08-24, cette règle rangeait le mood du côté du document.
+///    C'était le repli d'une énumération qui n'avait que deux cas, pas une
+///    mesure : le mood ne partage avec le document ni la rangée d'outils, ni
+///    la capture, ni le plafond de saisie. Le lot 4 lui donne son cas, et
+///    cette phrase-ci est réécrite dans le MÊME commit — un commentaire de
+///    règle laissé sous un code qui l'a démenti devient la loi que lira la
+///    session suivante. La formulation retirée est nommée hors de ce fichier,
+///    par `ComposerDocumentSurfaceTests`
+///    `.test_leCommentaireDeRegle_naffirmePlus_queLeMoodEstUnDocument`, pour
+///    qu'elle ne puisse pas y revenir sans faire rougir quelque chose.
+///
+///    Le `switch` sur le format reste exhaustif : un cinquième format casserait
+///    la compilation ICI, et c'est la propriété qu'on veut.
 ///
 /// La conséquence que V3 attend : `.feedComposer` (clavier sur contenu, format
 /// `.post`) monte le DOCUMENT, et bascule sur la scène le jour où son auteur
@@ -56,7 +82,8 @@ nonisolated enum ComposerSurfaceRouting {
         case .keyboardOnContent, .moodGrid:
             switch format {
             case .story, .reel: return .scene
-            case .post, .status: return .document
+            case .post: return .document
+            case .status: return .mood
             }
         }
     }
@@ -64,10 +91,84 @@ nonisolated enum ComposerSurfaceRouting {
     /// Le clavier ne se lève QUE là où la porte a promis qu'on écrirait
     /// d'emblée. Une reprise de brouillon ne le lève pas : le clavier
     /// recouvrirait le document qu'on vient de rouvrir pour le relire.
+    ///
+    /// `.moodGrid` ne le lève pas non plus, et ce cas n'a PAS bougé au lot 4
+    /// alors même que le mood changeait de surface : on choisit un emoji avant
+    /// d'écrire, et lever le clavier recouvrirait la grille — c'est-à-dire le
+    /// seul geste que le mood exige (`ComposerMoodPolicy.canPublish`).
     static func focusesContentOnAppear(opening: ComposerOpening) -> Bool {
         switch opening {
         case .keyboardOnContent: return true
         case .cameraReady, .videoCameraReady, .moodGrid, .resume: return false
+        }
+    }
+}
+
+/// **QUI peint le chrome de publication — audience, aperçu, flèche — sous la
+/// surface que le meuble a montée.**
+///
+/// La règle vit ICI, à côté de `ComposerSurfaceRouting`, pour exactement la même
+/// raison qu'elle : elle est éprouvable sans monter la moindre vue. Elle
+/// remplace une CONSTANTE (`chromeOwner: ComposerChromeOwner = .atelier`) qui
+/// portait, pour les trois surfaces, une raison qui n'en concernait qu'une.
+///
+/// Les deux blocages qui imposaient `.atelier` sont MESURÉS, et ce sont des
+/// blocages de la SCÈNE, tous deux dans `MeeshyUI` : `visibilityMenu` est
+/// l'unique écrivain d'audience de l'atelier, et l'œil du socle rendrait un
+/// aperçu amputé des médias préchargés, `internal` au SDK. Sous le document et
+/// sous le mood, **il n'y a pas d'atelier** — rien à retirer à personne, aucun
+/// média local à précharger. Une raison qui ne vaut que pour l'une des trois
+/// surfaces n'a rien à faire dans une constante qui les gouverne toutes.
+nonisolated enum ComposerChromeOwnership {
+
+    /// `.scene` cède à l'atelier ; les deux autres reviennent au meuble.
+    ///
+    /// Ce n'est pas « le host publie » : c'est « le host PEINT le chrome ».
+    /// L'envoi reste une fermeture que le site de montage fournit
+    /// (`MeeshyComposerHost.onPublishDocument`) — le meuble transmet.
+    static func owner(for surface: ComposerSurfaceKind) -> ComposerChromeOwner {
+        switch surface {
+        case .scene: return .atelier
+        case .document, .mood: return .host
+        }
+    }
+
+    /// Les zones que le socle peint RÉELLEMENT sous une surface donnée.
+    ///
+    /// La loi 5 dit que le socle ne varie jamais selon la PORTE. Elle n'a jamais
+    /// dit qu'il peignait une commande sans objet : il s'efface déjà devant
+    /// l'atelier, qui peint les mêmes trois zones. La même phrase, tenue jusqu'au
+    /// bout, donne les trois lignes ci-dessous.
+    ///
+    /// - `.scene` — RIEN. L'atelier assemble les trois ; en peindre une seconde
+    ///   série donnerait deux audiences, deux yeux et deux flèches, dont une
+    ///   inerte, sur la surface de création la plus utilisée.
+    /// - `.document` — les trois, personne d'autre ne les peignant. **Dette
+    ///   CONSIGNÉE, non refermée ici** : l'œil ouvre `MeeshyScenePlayer` sur
+    ///   `viewModel.currentEffects`, que la surface document ne remplit pas — il
+    ///   rendrait donc une scène VIDE. La cause est celle de
+    ///   `servedDocumentTools == []` : le meuble n'a pas de chemin d'ingestion,
+    ///   donc pas de média, donc rien à prévisualiser. Aucune porte de production
+    ///   ne monte ce document, et
+    ///   `test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`
+    ///   le retient.
+    /// - `.mood` — la flèche SEULE. L'audience y est ABSENTE, jamais grisée
+    ///   (loi 4) : `ComposerMoodSurface` porte son propre sélecteur six niveaux
+    ///   avec sa mémoire `@AppStorage("lastStatusVisibility")` (loi 10), tandis
+    ///   qu'`audienceChip` n'est qu'un témoin inerte. Le poser au-dessus d'un
+    ///   vrai sélecteur ferait deux affichages pour un même réglage — ce que le
+    ///   commentaire d'`audienceChip` s'interdit lui-même. L'œil est absent pour
+    ///   une raison plus dure : un mood n'a pas de canvas, et la loi 6 interdit
+    ///   d'en fabriquer un aperçu.
+    ///
+    /// **Divergence ASSUMÉE avec le plan du lot 4**, qui écrivait « sous `.mood`
+    /// … audience + flèche ». La mesure a tranché contre lui, et le dire ici vaut
+    /// mieux que de le laisser découvrir à l'écran.
+    static func socleZones(for surface: ComposerSurfaceKind) -> [ComposerTopBarControl] {
+        switch surface {
+        case .scene: return []
+        case .document: return [.audience, .preview, .publish]
+        case .mood: return [.publish]
         }
     }
 }
@@ -195,6 +296,141 @@ nonisolated enum ComposerDocumentSendRouting {
         if isQuote { return .quotedRepost }
         guard hasLocalMedia else { return .textOnly }
         return isOffline ? .durableOutbox : .upload
+    }
+}
+
+/// **Le gate de MATIÈRE du socle** — ce sans quoi une pression sur la flèche
+/// partirait sur une page blanche.
+///
+/// Il existe parce que le socle a cessé d'être un témoin. Tant que
+/// `publishButton` était un `Label`, aucun gate n'était nécessaire : rien ne
+/// partait. Un vrai bouton le rend OBLIGATOIRE — et c'est la première des deux
+/// conditions que le meuble consignait déjà pour la scène, « la télécommande
+/// n'a pas de gate de matière ».
+///
+/// Il ne réécrit pas la règle du mood : il DÉLÈGUE à
+/// `ComposerMoodPolicy.canPublish`, qui la tient depuis le lot 4.4. Deux gates
+/// pour un même format divergeraient au premier assouplissement.
+nonisolated enum ComposerDocumentPublishGate {
+
+    /// - Parameter surface: la surface MONTÉE. `.scene` rend toujours `false`, et
+    ///   ce n'est pas une précaution gratuite : le jour où le socle publiera sous
+    ///   la scène, il devra passer par le gate de l'atelier (`canPublish`,
+    ///   `internal` à `MeeshyUI`) et non par celui-ci, qui ne voit ni les
+    ///   diapositives ni la timeline. Rendre `false` REFUSE ; il n'invente pas
+    ///   une réponse qu'il n'a pas.
+    static func canPublish(
+        surface: ComposerSurfaceKind,
+        emoji: String?,
+        text: String,
+        isPublishing: Bool
+    ) -> Bool {
+        guard !isPublishing else { return false }
+        switch surface {
+        case .scene:
+            return false
+        case .mood:
+            return ComposerMoodPolicy.canPublish(emoji: emoji, isPublishing: isPublishing)
+        case .document:
+            return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+}
+
+/// **Ce que le socle remet au site de montage quand l'auteur presse la flèche.**
+///
+/// Une VALEUR, pas un envoi. Le meuble ne publie toujours pas : il assemble ce
+/// qui a été composé et le tend à une fermeture que la porte lui a donnée,
+/// exactement comme `onPublishAllInBackground` le fait pour la scène.
+///
+/// **Ce canal appartient au lot 4 et y RESTE.** Ne pas écrire ici qu'un lot
+/// ultérieur l'absorbera : le plan du lot 7 déclare le dossier `Composer`
+/// interdit et fait naître son `PublishIntent` sous `Services/`. Un travail que
+/// chacun croit chez l'autre est un travail que personne ne fait.
+///
+/// — Le glob du plan est écrit ici en toutes lettres, et jamais sous sa forme
+/// abrégée : celle-ci contient la séquence qui OUVRE un commentaire de bloc, et
+/// le dépouilleur de `MyStoriesSourceCorpus` jette alors tout le reste du
+/// fichier. Voir la note jumelle dans `MeeshyComposerHost`.
+///
+/// **Un seul paramètre opaque**, et c'est délibéré : la fermeture de la scène
+/// porte douze arguments positionnels, et c'est ce qui la rend impossible à
+/// faire évoluer sans toucher chacun de ses sites. Ajouter un champ ici n'en
+/// touche aucun.
+///
+/// Les deux normalisations que la loi impose vivent dans les FABRIQUES, pas chez
+/// l'appelant : `nil` plutôt que `[]` pour les mentions (loi 3 — un tableau vide
+/// est entendu par le serveur comme un EFFACEMENT), et la liste nominative
+/// écartée quand l'audience ne l'exige pas. Les laisser aux quatre sites de
+/// montage du lot 4.6, ce serait écrire la loi 3 quatre fois.
+nonisolated struct ComposerDocumentDraft: Equatable {
+    let format: ComposerFormat
+
+    /// `nil` quand rien n'a été tapé — la forme exacte que `setStatus` attend
+    /// (`statusText.isEmpty ? nil : statusText`), et qui distingue « pas de
+    /// texte » de « texte effacé ».
+    let text: String?
+
+    let emoji: String?
+    let visibility: PostVisibility
+
+    /// `nil` hors `ONLY`/`EXCEPT` : porter une liste sous une audience qui n'en
+    /// veut pas la ferait persister pour rien.
+    let visibilityUserIds: [String]?
+
+    let mentions: [PostMentionInput]?
+    let repostOfId: String?
+    let audioUrl: String?
+
+    /// Le brouillon d'un MOOD.
+    ///
+    /// `repostOfId` et `audioUrl` sont les deux graines d'une republication (lot
+    /// 4.7). Elles ont un défaut ici, contrairement au reste, parce que leur
+    /// absence EST le cas normal — un mood créé n'en a pas — et qu'aucun site ne
+    /// peut donc les perdre en silence.
+    static func mood(
+        emoji: String?,
+        text: String,
+        visibility: PostVisibility,
+        visibilityUserIds: [String],
+        references: [ComposerReference],
+        repostOfId: String? = nil,
+        audioUrl: String? = nil
+    ) -> ComposerDocumentDraft {
+        ComposerDocumentDraft(
+            format: .status,
+            text: text.isEmpty ? nil : text,
+            emoji: emoji,
+            visibility: visibility,
+            visibilityUserIds: visibility.requiresUserSelection ? visibilityUserIds : nil,
+            mentions: ComposerMoodPolicy.declared(references),
+            repostOfId: repostOfId,
+            audioUrl: audioUrl
+        )
+    }
+
+    /// Le brouillon d'un DOCUMENT.
+    ///
+    /// Il ne porte ni emoji, ni mentions, ni graine de repost — et ce n'est pas
+    /// un oubli : la surface document n'a ni grille d'emojis ni barre de
+    /// références, et aucune porte de production ne la monte. Lui inventer des
+    /// champs qu'aucune vue ne remplit aurait fabriqué une capacité que le
+    /// premier lecteur aurait crue tenue.
+    static func document(
+        format: ComposerFormat,
+        text: String,
+        visibility: PostVisibility
+    ) -> ComposerDocumentDraft {
+        ComposerDocumentDraft(
+            format: format,
+            text: text.isEmpty ? nil : text,
+            emoji: nil,
+            visibility: visibility,
+            visibilityUserIds: nil,
+            mentions: nil,
+            repostOfId: nil,
+            audioUrl: nil
+        )
     }
 }
 

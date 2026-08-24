@@ -175,9 +175,14 @@ struct JoinNoticePresentation: Equatable {
 struct BubbleJoinNoticeView: View, Equatable {
     /// L'avis nomme quelqu'un ET porte son identité de participation : c'est le
     /// moment exact où l'on veut savoir qui vient d'entrer, et sous quelles
-    /// conditions. Un APPUI LONG ouvre sa fiche — pas un tap : la rangée occupe
-    /// toute la largeur du fil, et une cible de cette taille se déclencherait
-    /// au moindre défilement.
+    /// conditions. Un DOUBLE TAP ouvre sa fiche — pas un tap simple : la rangée
+    /// occupe toute la largeur du fil, et une cible de cette taille se
+    /// déclencherait au moindre défilement.
+    ///
+    /// Ce n'est pas non plus l'appui long, qui l'a porté un temps : ce geste-là
+    /// ouvre, PARTOUT ailleurs dans le fil, les options d'un message. Une
+    /// pastille système qui se l'approprie ne gagne pas un geste, elle en VOLE
+    /// un — et l'avis d'arrivée reste un message du fil (directive 2026-08-24).
     ///
     /// `==` est écrit à la main : une closure n'est pas `Equatable`, et la
     /// synthèse automatique refuserait de compiler. Elle est exclue de la
@@ -265,11 +270,11 @@ struct BubbleJoinNoticeView: View, Equatable {
                     )
             )
             .contentShape(RoundedRectangle(cornerRadius: hasDetailRow ? 14 : 18, style: .continuous))
-            // L'appui long est posé sur la PASTILLE seule, pas sur la rangée :
+            // Le double tap est posé sur la PASTILLE seule, pas sur la rangée :
             // celle-ci s'étend d'un bord à l'autre du fil, et une zone active de
             // cette largeur se déclencherait pendant un défilement. Le retour
             // haptique confirme la prise avant que la feuille ne monte.
-            .onLongPressGesture(minimumDuration: 0.4) {
+            .onTapGesture(count: 2) {
                 guard let onOpenProfile, !notice.participantId.isEmpty else { return }
                 HapticFeedback.medium()
                 onOpenProfile(notice.participantId)
@@ -277,8 +282,9 @@ struct BubbleJoinNoticeView: View, Equatable {
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("bubble-join-notice")
             .accessibilityAddTraits(onOpenProfile == nil ? [] : .isButton)
-            // VoiceOver n'a pas d'appui long : l'action lui est offerte
-            // explicitement, sinon la fiche lui reste inaccessible.
+            .accessibilityHint(Text(openProfileHintLabel))
+            // VoiceOver n'a pas de double tap « brut » : l'action lui est
+            // offerte explicitement, sinon la fiche lui reste inaccessible.
             .accessibilityAction(named: Text(openProfileActionLabel)) {
                 guard let onOpenProfile, !notice.participantId.isEmpty else { return }
                 onOpenProfile(notice.participantId)
@@ -293,6 +299,14 @@ struct BubbleJoinNoticeView: View, Equatable {
         String(
             localized: "bubble.joinNotice.openProfile",
             defaultValue: "Voir la fiche",
+            bundle: .main
+        )
+    }
+
+    private var openProfileHintLabel: String {
+        String(
+            localized: "bubble.joinNotice.openProfile.hint.doubleTap",
+            defaultValue: "Touchez deux fois pour voir la fiche et les conditions d'entrée",
             bundle: .main
         )
     }
