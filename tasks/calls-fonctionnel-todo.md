@@ -11650,3 +11650,105 @@ restauration — hors périmètre de cette Vague, qui vise le site vérifié (ho
 dead code / god-object `CallManager.swift` (~6372 lignes) ; ADR `actor CallEventQueue` non implémenté ;
 iOS single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors
 périmètre calling).
+
+## Vague 172 — `app/call/[callId]/page.tsx` attendait un événement que le serveur n'envoie JAMAIS à son propre émetteur (web) (2026-08-24)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Branche redémarrée
+depuis `origin/main` (Vague 171 déjà mergée, aucune PR ouverte). Audit large dédié (subagent), biaisé
+cette fois vers le web/gateway TypeScript plutôt que `CallManager.swift` iOS : ce conteneur peut exécuter
+de vrais Jest/Vitest pour du TS (RED/GREEN réel), contrairement aux Vagues 166-171 qui n'avaient que des
+tests source-level faute de toolchain Xcode.
+
+### Root cause
+
+`app/call/[callId]/page.tsx` — le point d'entrée d'un lien direct `/call/:callId` (lien partagé, favori,
+notification) — traite `CALL_PARTICIPANT_JOINED` comme SON signal de complétion de join : c'est ce
+listener qui pose `setInCall(true)`. Or côté passerelle, le handler `call:join`
+(`CallEventsHandler.ts`) diffuse cet événement à tous les sockets de la room SAUF celui qui vient de
+joindre :
+
+```ts
+const socketsInRoom = await io.in(ROOMS.call(data.callId)).fetchSockets();
+for (const remoteSocket of socketsInRoom) {
+  if (remoteSocket.id === socket.id) continue;   // ← le joiner lui-même est sauté
+  ...
+  remoteSocket.emit(CALL_EVENTS.PARTICIPANT_JOINED, { ...joinedEvent, iceServers: remoteIceServers });
+}
+```
+
+`PARTICIPANT_JOINED` existe pour prévenir les AUTRES participants qu'un nouveau vient d'arriver — il
+n'a jamais été conçu pour confirmer au joiner son propre join, et ne peut structurellement pas le
+faire. La confirmation réelle du joiner est l'ACK de son propre `call:join`, que la page recevait déjà
+(`ack.data.iceServers`) mais dont elle ignorait `ack.success` et `ack.data.callSession` — jamais
+d'appel à `setCurrentCall`/`setInCall` depuis ce chemin.
+
+### Impact
+
+Un utilisateur authentifié qui navigue DIRECTEMENT vers `/call/<callId d'un appel actif>` (lien partagé
+hors bande, favori, deep-link) déclenche un `call:join` qui RÉUSSIT côté serveur (ligne `CallParticipant`
+créée/réutilisée, socket joint la room `ROOMS.call`) — mais côté client, ni `handleParticipantJoined`
+(structurellement impossible pour son propre join) ni `handleCallInitiated` (réservé à un appel en
+cours d'INITIATION, pas à un join sur un appel déjà actif) ne se déclenchent jamais. Après le timeout
+fixe de 10s, la page affiche « Call Error / Return Home » alors que l'appel est bel et bien actif et que
+l'utilisateur y a bien été ajouté serveur-side — `VideoCallInterface` ne monte jamais, aucun média local
+ne démarre, pendant que les AUTRES participants reçoivent, eux, la notification de cette arrivée
+« fantôme » et peuvent tenter une négociation WebRTC vers quelqu'un qui ne répondra jamais.
+
+Confirmé non hypothétique : `__tests__/app/call/CallPage.test.tsx` (Vague 78, listener-leak) portait déjà
+un test « happy path » qui masquait exactement ce défaut — il déclenche `CALL_PARTICIPANT_JOINED` avec
+`userId: 'user-2'` alors que l'utilisateur authentifié mocké est `'user-1'`, prouvant seulement que la
+page réagit à l'arrivée de QUELQU'UN D'AUTRE, jamais à son propre join réussi.
+
+### Fix
+
+Le callback d'ACK de `call:join` devient la source de vérité pour le propre join de la page — miroir
+exact de `acceptOrJoinCall` dans `CallManager.tsx`, qui traite déjà son propre ACK comme autoritatif.
+`ack.success && ack.data?.callSession` (garde sur `callSession`, pas seulement sur `ack.data` — un ACK
+sans `callSession` ne peut légitimement pas exister côté production, mais la garde évite un
+`setCurrentCall(undefined)` sur un ACK dégénéré) déclenche `setCurrentCall(ack.data.callSession)` +
+`setInCall(true)` + `clearTimeout(timeout)`, en plus de l'application des `iceServers` déjà en place. Un
+ACK en échec (`success: false`) affiche désormais l'erreur du SERVEUR immédiatement (`ack.error.message`)
+au lieu d'attendre les 10s du timeout générique. `handleParticipantJoined`/`handleCallInitiated` restent
+enregistrés pour les participants ultérieurs — ils cessent seulement d'être le chemin de complétion du
+propre join de cette page.
+
+### Tests (TDD, RED confirmé — vrai Jest, pas de pseudo-test source-level)
+
+Deux tests ajoutés à `CallPage.test.tsx` :
+- « completes this user's own join from the call:join ack alone, with no participant-joined broadcast »
+  — ACK `{success:true, data:{callSession,iceServers:[]}}`, AUCUN événement `CALL_PARTICIPANT_JOINED`/
+  `CALL_INITIATED` n'est jamais tiré ; asserte `isInCall === true` et `currentCall.id === callId`.
+- « surfaces the server-reported error immediately when call:join is rejected via its ack » — ACK
+  `{success:false, error:{message:'This call has ended'}}` ; asserte le message affiché immédiatement.
+
+RED confirmé en exécutant la suite AVANT le correctif (`bun run test -- __tests__/app/call/CallPage.test.tsx`,
+via `apps/web`, après `bun install --ignore-scripts` + `prisma generate` + `bun run build` sur
+`packages/shared`, prérequis documentés dans le CLAUDE.md racine) : 2 échecs exacts sur les deux
+nouveaux tests, 3 tests préexistants toujours verts. GREEN confirmé après le correctif : 5/5. Un premier
+correctif (garde sur `ack.data` seul plutôt que `ack.data?.callSession`) a fait apparaître une boucle de
+rendu infinie sur les deux tests préexistants dont le socket factice acquitte par défaut
+`{success:true, data:{}}` (sans `callSession`) — `setCurrentCall(undefined)` cassait alors la garde
+« déjà dans cet appel » (`currentCall?.id === callId`) et l'effet se ré-exécutait indéfiniment. Resserrer
+la garde sur `ack.data?.callSession` a fait disparaître la boucle sans changer le comportement de
+production (un ACK de succès porte toujours `callSession` en réalité).
+
+### Risk assessment
+
+Faible — un seul callback modifié, deux nouvelles branches d'état (succès complet / échec immédiat),
+aucun changement de signature. Le seul comportement observable qui change : un join qui réussit
+server-side complète désormais immédiatement au lieu d'attendre une notification qui ne viendra jamais
+(ou, pour un `CALL_INITIATED` fortuit, jusqu'à ce qu'un tiers déclenche l'appel initial) ; un join qui
+échoue affiche le message d'erreur réel du serveur au lieu du message générique après 10s.
+
+### Non fait volontairement / reste ouvert
+
+Un défaut adjacent, distinct, repéré mais non traité (hors périmètre de cette Vague — pas un défaut de
+calling) : la redirection non-authentifiée de cette même page (`router.push('/login?redirect=/call/…')`)
+nomme le paramètre `redirect`, alors que `app/login/page.tsx` ne lit que `returnUrl` — la destination
+est donc silencieusement perdue même sur le chemin « se connecter puis revenir ». Reconduits (inchangés) :
+outillage lint cassé dans ce conteneur (`eslint-plugin-react` incompatible avec `eslint@10.8.1` —
+`TypeError: contextOrFilename.getFilename is not a function`, échoue sur `bun run lint` avant même
+d'atteindre les fichiers de cette Vague, sur un fichier sans rapport — pré-existant, hors périmètre) ;
+dead code / god-object `CallManager.swift` (~6372 lignes) ; ADR `actor CallEventQueue` non implémenté ;
+iOS single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors
+périmètre calling).
