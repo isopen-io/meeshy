@@ -1,14 +1,18 @@
 /**
- * Cycle 123 — commentaires et statuts (web) deviennent conscients du RANG.
+ * Cycle 123 — la RÈGLE #1 du Prisme sur les commentaires et les statuts.
  *
- * `CommentItem` et `StatusBar` ne recevaient qu'une langue unique
- * (`userLanguage`, rang 1). Corrects, mais aveugles à toute traduction d'un
- * rang inférieur — cas NOMINAL dès que la locale appareil (rang 4) diffère de
- * la langue applicative. Ils reçoivent désormais le prisme ORDONNÉ, comme
- * `PostCard` / `PostDetail` depuis le cycle 120.
+ * Le câblage rang-conscient de ces deux surfaces a atterri par l'itération 257
+ * (`prisme-rank-comment-status.test.tsx`), qui en porte les témoins de RANG —
+ * « la traduction d'un rang inférieur est servie quand le rang 1 manque ». Ils
+ * ne sont pas redoublés ici.
  *
- * Les témoins s'écrivent au rang 2 : au rang 1, le défaut et la règle juste
- * rendent le même verdict (leçon 261).
+ * Ce qu'ils ne couvrent pas, et que ce fichier garde : **l'absence de repli**.
+ * Quand AUCUNE langue du prisme n'est servie, la règle #1 exige l'ORIGINAL —
+ * jamais une traduction quelconque (« servir une troisième langue serait pire
+ * que l'original »). C'est la moitié du contrat qu'une descente trop zélée
+ * casse en premier : il suffit qu'un résolveur retombe sur `translations[0]`
+ * pour que les témoins de rang restent verts pendant que le lecteur reçoit de
+ * l'espagnol qu'il n'a jamais demandé.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
@@ -48,20 +52,8 @@ function status(overrides: Partial<StatusItem> = {}): StatusItem {
   };
 }
 
-describe('CommentItem — le Prisme descend jusqu’au rang servi', () => {
-  it('sert la traduction du rang 2 quand le rang 1 est absent', () => {
-    render(
-      <CommentItem
-        comment={comment({ translations: { fr: { text: 'Bonjour' } } as never })}
-        preferredLanguages={['de', 'fr']}
-      />,
-    );
-
-    expect(screen.getByText('Bonjour')).toBeInTheDocument();
-    expect(screen.queryByText('Hello')).toBeNull();
-  });
-
-  it('sert l’original quand aucune langue du prisme n’est disponible', () => {
+describe('Prisme règle #1 — aucune langue servie ⇒ l’ORIGINAL, jamais un repli', () => {
+  it('CommentItem sert l’original plutôt qu’une traduction hors prisme', () => {
     render(
       <CommentItem
         comment={comment({ translations: { es: { text: 'Hola' } } as never })}
@@ -70,16 +62,15 @@ describe('CommentItem — le Prisme descend jusqu’au rang servi', () => {
     );
 
     expect(screen.getByText('Hello')).toBeInTheDocument();
+    expect(screen.queryByText('Hola')).toBeNull();
   });
-});
 
-describe('StatusBar — le Prisme descend jusqu’au rang servi', () => {
-  it('sert la traduction du rang 2 dans le popover', () => {
+  it('StatusBar sert l’original plutôt qu’une traduction hors prisme', () => {
     render(
       <StatusBar
         statuses={[
           status({
-            translations: [{ languageCode: 'fr', languageName: 'Français', content: 'Bonjour' }],
+            translations: [{ languageCode: 'es', languageName: 'Español', content: 'Hola' }],
           }),
         ]}
         onStatusPress={jest.fn()}
@@ -90,7 +81,6 @@ describe('StatusBar — le Prisme descend jusqu’au rang servi', () => {
 
     fireEvent.click(screen.getByText('Bob'));
 
-    expect(screen.getByText('Bonjour')).toBeInTheDocument();
-    expect(screen.queryByText('Hello')).toBeNull();
+    expect(screen.getByText('Hello')).toBeInTheDocument();
   });
 });
