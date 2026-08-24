@@ -218,6 +218,7 @@ extension StoryComposerView {
                                     originalLanguage: storyLanguage,
                                     editingPostId: viewModel.editingPostId)
         persistCommandHistory()
+        persistAccessibility()
         StoryDraftStore.shared.saveMedia(
             draftId: viewModel.draftId,
             images: viewModel.loadedImages,
@@ -251,6 +252,18 @@ extension StoryComposerView {
     func persistCommandHistory() {
         guard let blob = viewModel.commandHistoryBlobForPersistence() else { return }
         StoryDraftStore.shared.saveCommandHistoryBlob(blob, draftId: viewModel.draftId)
+    }
+
+    /// F2 — la collecte d'accessibilité accompagne chaque persistance du
+    /// brouillon. Sans elle, refermer le composer perdait le texte alternatif
+    /// saisi : il ne vivait que dans le store de session.
+    ///
+    /// Écrite même vide : le brouillon reflète toujours la DERNIÈRE collecte,
+    /// jamais une collecte périmée qu'une suppression de texte aurait dû
+    /// effacer.
+    func persistAccessibility() {
+        StoryDraftStore.shared.saveAccessibility(accessibilityStore.draftSnapshot(),
+                                                 draftId: viewModel.draftId)
     }
 
     func saveDraft() {
@@ -378,6 +391,7 @@ extension StoryComposerView {
                                     originalLanguage: storyLanguage,
                                     editingPostId: viewModel.editingPostId)
         persistCommandHistory()
+        persistAccessibility()
         // Cover composite local-first (même pipeline pixel-parfait que la publication) —
         // « première slide dans l'ordre », même convention que l'ancienne heuristique
         // brute qu'elle remplace côté My Stories > Drafts.
@@ -631,6 +645,10 @@ extension StoryComposerView {
             // E4 inc.2 — AVANT tout bootstrap timeline : l'undo/redo de
             // chaque slide revit avec le draft, même après un crash dur.
             viewModel.applyPersistedCommandHistory(StoryDraftStore.shared.loadCommandHistoryBlob(draftId: viewModel.draftId))
+            // F2 — le texte alternatif et l'opt-in d'extraction de son
+            // reviennent avec le brouillon : persistés sans être reposés, ils
+            // seraient écrits puis relus par personne.
+            accessibilityStore.restore(from: StoryDraftStore.shared.loadAccessibility(draftId: viewModel.draftId))
             let media = StoryDraftStore.shared.loadMedia(draftId: viewModel.draftId)
             let sessionDir = Self.sessionMediaDirectory(for: viewModel.draftId)
             viewModel.mergeRestoredMedia(
@@ -694,6 +712,7 @@ extension StoryComposerView {
                                     originalLanguage: storyLanguage,
                                     editingPostId: viewModel.editingPostId)
         persistCommandHistory()
+        persistAccessibility()
         StoryDraftStore.shared.markPendingPublish(draftId: viewModel.draftId)
         UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
     }

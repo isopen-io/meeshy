@@ -207,6 +207,12 @@ extension EnvironmentValues {
 /// (`ForEach(id:)`) ; le magasin qui lui donne un sens (budget, éviction,
 /// persistance) est app-side.
 public nonisolated struct StoryStickerLibraryItem: Identifiable, Equatable, @unchecked Sendable {
+    /// Provenance à écrire dans `StorySticker.provider` quand c'est CETTE
+    /// bibliothèque qui a fourni l'image. Métadonnée d'ORIGINE : rien ne s'en
+    /// déduit au chargement, elle évite seulement que le mot « library » soit
+    /// réécrit à la main au site de pose et dans les tests qui le vérifient.
+    public static let provider = "library"
+
     public let id: String
     public let thumbnail: UIImage
 

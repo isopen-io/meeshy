@@ -830,6 +830,56 @@ export class NotificationService {
   }
 
   /**
+   * Le COUPLE que la NSE iOS pré-enregistre — le corps de la bulle et son
+   * étiquette de langue — ou RIEN.
+   *
+   * Troisième projection de {@link PreviewPrismBasis}, après « qu'est-ce qui
+   * TRADUIT cet aperçu ? » ({@link previewPrismSource}) et « que peut-on
+   * transporter à côté ? » (la garde de {@link servedTranslationFields}) : ce
+   * type dit ce que l'aperçu EST, donc il est le seul à pouvoir dire s'il peut
+   * être pris pour le message.
+   *
+   * Elle répond `{}` — donc « n'enregistre rien » — sur les trois formes où
+   * l'aperçu n'est pas `Message.content` :
+   *
+   *  - `protected-placeholder` — l'écrire planterait « ⏱️ 💬 24h » dans la base
+   *    locale, où il survivrait à la bannière si la synchro REST n'arrive pas ;
+   *  - `transcript` — la parole d'un vocal appartient à la pièce jointe, pas au
+   *    message qui la porte ; la bulle audio la rendra après la synchro ;
+   *  - `protectedByLocKey` — second verrou, comme pour la descente : un appelant
+   *    qui compose un placeholder sans déclarer sa base perd un enregistrement
+   *    local, jamais le secret.
+   *
+   * La quatrième — le mode privé — est tenue une couche plus haut, par la garde
+   * `showPreview` qui retire TOUT champ porteur de contenu de `data`.
+   *
+   * Ce qui voyage est l'ORIGINAL, jamais la traduction : `MessageRecord.content`
+   * est le champ d'origine et `messageOriginalLanguage` son étiquette, quand la
+   * traduction servie a déjà `translatedContent` et son rang (cycle 121).
+   *
+   * **Pourquoi un helper et non le prédicat en ligne** : les TROIS éventails de
+   * `messageNotificationFanOut` poussent un `messageId`, donc les trois font
+   * pré-enregistrer une bulle. Écrit une fois par site, ce prédicat finirait par
+   * manquer à l'un d'eux — c'est exactement ce qui distingue une règle d'un
+   * site qui l'applique (leçon 271).
+   */
+  private prePersistedMessageFields(params: {
+    basis: PreviewPrismBasis;
+    preview: string;
+    originalLanguage: string | null;
+    protectedByLocKey?: boolean;
+  }): { messageContent?: string; messageOriginalLanguage?: string } {
+    if (params.protectedByLocKey) return {};
+    if (params.basis.kind !== 'message-content') return {};
+    // Un aperçu VIDE ne dit rien de plus que son absence et coûte du budget APNs.
+    if (params.preview.trim() === '') return {};
+    return {
+      messageContent: params.preview,
+      ...(params.originalLanguage ? { messageOriginalLanguage: params.originalLanguage } : {}),
+    };
+  }
+
+  /**
    * La DESCENTE du Prisme, sous la forme que le contexte de notification
    * attend : `translatedContent` et `translatedLanguage` côte à côte, ou RIEN.
    *
@@ -1798,20 +1848,14 @@ export class NotificationService {
     const prismContext = this.servedTranslationFields(servedTranslation);
 
     // Cycle 124 — le corps de la bulle que la NSE PRÉ-ENREGISTRE au démarrage à
-    // froid. `PreviewPrismBasis` répond ici à une seconde question, distincte de
-    // « qu'est-ce qui traduit cet aperçu ? » : « cet aperçu EST-il le contenu du
-    // message ? ». Seul `message-content` l'est — un placeholder de protection
-    // rendrait « 👁️ 🎵 » dans la bulle et relâcherait ce que la protection
-    // masque ; une transcription n'est pas `Message.content` et sera rendue par
-    // la bulle audio après la synchro REST. Un aperçu VIDE ne dit rien de plus
-    // que son absence et coûte du budget APNs.
-    const previewIsOwnContent =
-      !params.notificationLocKey &&
-      (params.previewBasis ?? MESSAGE_CONTENT_BASIS).kind === 'message-content';
-    const prePersistedContent =
-      previewIsOwnContent && params.messagePreview.trim() !== ''
-        ? params.messagePreview
-        : undefined;
+    // froid, et son étiquette de langue. Le prédicat vit dans
+    // `prePersistedMessageFields` — un SEUL site pour les trois éventails.
+    const prePersisted = this.prePersistedMessageFields({
+      basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+      preview: params.messagePreview,
+      originalLanguage: liveMessage.originalLanguage,
+      protectedByLocKey: !!params.notificationLocKey,
+    });
 
     // Cycle 122 — le corps AFFICHÉ descend le Prisme, pas seulement les champs
     // de service ci-dessus : c'est lui que les trois plateformes rendent.
@@ -1865,14 +1909,8 @@ export class NotificationService {
         // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
         messageCreatedAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt.toISOString() : undefined,
         messageType: liveMessage.messageType ?? undefined,
-        // Cycle 124 — cf. `prePersistedContent` ci-dessus : le corps et la
-        // langue de la bulle pré-enregistrée par la NSE.
-        ...(prePersistedContent
-          ? {
-              messageContent: prePersistedContent,
-              messageOriginalLanguage: liveMessage.originalLanguage ?? undefined,
-            }
-          : {}),
+        // Cycle 124 — le corps et la langue de la bulle pré-enregistrée.
+        ...prePersisted,
         ...prismContext,
       },
 
@@ -1998,6 +2036,17 @@ export class NotificationService {
         // la bannière d'une mention restait dans la langue de l'expéditeur
         // pendant que celle d'un message simple servait la traduction.
         ...this.servedTranslationFields(servedTranslation),
+        // Cycle 124 — la JUMELLE : cette bannière pousse un `messageId`, donc
+        // elle fait pré-enregistrer une bulle côté NSE, exactement comme celle
+        // d'un message simple. Sans ce couple, la bulle d'une MENTION restait
+        // vide pendant que celle d'un message en avait une — le symptôme « deux
+        // textes pour un même message » que les cycles 121 à 123 poursuivent.
+        // La langue vient de la source déjà relue : aucune lecture de plus.
+        ...this.prePersistedMessageFields({
+          basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+          preview: params.messagePreview,
+          originalLanguage: prismSource.originalLanguage,
+        }),
       },
 
       metadata: {
@@ -3627,6 +3676,14 @@ export class NotificationService {
         // Cycle 122 — le Prisme de la RÉPONSE, celle que cette bannière annonce
         // et ouvre : jamais celle du message cité.
         ...this.servedTranslationFields(servedTranslation),
+        // Cycle 124 — cf. `createMentionNotification` : la bulle pré-enregistrée
+        // est celle de la RÉPONSE, le message que cette bannière annonce et
+        // ouvre — jamais celle du message cité.
+        ...this.prePersistedMessageFields({
+          basis: params.previewBasis ?? MESSAGE_CONTENT_BASIS,
+          preview: params.messagePreview,
+          originalLanguage: prismSource.originalLanguage,
+        }),
       },
 
       metadata: {

@@ -394,7 +394,10 @@ struct RainbowEffect: ViewModifier {
     /// leur première couleur. Trois d'entre eux sont déjà des tokens nommés
     /// (`indigo400`, `success`, `warning`) : l'effet n'invente pas sa palette,
     /// il étend celle de la charte.
-    static let houseSpectrum = ["#818CF8", "#E879F9", "#FB7185", "#FBBF24", "#34D399", "#38BDF8", "#818CF8"]
+    /// `nonisolated` : sept littéraux immuables, donc `Sendable` — et son seul
+    /// lecteur, `spectrum(from:)`, est lui-même `nonisolated`. Sans cela le
+    /// repli du spectre traversait la frontière d'acteur à chaque appel.
+    nonisolated static let houseSpectrum = ["#818CF8", "#E879F9", "#FB7185", "#FBBF24", "#34D399", "#38BDF8", "#818CF8"]
 
     /// Spectre effectivement peint. Boucle TOUJOURS sur sa première couleur :
     /// un `AngularGradient` ouvert montre la couture de son raccord.

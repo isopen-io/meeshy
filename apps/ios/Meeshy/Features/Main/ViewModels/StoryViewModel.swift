@@ -60,12 +60,22 @@ enum StoryCoverThumbnail {
             legacyBackgroundURL: nil, imageURLsByObjectId: [:], requiredObjectIds: []
         )
 
+        // Les `PostMedia` que la composition référence par ses STICKERS : ils
+        // sont attachés au post comme n'importe quel média, donc le repli
+        // legacy ci-dessous les prendrait pour le fond et peindrait l'image
+        // d'un sticker PLEIN CADRE derrière la composition.
+        let stickerMediaIds = Set(
+            (effects.stickerObjects ?? []).map(\.postMediaId).filter { !$0.isEmpty }
+        )
+
         if let bg = effects.resolvedBackgroundMedia {
             let url = bg.mediaURL ?? item.media.first(where: { $0.id == bg.postMediaId })?.url
             guard bg.kind == .image, let url, !url.isEmpty else { return nil }
             plan.imageURLsByObjectId[bg.id] = url
             plan.requiredObjectIds.insert(bg.id)
-        } else if let legacyVisual = item.media.first(where: { $0.type == .image || $0.type == .video }) {
+        } else if let legacyVisual = item.media.first(where: {
+            ($0.type == .image || $0.type == .video) && !stickerMediaIds.contains($0.id)
+        }) {
             guard legacyVisual.type == .image, let url = legacyVisual.url, !url.isEmpty else { return nil }
             plan.legacyBackgroundURL = url
         }
@@ -73,6 +83,15 @@ enum StoryCoverThumbnail {
         for obj in effects.resolvedForegroundMediaObjects where obj.kind == .image {
             let url = obj.mediaURL ?? item.media.first(where: { $0.id == obj.postMediaId })?.url
             if let url, !url.isEmpty { plan.imageURLsByObjectId[obj.id] = url }
+        }
+
+        // Sticker IMAGE : son asset est un `PostMedia` du post comme un autre,
+        // et il entre dans le renderer par le MÊME slot `loadedImages`, sous
+        // l'id d'ÉLÉMENT. Jamais `required` : sans son image le renderer peint
+        // l'emoji de repli, ce qui vaut mieux que pas de cover du tout.
+        for sticker in effects.stickerObjects ?? [] where !sticker.postMediaId.isEmpty {
+            let url = item.media.first(where: { $0.id == sticker.postMediaId })?.url
+            if let url, !url.isEmpty { plan.imageURLsByObjectId[sticker.id] = url }
         }
 
         let hasVisualBackground = plan.legacyBackgroundURL != nil || !plan.requiredObjectIds.isEmpty
@@ -1719,11 +1738,20 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // promettait « publication au retour en ligne », puis le drain la
         // faisait échouer DÉFINITIVEMENT en `.missingLocalMedia` — travail
         // perdu, longtemps après, sans signal au moment où c'était réparable.
+        //
+        // Les images de stickers doivent traverser la file SANS être aplaties :
+        // le JPEG n'a pas de canal alpha et c'est ce fichier-là que le drain
+        // téléversera. On nomme tous les ids de stickers — le writer n'agit que
+        // sur ceux dont il détient réellement un bitmap, donc un sticker emoji
+        // n'y change rien. `StorySticker.kind` ne peut pas servir de filtre
+        // ici : il se déduit de `postMediaId`, encore vide avant publication.
+        let stickerIds = Set(slides.flatMap { $0.effects.stickerObjects ?? [] }.map(\.id))
         let mediaOutcome = StoryOfflineMediaWriter.persist(
             images: allImages,
             videos: loadedVideoURLs,
             audios: loadedAudioURLs,
             into: offlineDir,
+            alphaPreservingIds: stickerIds,
             fileManager: fm
         )
         guard mediaOutcome.isComplete else {
@@ -2109,6 +2137,37 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let item: StoryItem
     }
 
+    /// Ce qui reste quand un sticker n'a même pas pu être encodé : sans type
+    /// nommé, l'échec se confondrait avec une panne réseau dans le journal.
+    private struct StoryStickerImageNotEncodable: Error {}
+
+    /// Téléverse l'image d'un sticker par le chemin commun (TUS → `PostMedia`),
+    /// pour le publish comme pour l'édition.
+    ///
+    /// PNG et non JPEG : un sticker est une image détourée et le JPEG n'a pas
+    /// de canal alpha — le réencoder ainsi publierait un rectangle opaque à la
+    /// place du découpage. La bibliothèque borne déjà la taille à l'écriture
+    /// (`PasteDestination.maxSide`), il n'y a rien à sous-échantillonner ici.
+    private func uploadStickerImage(
+        _ image: UIImage,
+        uploader: TusUploadManager,
+        token: String
+    ) async throws -> TusUploadResult {
+        guard let data = image.pngData() else { throw StoryStickerImageNotEncodable() }
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sticker_\(UUID().uuidString).png")
+        try data.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        let result = try await uploader.uploadFile(
+            fileURL: tempURL, mimeType: "image/png",
+            credential: .bearer(token), uploadContext: "story", thumbHash: image.toThumbHash()
+        )
+        // Même réconciliation que les autres images : le lecteur — l'auteur en
+        // premier — trouve l'asset en cache au lieu de le retélécharger.
+        await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
+        return result
+    }
+
     /// Headless story upload pipeline shared by:
     ///   1. `launchUploadTask` (composer flow) — wraps progress/phase/published
     ///       callbacks to drive the `activeUploads` surfaces and tray prepend.
@@ -2237,6 +2296,35 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     onProgress(baseProgress + (0.30 + mediaProgress * 0.50) * slideShare)
                 }
                 updatedEffects.mediaObjects = mediaObjects
+            }
+
+            // L'image d'un sticker importé est INTÉGRÉE au post : elle part par
+            // le chemin commun, comme tout autre média, et le sticker reçoit son
+            // `postMediaId`. Aucune URL tierce n'entre dans le document publié.
+            if let stickers = updatedEffects.stickerObjects {
+                var uploadedStickers: [String: String] = [:]
+                let pendingStickerIds = StoryStickerUpload.pendingUploadIds(
+                    stickers: stickers, availableBitmapIds: Set(upload.loadedImages.keys)
+                )
+                for stickerId in pendingStickerIds {
+                    guard !Task.isCancelled else { return newPostIds }
+                    guard let image = upload.loadedImages[stickerId] else { continue }
+                    do {
+                        let result = try await uploadStickerImage(image, uploader: uploader, token: token)
+                        uploadedStickers[stickerId] = result.id
+                        foregroundMediaIds.append(result.id)
+                    } catch {
+                        // L'erreur s'arrête ICI : propager ferait échouer la
+                        // slide entière pour une image d'appoint. Le sticker
+                        // reste, rendu par son emoji de repli.
+                        Logger.stories.error(
+                            "publish sticker image upload failed stickerId=\(stickerId, privacy: .public) slide=\(slide.id, privacy: .public) reason=\(error.localizedDescription, privacy: .public) — sticker kept, falls back to its emoji"
+                        )
+                    }
+                }
+                updatedEffects.stickerObjects = StoryStickerUpload.applying(
+                    uploads: uploadedStickers, to: stickers
+                )
             }
 
             if var audioObjects = updatedEffects.audioPlayerObjects {
@@ -2588,10 +2676,40 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 updatedEffects.audioPlayerObjects = audioObjects
             }
 
-            // 4. Les originaux plus référencés par la composition éditée.
+            // 4. Stickers — même contrat que les médias : les images déjà
+            // téléversées sont CONSERVÉES (sans quoi l'étape 5 supprimerait
+            // côté serveur l'image de chaque sticker que la story continue
+            // d'afficher), les nouvelles partent par le chemin commun.
+            if let stickers = updatedEffects.stickerObjects {
+                keptOriginalIds.formUnion(StoryStickerUpload.attachedPostMediaIds(stickers: stickers))
+                var uploadedStickers: [String: String] = [:]
+                let pendingStickerIds = StoryStickerUpload.pendingUploadIds(
+                    stickers: stickers, availableBitmapIds: Set(loadedImages.keys)
+                )
+                for stickerId in pendingStickerIds {
+                    guard let image = loadedImages[stickerId] else { continue }
+                    do {
+                        let result = try await uploadStickerImage(image, uploader: uploader, token: token)
+                        uploadedStickers[stickerId] = result.id
+                        newMediaIds.append(result.id)
+                    } catch {
+                        // L'erreur s'arrête ICI : le sticker reste, rendu par
+                        // son emoji de repli, plutôt que de faire échouer une
+                        // édition entière pour une image d'appoint.
+                        Logger.stories.error(
+                            "update sticker image upload failed stickerId=\(stickerId, privacy: .public) reason=\(error.localizedDescription, privacy: .public) — sticker kept, falls back to its emoji"
+                        )
+                    }
+                }
+                updatedEffects.stickerObjects = StoryStickerUpload.applying(
+                    uploads: uploadedStickers, to: stickers
+                )
+            }
+
+            // 5. Les originaux plus référencés par la composition éditée.
             let removeMediaIds = edit.originalMediaIds.filter { !keptOriginalIds.contains($0) }
 
-            // 5. PUT — le gateway pose `contentEditedAt`, remet l'engagement à
+            // 6. PUT — le gateway pose `contentEditedAt`, remet l'engagement à
             // zéro et broadcast `story:updated` avec `engagementReset: true`.
             //
             // TRI-ÉTAT des références : `nil` tant que le composer n'a pas pu
@@ -2622,7 +2740,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 mediaAlt: serverMediaAlt.isEmpty ? nil : serverMediaAlt
             )
 
-            // 6. Réconciliation locale : cover local-first re-rendue (la
+            // 7. Réconciliation locale : cover local-first re-rendue (la
             // composition a changé) + remplacement de l'item dans le groupe.
             var editedSlide = slide
             editedSlide.effects = updatedEffects

@@ -710,3 +710,117 @@ final class NotificationCommunicationFramingTests: XCTestCase {
         XCTAssertEqual(f.intentKey, "n42")
     }
 }
+
+// MARK: - Cycle 124 bis — le message PRÉ-ENREGISTRÉ au démarrage à froid
+
+/// La bulle que la NSE écrit dans la base App Group avant que l'app ne démarre.
+///
+/// Le cycle 124 a posé `content` et `originalLanguage` sur le fil push, sous les
+/// noms que `prePersistMessage` lisait déjà. Ces témoins gèlent les TROIS écarts
+/// restants, mesurés par le diff du contrat dans les deux sens :
+///
+///  - `senderName` — lu par la NSE, JAMAIS émis (la passerelle envoie
+///    `senderDisplayName`, que le cadrage Communication du même fichier lit
+///    correctement depuis toujours) ;
+///  - `createdAt` et `messageType` — ÉMIS pour cette extension (« GW5 —
+///    persistance NSE ») et lus par personne : la bulle était ordonnée par
+///    l'horloge du device.
+final class PrePersistedMessageFieldsTests: XCTestCase {
+
+    private let epoch = Date(timeIntervalSince1970: 1_700_000_000)
+
+    private func fields(
+        _ userInfo: [AnyHashable: Any]
+    ) -> NotificationPayloadHelpers.PrePersistedMessageFields {
+        NotificationPayloadHelpers.prePersistedMessageFields(
+            userInfo: userInfo,
+            fallbackNow: epoch
+        )
+    }
+
+    // MARK: - Le corps et sa langue
+
+    func test_prePersistedFields_readsContentAndLanguageFromTheWire() {
+        let f = fields(["content": "Hola, ¿qué tal?", "originalLanguage": "es"])
+
+        XCTAssertEqual(f.content, "Hola, ¿qué tal?")
+        XCTAssertEqual(f.language, "es")
+    }
+
+    func test_prePersistedFields_noContent_writesNoBody() {
+        // Mode privé, placeholder de protection, transcription : la passerelle
+        // n'émet pas le couple. Une bulle sans texte vaut mieux qu'une bulle qui
+        // MENT — la synchro REST peut ne jamais arriver.
+        XCTAssertEqual(fields([:]).content, "")
+    }
+
+    func test_prePersistedFields_emptyLanguage_fallsBackWithoutClaimingFrench() {
+        // La passerelle pose `''` quand elle n'a rien à dire. « en » est un faux
+        // moins nuisible que « fr » pour le Prisme d'un lecteur non francophone.
+        XCTAssertEqual(fields(["content": "Hello", "originalLanguage": ""]).language, "en")
+    }
+
+    // MARK: - L'horodatage
+
+    func test_prePersistedFields_serverTimestamp_ordersTheBubble() {
+        let f = fields(["createdAt": "2026-08-24T10:00:00.000Z"])
+
+        XCTAssertEqual(f.createdAt, Date(timeIntervalSince1970: 1_787_565_600))
+    }
+
+    func test_prePersistedFields_timestampWithoutFraction_stillParses() {
+        let f = fields(["createdAt": "2026-08-24T10:00:00Z"])
+
+        XCTAssertEqual(f.createdAt, Date(timeIntervalSince1970: 1_787_565_600))
+    }
+
+    func test_prePersistedFields_unparsableTimestamp_fallsBackToDeviceClock() {
+        XCTAssertEqual(fields(["createdAt": "pas une date"]).createdAt, epoch)
+    }
+
+    // MARK: - L'expéditeur
+
+    func test_prePersistedFields_senderName_readsTheKeyTheGatewayActuallyEmits() {
+        let f = fields(["senderDisplayName": "Alice Martin", "senderUsername": "alice"])
+
+        XCTAssertEqual(f.senderName, "Alice Martin")
+    }
+
+    func test_prePersistedFields_senderName_fallsBackToUsername() {
+        let f = fields(["senderDisplayName": "", "senderUsername": "alice"])
+
+        XCTAssertEqual(f.senderName, "alice")
+    }
+
+    func test_prePersistedFields_senderName_absentWhenTheWireSaysNothing() {
+        XCTAssertNil(fields([:]).senderName)
+    }
+
+    // MARK: - Le type du message
+
+    func test_prePersistedTypes_attachmentMime_stillWins() {
+        // N4 reste prioritaire : `Message.messageType` vaut `text` pour un vocal
+        // légendé, et c'est le mime qui décide du rendu média.
+        let types = NotificationPayloadHelpers.prePersistedMessageTypes(
+            userInfo: ["attachmentMimeType": "audio/m4a", "messageType": "text"]
+        )
+
+        XCTAssertEqual(types.messageType, "audio")
+    }
+
+    func test_prePersistedTypes_wireTypeUsedWhenThereIsNoAttachment() {
+        let types = NotificationPayloadHelpers.prePersistedMessageTypes(
+            userInfo: ["messageType": "system"]
+        )
+
+        XCTAssertEqual(types.messageType, "system")
+        XCTAssertEqual(types.contentType, "system")
+    }
+
+    func test_prePersistedTypes_noWireType_fallsBackToText() {
+        XCTAssertEqual(
+            NotificationPayloadHelpers.prePersistedMessageTypes(userInfo: [:]).messageType,
+            "text"
+        )
+    }
+}

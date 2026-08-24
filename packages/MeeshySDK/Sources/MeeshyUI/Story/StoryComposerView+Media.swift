@@ -99,11 +99,18 @@ extension StoryComposerView {
             // C8 — le picker existait, complet, sans AUCUN call site. Sheet
             // medium, dismiss gestuel natif ; reste ouverte après un ajout
             // (poser plusieurs stickers d'affilée, fermer par swipe-down).
-            StickerPickerView { emoji in
+            StickerPickerView(onStickerSelected: { emoji in
                 // C13 — chemin VM unique (currentEffects source de vérité).
                 viewModel.addSticker(emoji: emoji)
                 HapticFeedback.light()
-            }
+            }, onLibraryStickerSelected: { item in
+                // S2 — le bitmap suffit à la pose : il vit en local sous l'id
+                // de l'élément jusqu'à ce que la publication le téléverse et
+                // remplisse `postMediaId`.
+                viewModel.addSticker(image: item.thumbnail,
+                                     provider: StoryStickerLibraryItem.provider)
+                HapticFeedback.light()
+            })
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }

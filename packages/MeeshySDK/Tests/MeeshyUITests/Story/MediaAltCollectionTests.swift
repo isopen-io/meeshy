@@ -404,4 +404,109 @@ final class MediaAltCollectionTests: XCTestCase {
         )
         XCTAssertTrue(body.contains("accessibilityStore.remove(mediaId: media.id)"))
     }
+
+    // MARK: - F2 — la collecte SURVIT à la fermeture du composer
+
+    /// `test_draftSnapshot_carriesTheTypedAltText` rougit si l'instantané que
+    /// le brouillon persiste cesse de porter ce que l'auteur a écrit : le
+    /// texte se saisissait, partait à la publication, et disparaissait dès que
+    /// le composer se refermait sans publier.
+    func test_draftSnapshot_carriesTheTypedAltText() {
+        let store = MediaAccessibilityStore()
+        store.setAlt("Un chat roux sur un muret", for: "media-1")
+
+        XCTAssertEqual(store.draftSnapshot().mediaAlt, ["media-1": "Un chat roux sur un muret"])
+    }
+
+    /// `test_draftSnapshot_ofAnUntouchedStore_isEmpty` rougit si un composer
+    /// vierge se met à écrire une collecte dans le brouillon — l'instantané
+    /// d'un store jamais touché n'a rien à persister.
+    func test_draftSnapshot_ofAnUntouchedStore_isEmpty() {
+        XCTAssertEqual(MediaAccessibilityStore().draftSnapshot(), .empty)
+    }
+
+    /// `test_restore_reposesTheAltTextOfAnAdoptedDraft` rougit si adopter un
+    /// brouillon ne repose pas ses textes dans le store vivant : la collecte
+    /// serait persistée puis relue par personne, et l'auteur retrouverait des
+    /// champs vides devant ses propres médias.
+    func test_restore_reposesTheAltTextOfAnAdoptedDraft() {
+        let store = MediaAccessibilityStore()
+
+        store.restore(from: StoryDraftAccessibility(mediaAlt: ["media-1": "Une plage au couchant"]))
+
+        XCTAssertEqual(store.alt(for: "media-1"), "Une plage au couchant")
+        XCTAssertEqual(store.mediaAltPayload(), ["media-1": "Une plage au couchant"])
+    }
+
+    /// `test_restore_replacesTheCollectionRatherThanMergingIntoIt` rougit si
+    /// l'adoption FUSIONNE : le composer porterait alors les textes d'une
+    /// composition précédente sur des ids de médias que le brouillon repris ne
+    /// contient pas — exactement le texte fantôme que `remove(mediaId:)` évite
+    /// par ailleurs.
+    func test_restore_replacesTheCollectionRatherThanMergingIntoIt() {
+        let store = MediaAccessibilityStore()
+        store.setAlt("Texte d'une autre composition", for: "media-9")
+
+        store.restore(from: StoryDraftAccessibility(mediaAlt: ["media-1": "Une plage au couchant"]))
+
+        XCTAssertEqual(store.alt(for: "media-9"), "")
+        XCTAssertEqual(store.mediaAltPayload(), ["media-1": "Une plage au couchant"])
+    }
+
+    /// `test_restore_clampsAltTextToTheTransportLimit` rougit si la reprise
+    /// court-circuite le clamp : un brouillon écrit quand la limite était plus
+    /// large repartirait vers un gateway qui refuse au-delà de
+    /// `z.string().max(1000)`.
+    func test_restore_clampsAltTextToTheTransportLimit() {
+        let store = MediaAccessibilityStore()
+        let tooLong = String(repeating: "a", count: MediaAccessibilityStore.maxAltLength + 50)
+
+        store.restore(from: StoryDraftAccessibility(mediaAlt: ["media-1": tooLong]))
+
+        XCTAssertEqual(store.alt(for: "media-1").count, MediaAccessibilityStore.maxAltLength)
+    }
+
+    // MARK: - Gardes POSITIVES : la collecte est ÉCRITE et RELUE par le composer
+
+    /// `test_everyDraftWriteCarriesTheAccessibilityCollection` rougit si l'un
+    /// des trois chemins d'écriture du brouillon cesse d'emporter la collecte.
+    ///
+    /// Les trois comptent : l'autosave débouncé (le travail survit au crash
+    /// dur), la persistance explicite (fermer, c'est enregistrer) et le gel de
+    /// publication (un échec permanent rend le brouillon éditable — amputé de
+    /// ses textes s'il ne les portait pas).
+    func test_everyDraftWriteCarriesTheAccessibilityCollection() throws {
+        let code = try ComposerSourceGuard.source("StoryComposerView+SyncRestore.swift")
+
+        for writer in ["func persistDraft()",
+                       "func autosaveDraftAfterMutation()",
+                       "func freezeCurrentDraftForPublish()"] {
+            let body = try XCTUnwrap(ComposerSourceGuard.functionBody(named: writer, in: code))
+            XCTAssertTrue(collapsed(body).contains("persistAccessibility()"),
+                          "\(writer) doit emporter la collecte d'accessibilité avec le brouillon.")
+        }
+
+        let persist = try XCTUnwrap(
+            ComposerSourceGuard.functionBody(named: "func persistAccessibility()", in: code)
+        )
+        XCTAssertTrue(collapsed(persist).contains("saveAccessibility(accessibilityStore.draftSnapshot()"),
+                      "La persistance doit LIRE le store de collecte du composer.")
+    }
+
+    /// `test_restoreDraft_reposesTheStoredCollection` rougit si la reprise
+    /// cesse de reposer la collecte : le brouillon la porterait sans que
+    /// personne ne la relise — « écrit, jamais relu » est le pendant exact du
+    /// « collecté, jamais envoyé » que ce chantier a déjà mesuré.
+    func test_restoreDraft_reposesTheStoredCollection() throws {
+        let code = try ComposerSourceGuard.source("StoryComposerView+SyncRestore.swift")
+        let body = try XCTUnwrap(
+            ComposerSourceGuard.functionBody(named: "func restoreDraft()", in: code)
+        )
+        let flat = collapsed(body)
+
+        XCTAssertTrue(flat.contains("accessibilityStore.restore(from:"),
+                      "Reprendre un brouillon doit reposer sa collecte dans le store vivant.")
+        XCTAssertTrue(flat.contains("loadAccessibility(draftId: viewModel.draftId)"),
+                      "La collecte reposée doit être celle DE CE brouillon.")
+    }
 }

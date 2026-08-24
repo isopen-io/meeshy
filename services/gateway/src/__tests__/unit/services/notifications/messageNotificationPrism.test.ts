@@ -50,6 +50,8 @@ const makePrismaMock = (opts: {
   recipient: LangPrefs;
   translations: unknown;
   originalLanguage: string | null;
+  /** Préférences de notification du destinataire (`showPreview`…). */
+  notificationPrefs?: Record<string, unknown>;
 }) => ({
   message: {
     findUnique: jest.fn().mockResolvedValue({
@@ -86,7 +88,11 @@ const makePrismaMock = (opts: {
   conversation: {
     findUnique: jest.fn().mockResolvedValue({ id: 'conv_x', title: 'Test Conv', type: 'group', avatar: null }),
   },
-  userPreferences: { findUnique: jest.fn().mockResolvedValue(null) },
+  userPreferences: {
+    findUnique: jest.fn().mockResolvedValue(
+      opts.notificationPrefs ? { notification: opts.notificationPrefs } : null
+    ),
+  },
 }) as any;
 
 const makeIO = () => ({
@@ -115,6 +121,7 @@ const runFanOut = async (opts: {
   recipient: LangPrefs;
   translations: unknown;
   originalLanguage: string | null;
+  notificationPrefs?: Record<string, unknown>;
   /** Surcharge des paramètres d'envoi — le CADRAGE ne s'observe que sur un
    *  corps localisé, donc sur un message porteur de pièce jointe. */
   params?: Record<string, unknown>;
@@ -469,6 +476,24 @@ describe('createMessageNotification — le Prisme d\'une TRANSCRIPTION', () => {
     });
 
     expect(push?.body).toBe('Hola, te llamo esta noche');
+  });
+
+  it('n\'autorise PAS l\'enregistrement local d\'une transcription comme contenu du message', async () => {
+    // La transcription est le texte que la bannière AFFICHE, mais elle n'est
+    // pas `Message.content` : l'enregistrer comme tel écrirait la parole de
+    // l'audio dans la bulle texte du message qui le porte.
+    const { data } = await runFanOut({
+      recipient: { systemLanguage: 'fr' },
+      translations: null,
+      originalLanguage: 'es',
+      params: {
+        messagePreview: 'Hola, te llamo esta noche',
+        previewBasis: transcript({ fr: 'Salut, je t\'appelle ce soir' }, 'es'),
+      },
+    });
+
+    expect(data).not.toHaveProperty('content');
+    expect(data).not.toHaveProperty('originalLanguage');
   });
 
   it('descend la carte de l\'ATTACHMENT, jamais celle du message', async () => {

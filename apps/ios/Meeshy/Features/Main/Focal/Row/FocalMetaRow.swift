@@ -48,6 +48,11 @@ struct FocalMetaRow: View, Equatable {
     /// hit-test au repos) : sinon le fil immobile serait semé de boutons
     /// invisibles.
     var onShowReadStatus: (() -> Void)? = nil
+    /// La méta occupe sa PROPRE ligne (`Spacer` de tête + retrait). Posée
+    /// EN LIGNE — à droite des drapeaux et des réactions, directive
+    /// 2026-08-24 — elle n'a ni l'un ni l'autre : c'est la ligne d'accueil
+    /// qui pousse, et le retrait y est déjà appliqué.
+    var fillsWidth: Bool = true
 
     /// `==` MANUEL : `onShowReadStatus` est une closure, donc la synthèse
     /// automatique d'`Equatable` ne s'applique plus. Elle est volontairement
@@ -64,6 +69,7 @@ struct FocalMetaRow: View, Equatable {
             && lhs.editedAt == rhs.editedAt
             && lhs.isEditSaving == rhs.isEditSaving
             && lhs.hasEditHistory == rhs.hasEditHistory
+            && lhs.fillsWidth == rhs.fillsWidth
     }
 
     private var metaTint: Color {
@@ -76,7 +82,7 @@ struct FocalMetaRow: View, Equatable {
 
     var body: some View {
         HStack(spacing: 4) {
-            Spacer(minLength: 0)
+            if fillsWidth { Spacer(minLength: 0) }
             editedIndicator
             stamp
             if isMe, let deliveryStatus {
@@ -88,7 +94,7 @@ struct FocalMetaRow: View, Equatable {
                 }
             }
         }
-        .padding(.leading, indent)
+        .padding(.leading, fillsWidth ? indent : 0)
         .accessibilityHidden(true)
     }
 
