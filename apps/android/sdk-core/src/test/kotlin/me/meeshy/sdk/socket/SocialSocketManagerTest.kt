@@ -158,6 +158,26 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `post updated payload nests the complete edited post under post`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.postUpdated.test {
+            handlers.getValue("post:updated").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"post":{"id":"p1","content":"Bonjour (edited)","likeCount":9,"isEdited":true}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.post.id).isEqualTo("p1")
+            assertThat(event.post.content).isEqualTo("Bonjour (edited)")
+            assertThat(event.post.likeCount).isEqualTo(9)
+            assertThat(event.post.isEdited).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `a malformed reaction payload is ignored without emitting`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.storyReacted.test {

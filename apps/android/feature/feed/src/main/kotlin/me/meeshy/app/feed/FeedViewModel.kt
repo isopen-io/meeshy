@@ -235,6 +235,16 @@ class FeedViewModel @Inject constructor(
                 postRepository.applyTranslationUpdate(payload.postId, payload.language, payload.translation)
             }
         }
+        viewModelScope.launch {
+            // post:updated — the author edited the post (caption, media, mood, ...) and the
+            // gateway broadcast the whole new post. Fold it onto the cached card so the edit
+            // shows in place, preserving the viewer's own like/bookmark/view/reaction state
+            // (the broadcast is unpersonalized). Mirror of iOS FeedViewModel's post:updated
+            // sink, and the content-edit sibling of post:translation-updated above.
+            socialSocket.postUpdated.collect { payload ->
+                postRepository.applyPostUpdate(payload.post)
+            }
+        }
     }
 
     /**

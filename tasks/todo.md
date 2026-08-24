@@ -1,88 +1,83 @@
-# Cycle 125 bis — répondre par un VOCAL poussait une bannière au corps VIDE
+# Cycle 126 — note de CONVERGENCE : deux passes ont trouvé le même défaut, séparément
 
-> Le cycle 125 (PR #3476, mergée) a fermé la fuite du MÉDIA d'un message protégé. Ce lot solde
-> le suivi qu'il a laissé — et qui traînait depuis le cycle 124.
+> Ce document ne décrit pas un lot, il décrit une RENCONTRE. Le lot lui-même est
+> `tasks/todo-cycle126-bannieres-jumelles-2026-08-24.md` et
+> `tasks/realtime-sync-audit-2026-08-24-cycle126.md` — ceux de la passe qui a mergé la première.
 
-## Point de départ — un suivi deux fois écarté, pour une raison fausse
+## Ce qui s'est passé
 
-> Les éventails RÉPONSE et MENTION composent depuis `notificationPreview` (jamais
-> `…ForPush`) et ne reçoivent aucun résumé de pièce jointe.
+Deux passes ont instruit le même suivi MESURÉ du cycle 124 en parallèle, sans se voir, et ont
+trouvé le même défaut : **les éventails RÉPONSE et MENTION ne poussaient pas `messageCreatedAt` /
+`messageType`**, donc la bulle que la NSE iOS pré-enregistre au démarrage à froid portait l'horloge
+du DEVICE et se rendait en `text` — un rectangle vide pour une réponse vocale, ces éventails ne
+poussant pas `attachmentMimeType` non plus (décision du cycle 125 bis).
 
-Deux fois qualifié de « décision produit, pas correction de Prisme ». La formule est juste sur
-un point — la langue ne change pas — et fausse sur ce qui compte. Sur un seul message :
+Les deux correctifs sont **fonctionnellement équivalents**, y compris sur les trois arbitrages qui
+comptent :
 
-| destinataire | ce qu'il voyait |
-|---|---|
-| les membres du fil | la transcription, ou « 📷 Photo · 1024×768 » |
-| **celui à qui on répond** | **rien** |
-| **celui qu'on mentionne** | **rien** |
+| arbitrage | passe mergée (PR #3483) | cette passe |
+|---|---|---|
+| une seule requête (colonnes ajoutées au `select` existant) | ✅ | ✅ |
+| l'estampille N'EST PAS gardée comme du contenu (elle survit au placeholder de protection) | ✅ | ✅ |
+| fail-OPEN : relecture en échec ⇒ aucune clé, jamais une horloge inventée | ✅ | ✅ |
+| garde `instanceof Date` sur la colonne | ✅ | ✅ |
 
-> **Un corps VIDE n'est pas « un autre choix de produit », c'est l'absence de la bannière sous
-> la bannière.** Aucun produit ne préfère un corps vide.
+Elles ne diffèrent que par la FORME du type porteur — `MessageBannerSource` plat contre un
+`MessageNotificationSource { prism, stamp }` imbriqué — et par le site de la projection
+(`messageClockFields` dédié contre un `prePersistedMessageFields` élargi).
 
-Le repli client ne rattrape pas (mesuré) : `audioBodyFallback` (NSE iOS) exige
-`attachmentMimeType`, que ces deux éventails ne poussent pas non plus.
+## Ce qui a été retenu, et pourquoi
 
-**La cause de fond** : `buildMessageNotificationBodyI18n` n'était appelé que par
-`createMessageNotification`. Les deux autres posaient `content: this.servedPreview(...)` — une
-projection plus PAUVRE — et rien ne le signalait, parce que `servedPreview` est un helper juste,
-partagé, testé, que **les trois** appellent.
+**L'implémentation de la passe mergée la première**, conformément au précédent posé au cycle 123
+(« Note de convergence — l'implémentation retenue est celle de l'itération 257, la première
+mergée »). Faire cohabiter deux abstractions parallèles pour la même règle est strictement pire que
+l'une des deux : c'est exactement le mécanisme qui a produit les familles divergentes des
+cycles 118 à 122.
 
-## Plan
+**Et elle couvrait PLUS.** La passe mergée a trouvé un second champ resté derrière le cycle 125 bis
+que celle-ci n'avait pas vu : `notificationLocKey` — la clé qui QUALIFIE le placeholder de
+protection et sert de SECOND VERROU à `createNotification`. Sa leçon (§ 279, « un lot qui fait
+CONVERGER une chaîne laisse derrière tout ce qui la QUALIFIE ») généralise mieux que la formulation
+de cette passe, centrée sur le seul helper.
 
-- [x] TDD — 8 témoins RED d'abord (`replyMentionMediaPreview.test.ts`) : 7 rouges, 1 vert
-      (le cas sans pièce jointe, qui prouve que le correctif ne doit rien changer là).
-- [x] `servedBannerBody()` — la composition devient un SITE UNIQUE pour les trois éventails :
-      descente du Prisme puis `buildMessageNotificationBodyI18n`. Sans média, le résultat est
-      exactement le texte servi.
-- [x] `NotificationBannerMedia` — l'éventail sépare la charge **par l'USAGE de ses champs** :
-      ce qui compose un TEXTE (les trois éventails) / ce qui transporte un FICHIER (le message
-      simple seul).
-- [x] Réponse et mention reçoivent `notificationPreviewForPush` et `pushPreviewBasis` — les
-      deux **déjà gardés par `mediaMayTravel`** (cycle 125), donc un message protégé retombe
-      sur son placeholder ici comme là.
-- [x] CHANGELOG — les entrées des cycles 125 et 125 bis, la section `[Unreleased]` ayant dérivé
-      depuis le cycle 121.
+## Ce que cette passe a apporté au lot mergé
 
-## Revue
+Un témoin que le lot mergé n'avait pas, ajouté à son propre fichier
+(`replyMentionBannerClock.test.ts`) :
 
-### Gates
+> **`createMentionNotificationsBatch` — deux mentionnés ⇒ UNE seule relecture du message.**
+
+Les témoins du lot mergé exercent `createMentionNotification` en SOLO. Le chemin de production est
+le BATCH, et c'est lui qui porte le risque que ce correctif introduit : **élargir un `select` est
+exactement le geste qui invite à ouvrir une seconde lecture**, et une lecture PAR DESTINATAIRE ne
+rougit nulle part — elle se paie en latence de fan-out, sur un chemin que personne ne mesure.
+
+Le témoin exige N > 1 : à un seul mentionné, « une lecture » et « une lecture par destinataire »
+rendent le même compte, et l'assertion ne peut pas tomber. C'est la leçon 276 transposée — un
+témoin de rang s'écrit sur un rang autre que le premier ; ici, sur un lot autre que le singleton.
+
+**ROUGE prouvé** : en retirant le `prismSource` que le batch relaie, le témoin tombe (3 lectures au
+lieu d'1) et **aucun autre témoin du dépôt ne bouge**.
+
+## Gates de cette passe
 
 | gate | résultat |
 |---|---|
-| `replyMentionMediaPreview.test.ts` (nouveau) | **7 rouges avant → 8/8 verts après** |
-| suites voisines (`notifications/` + `messaging/` + éventail) | **43 suites, 794 témoins** |
-| suite gateway complète | **856/856 suites, 19486 témoins** |
-| `services/gateway` `tsc --noEmit` | **0 erreur** |
-| mutation « câblage de l'éventail reverti » | **4 témoins tombent** |
-| mutation « la composition ignore le résumé de média » | **3 témoins tombent** |
-| Swift | non modifié |
+| `replyMentionBannerClock.test.ts` (fichier mergé + témoin ajouté) | **20 témoins verts** ; le nouveau prouvé ROUGE sous mutation |
+| suite gateway complète, sur l'arbre APRÈS merge | **859 suites / 19 539 témoins verts** (exit 0) |
+| `services/gateway` `tsc --noEmit` | 0 erreur |
 
-### Une note de harnais
+Les 19 539 témoins de l'arbre mergé se comparent aux 19 527 mesurés sur cette passe seule et
+aux 19 538 annoncés par la passe mergée : l'écart de +1 est le témoin de batch ajouté ci-dessus.
 
-Le premier jet du témoin posait trois membres : l'expéditeur, celui à qui on répond, celui qu'on
-mentionne. `createMessageNotification` n'a **jamais** été appelé — `alreadyNotified` les absorbe
-tous les trois, et l'assertion de RÉFÉRENCE (« la réponse reçoit ce que reçoit le message
-simple ») comparait à rien.
+## La leçon de la rencontre elle-même
 
-> Quand un témoin compare une branche à une autre, la branche de RÉFÉRENCE doit avoir de quoi
-> exister. Trois rôles dans une conversation à trois membres n'en laissent aucun au quatrième.
+C'est la **deuxième** convergence de ce type en quatre cycles (la première : itération 257 ↔
+cycle 123, qui avait câblé COMMENTAIRES et STATUS à l'identique). Les deux fois, le point de départ
+était un **suivi MESURÉ écrit dans le dépôt** — et c'est précisément ce qui rend la collision
+probable : un suivi bien écrit est une piste que n'importe quelle passe suivante saura reprendre.
 
-### Détail
-
-- `tasks/realtime-sync-audit-2026-08-24-cycle125-bis.md`
-- `tasks/lessons.md` § Leçon 277 (rédigée 276, renumérotée : une passe parallèle — cycle 125 sur
-  la langue de CADRAGE, PR #3473 — a pris le 276 pendant que ce lot était en CI)
-- Le lot précédent : `tasks/realtime-sync-audit-2026-08-24-cycle125.md`, § Leçon 275
-
-### Suivi MESURÉ
-
-- **Le rich-push n'est pas étendu à la réponse ni à la mention** — délibérément. Leur bannière
-  compose désormais le bon TEXTE ; y attacher aussi le média inline est une décision produit
-  distincte, et elle rouvre une surface de charge que le cycle 125 vient de resserrer.
-- Réponse et mention ne poussent toujours ni `createdAt` ni `messageType` : leur bulle
-  pré-enregistrée reste ordonnée par l'horloge du device (suivi du cycle 124).
-- `isEncrypted` reste lue par la NSE et jamais émise — piège armé, pas panne.
-- La bannière d'un vocal joint toujours le fichier ORIGINAL, jamais la piste traduite du Prisme.
-- Aucun chemin de création n'écrit `isViewOnce` / `isBlurred` sur une `MessageAttachment` : le
-  second niveau de `maskedAttachment` est armé, pas encore atteignable.
+> Ce n'est pas du gaspillage à supprimer, c'est le prix d'un backlog LISIBLE — et il se paie en
+> travail dupliqué, jamais en défaut manqué. La contre-mesure n'est pas d'écrire des suivis plus
+> vagues : c'est de **relire `origin/main` avant de committer**, et de converger sur la première
+> implémentation mergée plutôt que de défendre la sienne.

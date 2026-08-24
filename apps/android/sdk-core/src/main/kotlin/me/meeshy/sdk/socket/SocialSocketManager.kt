@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.SocketPostCreatedData
+import me.meeshy.sdk.model.SocketPostUpdatedData
 import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.model.SocketPostBookmarkedData
@@ -41,6 +42,7 @@ class SocialSocketManager @Inject constructor(
     private val json: Json,
 ) {
     private val _postCreated = buf<SocketPostCreatedData>()
+    private val _postUpdated = buf<SocketPostUpdatedData>()
     private val _postLiked = buf<SocketPostLikedData>()
     private val _postUnliked = buf<SocketPostUnlikedData>()
     private val _postBookmarked = buf<SocketPostBookmarkedData>()
@@ -66,6 +68,14 @@ class SocialSocketManager @Inject constructor(
     private val _statusUnreacted = buf<SocketStatusUnreactedData>()
 
     val postCreated: SharedFlow<SocketPostCreatedData> = _postCreated.asSharedFlow()
+
+    /**
+     * `post:updated` — the author edited a post; carries the COMPLETE new post. The feed
+     * viewer folds it onto the cached card so the edit shows in place, preserving the
+     * reader's own like/bookmark/view/reaction state (the broadcast is unpersonalized).
+     * The content-edit sibling of [postCreated] / [postTranslationUpdated].
+     */
+    val postUpdated: SharedFlow<SocketPostUpdatedData> = _postUpdated.asSharedFlow()
     val postLiked: SharedFlow<SocketPostLikedData> = _postLiked.asSharedFlow()
     val postUnliked: SharedFlow<SocketPostUnlikedData> = _postUnliked.asSharedFlow()
     val postBookmarked: SharedFlow<SocketPostBookmarkedData> = _postBookmarked.asSharedFlow()
@@ -123,6 +133,7 @@ class SocialSocketManager @Inject constructor(
 
     fun attach() {
         listen("post:created", _postCreated)
+        listen("post:updated", _postUpdated)
         listen("post:liked", _postLiked)
         listen("post:unliked", _postUnliked)
         listen("post:bookmarked", _postBookmarked)
