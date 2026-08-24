@@ -24,11 +24,8 @@ export interface CommentListProps {
   currentUserId?: string | null;
   currentUser?: { username: string; avatar?: string | null } | null;
   userLanguage?: string;
-  /**
-   * Prisme ORDONNÉ du lecteur (rangs 1→4 + fallback), relayé jusqu'aux
-   * `CommentItem` (et aux réponses via `CommentThread`). Sans lui, un
-   * commentaire ne servait que le rang 1.
-   */
+  /** Prisme ORDONNÉ du lecteur (rangs 1→4 + fallback), descendu par chaque
+   *  commentaire et réponse. Cf. `CommentItemProps.preferredLanguages`. */
   preferredLanguages?: string[];
   likedCommentIds?: Set<string>;
   isLoading?: boolean;

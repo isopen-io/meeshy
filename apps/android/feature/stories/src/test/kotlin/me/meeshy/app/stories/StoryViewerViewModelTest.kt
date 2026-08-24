@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketStoryReactedData
+import me.meeshy.sdk.model.SocketStoryTranslationUpdatedData
 import me.meeshy.sdk.model.SocketStoryUnreactedData
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryClipTransition
@@ -55,9 +56,12 @@ class StoryViewerViewModelTest {
     private val session: SessionRepository = mockk(relaxed = true)
     private val reactedFlow = MutableSharedFlow<SocketStoryReactedData>(extraBufferCapacity = 8)
     private val unreactedFlow = MutableSharedFlow<SocketStoryUnreactedData>(extraBufferCapacity = 8)
+    private val translationUpdatedFlow =
+        MutableSharedFlow<SocketStoryTranslationUpdatedData>(extraBufferCapacity = 8)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true) {
         every { storyReacted } returns reactedFlow
         every { storyUnreacted } returns unreactedFlow
+        every { storyTranslationUpdated } returns translationUpdatedFlow
     }
     private val config = MeeshyConfig()
 
@@ -942,6 +946,77 @@ class StoryViewerViewModelTest {
         vm.toggleLanguageOverride("de")
         // No "de" text-object translation exists, so the reader's fr chain still resolves.
         assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Bonjour")
+    }
+
+    // --- Realtime overlay translation merge (story:translation-updated) ---
+
+    @Test
+    fun `a realtime overlay translation merges and repaints in the reader's language without a tap`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(StoryTextObject(id = "txt", text = "Hello")),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "fr"), posts = listOf(post))
+
+        // No fr translation yet: the overlay shows its original text.
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hello")
+
+        translationUpdatedFlow.emit(
+            SocketStoryTranslationUpdatedData(
+                postId = "s1",
+                textObjectIndex = 0,
+                translations = mapOf("fr" to "Bonjour"),
+            ),
+        )
+
+        // The reader prefers fr, so the freshly-merged overlay translation repaints — no tap.
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `a realtime overlay translation surfaces as a present content chip`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(StoryTextObject(id = "txt", text = "Hello")),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "en"), posts = listOf(post))
+
+        // No translations anywhere → no language strip.
+        assertThat(vm.state.value.availableLanguages).isEmpty()
+
+        translationUpdatedFlow.emit(
+            SocketStoryTranslationUpdatedData(
+                postId = "s1",
+                textObjectIndex = 0,
+                translations = mapOf("es" to "Hola"),
+            ),
+        )
+
+        val languages = vm.state.value.availableLanguages
+        assertThat(languages.map { it.code }).contains("es")
+        assertThat(languages.first { it.code == "es" }.isTranslatable).isFalse()
+    }
+
+    @Test
+    fun `a realtime overlay translation for an unknown story is inert`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(StoryTextObject(id = "txt", text = "Hello")),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "fr"), posts = listOf(post))
+
+        translationUpdatedFlow.emit(
+            SocketStoryTranslationUpdatedData(
+                postId = "does-not-exist",
+                textObjectIndex = 0,
+                translations = mapOf("fr" to "Bonjour"),
+            ),
+        )
+
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hello")
     }
 
     // --- On-demand story translation (the flag strip's request arm) ---

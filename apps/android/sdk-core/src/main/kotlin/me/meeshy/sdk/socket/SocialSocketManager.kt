@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.SocketCommentReactionUpdateData
 import me.meeshy.sdk.model.SocketStoryCreatedData
 import me.meeshy.sdk.model.SocketStoryViewedData
 import me.meeshy.sdk.model.SocketStoryReactedData
+import me.meeshy.sdk.model.SocketStoryTranslationUpdatedData
 import me.meeshy.sdk.model.SocketStoryUnreactedData
 import me.meeshy.sdk.model.SocketStatusCreatedData
 import me.meeshy.sdk.model.SocketStatusUpdatedData
@@ -51,6 +52,7 @@ class SocialSocketManager @Inject constructor(
     private val _storyViewed = buf<SocketStoryViewedData>()
     private val _storyReacted = buf<SocketStoryReactedData>()
     private val _storyUnreacted = buf<SocketStoryUnreactedData>()
+    private val _storyTranslationUpdated = buf<SocketStoryTranslationUpdatedData>()
     private val _statusCreated = buf<SocketStatusCreatedData>()
     private val _statusUpdated = buf<SocketStatusUpdatedData>()
     private val _statusDeleted = buf<SocketStatusDeletedData>()
@@ -80,6 +82,8 @@ class SocialSocketManager @Inject constructor(
     val storyViewed: SharedFlow<SocketStoryViewedData> = _storyViewed.asSharedFlow()
     val storyReacted: SharedFlow<SocketStoryReactedData> = _storyReacted.asSharedFlow()
     val storyUnreacted: SharedFlow<SocketStoryUnreactedData> = _storyUnreacted.asSharedFlow()
+    val storyTranslationUpdated: SharedFlow<SocketStoryTranslationUpdatedData> =
+        _storyTranslationUpdated.asSharedFlow()
     val statusCreated: SharedFlow<SocketStatusCreatedData> = _statusCreated.asSharedFlow()
     val statusUpdated: SharedFlow<SocketStatusUpdatedData> = _statusUpdated.asSharedFlow()
     val statusDeleted: SharedFlow<SocketStatusDeletedData> = _statusDeleted.asSharedFlow()
@@ -102,6 +106,7 @@ class SocialSocketManager @Inject constructor(
         listen("story:viewed", _storyViewed)
         listen("story:reacted", _storyReacted)
         listen("story:unreacted", _storyUnreacted)
+        listen("story:translation-updated", _storyTranslationUpdated)
         listen("status:created", _statusCreated)
         listen("status:updated", _statusUpdated)
         listen("status:deleted", _statusDeleted)

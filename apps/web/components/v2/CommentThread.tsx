@@ -13,7 +13,8 @@ export interface CommentThreadProps {
   replies: PostComment[];
   currentUserId?: string | null;
   userLanguage?: string;
-  /** Prisme ORDONNÉ du lecteur, relayé aux `CommentItem` des réponses. */
+  /** Prisme ORDONNÉ du lecteur (rangs 1→4 + fallback), descendu par chaque
+   *  réponse. Cf. `CommentItemProps.preferredLanguages`. */
   preferredLanguages?: string[];
   likedCommentIds?: Set<string>;
   isLoading?: boolean;

@@ -13,10 +13,10 @@ export interface CommentItemProps {
   comment: PostComment;
   userLanguage?: string;
   /**
-   * Prisme ORDONNÉ du lecteur (rangs 1→4 + fallback). Fourni, l'auto-résolution
-   * DESCEND la chaîne et sert la première langue servie ; absent, comportement
-   * historique à une seule langue (`userLanguage`, rang 1 seul). Même patron que
-   * `PostCard` / `PostDetail` depuis le cycle 120.
+   * Prisme ORDONNÉ du lecteur (rangs 1→4 + fallback). Fourni, `TranslationToggle`
+   * DESCEND le prisme et sert la première langue disponible ; absent, il retombe
+   * sur `userLanguage` (rang 1 seul). Parité avec la surface POSTS
+   * (`PostCard`/`PostDetail`) et les jumeaux iOS/Android.
    */
   preferredLanguages?: string[];
   isAuthor?: boolean;

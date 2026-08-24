@@ -2,6 +2,78 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-24 **the story viewer merges realtime overlay translations pushed over `story:translation-updated`**
+> (slice `story-text-object-translation-realtime-merge`, feature-parity §E — the previous entry's `Next` pointer
+> flagged that `requestStoryTranslation` translates only the CAPTION and asked to scout iOS overlay parity
+> first. The scout found the missing half: iOS does NOT pull overlays on demand — the **gateway** translates a
+> canvas overlay server-side and BROADCASTS it via `story:translation-updated` (`{postId, textObjectIndex,
+> translations}`), which iOS merges into the open viewer (`StoryItem.mergingTextObjectTranslations`). Android
+> had no handler for this event at all — a whole realtime Prisme channel was on the floor).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3453..#3434 are all Dependabot, plus
+> #3429 (shared ObjectId), #3426 (ios i18n): none is a `claude/apps/android/*` slice, all touch production
+> logic outside `apps/android`, none in this routine's scope, none touched. Prior slice
+> (`story-language-bar-text-object-translations`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`cba70d47`).
+>
+> **The gap — a realtime Prisme channel Android never wired.** The gateway's `StoryTextObjectTranslationService`
+> persists a translated overlay and broadcasts `story:translation-updated` to the author's feed room. iOS folds
+> it into the cached story so the reader — who resolves overlays via the preferred chain — switches to the
+> requested language the instant it lands. On Android the event decoded nowhere, so an overlay the reader asked
+> to translate stayed in its source language until a full refetch.
+>
+> **The fix — pure merge + socket wiring + one emit generalisation.**
+> (1) New pure `StoryTextObjectTranslationMerge.merge(item, textObjectIndex, translations)` in `:core:model`
+> (canvas sibling of `StoryTranslationMerge`): upserts the languages into the targeted text object (existing
+> overwritten, new added) via immutable `copy`; empty map / no `storyEffects` / out-of-range or negative index
+> → story returned unchanged (iOS `mergingTextObjectTranslations` parity, minus its memberwise-init field-drop
+> hazard — `copy` preserves every other field for free).
+> (2) New `SocketStoryTranslationUpdatedData` + `SocialSocketManager.storyTranslationUpdated` flow, wired with
+> `listen("story:translation-updated", …)`.
+> (3) `StoryViewerViewModel.observeTranslationUpdates()` subscribes, merges into `rawItems` (inert on unknown
+> `postId` or no-op merge), and calls `emit()`. `emit()` now re-projects the current slide from `rawItems`
+> **unconditionally** — it was gated behind an active exploration override, which meant a realtime merge with
+> no override never reached the view. With no override and no runtime merge the unconditional path reproduces
+> `toSlideView` exactly (same `StoryContentResolver`/`StoryTextObjectProjection` calls, override=null), so
+> non-current slides and no-change emits are byte-identical to before. No forced override (iOS parity — the
+> reader's own chain resolves the merged language).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE; pristine `android-37.0` via `--channel=3` WORKED alone this run**
+> (no copy→patch, no both-dirs). `platforms;android-37` is not a downloadable package; `sdkmanager --channel=3
+> "platforms;android-37.0"` installed the preview platform and AGP 8.13.0 mapped compileSdk 37 → android-37.0
+> on the first `./gradlew`. (NOTES' "recipe is image-dependent, try pristine first" held — pristine was right.)
+>
+> **Tests: +12** — 8 `StoryTextObjectTranslationMergeTest` (adds to target; preserves+overwrites same
+> language; targets only the indexed object; out-of-range → unchanged; negative → unchanged; empty map →
+> unchanged; no storyEffects → unchanged; every other story/effects field survives), 2
+> `SocialSocketManagerTest` (decodes+emits the payload; missing `translations` → empty map), 2
+> `StoryViewerViewModelTest` (a realtime merge repaints the current overlay in the reader's language with NO
+> tap; the merged language surfaces as a present content chip) + a reused inert case (unknown `postId` leaves
+> the overlay untouched). **RED-proof, surgical per piece**: neutering `merge`→`return item` reddened the 4
+> transformation merge tests (4 no-op tests stayed green — correct); commenting the socket `listen` reddened
+> the 2 socket tests (other 15 green); with merge+subscription intact, reverting ONLY the `emit()`
+> re-projection reddened EXACTLY the repaint test while the chip test (reads `rawItems` via
+> `availableLanguagesFor`) and the inert test stayed green — isolating the emit generalisation's necessity.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest) locally — see run log
+> below for the result. Reviewer PASS. Diff is `apps/android` only (3 prod files edited/added in :core:model +
+> :sdk-core + :feature:stories, +12 tests across 3 files, tracking docs). Verdict: **PASS** — a pure merge
+> reusing the caption-merge shape, a socket event mirroring the existing story events, and one behaviour-
+> preserving emit generalisation; behavioural tests through the public API; no production logic outside
+> apps/android; no wire/shared/model change beyond a new Android socket DTO.
+>
+> **Next**: §E (Stories) — realtime AND on-demand overlay translation are both now honoured end to end (the
+> viewer offers overlay languages, resolves them per the chain and per a tapped override, and now folds in
+> pushed overlay translations). Remaining reader-side loose end: `requestStoryTranslation` still pulls only the
+> CAPTION on demand (`translateStory` → `StoryTranslationMerge` on `item.content`); iOS does NOT pull overlays
+> on demand either (they arrive via the realtime channel this slice wired), so this is **parity-complete, not a
+> gap** — do not build an N-call overlay pull. Turn instead to the editor-side candidates that resurface each
+> cycle: (a) the **clip-inspector editor reducer** (pure per-clip volume/fade/loop/background/delete) or (b)
+> the **timeline transport** pure state (play/pause/scrub/zoom 0.25×–4×/mute) — both still need a
+> timeline/selection host surface first (orphan risk), so scout that surface read-only before committing; else
+> take the highest-value non-editor §E box (e.g. `post:translation-updated` CAPTION realtime merge into the
+> viewer, the caption sibling of THIS slice — iOS wires it too, Android's viewer likely doesn't).
+
 > On 2026-08-24 **the story language bar descends the Prisme over ALL slide content, not the caption alone**
 > (slice `story-language-bar-text-object-translations`, feature-parity §E — the previous entry's `Next`
 > pointer's scout arm: "worth a scout to confirm a pulled-then-displayed text object resolves." The scout

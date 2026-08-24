@@ -29,9 +29,10 @@ export interface StatusBarProps {
   onAddStatus: () => void;
   userLanguage?: string;
   /**
-   * Prisme ORDONNÉ du lecteur (rangs 1→4 + fallback). Fourni, l'auto-résolution
-   * DESCEND la chaîne et sert la première langue servie ; absent, comportement
-   * historique à une seule langue (`userLanguage`, rang 1 seul).
+   * Prisme ORDONNÉ du lecteur (rangs 1→4 + fallback). Fourni, la popover DESCEND
+   * le prisme et sert la première langue disponible ; absent, elle retombe sur
+   * `userLanguage` (rang 1 seul). Parité avec la surface POSTS et les jumeaux
+   * iOS/Android.
    */
   preferredLanguages?: string[];
   isLoading?: boolean;
