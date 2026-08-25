@@ -12,9 +12,25 @@ import MeeshySDK
 /// du son en bibliothèque.
 final class AudioChipDisplayTests: XCTestCase {
 
+    /// La chaîne que le SEUL appelant de production emprunte
+    /// (`Sources/MeeshyUI/Story/Controls/AudioForegroundChip.swift:190`) :
+    /// `borrowedSound` adapte le vocabulaire `soundId`,
+    /// `backgroundAnnouncement` tranche la provenance, `display(for:)` en tire
+    /// la forme. Ces cas passaient par l'adaptateur
+    /// `AudioChipDisplay.resolve(soundId:title:authorUsername:)`, retiré du
+    /// SDK en E1c faute d'appelant hors tests : la composition qu'il abritait
+    /// vit désormais ici, du côté qui en avait seul besoin.
+    private func display(soundId: String?, title: String?, authorUsername: String?) -> AudioChipDisplay {
+        AudioChipDisplay.display(for: AudioChipDisplay.backgroundAnnouncement(
+            sound: AudioChipDisplay.borrowedSound(soundId: soundId),
+            libraryTitle: title,
+            libraryUsername: authorUsername,
+            libraryDuration: nil))
+    }
+
     func test_ownAudio_showsWaveform_evenWithNameAndAuthor() {
         XCTAssertEqual(
-            AudioChipDisplay.resolve(soundId: nil, title: "Ma prise", authorUsername: "meeshy"),
+            display(soundId: nil, title: "Ma prise", authorUsername: "meeshy"),
             .waveform,
             "La publication d'origine garde la sinusoïde — le son n'est pas un emprunt"
         )
@@ -22,18 +38,18 @@ final class AudioChipDisplayTests: XCTestCase {
 
     func test_borrowedSound_withTitleAndAuthor_marqueesTitleDotAuthor() {
         XCTAssertEqual(
-            AudioChipDisplay.resolve(soundId: "s1", title: "Meeshy Go", authorUsername: "meeshy"),
+            display(soundId: "s1", title: "Meeshy Go", authorUsername: "meeshy"),
             .marquee(text: "Meeshy Go · @meeshy")
         )
     }
 
     func test_borrowedSound_withoutTitle_marqueesAuthorAlone() {
         XCTAssertEqual(
-            AudioChipDisplay.resolve(soundId: "s1", title: nil, authorUsername: "meeshy"),
+            display(soundId: "s1", title: nil, authorUsername: "meeshy"),
             .marquee(text: "@meeshy")
         )
         XCTAssertEqual(
-            AudioChipDisplay.resolve(soundId: "s1", title: "   ", authorUsername: "meeshy"),
+            display(soundId: "s1", title: "   ", authorUsername: "meeshy"),
             .marquee(text: "@meeshy"),
             "Un titre fait d'espaces n'est pas un titre"
         )
@@ -41,27 +57,25 @@ final class AudioChipDisplayTests: XCTestCase {
 
     func test_borrowedSound_withoutAuthor_marqueesTitleAlone_legacyPayload() {
         XCTAssertEqual(
-            AudioChipDisplay.resolve(soundId: "s1", title: "Meeshy Go", authorUsername: nil),
+            display(soundId: "s1", title: "Meeshy Go", authorUsername: nil),
             .marquee(text: "Meeshy Go"),
             "Une story publiée avant le champ auteur affiche ce qu'elle possède"
         )
     }
 
-    /// `resolve` DÉLÈGUE à `backgroundAnnouncement` (B8f, arbitrage 9) : le
-    /// cache froid d'une piste EMPRUNTÉE (soundId posé, aucune métadonnée
-    /// résolue) reste dans la forme CRÉDIT — un marquee générique « ♫ — » —
-    /// jamais la sinusoïde, qui mentirait sur la provenance (constat 9,
-    /// « comportement cache-froid = forme crédit »).
+    /// Cache froid d'une piste EMPRUNTÉE (soundId posé, aucune métadonnée
+    /// résolue) : la forme reste CRÉDIT — un marquee générique « ♫ — » —
+    /// jamais la sinusoïde, qui mentirait sur la provenance (B3.4, constat 9).
     func test_borrowedSound_withNothing_keepsCreditForm_neverFallsBackToWaveform() {
         XCTAssertEqual(
-            AudioChipDisplay.resolve(soundId: "s1", title: nil, authorUsername: nil),
+            display(soundId: "s1", title: nil, authorUsername: nil),
             .marquee(text: "♫ —")
         )
     }
 
     func test_authorUsername_isNormalizedWithoutLeadingAt() {
         XCTAssertEqual(
-            AudioChipDisplay.resolve(soundId: "s1", title: nil, authorUsername: "@meeshy"),
+            display(soundId: "s1", title: nil, authorUsername: "@meeshy"),
             .marquee(text: "@meeshy"),
             "Un pseudo déjà préfixé ne double pas son arobase"
         )

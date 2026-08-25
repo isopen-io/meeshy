@@ -24,25 +24,9 @@ public nonisolated enum AudioChipDisplay: Equatable, Sendable {
     case waveform
     case marquee(text: String)
 
-    /// Résolveur UNIQUE (B8f, arbitrage 9) : DÉLÈGUE à `backgroundAnnouncement`
-    /// — la vérité de la provenance (B3.4) — plutôt que de la ré-implémenter.
-    /// `soundId` reste le discriminant emprunté/propre, au vocabulaire de
-    /// `StoryAudioPlayerObject` que cet appelant porte. Le cache froid
-    /// (`soundId` posé, aucune métadonnée résolue) rendait `.waveform` avant
-    /// B8f — une piste EMPRUNTÉE affichée comme si elle était originale
-    /// (constat 9) ; il rend désormais `display(for:)` de la forme CRÉDIT,
-    /// jamais la sinusoïde.
-    public static func resolve(soundId: String?, title: String?, authorUsername: String?) -> AudioChipDisplay {
-        display(for: backgroundAnnouncement(sound: borrowedSound(soundId: soundId),
-                                            libraryTitle: title,
-                                            libraryUsername: authorUsername,
-                                            libraryDuration: nil))
-    }
-
     /// Adapte le vocabulaire `soundId` (emprunté ⇔ non-nil) en piste v3 —
-    /// SOURCE UNIQUE de cette conversion, partagée par `resolve` et par les
-    /// appelants qui interrogent directement `backgroundAnnouncement`
-    /// (`AudioForegroundChip`).
+    /// SOURCE UNIQUE de cette conversion pour les appelants qui interrogent
+    /// `backgroundAnnouncement` (`AudioForegroundChip`).
     public static func borrowedSound(soundId: String?) -> BackgroundSoundV3? {
         soundId.map { BackgroundSoundV3(source: .library(soundId: $0), volume: 1) }
     }
@@ -186,20 +170,6 @@ public struct AudioChipPlaybackWindow: Equatable, Sendable {
         self.duration = duration
         self.isBackground = isBackground
         self.slideDuration = slideDuration
-    }
-}
-
-/// Primitive UNIQUE descendue au header du reader : le contenu à droite de la
-/// note (onde ou crédit défilant) + la fenêtre du fond qui arme le compteur.
-/// Equatable — le header reste une leaf view à inputs primitifs (règle « Zero
-/// Unnecessary Re-render »).
-public struct AudioChipHeaderModel: Equatable, Sendable {
-    public let display: AudioChipDisplay
-    public let window: AudioChipPlaybackWindow?
-
-    public init(display: AudioChipDisplay, window: AudioChipPlaybackWindow? = nil) {
-        self.display = display
-        self.window = window
     }
 }
 

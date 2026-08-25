@@ -1778,10 +1778,9 @@ struct StoryViewerView: View {
     /// exigeait `volume > 0`, une notion que les deux autres surfaces
     /// n'avaient pas ; alignement E1). `.original`/`.credit` selon la
     /// provenance (B3.4). `story.backgroundAudio`
-    /// (`StoryBackgroundAudioEntry`) n'est retenu nulle part ici : il n'est
-    /// JAMAIS peuplé par le pipeline de production actuel (voir la doc de
-    /// `StoryAudioAvailability.hasBackgroundAudioTrack`) — retiré avec la
-    /// même justification que sa dépréciation là-bas.
+    /// (`StoryBackgroundAudioEntry`) n'est retenu nulle part ici : le chemin
+    /// de décodage de production (`toStoryGroups`, StoryModels.swift) ne le
+    /// peuple pas — `APIPost` n'a pas de champ `backgroundAudio`.
     var backgroundSoundAnnouncement: BackgroundAudioAnnouncement { // internal for cross-file extension access
         BackgroundSoundBadge.announcement(for: currentStory?.storyEffects)
     }
