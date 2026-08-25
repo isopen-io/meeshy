@@ -337,6 +337,17 @@ export class DoubleRatchet {
       currentMessageNumber++;
     }
 
+    // Persist the advanced position back onto the session. The chain key was
+    // ratcheted forward above; the message counter MUST follow it, otherwise
+    // the next symmetric ratchet labels its key from a stale number and the
+    // next in-order message is misread as "ahead" and re-skipped from a chain
+    // that has already moved — corrupting the whole receive chain.
+    if (direction === 'send') {
+      session.messageNumberSend = currentMessageNumber;
+    } else {
+      session.messageNumberReceive = currentMessageNumber;
+    }
+
     // Cleanup old skipped keys (prevent memory attack)
     // Keep only the most recent maxSkippedKeys
     if (session.skippedMessageKeys.length > session.maxSkippedKeys) {
