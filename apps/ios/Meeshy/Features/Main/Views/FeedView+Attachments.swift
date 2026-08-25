@@ -784,21 +784,10 @@ extension FeedView {
     }
 
     // MARK: - Helpers
-    func feedGenerateVideoThumbnail(url: URL) async -> UIImage? {
-        // Async AVFoundation API (iOS 16+): decodes off AVFoundation's queue
-        // instead of blocking the caller, replacing the deprecated synchronous
-        // `copyCGImage` / `AVAsset(url:)`.
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 200, height: 200)
-        do {
-            let cgImage = try await generator.image(at: .zero).image
-            return UIImage(cgImage: cgImage)
-        } catch {
-            return nil
-        }
-    }
+    //
+    // `feedGenerateVideoThumbnail(url:)` a vécu ici sans site d'appel — TROISIÈME
+    // écriture de la même vignette, la première étant `generateVideoThumbnail`
+    // plus bas DANS CE FICHIER, la seconde `AttachmentPreparationService`.
 
     func feedGetFileSize(_ url: URL) -> Int {
         (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
