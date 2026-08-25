@@ -15581,7 +15581,7 @@ collecteur est exercé sur une arborescence FABRIQUÉE, parce qu'un cliquet dont
 collecteur ne trouve jamais rien reste vert quoi qu'on écrive.
 
 Détail : `tasks/realtime-sync-audit-2026-08-24-cycle128.md`.
-## Leçon 283 — un correctif de résolution se mesure sur tout ce que la charge TRANSPORTE, pas sur sa seule chaîne (2026-08-24, cycle 128)
+## Leçon 284 — un correctif de résolution se mesure sur tout ce que la charge TRANSPORTE, pas sur sa seule chaîne (2026-08-24, cycle 128)
 
 La leçon 275 disait cela d'une garde de CONFIDENTIALITÉ. Elle vaut identiquement
 d'un correctif de RÉSOLUTION, et le cycle 123 en est l'exemplaire : il a donné à
@@ -15682,7 +15682,7 @@ PISTE, la région porte une information (la voix), et la strripper changerait un
 sémantique. Ce cycle-ci ne touche pas cette sélection non plus : il élit la piste
 par la langue que la descente du TEXTE a déjà servie, donc il hérite de la
 sémantique du texte au lieu d'en inventer une seconde.
-## Leçon 274 — un gate posé sur le frère IMMÉDIAT ne garde pas l'opération d'à côté, et le commentaire qui l'énonce se lit comme s'il valait pour les deux (2026-08-24, cycle 125)
+## Leçon 285 — un gate posé sur le frère IMMÉDIAT ne garde pas l'opération d'à côté, et le commentaire qui l'énonce se lit comme s'il valait pour les deux (2026-08-24, cycle 125)
 
 Deux appels CONSÉCUTIFS, dans la même méthode, sur le même `userInfo` :
 

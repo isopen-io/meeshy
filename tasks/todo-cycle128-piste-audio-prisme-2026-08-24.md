@@ -82,4 +82,4 @@ push ET dans la ligne `Notification` que le SDK iOS décode.
 ## Revue
 
 Rapport complet : `tasks/realtime-sync-audit-2026-08-24-cycle128.md`.
-Leçon : `tasks/lessons.md` § 283. Règles : `/CLAUDE.md`, `services/gateway/CLAUDE.md`.
+Leçon : `tasks/lessons.md` § 284. Règles : `/CLAUDE.md`, `services/gateway/CLAUDE.md`.
