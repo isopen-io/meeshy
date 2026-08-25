@@ -5,6 +5,30 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-25 — the AUTHORING bound is a second SSOT, distinct from the reader SSOT (slice `story-composer-slide-duration-pin`)
+The reader honours `effects.timelineDuration`; the composer had no way to write it, so Android could only
+*read back* a pin an iOS author or the backend set. Closing the loop needs a SECOND single source: not the
+duration *rule* (`StorySlideDuration`, reader-side) but the duration *bound* — what an author is allowed to pin.
+- **Port the setter's clamp, not just the getter's rule.** iOS `StoryComposerViewModel.currentSlideDuration`
+  (StoryComposerViewModel+Slides.swift) bounds the write with `max(2, min(600, newValue))`. That `[2, 600]`s
+  bound is its own parity claim → `StoryDurationPin.clamp` (`:core:model`, pure) owns it in one place, and the
+  deck/draft/VM all route through it. A magic `2`/`600` scattered across the composer would drift from iOS the
+  moment either bound moved.
+- **`coerceIn` propagates NaN; guard it at the bound.** Android's slider hands a `Float`; a degenerate gesture
+  can produce `NaN`, and `NaN.coerceIn(2,600)` stays `NaN` (Swift's `max/min` do too, but iOS never feeds a
+  slider `Float` here). Guard `if (seconds.isNaN()) return MIN` so a bad pin can never persist a non-finite
+  duration. `±∞` are fine — `coerceIn` maps them to the ceiling/floor.
+- **The composer's displayed value reuses the READER SSOT for its fallback.** `selectedSlideDurationSeconds` =
+  `pin ?? StorySlideDuration.contentDerivedSeconds(...)` — the same function the viewer uses — so the "auto"
+  value the slider shows can never diverge from what the reader will actually play. Feed it the publishable text
+  elements; the background-media branch lights up for free when that pipeline lands.
+- **A pin alone must materialise `StoryEffects`.** The draft's `storyEffects()` early-returned null when there
+  were no textObjects/stickers/filter; a duration-only story would then have dropped its pin. Add
+  `durationSecondsPin == null` to that guard, else the one field the reader honours never reaches the wire.
+- **SDK bootstrap this run: `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs)** — identical to the entry
+  below: pristine `android-37.0` auto-installed, first `./gradlew` hash-errored on `android-37`, the four-edit
+  copy→patch keeping android-37.0 ALONGSIDE resolved it. Two THIRD-mode runs in a row on this container.
+
 ## 2026-08-25 — a duration/timing constant is a PARITY CLAIM; port the SSOT, don't reuse the magic number (slice `story-viewer-slide-duration`)
 The story viewer auto-advanced on a hardcoded `SLIDE_DURATION_MS = 5000`. iOS has ONE authority for slide
 duration (`StorySlide.computedTotalDuration()`, StoryModels.swift) that is content-aware and defaults to **6s**.

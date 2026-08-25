@@ -143,6 +143,30 @@ class StoryComposerDraftTest {
     }
 
     @Test
+    fun `an author-pinned duration serialises onto storyEffects timelineDuration`() {
+        val request = StoryComposerDraft(text = "hi", durationSecondsPin = 8.0)
+            .toCreateStoryRequest(originalLanguage = "en")
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.timelineDuration).isEqualTo(8.0)
+    }
+
+    @Test
+    fun `a pinned duration alone materialises storyEffects on an otherwise plain caption`() {
+        // No text elements, no stickers, no filter — the pin is the only reason effects exist.
+        val request = StoryComposerDraft(text = "bonjour", durationSecondsPin = 4.0)
+            .toCreateStoryRequest(originalLanguage = "fr")
+        assertThat(request.storyEffects?.timelineDuration).isEqualTo(4.0)
+        assertThat(request.storyEffects?.textObjects).isEmpty()
+    }
+
+    @Test
+    fun `a draft with no pin leaves timelineDuration null`() {
+        val request = StoryComposerDraft(text = "bonjour")
+            .toCreateStoryRequest(originalLanguage = "fr")
+        assertThat(request.storyEffects).isNull()
+    }
+
+    @Test
     fun `an empty draft offers the full media allowance and is not full`() {
         val draft = StoryComposerDraft()
         assertThat(draft.remainingMediaSlots).isEqualTo(StoryComposerDraft.MAX_MEDIA)

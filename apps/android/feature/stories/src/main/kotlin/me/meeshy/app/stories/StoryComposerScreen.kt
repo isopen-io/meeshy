@@ -314,6 +314,7 @@ fun StoryComposerScreen(
                 visibility = state.draft.visibility,
                 selectedFilter = state.selectedSlideFilter,
                 filterIntensity = state.selectedSlideFilterIntensity,
+                slideDurationSeconds = state.selectedSlideDurationSeconds,
                 canAddText = state.deck.selectedCanAddTextElement,
                 canAddSticker = state.deck.selectedCanAddSticker,
                 isUploadingMedia = state.isUploadingMedia,
@@ -335,6 +336,7 @@ fun StoryComposerScreen(
                 onSelectVisibility = viewModel::onVisibilityChange,
                 onSelectFilter = viewModel::onSelectFilter,
                 onFilterIntensityChange = viewModel::onFilterIntensityChange,
+                onSlideDurationChange = viewModel::onSlideDurationChange,
             )
         }
     }
@@ -356,6 +358,7 @@ private fun ComposerControlsLayer(
     visibility: StoryVisibility,
     selectedFilter: StoryFilter?,
     filterIntensity: Float,
+    slideDurationSeconds: Double,
     canAddText: Boolean,
     canAddSticker: Boolean,
     isUploadingMedia: Boolean,
@@ -371,6 +374,7 @@ private fun ComposerControlsLayer(
     onSelectVisibility: (StoryVisibility) -> Unit,
     onSelectFilter: (StoryFilter?) -> Unit,
     onFilterIntensityChange: (Float) -> Unit,
+    onSlideDurationChange: (Double) -> Unit,
 ) {
     val swipeThresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -416,6 +420,10 @@ private fun ComposerControlsLayer(
                             intensity = filterIntensity,
                             onSelect = onSelectFilter,
                             onIntensityChange = onFilterIntensityChange,
+                        )
+                        DurationRow(
+                            seconds = slideDurationSeconds,
+                            onSecondsChange = onSlideDurationChange,
                         )
                         VisibilityRow(
                             selected = visibility,
@@ -1561,6 +1569,54 @@ private fun FilterRow(
         }
     }
 }
+
+/**
+ * The per-slide duration control in the Effets band — a labelled slider that pins how
+ * long the selected slide stays on screen (parity with iOS's timeline "pin duration").
+ * The slider spans the practical [DURATION_SLIDER_MIN_SECONDS]..[DURATION_SLIDER_MAX_SECONDS]
+ * range; the value it emits is bounded to the iOS `[2, 600]`s range by the pure
+ * `StoryDurationPin` in the ViewModel, and rides to the reader as `effects.timelineDuration`.
+ * Rounded to whole seconds so the pin is a clean value and the label reads simply.
+ */
+@Composable
+private fun DurationRow(
+    seconds: Double,
+    onSecondsChange: (Double) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val whole = seconds.roundToInt()
+    val label = stringResource(R.string.stories_composer_slide_duration)
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, style = MaterialTheme.typography.labelMedium)
+            Text(
+                stringResource(R.string.stories_composer_slide_duration_value, whole),
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+        Slider(
+            value = whole.toFloat().coerceIn(DURATION_SLIDER_MIN_SECONDS, DURATION_SLIDER_MAX_SECONDS),
+            onValueChange = { onSecondsChange(it.roundToInt().toDouble()) },
+            valueRange = DURATION_SLIDER_MIN_SECONDS..DURATION_SLIDER_MAX_SECONDS,
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = label },
+        )
+    }
+}
+
+/** Practical lower bound of the duration slider (matches the model's `StoryDurationPin.MIN_SECONDS`). */
+private const val DURATION_SLIDER_MIN_SECONDS: Float = 2f
+
+/** Practical upper bound of the duration slider — most story slides live well under a minute. */
+private const val DURATION_SLIDER_MAX_SECONDS: Float = 60f
 
 private fun StoryFilter.labelRes(): Int = when (this) {
     StoryFilter.VINTAGE -> R.string.stories_composer_filter_vintage

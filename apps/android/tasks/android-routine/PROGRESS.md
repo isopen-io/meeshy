@@ -2,6 +2,61 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-25 **the composer AUTHORS a per-slide duration pin** (slice `story-composer-slide-duration-pin`,
+> feature-parity E. Stories — "Per-element + per-slide duration"). The prior slice made the *reader* honour
+> `effects.timelineDuration`; this one gives Android's own composer a control that *writes* it, closing the
+> author→reader loop (today only iOS-authored / back-end stories carried the pin). Ports iOS
+> `StoryComposerViewModel.currentSlideDuration` (StoryComposerViewModel+Slides.swift): clamp `[2, 600]`s, write
+> the authoritative `timelineDuration`; the getter falls back to the content-derived duration when unpinned.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3504/#3502/#3500/#3498/#3497, all
+> gateway/ios/shared branches (`claude/brave-archimedes-*`, `claude/intelligent-noether-*`), none a
+> `claude/apps/android/*` slice from THIS routine. Prior slice (`story-viewer-slide-duration`, #3503) already
+> merged into main (`5f20c529`). Branched off freshly-fetched `origin/main` (`5f20c529`).
+>
+> **The fix — a pure clamp SSOT + a deck field/reducer + a draft serialiser + a VM intent + a screen slider.**
+> (1) `StoryDurationPin` (`:core:model`, pure, no state) owns the one bound — `clamp(seconds)` →
+> `coerceIn(2.0, 600.0)` with a NaN→MIN guard the `Float` slider could otherwise feed through — the authoring
+> counterpart of the reader SSOT `StorySlideDuration`. (2) `StorySlide` (deck) gains `durationSecondsPin: Double?`;
+> `StorySlideDeck.setSelectedDuration(seconds)` clamps via the SSOT, writes the pin on the selected slide only,
+> and is inert (same instance) when the clamped value already equals the pin; `selectedSlideDurationSeconds`
+> resolves `pin ?? contentDerived` by delegating the fallback to `StorySlideDuration.contentDerivedSeconds`
+> (fed the publishable text elements, mirroring iOS's `timelineDuration ?? computedTotalDuration()`). (3)
+> `StoryComposerDraft` carries `durationSecondsPin` and serialises it onto `StoryEffects.timelineDuration`
+> (a pin alone now materialises effects). (4) `StoryComposerViewModel.onSlideDurationChange` + the pin flows
+> per-slide through `publishPlans`; `selectedSlideDurationSeconds` is exposed on the UiState. (5) A "Slide
+> duration" slider in the Effets band (Compose glue, exempt) with a live seconds label, wired end-to-end.
+>
+> **Tests: +21** — 8 `StoryDurationPinTest` (pure: inside-range unchanged; below-floor & above-ceiling clamp;
+> exact bounds preserved; bounds are 2/600; ±∞ clamp; NaN→MIN), 10 `StorySlideDeckDurationTest` (fresh slide has
+> no pin; set pins selected slide only; selection preserved; clamp below/above; inert on equal pin; inert when a
+> below-floor request equals a floor pin; effective duration default 6s / follows the content rule for a long
+> caption / blank element does not extend / pin wins over content), 3 new `StoryComposerDraftTest` (pin serialises
+> to `timelineDuration`; a pin alone materialises effects with empty textObjects; no pin → null effects), 3 new
+> `StoryComposerViewModelTest` (intent pins through public state; clamps out-of-range; pin rides into the wire
+> request on publish). **RED-proof isolated**: neutering `StoryDurationPin.clamp` to return `seconds` reddened
+> EXACTLY the 5 clamp-behaviour tests (below/above/±∞/NaN) while the 3 non-clamp tests (within-range, exact
+> bounds, bounds-are-2/600) stayed green — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch
+> (`source.properties` ApiLevel 37.0→37, `package.xml` `<api-level>` + `path=`, BOTH `build.prop` `sdk_full`
+> fields) keeping android-37.0 ALONGSIDE resolved it — same THIRD mode as the `story-viewer-slide-duration` run.
+>
+> **Verified**: targeted `:core:model` (`StoryDurationPinTest`) + `:feature:stories` (`StorySlideDeckDurationTest`
+> / `StoryComposerDraftTest` / `StoryComposerViewModelTest`) suites green, then full `./apps/android/meeshy.sh
+> check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any push.
+> Reviewer PASS. Diff is `apps/android` only (1 new prod file in :core:model, 4 prod files + 4 strings.xml in
+> :feature:stories, +2 new test files + 2 amended, tracking docs). Verdict: **PASS** — a pure clamp SSOT
+> mirroring iOS's authority, a deck reducer, a draft serialiser, a VM intent, and a screen slider; behavioural
+> tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the two remaining pieces of feature-parity E's duration/background item — **per-ELEMENT duration**
+> (a text/media element carries its own on-screen window `startTime`/`duration`, distinct from the slide's) and
+> the **background-designation toggle** (mark 1 visual + 1 audio per slide as the looping background, feeding the
+> content-derived `bgVideoDur`/`bgAudioDur` branch the reader SSOT already reads). Scout `feature-parity.md`
+> read-only before branching.
+
 > On 2026-08-25 **the story viewer honours per-slide duration** (slice `story-viewer-slide-duration`,
 > feature-parity E. Stories — "Timed auto-advance" + "Per-element + per-slide duration"). The viewer's
 > auto-advance ran a HARDCODED 5s (`SLIDE_DURATION_MS`) for every slide; iOS has a single source of truth
