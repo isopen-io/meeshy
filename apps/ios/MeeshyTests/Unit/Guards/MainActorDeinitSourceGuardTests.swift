@@ -29,9 +29,16 @@ import XCTest
 /// classe in-scope — `@MainActor` (explicite ou par défaut de cible) ET
 /// conforme à `ObservableObject` — déclare un `deinit` dans son corps (le
 /// sweep les pose toutes `nonisolated`). Une classe qui porte DÉJÀ une `deinit`
-/// écrite est hors de portée de cette garde : sa deinit est non-isolée par
-/// défaut (Swift 6) sauf mention contraire, et son corps a été pensé pour
-/// s'exécuter au démontage (timers, tâches, observers) — on ne le réécrit pas.
+/// écrite est hors de portée de cette garde — MAIS pas parce qu'elle serait
+/// sûre : une deinit écrite SANS `nonisolated` sur une classe @MainActor est
+/// ELLE AUSSI isolée (c'est l'ISOLATION, pas l'absence de deinit, qui déclenche
+/// le crash). Ces classes (18 app, 6 SDK au 2026-08-26) forment un SUIVI
+/// distinct, jugé empiriquement sur 26.1 : certaines se corrigent en marquant
+/// leur deinit `nonisolated` (corps ne touchant que du Sendable), d'autres non —
+/// `AudioRecorderManager` crashe ENCORE avec `nonisolated deinit` (cause
+/// AVFoundation mesurée, pas l'isolation). Cette garde couvre la famille SANS
+/// deinit écrite ; la famille À deinit écrite reste OUVERTE (voir la revue Opus
+/// de la vague 1c et la leçon SE-0466).
 ///
 /// Restreindre l'in-scope à `ObservableObject` (et non « toute classe
 /// `@MainActor` ») est délibéré : ce sont les types que SwiftUI détruit hors
@@ -62,7 +69,7 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
     }
 
     /// Toutes les déclarations `class` de `apps/ios/Meeshy/**`, commentaires et
-    /// littéraux neutralisés (`AppSourceGuard.stripComments`), avec les faits
+    /// littéraux ET chaînes neutralisés (`DeclarationBodyScanner.mask`), avec les faits
     /// nécessaires au verdict : isolation déclarée, conformité `ObservableObject`
     /// (au site de déclaration), présence d'un `deinit` dans le corps équilibré.
     private func classDecls() throws -> [ClassDecl] {
@@ -74,7 +81,7 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
         var out: [ClassDecl] = []
         for case let url as URL in enumerator where url.pathExtension == "swift" {
             let relative = url.path.replacingOccurrences(of: root.path + "/", with: "")
-            let stripped = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            let stripped = DeclarationBodyScanner.mask(try String(contentsOf: url, encoding: .utf8))
             out.append(contentsOf: Self.parse(stripped, relativePath: relative))
         }
         return out.sorted { ($0.relativePath, $0.name) < ($1.relativePath, $1.name) }
@@ -124,12 +131,16 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
     }
 
     /// `true` si le corps `{ … }` de la déclaration commençant à `startOffset`
-    /// contient le mot-clé `deinit`. Équilibrage d'accolades sur le texte déjà
-    /// masqué (commentaires/chaînes neutralisés en amont).
+    /// déclare un `deinit` À SON PROPRE NIVEAU. Le corps est balayé par
+    /// équilibrage d'accolades sur le texte déjà masqué (commentaires ET
+    /// contenu des chaînes neutralisés en amont via `DeclarationBodyScanner.mask`),
+    /// et SEULS les caractères de profondeur 1 — les membres DIRECTS de la classe —
+    /// sont retenus : un `deinit` appartenant à un TYPE IMBRIQUÉ (profondeur ≥ 2)
+    /// ne blanchit donc pas la classe hôte (constat 2 de la revue Opus).
     private static func bodyContainsDeinit(chars: [Character], startOffset: Int) -> Bool {
         guard let open = (startOffset..<chars.count).first(where: { chars[$0] == "{" }) else { return false }
         var depth = 0
-        var body = ""
+        var topLevel = ""
         var idx = open
         while idx < chars.count {
             let c = chars[idx]
@@ -138,10 +149,10 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
                 depth -= 1
                 if depth == 0 { break }
             }
-            if depth >= 1 { body.append(c) }
+            if depth == 1 { topLevel.append(c) }
             idx += 1
         }
-        return body.range(of: "\\bdeinit\\b", options: .regularExpression) != nil
+        return topLevel.range(of: "\\bdeinit\\b", options: .regularExpression) != nil
     }
 
     private func inScope(_ d: ClassDecl) -> Bool {
@@ -179,7 +190,7 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
             @Published var x = 0
         }
         """
-        let decls = Self.parse(AppSourceGuard.stripComments(sample), relativePath: "S.swift")
+        let decls = Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift")
         let foo = decls.first { $0.name == "Foo" }
         XCTAssertNotNil(foo)
         XCTAssertTrue(foo!.isMainActor && foo!.conformsObservableObject && !foo!.hasDeinit,
@@ -193,7 +204,7 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
             deinit { timer?.invalidate() }
         }
         """
-        let bar = Self.parse(AppSourceGuard.stripComments(sample), relativePath: "S.swift").first { $0.name == "Bar" }
+        let bar = Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift").first { $0.name == "Bar" }
         XCTAssertNotNil(bar)
         XCTAssertTrue(bar!.hasDeinit, "une deinit écrite doit satisfaire la garde")
     }
@@ -204,7 +215,7 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
             @Published var y = 0
         }
         """
-        let baz = Self.parse(AppSourceGuard.stripComments(sample), relativePath: "S.swift").first { $0.name == "Baz" }
+        let baz = Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift").first { $0.name == "Baz" }
         XCTAssertNotNil(baz)
         XCTAssertTrue(baz!.isNonisolated, "une classe nonisolated est hors scope — pas de deinit isolée")
     }
@@ -217,7 +228,7 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
             deinit {}
         }
         """
-        let names = Self.parse(AppSourceGuard.stripComments(sample), relativePath: "S.swift").map(\.name)
+        let names = Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift").map(\.name)
         XCTAssertEqual(names, ["Widget"], "`class var` ne doit pas être pris pour une déclaration de classe")
     }
 }

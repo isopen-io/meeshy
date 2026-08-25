@@ -27,8 +27,12 @@ import XCTest
 /// toute classe non-`nonisolated` porte la forme. Le correctif reste
 /// `nonisolated deinit {}` (corps vide : rien d'isolé à toucher).
 ///
-/// Une classe qui écrit DÉJÀ une `deinit` est hors portée (sa deinit est
-/// non-isolée par défaut, et son corps a été pensé pour le démontage).
+/// Une classe qui écrit DÉJÀ une `deinit` est hors portée de cette garde — MAIS
+/// pas parce qu'elle serait sûre : une deinit écrite SANS `nonisolated` sur une
+/// classe isolée MainActor est ELLE AUSSI isolée (c'est l'ISOLATION, pas
+/// l'absence de deinit, qui déclenche le crash). Ces classes à deinit écrite
+/// forment un SUIVI distinct, jugé empiriquement sur 26.1. Cette garde couvre la
+/// famille SANS deinit écrite ; la famille À deinit écrite reste OUVERTE.
 final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
 
     private struct ClassDecl {
@@ -51,7 +55,7 @@ final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
         var out: [ClassDecl] = []
         for case let url as URL in enumerator where url.pathExtension == "swift" {
             let relative = url.path.replacingOccurrences(of: root.path + "/", with: "")
-            let stripped = ComposerSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            let stripped = Self.mask(try String(contentsOf: url, encoding: .utf8))
             out.append(contentsOf: Self.parse(stripped, relativePath: relative))
         }
         return out.sorted { ($0.relativePath, $0.name) < ($1.relativePath, $1.name) }
@@ -84,6 +88,40 @@ final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
         return out
     }
 
+    /// Neutralise le contenu des commentaires (ligne + bloc) ET des littéraux de
+    /// chaîne en les remplaçant par des espaces, longueur PRÉSERVÉE (les index
+    /// restent valides). `ComposerSourceGuard.stripComments` ne masque QUE les
+    /// commentaires — un littéral `"deinit"` ou `"class X {"` y survivrait et
+    /// fausserait le parseur (constat 3 de la revue Opus). Port local du masker
+    /// `DeclarationBodyScanner.mask` app-side.
+    static func mask(_ source: String) -> String {
+        var out = ""
+        out.reserveCapacity(source.count)
+        var inLine = false, inBlock = false, inString = false, escaped = false
+        var previous: Character?
+        for ch in source {
+            var emit = ch
+            if inLine {
+                if ch == "\n" { inLine = false } else { emit = " " }
+            } else if inBlock {
+                if previous == "*" && ch == "/" { inBlock = false }
+                emit = ch == "\n" ? "\n" : " "
+            } else if inString {
+                if escaped { escaped = false; emit = " " }
+                else if ch == "\\" { escaped = true; emit = " " }
+                else if ch == "\"" { inString = false }
+                else { emit = " " }
+            } else {
+                if previous == "/" && ch == "/" { inLine = true; out.removeLast(); out.append(" "); emit = " " }
+                else if previous == "/" && ch == "*" { inBlock = true; out.removeLast(); out.append(" "); emit = " " }
+                else if ch == "\"" { inString = true }
+            }
+            out.append(emit)
+            previous = ch
+        }
+        return out
+    }
+
     private static func bodyContainsDeinit(chars: [Character], startOffset: Int) -> Bool {
         guard let open = (startOffset..<chars.count).first(where: { chars[$0] == "{" }) else { return false }
         var depth = 0
@@ -96,7 +134,7 @@ final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
                 depth -= 1
                 if depth == 0 { break }
             }
-            if depth >= 1 { body.append(c) }
+            if depth == 1 { body.append(c) }
             idx += 1
         }
         return body.range(of: "\\bdeinit\\b", options: .regularExpression) != nil
@@ -125,7 +163,7 @@ final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
     // MARK: - Méta-tests du parseur
 
     func test_parser_flagsMissingDeinit() {
-        let decls = Self.parse(ComposerSourceGuard.stripComments("""
+        let decls = Self.parse(Self.mask("""
         public final class Foo {
             var x = 0
         }
@@ -136,21 +174,21 @@ final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
     }
 
     func test_parser_acceptsWrittenDeinit() {
-        let bar = Self.parse(ComposerSourceGuard.stripComments("""
+        let bar = Self.parse(Self.mask("""
         final class Bar { deinit { player?.pause() } }
         """), relativePath: "S.swift").first { $0.name == "Bar" }
         XCTAssertTrue(bar!.hasDeinit)
     }
 
     func test_parser_acceptsNonisolatedType() {
-        let baz = Self.parse(ComposerSourceGuard.stripComments("""
+        let baz = Self.parse(Self.mask("""
         nonisolated final class Baz { var y = 0 }
         """), relativePath: "S.swift").first { $0.name == "Baz" }
         XCTAssertTrue(baz!.isNonisolated)
     }
 
     func test_parser_ignoresClassMemberDeclarations() {
-        let names = Self.parse(ComposerSourceGuard.stripComments("""
+        let names = Self.parse(Self.mask("""
         final class Widget {
             override class var layerClass: AnyClass { CALayer.self }
             deinit {}
