@@ -94,6 +94,7 @@ class StoriesViewModel @Inject constructor(
                 }
         }
         observeStoryDeletions()
+        observeStoryUpdates()
     }
 
     /**
@@ -106,6 +107,26 @@ class StoriesViewModel @Inject constructor(
         viewModelScope.launch {
             socialSocket.storyDeleted.collect { payload ->
                 storyRepository.removeCachedStory(payload.storyId)
+            }
+        }
+    }
+
+    /**
+     * Folds a realtime `story:updated` into the tray: the edited story is merged onto the
+     * authoritative Room cache (adopting the edit while keeping the reader's monotone seen
+     * state, unless a content edit reset engagement) and the cache-first stream repaints.
+     * The `engagementReset` flag and the current user id (the author-seen exception) are
+     * resolved here; the merge law itself lives in the SDK. Mirrors iOS
+     * `StoryViewModel.storyUpdated`.
+     */
+    private fun observeStoryUpdates() {
+        viewModelScope.launch {
+            socialSocket.storyUpdated.collect { payload ->
+                storyRepository.applyStoryUpdate(
+                    updated = payload.story,
+                    engagementReset = payload.engagementReset ?: false,
+                    currentUserId = sessionRepository.currentUserId,
+                )
             }
         }
     }

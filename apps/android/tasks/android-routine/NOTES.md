@@ -5,6 +5,29 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-25 — a realtime EDIT into a Room-cache surface is READ-MERGE-WRITE; reuse the existing merge law (slice `story-updated-realtime-tray`)
+A realtime `story:updated` into the Room-cache-driven tray is folded by READING the cached copy
+(`StoryCacheSource.findLocal` ← `StoryDao.getById`), MERGING the edit onto it, and WRITING it back
+(`upsertLocal`) — the cache-first stream then repaints. This is the EDIT twin of the delete seam (`deleteLocal`),
+and the same principle: the Room cache is the single source of truth; no in-memory overlay.
+- **Reuse the merge law, don't re-implement it.** The tray-edit merge (`StoryUpdateMerge`) delegates its
+  preserve-path to the already-tested `PostUpdateMerge.merge` (the feed's `post:updated` fold) — same
+  reader-personal-field preservation, one source of truth. The story merge only ADDS the `engagementReset`
+  branch on top.
+- **A broadcast can't be personalized, so viewer-owned fields are MONOTONE with one escape.** `isViewedByMe` in a
+  `story:updated` reflects the broadcaster's/default view, not the reader's — preserving the reader's seen state is
+  the default (monotone: once seen, stays seen). The ONE escape is `engagementReset` (a content edit wiped
+  views/reactions server-side → the ring legitimately reverts to unseen), and the exception to THAT is the AUTHOR
+  (`isOwnStory`): the server never records the author's own view of their own story, so it survives a reset. Mirror
+  of iOS `isOwnGroup || (!engagementReset && shouldKeepLocalViewed(...))`.
+- **Android reads the flag; iOS reads a timestamp.** iOS's `shouldKeepLocalViewed(localViewedAt, contentEditedAt)`
+  compares timestamps because its REST path lacks the flag; Android's wire model exposes no `contentEditedAt`, and
+  the socket event carries `engagementReset` explicitly — so the Android merge reads the flag directly. Same rule,
+  simpler signal.
+- **SDK bootstrap this run: `dl.google.com` 200; pristine `android-37.0` alone worked** (no copy→patch, no
+  both-dirs). First `./gradlew` mapped compileSdk 37 → android-37.0 with no hash error. Recipe still flips per
+  container.
+
 ## 2026-08-25 — fold a realtime removal into the AUTHORITATIVE cache, not an in-memory overlay (slice `story-deleted-realtime-tray`)
 A Room-cache-driven surface (the story tray, `StoriesViewModel` ← `StoryRepository.storiesStream()`) folds a
 realtime `story:deleted` by DELETING the row from the cache — `StoryDao.deleteById` → `StoryCacheSource.deleteLocal`
