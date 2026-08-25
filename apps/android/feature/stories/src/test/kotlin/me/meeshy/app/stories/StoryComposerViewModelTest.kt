@@ -1985,4 +1985,38 @@ class StoryComposerViewModelTest {
         assertThat(request.captured.storyEffects?.stickerObjects?.map { it.emoji }).containsExactly("🎉")
         assertThat(request.captured.content).isNull()
     }
+
+    @Test
+    fun `onSlideDurationChange pins the selected slide's duration through the public state`() = runTest {
+        val vm = viewModel()
+
+        vm.onSlideDurationChange(9.0)
+
+        assertThat(vm.state.value.deck.selectedSlide.durationSecondsPin).isEqualTo(9.0)
+        assertThat(vm.state.value.selectedSlideDurationSeconds).isEqualTo(9.0)
+    }
+
+    @Test
+    fun `onSlideDurationChange clamps an out-of-range request to the iOS bounds`() = runTest {
+        val vm = viewModel()
+
+        vm.onSlideDurationChange(10_000.0)
+
+        assertThat(vm.state.value.selectedSlideDurationSeconds)
+            .isEqualTo(me.meeshy.sdk.model.StoryDurationPin.MAX_SECONDS)
+    }
+
+    @Test
+    fun `a pinned duration rides into the wire request as timelineDuration on publish`() = runTest {
+        val vm = viewModel()
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+        vm.onTextChange("bonjour")
+        vm.onSlideDurationChange(7.0)
+
+        vm.publish()
+
+        coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
+        assertThat(request.captured.storyEffects?.timelineDuration).isEqualTo(7.0)
+    }
 }

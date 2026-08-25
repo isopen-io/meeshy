@@ -32,6 +32,7 @@ data class StoryComposerDraft(
     val stickers: List<StoryStickerElement> = emptyList(),
     val filter: StoryFilter? = null,
     val filterIntensity: Float = StoryFilterMatrix.DEFAULT_INTENSITY,
+    val durationSecondsPin: Double? = null,
 ) {
     /** The content actually sent — surrounding whitespace is never published. */
     val trimmedText: String get() = text.trim()
@@ -109,12 +110,13 @@ data class StoryComposerDraft(
     private fun storyEffects(originalLanguage: String): StoryEffects? {
         val textObjects = publishableTextElements.map { it.toTextObject(originalLanguage) }
         val stickerObjects = publishableStickers.map { it.toSticker() }
-        if (textObjects.isEmpty() && stickerObjects.isEmpty() && filter == null) return null
+        if (textObjects.isEmpty() && stickerObjects.isEmpty() && filter == null && durationSecondsPin == null) return null
         return StoryEffects(
             textObjects = textObjects,
             stickerObjects = stickerObjects.takeIf { it.isNotEmpty() },
             filter = filter?.wireValue(),
             filterIntensity = filter?.let { StoryFilterMatrix.clampIntensity(filterIntensity).toDouble() },
+            timelineDuration = durationSecondsPin,
         )
     }
 

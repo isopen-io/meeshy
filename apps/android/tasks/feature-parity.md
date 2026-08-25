@@ -3802,8 +3802,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Per-element + per-slide duration; background designation toggle (1 visual + 1 audio/slide) —
       **per-slide duration RESOLUTION done** (slice `story-viewer-slide-duration`, 2026-08-25): the
       viewer honours the author-pinned/content-derived slide duration via the pure `StorySlideDuration`
-      SSOT (see the auto-advance item below). **Pending**: the composer-side AUTHORING control that
-      writes `effects.timelineDuration`, per-ELEMENT duration, and the background-designation toggle.
+      SSOT (see the auto-advance item below). **Per-slide duration AUTHORING done** (slice
+      `story-composer-slide-duration-pin`, 2026-08-25): the composer's Effets band carries a "Slide
+      duration" slider that pins the selected slide's duration; the pure `StoryDurationPin.clamp`
+      (`[2, 600]`s, iOS `currentSlideDuration` parity) bounds it, `StorySlideDeck.setSelectedDuration`
+      writes the per-slide pin, and it serialises to `effects.timelineDuration` on publish — the very
+      field the viewer SSOT already honours over content. The slider's live value falls back to the
+      content-derived `StorySlideDuration` when unpinned. **Pending**: per-ELEMENT duration, and the
+      background-designation toggle.
 - [ ] Repost flow: clone source story + locked attribution badge
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on

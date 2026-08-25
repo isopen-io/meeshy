@@ -86,6 +86,8 @@
     <string name="stories_visibility_community">Comunidade</string>
     <string name="stories_visibility_private">Apenas eu</string>
     <string name="stories_composer_filter_intensity">Intensidade do filtro</string>
+    <string name="stories_composer_slide_duration">Duração do slide</string>
+    <string name="stories_composer_slide_duration_value">%1$ds</string>
     <string name="stories_composer_filter_none">Nenhum</string>
     <string name="stories_composer_filter_vintage">Vintage</string>
     <string name="stories_composer_filter_bw">P&amp;B</string>
