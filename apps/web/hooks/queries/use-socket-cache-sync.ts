@@ -513,6 +513,56 @@ function messageCacheKeysFor(
   return keys;
 }
 
+/**
+ * Le pendant INVALIDANT de `messageCacheKeysFor`.
+ *
+ * Trois handlers demandaient une relecture serveur en nommant la clé
+ * ObjectId — `queryKeys.messages.infinite(<ObjectId>)` — alors que l'écran
+ * d'accueil monte la conversation globale sous son SLUG (`"meeshy"`). Sur cet
+ * écran, l'invalidation ne visait aucune requête existante : elle ne réparait
+ * rien, en silence. Écrire par `messageCacheKeysFor` et invalider par la clé
+ * ObjectId, c'est appliquer la résolution d'alias d'un côté et pas de l'autre.
+ *
+ * DEUX des trois sites y gagnent vraiment — `message:restored-for-me` et
+ * `message:pending-delivered`, qui portent sur une liste DÉJÀ peuplée, donc
+ * résoluble par le `conversationId` de ses messages. Le troisième, le filet
+ * `!landedInCache`, ne peut par construction rien résoudre : son commentaire
+ * en place le dit, et c'est la graine de `addMessage` qui ferme ce cas.
+ *
+ * La clé ObjectId est conservée dans le lot même quand aucune requête ne la
+ * porte : c'est elle que montera un écran ouvert par `/conversations/:id`, et
+ * marquer une requête encore inexistante est sans effet ni coût.
+ */
+function invalidateMessageListsFor(
+  queryClient: ReturnType<typeof useQueryClient>,
+  conversationId: string
+): void {
+  const aliasKeys = messageCacheKeysFor(queryClient, conversationId);
+  const canonicalKey: unknown[] = [...queryKeys.messages.infinite(conversationId)];
+  const canonical = JSON.stringify(canonicalKey);
+  const targets = aliasKeys.some((key) => JSON.stringify(key) === canonical)
+    ? aliasKeys
+    : [...aliasKeys, canonicalKey];
+
+  for (const queryKey of targets) {
+    queryClient.invalidateQueries({ queryKey });
+  }
+}
+
+/**
+ * Une ligne de conversation lue au réseau n'a de valeur que s'il existe une
+ * LISTE pour la recevoir : `updateInfiniteConversationCache` sort sur
+ * `if (!old) return old;`, donc sans cache de liste le `GET /conversations/:id`
+ * est intégralement jeté. Sur un écran qui ne monte aucune liste — la page
+ * d'accueil, le fil partagé — cela faisait UNE requête par message reçu, sur la
+ * conversation la plus bavarde du produit, pour rien.
+ */
+function hasConversationListCache(
+  queryClient: ReturnType<typeof useQueryClient>
+): boolean {
+  return queryClient.getQueryData(queryKeys.conversations.infinite()) !== undefined;
+}
+
 export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
   const { conversationId, enabled = true } = options;
   const queryClient = useQueryClient();
@@ -624,10 +674,23 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // No cache entry to write into: mark the query stale so the in-flight
       // fetch is re-issued (and any later mount re-reads) from the server —
       // the only source able to close the gap this message would leave.
+      //
+      // CE FILET N'ATTEINT PAS UNE ENTRÉE ALIAS, ET NE LE PEUT PAS — à dire
+      // explicitement pour que personne ne s'y fie. `landedInCache` reste faux
+      // exactement quand AUCUNE liste ne contient de message de cette
+      // conversation ; or c'est par ce contenu que `messageCacheKeysFor`
+      // reconnaît une entrée clé-ée sur un SLUG. La condition qui déclenche le
+      // filet est donc la même que celle qui rend la résolution d'alias
+      // impossible. Passer par `invalidateMessageListsFor` n'y change rien : ce
+      // n'est ici qu'un site d'invalidation unique.
+      //
+      // Ce que ce filet couvre : la lecture serveur d'une conversation dont
+      // l'écran EST clé-é sur l'ObjectId. Ce qu'il ne couvre pas — le message
+      // arrivé pendant la lecture initiale, que le serveur ne connaît pas
+      // encore, quelle que soit la clé — est fermé côté écrivain, par la graine
+      // de `addMessage` (`use-conversation-messages-rq.ts`).
       if (!landedInCache) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.messages.infinite(targetConversationId),
-        });
+        invalidateMessageListsFor(queryClient, targetConversationId);
       }
 
       // Update infinite conversations query (paginated cache used by ConversationList)
@@ -655,7 +718,17 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // by the paginated initial query). Fetch the full row from the
       // API and prepend it so the list surfaces the new chat in real
       // time instead of waiting for the next manual refresh.
-      if (!conversationFoundInCache && /^[a-f\d]{24}$/i.test(targetConversationId)) {
+      //
+      // `hasConversationListCache` : sans liste en cache, la ligne lue n'a
+      // nulle part où atterrir (voir le helper). Cette garde est ce qui rend le
+      // montage de ce hook sur la page d'accueil et le fil partagé gratuit —
+      // sinon chaque message entrant y déclenchait un `GET /conversations/:id`
+      // dont la réponse était jetée.
+      if (
+        !conversationFoundInCache &&
+        /^[a-f\d]{24}$/i.test(targetConversationId) &&
+        hasConversationListCache(queryClient)
+      ) {
         if (typeof window === 'undefined' || window.location.pathname !== '/login') {
           apiService.get<Conversation>(`/conversations/${targetConversationId}`)
             .then((response) => {
@@ -689,16 +762,23 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // Invalidating would trigger a re-fetch that could return stale data from backend cache
       // The backend may not have processed the message yet when we re-fetch
 
-      // Auto mark-as-received for messages from other users
-      // senderId is now always a User ID (resolved in message converters)
-      const currentUser = useAuthStore.getState().user;
-      if (currentUser && message.senderId !== currentUser.id && /^[a-f\d]{24}$/i.test(message.conversationId)) {
-        // Prevent background API calls if on login page to avoid infinite reload loops
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          apiService.post(`/conversations/${message.conversationId}/mark-as-received`)
-            .catch(() => {}); // Non-critical, fire-and-forget
-        }
-      }
+      // L'accusé de RÉCEPTION n'est PAS posté ici, et ne l'était plus que par
+      // redondance : le `POST /conversations/:id/mark-as-received` qui se
+      // trouvait à cet endroit doublait celui de la couche TRANSPORT.
+      //
+      // La chaîne est fermée : `meeshySocketIOService.onNewMessage` →
+      // `orchestrator.onNewMessage` → `messaging.service.messageListeners`. Le
+      // MÊME `socket.on(MESSAGE_NEW)` qui sert ces auditeurs appelle
+      // `markAsReceivedDebounced(message.conversationId)` juste après les avoir
+      // servis — pour tout message d'un tiers, sur TOUTE page, débounce 500 ms
+      // par conversation. Aucun message ne peut donc atteindre ce handler sans
+      // que l'accusé soit déjà parti : un sur-ensemble strict de la condition
+      // qui vivait ici.
+      //
+      // Le doublon était sans conséquence tant que ce hook n'était monté que
+      // par `ConversationLayout`. Il en prend une dès qu'il est monté par
+      // `BubbleStreamPage` : UNE requête par message reçu, non débouncée, sur
+      // la conversation la plus bavarde du produit.
     };
 
     // Handler for edited messages
@@ -1117,6 +1197,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const fetchConversationIntoCache = (conversationId: string) => {
       if (!conversationId || !/^[a-f\d]{24}$/i.test(conversationId)) return;
       if (typeof window === 'undefined' || window.location.pathname === '/login') return;
+      if (!hasConversationListCache(queryClient)) return;
 
       let alreadyInCache = false;
       updateInfiniteConversationCache(queryClient, (convs) => {
@@ -1302,7 +1383,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       const affected = new Set((data?.messages ?? []).map((m) => m.conversationId).filter(Boolean));
       if (affected.size === 0) return;
       for (const convId of affected) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(convId) });
+        invalidateMessageListsFor(queryClient, convId);
       }
     };
 
@@ -1369,7 +1450,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // n'envoyaient pas `conversationIds`.
       const targets = affected.length > 0 ? affected : conversationId ? [conversationId] : [];
       for (const convId of targets) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(convId) });
+        invalidateMessageListsFor(queryClient, convId);
       }
     };
 

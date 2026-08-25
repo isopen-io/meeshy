@@ -1,7 +1,10 @@
 /**
  * SERVICE WORKER - MEESHY PWA
- * Gère le cache de l'interface et des données (App Shell + API)
- * Optimisé pour des chargements instantanés et des mises à jour garanties.
+ * Gère le cache de l'interface (App Shell) et le repli hors ligne des données API.
+ *  - App Shell  : stale-while-revalidate — chargement instantané.
+ *  - Données API : RÉSEAU D'ABORD, cache en repli HORS LIGNE uniquement.
+ * Les deux stratégies ne sont PAS interchangeables : voir le § 2 du listener
+ * `fetch` pour la raison, qui n'est pas négociable.
  */
 
 /// <reference lib="webworker" />
@@ -13,7 +16,7 @@
 const APP_BUILD_VERSION = '__RUNTIME_BUILD_VERSION__' !== '__RUNTIME' + '_BUILD_VERSION__'
   ? '__RUNTIME_BUILD_VERSION__'
   : `DEV_${Date.now()}`;
-const SW_VERSION = '1.3.1';
+const SW_VERSION = '1.3.2';
 const CACHE_NAME = `meeshy-cache-${APP_BUILD_VERSION}`;
 
 // Assets critiques pour l'App Shell (chargement instantané)
@@ -95,21 +98,42 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. Stratégie SWR pour les données API (Conversations, Profil, etc.)
-  // Permet d'afficher les données instantanément tout en les mettant à jour.
+  // 2. RÉSEAU D'ABORD, REPLI SUR LE CACHE, pour les données API
+  //    (Conversations, Messages, Profil…). Ce n'est PAS du stale-while-
+  //    revalidate, et le nommer ainsi serait un mensonge coûteux :
+  //
+  //    EN LIGNE  → la réponse rendue est TOUJOURS celle du réseau. Servir
+  //      l'entrée en cache à un appelant qui a pu joindre le gateway le fige
+  //      sur la réponse PRÉCÉDENTE : un Service Worker ne peut pas rafraîchir
+  //      une requête DÉJÀ résolue, donc le corps frais n'arriverait qu'à la
+  //      requête d'après — et ainsi de suite, indéfiniment. C'est ce que
+  //      faisait `return cachedResponse || fetchPromise` : chaque
+  //      rechargement rendait l'état n-1, sous une couche React Query qui
+  //      demandait pourtant bien le réseau (`refetchOnMount: 'always'`).
+  //
+  //    HORS LIGNE → le dernier corps connu est rendu s'il existe
+  //      (« Offline Graceful Degradation », principe non négociable du
+  //      dépôt). Le cache n'est donc lu que sur ÉCHEC réseau, ce qui évite en
+  //      prime de retarder chaque requête d'une lecture de Cache Storage.
+  //
+  //    LIMITE CONNUE, VOLONTAIREMENT NON RÉSOLUE ICI : ces entrées ne portent
+  //    aucun en-tête `Vary`, donc le cache n'est segmenté ni par jeton ni par
+  //    utilisateur. Deux comptes utilisés sur le MÊME appareil partagent
+  //    l'entrée d'une même URL, et le second peut lire HORS LIGNE le corps
+  //    mis en cache par le premier. Fermer ce trou demande une purge du cache
+  //    API à la déconnexion — autre lot. Ne pas supposer que c'est déjà fait.
   if (url.pathname.startsWith('/api/') || url.hostname.includes('gate.')) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
-        const cachedResponse = await cache.match(request);
-
-        const fetchPromise = fetch(request).then((networkResponse) => {
+        try {
+          const networkResponse = await fetch(request);
           if (networkResponse.ok) {
             cache.put(request, networkResponse.clone());
           }
           return networkResponse;
-        }).catch(() => cachedResponse || Response.error());
-
-        return cachedResponse || fetchPromise;
+        } catch {
+          return (await cache.match(request)) || Response.error();
+        }
       })
     );
     return;

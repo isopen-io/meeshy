@@ -780,7 +780,11 @@ describe('PostCommentService.likeComment', () => {
     expect(mockPrisma.commentReaction.upsert as jest.Mock).not.toHaveBeenCalled();
   });
 
-  it('purges the user\'s other-emoji reactions so at most 1 reaction survives (parity with socket)', async () => {
+  // Ce témoin affirmait l'INVERSE, sous un nom qui invoquait la « parity with
+  // socket » : il assérait la purge `emoji: { not }` alors que le chemin socket
+  // EMPILE. Un témoin qui grave un défaut le rend indéboulonnable — la session
+  // suivante lit une assertion verte et conclut que la règle est voulue.
+  it('empile un second emoji sans toucher au premier — la VRAIE parité avec le socket', async () => {
     (mockPrisma.postComment.findFirst as jest.Mock).mockResolvedValue({ id: 'c-1' });
     (mockPrisma.commentReaction.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
     (mockPrisma.commentReaction.upsert as jest.Mock).mockResolvedValue({});
@@ -789,9 +793,7 @@ describe('PostCommentService.likeComment', () => {
 
     await service.likeComment('c-1', 'u-1', '👍');
 
-    expect(mockPrisma.commentReaction.deleteMany as jest.Mock).toHaveBeenCalledWith({
-      where: { commentId: 'c-1', userId: 'u-1', emoji: { not: '👍' } },
-    });
+    expect(mockPrisma.commentReaction.deleteMany as jest.Mock).not.toHaveBeenCalled();
     expect(mockPrisma.commentReaction.upsert as jest.Mock).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { comment_user_reaction_unique: { commentId: 'c-1', userId: 'u-1', emoji: '👍' } },
@@ -809,9 +811,7 @@ describe('PostCommentService.likeComment', () => {
 
     await service.likeComment('c-1', 'u-1', '❤️');
 
-    expect(mockPrisma.commentReaction.deleteMany as jest.Mock).toHaveBeenCalledWith({
-      where: { commentId: 'c-1', userId: 'u-1', emoji: { not: '❤️' } },
-    });
+    expect(mockPrisma.commentReaction.deleteMany as jest.Mock).not.toHaveBeenCalled();
     expect(mockPrisma.commentReaction.upsert as jest.Mock).toHaveBeenCalledWith(
       expect.objectContaining({ update: {} }),
     );

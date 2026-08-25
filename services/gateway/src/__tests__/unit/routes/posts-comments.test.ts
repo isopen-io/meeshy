@@ -83,6 +83,17 @@ jest.mock('../../../utils/sanitize.js', () => ({
 }));
 
 jest.mock('../../../routes/posts/types', () => ({
+  // Ce double ÉNUMÈRE les schémas : tout export neuf consommé par la route est
+  // `undefined` ici, et `.safeParse` lève AVANT la moindre garde — la route
+  // rend alors 500 sur des chemins qui n'ont rien à voir. C'est un inventaire
+  // à tenir à jour, pas une simple façade.
+  //
+  // `UnlikeSchema` est le jumeau SANS défaut de `LikeSchema` : sur un retrait,
+  // l'absence d'emoji vaut « retire la plus récente », alors qu'un défaut '❤️'
+  // rendrait ce repli inatteignable.
+  UnlikeSchema: {
+    safeParse: (data: any) => ({ success: true, data: { emoji: data?.emoji } }),
+  },
   CreateCommentSchema: {
     safeParse: (data: any) => {
       if (data?.invalid) return { success: false, error: {} };

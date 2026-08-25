@@ -1248,15 +1248,19 @@ model AttachmentReaction {
   message     Message           @relation("MessageAttachmentReactions", fields: [messageId], references: [id], onDelete: Cascade)
   participant Participant       @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  // Single-reaction-per-user model: the key omits `emoji` on purpose so the DB
-  // itself enforces "at most one row per (attachment, participant)". This makes
-  // AttachmentReactionService.addAttachmentReaction's upsert atomic — two
-  // concurrent adds with different emojis now race on the SAME document instead
-  // of each inserting their own row (mirrors Reaction, see
-  // 2026-07-04-attachment-reaction-single-per-user-unique-index.mongodb.js).
-  // Multi-réactions (2026-08-18) : triplet — un participant empile
-  // plusieurs emojis distincts par pièce jointe (parité messages/posts).
+  // Multi-réactions (2026-08-18) : la clé est un TRIPLET et porte l'emoji — un
+  // participant empile plusieurs emojis distincts par pièce jointe, en parité
+  // avec les messages et les posts. Le seul plafond est applicatif :
+  // MAX_REACTIONS_PER_OBJECT, cinq par personne et par objet.
   // Index Mongo : 2026-08-18-attachment-reaction-multi-per-user-unique-index.mongodb.js
+  //
+  // Le paragraphe qui vivait ici jusqu'au 2026-08-25 décrivait le modèle
+  // ANTÉRIEUR (« the key omits `emoji` on purpose … at most one row per
+  // (attachment, participant) », index de 2026-07-04) : il était démenti quatre
+  // lignes plus bas par le triplet lui-même, et une session le lisant en
+  // concluait que les réactions multiples sont interdites par conception.
+  // Un commentaire périmé sur un schéma est lu comme la loi ; il est retiré,
+  // pas conservé « pour l'histoire » — l'historique vit dans git.
   @@unique([attachmentId, participantId, emoji], name: "attachment_participant_reaction")
   @@index([attachmentId])
   @@index([messageId])

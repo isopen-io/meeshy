@@ -575,9 +575,8 @@ export class PostCommentService {
     // est déjà posé : la purge+upsert qui suit ne fait alors que le
     // CONFIRMER, sans consommer de place neuve — exactement comme sur les
     // trois autres chemins de création (message, pièce jointe, post,
-    // commentaire/socket). Refuser AVANT la purge est ce qui empêche un appel
-    // REST au plafond de silencieusement remplacer les cinq réactions
-    // existantes par une seule au lieu d'être refusé.
+    // commentaire/socket). Reconfirmer un emoji DÉJÀ posé ne consomme aucune
+    // place : la garde ne s'applique qu'à une création réelle.
     const alreadyHasThisEmoji = await this.prisma.commentReaction.findFirst({
       where: { commentId, userId, emoji },
       select: { id: true },
@@ -593,18 +592,26 @@ export class PostCommentService {
       assertReactionAllowed(existingReactionCount);
     }
 
-    // Source de vérité = table `CommentReaction` (comme le chemin socket).
-    // Invariant « max 1 réaction par user » (identique à `CommentReactionService`
-    // et au modèle canonique `ReactionService`) : la réaction REST REMPLACE toute
-    // autre réaction de ce user sur ce commentaire. Sans cette purge, un client
-    // envoyant successivement ❤️ puis 👍 via REST accumulerait 2 réactions
-    // distinctes, contournant l'invariant que le socket applique.
-    // On purge d'abord les autres emojis, puis on upsert l'emoji demandé —
-    // idempotent (❤️/❤️ inchangé), donc le REST reste un FALLBACK sûr du socket
-    // sans double-comptage même si socket + REST se déclenchent sur le même like.
-    await this.prisma.commentReaction.deleteMany({
-      where: { commentId, userId, emoji: { not: emoji } },
-    });
+    // Source de vérité = table `CommentReaction`, EMPILÉE — comme le chemin
+    // socket, et comme le schéma le dit depuis toujours :
+    // `@@unique([commentId, userId, emoji])` porte l'emoji, donc la base n'a
+    // jamais plafonné à une réaction. Le seul plafond est
+    // `MAX_REACTIONS_PER_OBJECT`, et il vaut cinq.
+    //
+    // Ce site exécutait ici `deleteMany({ emoji: { not: emoji } })` au nom d'un
+    // « invariant max 1 réaction par user » qui n'existait sur AUCUN des deux
+    // autres chemins : `CommentReactionService.addReaction` (socket) empile.
+    // Les deux partageaient pourtant la GARDE de plafond et divergeaient sur la
+    // MUTATION — la divergence ne se voyait donc pas en comparant les gardes.
+    // Effet vécu : quelqu'un ayant empilé sur iOS puis touchant le cœur depuis
+    // Android perdait tout le reste, sans erreur ni notification. Au plafond
+    // c'était pire — reconfirmer un emoji déjà posé fait sauter la garde
+    // (confirmer ne consomme pas de place, c'est juste), et la purge partait
+    // quand même : cinq réactions, quatre détruites.
+    //
+    // L'upsert reste idempotent (❤️ sur ❤️ ne change rien), donc le REST demeure
+    // un FALLBACK sûr du socket, sans double-comptage si les deux se
+    // déclenchent sur le même geste.
     await this.prisma.commentReaction.upsert({
       where: { comment_user_reaction_unique: { commentId, userId, emoji } },
       create: { commentId, userId, emoji },
@@ -613,15 +620,51 @@ export class PostCommentService {
     return this.syncCommentLikeCounters(commentId);
   }
 
-  async unlikeComment(commentId: string, userId: string, emoji: string = '❤️') {
+  /**
+   * Retire UNE réaction du lecteur sur un commentaire.
+   *
+   * `emoji` FOURNI ⇒ c'est celui-là qui part, exactement. ABSENT ⇒ la PLUS
+   * RÉCENTE part — la règle produit dit « re-toucher retire la dernière posée,
+   * une par une, jusqu'à n'en plus avoir », et cette règle vaut pour les
+   * commentaires comme pour les publications (`PostService.unlikePost`).
+   *
+   * Le défaut `= '❤️'` qui vivait sur ce paramètre rendait le repli
+   * INATTEIGNABLE : « rien demandé » devenait « retire le cœur », donc une pile
+   * sans cœur ne se pelait jamais, et quelqu'un qui n'en avait jamais posé en
+   * perdait un. Le schéma de route porte la même correction (`UnlikeSchema`,
+   * emoji optionnel et SANS défaut, distinct de `LikeSchema`).
+   */
+  async unlikeComment(commentId: string, userId: string, emoji?: string) {
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
       select: { id: true },
     });
     if (!comment) return null;
 
-    await this.prisma.commentReaction.deleteMany({ where: { commentId, userId, emoji } });
-    return this.syncCommentLikeCounters(commentId);
+    // L'emoji demandé restreint la pile ; son absence la laisse entière. Dans
+    // les deux cas le tri décroissant fait de la tête la réaction à retirer :
+    // la désignée, ou la plus récente. Même forme que `unlikePost`.
+    const requested = emoji?.trim();
+    const pile = await this.prisma.commentReaction.findMany({
+      where: { commentId, userId, ...(requested ? { emoji: requested } : {}) },
+      orderBy: { createdAt: 'desc' },
+      select: { emoji: true },
+      take: 1,
+    });
+    const cible = pile[0]?.emoji ?? null;
+    if (!cible) {
+      const inchange = await this.syncCommentLikeCounters(commentId);
+      return { ...inchange, removedEmoji: null };
+    }
+
+    await this.prisma.commentReaction.deleteMany({ where: { commentId, userId, emoji: cible } });
+    // `removedEmoji` voyage AVEC le commentaire, exactement comme sur le chemin
+    // des publications (`PostService.unlikePost`). La route diffuse ce que le
+    // serveur a FAIT, jamais ce que le client a DEMANDÉ : sans lui, un retrait
+    // non désigné annonçait `undefined`, et un client optimiste ne savait quel
+    // compteur décrémenter — il se désynchronisait sur un geste RÉUSSI.
+    const apres = await this.syncCommentLikeCounters(commentId);
+    return { ...apres, removedEmoji: cible };
   }
 
   /// Recalcule les compteurs dénormalisés du commentaire DEPUIS la table (source de
