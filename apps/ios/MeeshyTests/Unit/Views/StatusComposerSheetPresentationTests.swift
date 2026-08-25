@@ -53,9 +53,10 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
     /// que plus aucune feuille ne présente — le mode d'extinction silencieuse
     /// que cette suite existe pour fuir.
     ///
-    /// `StatusComposerView.swift` existe encore (son retrait est la tâche 4.8,
-    /// conditionnelle) et garde ses propres suites — `SheetToolbarSemanticsTests`,
-    /// `StatusComposerAccessibilityTests`, `NavigationContainerMigrationTests`.
+    /// La tâche 4.8 a retiré `StatusComposerView.swift` (vérifié 2026-08-25 :
+    /// le fichier n'existe plus). `SheetToolbarSemanticsTests`,
+    /// `StatusComposerAccessibilityTests` et `NavigationContainerMigrationTests`
+    /// ont été re-visées sur la même surface, `ComposerMoodSurface.swift`.
     private let composerPath = "Meeshy/Features/Main/Composer/ComposerMoodSurface.swift"
 
     // MARK: - The composer's own side of the contract
@@ -64,7 +65,7 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
         let swift = try code(composerPath)
         XCTAssertTrue(
             swift.contains("ScrollView {"),
-            "StatusComposerView must host its stack in a ScrollView: the emoji grid uses fixed " +
+            "ComposerMoodSurface must host its stack in a ScrollView: the emoji grid uses fixed " +
             "56pt cells while every surrounding label scales with Dynamic Type, so at " +
             "accessibility sizes the content exceeds the .medium detent and would be clipped " +
             "with no gesture left to reach the text field."
