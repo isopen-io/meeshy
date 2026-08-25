@@ -33,6 +33,7 @@ data class StorySlide(
     val filterIntensity: Float = StoryFilterMatrix.DEFAULT_INTENSITY,
     val durationSecondsPin: Double? = null,
     val background: StoryBackgroundValue? = null,
+    val backgroundMediaId: String? = null,
 )
 
 /**
@@ -154,7 +155,14 @@ data class StorySlideDeck(
     fun removeMedia(mediaId: String): StorySlideDeck {
         if (slides.none { mediaId in it.mediaIds }) return this
         val next = slides.map { slide ->
-            if (mediaId in slide.mediaIds) slide.copy(mediaIds = slide.mediaIds - mediaId) else slide
+            if (mediaId in slide.mediaIds) {
+                slide.copy(
+                    mediaIds = slide.mediaIds - mediaId,
+                    backgroundMediaId = slide.backgroundMediaId.takeIf { it != mediaId },
+                )
+            } else {
+                slide
+            }
         }
         return copy(slides = next)
     }
@@ -448,6 +456,32 @@ data class StorySlideDeck(
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(background = background) else slide }
         return copy(slides = next)
+    }
+
+    /** The media id designated as the **selected** slide's looping background, or `null`. */
+    val selectedSlideBackgroundMediaId: String? get() = selectedSlide.backgroundMediaId
+
+    /** True when [mediaId] is the **selected** slide's designated looping-background media. */
+    fun isSelectedBackgroundMedia(mediaId: String): Boolean = selectedSlide.backgroundMediaId == mediaId
+
+    /**
+     * Toggles which of the **selected** slide's media is its single looping background —
+     * the authoring counterpart of the reader's `isBackground` [me.meeshy.sdk.model.StoryMediaObject]
+     * selection. **At most one** media per slide may be the background: designating [mediaId]
+     * replaces any prior designation, and designating the current background again clears it
+     * (a natural on/off tap). Inert (same instance) when [mediaId] is not attached to the
+     * selected slide, so the ≤1-background invariant lives in one place and the caller stays
+     * glue. Every other slide and the selection are left untouched.
+     */
+    fun toggleSelectedBackgroundMedia(mediaId: String): StorySlideDeck {
+        val selected = selectedSlide
+        if (mediaId !in selected.mediaIds) return this
+        val next = if (selected.backgroundMediaId == mediaId) null else mediaId
+        val index = selectedIndex
+        val slidesNext = slides.mapIndexed { i, slide ->
+            if (i == index) slide.copy(backgroundMediaId = next) else slide
+        }
+        return copy(slides = slidesNext)
     }
 
     /**

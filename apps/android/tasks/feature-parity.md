@@ -3867,8 +3867,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       advance each end independently (inert on unknown id); two toolbar controls (clock / timelapse, tinted
       when active) author them, localised in 4 locales. +18 tests (10 model/cycle + 4 `toTextObject`
       projection + 4 VM intent). Mutation-RED-proven (neutering `advance` to a constant reddens exactly the
-      9 advance/cycle/VM-advance assertions, the model-shape + inert-id ones stay green). **Pending**: the
-      background-designation toggle.
+      9 advance/cycle/VM-advance assertions, the model-shape + inert-id ones stay green). **Background-designation
+      toggle (VISUAL half) done** (slice `story-composer-background-media`, 2026-08-25): the composer now AUTHORS
+      which of a slide's attached media is its single looping background — before this, every media rode as a flat
+      `mediaIds` list and the reader fell back to "first video else first image" as the background, so the author
+      could not choose. `StorySlide.backgroundMediaId` + `StorySlideDeck.toggleSelectedBackgroundMedia` enforce
+      **at most one visual background per slide** (designating replaces the prior; re-designating clears it; inert
+      on an unattached id), and `removeMedia` clears the designation when it drops the background media (no orphan
+      pointer). On publish the VM resolves the id to the uploaded media's URL/MIME/duration
+      (`StoryBackgroundMedia.toMediaObject`) into a single `effects.mediaObjects` entry flagged
+      `isBackground = true, loop = true` — a **video** carries its duration onto `duration`+`intrinsicDuration`
+      (feeding the reader's `StorySlideDuration` `bgVideoDur` loop-extend), an **image** carries none — exactly the
+      shape the reader's `resolveBackgroundMedia` (`firstOrNull { it.isBackground }`) already honours. A `Wallpaper`
+      toggle badge on each real media thumbnail authors it (tinted `primary` when active), localised in 4 locales.
+      +21 tests (8 deck reducer/invariant + 5 draft serialisation + 5 VM intent/publish-resolution + 3 boundary).
+      **Pending**: the AUDIO half (mark one audio track per slide as background → `audioPlayerObjects[].isBackground`),
+      blocked until the composer gains an audio-track authoring surface.
 - [ ] Repost flow: clone source story + locked attribution badge
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
