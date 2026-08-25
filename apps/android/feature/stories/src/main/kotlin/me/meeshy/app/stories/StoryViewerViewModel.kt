@@ -29,6 +29,7 @@ import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
+import me.meeshy.sdk.story.toStoryItem
 import javax.inject.Inject
 
 /**
@@ -245,6 +246,35 @@ class StoryViewerViewModel @Inject constructor(
         observeReactionDeltas()
         observeTranslationUpdates()
         observeStoryDeletions()
+        observeStoryUpdates()
+    }
+
+    /**
+     * Fold a realtime `story:updated` into the open viewer. The gateway broadcasts the
+     * COMPLETE edited story; the matched slide is re-projected in place through the same
+     * [toSlideView] conversion the initial load used (repopulating [rawItems], the single
+     * source of truth for the current-slide re-projection in [emit]), and the pure
+     * [StoryPlayback.replacingSlide] swaps it while keeping the cursor on the same slot so
+     * the reader's content simply refreshes. On an `engagementReset` (a content edit that
+     * wiped views/reactions server-side) the per-slide [reactionStates] cache is purged so
+     * the count re-seeds from the fresh story (typically 0); a metadata-only update leaves
+     * any live reaction count in place. An event for a story not in this playback is inert.
+     * Mirror of iOS `StoryViewModel.storyUpdated`.
+     */
+    private fun observeStoryUpdates() {
+        viewModelScope.launch {
+            socialSocket.storyUpdated.collect { event ->
+                val storyId = event.story.id
+                val existingSlide = playback.groups.firstNotNullOfOrNull { group ->
+                    group.slides.firstOrNull { it.id == storyId }
+                } ?: return@collect
+                val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
+                val newSlide = event.story.toStoryItem().toSlideView(existingSlide.accentHex, prefs)
+                playback = playback.replacingSlide(newSlide)
+                if (event.engagementReset == true) reactionStates.remove(storyId)
+                emit()
+            }
+        }
     }
 
     /**
