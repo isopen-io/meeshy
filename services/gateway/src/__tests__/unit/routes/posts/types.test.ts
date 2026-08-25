@@ -271,6 +271,13 @@ describe('CreatePostSchema', () => {
     const result = CreatePostSchema.safeParse({ type: 'POST', mediaIds });
     expect(result.success).toBe(false);
   });
+
+  // Parité SSOT `CommonSchemas.language` (`.max(6)`) : un override de langue
+  // d'origine régionalisé (`bas-CM`) fait 6 caractères et ne doit plus être rejeté.
+  it('accepts a region-tagged 6-char originalLanguage override (bas-CM)', () => {
+    const result = CreatePostSchema.safeParse({ type: 'POST', content: 'Salut', originalLanguage: 'bas-CM' });
+    expect(result.success).toBe(true);
+  });
 });
 
 // ─── UpdatePostSchema ─────────────────────────────────────────────────────────
@@ -484,6 +491,16 @@ describe('TranslatePostSchema', () => {
 
   it('refuse une langue cible absente', () => {
     expect(TranslatePostSchema.safeParse({ force: true }).success).toBe(false);
+  });
+
+  // Parité SSOT `CommonSchemas.language` (`.max(6)`) : un code ISO 639-3
+  // régionalisé (`bas-CM`) fait 6 caractères — le Prisme s'applique aux posts.
+  it('accepte un code régionalisé 6 caractères (bas-CM)', () => {
+    expect(TranslatePostSchema.safeParse({ targetLanguage: 'bas-CM' }).success).toBe(true);
+  });
+
+  it('refuse un code trop long (7 caractères)', () => {
+    expect(TranslatePostSchema.safeParse({ targetLanguage: 'abcd-CM' }).success).toBe(false);
   });
 });
 

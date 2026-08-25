@@ -123,7 +123,10 @@ export type SocketMessageSendWithAttachmentsData = z.infer<typeof SocketMessageS
 
 export const SocketTranslationRequestSchema = z.object({
   messageId: mongoId,
-  targetLanguage: z.string().min(2).max(5),
+  // Borne alignée sur la SSOT `CommonSchemas.language` (`.max(6)`) : un code
+  // ISO 639-3 régionalisé (`bas-CM`) fait 6 caractères. Le `.max(5)` était un
+  // piège armé identique à celui des routes REST de traduction.
+  targetLanguage: z.string().min(2).max(6),
 });
 
 export type SocketTranslationRequestData = z.infer<typeof SocketTranslationRequestSchema>;
