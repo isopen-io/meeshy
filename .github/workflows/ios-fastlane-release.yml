@@ -100,6 +100,16 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.MATCH_DEPLOY_KEY }}
 
+      # MATCH_GIT_URL (secret) and the Matchfile default are both HTTPS URLs, so
+      # `match` cloned over HTTPS and never touched the deploy key loaded above
+      # (run 32910503192: "could not read Username for 'https://github.com'").
+      # Route ONLY the certificates repo over SSH — a blanket github.com rewrite
+      # would drag every SPM package through a single-repo deploy key.
+      - name: Route the match repo over SSH
+        run: |
+          git config --global url."git@github.com:isopen-io/meeshy-certificates.git".insteadOf "https://github.com/isopen-io/meeshy-certificates.git"
+          git config --global url."git@github.com:isopen-io/meeshy-certificates".insteadOf "https://github.com/isopen-io/meeshy-certificates"
+
       - name: Decode GoogleService-Info.plist
         run: |
           echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}" | base64 --decode > apps/ios/Meeshy/GoogleService-Info.plist
