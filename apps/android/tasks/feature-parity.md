@@ -3930,6 +3930,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       to `return this` reddened exactly the 3 structural engine cases while the unknown-id inert case stayed green.
       The tray fold (iOS `storyGroups` + `shouldKeepLocalViewed` viewed-monotonicity) remains a distinct future
       slice — Android's tray is Room-cache-driven, a larger surface. No wire/production logic outside `apps/android`.
+- [x] **Realtime story deletion — TRAY** done (slice `story-deleted-realtime-tray`, 2026-08-25): the viewer fold
+      (above) dropped a deleted story only from the OPEN viewer; the story TRAY (`StoriesViewModel`) is
+      Room-cache-driven and kept the deleted ring until the next background revalidation. The `SocketStoryDeletedData`
+      DTO + `SocialSocketManager.storyDeleted` flow already existed (viewer slice); this slice adds the authoritative
+      Room-cache removal seam. New `StoryDao.deleteById(id)` (`DELETE … WHERE id = :id`), `StoryCacheSource.deleteLocal`,
+      and `StoryRepository.removeCachedStory(storyId)` fold the delete into the cache so the cache-first stream
+      repaints without the row; an unknown id is an inert 0-row delete (Room emits nothing → no repaint on an
+      over-broadcast delivery). `StoriesViewModel` now injects `SocialSocketManager` and `observeStoryDeletions`
+      forwards every `story:deleted` to `removeCachedStory` UNCONDITIONALLY (no own-echo guard, unlike a reaction —
+      a story deleted on another device must vanish for its author too; iOS `purgeDeadStories` parity). +4 tests
+      (2 `StoryDaoTest` real-Room: `deleteById` removes exactly the matched row / inert on an absent id; 2
+      `StoriesViewModelTest`: a delete drops the story from the tray via the reactive cache, and the current user's
+      own story is folded too). RED-proof isolated: neutering the subscription reddened EXACTLY the 2 new VM tests
+      (17 completed, 2 failed) while the other 15 stayed green. The tray fold of `story:updated`
+      (viewed-monotonicity merge, iOS `shouldKeepLocalViewed`) remains the last STORY-realtime slice. No production
+      logic outside `apps/android`.
 - [ ] Per-clip inspector EDITOR (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)
