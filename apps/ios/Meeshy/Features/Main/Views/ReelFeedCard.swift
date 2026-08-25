@@ -555,18 +555,23 @@ struct ReelFeedCard: View, Equatable {
     /// the current user has participated (liked / reposted / bookmarked) — the
     /// outline symbol overlaid in the post accent traces the glyph edge. Never a
     /// circle around it.
+    ///
+    /// Délègue à `EngagementGlyph` (MeeshyUI) : ce composant vivait ici en
+    /// `private func` et en trois copies inline dans `FeedPostCard`, ce qui
+    /// explique qu'il soit resté absent de toutes les autres surfaces.
     private func actionGlyph(outline: String, filled: String, tint: Color, participated: Bool) -> some View {
-        ZStack {
-            Image(systemName: participated ? filled : outline)
-                .font(MeeshyFont.relative(18))
-                .foregroundColor(participated ? tint : .white)
-            if participated {
-                Image(systemName: outline)
-                    .font(MeeshyFont.relative(18))
-                    .foregroundColor(Color(hex: accentHex))
-            }
-        }
-        .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+        EngagementGlyph(
+            outline: outline,
+            filled: filled,
+            participated: participated,
+            accentHex: accentHex,
+            activeTint: tint,
+            // Fond MÉDIA : le repos est blanc, et l'ombre porte la lisibilité
+            // par-dessus la vidéo.
+            inactiveTint: .white,
+            size: 18,
+            shadowed: true
+        )
     }
 
     // Bouton like dédié : cœur plein dès qu'il y a des likes (rouge si moi, blanc
