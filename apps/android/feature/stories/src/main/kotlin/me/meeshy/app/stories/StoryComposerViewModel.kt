@@ -182,6 +182,14 @@ data class StoryComposerUiState(
     val selectedSlideDurationSeconds: Double get() = deck.selectedSlideDurationSeconds
 
     /**
+     * The **selected** slide's author-chosen backdrop (`null` when none), projected from
+     * the pure [StorySlideDeck.selectedSlideBackground] so the background picker can show
+     * the active swatch and the screen stays glue.
+     */
+    val selectedSlideBackground: me.meeshy.sdk.model.StoryBackgroundValue?
+        get() = deck.selectedSlideBackground
+
+    /**
      * What the single text field shows and edits: the selected element's text while
      * one is selected, otherwise the selected slide's caption. One field, two roles —
      * the screen stays glue.
@@ -634,6 +642,17 @@ class StoryComposerViewModel @Inject constructor(
     fun onSlideDurationChange(seconds: Double) = applyDeck { it.setSelectedDuration(seconds) }
 
     /**
+     * Sets (or clears, with null) the **selected** slide's backdrop — the Effets drawer's
+     * background picker (a preset solid/gradient from
+     * [me.meeshy.sdk.model.StoryBackgroundPalette], or a random pastel). Per-slide: each
+     * slide keeps its own colour. The value rides to the reader as `effects.background`,
+     * which the reader paints over its accent→black fallback
+     * ([me.meeshy.sdk.model.StoryBackgroundValue]).
+     */
+    fun onSlideBackgroundChange(background: me.meeshy.sdk.model.StoryBackgroundValue?) =
+        applyDeck { it.setSelectedBackground(background) }
+
+    /**
      * Applies a structural deck transform and re-syncs the editor buffer to the
      * (possibly new) selected slide's text **and** media, keeping `draft` a faithful
      * mirror of the selected slide — the single invariant the screen relies on.
@@ -817,6 +836,7 @@ class StoryComposerViewModel @Inject constructor(
                 filter = slide.filter,
                 filterIntensity = slide.filterIntensity,
                 durationSecondsPin = slide.durationSecondsPin,
+                background = slide.background,
             )
             PublishPlan(
                 request = draft.toCreateStoryRequest(language),

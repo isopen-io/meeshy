@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryDurationPin
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.StorySlideDuration
@@ -31,6 +32,7 @@ data class StorySlide(
     val filter: StoryFilter? = null,
     val filterIntensity: Float = StoryFilterMatrix.DEFAULT_INTENSITY,
     val durationSecondsPin: Double? = null,
+    val background: StoryBackgroundValue? = null,
 )
 
 /**
@@ -429,6 +431,24 @@ data class StorySlideDeck(
                 .filter { it.isPublishable }
                 .map { StoryTextObject(id = it.id, text = it.text) },
         )
+
+    /** The **selected** slide's author-chosen backdrop, or `null` when none is set. */
+    val selectedSlideBackground: StoryBackgroundValue? get() = selectedSlide.background
+
+    /**
+     * Sets the **selected** slide's backdrop to [background] (a solid or gradient from
+     * [me.meeshy.sdk.model.StoryBackgroundPalette], or `null` to clear it), leaving every
+     * other slide and the selection untouched. The value serialises to `effects.background`
+     * and the reader honours it over its accent→black fallback ([StoryBackgroundValue]).
+     * Inert (same instance) when the requested value already equals the slide's backdrop,
+     * so the picker never churns recomposition.
+     */
+    fun setSelectedBackground(background: StoryBackgroundValue?): StorySlideDeck {
+        if (selectedSlide.background == background) return this
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(background = background) else slide }
+        return copy(slides = next)
+    }
 
     /**
      * Appends a fresh empty slide with [newId] and selects it. Inert (same

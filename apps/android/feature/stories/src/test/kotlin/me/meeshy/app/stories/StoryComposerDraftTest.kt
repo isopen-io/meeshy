@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
 import org.junit.Test
 
@@ -364,5 +365,43 @@ class StoryComposerDraftTest {
         )
         assertThat(draft.canPublish).isFalse()
         assertThat(draft.hasStickers).isFalse()
+    }
+
+    @Test
+    fun `a solid background serialises onto storyEffects background as bare hex`() {
+        val request = StoryComposerDraft(text = "hi", background = StoryBackgroundValue.Hex("FF2E63"))
+            .toCreateStoryRequest("en")
+
+        assertThat(request.storyEffects?.background).isEqualTo("FF2E63")
+    }
+
+    @Test
+    fun `a gradient background serialises to the gradient wire form`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            background = StoryBackgroundValue.Gradient("FF2E63", "08D9D6"),
+        ).toCreateStoryRequest("en")
+
+        assertThat(request.storyEffects?.background).isEqualTo("gradient:FF2E63:08D9D6")
+    }
+
+    @Test
+    fun `a background alone materialises effects`() {
+        // No text elements, no stickers, no filter, no pin — the backdrop is the only reason effects exist.
+        val request = StoryComposerDraft(text = "bonjour", background = StoryBackgroundValue.Hex("2ECC71"))
+            .toCreateStoryRequest("fr")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.background).isEqualTo("2ECC71")
+        assertThat(request.storyEffects?.textObjects).isEmpty()
+    }
+
+    @Test
+    fun `a draft with no background leaves storyEffects background null`() {
+        val request = StoryComposerDraft(text = "x", filter = StoryFilter.VINTAGE)
+            .toCreateStoryRequest("en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.background).isNull()
     }
 }

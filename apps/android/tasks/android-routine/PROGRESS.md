@@ -2,6 +2,65 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-25 **the composer AUTHORS a per-slide colour/gradient/random-pastel backdrop** (slice
+> `story-composer-slide-background`, feature-parity E. Stories — "Backgrounds: random pastel, colour/gradient
+> palette, …"). The prior slice (`story-slide-background-value`) made the *reader* honour
+> `effects.background`; this one gives Android's own composer the control that *writes* it, closing the
+> author→reader loop (today only iOS-authored / back-end stories carried a colour backdrop). Ports iOS's
+> authoring SSOT `StoryBackgroundPalette`
+> (`packages/MeeshySDK/.../MeeshyUI/Story/StoryComposerSupportTypes.swift`) + `applyBackgroundColorToCurrentSlide`.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3509/#3508, both iOS/gateway
+> branches (`claude/intelligent-noether-*`, `claude/brave-archimedes-*`), none a `claude/apps/android/*`
+> slice from THIS routine. Prior slice (`story-slide-background-value`, `1fdeff70`) already merged into main.
+> Branched off freshly-fetched `origin/main` (`ae52866a`).
+>
+> **The fix — a pure palette SSOT + a slide field/reducer + a draft serialiser + a VM intent + a screen picker.**
+> (1) `StoryBackgroundPalette` (`:core:model`, pure `object`) ports iOS exactly: `SOLID_COLORS` (17 preset
+> hex, no `#`), `GRADIENTS` (6 `(start,end)` pairs), `presets()` projecting solids as `StoryBackgroundValue.Hex`
+> then gradients as `.Gradient`, `hsbToHex(h,s,b)` (pure HSB→uppercase-6-hex matching UIColor + `Int(x*255)`
+> truncation), and `randomPastelHex(random: Random)` (injectable RNG, saturation 0.14–0.24 / brightness
+> 0.93–0.98, looping until the pick is not a preset). (2) `StorySlide.background: StoryBackgroundValue?`;
+> `StorySlideDeck.setSelectedBackground(value)` writes the selected slide only, inert (same instance) when the
+> value already equals the slide's backdrop, clears on `null`; `selectedSlideBackground` reads it back. (3)
+> `StoryComposerDraft.background` serialises onto `StoryEffects.background` via `StoryBackgroundValue.serialized()`
+> (a backdrop alone now materialises effects). (4) `StoryComposerViewModel.onSlideBackgroundChange` +
+> `selectedSlideBackground`, and the backdrop flows per-slide through `publishPlans`. (5) A "Background" swatch
+> picker in the Effets band (Compose glue, exempt) — a None chip, one tappable swatch per preset (painted with
+> the reader's `hexColor` SSOT so swatch = publish), and a "Random" pastel button; localised in 4 locales.
+>
+> **Tests: +23** — 10 `StoryBackgroundPaletteTest` (pure: 17 solids / 6 gradients / 23 presets; `hsbToHex`
+> primary hues + grey ramp; `randomPastelHex` valid-hex / brightness band / saturation band / never-a-preset;
+> `randomPastel` wraps the hex), 7 `StorySlideDeckBackgroundTest` (fresh slide has none; write selected-only;
+> gradient stored; clear; inert on equal; inert clear-of-blank; survives selection change), 4 new
+> `StoryComposerDraftTest` (solid → bare hex; gradient → `gradient:…:…` wire; backdrop alone materialises
+> effects; no backdrop → null), 3 new `StoryComposerViewModelTest` (intent sets through public state; clears;
+> backdrop rides into the wire request on publish). **RED-proof isolated**: neutering `hsbToHex` to a constant
+> reddened EXACTLY the 4 conversion-dependent tests (primary hues, grey ramp, brightness band, saturation
+> band) while the list/valid-hex/preset-avoidance/wrap tests stayed green; neutering the `setSelectedBackground`
+> inert guard reddened EXACTLY the 2 inert tests while the 5 write/clear/gradient/selection tests stayed green —
+> genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch
+> (`source.properties` ApiLevel 37.0→37, `package.xml` `path=`, BOTH `build.prop` `sdk_full` fields) keeping
+> android-37.0 ALONGSIDE resolved it — same THIRD mode as the prior runs.
+>
+> **Verified**: targeted `:core:model` (`StoryBackgroundPaletteTest`) + `:feature:stories`
+> (`StorySlideDeckBackgroundTest` / `StoryComposerDraftTest` / `StoryComposerViewModelTest`) suites green, then
+> full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate)
+> **BUILD SUCCESSFUL** before any push. Reviewer PASS. Diff is `apps/android` only (1 new prod file in
+> :core:model, 4 prod files + 4 strings.xml in :feature:stories, +2 new test files + 2 amended, tracking docs).
+> Verdict: **PASS** — a pure palette SSOT mirroring iOS's authority, a deck reducer, a draft serialiser, a VM
+> intent, and a screen picker; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the two remaining pieces of feature-parity E's background item — background **IMAGE** with a
+> per-slide transform (pan/zoom/rotation, `StoryBackgroundTransform`), and the **looping/non-looping background
+> video designation** (mark one visual as the looping background, feeding the content-derived `bgVideoDur`
+> branch the reader duration SSOT already reads). Both share a media-OBJECT authoring foundation the composer
+> still lacks (`mediaObjects` with `isBackground`). Adjacent: per-ELEMENT duration. Scout `feature-parity.md`
+> read-only before branching.
+
 > On 2026-08-25 **the viewer honours a slide's serialised COLOUR background** (slice
 > `story-slide-background-value`, feature-parity E. Stories — "Backgrounds: random pastel, colour/gradient
 > palette, …"). The viewer already painted a slide's background MEDIA (image/video) but IGNORED
