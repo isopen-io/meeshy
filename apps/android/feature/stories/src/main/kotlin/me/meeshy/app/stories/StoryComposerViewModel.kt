@@ -424,6 +424,42 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
+     * Advances the visibility START of the on-canvas element [id] by one tap — to the next
+     * longer step, wrapping past the longest back to no offset (decided by the pure
+     * [StoryElementTimingCycle.advance]). The duration end is left untouched, mirroring iOS's
+     * two independent timing controls. Inert on an unknown id; selection and editing are
+     * untouched. The wire mapping ([StoryTextElement.toTextObject]) carries `startTime` on
+     * publish, and the reader gate ([StoryElementVisibility]) honours the window on playback.
+     */
+    fun onTextElementCycleStart(id: String) {
+        _state.update {
+            it.copy(
+                deck = it.deck.updateTextElement(id) { element ->
+                    element.copy(timing = element.timing.cycledStart())
+                },
+            )
+        }
+    }
+
+    /**
+     * Advances the visibility DURATION of the on-canvas element [id] by one tap — to the next
+     * longer step, wrapping past the longest back to open-ended (decided by the pure
+     * [StoryElementTimingCycle.advance]). The start end is left untouched. Inert on an unknown
+     * id; selection and editing are untouched. The wire mapping ([StoryTextElement.toTextObject])
+     * carries `duration` on publish, and the reader gate ([StoryElementVisibility]) honours the
+     * window on playback.
+     */
+    fun onTextElementCycleDuration(id: String) {
+        _state.update {
+            it.copy(
+                deck = it.deck.updateTextElement(id) { element ->
+                    element.copy(timing = element.timing.cycledDuration())
+                },
+            )
+        }
+    }
+
+    /**
      * Pinch-scales / rotates the on-canvas element [id] by the incremental gesture
      * deltas ([scaleBy] is the multiplicative pinch factor, [rotateByDeg] the additive
      * rotation; clamped/wrapped by the pure [StoryTextElement.transformed]). Selection

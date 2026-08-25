@@ -3855,8 +3855,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       resolver covering every window branch + boundary/inclusive-exclusive + open-ended + non-finite
       fail-open + non-finite start→0; 2 text-view + 2 foreground-view delegation). Mutation-RED-proven
       (neutering the gate to always-visible reddens exactly the 6 hiding assertions, the always-visible
-      ones stay green). **Pending**: per-ELEMENT duration AUTHORING (a composer control writing an
-      element's `startTime`/`duration`), and the background-designation toggle.
+      ones stay green). **Per-ELEMENT timing AUTHORING done** (slice `story-composer-element-timing`,
+      2026-08-25): the composer now WRITES a text element's `startTime`/`duration`, closing the
+      author→reader loop against the resolution gate above (before this, an Android-authored text element
+      could never carry a per-element window — `toTextObject` never set the two fields). The pure
+      `StoryElementTiming` `(startSeconds, durationSeconds)` value type mirrors `StoryTextFade` (iOS's two
+      independent start/duration controls, `0…30 s`, a `0` folding back to unset exactly as iOS's
+      `$0 > 0 ? … : nil`), `StoryElementTimingCycle` is the tap-friendly discrete ladder
+      `[1,2,3,5,10,15,30]` all within iOS's `0…30 s` range; `StoryTextElement.timing` serialises to
+      `StoryTextObject.startTime`/`duration` on publish; `onTextElementCycleStart`/`onTextElementCycleDuration`
+      advance each end independently (inert on unknown id); two toolbar controls (clock / timelapse, tinted
+      when active) author them, localised in 4 locales. +18 tests (10 model/cycle + 4 `toTextObject`
+      projection + 4 VM intent). Mutation-RED-proven (neutering `advance` to a constant reddens exactly the
+      9 advance/cycle/VM-advance assertions, the model-shape + inert-id ones stay green). **Pending**: the
+      background-designation toggle.
 - [ ] Repost flow: clone source story + locked attribution badge
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
