@@ -14,6 +14,18 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 245i, 2026-08-25)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> - **243i ET 244i sont MERGÉES** — PR [#3498](https://github.com/isopen-io/meeshy/pull/3498) et [#3509](https://github.com/isopen-io/meeshy/pull/3509). `main` = `d4401986`.
+> - **245i — une MESURE, pas un lot de code.** La suite naturelle de 244i était « étendre la garde d'atteignabilité aux autres surfaces ». **Mesuré d'abord : elle ne se généralise PAS ainsi.** Hors des trois surfaces déjà couvertes, le balayage rend **355 fonctions sur 190 fichiers** — et ce nombre est **dominé par des faux positifs STRUCTURELS**, pas par du code mort.
+> - **⚠️ Les trois sources de faux positifs, mesurées et nommées** :
+>   1. **Exigences de PROTOCOLE.** `StoryComposerProviding` (`protocol … : AnyObject`) déclare `bringForward`, `deselectAll`… ; chaque nom apparaît DEUX fois (l'exigence + l'implémentation), donc l'arithmétique `usages − déclarations` de la garde **retombe à zéro même quand le protocole est appelé**. 8 faux positifs sur ce seul fichier.
+>   2. **Conformances de DÉLÉGUÉ.** `SectionDropDelegate: DropDelegate` (`dropEntered`, `dropUpdated`, `performDrop`…) et `UIScrollViewDelegate` (`scrollViewDidEndDecelerating`…) sont appelées par le FRAMEWORK. `frameworkInvoked` n'en couvre qu'une douzaine, nommées à la main.
+>   3. **Sièges de TEST** (`simulateTapBodyForTesting`, `dirtyCountForTest`, `awaitConfigured`…), légitimes par construction.
+> - **⚠️ Pourquoi la garde marche sur ses trois surfaces actuelles** : `ConversationView*`, `FeedView*`, `StoryViewerView*` sont des fichiers d'EXTENSION de vue SwiftUI, presque sans conformance de protocole. **La garde n'est pas générale — elle est adaptée à une FORME de fichier.** Élargir `surfacePrefixes` sans rien d'autre noierait le signal.
+> - **Ce qu'il faut AVANT de généraliser** (spécification pour 246i+) : exclure par la STRUCTURE et non par une liste de noms — (a) ne pas compter comme déclaration ce qui est écrit dans un corps de `protocol` ; (b) détecter les conformances `: XxxDelegate` / `: XxxDataSource` et exclure leurs exigences ; (c) traiter les suffixes `…ForTesting` / `…ForTest` comme sièges assumés. Tant que ces trois exclusions n'existent pas, **ne pas allonger `surfacePrefixes`**.
+> - **Base de départ 246i+ : `main` HEAD.** **Piste 246i+** : (a) rendre la garde STRUCTURE-CONSCIENTE selon la spécification ci-dessus, puis l'élargir ; (b) **recâbler `FeedView` sur `likePost`/`bookmarkPost`** (toujours le lot le plus rentable — code testé ≠ code expédié) ; (c) `isProgrammaticScroll` — garde qui ne garde rien ; (d) les 3 copies d'`isLoadingReactions` ; (e) carry-over : `buildNativeMessageMenu`, découvrabilité du fil de réponses, les 7 `String(format: "%d:%02d", …)`, cibles tactiles 44 pt d'`InteractiveProgressBar`.
+
+
 > **POINTEUR iOS AUTORITAIRE (mis à jour 244i, 2026-08-25)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
 > - **243i est MERGÉE** — PR [#3498](https://github.com/isopen-io/meeshy/pull/3498), fusionnée dans le train beta (`main` `27078e80`). Retraits et excisions **vérifiés survivants** après fusion à 7 PR.
 > - **Synchronisation** : branche `claude/intelligent-noether-oulsyj` **repartie de `origin/main` `27078e80`** · itération **244i** · PR [#3509](https://github.com/isopen-io/meeshy/pull/3509) · **CI VERTE sur `8c950d22`** (17 checks : 15 succès, `Voice E2E Benchmark` ignoré, `Trivy` neutre ; `Build app + tests unitaires` **success**) · **merge ⏳ (laissé au propriétaire — cette piste ne fusionne pas)**.
