@@ -3,6 +3,11 @@ import MeeshySDK
 
 @MainActor
 final class HashtagResultsViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     let tag: String
     @Published private(set) var posts: [FeedPost] = []
     @Published private(set) var isLoading = false

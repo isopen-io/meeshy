@@ -215,6 +215,11 @@ struct DownloadBadgeView: View {
 // MARK: - Attachment Downloader (real byte-level progress via URLSession.bytes)
 @MainActor
 final class AttachmentDownloader: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var isCached = false
     @Published var isDownloading = false
     @Published var downloadedBytes: Int64 = 0

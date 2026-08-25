@@ -28,6 +28,11 @@ enum StoryExportSharePhase: Equatable, Sendable {
 
 @MainActor
 final class StoryExportShareViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published private(set) var phase: StoryExportSharePhase = .idle
     @Published private(set) var progress: Double = 0
     @Published private(set) var sharedURL: URL? = nil

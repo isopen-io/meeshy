@@ -160,6 +160,11 @@ protocol VideoSurvivalControlling: AnyObject {
 
 @MainActor
 final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     /// Outbound video auto-suspended by survival (distinct from user camera intent).
     @Published private(set) var isVideoSuspended: Bool = false
 

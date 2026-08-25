@@ -592,6 +592,11 @@ final class PostViewThrottle {
 
 @MainActor
 final class ProfileUserPostsViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published private(set) var posts: [FeedPost] = [] { didSet { refreshDerivedState() } }
     /// Chargement INITIAL uniquement (plein écran). La page suivante vit dans
     /// `isLoadingMore` — un seul flag pour les deux forçait la vue à afficher

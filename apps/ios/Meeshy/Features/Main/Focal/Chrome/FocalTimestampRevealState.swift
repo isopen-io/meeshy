@@ -31,6 +31,11 @@ import MeeshyUI
 /// traversé, la rangée entière n'est jamais réévaluée.
 @MainActor
 final class FocalTimestampRevealState: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     /// `true` tant que la fenêtre de la loi est ouverte (défilement en cours
     /// ou dans les `lingerMs` qui suivent).
     @Published private(set) var isRevealed: Bool = false
