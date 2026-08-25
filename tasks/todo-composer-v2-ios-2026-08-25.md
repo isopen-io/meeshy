@@ -60,6 +60,42 @@ depuis le DOM ; si l'arc diverge, un bandeau rouge s'affiche dans la page.
 - Référence rejouée avant tout diff : 13 suites `Unit/Composer/*`, 377 tests,
   376 verts + 1 crash préexistant (corrigé ci-dessus).
 
+## Complément d'audit (reprise 19:16 → 20:22, 48 agents, 0 erreur) — ce que la rév. 24 ne savait pas
+
+Rapport : `scratchpad/audit/rapport-audit-composer-2026-08-25-complet.md` (les deux lecteurs
+tombés en 403 rejoués, réfutés, jugés). Ce qui CHANGE par rapport à la rév. 24 (95/104) :
+
+- **Deux défauts GATEWAY sur le lot 5 déjà livré** — à traiter AVANT tout nouveau front iOS :
+  - `iOS-01` (M) — `POST /posts/from-attachment` (`services/gateway/src/routes/posts/core.ts:206-284`,
+    `publishAttachment.ts`) ne refuse ni `isViewOnce` ni `isEncrypted` : la garde n'existe QUE côté
+    client. Un appel direct publie un média à vue unique. **Défaut de confidentialité.**
+  - `iOS-02` (S) — `publishAttachment.ts:135` fixe `DEFAULT_PUBLICATION_VISIBILITY = 'PUBLIC'` pour
+    tous les types ; `POST /posts` retombe sur `FRIENDS` pour une STORY.
+  - et la route publie **en silence** : ni `socialEvents.broadcast*`, ni `withMentions`/`graftReferences`
+    avant `sendSuccess`, aucun test de route HTTP → **O13 rétrogradé à partiel**.
+- **Lot H sous-déclaré** : lecture v3 (`b7da22ec38`) et `X-Canvas-Caps` (`31bf008d3b`) livrés et
+  testés AVANT la directive de suspension (`9fb4d6a65c`, 12:00:26) — seule l'ÉMISSION reste due.
+- **Lignes manquantes** : V1 (fait), V2 (partiel, 1 capacité/3), V3-iOS (partiel) / V3-web (fait,
+  `PostsFeedScreen.tsx:816`) ; 7.4 scindée en 7.4a / 7.4b (précédent C4a/C4b) ; T4 du lot 5
+  **partiel** (envoi RÉEL non consigné) et non « fait » ; C6a (appui long) et C8 (gate final du lot C)
+  n'ont AUCUNE ligne. Compte proposé par ce rapport : **96/108** ; la rév. 24 bis réconcilie.
+- **Constats nouveaux, à nommer dans la planche** : `iOS-08` `profile.allowsCapture` non honoré par
+  l'offre de capture de la scène (S, préjudice nul aujourd'hui) ; `iOS-17` aucune garde ne confronte
+  `ComposerIntent.swift` au contrat TS (V0 reste partiel) ; `iOS-18` `showsSlides`/`showsTimeline` :
+  9 écritures, 0 lecture de production ; `iOS-15` `routesToLegacy` sans lecteur, garde vacuous ;
+  `iOS-16` aucun gate 4 phases rejoué depuis `8ad9b314c0` (+26 006 lignes iOS depuis) et aucune
+  capture C8.
+- **Questions produit supplémentaires** (§7 du rapport) : §F « Hors v1 » vs sticker `{mediaId}` livré ;
+  D-6 un repost est-il « adopté » ou « semé » (« Reprendre » écrase le slide repartagé) ; l'asymétrie
+  iOS ⇄ web du lot 3 (le web a basculé sa porte du fil, iOS ne le peut pas avant le lot 2) ;
+  le mot à écrire (5.3) et la durée (5.2) écartés par périmètre, « à reprendre immédiatement après ».
+
+**⚠️ D6 — Ordre révisé** : les deux défauts gateway (`iOS-01`, `iOS-02`) et le test d'exclusion
+mutuelle de 7.6 (`iOS-03`, le test AVANT le code) passent en tête de la vague 2, devant `V2-rangée`.
+Raison : un défaut qui atteint l'utilisateur (confidentialité, audience, double publication) passe
+devant une capacité manquante. Option écartée : garder l'ordre « lot 2 d'abord » — il tenait tant
+qu'aucun défaut vivant n'était connu.
+
 ## Les vagues
 
 ### Vague 1 — en cours (workflow `composer-vague-1`)
