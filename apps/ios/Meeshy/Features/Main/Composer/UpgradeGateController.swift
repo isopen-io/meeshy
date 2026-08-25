@@ -63,6 +63,16 @@ final class UpgradeGateController: ObservableObject {
     /// arbitrage que `ImpressionBatcher`.
     private var cancellables = Set<AnyCancellable>()
 
+    /// `nonisolated` — pas un choix de style : sous SE-0466 (Swift 6.2) une
+    /// classe `@MainActor` reçoit une deinit ISOLÉE, et le runtime iOS 26.1 la
+    /// double-libère quand elle s'exécute hors de tout contexte de tâche
+    /// (`malloc: pointer being freed was not allocated`, signal abrt). Vécu sur
+    /// `test_requirement_auDemarrage_estNil` — le seul test SYNCHRONE de la
+    /// suite, donc le seul sans tâche courante ; iOS 18.2 ne le montre pas.
+    /// Rien d'isolé n'est touché ici : `cancellables` se démonte tout seul.
+    /// Même arbitrage que `MessageStore` et `ConversationListViewModel`.
+    nonisolated deinit {}
+
     init(
         floor: AppVersionFloorProviding = AppVersionFloorService(),
         currentVersion: String = AppVersionHeader.value(),
