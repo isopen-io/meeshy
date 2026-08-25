@@ -83,7 +83,36 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
         "viewWillDisappear", "viewDidDisappear",
     ]
 
-    private func repoRoot() -> URL {
+    // MARK: - Le corpus, lu UNE fois
+
+    /// Les cinq tests de cette classe interrogent le MÊME corpus : ~1250
+    /// fichiers Swift, lus, dépouillés de leurs commentaires puis concaténés.
+    /// Le faire par test, c'était cinq balayages complets de l'arbre pour un
+    /// résultat identique — quelques dizaines de secondes de MainActor, sur une
+    /// suite qui en compte 8229 et dont le rapport CI signale déjà les
+    /// « longest test runs » comme 43 % de la durée.
+    ///
+    /// `static let` : Swift l'initialise paresseusement, une fois, à la
+    /// première lecture.
+    /// Les membres statiques sont nommés PAR LEUR TYPE et non par `Self` :
+    /// dans l'initialiseur d'une propriété stockée statique, `Self` n'a pas de
+    /// type dynamique à désigner.
+    private static let sourceCorpus: String = {
+        ConversationSurfaceReachabilityGuardTests.allSourceFiles()
+            .compactMap { ConversationSurfaceReachabilityGuardTests.code(of: $0) }
+            .joined(separator: "\n")
+    }()
+
+    /// Idem pour la surface : nom + code dépouillé, lus une fois.
+    private static let surfaceSources: [(name: String, code: String)] = {
+        ConversationSurfaceReachabilityGuardTests.surfaceFiles()
+            .compactMap { url -> (name: String, code: String)? in
+                guard let stripped = ConversationSurfaceReachabilityGuardTests.code(of: url) else { return nil }
+                return (name: url.lastPathComponent, code: stripped)
+            }
+    }()
+
+    private static func repoRoot() -> URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // …/Unit/Architecture
             .deletingLastPathComponent()  // …/Unit
@@ -95,7 +124,7 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
 
     /// Le balayage des RÉFÉRENCES couvre l'app, ses quatre extensions et le SDK :
     /// une extension peut très bien appeler un helper de la surface.
-    private func allSourceFiles() -> [URL] {
+    private static func allSourceFiles() -> [URL] {
         let root = repoRoot()
         let roots = [
             "apps/ios/Meeshy",
@@ -118,14 +147,14 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
         return found
     }
 
-    private func surfaceFiles() -> [URL] {
-        let dir = repoRoot().appendingPathComponent(Self.surfaceDirectory)
+    private static func surfaceFiles() -> [URL] {
+        let dir = repoRoot().appendingPathComponent(surfaceDirectory)
         let contents = (try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: nil
         )) ?? []
         return contents
             .filter { $0.pathExtension == "swift" }
-            .filter { $0.lastPathComponent.hasPrefix(Self.surfacePrefix) }
+            .filter { $0.lastPathComponent.hasPrefix(surfacePrefix) }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
@@ -133,8 +162,8 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     /// pierre tombale qui NOMME la fonction retirée — c'est le style de ce
     /// dépôt — ne doit pas la ressusciter en la faisant compter pour une
     /// référence.
-    private func code(of url: URL) -> String {
-        guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return "" }
+    private static func code(of url: URL) -> String? {
+        guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return nil }
         return AppSourceGuard.stripComments(raw)
     }
 
@@ -174,16 +203,16 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     // MARK: - Le versant atteignabilité
 
     func test_touteFonctionDeLaSurfaceConversationEstAtteignable() {
-        let corpus = allSourceFiles().map { code(of: $0) }.joined(separator: "\n")
+        let corpus = Self.sourceCorpus
         XCTAssertFalse(corpus.isEmpty, "Le balayage ne lit aucune source — la garde n'inspecterait rien.")
 
         var unreachable: [String] = []
-        for file in surfaceFiles() {
-            for name in declaredFunctionNames(in: code(of: file)).sorted() {
+        for file in Self.surfaceSources {
+            for name in declaredFunctionNames(in: file.code).sorted() {
                 guard !Self.unreachableAllowlist.contains(name),
                       !Self.frameworkInvoked.contains(name) else { continue }
                 if referenceCount(of: name, in: corpus) == 0 {
-                    unreachable.append("\(file.lastPathComponent) → \(name)")
+                    unreachable.append("\(file.name) → \(name)")
                 }
             }
         }
@@ -207,14 +236,14 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     /// raison le jour où le balayage, le dépouillement ou la regex casserait :
     /// il n'inspecterait plus rien.
     func test_leBalayageVoitLaSurfaceEtSesFonctions() {
-        let files = surfaceFiles()
+        let files = Self.surfaceSources
         XCTAssertGreaterThanOrEqual(
             files.count, 5,
             "La surface conversation compte au moins la vue et ses cinq extensions"
         )
 
         let declared = files.reduce(into: Set<String>()) {
-            $0.formUnion(declaredFunctionNames(in: code(of: $1)))
+            $0.formUnion(declaredFunctionNames(in: $1.code))
         }
         XCTAssertGreaterThan(declared.count, 50, "Le dépouillement mange les déclarations")
         XCTAssertTrue(
@@ -258,7 +287,7 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     /// site d'appel. Le test ci-dessus les attraperait — celui-ci le dit par
     /// leur nom, pour que la recherche `git log -S` les retrouve.
     func test_lesDeuxFonctionsRetiréesEn243iNeSontPasRevenues() {
-        let corpus = surfaceFiles().map { code(of: $0) }.joined(separator: "\n")
+        let corpus = Self.surfaceSources.map { $0.code }.joined(separator: "\n")
         for name in ["replyCountPill", "scrollToAndHighlight"] {
             XCTAssertFalse(
                 corpus.contains(name),

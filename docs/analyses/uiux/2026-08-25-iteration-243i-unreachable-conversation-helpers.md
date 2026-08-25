@@ -208,3 +208,92 @@ Bilan net : **−231 / +60**.
 **Et une consigne de méthode pour la reprise de cette liste** : avant de corriger
 une ligne héritée d'un report, poser la question que le report ne pose pas —
 **qui affiche ça ?** Elle a coûté une mesure ici et rendu cinq fonctions.
+
+---
+
+## Ce que la CI a rendu — 8223/8229, et un rouge qui n'est pas le nôtre
+
+Tête `5df76b2e`, check **« Build app + tests unitaires »** (le nom atteste que
+la suite a bien TOURNÉ) : **8223 passés · 1 échoué · 5 ignorés**.
+
+**Les cinq tests de la garde neuve passent**, ainsi que
+`EngagementCountConsolidationGuardTests` étendue. L'unique échec :
+
+```
+FeedViewModelTests/test_loadMoreIfNeeded_afterFreshCacheOnlySession_stillFetchesDespiteNilCursor()
+XCTAssertEqual failed: ("0") is not equal to ("10")
+```
+
+### Ce n'est pas un « flake », c'est une COURSE — et on peut la nommer
+
+L'assertion qui tombe est la ligne 339 : le test vide le cache partagé, y sème
+10 posts, appelle `loadFeed()` et attend un succès de cache `.fresh`. Il obtient
+**0**.
+
+`CacheCoordinator.shared.feed` est un `GRDBCacheStore` **de processus**, et la
+clé `"main-feed"` est une constante partagée par `FeedViewModel`,
+`ReelsViewModel` et **sept fichiers de tests**. Le mécanisme exact vit dans
+`FeedViewModel.debouncedCacheSave()` (`FeedViewModel.swift:1508`) :
+
+```swift
+cacheSaveTask = Task {
+    try? await Task.sleep(for: .seconds(2))
+    guard !Task.isCancelled else { return }
+    try? await CacheCoordinator.shared.feed.savePreservingFreshness(…, for: "main-feed")
+}
+```
+
+Un `Task` se retient lui-même tant qu'il tourne. La seule annulation est
+`cacheSaveTask?.cancel()` au PROCHAIN appel sur la MÊME instance — or chaque
+test fabrique son propre `FeedViewModel` et le laisse mourir. **Le sommeil de
+2 s d'un ViewModel d'un test PRÉCÉDENT survit à sa désallocation**, puis écrit
+son propre instantané (souvent vide) dans `"main-feed"` pendant qu'un autre test
+tourne. S'il atterrit entre le semis et la lecture, `posts.count == 0`.
+
+C'est exactement le texte de l'échec.
+
+### Pourquoi ce n'est pas ce lot — et pourquoi je ne le corrige pas ici
+
+| question | réponse |
+|---|---|
+| Le diff touche-t-il le fil, `FeedViewModel`, `CacheCoordinator` ? | **non** — 0 fichier feed/cache (`git diff --name-only`) |
+| Une clé retirée manque-t-elle à du code vivant ? | **non** — `check_localization.py` vert dans les deux directions |
+| La base `e91b3d19` était-elle verte ? | **oui** (run #440) |
+
+Le lot ne CAUSE pas la course ; il en déplace le minutage. La suite neuve lisait
+l'arbre source **cinq fois** (une par test, ~1250 fichiers), ce qui ajoute des
+dizaines de secondes de MainActor à un processus où un écrivain orphelin de 2 s
+attend son heure.
+
+**Corrigé dans le périmètre du lot** : le corpus est désormais lu **une seule
+fois** (`static let sourceCorpus` / `surfaceSources`). C'est justifié pour
+soi — cinq balayages complets pour un résultat identique, sur une suite dont le
+rapport CI signale déjà les « longest test runs » à 43 % de la durée — et cela
+réduit la perturbation que nous avions introduite.
+
+**NON corrigé, et signalé plutôt que deviné** : la course elle-même. La réparer
+demande de toucher `FeedViewModel` — un autre sous-système, sur une itération
+UI/UX de la surface conversation. Élargir cette PR jusque-là, c'est précisément
+ce que le dépôt interdit.
+
+> **Correctif proposé, à porter par la piste feed** : annuler `cacheSaveTask`
+> quand le ViewModel s'en va (`deinit`, ou une méthode de fin de vie explicite —
+> un `deinit` d'un type `@MainActor` ne peut pas toucher d'état isolé). À
+> défaut, faire porter au `Task` un jeton de génération et vérifier, APRÈS le
+> sommeil, qu'il est toujours le courant. Le second est plus sûr : il survit à
+> l'oubli d'un appel de fin de vie.
+>
+> Portée réelle en production : un `FeedViewModel` y est long ; l'orphelin
+> n'existe que si l'utilisateur quitte le fil dans les 2 s d'un like, et
+> `savePreservingFreshness` préserve le marqueur d'âge. **La morsure est donc
+> surtout au banc d'essai** — mais c'est là qu'elle rend rouge, par ordre
+> d'exécution, n'importe quelle PR qui déplace le minutage.
+
+### Ce que je n'ai PAS pu faire
+
+Relancer le job pour vérifier la reproduction : `rerun-failed-jobs` rend
+**403 — Resource not accessible by integration**. La règle du dépôt prévoit ce
+cas : à défaut de relance, rendre le test robuste s'il est dans le périmètre,
+sinon le dire UNE fois et garder la PR surveillée. Le périmètre couvrait la
+lecture répétée du corpus, pas la course du fil — les deux sont traités
+ci-dessus selon ce partage.

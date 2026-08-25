@@ -15896,3 +15896,48 @@ contrôle — et le commit est parti sans. C'est la leçon 242i (*connaître un 
 ne protège pas d'y tomber : il faut l'appliquer AU BANC D'ESSAI*) d'un cran plus
 haut : citer une doctrine dans sa propre documentation ne l'applique pas
 davantage que la citer dans un doc-comment.
+
+### Corollaire de banc d'essai — un écrivain différé ORPHELIN transforme une clé de cache partagée en variable globale de test
+
+L'unique rouge de la CI 243i (8223/8229) :
+
+```
+FeedViewModelTests/test_loadMoreIfNeeded_afterFreshCacheOnlySession_stillFetchesDespiteNilCursor
+XCTAssertEqual failed: ("0") is not equal to ("10")
+```
+
+Le test vide `CacheCoordinator.shared.feed`, y sème 10 posts, lit — et trouve 0.
+
+```swift
+// FeedViewModel.swift:1508
+cacheSaveTask = Task {
+    try? await Task.sleep(for: .seconds(2))
+    guard !Task.isCancelled else { return }
+    try? await CacheCoordinator.shared.feed.savePreservingFreshness(…, for: "main-feed")
+}
+```
+
+Un `Task` **se retient lui-même** tant qu'il tourne. La seule annulation est
+`cacheSaveTask?.cancel()` au prochain appel sur la **même instance** — or chaque
+test fabrique son `FeedViewModel` et le laisse mourir. Le sommeil de 2 s survit
+donc à la désallocation, puis écrit son instantané (souvent vide) dans la clé de
+PROCESSUS `"main-feed"`, pendant qu'un autre test tourne.
+
+> **Un `Task` différé qu'aucune fin de vie n'annule ne meurt pas avec son
+> propriétaire : il devient un écrivain anonyme sur l'état global.** Si sa cible
+> est une clé partagée, toute suite qui la lit devient order-dependent — et
+> rougit chez la PR suivante qui déplace le minutage, jamais chez celle qui a
+> introduit la course.
+
+Deux conséquences de méthode :
+
+- **« Flake » n'est pas un diagnostic ; « course » l'est.** La différence tient
+  à ce qu'on peut NOMMER : ici, l'écrivain (`debouncedCacheSave`), le délai
+  (2 s), la clé (`"main-feed"`), et pourquoi l'annulation ne couvre pas le cas
+  (par instance, pas par processus). Tant qu'on ne peut pas écrire cette phrase,
+  on n'a pas fini de chercher.
+- **Le partage se fait au PÉRIMÈTRE, pas au symptôme.** Ce qui était à nous —
+  cinq balayages du corpus source là où un seul suffit — a été corrigé. La
+  course, qui vit dans un autre sous-système, a été SIGNALÉE avec son correctif
+  proposé plutôt que réparée en élargissant la PR. Rendre le test « robuste »
+  côté test l'aurait masquée.
