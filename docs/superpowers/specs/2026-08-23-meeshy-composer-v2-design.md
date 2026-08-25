@@ -383,9 +383,32 @@ régression sèche.
 ### Lot 4 — Mood (S3) et repost
 `.moodChip` et `.repost` cessent de router. La loi 5 est câblée : le format
 miroite, l'ancrage cross-format devient un choix explicite de l'éventail, et le
-client envoie enfin `targetType`.
-**Retrait** : `StatusComposerView.swift` (361 l.), `UnifiedPostComposer.swift`
-(739 l., 1 seul appelant).
+**filet `targetType: nil` devient inatteignable**.
+
+> **Amendement (a), 2026-08-25 — prescrit par la tâche 4.9, jamais écrit
+> jusqu'ici.** Ce paragraphe disait « le client envoie *enfin* `targetType` ».
+> C'est faux depuis le lot 0 bis : les **six** sites l'envoient déjà
+> (`92529dac5b`, sur main). Ce que le lot 4 a réellement fait est de rendre le
+> **filet** `targetType: nil` inatteignable — les trois sites qui composaient
+> une republication lisaient la carte de la source à l'INTÉRIEUR du `Task`,
+> si bien que l'ancrage cross-format n'était pas un choix mais une **course**.
+> La carte est désormais lue hors du `Task`, aux trois sites (4.1).
+
+**Retrait** : `StatusComposerView.swift` (**363 l.**, mesuré au 2026-08-25 —
+et non 361), `UnifiedPostComposer.swift` (739 l., 1 seul appelant).
+
+> **Amendement (b), 2026-08-25 — prescrit par la tâche 4.9, jamais écrit
+> jusqu'ici.** Le retrait d'`UnifiedPostComposer.swift` **ne relève pas de ce
+> lot** : le fichier vit sous `packages/MeeshySDK/Sources/MeeshyUI/Story/`, le
+> lot 4 s'y interdit d'écrire, le lot 7 aussi, et **aucun lot v2 ne possède
+> `MeeshyUI`**. Ce §E promettait donc un retrait que personne ne porte. Il
+> **attend le lot qui possédera `MeeshyUI`** — c'est ce que dit déjà
+> l'addendum du présent fichier (point 2 de « Ce que l'audit du 2026-08-24 a
+> corrigé ») ; les deux passages cessent ici de se contredire.
+> Le retrait de `StatusComposerView.swift`, lui, reste bien au lot 4 (tâche
+> 4.8) : ses deux dépendances (4.4, 4.6) sont livrées, le fichier a **0
+> appelant**, et son maintien n'est aujourd'hui écrit nulle part — un STOP posé
+> *de fait* n'est pas une décision.
 
 ### Lot 5 — Média reçu et forward (O13)
 `.conversationMedia` câblée ; la fiche de forward gagne ses trois destinations
