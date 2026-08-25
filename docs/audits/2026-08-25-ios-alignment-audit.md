@@ -67,3 +67,13 @@ Les trois effets tolérés : (c) `effectFlags` intact ; (a) envol composer→bul
 | iOS phase 3 (session connectée, login réel) | **1/1 vert** |
 | Relance ciblée après revue A+C (21 classes A/C + gardes Rivière) | build vert ; **227 verts / 0 rouge** après réécriture de 4 témoins qui supposaient « rien ne part sous le pane » (F1 dit l'inverse : ce qui a été acquis avant part) |
 
+
+### Après fusion de `main` (14 commits arrivés pendant le chantier — frappe avec visage, bannières in-app, gateway/shared/android)
+| Gate | Résultat |
+|---|---|
+| Fusion | 1 seul conflit textuel (`TypingIndicatorBubble` : `internal` + `participants:`), câblage Rivière adapté ; 8 fichiers auto-fusionnés audités (catalogues JSON valides, aucune déclaration en double) |
+| gateway `tsc` + suites profil/contacts | 0 erreur ; 130/130 |
+| web suites appels | 406/406 |
+| iOS phase 0 SDK (passage 5, simulateur vierge, sous charge jest concurrente) | `MeeshyUITests` verts ; `MeeshySDKTests` 1 rouge : `OfflineQueuePendingUIItemsPublisherTests.test_publisher_emits_one_after_enqueue_send_message` (« 2 rows ≠ 1 ») — **rouge 3 passages sur 5 sur un code d'outbox strictement identique à `main`**, vert isolé 17/17 : flake, à durcir dans un lot dédié (compte exact d'un publisher sur `OfflineQueue.shared`) |
+| iOS build + phases 1-3 après fusion | build vert, 0 orphelin ; **phase 1 = 3 513 / 0 · phase 2 = 4 913 / 0 · phase 3 = 1 / 0** ; le test SDK flaky rejoué isolé : 8/8 |
+| PR | #3515 vers `main`, mergeable après fusion ; CI en cours au moment de la rédaction |

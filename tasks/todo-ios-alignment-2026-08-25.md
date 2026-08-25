@@ -49,3 +49,9 @@ Voir `docs/audits/2026-08-25-ios-alignment-audit.md` § Méthode et § Gates ; p
 - gateway : tsc 0 erreur ; 876/876 suites (4 rouges sous charge, 95/95 à la relance)
 - web : 793/793 suites (5 rouges sous charge, 100/100 à la relance) ; tsc = 15 erreurs PRÉEXISTANTES dans des fichiers non touchés
 - iOS phase 0 SDK : 3 975 + 3 557 tests, 0 échec (avant les correctifs post-revue — à relancer)
+
+## Après fusion de main (14 commits) — 2026-08-25 20:5x
+- [x] Fusion (1 conflit : TypingIndicatorBubble internal + participants), gate complet vert (7 502 + 3 513 + 4 913 + 1 ; 1 flaky SDK prouvé), gateway/web ciblés verts
+- [x] PR #3515 mergeable — CI en cours
+- [ ] Suivi : durcir `OfflineQueuePendingUIItemsPublisherTests` (flaky 3/5, singleton partagé)
+- [ ] Suivi : décisions à confirmer par le porteur produit (L1-02 (ii), bouton d'envoi teinté, contraste, ?languages=)
