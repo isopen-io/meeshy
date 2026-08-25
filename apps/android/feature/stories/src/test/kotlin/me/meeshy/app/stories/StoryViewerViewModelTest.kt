@@ -24,6 +24,7 @@ import me.meeshy.sdk.model.SocketStoryDeletedData
 import me.meeshy.sdk.model.SocketStoryReactedData
 import me.meeshy.sdk.model.SocketStoryTranslationUpdatedData
 import me.meeshy.sdk.model.SocketStoryUnreactedData
+import me.meeshy.sdk.model.SocketStoryUpdatedData
 import me.meeshy.sdk.model.StoryAudioPlayerObject
 import me.meeshy.sdk.model.StoryClipTransition
 import me.meeshy.sdk.model.StoryEffects
@@ -60,11 +61,13 @@ class StoryViewerViewModelTest {
     private val translationUpdatedFlow =
         MutableSharedFlow<SocketStoryTranslationUpdatedData>(extraBufferCapacity = 8)
     private val deletedFlow = MutableSharedFlow<SocketStoryDeletedData>(extraBufferCapacity = 8)
+    private val updatedFlow = MutableSharedFlow<SocketStoryUpdatedData>(extraBufferCapacity = 8)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true) {
         every { storyReacted } returns reactedFlow
         every { storyUnreacted } returns unreactedFlow
         every { storyTranslationUpdated } returns translationUpdatedFlow
         every { storyDeleted } returns deletedFlow
+        every { storyUpdated } returns updatedFlow
     }
     private val config = MeeshyConfig()
 
@@ -1076,6 +1079,80 @@ class StoryViewerViewModelTest {
 
         assertThat(vm.state.value.slides.map { it.id }).containsExactly("b1", "b2").inOrder()
         assertThat(vm.state.value.current?.id).isEqualTo("b1")
+    }
+
+    // --- Realtime story update (story:updated) ---
+
+    @Test
+    fun `a realtime story update swaps the current slide's content in the open viewer`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors()) // at a1, content "text-a1"
+        assertThat(vm.state.value.current?.text).isEqualTo("text-a1")
+
+        updatedFlow.emit(
+            SocketStoryUpdatedData(
+                story = storyPost("a1", "a", hoursAgo = 1).copy(content = "text-edited"),
+                engagementReset = false,
+            ),
+        )
+
+        assertThat(vm.state.value.current?.id).isEqualTo("a1")
+        assertThat(vm.state.value.current?.text).isEqualTo("text-edited")
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("a1")
+        assertThat(vm.state.value.isDismissed).isFalse()
+    }
+
+    @Test
+    fun `an engagement-reset story update wipes the reaction count to zero`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2))),
+        )
+        reactedFlow.emit(SocketStoryReactedData(storyId = "a1", userId = "stranger", emoji = "🔥"))
+        assertThat(vm.state.value.reactionCount).isEqualTo(3)
+
+        updatedFlow.emit(
+            SocketStoryUpdatedData(
+                story = storyPost("a1", "a", hoursAgo = 1, reactionSummary = null),
+                engagementReset = true,
+            ),
+        )
+
+        assertThat(vm.state.value.reactionCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `a metadata-only story update keeps the live reaction count`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2))),
+        )
+        reactedFlow.emit(SocketStoryReactedData(storyId = "a1", userId = "stranger", emoji = "🔥"))
+        assertThat(vm.state.value.reactionCount).isEqualTo(3)
+
+        updatedFlow.emit(
+            SocketStoryUpdatedData(
+                story = storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2)),
+                engagementReset = false,
+            ),
+        )
+
+        assertThat(vm.state.value.reactionCount).isEqualTo(3)
+    }
+
+    @Test
+    fun `an update for a story not in the viewer is inert`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+
+        updatedFlow.emit(
+            SocketStoryUpdatedData(
+                story = storyPost("ghost", "z", hoursAgo = 1).copy(content = "nope"),
+                engagementReset = true,
+            ),
+        )
+
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b1", "b2").inOrder()
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+        assertThat(vm.state.value.current?.text).isEqualTo("text-b1")
     }
 
     // --- On-demand story translation (the flag strip's request arm) ---

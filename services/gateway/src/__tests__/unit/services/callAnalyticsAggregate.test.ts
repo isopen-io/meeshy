@@ -190,6 +190,29 @@ describe('summarizeCallReliability', () => {
     expect(s.qualityDistribution.poor).toBeCloseTo(0.5, 5);
   });
 
+  it('excludes never-connected calls (all-zero distribution, no samples) from the quality-distribution mean', () => {
+    // A never-connected call reports qualityDistribution = all zeros (no
+    // samples were ever taken) — same sentinel-shaped hazard already fixed for
+    // avgRtt/avgPacketLoss above. Folding it into the mean over ALL calls
+    // dilutes every bucket by the never-connected fraction and the buckets no
+    // longer sum to 1, understating quality on the reliability dashboard.
+    const s = summarizeCallReliability([
+      record({ setupTimeMs: 3000, qualityDistribution: { excellent: 0, good: 1, fair: 0, poor: 0 } }), // connected
+      record({ setupTimeMs: -1, qualityDistribution: { excellent: 0, good: 0, fair: 0, poor: 0 } }),   // never connected
+      record({ setupTimeMs: -1, qualityDistribution: { excellent: 0, good: 0, fair: 0, poor: 0 } }),   // never connected
+    ]);
+    expect(s.qualityDistribution.good).toBe(1); // not 1/3
+    expect(s.qualityDistribution.excellent + s.qualityDistribution.good + s.qualityDistribution.fair + s.qualityDistribution.poor).toBeCloseTo(1, 5);
+  });
+
+  it('leaves qualityDistribution zeroed when no call ever connected', () => {
+    const s = summarizeCallReliability([
+      record({ setupTimeMs: -1, qualityDistribution: { excellent: 0, good: 0, fair: 0, poor: 0 } }),
+      record({ setupTimeMs: -1, qualityDistribution: { excellent: 0, good: 0, fair: 0, poor: 0 } }),
+    ]);
+    expect(s.qualityDistribution).toEqual({ excellent: 0, good: 0, fair: 0, poor: 0 });
+  });
+
   it('breaks calls down by platform and by end reason', () => {
     const s = summarizeCallReliability([
       record({ platform: 'ios', endReason: 'completed' }),

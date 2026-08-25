@@ -468,6 +468,30 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
 
 ## App Extensions
 - **MeeshyNotificationExtension** (rich push) — cible `app-extension` dans `project.yml`.
+
+  **La bulle PRÉ-ENREGISTRÉE (`prePersistMessage`) obéit à deux verrous, et aucun
+  ne subsume l'autre** (cycle 125) :
+  1. **le TYPE** — quatre familles de push portent un `messageId`, et une seule
+     famille l'utilise pour désigner un message qui ARRIVE. `message_reaction`
+     nomme le message RÉAGI (que le destinataire a le plus souvent écrit) et
+     porte le `senderId` du RÉACTEUR. Le gate vit dans
+     `NotificationPayloadHelpers.messageArrivalTypes`.
+  2. **la LIGNE** — une bulle pré-enregistrée est un PLACEHOLDER pour la fenêtre
+     qui précède la synchro REST : l'écriture est un `INSERT`, **jamais** un
+     `save()`/UPSERT. `localId` est la clé primaire de `messages` ; un UPSERT
+     réécrit TOUTES les colonnes de la ligne canonique.
+
+  Corollaire de contrat : **toute clé lue dans `userInfo` se vérifie contre son
+  ÉMETTEUR, sous son nom exact.** Deux cycles consécutifs y ont trouvé leur
+  défaut principal — `content`/`originalLanguage` jamais émis (124), `senderName`
+  lu sous un nom qu'aucun producteur n'écrit (125) — et les deux lectures
+  compilaient en rendant un repli plausible. Le payload étant un
+  `Record<string,string>`, une clé absente y voyage comme `''` : distinguer
+  « absent » de « vide » se fait UNE fois, à la lecture.
+
+  Ce qui se décide sans la base vit dans `NotificationPayloadHelpers.swift`
+  (Foundation pur, compilé DANS `MeeshyTests` via `project.yml`) — c'est la
+  seule façon dont du code d'`app-extension` devient interrogeable.
 - **MeeshyWidgets** (home screen) — cible `app-extension` (iOS 17+).
 - **MeeshyShareExtension** (« Share to Meeshy ») — cible `app-extension` recâblée 2026-06-24
   (était sur disque mais absente de `project.yml` → jamais compilée). `ShareViewController`

@@ -393,3 +393,75 @@ export function transcriptTranslationTexts(
       .map(([lang, t]) => [lang, t!.transcription as string])
   );
 }
+
+/**
+ * Une piste TRADUITE, réduite à ce qu'une surface doit remettre pour l'attacher :
+ * le fichier, son étiquette de type, sa durée.
+ */
+export interface AttachmentTranslationTrack {
+  readonly url: string;
+  /** Absent quand le producteur n'a pas dit son format — cf. `normalizeTrackMimeType`. */
+  readonly mimeType?: string;
+  readonly durationMs?: number;
+}
+
+/**
+ * Les deux producteurs de `format` DIVERGENT, et aucun n'a tort chez lui :
+ * le chemin message écrit l'extension nue (`audioMimeType.replace('audio/', '')`
+ * ⇒ `'mp3'`), le chemin post écrit le mime complet (`'audio/mp3'`).
+ *
+ * On NORMALISE plutôt que de choisir : un `typeHint` UTI faux fait rejeter la
+ * pièce jointe par l'extension de notification iOS, en silence. Et on ne rend
+ * RIEN plutôt que d'inventer quand le format est absent — la NSE sait déduire
+ * un UTI de l'extension du fichier, une étiquette fausse l'en empêcherait.
+ */
+function normalizeTrackMimeType(format: unknown): string | undefined {
+  if (typeof format !== 'string') return undefined;
+  const trimmed = format.trim();
+  if (trimmed === '') return undefined;
+  return trimmed.includes('/') ? trimmed : `audio/${trimmed}`;
+}
+
+/**
+ * La JUMELLE de {@link transcriptTranslationTexts}, pour le MÉDIUM — cycle 128.
+ *
+ * La MÊME entrée de la carte porte deux choses : le TEXTE traduit de la
+ * transcription, et la PISTE que le TTS en a produite. Le cycle 123 n'a
+ * dépouillé que le premier, si bien que la bannière d'un vocal servait la bonne
+ * langue en texte et attachait le fichier ORIGINAL en son — une bannière
+ * française au-dessus d'un `UNNotificationAttachment` qui parle anglais.
+ *
+ * > Une résolution de CONTENU se mesure sur tout ce que la charge TRANSPORTE,
+ * > jamais sur sa seule chaîne (leçon 275).
+ *
+ * Site UNIQUE du dépouillement, pour la raison de sa jumelle : un consommateur
+ * qui a besoin d'un peu plus que ce que rend le résolveur existant réécrit la
+ * boucle chez lui, et c'est ainsi que naissent les familles divergentes.
+ *
+ * Les deux jumelles ne rendent PAS le même jeu de langues, et c'est le point :
+ * une traduction TEXTE peut exister sans que le TTS ait produit sa piste. Une
+ * entrée sans `url` concourt donc pour le texte et pas pour le son — ce qui
+ * fait retomber l'élection sur le fichier original plutôt que sur une URL vide.
+ *
+ * Accepte `unknown` : la valeur sort d'une colonne `Json` Prisma, donc d'une
+ * frontière de désérialisation.
+ */
+export function transcriptTranslationTracks(
+  translations: unknown
+): Readonly<Record<string, AttachmentTranslationTrack>> {
+  if (!translations || typeof translations !== 'object') return {};
+  const entries = translations as Record<string, Partial<AttachmentTranslation> | null>;
+  return Object.fromEntries(
+    Object.entries(entries)
+      .filter(([, t]) => typeof t?.url === 'string' && t.url.trim() !== '' && !t.deletedAt)
+      .map(([lang, t]) => {
+        const mimeType = normalizeTrackMimeType(t!.format);
+        const durationMs = typeof t!.durationMs === 'number' ? t!.durationMs : undefined;
+        return [lang, {
+          url: (t!.url as string).trim(),
+          ...(mimeType ? { mimeType } : {}),
+          ...(durationMs !== undefined ? { durationMs } : {}),
+        }];
+      })
+  );
+}

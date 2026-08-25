@@ -55,3 +55,4 @@ Revert du commit unique.
   la véracité (`data.createdAt && data.id`), pas le TYPE, avant de caster en
   `CursorData` et de composer un filtre Prisma `Date`. Gap de validation, sévérité
   limitée (curseurs server-mintés). Candidat itération suivante.
+

@@ -88,3 +88,4 @@ prédicat pur, et chaque service a dû recomposer la traduction « prédicat fau
       (`reaction-limit-guard`, `ReactionService`, `PostReactionService`,
       `CommentReactionService`, `AttachmentReactionService`, `PostCommentService`).
 - [ ] CI verte sur la PR.
+

@@ -425,6 +425,20 @@ data class SocketStoryCreatedData(
     val clientMutationId: String? = null,
 )
 
+/**
+ * `story:updated` — an author edited a story; carries the COMPLETE new story under
+ * [story] (the edit sibling of [SocketStoryCreatedData]). [engagementReset] is `true`
+ * when the edit wiped views/reactions server-side (a content edit) — the open viewer
+ * then re-seeds the slide's reaction count from the fresh story; `false`/absent on a
+ * metadata-only change (e.g. visibility) leaves any live reaction count in place.
+ * Mirror of iOS `SocketStoryUpdatedData`.
+ */
+@Serializable
+data class SocketStoryUpdatedData(
+    val story: ApiPost,
+    val engagementReset: Boolean? = null,
+)
+
 @Serializable
 data class SocketStoryViewedData(
     val storyId: String,

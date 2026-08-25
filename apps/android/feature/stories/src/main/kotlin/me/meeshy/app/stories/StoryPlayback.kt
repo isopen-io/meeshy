@@ -123,6 +123,23 @@ data class StoryPlayback(
         return copy(groups = rebuilt, groupIndex = groupIndex.coerceAtMost(rebuilt.lastIndex), slideIndex = 0)
     }
 
+    /**
+     * Folds a realtime `story:updated` into the open viewer: the slide sharing
+     * [newSlide]'s id is replaced in place with the freshly-projected view (content,
+     * media, text objects, reaction count). Every group's order and the cursor
+     * ([groupIndex]/[slideIndex]) are untouched, so the reader keeps watching the SAME
+     * slot — its content simply refreshes. An id absent from every group is inert
+     * (returns `this`). Mirror of iOS `StoryViewModel.storyUpdated`.
+     */
+    fun replacingSlide(newSlide: StorySlideView): StoryPlayback {
+        if (groups.none { group -> group.slides.any { it.id == newSlide.id } }) return this
+        val rebuilt = groups.map { group ->
+            if (group.slides.none { it.id == newSlide.id }) return@map group
+            group.copy(slides = group.slides.map { if (it.id == newSlide.id) newSlide else it })
+        }
+        return copy(groups = rebuilt)
+    }
+
     companion object {
         /** Build a live playback over the non-empty [groups], positioned at [startUserId]'s group. */
         fun startingAt(groups: List<StoryGroupSlides>, startUserId: String?): StoryPlayback {

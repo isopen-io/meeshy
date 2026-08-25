@@ -2,6 +2,76 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-25 **the open story viewer folds a realtime `story:updated`** (slice
+> `story-updated-realtime-viewer`, feature-parity Story realtime) — the EDIT sibling of the `story:deleted`
+> fold shipped the prior run, and the last remaining VIEWER-scoped STORY realtime gap.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → `[]` (empty). Prior slice
+> (`story-deleted-realtime-viewer`) already merged into main. My routine branch `claude/fervent-darwin-2bdo9z`
+> sat exactly at `origin/main` (`9ac1f0f7`, 0/0). Branched off freshly-fetched `origin/main`.
+>
+> **The gap — the edit twin of `story:deleted`.** The gateway broadcasts a story edit as the COMPLETE new
+> story (`{ story, engagementReset }`) to every visibility-filtered feed room via
+> `SocialEventsHandler.broadcastStoryUpdated`; `engagementReset: true` when the edit wiped views/reactions
+> (a content edit), false/absent on a metadata-only change (visibility). iOS folds it via
+> `StoryViewModel.storyUpdated`. On Android the event decoded nowhere: `SocialSocketManager` had no
+> `storyUpdated` flow, `SocketEvents.kt` no DTO, `StoryViewerViewModel` no subscriber — an edit made on
+> another device never reached the open viewer until it was reloaded.
+>
+> **Scout — why the VIEWER, not the tray.** iOS lands `story:updated` in the TRAY (`storyGroups`) with a
+> `shouldKeepLocalViewed` viewed-monotonicity guard (a stale story mustn't revert the ring to "unseen"). The
+> Android tray (`StoriesViewModel`) is Room-cache-driven — no in-memory fold seam — so a tray fold is a
+> larger, distinct slice. The VIEWER already consumes story socket events (`reacted`/`translation`/`deleted`)
+> into an in-memory `StoryPlayback` + `rawItems` seam, giving a clean, orphan-free fold: the viewer-scoped
+> half of the gap, sized exactly like the three folds before it. The tray half is deferred (noted in
+> feature-parity).
+>
+> **The fix — a DTO + a socket flow + a PURE in-place slide-swap engine method + a VM subscriber reusing the
+> load-time projection.** (1) New `SocketStoryUpdatedData(story: ApiPost, engagementReset: Boolean? = null)`
+> in `:core:model` (mirror of iOS, defaulted flag for forward-compatible decoding). (2)
+> `SocialSocketManager.storyUpdated` flow + `listen("story:updated", …)`. (3) New pure
+> `StoryPlayback.replacingSlide(newSlide)` — swaps the slide sharing `newSlide`'s id in place, keeping every
+> group's order and the cursor on the SAME slot (unknown id → inert `this`). (4)
+> `StoryViewerViewModel.observeStoryUpdates` re-projects the payload through the SAME
+> `toStoryItem().toSlideView` conversion the initial load used (repopulating `rawItems`, the single source of
+> truth for the current-slide re-projection in `emit()`), swaps it via `replacingSlide`, and — only on
+> `engagementReset` — purges `reactionStates[storyId]` so the count re-seeds from the fresh story; a
+> metadata-only update leaves any live reaction count in place. `ApiPost.toStoryItem()` promoted from
+> `private` to `public` in `:sdk-core` (`StoryGrouping.kt`) so the viewer re-projects through the ONE
+> canonical wire→item mapper rather than a second copy — SDK-pure (a stateless mapper).
+>
+> **Tests: +11** — 5 `StoryPlaybackTest` (`replacingSlide`: unknown-id inert, swap current keeping cursor,
+> swap a non-current slide in the current group, swap a slide in another group untouched-cursor, every other
+> slide preserved), 4 `StoryViewerViewModelTest` (current-slide content swap; engagement-reset wipes the
+> reaction count to 0; metadata-only update KEEPS a live reaction count from a prior delta — the arm that
+> distinguishes the flag; an update for a story not in the viewer is inert), 2 `SocialSocketManagerTest`
+> (decodes story + engagementReset:true; decodes with a null flag when absent). **RED-proof isolated**:
+> stubbing `replacingSlide` to `return this` reddened EXACTLY the 3 structural `StoryPlaybackTest` cases
+> (36 completed, 3 failed) while the unknown-id inert case (correctly expecting `this`) and the
+> preserve-others case stayed green — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200).** Pristine `android-37.0` auto-installed by AGP but the
+> first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch (`source.properties` ApiLevel +
+> `package.xml` `<api-level>` + `path=` + BOTH `build.prop` `sdk_full` fields), keeping android-37.0 alongside,
+> resolved it (per NOTES "THIRD mode").
+>
+> **Verified**: targeted `:core:model`/`:sdk-core`/`:feature:stories` unit tests **BUILD SUCCESSFUL** (the three
+> touched suites green), then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all
+> modules, the CI-mirror gate) run before any push. Reviewer PASS. Diff is `apps/android` only (4 prod files
+> edited across :core:model + :sdk-core + :feature:stories, 1 pure engine method, +11 tests across 3 files,
+> tracking docs). Verdict: **PASS** — a DTO mirroring an existing type, a socket event mirroring the existing
+> story events, a pure in-place slide-swap engine method, and a VM subscriber reusing the established
+> socket-fold + `toSlideView` + `emit()` seam; behavioural tests through the public API; no production logic
+> outside `apps/android`.
+>
+> **Next**: STORY realtime VIEWER folds now cover reactions, overlay translations, DELETION, and now UPDATE.
+> Remaining STORY realtime work is the TRAY fold of `story:updated`/`story:deleted` (iOS `storyGroups` +
+> `shouldKeepLocalViewed` viewed-monotonicity) — a distinct, larger slice needing a Room-cache removal/merge
+> seam. Alternatively move to the next feature-parity box (STATUS realtime folds — `status:created`/`updated`/
+> `deleted`/`reacted` — are the sibling family Android's `SocialSocketManager` already declares flows for; scout
+> whether a status render surface exists to fold into before committing, per the orphan rule). Scout read-only
+> before committing.
+
 > On 2026-08-24 **the open story viewer folds a realtime `story:deleted`** (slice
 > `story-deleted-realtime-viewer`, feature-parity Story realtime) — the removal sibling of the story socket
 > events the viewer already consumes (`story:reacted`/`-unreacted`/`-translation-updated`), and the third of

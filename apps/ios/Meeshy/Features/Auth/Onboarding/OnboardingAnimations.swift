@@ -478,6 +478,18 @@ struct InteractiveProgressBar: View {
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentStep)
                 }
                 .disabled(step.rawValue > currentStep.rawValue)
+                // 242i — ces huit boutons n'avaient AUCUN nom accessible : leur
+                // label est un `RoundedRectangle`, c'est-à-dire une FORME.
+                // VoiceOver annonçait « bouton », huit fois, sans rien d'autre.
+                // Et l'état (faite / en cours / à venir) ne tenait qu'à la
+                // COULEUR et à la HAUTEUR — WCAG 1.4.1.
+                .accessibilityLabel(Self.positionLabel(for: step))
+                .accessibilityValue(Self.stateLabel(for: step, currentStep: currentStep))
+                .accessibilityAddTraits(step == currentStep ? .isSelected : [])
+                // L'indice ne vaut que pour les étapes réellement re-visitables.
+                // L'étape courante n'irait nulle part, et les suivantes sont
+                // `.disabled` — SwiftUI les annonce déjà « estompé ».
+                .accessibilityHint(step.rawValue < currentStep.rawValue ? Self.revisitHint() : "")
                 .simultaneousGesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { _ in
@@ -489,6 +501,66 @@ struct InteractiveProgressBar: View {
                 )
             }
         }
+    }
+
+    /// « Étape 3 sur 8 ».
+    ///
+    /// Le libellé est **positionnel** et non nominal, pour une raison qui n'est
+    /// pas un choix : `RegistrationStep` vit dans `packages/MeeshySDK`, que
+    /// cette piste n'a pas le droit de modifier, et l'enum n'expose **aucun
+    /// titre court** — `funHeader` est une accroche (« Un pseudo unique, comme
+    /// toi »), inutilisable comme nom de contrôle.
+    ///
+    /// Ce n'est pas un pis-aller : sur une barre de PROGRESSION, la position est
+    /// précisément l'information que le lecteur cherche, et elle survit à
+    /// l'ajout d'une étape sans retoucher huit libellés.
+    ///
+    /// `bundle` et `locale` vont par PAIRE (idiome `PostStatAccessibility`) : le
+    /// bundle choisit la table, le locale la règle appliquée à cette table.
+    /// Les fixer séparément rend un test vert en local et rouge en CI.
+    static func positionLabel(for step: RegistrationStep,
+                              bundle: Bundle = .main,
+                              locale: Locale = .current) -> String {
+        // Les deux nombres sont rendus par `LocalizedNumber.exact` (241i) AVANT
+        // d'être injectés — donc le catalogue porte des `%@`, pas des `%lld`.
+        // Ce n'est pas un détour : c'est la source unique du dépôt pour « un
+        // nombre écrit dans le système de chiffres du lecteur ». L'arabe s'écrit
+        // en chiffres arabo-indiens, et une position d'étape n'y fait pas
+        // exception.
+        let position = LocalizedNumber.exact(step.rawValue + 1, locale: locale)
+        let total = LocalizedNumber.exact(RegistrationStep.allCases.count, locale: locale)
+        return String(
+            localized: "a11y.onboarding.step.position",
+            defaultValue: "Étape \(position) sur \(total)",
+            bundle: bundle,
+            locale: locale
+        )
+    }
+
+    /// L'état de l'étape **en toutes lettres** — c'est le versant WCAG 1.4.1 du
+    /// correctif : avant, « faite / en cours / à venir » ne se distinguaient que
+    /// par la teinte (`accentColor`, `accentColor.opacity(0.6)`, `systemGray4`)
+    /// et par 3 points de hauteur.
+    static func stateLabel(for step: RegistrationStep,
+                           currentStep: RegistrationStep,
+                           bundle: Bundle = .main,
+                           locale: Locale = .current) -> String {
+        if step.rawValue < currentStep.rawValue {
+            return String(localized: "a11y.onboarding.step.completed",
+                          defaultValue: "Terminée", bundle: bundle, locale: locale)
+        }
+        if step == currentStep {
+            return String(localized: "a11y.onboarding.step.current",
+                          defaultValue: "En cours", bundle: bundle, locale: locale)
+        }
+        return String(localized: "a11y.onboarding.step.upcoming",
+                      defaultValue: "À venir", bundle: bundle, locale: locale)
+    }
+
+    static func revisitHint(bundle: Bundle = .main,
+                            locale: Locale = .current) -> String {
+        String(localized: "a11y.onboarding.step.revisit.hint",
+               defaultValue: "Revenir à cette étape", bundle: bundle, locale: locale)
     }
 
     private func stepColor(for step: RegistrationStep) -> Color {
