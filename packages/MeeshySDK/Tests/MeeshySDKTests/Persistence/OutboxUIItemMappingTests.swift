@@ -369,4 +369,57 @@ struct OutboxUIItemMappingTests {
         // Empty body → the mood emoji is surfaced as the preview.
         #expect(item.titlePreview == "🎉")
     }
+
+    // MARK: - repostPost (fil rouge du repost, lot 7 tâche 7.5)
+
+    private func repostPostPayload(
+        postId: String = "post-source-1",
+        targetType: String = "POST",
+        content: String? = nil,
+        isQuote: Bool = false,
+        visibility: String? = nil
+    ) -> Data {
+        let payload = RepostPostPayload(
+            clientMutationId: "cmid_repost",
+            postId: postId,
+            targetType: targetType,
+            content: content,
+            isQuote: isQuote,
+            visibility: visibility
+        )
+        return try! JSONEncoder().encode(payload)
+    }
+
+    /// Contrairement à `.createPost` (`source: .unknown` — l'id serveur
+    /// n'existe pas encore), l'id SOURCE d'un repost est connu à l'enfilage :
+    /// la pastille doit rester navigable vers le post reposté, jamais tomber
+    /// sur `.unknown` (le repli de `mapOther`, qui perd la destination —
+    /// défaut mesuré en prod sur `markStoryViewed`).
+    @Test func test_from_repostPost_resolvesNavigableSourceNeverUnknown() {
+        let r = record(kind: .repostPost, payload: repostPostPayload(postId: "post-source-42"))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.source == .post(id: "post-source-42"))
+        #expect(item.source != .unknown)
+    }
+
+    @Test func test_from_repostPost_withQuoteContent_showsPreview() {
+        let r = record(kind: .repostPost, payload: repostPostPayload(content: "My take", isQuote: true))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.titlePreview == "My take")
+        #expect(item.kind == .other("repostPost"))
+    }
+
+    @Test func test_from_repostPost_simpleRepost_noPreview() {
+        let r = record(kind: .repostPost, payload: repostPostPayload())
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.titlePreview == nil)
+    }
+
+    /// Un payload corrompu ne doit pas crasher — repli `.unknown`, symétrique
+    /// au patron déjà établi par `test_from_sendMessageWithEmptyPayload_returnsMessageKindNotCrash`.
+    @Test func test_from_repostPost_corruptPayload_fallsBackToUnknownSource() {
+        let r = record(kind: .repostPost, payload: Data("not json".utf8))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.source == .unknown)
+    }
 }

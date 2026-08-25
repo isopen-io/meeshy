@@ -15,6 +15,8 @@ import {
   TUS_CHUNK_SIZE,
   SMALL_FILE_THRESHOLD,
   ACCEPTED_MIME_TYPES,
+  MAX_POST_MEDIA,
+  isPostMediaUploadContext,
 } from '../../types/attachment.js';
 
 describe('UPLOAD_LIMITS constants', () => {
@@ -28,6 +30,29 @@ describe('UPLOAD_LIMITS constants', () => {
   it('MAX_CONCURRENT_UPLOADS is 3', () => expect(MAX_CONCURRENT_UPLOADS).toBe(3));
   it('TUS_CHUNK_SIZE is 10MB', () => expect(TUS_CHUNK_SIZE).toBe(10 * 1024 * 1024));
   it('SMALL_FILE_THRESHOLD is 50MB', () => expect(SMALL_FILE_THRESHOLD).toBe(50 * 1024 * 1024));
+});
+
+describe('MAX_POST_MEDIA', () => {
+  it('is 10 — the mediaIds cap shared by CreatePostSchema/UpdatePostSchema', () => {
+    expect(MAX_POST_MEDIA).toBe(10);
+  });
+});
+
+describe('isPostMediaUploadContext', () => {
+  it.each(['post', 'story', 'status', 'comment'])(
+    'returns true for %s',
+    (context) => expect(isPostMediaUploadContext(context)).toBe(true),
+  );
+
+  it.each(['message', 'POST', '', 'unknown'])(
+    'returns false for the string %s',
+    (context) => expect(isPostMediaUploadContext(context)).toBe(false),
+  );
+
+  it.each([undefined, null, 42, {}, []])(
+    'returns false for the non-string %j',
+    (context) => expect(isPostMediaUploadContext(context)).toBe(false),
+  );
 });
 
 describe('ACCEPTED_MIME_TYPES constants', () => {

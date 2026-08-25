@@ -25,6 +25,7 @@ import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { removingHandle } from '@meeshy/shared/utils/composer-references';
 import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
+import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 import type { PostReferenceDisplay } from '@meeshy/shared/types/post-reference';
 import type { ComposerDocumentPayload } from '@/components/composer/payload';
 
@@ -132,12 +133,14 @@ export interface ComposerDocumentSurfaceProps {
 }
 
 /**
- * Plafond client aligné sur la limite serveur de `mediaIds` (≤ 10,
- * `CreatePostSchema`). UN SEUL pool photos+vidéos : `useAttachmentUpload`
- * compte `selectedFiles` seul, qui reflète déjà tout fichier en attente ou
- * téléversé — la somme `selectedFiles + uploadedAttachments` comptait double.
+ * Plafond client aligné sur la limite serveur de `mediaIds`
+ * (`CreatePostSchema`/`UpdatePostSchema`, source unique
+ * `@meeshy/shared/types/attachment` → `MAX_POST_MEDIA`). UN SEUL pool
+ * photos+vidéos : `useAttachmentUpload` compte `selectedFiles` seul, qui
+ * reflète déjà tout fichier en attente ou téléversé — la somme
+ * `selectedFiles + uploadedAttachments` comptait double.
  */
-const MEDIA_LIMIT = 10;
+const MEDIA_LIMIT = MAX_POST_MEDIA;
 
 const CHAR_LIMIT = 5000;
 const CHAR_COUNT_THRESHOLD = 4500;
@@ -208,10 +211,12 @@ export function ComposerDocumentSurface({
   } = useAttachmentUpload({
     token: authToken ?? undefined,
     maxAttachments: MEDIA_LIMIT,
+    // Un POST/RÉEL publie en `PostMedia` (via TUS), jamais en
+    // `MessageAttachment` — voir `services/attachmentTransport.ts`.
+    uploadContext: 'post',
   });
 
   const mediaLimitReached = selectedFiles.length >= MEDIA_LIMIT;
-  const uploadPercentage = uploadProgress[0] ?? 0;
 
   // `uploadedAttachments` porte déjà la forme que le prédicat partagé attend
   // (`ReelMediaLike`) : aucune normalisation intermédiaire, donc aucun second
@@ -276,7 +281,7 @@ export function ComposerDocumentSurface({
       // Pré-validation avec le même service que le hook (taille/type), pour
       // afficher le message spécifique DANS la surface plutôt que de laisser
       // le hook émettre un toast générique.
-      const validation = AttachmentService.validateFiles(filesToAdd);
+      const validation = AttachmentService.validateFiles(filesToAdd, MEDIA_LIMIT);
       if (!validation.valid) {
         setMediaError(validation.errors.join(' '));
         return;
@@ -339,12 +344,14 @@ export function ComposerDocumentSurface({
   // depuis le texte (`detectLanguage`) dès que la clé est absente, ce qui est
   // exactement la règle F7d. Voir la note d'en-tête d'`AudioCapture.tsx`.
   //
-  // Ce que cette note ne promet PAS (revue du 2026-08-25) : la transcription
-  // serveur du fichier lui-même. `useAttachmentUpload` rend des ids de
-  // `MessageAttachment`, que `PostService.createPost` ne sait pas réclamer —
-  // il n'attend que des `PostMedia`. Dette mesurée et ANTÉRIEURE à cette
-  // surface (le composer hérité téléversait déjà par ce pool) ; détail et
-  // portée dans la note jumelle de `PostsFeedScreen.tsx`.
+  // La transcription SERVEUR du fichier, elle, part bien depuis le lot W7bis :
+  // ce composer déclare `uploadContext: 'post'`, donc `useAttachmentUpload`
+  // rend des ids de `PostMedia` — la seule forme que `PostService.createPost`
+  // sait réclamer, et sur laquelle il cherche son premier média audio.
+  // La `duration` mesurée ici voyage AVEC le fichier (métadonnée TUS
+  // `duration`, lue par `clientMeasuredMetadata` côté gateway) : l'en-tête
+  // d'un WebM de `MediaRecorder` ne la porte pas, et sans elle la bulle
+  // vocale resterait à 0:00.
   const handleAudioCaptured = useCallback(
     (result: AudioCaptureResult) => {
       handleFilesSelected([result.file], [{ duration: result.durationMs }]);
@@ -509,7 +516,12 @@ export function ComposerDocumentSurface({
                     )}
                     {isUploading && (
                       <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 text-center text-[10px] text-white">
-                        {uploadPercentage}%
+                        {/* La jauge de CETTE vignette. `uploadProgress[0]`
+                            affichait celle du premier fichier sur toutes :
+                            trois téléversements volent en parallèle, donc le
+                            premier atteint 100 % pendant que les autres
+                            commencent — « 100% » partout, et Publier bloqué. */}
+                        {uploadProgress[index] ?? 0}%
                       </div>
                     )}
                     <button

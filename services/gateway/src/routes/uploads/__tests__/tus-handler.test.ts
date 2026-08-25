@@ -323,6 +323,120 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
     });
   });
 
+  // ── Ce que la RÉPONSE promet, et ce qu'elle portait ──────────────────────
+
+  describe('corps de réponse — les champs que `UploadedAttachmentResponse` déclare REQUIS', () => {
+    const RAW_SESSION_TOKEN = 'anon-session-token-xyz';
+
+    it('porte uploadedBy / isAnonymous / createdAt — le type les déclare requis, le corps ne les portait pas', async () => {
+      // Ce chemin ne servait jusqu'ici que les fichiers > 50 Mo ; le transport
+      // de publication en fait le chemin UNIQUE de tout média de post/story.
+      // Un client qui fait confiance au type lisait `undefined` sur quatre
+      // champs. Trois d'entre eux sont CONNUS ici — les poser coûte trois
+      // lignes ; seul `messageId` n'existe pas pour un média de publication.
+      const prisma = buildFakePrisma({
+        participant: { id: 'participant-1', anonymousSession: { shareLinkId: 'sharelink-open' } },
+        shareLink: { allowAnonymousFiles: true, allowAnonymousImages: true },
+      });
+
+      const result = await runFullUpload({
+        prisma,
+        headers: { 'x-session-token': RAW_SESSION_TOKEN },
+        filename: 'voice.webm',
+        filetype: 'audio/webm',
+        bytes: WEBM_HEADER,
+      });
+
+      expect(result.status_code).toBe(200);
+      const attachment = JSON.parse(result.body as string).data.attachment;
+      expect(attachment.isAnonymous).toBe(true);
+      expect(typeof attachment.uploadedBy).toBe('string');
+      expect(typeof attachment.createdAt).toBe('string');
+      expect(Number.isNaN(Date.parse(attachment.createdAt))).toBe(false);
+    });
+  });
+
+  // ── La durée MESURÉE par le client, seul à pouvoir la connaître ─────────
+
+  describe('duration — la mesure du client sert de repli quand le fichier ne la porte pas', () => {
+    const RAW_SESSION_TOKEN = 'anon-session-token-xyz';
+    const ANONYMOUS_HEADERS = { 'x-session-token': RAW_SESSION_TOKEN };
+
+    const openLinkPrisma = () => buildFakePrisma({
+      participant: { id: 'participant-1', anonymousSession: { shareLinkId: 'sharelink-open' } },
+      shareLink: { allowAnonymousFiles: true, allowAnonymousImages: true },
+    });
+
+    /** `providedMetadata` — le 4e argument d'`extractMetadata`. */
+    const providedMetadataArg = () => (mockExtractMetadata.mock.calls[0] as any[])[3];
+
+    it("passe la durée déclarée à l'extracteur, en MILLISECONDES", async () => {
+      // `MetadataManager` porte exactement la branche qu'il faut — « Backend
+      // extraction failed, using frontend as fallback » — et elle n'existe QUE
+      // si `providedMetadata` est fourni. Le handler TUS passait `undefined`,
+      // donc elle était inatteignable : un WebM de `MediaRecorder`, dont
+      // l'en-tête ne porte pas de durée, ressortait à 0 ms.
+      const prisma = openLinkPrisma();
+
+      await runFullUpload({
+        prisma,
+        headers: ANONYMOUS_HEADERS,
+        filename: 'voice.webm',
+        filetype: 'audio/webm',
+        bytes: WEBM_HEADER,
+        extraMetadata: { duration: '12340' },
+      });
+
+      expect(providedMetadataArg()).toEqual({ duration: 12340 });
+    });
+
+    it("n'invente AUCUNE durée quand le client n'en déclare pas", async () => {
+      const prisma = openLinkPrisma();
+
+      await runFullUpload({
+        prisma,
+        headers: ANONYMOUS_HEADERS,
+        filename: 'voice.webm',
+        filetype: 'audio/webm',
+        bytes: WEBM_HEADER,
+      });
+
+      expect(providedMetadataArg()).toBeUndefined();
+    });
+
+    it('ignore une durée non numérique — les métadonnées TUS sont des CHAÎNES', async () => {
+      const prisma = openLinkPrisma();
+
+      await runFullUpload({
+        prisma,
+        headers: ANONYMOUS_HEADERS,
+        filename: 'voice.webm',
+        filetype: 'audio/webm',
+        bytes: WEBM_HEADER,
+        extraMetadata: { duration: 'pas-un-nombre' },
+      });
+
+      // Un `Number('pas-un-nombre')` vaut `NaN`, qui traverse `>= 0` sans
+      // rougir et s'écrirait tel quel en base.
+      expect(providedMetadataArg()).toBeUndefined();
+    });
+
+    it('ignore une durée nulle ou négative — un repli ne remplace rien par rien', async () => {
+      const prisma = openLinkPrisma();
+
+      await runFullUpload({
+        prisma,
+        headers: ANONYMOUS_HEADERS,
+        filename: 'voice.webm',
+        filetype: 'audio/webm',
+        bytes: WEBM_HEADER,
+        extraMetadata: { duration: '0' },
+      });
+
+      expect(providedMetadataArg()).toBeUndefined();
+    });
+  });
+
   // ── Critical 1 : contournement d'autorisation anonyme ────────────────────
 
   describe('anonyme — allowAnonymousFiles/allowAnonymousImages désormais consultés', () => {

@@ -8,11 +8,12 @@ import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
 import { LikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema } from './types';
-import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict } from '../../utils/response';
+import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { resolveInteractionTarget } from '../../services/posts/postVisibility';
-import { withMutationLog } from '../../utils/withMutationLog';
+import { withMutationLog, withMutationOutcome } from '../../utils/withMutationLog';
+import { MutationInFlight } from '../../services/MutationLogService';
 import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { validatePagination } from '../../utils/pagination';
 import { NOT_DELETED } from '../../services/posts/postIncludes';
@@ -82,13 +83,24 @@ export function registerInteractionRoutes(
 
       // Idempotent via clientMutationId. `likePost` is naturally
       // idempotent at the storage layer (the reaction set keeps a
-      // single entry per (userId, postId)), but we still record the
-      // mutation so replays don't double-fire notifications.
+      // single entry per (userId, postId)), d'où `replayCost: 'converges'`.
+      //
+      // ATTENTION — ce commentaire promettait « so replays don't double-fire
+      // notifications ». C'est FAUX et ça l'a toujours été : la diffusion et
+      // `createPostLikeNotification` vivent APRÈS le journal, sans condition,
+      // donc un rejeu les refait. Le verrou ne garde que ce qu'il ENVELOPPE.
+      // Le remède existe depuis 2026-08-25 — `withMutationOutcome`, dont le
+      // verdict `replayed` retient les effets de bord, appliqué juste en
+      // dessous sur le repost — mais il n'a PAS été porté ici : la route like
+      // est hors du fil rouge du repost et sa suite de tests mocke le helper.
+      // Dette nommée, pas invariant tenu.
       const post = await withMutationLog({
         request,
         fastify,
         userId: authContext.registeredUser.id,
         kind: 'toggleLikePost',
+        // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
+        replayCost: 'converges',
         op: async () => {
           const res = await postService.likePost(targetPostId, authContext.registeredUser.id, emoji);
           if (!res) throw new Error('POST_NOT_FOUND');
@@ -222,6 +234,8 @@ export function registerInteractionRoutes(
         fastify,
         userId: authContext.registeredUser.id,
         kind: 'toggleLikePost',
+        // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
+        replayCost: 'converges',
         op: async () => {
           const res = await postService.unlikePost(targetPostId, authContext.registeredUser.id);
           if (!res) throw new Error('POST_NOT_FOUND');
@@ -895,10 +909,44 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      const republished = await postService.republishStory(postId, authContext.registeredUser.id);
-      if (!republished) {
+
+      // Mécanisme 2 de la chaîne du repost, et le seul dont le rejeu DÉTRUIT.
+      // `republishStory` ne crée rien — il fait repartir la MÊME ligne — mais
+      // il supprime `postView`/`postReaction`/`postImpression` et remet sept
+      // compteurs à zéro. Rejouer après un timeout de réponse détruit une
+      // SECONDE fois l'engagement acquis entre les deux appels et refanne
+      // `story:created`. La remise à zéro est un choix produit ; sa répétition
+      // sur un aléa réseau n'en est pas un. `diverges` parce que « rejouer
+      // l'op » ne converge PAS : il détruit à nouveau.
+      type RepublishResult = NonNullable<Awaited<ReturnType<typeof postService.republishStory>>>;
+      const outcome = await withMutationOutcome<RepublishResult>({
+        request,
+        fastify,
+        userId: authContext.registeredUser.id,
+        kind: 'republishStory',
+        replayCost: 'diverges',
+        op: async () => {
+          const r = await postService.republishStory(postId, authContext.registeredUser.id);
+          if (!r) throw new Error('STORY_NOT_FOUND');
+          return r as RepublishResult & { id: string };
+        },
+        onDuplicate: async (resultId) => {
+          const r = await postService.getPostById(resultId, authContext.registeredUser.id);
+          return r ? (r as unknown as RepublishResult & { id: string }) : null;
+        },
+      }).catch((err) => {
+        if (err instanceof Error && err.message === 'STORY_NOT_FOUND') return null;
+        throw err;
+      });
+
+      if (!outcome) {
         return sendNotFound(reply, 'Story not found', { code: 'POST_NOT_FOUND' });
       }
+      if (outcome.status === 'gone') {
+        return sendGone(reply, 'Republish already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+      }
+      const republished = outcome.result;
+      const isFreshRepublish = outcome.status === 'applied';
 
       // Une republication garde ses lignes `PostMention` : servie sous le nom
       // de la RELATION, l'app qui la reçoit n'y lit aucune référence. Même
@@ -908,14 +956,25 @@ export function registerInteractionRoutes(
       const payload = withMentions(republished, wireReaderFromRequest(request as UnifiedAuthRequest));
       const broadcastPayload = withMentions(republished, WIRE_BROADCAST);
 
+      // Un rejeu resert la story ; il ne la republie pas. Refanner
+      // `story:created` la ferait remonter une seconde fois en tête des trays
+      // de tous les destinataires pour une seule republication.
       const socialEvents = fastify.socialEvents;
-      if (socialEvents) {
+      if (socialEvents && isFreshRepublish) {
         socialEvents.broadcastStoryCreated(broadcastPayload as unknown as Post, authContext.registeredUser.id)
           .catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/republish]: broadcast story created failed'));
       }
 
       return sendSuccess(reply, payload);
     } catch (error) {
+      // Une requête JUMELLE applique déjà ce cmid. Ni résultat à resservir, ni
+      // op à rejouer : 409, que la file durable iOS traite comme retentable
+      // (409 est délibérément EXCLU de `permanentRejectionStatusCodes`). Sans
+      // ce traitement, la route rendait 500 — « le serveur est cassé » pour
+      // une situation parfaitement saine.
+      if (error instanceof MutationInFlight) {
+        return sendConflict(reply, 'Republish already in flight', { code: 'MUTATION_IN_FLIGHT' });
+      }
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Only the author can republish a story', { code: 'FORBIDDEN' });
       }
@@ -937,23 +996,93 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
+      // Loi 5 — « le repost miroite ». Ce `safeParse` retombait sur
+      // `{ isQuote: false }` en cas d'échec, ce qui jette D'UN COUP
+      // `targetType`, `content` ET `visibility` : le service appliquait alors
+      // son repli `?? PostType.POST` et une source ÉPHÉMÈRE (story, status)
+      // repartait en post PERMANENT, sans le moindre signal. Une citation de
+      // 5001 caractères, ou un `targetType` hors énumération (`MOOD` est une
+      // valeur réelle de `Post.type` que `RepostSchema` n'accepte pas),
+      // suffisaient à le déclencher. Un corps invalide se REFUSE — c'est la
+      // garde même que `RepostPostPayload.targetType` (obligatoire dans la
+      // file durable iOS) existe pour ne jamais avoir à contourner.
       const parsed = RepostSchema.safeParse(request.body ?? {});
-      const data = parsed.success ? parsed.data : { isQuote: false };
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+      }
+      const data = parsed.data;
 
-      const repost = await postService.repostPost(
-        postId,
-        authContext.registeredUser.id,
-        {
-          targetType: data.targetType as PostType | undefined,
-          content: data.content,
-          isQuote: data.isQuote,
-          visibility: ('visibility' in data ? data.visibility : undefined) as PostVisibility | undefined,
+      // Idempotent via clientMutationId (lot 7, tâche 7.1) : `repostPost`
+      // n'est PAS naturellement idempotent — chaque appel `prisma.post.create`
+      // fabrique un Post neuf (contrairement à `likePost`/`unlikePost`, dont
+      // l'idempotence vit dans l'ensemble de réactions). Sans ce verrou, un
+      // rejeu réseau (retry client, double-tap, flush d'outbox après un
+      // timeout de réponse) republie le même contenu en double.
+      //
+      // `replayCost: 'diverges'` est la DEUXIÈME moitié du verrou, et elle
+      // n'est pas décorative : sans elle, `withMutationLog` retombait sur son
+      // filet « rejoue op() » dès que `onDuplicate` ne retrouvait rien —
+      // c'est-à-dire dès que l'auteur avait supprimé son repost entre l'envoi
+      // et le rejeu. Le repost SUPPRIMÉ renaissait alors sous un id neuf. La
+      // route rend désormais 410 : la mutation a bien eu lieu, son résultat
+      // n'est plus là, il n'y a rien à refaire.
+      //
+      // `withMutationOutcome` (et non `withMutationLog`) parce que la
+      // republication ne voyage pas SEULE : un `post:reposted` et une
+      // notification partent juste en dessous. Un verrou qui ne garde que la
+      // CRÉATION laisse partir l'annonce en double à chaque rejeu — deux
+      // bannières pour un repost unique (`createNotification` fait un
+      // `prisma.notification.create` sec, sans clé d'idempotence). Le verdict
+      // les garde.
+      //
+      // Même patron que `like`/`unlike` juste au-dessus dans ce fichier : op()
+      // lève une erreur MESSAGE-matchée sur un 404 métier plutôt que de
+      // renvoyer `null` (le type `T & { id: string }` ne laisse pas passer
+      // `null`), et le `.catch()` qui l'entoure la reconvertit en verdict
+      // « introuvable ». La ligne `MutationLog` n'est écrite qu'APRÈS le succès
+      // de `op()` (`MutationLogService.recordOrReturn`) : un repost 404 ne
+      // consomme donc PAS le cmid, et le client peut le rejouer une fois
+      // l'original redevenu accessible.
+      type RepostResult = NonNullable<Awaited<ReturnType<typeof postService.repostPost>>>;
+      const outcome = await withMutationOutcome<RepostResult>({
+        request,
+        fastify,
+        userId: authContext.registeredUser.id,
+        kind: 'repostPost',
+        replayCost: 'diverges',
+        op: async () => {
+          const r = await postService.repostPost(
+            postId,
+            authContext.registeredUser.id,
+            {
+              targetType: data.targetType as PostType | undefined,
+              content: data.content,
+              isQuote: data.isQuote,
+              visibility: data.visibility as PostVisibility | undefined,
+            },
+          );
+          if (!r) throw new Error('POST_NOT_FOUND');
+          return r as RepostResult & { id: string };
         },
-      );
+        onDuplicate: async (resultId) => {
+          const r = await postService.getPostById(resultId, authContext.registeredUser.id);
+          return r ? (r as unknown as RepostResult & { id: string }) : null;
+        },
+      }).catch((err) => {
+        if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
+        throw err;
+      });
 
-      if (!repost) {
+      if (!outcome) {
         return sendNotFound(reply, 'Original post not found', { code: 'POST_NOT_FOUND' });
       }
+      if (outcome.status === 'gone') {
+        return sendGone(reply, 'Repost already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+      }
+      const repost = outcome.result;
+      // Un rejeu resert le repost ; il ne REFAIT rien. Ce booléen gouverne les
+      // deux effets qui voyagent AVEC la republication, et eux seuls.
+      const isFreshRepost = outcome.status === 'applied';
 
       // Même aplatissement que partout ailleurs : la clé exposée est `mentions`,
       // y compris sur un repost qui n'en porte aucune — une clé absente et une
@@ -964,7 +1093,7 @@ export function registerInteractionRoutes(
       // Broadcast repost via Socket.IO — F3 : blob tel quel pour l'audience
       // hétérogène, chaque client négocie sa forme au premier fetch REST.
       const socialEvents = fastify.socialEvents;
-      if (socialEvents) {
+      if (socialEvents && isFreshRepost) {
         socialEvents.broadcastPostReposted({
           originalPostId: postId,
           repost: broadcastPayload as unknown as Post,
@@ -973,7 +1102,7 @@ export function registerInteractionRoutes(
 
       // Notify original post author
       const notifService = fastify.notificationService;
-      if (notifService && repost.repostOfId) {
+      if (notifService && repost.repostOfId && isFreshRepost) {
         // Même garde que la route de traduction : sans le viewer, le lookup
         // applique le filtre anonyme et ne retrouve pas une story réservée aux
         // contacts — l'auteur d'une story repartagée n'était alors jamais
@@ -995,6 +1124,14 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, payload, { statusCode: 201 });
     } catch (error) {
+      // Une requête JUMELLE applique déjà ce cmid. Ni résultat à resservir, ni
+      // op à rejouer : 409, que la file durable iOS traite comme retentable
+      // (409 est délibérément EXCLU de `permanentRejectionStatusCodes`). Sans
+      // ce traitement, la route rendait 500 — « le serveur est cassé » pour
+      // une situation parfaitement saine.
+      if (error instanceof MutationInFlight) {
+        return sendConflict(reply, 'Repost already in flight', { code: 'MUTATION_IN_FLIGHT' });
+      }
       if (error instanceof Error && (error as any).statusCode === 403) {
         return sendForbidden(reply, error.message);
       }

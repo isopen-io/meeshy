@@ -257,6 +257,14 @@ describe('PostComposer — media wiring (Task 1)', () => {
     );
   });
 
+  it("declares the 'post' upload context — its media travel as PostMedia via TUS, never MessageAttachment", () => {
+    render(<PostComposer onPublish={jest.fn()} />);
+
+    expect(mockUseAttachmentUpload).toHaveBeenCalledWith(
+      expect.objectContaining({ uploadContext: 'post' }),
+    );
+  });
+
   it('sets a cap-reached message and still uploads the files that fit when more are selected than remain', () => {
     mockAttachmentState.selectedFiles = Array.from({ length: 8 }, (_, i) => makeFile(`img-${i}.png`, 'image/png'));
     const { container } = render(<PostComposer onPublish={jest.fn()} />);

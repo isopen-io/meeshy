@@ -530,4 +530,52 @@ final class MutationPayloadsTests: XCTestCase {
             XCTAssertEqual(decoded, original)
         }
     }
+
+    // MARK: - RepostPostPayload (fil rouge du repost, lot 7 tâche 7.5)
+
+    /// `targetType` voyage OBLIGATOIRE (Loi 5 — « le repost miroite »),
+    /// jamais optionnel : la clé DOIT figurer sur le fil, pas seulement
+    /// exister à l'appel.
+    func test_repostPostPayload_encoding_includesPostIdAndTargetType() throws {
+        let payload = RepostPostPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000002",
+            postId: "post-source-1",
+            targetType: "POST"
+        )
+
+        let data = try encoder.encode(payload)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(object["postId"] as? String, "post-source-1")
+        XCTAssertEqual(object["targetType"] as? String, "POST")
+        XCTAssertNotNil(object["isQuote"], "isQuote a un défaut mémoire mais reste ENCODÉ — pas de clé absente")
+    }
+
+    func test_repostPostPayload_roundtrip_withQuoteAndVisibility() throws {
+        let original = RepostPostPayload(
+            clientMutationId: ClientMutationId.generate(),
+            postId: "post-source-2",
+            targetType: "STORY",
+            content: "Regardez ça",
+            isQuote: true,
+            visibility: "COMMUNITY"
+        )
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(RepostPostPayload.self, from: data)
+        XCTAssertEqual(decoded, original)
+    }
+
+    func test_repostPostPayload_roundtrip_defaultsSimpleRepost() throws {
+        let original = RepostPostPayload(
+            clientMutationId: ClientMutationId.generate(),
+            postId: "post-source-3",
+            targetType: "POST"
+        )
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(RepostPostPayload.self, from: data)
+        XCTAssertEqual(decoded, original)
+        XCTAssertNil(decoded.content)
+        XCTAssertFalse(decoded.isQuote)
+        XCTAssertNil(decoded.visibility)
+    }
 }

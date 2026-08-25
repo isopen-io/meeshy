@@ -333,7 +333,15 @@ public actor OutboxFlusher {
     /// - 409 → a conflict on a deduped clientMessageId can mean "already
     ///   delivered", which must NOT surface as a failure — left to the generic
     ///   path rather than dead-lettered.
-    private static let permanentRejectionStatusCodes: Set<Int> = [400, 403, 404, 413, 422]
+    ///
+    /// 410 Gone rejoint la liste avec le verrou d'idempotence du gateway
+    /// (`withMutationLog`, `replayCost: 'diverges'`). Il ne dit PAS « je ne
+    /// trouve pas » — il dit « ton cmid a bien été appliqué, et son résultat
+    /// n'est plus là ». Rejouer ne le ramènera jamais : soit l'auteur a
+    /// supprimé ce que la ligne avait créé, soit la source éphémère a expiré.
+    /// Sans lui dans cette liste, la ligne brûlait ses cinq tentatives pour
+    /// finir au même endroit, une minute de ⏳ plus tard.
+    private static let permanentRejectionStatusCodes: Set<Int> = [400, 403, 404, 410, 413, 422]
     private static func isPermanentServerRejection(_ error: Error) -> Bool {
         // 403 is surfaced as a distinct `.forbidden` case by APIClient (resource
         // access loss, not a session problem) — a permanent reject all the same.

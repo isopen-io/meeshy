@@ -346,6 +346,21 @@ export interface AttachmentMetadata {
  */
 export interface UploadedAttachmentResponse {
   readonly id: string;
+  /**
+   * DETTE DE TYPE, mesurée au lot W7bis : le chemin résumable (TUS) rend le
+   * MÊME corps pour un `MessageAttachment` et pour un `PostMedia`, et un
+   * `PostMedia` n'appartient à AUCUN message — ce champ est donc absent sur
+   * tout média de publication, là où le type le déclare requis. Inoffensif
+   * aujourd'hui (aucun consommateur d'un média de publication ne le lit :
+   * `MediaAccessibilityFields`, `qualifiesAsReel`, `optimisticMedia`,
+   * `mediaIds` et `StoryComposer` ne lisent qu'id/mimeType/fileUrl/duration),
+   * mais le type ne protège plus rien sur ce chemin. Le retrait de la dette
+   * est un SPLIT : `UploadedMediaResponse` (le noyau réellement rendu par les
+   * deux chemins) dont cette interface hériterait en y ajoutant les champs de
+   * message. Non fait ici : les visionneuses de message
+   * (`AudioAttachment`, `DocumentAttachment`, `AttachmentGallery`,
+   * `MessageAttachments`) lisent ce champ et sont hors du périmètre du lot.
+   */
   readonly messageId: string;
   readonly fileName: string;
   readonly originalName: string;
@@ -426,6 +441,33 @@ export const UPLOAD_LIMITS = {
  * la duplique et le test `attachment.test.ts` fige la valeur des deux côtés.
  */
 export const MAX_ATTACHMENTS_PER_MESSAGE = 199;
+
+/**
+ * Contextes d'upload TUS qui produisent un `PostMedia` (par opposition à un
+ * `MessageAttachment`). Vocabulaire PARTAGÉ entre le handler d'upload du
+ * gateway (`onUploadCreate`/`onUploadFinish`, rejet avant le premier octet
+ * puis choix de la table) et le transport web des composers de publication
+ * (`resolveAttachmentTransport`) — les deux délèguent ici plutôt que de
+ * recopier la liste, pour qu'elles ne puissent plus diverger.
+ */
+export type PostMediaUploadContext = 'post' | 'story' | 'status' | 'comment';
+
+const POST_MEDIA_UPLOAD_CONTEXTS: readonly PostMediaUploadContext[] = ['post', 'story', 'status', 'comment'];
+
+export function isPostMediaUploadContext(context: unknown): context is PostMediaUploadContext {
+  return typeof context === 'string'
+    && (POST_MEDIA_UPLOAD_CONTEXTS as readonly string[]).includes(context);
+}
+
+/**
+ * Plafond du nombre de médias d'UNE publication (post/reel/story/status) —
+ * source de vérité unique pour `CreatePostSchema`/`UpdatePostSchema`
+ * (gateway) et pour le transport web des composers de publication.
+ * Historiquement recopié en dur : `.max(10)` × 2 côté gateway (création,
+ * édition), `MEDIA_LIMIT = 10` × 2 côté web (`ComposerDocumentSurface`,
+ * `PostComposer`) — cinq copies qu'aucun site ne tenait ensemble.
+ */
+export const MAX_POST_MEDIA = 10;
 
 export const MAX_CONCURRENT_UPLOADS = 3;
 

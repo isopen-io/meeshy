@@ -44,6 +44,15 @@ public enum OutboxKind: String, Codable, CaseIterable, Sendable {
     case publishStory
     case repostStory
     case createPost
+    /// Fil rouge du repost (lot 7, tâche 7.5) — porte `POST /posts/:id/repost`,
+    /// PAS `.repostStory` (`RepostStoryPayload`, porte `targetConversationId`,
+    /// un repost PRIVÉ en conversation — un autre geste) ni `.createPost` avec
+    /// `repostOfId` (porte 3, cross-format, distincte de la republication
+    /// simple). Voir `RepostPostPayload`. `targetType` y voyage OBLIGATOIRE
+    /// (Loi 5 — « le repost miroite », spec 2026-08-23 §Loi 5) : jamais laissé
+    /// au repli serveur `?? PostType.POST`, qui transforme silencieusement
+    /// une source éphémère en post permanent.
+    case repostPost
     /// R6 — état « vu » d'une story, durable offline (flush FIFO au reconnect).
     /// Idempotent côté gateway (P2002 no-op) ; coalescé par storyId (re-voir la
     /// même story ne stacke pas de doublons).

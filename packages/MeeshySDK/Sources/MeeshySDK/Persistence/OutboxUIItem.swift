@@ -97,6 +97,8 @@ extension OutboxUIItem {
             return mapPostReaction(record: record)
         case .createPost:
             return mapCreatePost(record: record)
+        case .repostPost:
+            return mapRepostPost(record: record)
         case .markAsRead,
              .markStoryViewed,
              .reportAttachmentStatus,
@@ -343,6 +345,37 @@ extension OutboxUIItem {
             iconKind: icon,
             attachmentCount: mediaPaths.count,
             source: .unknown,
+            status: record.status,
+            createdAt: record.createdAt
+        )
+    }
+
+    /// A queued repost (`.repostPost`, fil rouge du repost — lot 7 tâche 7.5)
+    /// — `POST /posts/:postId/repost`. Contrairement à `mapCreatePost`, l'id
+    /// SOURCE est déjà connu à l'enfilage (`RepostPostPayload.postId`, le
+    /// post reposté, pas le repost lui-même qui n'existe pas encore) :
+    /// `source` résout donc en `.post(id:)`, navigable, jamais `.unknown` —
+    /// le repli de `mapOther`, qui perd la destination (défaut mesuré en
+    /// prod sur `markStoryViewed`, cf. doc de `countsTowardSyncIndicator`
+    /// dans `OutboxRecord.swift`).
+    private static func mapRepostPost(record: OutboxRecord) -> OutboxUIItem {
+        let payload = JSONDecoder().decodeOrLog(RepostPostPayload.self, from: record.payload,
+                                                field: "repost-post payload (sync pill)", id: record.id,
+                                                logger: Logger.ui)
+        let source: Source = payload.map { .post(id: $0.postId) } ?? .unknown
+        let preview: String?
+        if let content = payload?.content, !content.isEmpty {
+            preview = truncatePreview(content)
+        } else {
+            preview = nil
+        }
+        return OutboxUIItem(
+            id: record.id,
+            kind: .other("repostPost"),
+            titlePreview: preview,
+            iconKind: .text,
+            attachmentCount: 0,
+            source: source,
             status: record.status,
             createdAt: record.createdAt
         )

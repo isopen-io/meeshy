@@ -84,6 +84,9 @@ struct OutboxDispatcher: OutboxDispatching {
         case .toggleLikeComment:
             try await dispatchToggleLikeComment(record)
 
+        case .repostPost:
+            try await dispatchRepostPost(record)
+
         case .publishStory, .repostStory:
             // Story publish/repost remains routed through `StoryOfflineQueue`
             // until Tier C merges the two persistence stores. A row landing
@@ -525,6 +528,47 @@ struct OutboxDispatcher: OutboxDispatching {
         } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
             logger.warning("toggleLikePost 404 for \(payload.postId, privacy: .public) — post gone, accepting as success")
         }
+    }
+
+    /// `POST /posts/:id/repost` — gateway wraps through `withMutationLog`
+    /// (fil rouge du repost, lot 7 tâche 7.1) : le cmid dédoublonne un rejeu
+    /// réseau, `repostPost` n'étant PAS naturellement idempotent (chaque
+    /// appel fabrique un `Post` neuf).
+    ///
+    /// `targetType` voyage TOUJOURS depuis `RepostPostPayload` (jamais
+    /// optionnel) — Loi 5 (« le repost miroite », spec 2026-08-23) :
+    /// laisser le serveur retomber sur son défaut `?? PostType.POST`
+    /// transformerait silencieusement une source éphémère en post permanent.
+    ///
+    /// Contrairement à `dispatchToggleLikePost`, un 404 n'est PAS avalé : la
+    /// source a disparu, le geste demandé (publier CE contenu) n'a pas eu
+    /// lieu — ce n'est pas un no-op idempotent comme un like sur un post
+    /// déjà parti. L'erreur remonte telle quelle ;
+    /// `OutboxFlusher.isPermanentServerRejection` (400/403/404/413/422) la
+    /// fait terminer en `.exhausted` dès la première tentative plutôt que de
+    /// consommer tout le budget de retry.
+    private func dispatchRepostPost(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: RepostPostPayload.self)
+        struct RepostBody: Encodable {
+            let targetType: String
+            let content: String?
+            let isQuote: Bool
+            let visibility: String?
+        }
+        let body = RepostBody(
+            targetType: payload.targetType,
+            content: payload.content,
+            isQuote: payload.isQuote,
+            visibility: payload.visibility
+        )
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+            endpoint: "/posts/\(payload.postId)/repost",
+            method: "POST",
+            body: try JSONEncoder().encode(body),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+        )
+        logger.info("repostPost dispatched for \(payload.postId, privacy: .public) targetType=\(payload.targetType, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
     /// `POST /posts/:id/comments` — gateway wraps through

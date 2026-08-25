@@ -3,9 +3,9 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { SecuritySanitizer } from '../utils/sanitize';
 import { logError } from '../utils/logger';
-import { sendSuccess, sendPaginatedSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError } from '../utils/response.js';
+import { sendSuccess, sendPaginatedSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError, sendGone } from '../utils/response.js';
 import type { NotificationService } from '../services/notifications/NotificationService';
-import { withMutationLog } from '../utils/withMutationLog';
+import { withMutationLog, MutationResultGone } from '../utils/withMutationLog';
 import {
   friendRequestSchema,
   sendFriendRequestSchema,
@@ -123,6 +123,10 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         fastify,
         userId,
         kind: 'sendFriendRequest',
+        // `diverges` — voir `ReplayCost` : chaque exécution INSÈRE une ligne.
+        // Rejouer sur un résultat disparu fabriquerait un doublon (contenu
+        // supprimé qui ressuscite), d'où le 410 rendu par le catch de la route.
+        replayCost: 'diverges',
         op: () => fastify.prisma.friendRequest.create({
           data: {
             senderId: userId,
@@ -161,6 +165,14 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, friendRequest, { statusCode: 201 });
 
     } catch (error) {
+      // Le cmid a bien été appliqué, mais son résultat n'est plus relisible
+      // (contenu supprimé, expiré, ou hors de la tranche ACL du lecteur) et
+      // l'op DIVERGE — la rejouer recréerait une ligne que l'auteur a fait
+      // disparaître. 410 le dit exactement : le geste a eu lieu, il n'y a
+      // rien à refaire.
+      if (error instanceof MutationResultGone) {
+        return sendGone(reply, 'Friend request already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+      }
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'Donnees invalides');
       }
@@ -469,6 +481,8 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         fastify,
         userId,
         kind: 'respondFriendRequest',
+        // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
+        replayCost: 'converges',
         op: () => fastify.prisma.friendRequest.update({
           where: { id },
           data: { status: body.status },

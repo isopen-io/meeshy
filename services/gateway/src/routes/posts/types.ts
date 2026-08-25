@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
+import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 
 // ============================================
 // CURSOR PAGINATION HELPERS
@@ -242,7 +243,7 @@ export const CreatePostSchema = z.object({
   // Original language override (ISO 639-1, e.g. "fr", "en")
   originalLanguage: z.string().min(2).max(5).optional(),
   // Media IDs (already uploaded)
-  mediaIds: z.array(z.string()).max(10).optional(),
+  mediaIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
   // Texte alternatif par média (accessibilité, `PostMedia.alt`) — clé = un id
   // de `mediaIds` ci-dessus, IGNORÉ pour tout id absent de `mediaIds` (le
   // service ne l'applique qu'aux lignes qu'il vient réellement de rattacher
@@ -358,7 +359,7 @@ export const UpdatePostSchema = z.object({
   // Ids of freshly uploaded media (PostMedia created by TUS with postId=null)
   // to attach during the edit — same contract and bound as CreatePostSchema.
   // On a STORY this counts as a content edit (engagement reset).
-  mediaIds: z.array(z.string()).max(10).optional(),
+  mediaIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
   // Texte alternatif par média — même contrat que `CreatePostSchema.mediaAlt`
   // (clé = un id de `mediaIds` ci-dessus, ignoré sinon). Édite l'accessibilité
   // d'un média qui vient d'être rattaché ; les médias déjà attachés au post ne

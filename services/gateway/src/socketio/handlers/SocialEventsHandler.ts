@@ -365,7 +365,7 @@ export class SocialEventsHandler {
   // STORY BROADCASTS
   // ==============================================
 
-  async broadcastStoryCreated(story: Post, authorId: string): Promise<void> {
+  async broadcastStoryCreated(story: Post, authorId: string, clientMutationId?: string): Promise<void> {
     // Honor `visibility` / `visibilityUserIds` like `broadcastStatusCreated` —
     // previously this always fanned out to ALL friends, leaking ONLY/EXCEPT
     // stories via the realtime event payload even though the REST list was
@@ -376,7 +376,9 @@ export class SocialEventsHandler {
     logger.info(
       `📣 story:created fanout author=${authorId} storyId=${story.id} visibility=${visibility} recipients=${recipients.length}`
     );
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_CREATED, { story });
+    // U1 parity — echo the cmid so an offline author's optimistic story
+    // (keyed by cmid) reconciles to the server story instead of duplicating.
+    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_CREATED, { story, clientMutationId });
   }
 
   /// Emitted when an author edits a published story (PUT /posts/:id). Mirrors
@@ -426,14 +428,16 @@ export class SocialEventsHandler {
   // STATUS/MOOD BROADCASTS
   // ==============================================
 
-  async broadcastStatusCreated(status: Post, authorId: string): Promise<void> {
+  async broadcastStatusCreated(status: Post, authorId: string, clientMutationId?: string): Promise<void> {
     const visibility = status.visibility;
     const visibilityUserIds = [...(status.visibilityUserIds ?? [])];
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
     logger.info(
       `📣 status:created fanout author=${authorId} statusId=${status.id} visibility=${visibility} recipients=${recipients.length}`
     );
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_CREATED, { status });
+    // U1 parity — echo the cmid so an offline author's optimistic status
+    // (keyed by cmid) reconciles to the server status instead of duplicating.
+    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_CREATED, { status, clientMutationId });
   }
 
   async broadcastStatusUpdated(status: Post, authorId: string): Promise<void> {

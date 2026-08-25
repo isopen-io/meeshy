@@ -22,42 +22,56 @@ type LogRow = {
   clientMutationId: string;
   kind: string;
   resultId: string | null;
+  createdAt: Date;
 };
 
+/**
+ * Faux prisma qui MODÉLISE l'index unique `(userId, clientMutationId)` — sans
+ * lui, la réservation-d'abord du service n'est pas éprouvée : c'est cet index
+ * qui tranche la course entre deux requêtes portant le même cmid.
+ */
 function makeFakePrisma() {
   const rows: LogRow[] = [];
+  const find = (args: any) => {
+    const { userId, clientMutationId } = args.where.userId_clientMutationId;
+    return rows.find(r => r.userId === userId && r.clientMutationId === clientMutationId);
+  };
   const findUnique = jest.fn(async (args: any) => {
-    const { userId, clientMutationId } = args.where.userId_clientMutationId;
-    const found = rows.find(
-      r => r.userId === userId && r.clientMutationId === clientMutationId
-    );
+    const found = find(args);
     if (!found) return null;
-    return { resultId: found.resultId, kind: found.kind };
+    return { resultId: found.resultId, kind: found.kind, createdAt: found.createdAt };
   });
-  const upsert = jest.fn(async (args: any) => {
-    const { userId, clientMutationId } = args.where.userId_clientMutationId;
-    const existing = rows.find(
-      r => r.userId === userId && r.clientMutationId === clientMutationId
-    );
-    if (existing) {
-      existing.kind = args.update.kind ?? existing.kind;
-      return existing;
+  const create = jest.fn(async (args: any) => {
+    const { userId, clientMutationId, kind, resultId } = args.data;
+    if (rows.find(r => r.userId === userId && r.clientMutationId === clientMutationId)) {
+      const err: any = new Error('Unique constraint failed on the fields: (`userId`,`clientMutationId`)');
+      err.code = 'P2002';
+      throw err;
     }
-    const row: LogRow = {
-      userId,
-      clientMutationId,
-      kind: args.create.kind,
-      resultId: args.create.resultId,
-    };
+    const row: LogRow = { userId, clientMutationId, kind, resultId: resultId ?? null, createdAt: new Date() };
     rows.push(row);
     return row;
   });
+  const update = jest.fn(async (args: any) => {
+    const existing = find(args);
+    if (!existing) throw new Error('Record to update not found');
+    Object.assign(existing, args.data);
+    return existing;
+  });
+  const del = jest.fn(async (args: any) => {
+    const existing = find(args);
+    if (existing) rows.splice(rows.indexOf(existing), 1);
+    return existing ?? {};
+  });
+  const upsert = jest.fn(async () => {
+    throw new Error('upsert is no longer part of the recordOrReturn path');
+  });
   return {
     prisma: {
-      mutationLog: { findUnique, upsert },
+      mutationLog: { findUnique, create, update, delete: del, upsert },
     },
     rows,
-    spies: { findUnique, upsert },
+    spies: { findUnique, create, update, delete: del, upsert },
   };
 }
 

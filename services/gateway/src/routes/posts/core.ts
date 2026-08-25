@@ -13,7 +13,7 @@ import {
   DEFAULT_PUBLICATION_VISIBILITY,
 } from '../../services/posts/publishAttachment';
 import { canAccessConversation } from '../conversations/utils/access-control';
-import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired } from '../../utils/response';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 import { MentionService } from '../../services/MentionService';
@@ -28,7 +28,7 @@ import {
 } from '../../services/posts/postReferences';
 import { HashtagService } from '../../services/HashtagService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
-import { withMutationLog } from '../../utils/withMutationLog';
+import { withMutationLog, MutationResultGone } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationDeep, parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
 import { WIRE_BROADCAST, wireReaderFromRequest, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
@@ -324,6 +324,10 @@ export function registerCoreRoutes(
         fastify,
         userId: authContext.registeredUser.id,
         kind: 'createPost',
+        // `diverges` — voir `ReplayCost` : chaque exécution INSÈRE une ligne.
+        // Rejouer sur un résultat disparu fabriquerait un doublon (contenu
+        // supprimé qui ressuscite), d'où le 410 rendu par le catch de la route.
+        replayCost: 'diverges',
         op: () => postService.createPost({
           ...parsed.data,
           content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
@@ -451,9 +455,14 @@ export function registerCoreRoutes(
           WIRE_BROADCAST
         ) as unknown as Post;
         if (postType === 'STORY') {
-          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
+          // U1 parity — voir `broadcastPostCreated` juste en dessous : sans
+          // l'écho du cmid, une STORY créée hors-ligne (dont un repost via
+          // `POST /posts { repostOfId }`) ne pouvait jamais réconcilier son
+          // item optimiste avec la story serveur.
+          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
         } else if (postType === 'STATUS') {
-          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast status created failed'));
+          // U1 parity — même raison que STORY ci-dessus.
+          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast status created failed'));
         } else {
           // U1 — echo the request cmid so an offline author reconciles its
           // optimistic temp post (keyed by cmid) with this server post.
@@ -499,6 +508,14 @@ export function registerCoreRoutes(
         { statusCode: 201 }
       );
     } catch (error) {
+      // Le cmid a bien été appliqué, mais son résultat n'est plus relisible
+      // (contenu supprimé, expiré, ou hors de la tranche ACL du lecteur) et
+      // l'op DIVERGE — la rejouer recréerait une ligne que l'auteur a fait
+      // disparaître. 410 le dit exactement : le geste a eu lieu, il n'y a
+      // rien à refaire.
+      if (error instanceof MutationResultGone) {
+        return sendGone(reply, 'Post already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+      }
       fastify.log.error(`[POST /posts] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }

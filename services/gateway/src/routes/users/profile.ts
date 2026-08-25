@@ -194,6 +194,8 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         fastify,
         userId: userId!,
         kind: 'updateProfile',
+        // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
+        replayCost: 'converges',
         op: () => fastify.prisma.user.update({
           where: { id: userId },
           data: updateData,

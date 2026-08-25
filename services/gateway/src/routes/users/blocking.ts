@@ -87,6 +87,8 @@ export async function blockUser(fastify: FastifyInstance) {
         fastify,
         userId: currentUserId!,
         kind: 'blockUser',
+        // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
+        replayCost: 'converges',
         op: async () => {
           await fastify.prisma.user.update({
             where: { id: currentUserId },
@@ -175,6 +177,8 @@ export async function unblockUser(fastify: FastifyInstance) {
         fastify,
         userId: currentUserId!,
         kind: 'unblockUser',
+        // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
+        replayCost: 'converges',
         op: async () => {
           await fastify.prisma.user.update({
             where: { id: currentUserId },

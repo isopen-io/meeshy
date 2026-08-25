@@ -55,11 +55,13 @@ export function uploaderIdFromFilePath(filePath: string | null | undefined): str
  * pièces jointes de message). Définition UNIQUE partagée par `onUploadCreate`
  * (rejet avant le premier octet) et `onUploadFinish` (choix de la table) —
  * le handler portait la liste en dur au seul site de finish.
+ *
+ * La définition elle-même vit désormais dans `@meeshy/shared/types/attachment`
+ * (cycle composer W7bis) : le web en a besoin pour taguer ses uploads
+ * (`attachmentTransport.ts`), et ce module la ré-exporte pour que ses propres
+ * appelants (`tus-handler.ts`, ses tests) ne changent pas d'import.
  */
-export function isPostMediaUploadContext(context: unknown): boolean {
-  return context === 'post' || context === 'story'
-    || context === 'status' || context === 'comment';
-}
+export { isPostMediaUploadContext } from '@meeshy/shared/types/attachment';
 
 /**
  * Propriétaire d'un futur `PostMedia`, ou `null`.
@@ -98,21 +100,40 @@ export function postMediaUploaderOrNull(
  */
 export function claimableMediaWhere(ownerId: string) {
   return {
-    // « Libre » couvre les DEUX formes MongoDB : champ présent à `null` ET
-    // champ absent du document. Prisma sur MongoDB ne matche PAS un champ
-    // absent avec `null` — seul `isSet: false` le fait. Le handler TUS crée
-    // ses médias sans poser `commentId` : la clause `commentId: null` seule a
-    // rendu TOUT média fraîchement téléversé irréclamable en production
-    // (2026-07-31→08-01), chaque publication perdant son image en silence.
+    ...unclaimedMediaWhere(),
+    uploaderId: ownerId,
+  };
+}
+
+/**
+ * « Libre » — la MOITIÉ de la clause ci-dessus qui ne parle pas de propriété.
+ *
+ * Deux verbes lisent cette définition et ne doivent JAMAIS en avoir deux :
+ * la RÉCLAMATION (`claimableMediaWhere`, qui y ajoute le propriétaire) et le
+ * BALAYAGE des médias abandonnés (`sweepPendingPostMedia`, qui n'a pas de
+ * propriétaire à opposer — il détruit ce que personne n'a réclamé). Un
+ * balayage qui redéfinirait « libre » pour son compte finirait par détruire
+ * du réclamable, ou par épargner de l'irréclamable.
+ *
+ * « Libre » couvre les DEUX formes MongoDB : champ présent à `null` ET champ
+ * absent du document. Prisma sur MongoDB ne matche PAS un champ absent avec
+ * `null` — seul `isSet: false` le fait. Le handler TUS crée ses médias sans
+ * poser `commentId` : la clause `commentId: null` seule a rendu TOUT média
+ * fraîchement téléversé irréclamable en production (2026-07-31→08-01), chaque
+ * publication perdant son image en silence. Le même oubli, du côté du
+ * balayage, le rendrait AVEUGLE — il ne verrait aucun abandon, en silence.
+ *
+ * Un média déjà rattaché à un COMMENTAIRE n'est pas libre non plus.
+ * `createPost` ne testait que `postId`, et un média de commentaire restait
+ * donc capturable par un post — les deux champs sont pourtant exclusifs par
+ * construction.
+ */
+export function unclaimedMediaWhere() {
+  return {
     AND: [
       { OR: [{ postId: null }, { postId: { isSet: false } }] },
-      // Un média déjà rattaché à un COMMENTAIRE n'est pas libre. `createPost`
-      // ne testait que `postId`, et un média de commentaire restait donc
-      // capturable par un post — les deux champs sont pourtant exclusifs par
-      // construction.
       { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
     ],
-    uploaderId: ownerId,
   };
 }
 

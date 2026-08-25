@@ -6,11 +6,11 @@ import { retractReactionNotifications } from '../../services/notifications/retra
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
 import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
-import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendConflict } from '../../utils/response';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
-import { withMutationLog } from '../../utils/withMutationLog';
+import { withMutationLog, MutationResultGone } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
 import {
@@ -182,6 +182,10 @@ export function registerCommentRoutes(
         fastify,
         userId: authContext.registeredUser.id,
         kind: 'createComment',
+        // `diverges` — voir `ReplayCost` : chaque exécution INSÈRE une ligne.
+        // Rejouer sur un résultat disparu fabriquerait un doublon (contenu
+        // supprimé qui ressuscite), d'où le 410 rendu par le catch de la route.
+        replayCost: 'diverges',
         op: async () => {
           const c = await commentService.addComment(
             targetPostId,
@@ -380,6 +384,14 @@ export function registerCommentRoutes(
 
       return sendSuccess(reply, hoistCommentLocation(comment as unknown as Record<string, unknown>), { statusCode: 201, meta: { mentionedUsers: newCommentMentionedUsers } });
     } catch (error) {
+      // Le cmid a bien été appliqué, mais son résultat n'est plus relisible
+      // (contenu supprimé, expiré, ou hors de la tranche ACL du lecteur) et
+      // l'op DIVERGE — la rejouer recréerait une ligne que l'auteur a fait
+      // disparaître. 410 le dit exactement : le geste a eu lieu, il n'y a
+      // rien à refaire.
+      if (error instanceof MutationResultGone) {
+        return sendGone(reply, 'Comment already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+      }
       if (error instanceof Error && error.message === 'PARENT_NOT_FOUND') {
         return sendNotFound(reply, 'Parent comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
@@ -419,6 +431,8 @@ export function registerCommentRoutes(
         fastify,
         userId: authContext.registeredUser.id,
         kind: 'updateComment',
+        // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
+        replayCost: 'converges',
         op: async () => {
           const c = await commentService.updateComment(commentId, authContext.registeredUser.id, {
             content: sanitizedContent,
@@ -714,6 +728,8 @@ export function registerCommentRoutes(
         fastify,
         userId: authContext.registeredUser.id,
         kind: 'deleteComment',
+        // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
+        replayCost: 'converges',
         op: async () => {
           const res = await commentService.deleteComment(commentId, authContext.registeredUser.id);
           if (!res) throw new Error('COMMENT_NOT_FOUND');

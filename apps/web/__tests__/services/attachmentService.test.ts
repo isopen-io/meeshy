@@ -197,6 +197,22 @@ describe('AttachmentService', () => {
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
     });
+
+    it('applies a caller-supplied maxCount instead of MAX_ATTACHMENTS_PER_MESSAGE', () => {
+      // Le transport post (MAX_POST_MEDIA = 10) réutilise CE validateur au
+      // lieu d'en écrire un second — seul le plafond diffère (taille
+      // identique des deux côtés).
+      const files = Array.from({ length: 11 }, (_, i) => makeFile(`file${i}.jpg`, 100));
+      const result = AttachmentService.validateFiles(files, 10);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes('Maximum 10'))).toBe(true);
+    });
+
+    it('accepts exactly maxCount files when a caller-supplied maxCount is given', () => {
+      const files = Array.from({ length: 10 }, (_, i) => makeFile(`file${i}.jpg`, 100));
+      const result = AttachmentService.validateFiles(files, 10);
+      expect(result.valid).toBe(true);
+    });
   });
 
   describe('uploadFiles', () => {

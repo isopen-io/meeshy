@@ -16,6 +16,7 @@ import {
   CreateCommentSchema,
   TranslatePostSchema,
 } from '../../../../routes/posts/types';
+import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 
 // ─── encodeCursor ─────────────────────────────────────────────────────────────
 
@@ -214,6 +215,18 @@ describe('CreatePostSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts exactly MAX_POST_MEDIA media ids — the bound is read from @meeshy/shared, not a literal', () => {
+    const mediaIds = Array.from({ length: MAX_POST_MEDIA }, (_, i) => `media-${i}`);
+    const result = CreatePostSchema.safeParse({ type: 'POST', mediaIds });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects MAX_POST_MEDIA + 1 media ids', () => {
+    const mediaIds = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => `media-${i}`);
+    const result = CreatePostSchema.safeParse({ type: 'POST', mediaIds });
+    expect(result.success).toBe(false);
+  });
 });
 
 // ─── UpdatePostSchema ─────────────────────────────────────────────────────────
@@ -263,6 +276,18 @@ describe('UpdatePostSchema', () => {
 
   it('rejects mediaIds beyond 10 entries', () => {
     const mediaIds = Array.from({ length: 11 }, (_, i) => `media-${i}`);
+    const result = UpdatePostSchema.safeParse({ mediaIds });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts exactly MAX_POST_MEDIA media ids — same shared bound as CreatePostSchema', () => {
+    const mediaIds = Array.from({ length: MAX_POST_MEDIA }, (_, i) => `media-${i}`);
+    const result = UpdatePostSchema.safeParse({ mediaIds });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects MAX_POST_MEDIA + 1 media ids', () => {
+    const mediaIds = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => `media-${i}`);
     const result = UpdatePostSchema.safeParse({ mediaIds });
     expect(result.success).toBe(false);
   });

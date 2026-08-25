@@ -69,6 +69,12 @@ jest.mock('../../../../middleware/rate-limiter', () => ({
 }));
 
 jest.mock('../../../../utils/withMutationLog', () => ({
+  // Le module réel est ÉTALÉ d'abord : `MutationResultGone` est une CLASSE
+  // dont les routes font `instanceof`, et `withMutationOutcome` est le
+  // chemin réel du repost. Une usine qui ne rendait que `withMutationLog`
+  // les laissait à `undefined` — `instanceof undefined` lève un TypeError
+  // qui se déguise en 500 sur des chemins d'erreur sans rapport.
+  ...(jest.requireActual('../../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn<any>().mockImplementation(({ op }: any) => op()),
 }));
 
@@ -1559,15 +1565,28 @@ describe('POST /posts/:id/share — no body uses ?? {} fallback (line 480)', () 
   });
 });
 
-describe('POST /posts/:id/repost — invalid body uses fallback isQuote:false (lines 675-676)', () => {
-  it('returns 201 using fallback when RepostSchema.safeParse fails', async () => {
+// GARDE RETOURNÉE (fil rouge du repost, 2026-08-25) — elle gravait le défaut.
+//
+// Elle exigeait 201 « using fallback when RepostSchema.safeParse fails ». Ce
+// repli (`parsed.success ? parsed.data : { isQuote: false }`) jetait D'UN SEUL
+// COUP `targetType`, `content` ET `visibility` — puis le service appliquait
+// `?? PostType.POST`. Une source ÉPHÉMÈRE repartait donc en post PERMANENT
+// sans le moindre signal, ce qui est exactement ce que la Loi 5 (« le repost
+// miroite ») interdit et ce que `RepostPostPayload.targetType` (obligatoire
+// dans la file durable iOS) existe pour ne pas avoir à contourner.
+//
+// La garde n'est pas supprimée : elle est RÉÉCRITE dans l'autre sens. Un corps
+// invalide se refuse.
+describe('POST /posts/:id/repost — un corps invalide est REFUSÉ, jamais déprécié en POST', () => {
+  it('returns 400 when RepostSchema.safeParse fails', async () => {
     const app = await buildApp();
     // Send isQuote as a non-boolean string to make RepostSchema.safeParse fail
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/repost`,
       payload: { isQuote: 'not-a-boolean' },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('VALIDATION_ERROR');
     await app.close();
   });
 });

@@ -269,6 +269,56 @@ public struct RepostStoryPayload: Codable, Sendable, Equatable {
     }
 }
 
+/// Fil rouge du repost (lot 7, tâche 7.5) — payload du kind `.repostPost`,
+/// pour `POST /posts/:postId/repost` (repost PUBLIC, sur le fil). Distinct de
+/// `RepostStoryPayload` (repost PRIVÉ dans une conversation, `targetConversationId`)
+/// et de `CreatePostPayload` (porte 3 — `POST /posts { repostOfId }`, un autre
+/// mécanisme serveur, cf. `PostService.repostPost` vs `PostService.createPost`).
+public struct RepostPostPayload: Codable, Sendable, Equatable {
+    public let clientMutationId: String
+    /// L'id du post/story/status source à reposter.
+    public let postId: String
+    /// Type CIBLE du repost (`"POST" | "STORY" | "STATUS" | "REEL"`, valeurs
+    /// `PostType` côté gateway) — OBLIGATOIRE, jamais optionnel. Loi 5 (« le
+    /// repost miroite ; changer de format est l'ancrage », spec
+    /// 2026-08-23 §Loi 5) : le format doit être porté explicitement jusqu'au
+    /// bout de la file, jamais laissé au repli serveur `?? PostType.POST`.
+    /// C'est exactement ce repli qui, pour l'appelant historique sans
+    /// `targetType`, transforme une story repartagée en post permanent sans
+    /// que personne ne l'ait demandé.
+    ///
+    /// **Cet appelant historique EXISTE ENCORE** —
+    /// `StoryService.repost(storyId:)` (`Services/StoryService.swift`), sans
+    /// `targetType`, donc droit sur le repli. Il n'a aucun appelant de
+    /// production (seul un test l'invoque) et il décode `[String: String]` là
+    /// où la route rend un Post complet, donc il lève même quand le serveur
+    /// réussit : mort ET menteur. Son retrait est une DETTE ouverte, pas un
+    /// fait accompli — ne pas relire cette ligne comme si elle l'était.
+    public let targetType: String
+    /// Commentaire de citation (`isQuote == true`). `nil` pour un repost simple.
+    public let content: String?
+    public let isQuote: Bool
+    /// Audience choisie par le reposteur. `nil` ⇒ le serveur hérite de
+    /// l'audience de l'original (`PostService.repostPost`).
+    public let visibility: String?
+
+    public init(
+        clientMutationId: String,
+        postId: String,
+        targetType: String,
+        content: String? = nil,
+        isQuote: Bool = false,
+        visibility: String? = nil
+    ) {
+        self.clientMutationId = clientMutationId
+        self.postId = postId
+        self.targetType = targetType
+        self.content = content
+        self.isQuote = isQuote
+        self.visibility = visibility
+    }
+}
+
 // MARK: - Posts & comments
 
 public struct CreatePostPayload: Codable, Sendable, Equatable {

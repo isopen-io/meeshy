@@ -424,6 +424,40 @@ final class OutboxDispatcherTests: XCTestCase {
         }
     }
 
+    // MARK: - repostPost: corrupt payload → MeeshyError.server(400, _)
+    // (fil rouge du repost, lot 7 tâche 7.5)
+
+    func test_dispatch_repostPost_whenCorruptPayload_throwsCode400() async {
+        let record = makeRecord(kind: .repostPost, payload: corrupt)
+        do {
+            try await makeSUT().dispatch(record)
+            XCTFail("Expected MeeshyError.server(400, _) for corrupt repostPost payload")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
+    /// `.repostPost` a désormais son PROPRE branchement, distinct de
+    /// `.publishStory, .repostStory` — sans ce test, une régression qui
+    /// fusionnerait à nouveau les trois cases dans le même 501 passerait
+    /// inaperçue (la garde de compilation ne voit qu'un `case` manquant,
+    /// jamais qu'un `case` existe mais route au mauvais endroit).
+    func test_dispatch_whenKindIsRepostPost_doesNotThrowCode501() async {
+        let record = makeRecord(kind: .repostPost, payload: corrupt)
+        do {
+            try await makeSUT().dispatch(record)
+            XCTFail("Expected a decode failure (400), not a silent success")
+        } catch let error as NSError where error.domain == "OutboxDispatcher" {
+            XCTAssertNotEqual(error.code, 501, "repostPost must not fall through to the story-queue 501 branch")
+        } catch MeeshyError.server(let statusCode, _) {
+            XCTAssertEqual(statusCode, 400)
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
     // MARK: - createComment: corrupt payload → MeeshyError.server(400, _)
 
     func test_dispatch_createComment_whenCorruptPayload_throwsCode400() async {

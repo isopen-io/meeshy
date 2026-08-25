@@ -19,6 +19,7 @@ import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import { PUBLICATION_VISIBILITY_OPTIONS } from './publication-visibility';
 import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
 import type { PostReferenceDisplay } from '@meeshy/shared/types/post-reference';
+import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 import type { ComposerDocumentPayload } from '@/components/composer/payload';
 
 const REFERENCE_MODES: readonly Exclude<PostReferenceDisplay, 'INLINE'>[] = ['NOTE', 'SILENT'];
@@ -40,10 +41,12 @@ export interface PostComposerProps {
 }
 
 
-// W6 media — cap client aligné sur la limite serveur `mediaIds` (≤ 10,
-// `CreatePostSchema`). Un seul pool combiné photos+vidéos, contrairement à
-// StoryComposer qui répartit sur 3 catégories.
-const MEDIA_LIMIT = 10;
+// W6 media — cap client aligné sur la limite serveur `mediaIds`
+// (`CreatePostSchema`/`UpdatePostSchema`, source unique
+// `@meeshy/shared/types/attachment` → `MAX_POST_MEDIA`). Un seul pool
+// combiné photos+vidéos, contrairement à StoryComposer qui répartit sur 3
+// catégories.
+const MEDIA_LIMIT = MAX_POST_MEDIA;
 
 const MEDIA_ACCEPT = {
   image: 'image/*',
@@ -105,10 +108,12 @@ function PostComposer({
     // once uploads settled since selectedFiles is never trimmed on
     // success). MEDIA_LIMIT can be passed as-is.
     maxAttachments: MEDIA_LIMIT,
+    // Un POST/RÉEL publie en `PostMedia` (via TUS), jamais en
+    // `MessageAttachment` — voir `services/attachmentTransport.ts`.
+    uploadContext: 'post',
   });
 
   const mediaLimitReached = selectedFiles.length >= MEDIA_LIMIT;
-  const uploadPercentage = uploadProgress[0] ?? 0;
 
   // W7 — same source-of-truth predicate the gateway degrades REEL→POST with
   // (`@meeshy/shared/utils/reel-composition`). An attachment whose duration
@@ -167,7 +172,7 @@ function PostComposer({
     // Pré-validation avec le même service que le hook (taille/type), pour
     // afficher le message spécifique DANS le composer plutôt que de laisser
     // le hook émettre un toast générique.
-    const validation = AttachmentService.validateFiles(filesToAdd);
+    const validation = AttachmentService.validateFiles(filesToAdd, MEDIA_LIMIT);
     if (!validation.valid) {
       setMediaError(validation.errors.join(' '));
       return;
@@ -357,7 +362,12 @@ function PostComposer({
                     )}
                     {isUploading && (
                       <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 text-center text-[10px] text-white">
-                        {uploadPercentage}%
+                        {/* La jauge de CETTE vignette. `uploadProgress[0]`
+                            affichait celle du premier fichier sur toutes :
+                            trois téléversements volent en parallèle, donc le
+                            premier atteint 100 % pendant que les autres
+                            commencent — « 100% » partout, et Publier bloqué. */}
+                        {uploadProgress[index] ?? 0}%
                       </div>
                     )}
                     <button

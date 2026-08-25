@@ -731,23 +731,20 @@ export function PostsFeedScreen() {
   // ne les déclare plus (voir la note « Aucune langue d'origine n'y figure »
   // de `components/composer/payload.ts`).
   //
-  // DETTE MESURÉE, à ne pas lire comme un acquis (revue du 2026-08-25) : la
-  // phrase « Whisper prend le relais dès que la clé est absente » n'est vraie
-  // que si `mediaIds` désigne des `PostMedia`. Or `useAttachmentUpload` passe
-  // par `POST /attachments/upload`, qui crée des `MessageAttachment`
-  // (`UploadProcessor`), pendant que `PostService.createPost` ne réclame que
-  // des `PostMedia` (`postMedia.updateMany` + `postMedia.findFirst` pour
-  // l'audio). Les deux seuls producteurs de `PostMedia` sont le gestionnaire
-  // TUS (`uploadcontext: 'post'`) et `POST /posts/from-attachment`.
-  // Conséquence : sur CE chemin, aucun média n'est rattaché et aucune
-  // transcription serveur ne part. Le défaut est ANTÉRIEUR et SYSTÉMIQUE —
-  // `PostComposer` (hérité) téléversait déjà par ce même pool pour
-  // photo/vidéo — mais W7 y fait entrer l'audio, qui empruntait jusqu'ici le
-  // canal TUS conforme. Le correctif appartient au TRANSPORT (donner un
-  // contexte de téléversement au pool, ce que réclame déjà
-  // `docs/superpowers/specs/2026-08-15-story-atelier-implementation.md`),
-  // pas au câblage des portes : il ne se fait pas dans un lot de
-  // branchement.
+  // DETTE SOLDÉE (lot W7bis, 2026-08-25) — cette note décrivait le défaut
+  // inverse ; elle est conservée au PASSÉ pour que la prochaine lecture ne
+  // rouvre pas la question. `useAttachmentUpload` passait par
+  // `POST /attachments/upload`, qui crée des `MessageAttachment`, pendant que
+  // `PostService.createPost` ne réclame que des `PostMedia` : aucun média
+  // n'était rattaché et aucune transcription ne partait. Le correctif est
+  // dans le TRANSPORT, comme annoncé : `services/attachmentTransport.ts`
+  // résout un `uploadContext` en transport, et `ComposerDocumentSurface`
+  // déclare `uploadContext: 'post'`. Le fichier voyage donc par TUS
+  // (`uploadcontext: 'post'` → `isPostMediaUploadContext` →
+  // `prisma.postMedia.create`), `mediaIds` désigne bien des `PostMedia`, et
+  // `postMedia.findFirst({ mimeType: { startsWith: 'audio/' } })` déclenche
+  // Whisper — `ComposerDocumentPayload` ne porte AUCUN `mobileTranscription`,
+  // donc la condition `audioMedia && !data.mobileTranscription` est vraie.
 
   // ─── Status / mood ────────────────────────────────────────────────────
   const [statusComposerOpen, setStatusComposerOpen] = useState(false);

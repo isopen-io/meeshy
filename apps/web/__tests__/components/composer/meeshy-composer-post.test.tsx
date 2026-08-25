@@ -40,7 +40,7 @@ import type { ComposerDocumentPayload } from '@/components/composer/ComposerDocu
 import { webComposerOpening } from '@/lib/composer-door';
 import { COMPOSER_DOORS } from '@meeshy/shared/utils/composer-contract';
 import { PUBLICATION_VISIBILITY_OPTIONS } from '@/components/v2/publication-visibility';
-import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
+import { MAX_POST_MEDIA, type UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 
 jest.mock('@/hooks/use-i18n', () => ({
   useI18n: () => ({
@@ -63,9 +63,10 @@ jest.mock('@/stores/auth-store', () => ({
 }));
 
 let mockValidation: { valid: boolean; errors: string[] } = { valid: true, errors: [] };
+const mockValidateFiles = jest.fn(() => mockValidation);
 jest.mock('@/services/attachmentService', () => ({
   AttachmentService: {
-    validateFiles: () => mockValidation,
+    validateFiles: (...args: unknown[]) => (mockValidateFiles as unknown as (...a: unknown[]) => typeof mockValidation)(...args),
   },
 }));
 
@@ -112,13 +113,13 @@ type MockAttachmentState = {
 };
 
 let mockAttachmentState: MockAttachmentState;
-let mockAttachmentOptions: { maxAttachments?: number } | undefined;
+let mockAttachmentOptions: { maxAttachments?: number; uploadContext?: string } | undefined;
 const mockHandleFilesSelected = jest.fn();
 const mockHandleRemoveFile = jest.fn();
 const mockClearAttachments = jest.fn();
 
 jest.mock('@/hooks/composer/useAttachmentUpload', () => ({
-  useAttachmentUpload: (options: { maxAttachments?: number }) => {
+  useAttachmentUpload: (options: { maxAttachments?: number; uploadContext?: string }) => {
     mockAttachmentOptions = options;
     return {
       selectedFiles: mockAttachmentState.selectedFiles,
@@ -216,6 +217,7 @@ function chooseVisibility(labelKey: string): void {
 beforeEach(() => {
   jest.clearAllMocks();
   mockValidation = { valid: true, errors: [] };
+  mockValidateFiles.mockClear();
   mockAttachmentOptions = undefined;
   mockAttachmentState = {
     selectedFiles: [],
@@ -273,6 +275,11 @@ describe('W3 point 2 — un seul pool de 10 médias, jamais une somme', () => {
   it('passe EXACTEMENT 10 à useAttachmentUpload — le plafond serveur de `mediaIds`, sans facteur correctif', () => {
     renderComposer();
     expect(mockAttachmentOptions?.maxAttachments).toBe(10);
+  });
+
+  it("déclare le contexte d'upload 'post' — ses médias voyagent en PostMedia via TUS, jamais en MessageAttachment", () => {
+    renderComposer();
+    expect(mockAttachmentOptions?.uploadContext).toBe('post');
   });
 
   it('compte `selectedFiles` SEUL : 9 sélectionnés dont 9 déjà uploadés laissent les boutons actifs', () => {
@@ -336,6 +343,21 @@ describe('W3 point 2 — un seul pool de 10 médias, jamais une somme', () => {
 
     expect(mockHandleFilesSelected).toHaveBeenCalledWith([expect.objectContaining({ name: 'a.png' })]);
     expect(screen.getByTestId('composer-media-error')).toHaveTextContent('composer.media.limitPartial');
+  });
+
+  it('valide contre le plafond de PUBLICATION, jamais celui d’un message', () => {
+    // Seconde copie du plafond, restée au chiffre MESSAGE (199) : sans effet
+    // tant que la sélection est tranchée en amont à MEDIA_LIMIT, mais c'est
+    // exactement la copie que le contexte d'upload prétend avoir unifiée. Le
+    // jour où le `slice` bouge, la porte amont dit 199 et le transport dit 10.
+    renderComposer();
+    expand();
+
+    fireEvent.change(screen.getByTestId('composer-media-input-image'), {
+      target: { files: [new File(['x'], 'a.png', { type: 'image/png' })] },
+    });
+
+    expect(mockValidateFiles).toHaveBeenCalledWith([expect.any(File)], MAX_POST_MEDIA);
   });
 
   it('remonte le message de validation du service quand un fichier est refusé', () => {
@@ -442,6 +464,28 @@ describe('W3 point 2 bis — l’aperçu des médias et leur retrait', () => {
 
     expect(global.URL.revokeObjectURL).toHaveBeenCalledTimes(1);
     expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+  });
+
+  it('affiche la jauge PROPRE À CHAQUE vignette, jamais celle de la première partout', () => {
+    // Les téléversements volent par trois (`MAX_CONCURRENT_UPLOADS`) : le
+    // premier fichier atteint 100 % pendant que les autres sont à 10 %.
+    // `uploadProgress[0]` affiché sur TOUTES les vignettes annonçait donc
+    // « 100% » partout pendant que le bouton Publier restait bloqué. Le hook
+    // relaie bien une progression par fichier — encore faut-il la LIRE.
+    mockAttachmentState.selectedFiles = [
+      new File(['x'], 'a.png', { type: 'image/png' }),
+      new File(['x'], 'b.png', { type: 'image/png' }),
+      new File(['x'], 'c.png', { type: 'image/png' }),
+    ];
+    mockAttachmentState.uploadProgress = { 0: 100, 1: 10, 2: 0 };
+    mockAttachmentState.isUploading = true;
+    renderComposer();
+    expand();
+
+    const preview = within(screen.getByTestId('composer-media-preview'));
+    expect(preview.getByText('100%')).toBeInTheDocument();
+    expect(preview.getByText('10%')).toBeInTheDocument();
+    expect(preview.getByText('0%')).toBeInTheDocument();
   });
 
   it('affiche la jauge de téléversement sur les vignettes, et seulement pendant le téléversement', () => {

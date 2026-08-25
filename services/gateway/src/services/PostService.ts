@@ -7,6 +7,7 @@ import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
+import { applyMediaOrder } from './posts/mediaOrder';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter, isEphemeralPostType } from './posts/postVisibility';
@@ -319,6 +320,9 @@ export class PostService {
       }
 
       await this.applyMediaAlt(post.id, data.mediaIds, data.mediaAlt);
+      // L'ordre de `mediaIds` EST l'ordre de sélection de l'utilisateur : le
+      // seul site qui le connaisse. Voir `posts/mediaOrder.ts`.
+      await applyMediaOrder(this.prisma, post.id, data.mediaIds);
 
       // Locate the first audio PostMedia for transcription processing
       const audioMedia = await this.prisma.postMedia.findFirst({
@@ -1212,6 +1216,7 @@ export class PostService {
           enhancedLogger.warn(`[PostService] updatePost: ${shortfall}`, { postId, authorId: userId });
         }
         await this.applyMediaAlt(postId, mediaIdsToAttach, mediaAlt, tx);
+        await applyMediaOrder(tx, postId, mediaIdsToAttach);
       }
       if (storyContentEdit) {
         await tx.postView.deleteMany({ where: { postId } });

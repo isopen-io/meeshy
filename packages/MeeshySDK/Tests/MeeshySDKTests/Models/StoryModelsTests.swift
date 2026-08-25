@@ -571,6 +571,77 @@ final class StoryModelsTests: XCTestCase {
         )
     }
 
+    // MARK: - toStatusEntry — attribution "via @X" (Prisme cycles 121-126,
+    // fil rouge du repost — R1)
+    //
+    // `APIPost.viaUsername` n'a JAMAIS été émis par un gateway déployé
+    // (`git log -S "viaUsername" -- services/gateway packages/shared` est
+    // vide sur toute l'histoire) : la seule vérité d'attribution d'une
+    // republication est `repostOf.author`. Ces tests prouvent que
+    // `toStatusEntry()` ne fait plus jamais primer un `viaUsername` — même
+    // adverse — sur cette source, et couvrent le versant nominal (absence de
+    // repost) en non-régression.
+
+    private func makeStatusAPIPost(
+        repostOfAuthorUsername: String? = nil,
+        viaUsername: String? = nil
+    ) -> APIPost {
+        let reposterAuthor = APIAuthor(id: "reposter-1", username: "carol", displayName: "Carol", avatar: nil)
+        let repostOf: APIRepostOf? = repostOfAuthorUsername.map { username in
+            APIRepostOf(
+                id: "orig-1", type: "STATUS", content: nil, originalLanguage: nil, translations: nil,
+                storyEffects: nil, audioUrl: nil, moodEmoji: nil, originalRepostOfId: nil,
+                author: APIAuthor(id: "orig-author-1", username: username, displayName: username, avatar: nil),
+                media: nil, createdAt: Date(), likeCount: nil, commentCount: nil, isQuote: nil, location: nil
+            )
+        }
+        return APIPost(
+            id: "status-1", type: "STATUS", visibility: "PUBLIC", visibilityUserIds: nil, content: "Hello",
+            originalLanguage: "en", createdAt: Date(), updatedAt: nil, expiresAt: nil,
+            author: reposterAuthor, likeCount: 0, commentCount: 0, repostCount: 0,
+            viewCount: 0, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil, bookmarkCount: 0, shareCount: 0,
+            reactionSummary: nil, isPinned: false, isEdited: false, media: nil, comments: nil,
+            repostOf: repostOf, originalRepostOfId: nil, isQuote: false,
+            moodEmoji: "😀", audioUrl: nil, audioDuration: nil, storyEffects: nil,
+            translations: nil, isLikedByMe: nil, isBookmarkedByMe: nil, isRepostedByMe: nil,
+            isViewedByMe: nil, currentUserReactions: nil, referenceAccess: nil, viaUsername: viaUsername
+        )
+    }
+
+    /// RED avant le correctif (l'ancien `viaUsername ?? repostOf?.author.username`
+    /// rendait "bob") — GREEN après : `repostOf.author` est la seule vérité,
+    /// jamais court-circuitée par un champ que le gateway ne sert jamais.
+    func test_toStatusEntry_attributionComesFromRepostOfAuthor_neverFromViaUsernameField() {
+        let post = makeStatusAPIPost(repostOfAuthorUsername: "alice", viaUsername: "bob")
+        XCTAssertEqual(post.toStatusEntry()?.viaUsername, "alice")
+    }
+
+    /// Non-régression : sans repost, l'attribution reste `nil` (pas de source
+    /// à citer) — versant nominal inchangé par le retrait du fallback.
+    func test_toStatusEntry_attributionIsNil_withoutRepost() {
+        let post = makeStatusAPIPost(repostOfAuthorUsername: nil, viaUsername: nil)
+        XCTAssertNil(post.toStatusEntry()?.viaUsername)
+    }
+
+    /// `toStatusEntry()` refuse tout post qui n'est pas un STATUS pourvu d'un
+    /// `moodEmoji` — garde déjà en place, épinglée ici pour documenter le
+    /// contrat que les deux tests ci-dessus présupposent.
+    func test_toStatusEntry_returnsNil_whenTypeIsNotStatus() {
+        var post = makeStatusAPIPost(repostOfAuthorUsername: "alice", viaUsername: nil)
+        post = APIPost(
+            id: post.id, type: "STORY", visibility: post.visibility, visibilityUserIds: nil,
+            content: post.content, originalLanguage: post.originalLanguage, createdAt: post.createdAt,
+            updatedAt: nil, expiresAt: nil, author: post.author, likeCount: 0, commentCount: 0,
+            repostCount: 0, viewCount: 0, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil,
+            bookmarkCount: 0, shareCount: 0, reactionSummary: nil, isPinned: false, isEdited: false,
+            media: nil, comments: nil, repostOf: post.repostOf, originalRepostOfId: nil, isQuote: false,
+            moodEmoji: post.moodEmoji, audioUrl: nil, audioDuration: nil, storyEffects: nil,
+            translations: nil, isLikedByMe: nil, isBookmarkedByMe: nil, isRepostedByMe: nil,
+            isViewedByMe: nil, currentUserReactions: nil, referenceAccess: nil, viaUsername: nil
+        )
+        XCTAssertNil(post.toStatusEntry())
+    }
+
     // MARK: - Présence auteur (interstitiel de switch de groupe, 2026-07-10)
 
     func test_toStoryGroups_propagatesAuthorPresence_fromStoriesPayload() {

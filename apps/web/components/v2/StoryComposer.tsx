@@ -194,12 +194,16 @@ function StoryComposerSurface({
     selectedFiles,
     uploadedAttachments,
     isUploading,
+    uploadProgress,
     handleFilesSelected,
     handleRemoveFile,
     clearAttachments,
   } = useAttachmentUpload({
     token: token ?? undefined,
     maxAttachments: MEDIA_LIMITS.image + MEDIA_LIMITS.video + MEDIA_LIMITS.audio,
+    // Une STORY publie en `PostMedia` (via TUS), jamais en
+    // `MessageAttachment` — voir `services/attachmentTransport.ts`.
+    uploadContext: 'story',
   });
 
   // L'éventail n'est peint QUE quand les trois props de la porte arrivent
@@ -373,6 +377,14 @@ function StoryComposerSurface({
                           <circle cx="6" cy="18" r="3" />
                           <circle cx="18" cy="16" r="3" />
                         </svg>
+                      </div>
+                    )}
+                    {isUploading && (
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 text-center text-[10px] text-white">
+                        {/* Cette surface ne lisait PAS `uploadProgress` : ses
+                            médias — vidéo et audio, les plus lourds du
+                            produit — montaient sans aucun signal. */}
+                        {uploadProgress[index] ?? 0}%
                       </div>
                     )}
                     <button

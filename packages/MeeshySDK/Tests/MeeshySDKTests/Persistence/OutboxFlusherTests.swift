@@ -93,6 +93,102 @@ final class OutboxFlusherTests: XCTestCase {
         XCTAssertEqual(after.attempts, 1, "it must not burn the whole retry budget on an un-retryable error")
     }
 
+    // MARK: - repostPost — échec TERMINAL nommé (fil rouge du repost, lot 7 tâche 7.5)
+    //
+    // Task 7.5 exige un « échec TERMINAL nommé » pour 404 `POST_NOT_FOUND`
+    // (la source a expiré pendant l'attente) et 403 `REPOST_AUDIENCE_WIDENING`
+    // — ces deux tests ÉPINGLENT le mécanisme EXISTANT (`isPermanentServerRejection`,
+    // déjà couvert ci-dessus pour 400/413 sur d'autres kinds) plutôt que d'en
+    // écrire un second, dédié au kind : la classification ne branche jamais
+    // sur `OutboxRecord.kind`, un mécanisme dupliqué divergerait au premier
+    // ajustement. Zéro ligne de production pour CES deux tests — ils
+    // documentent un comportement déjà correct pour le kind neuf.
+
+    func test_flush_repostPost_404PostNotFound_deadLettersImmediately_withoutBurningBudget() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "repost-404", kind: .repostPost, conversationId: "c1",
+                clientMessageId: "cid_repost_404",
+                payload: Data(), status: .pending, attempts: 0, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        // La source a expiré (story TTL) ou a été supprimée pendant l'attente
+        // — jamais retryable, l'auteur doit être prévenu, pas bouclé en silence.
+        let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher(failure: MeeshyError.server(statusCode: 404, message: "Original post not found")))
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "repost-404")!
+        }
+        XCTAssertEqual(after.status, .exhausted, "a 404 on the repost source must dead-letter immediately, never retry")
+        XCTAssertEqual(after.attempts, 1)
+    }
+
+    func test_flush_repostPost_403AudienceWidening_deadLettersImmediately_withoutBurningBudget() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "repost-403", kind: .repostPost, conversationId: "c1",
+                clientMessageId: "cid_repost_403",
+                payload: Data(), status: .pending, attempts: 0, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        // 403 REPOST_AUDIENCE_WIDENING est surfacé par APIClient comme
+        // `.forbidden` (accès refusé), pas `.server(403, _)` — la branche
+        // dédiée d'`isPermanentServerRejection` doit le reconnaître pareil.
+        let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher(failure: MeeshyError.forbidden(reason: "REPOST_AUDIENCE_WIDENING", body: nil)))
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "repost-403")!
+        }
+        XCTAssertEqual(after.status, .exhausted, "a 403 audience-widening rejection must dead-letter immediately, never retry")
+        XCTAssertEqual(after.attempts, 1)
+    }
+
+    /// 410 Gone — le verdict que le gateway rend quand le cmid a bien été
+    /// APPLIQUÉ et que son résultat n'est plus relisible (l'auteur a supprimé
+    /// son repost, ou la source éphémère a expiré, entre l'envoi et le rejeu
+    /// de la ligne). Contrairement aux deux tests ci-dessus, celui-ci ÉPINGLE
+    /// une ligne de production neuve : `permanentRejectionStatusCodes` ne
+    /// contenait pas 410 avant le 2026-08-25, et la ligne brûlait donc ses
+    /// cinq tentatives — une minute de ⏳ — pour finir exactement au même
+    /// endroit. Rejouer ne ramène jamais un résultat disparu.
+    func test_flush_repostPost_410Gone_deadLettersImmediately_withoutBurningBudget() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "repost-410", kind: .repostPost, conversationId: "c1",
+                clientMessageId: "cid_repost_410",
+                payload: Data(), status: .pending, attempts: 0, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher(failure: MeeshyError.server(statusCode: 410, message: "Repost already applied, its result is gone")))
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "repost-410")!
+        }
+        XCTAssertEqual(after.status, .exhausted, "un 410 dit « appliqué, résultat disparu » — rejouer ne le ramènera jamais")
+        XCTAssertEqual(after.attempts, 1, "il ne doit pas brûler le budget de tentatives pour finir au même endroit")
+    }
+
     func test_flush_corruptPayloadRejection_deadLettersImmediately_withoutBurningBudget() async throws {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)

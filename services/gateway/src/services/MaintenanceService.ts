@@ -8,6 +8,9 @@ import { logger } from '../utils/logger';
 import { AttachmentService } from './attachments';
 import { EmailService } from './EmailService';
 import { recomputeConversationLastMessageAt } from './messaging/messageRemovalEffects';
+import { MediaService } from './MediaService';
+import { sweepPendingPostMedia } from './posts/sweepPendingPostMedia';
+import type { PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
 import { conversationMessageStatsService } from './ConversationMessageStatsService';
 import {
   RECIPIENT_LANG_SELECT,
@@ -36,11 +39,23 @@ export class MaintenanceService {
   private lastDailyCleanup: Date | null = null;
 
   private emailService?: EmailService;
+  /**
+   * Le stockage qui rend les octets d'un `PostMedia` balayé. Distinct
+   * d'`attachmentService` : celui-ci ne connaît que `MessageAttachment`, et
+   * les deux tables ne partagent aucun chemin de suppression.
+   */
+  private readonly mediaService: PostMediaByteRemover;
 
-  constructor(prisma: PrismaClient, attachmentService: AttachmentService, emailService?: EmailService) {
+  constructor(
+    prisma: PrismaClient,
+    attachmentService: AttachmentService,
+    emailService?: EmailService,
+    mediaService: PostMediaByteRemover = new MediaService(),
+  ) {
     this.prisma = prisma;
     this.attachmentService = attachmentService;
     this.emailService = emailService;
+    this.mediaService = mediaService;
   }
 
   /**
@@ -365,6 +380,11 @@ export class MaintenanceService {
         // Nettoyer les attachments orphelins
         await this.cleanupOrphanedAttachments();
 
+        // ... et son JUMEAU côté publication. Les deux tables portent la même
+        // forme d'abandon (un média téléversé que rien n'a réclamé) ; une
+        // seule des deux était moissonnée.
+        await this.cleanupOrphanedPostMedia();
+
         // Nettoyer les messages vides sans contenu ni attachement
         await this.cleanupEmptyMessages();
 
@@ -450,6 +470,36 @@ export class MaintenanceService {
 
     } catch (error) {
       logger.error('❌ [CLEANUP] Erreur lors du nettoyage des attachments orphelins:', error);
+    }
+  }
+
+  /**
+   * Ramasser les `PostMedia` restés EN ATTENTE au-delà du même seuil que les
+   * pièces jointes de message orphelines.
+   *
+   * Le geste qui les produit est le plus banal du produit : ouvrir un
+   * composer de publication, joindre des médias, fermer sans publier. Aucun
+   * client ne rappelle après un onglet refermé — c'est pourquoi la garde vit
+   * ici et pas dans le composer. Voir `posts/sweepPendingPostMedia.ts` pour
+   * l'ordre (octets avant ligne) et le prédicat PARTAGÉ avec la réclamation.
+   *
+   * Les échecs sont ABSORBÉS, comme ceux de son jumeau : une passe qui
+   * rejetterait emporterait le reste du nettoyage journalier avec elle.
+   */
+  private async cleanupOrphanedPostMedia(): Promise<void> {
+    try {
+      const olderThan = new Date();
+      olderThan.setHours(olderThan.getHours() - this.ORPHANED_ATTACHMENT_THRESHOLD_HOURS);
+
+      const { swept, reclaimed } = await sweepPendingPostMedia(this.prisma, this.mediaService, { olderThan });
+
+      if (swept === 0) {
+        logger.info('✅ [CLEANUP] Aucun média de publication abandonné');
+        return;
+      }
+      logger.info(`✅ [CLEANUP] ${swept} média(s) de publication abandonné(s) supprimé(s), ${reclaimed} fichier(s) récupéré(s)`);
+    } catch (error) {
+      logger.error('❌ [CLEANUP] Erreur lors du nettoyage des médias de publication abandonnés:', error);
     }
   }
 
