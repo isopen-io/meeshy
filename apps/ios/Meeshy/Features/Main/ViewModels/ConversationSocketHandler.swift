@@ -10,7 +10,14 @@ import os
 @MainActor
 protocol ConversationSocketDelegate: AnyObject {
     var messages: [Message] { get set }
-    var typingUsernames: [String] { get set }
+    var typingParticipants: [TypingParticipant] { get set }
+
+    /// Avatar CONNU LOCALEMENT de cet auteur, ou `nil`.
+    ///
+    /// `TypingEvent` n'en transporte aucun : c'est au client de le retrouver
+    /// dans ce qu'il a déjà. Aucune requête ne doit partir pour afficher une
+    /// frappe — d'où le retour synchrone et l'optionnel assumé.
+    func localAvatarURL(forSender userId: String) -> String?
     var lastUnreadMessage: Message? { get set }
     var messageTranslations: [String: [MessageTranslation]] { get set }
     var messageTranscriptions: [String: MessageTranscription] { get set }
@@ -128,7 +135,7 @@ final class ConversationSocketHandler {
     // caused one user's typing:stop to wipe the other's still-active entry.
     nonisolated(unsafe) private var typingSafetyTimers: [String: Timer] = [:]
     nonisolated(unsafe) private var typingUserOrder: [String] = []
-    nonisolated(unsafe) private var typingUserNames: [String: String] = [:]
+    nonisolated(unsafe) private var typingUserEntries: [String: TypingParticipant] = [:]
 
     /// `true` une fois `activate()` exécuté (instance réelle, installée par
     /// `@StateObject`). SwiftUI alloue EAGER un `ConversationViewModel`
@@ -203,7 +210,7 @@ final class ConversationSocketHandler {
         typingSafetyTimers.values.forEach { $0.invalidate() }
         typingSafetyTimers.removeAll()
         typingUserOrder.removeAll()
-        typingUserNames.removeAll()
+        typingUserEntries.removeAll()
         // Snapshot `delegate` now, while `self` is still valid, and hand the
         // snapshot (not `self`) to the Task. ARC zeroes weak references to
         // `self` as soon as `deinit` begins — a `[weak self]` capture inside
@@ -212,7 +219,7 @@ final class ConversationSocketHandler {
         // and leaving stale typing indicators on the delegate after teardown.
         let delegateSnapshot = delegate
         Task { @MainActor in
-            delegateSnapshot?.typingUsernames.removeAll()
+            delegateSnapshot?.typingParticipants.removeAll()
         }
     }
 
@@ -328,20 +335,37 @@ final class ConversationSocketHandler {
 
     /// Roster of currently-typing users, keyed by userId so a same-name
     /// collision can't make one user's departure clear another's entry.
-    /// `delegate.typingUsernames` is recomputed from this roster on every
+    /// `delegate.typingParticipants` is recomputed from this roster on every
     /// change, preserving first-seen order.
     private func addTypingUser(id: String, name: String) {
-        typingUserNames[id] = name
+        // L'avatar est relu à CHAQUE `typing:start`, pas seulement à la
+        // première frappe : au tout premier événement l'auteur n'a
+        // peut-être encore rien écrit dans ce fil (aucun `senderAvatarURL`
+        // en mémoire), et le keepalive de frappe — un `typing:start` toutes
+        // les ~3 s — rattrape le visage dès qu'il devient connu.
+        typingUserEntries[id] = TypingParticipant(
+            id: id,
+            displayName: name,
+            avatarURL: delegate?.localAvatarURL(forSender: id)
+        )
         if !typingUserOrder.contains(id) {
             typingUserOrder.append(id)
         }
-        delegate?.typingUsernames = typingUserOrder.compactMap { typingUserNames[$0] }
+        publishTypingRoster()
     }
 
     private func removeTypingUser(id: String) {
-        guard typingUserNames.removeValue(forKey: id) != nil else { return }
+        guard typingUserEntries.removeValue(forKey: id) != nil else { return }
         typingUserOrder.removeAll { $0 == id }
-        delegate?.typingUsernames = typingUserOrder.compactMap { typingUserNames[$0] }
+        publishTypingRoster()
+    }
+
+    /// Republie le roster dans l'ordre de première apparition. Site unique :
+    /// les deux mutations ci-dessus doivent produire exactement la même
+    /// projection, sans quoi la rangée du fil et le bouton de retour au bas
+    /// désigneraient des personnes différentes.
+    private func publishTypingRoster() {
+        delegate?.typingParticipants = typingUserOrder.compactMap { typingUserEntries[$0] }
     }
 
     // MARK: - Socket Subscriptions
@@ -1284,8 +1308,8 @@ final class ConversationSocketHandler {
                 self.typingSafetyTimers.values.forEach { $0.invalidate() }
                 self.typingSafetyTimers.removeAll()
                 self.typingUserOrder.removeAll()
-                self.typingUserNames.removeAll()
-                self.delegate?.typingUsernames.removeAll()
+                self.typingUserEntries.removeAll()
+                self.delegate?.typingParticipants.removeAll()
                 self.triggerSyncIfNeeded()
             }
             .store(in: &cancellables)

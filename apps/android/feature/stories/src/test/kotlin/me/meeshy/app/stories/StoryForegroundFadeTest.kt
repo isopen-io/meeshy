@@ -107,4 +107,20 @@ class StoryForegroundFadeTest {
         val clip = layer(startTime = 0.0, duration = 10.0)
         assertThat(clip.animated(atSeconds = 5f)).isEqualTo(clip)
     }
+
+    @Test
+    fun `an untimed foreground clip is visible at every playhead`() {
+        val clip = layer(startTime = 0.0, duration = 0.0)
+        assertThat(clip.isVisible(atSeconds = 0f)).isTrue()
+        assertThat(clip.isVisible(atSeconds = 999f)).isTrue()
+    }
+
+    @Test
+    fun `a timed foreground clip is gated to its own window`() {
+        val clip = layer(startTime = 3.0, duration = 4.0)
+        assertThat(clip.isVisible(atSeconds = 2f)).isFalse()
+        assertThat(clip.isVisible(atSeconds = 3f)).isTrue()
+        assertThat(clip.isVisible(atSeconds = 6.9f)).isTrue()
+        assertThat(clip.isVisible(atSeconds = 7f)).isFalse()
+    }
 }

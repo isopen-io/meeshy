@@ -5,6 +5,25 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-25 — "carried" is not "honoured": a wire field can ride the projection and still change nothing (slice `story-element-timing-window-gate`)
+`StoryTextObjectView`/`StoryForegroundMediaView` already carried `startTime`/`duration` and even fed them to the
+fade envelope — so a grep for the field name reads as "supported". But the fade resolver returns `null` outside the
+window (caller keeps base opacity), so an element with a timing window BUT no authored fade stayed fully visible the
+whole slide. iOS gates it hard via `StoryRenderer.shouldRender` (a sharp on/off cut, separate from the fade). The
+lesson generalises the "which wire field does the client still not consume?" heuristic: **a field being decoded and
+projected does not mean its SEMANTICS are enforced — ask what OBSERVABLE behaviour the field is supposed to drive,
+then check that path exists.** Here the field drove a fade ramp but not the visibility cut. Two behaviours, one field;
+one was wired, one wasn't.
+
+- **Convention when porting a `T?`-vs-`0` distinction iOS keeps but the wire projection has flattened.** iOS's
+  `shouldRender` reads `duration.map { start + $0 } ?? .infinity` — a PRESENT `0` → zero-length window (never
+  visible), `nil` → infinity (always). Android's projection collapses absent→`0.0`, losing that distinction. The
+  right port is NOT the literal iOS formula (it would hide every untimed element) but the module's ESTABLISHED
+  reading of `duration <= 0` as open-ended (`StoryMediaFadeResolver`, the clip-transition path). Match the codebase's
+  existing convention for the flattened value, not the foreign source's, and document the deviation at the site.
+- **Fail-open on a degenerate clock.** A visibility gate fed a non-finite playhead should return `true`, never hide
+  everything — a slice that can blank the canvas on a NaN is worse than the gap it closes. Made it a tested branch.
+
 ## 2026-08-25 — find the reader gap by asking which wire field the client still doesn't consume (slice `story-slide-background-value`)
 The PROGRESS "Next" pointed at two composer-side pieces (per-element duration, background-designation) that both
 need a media-OBJECT authoring foundation the composer doesn't have yet — a big slice, not a thin one. Rather than

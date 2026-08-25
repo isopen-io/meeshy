@@ -52,4 +52,27 @@ final class ConnectionBannerTypingEntriesTests: XCTestCase {
         XCTAssertTrue(entries([:]).isEmpty)
         XCTAssertTrue(entries([:], excluding: "conv1").isEmpty)
     }
+
+    // MARK: - Remontée de la pastille
+
+    /// La pastille naissait trop bas sous le chrome de ses hôtes. Elle remonte
+    /// de trois fois sa hauteur — en RENDANT de la marge, jamais en débordant :
+    /// un hôte déjà collé en haut reste où il est.
+    func test_liftedTopPadding_liftsByThreeTimesThePillHeight() {
+        XCTAssertEqual(
+            ConnectionBanner.liftedTopPadding(base: 72),
+            72 - SyncPillMetrics.topLift,
+            "72 pt sous le header de conversation : la marge disponible est rendue"
+        )
+        XCTAssertEqual(SyncPillMetrics.topLift, 3 * SyncPillMetrics.height,
+                       "la remontée est exprimée en hauteurs de pastille, pas en points en dur")
+    }
+
+    func test_liftedTopPadding_neverPushesAboveTheTopOfItsHost() {
+        XCTAssertEqual(ConnectionBanner.liftedTopPadding(base: 0), 0,
+                       "un hôte sans marge (iPad) ne doit pas voir la pastille passer sous la barre d'état")
+        XCTAssertEqual(ConnectionBanner.liftedTopPadding(base: 8), 0,
+                       "le viewer de story n'a que 8 pt : il les rend, et s'arrête là")
+    }
+
 }

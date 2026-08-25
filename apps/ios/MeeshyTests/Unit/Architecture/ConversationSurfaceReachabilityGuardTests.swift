@@ -50,11 +50,18 @@ import XCTest
 @MainActor
 final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
 
-    /// La surface conversation : la vue et ses cinq fichiers d'extension.
-    /// Le préfixe est le critère — un septième `ConversationView+…` naîtra
-    /// couvert, sans que personne ait à penser à l'ajouter ici.
-    private static let surfacePrefix = "ConversationView"
-    private static let surfaceDirectory = "apps/ios/Meeshy/Features/Main/Views"
+    /// Les surfaces couvertes, par PRÉFIXE de nom de fichier — un
+    /// `ConversationView+…` ou un `StoryViewerView+…` de plus naît couvert, sans
+    /// que personne ait à penser à l'ajouter ici.
+    ///
+    /// 243i n'en couvrait qu'une (`ConversationView`). 244i y ajoute le FIL et
+    /// la STORY, chacune ayant d'abord été MESURÉE : c'est cette mesure qui a
+    /// rendu les six fonctions retirées et les trois exceptions ci-dessous.
+    private static let surfacePrefixes = ["ConversationView", "FeedView", "StoryViewerView"]
+    private static let surfaceDirectories = [
+        "apps/ios/Meeshy/Features/Main/Views",
+        "apps/ios/Meeshy/Features/Main/ViewModels",
+    ]
 
     /// Les exceptions, chacune avec la raison qui la rend légitime.
     ///
@@ -67,6 +74,72 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     /// — inscrite ici NOMMÉMENT pour qu'elle reste une dette VUE.
     private static let unreachableAllowlist: Set<String> = [
         "buildNativeMessageMenu",
+
+        // ── 244i · le fil : trois méthodes dont le SEUL appelant est la SUITE ──
+        //
+        // `likePost`, `bookmarkPost` et `clearTranslationOverride` sont
+        // déclarées sur `FeedViewModel`, largement couvertes par
+        // `FeedViewModelTests` — et appelées par AUCUN code de production.
+        //
+        // Ce n'est pas du code oublié : `FeedView` a RÉÉCRIT leur logique en
+        // ligne. Ses propres commentaires le disent — « Mirrors the
+        // SocialSocketManager call », « same one `FeedViewModel.likePost`
+        // already uses », « Mirror the pre-fix behaviour from
+        // FeedViewModel.bookmarkPost ». La vue porte donc le toggle optimiste,
+        // l'appel socket, le repli REST, la mise en file hors-ligne et
+        // l'observation d'issue, pendant que l'implémentation canonique — celle
+        // que les tests exercent — ne tourne jamais.
+        //
+        // > **Le code TESTÉ et le code EXPÉDIÉ ne sont pas le même.** Une suite
+        // > verte n'atteste alors plus rien du produit : elle mesure une
+        // > deuxième implémentation que personne ne rend. C'est la forme la plus
+        // > coûteuse de « code mort testé vert », parce qu'elle achète de la
+        // > confiance au lieu d'en retirer.
+        //
+        // Les RETIRER casserait les tests ; les CÂBLER est un refactor porteur
+        // de comportement sur le like / favori / file hors-ligne du fil, qui
+        // demande un simulateur (leçon 238i : découper par NIVEAU DE DOUTE).
+        // Inscrites NOMMÉMENT pour rester une dette VUE, avec le correctif
+        // proposé dans l'analyse 244i.
+        "likePost",
+        "bookmarkPost",
+        "clearTranslationOverride",
+
+        // ── 244i · la conversation : quatre méthodes que seule la suite appelle ──
+        //
+        // Même famille que les trois ci-dessus. `_testSetAudioCoordinator` est un
+        // SIÈGE DE TEST assumé (son préfixe le dit) et restera légitimement ici ;
+        // les trois autres sont du code de production dont plus rien, en
+        // production, ne dépend.
+        "_testSetAudioCoordinator",
+        "clearMentionSuggestions",
+        "handleMentionQuery",
+        "removeExpiredMessages",
+
+        // ── 244i · deux méthodes ENTANGLÉES avec de l'état vivant ──
+        //
+        // Elles n'ont AUCUN appelant, pas même un test — mais les retirer ne
+        // serait pas neutre, et c'est pourquoi elles sont inscrites plutôt que
+        // supprimées.
+        //
+        // `markProgrammaticScroll()` était l'unique site posant
+        // `isProgrammaticScroll = true`. Son seul appelant était
+        // `scrollToAndHighlight`, retirée en **243i** — mais celle-ci n'avait
+        // elle-même aucun site d'appel, donc le drapeau n'a JAMAIS été vrai.
+        // Conséquence à signaler, pas à corriger ici : le `guard … ,
+        // !isProgrammaticScroll` de la pagination (`ConversationViewModel:4132`)
+        // ne bloque rien, et la « réinitialisation défensive » (:1869) non plus.
+        // Retirer la méthode laisserait un drapeau LU que rien n'écrit — la
+        // vraie question (cette garde doit-elle fonctionner ?) appartient à la
+        // piste conversation et demande un simulateur.
+        //
+        // `fetchReactionDetails(messageId:)` peuple `reactionDetails` /
+        // `isLoadingReactions`, deux `@Published` que `ConversationStateStore`
+        // déclare AUSSI, pendant que `MessageReactionsDetailView` porte son
+        // PROPRE `@State isLoadingReactions`. Trois copies d'un même état, une
+        // seule alimentée. Démêler cela est un lot en soi.
+        "markProgrammaticScroll",
+        "fetchReactionDetails",
     ]
 
     /// Les exigences de protocole que le FRAMEWORK appelle. Elles ne sont
@@ -148,13 +221,15 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     }
 
     private static func surfaceFiles() -> [URL] {
-        let dir = repoRoot().appendingPathComponent(surfaceDirectory)
-        let contents = (try? FileManager.default.contentsOfDirectory(
-            at: dir, includingPropertiesForKeys: nil
-        )) ?? []
+        let root = repoRoot()
+        let contents = surfaceDirectories.flatMap { dir -> [URL] in
+            (try? FileManager.default.contentsOfDirectory(
+                at: root.appendingPathComponent(dir), includingPropertiesForKeys: nil
+            )) ?? []
+        }
         return contents
             .filter { $0.pathExtension == "swift" }
-            .filter { $0.lastPathComponent.hasPrefix(surfacePrefix) }
+            .filter { url in surfacePrefixes.contains { url.lastPathComponent.hasPrefix($0) } }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
@@ -238,14 +313,14 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     func test_leBalayageVoitLaSurfaceEtSesFonctions() {
         let files = Self.surfaceSources
         XCTAssertGreaterThanOrEqual(
-            files.count, 5,
-            "La surface conversation compte au moins la vue et ses cinq extensions"
+            files.count, 10,
+            "Les trois surfaces (conversation, fil, story) comptent ensemble au moins dix fichiers"
         )
 
         let declared = files.reduce(into: Set<String>()) {
             $0.formUnion(declaredFunctionNames(in: $1.code))
         }
-        XCTAssertGreaterThan(declared.count, 50, "Le dépouillement mange les déclarations")
+        XCTAssertGreaterThan(declared.count, 200, "Le dépouillement mange les déclarations")
         XCTAssertTrue(
             declared.contains("triggerReply"),
             "`triggerReply(for:)` est un helper vivant de la surface — s'il n'est plus vu, la détection est cassée"

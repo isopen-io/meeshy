@@ -29,7 +29,6 @@ type NotificationItemProps = {
   /** Locale de l'appareil — décore la date locale de publication du contenu social. */
   locale?: string;
   compact?: boolean;
-  index?: number;
 };
 
 export const NotificationItem = memo(function NotificationItem({
@@ -41,7 +40,6 @@ export const NotificationItem = memo(function NotificationItem({
   t,
   locale,
   compact = false,
-  index = 0,
 }: NotificationItemProps) {
   const isUnread = !notification.state.isRead;
   const title = buildNotificationTitle(notification, t);

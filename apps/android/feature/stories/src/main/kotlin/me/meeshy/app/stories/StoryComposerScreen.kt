@@ -38,6 +38,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Login
@@ -90,9 +91,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -127,8 +130,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.StoryBackgroundPalette
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.ui.theme.hexColor
 
 /**
  * Story composer screen — the publish surface reached from the tray's "add story"
@@ -315,6 +321,7 @@ fun StoryComposerScreen(
                 selectedFilter = state.selectedSlideFilter,
                 filterIntensity = state.selectedSlideFilterIntensity,
                 slideDurationSeconds = state.selectedSlideDurationSeconds,
+                selectedBackground = state.selectedSlideBackground,
                 canAddText = state.deck.selectedCanAddTextElement,
                 canAddSticker = state.deck.selectedCanAddSticker,
                 isUploadingMedia = state.isUploadingMedia,
@@ -337,6 +344,7 @@ fun StoryComposerScreen(
                 onSelectFilter = viewModel::onSelectFilter,
                 onFilterIntensityChange = viewModel::onFilterIntensityChange,
                 onSlideDurationChange = viewModel::onSlideDurationChange,
+                onSelectBackground = viewModel::onSlideBackgroundChange,
             )
         }
     }
@@ -359,6 +367,7 @@ private fun ComposerControlsLayer(
     selectedFilter: StoryFilter?,
     filterIntensity: Float,
     slideDurationSeconds: Double,
+    selectedBackground: StoryBackgroundValue?,
     canAddText: Boolean,
     canAddSticker: Boolean,
     isUploadingMedia: Boolean,
@@ -375,6 +384,7 @@ private fun ComposerControlsLayer(
     onSelectFilter: (StoryFilter?) -> Unit,
     onFilterIntensityChange: (Float) -> Unit,
     onSlideDurationChange: (Double) -> Unit,
+    onSelectBackground: (StoryBackgroundValue?) -> Unit,
 ) {
     val swipeThresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -415,6 +425,10 @@ private fun ComposerControlsLayer(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        BackgroundRow(
+                            selected = selectedBackground,
+                            onSelect = onSelectBackground,
+                        )
                         FilterRow(
                             selected = selectedFilter,
                             intensity = filterIntensity,
@@ -1516,6 +1530,87 @@ private fun StoryVisibility.labelRes(): Int = when (this) {
     StoryVisibility.FRIENDS -> R.string.stories_visibility_friends
     StoryVisibility.COMMUNITY -> R.string.stories_visibility_community
     StoryVisibility.PRIVATE -> R.string.stories_visibility_private
+}
+
+/**
+ * The Effets drawer's background picker: a "None" chip (clears the backdrop), one
+ * tappable swatch per [StoryBackgroundPalette] preset (solids and gradients), and a
+ * "random pastel" swatch. Selecting hands the chosen [StoryBackgroundValue] straight
+ * to the deck, which serialises it to `effects.background`; the reader paints it over
+ * its accent→black fallback. Per-slide; the palette + parse rules live in the model,
+ * so this stays glue. The random pastel is minted here (UI-side randomness) via the
+ * pure [StoryBackgroundPalette.randomPastel].
+ */
+@Composable
+private fun BackgroundRow(
+    selected: StoryBackgroundValue?,
+    onSelect: (StoryBackgroundValue?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val label = stringResource(R.string.stories_composer_background)
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium)
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            item {
+                FilterChip(
+                    selected = selected == null,
+                    onClick = { onSelect(null) },
+                    label = { Text(stringResource(R.string.stories_composer_background_none)) },
+                )
+            }
+            items(StoryBackgroundPalette.presets()) { preset ->
+                BackgroundSwatch(
+                    brush = backgroundSwatchBrush(preset),
+                    isSelected = preset == selected,
+                    onClick = { onSelect(preset) },
+                )
+            }
+            item {
+                val randomLabel = stringResource(R.string.stories_composer_background_random)
+                FilterChip(
+                    selected = false,
+                    onClick = { onSelect(StoryBackgroundPalette.randomPastel()) },
+                    label = { Text(randomLabel) },
+                )
+            }
+        }
+    }
+}
+
+/** One tappable background swatch — a rounded chip painted with [brush], ringed when [isSelected]. */
+@Composable
+private fun BackgroundSwatch(
+    brush: Brush,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val ring = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+    Box(
+        modifier = modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(brush)
+            .border(BorderStroke(if (isSelected) 2.dp else 1.dp, ring), CircleShape)
+            .clickable(onClick = onClick),
+    )
+}
+
+/**
+ * The paint for a preview swatch — a solid fill or a two-colour gradient — reusing the
+ * same `hexColor` SSOT the reader paints with, so the swatch matches what publishes.
+ */
+private fun backgroundSwatchBrush(value: StoryBackgroundValue): Brush = when (value) {
+    is StoryBackgroundValue.Hex -> SolidColor(hexColor(value.hex))
+    is StoryBackgroundValue.Gradient -> Brush.linearGradient(
+        listOf(hexColor(value.start), hexColor(value.end)),
+    )
 }
 
 /**

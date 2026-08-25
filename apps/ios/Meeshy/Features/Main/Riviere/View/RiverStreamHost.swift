@@ -84,7 +84,7 @@ struct RiverStreamHost: View {
     /// dans `RiverLaneResolver` ni dans `lanesInput` : une voix qui n'a encore
     /// rien DIT ne doit pas faire naître un couloir — et ce couloir
     /// survivrait au `typing:stop` (`RiverTypingIndicatorTests`).
-    var typingNames: [String] = []
+    var typingParticipants: [TypingParticipant] = []
     /// Demande de RE-CADRAGE venue de l'appelant (première géométrie
     /// peuplée, rangs préfixés) — chaque incrément recadre le curseur.
     var landingToken: Int = 0
@@ -153,7 +153,7 @@ struct RiverStreamHost: View {
     /// 2026-08-25). Aucune couleur en dur : une peau ne redéclare jamais une
     /// loi de couleur.
     private var typingAccentHex: String {
-        DynamicColorGenerator.colorForName(typingNames.first ?? "")
+        DynamicColorGenerator.colorForName(typingParticipants.first?.displayName ?? "")
     }
 
     /// **Hauteur de lecture, en RANG** — ce que `resolveRiverLaneHeaders`
@@ -453,9 +453,9 @@ struct RiverStreamHost: View {
         // donne au bandeau la même lisibilité que la tenue capsule, sans
         // changer sa tenue mandatée (`isFlat: true`).
         .overlay(alignment: .bottom) {
-            if !typingNames.isEmpty {
+            if !typingParticipants.isEmpty {
                 TypingIndicatorBubble(
-                    names: typingNames,
+                    participants: typingParticipants,
                     accentHex: typingAccentHex,
                     isDark: colorScheme == .dark,
                     isFlat: true

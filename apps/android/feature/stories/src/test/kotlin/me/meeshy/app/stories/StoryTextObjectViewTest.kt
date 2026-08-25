@@ -106,4 +106,20 @@ class StoryTextObjectViewTest {
         // An un-keyed channel holds its base too.
         assertThat(mid.scale).isWithin(1e-4).of(1.0)
     }
+
+    @Test
+    fun `an untimed text object is visible at every playhead`() {
+        val obj = textObject(startTime = 0.0, duration = 0.0)
+        assertThat(obj.isVisible(atSeconds = 0f)).isTrue()
+        assertThat(obj.isVisible(atSeconds = 999f)).isTrue()
+    }
+
+    @Test
+    fun `a timed text object is gated to its own window`() {
+        val obj = textObject(startTime = 2.0, duration = 3.0)
+        assertThat(obj.isVisible(atSeconds = 1f)).isFalse()
+        assertThat(obj.isVisible(atSeconds = 2f)).isTrue()
+        assertThat(obj.isVisible(atSeconds = 4.5f)).isTrue()
+        assertThat(obj.isVisible(atSeconds = 5f)).isFalse()
+    }
 }

@@ -8,8 +8,9 @@ import UserNotifications
 /// dès que le socket était down.
 ///
 /// Règles :
-/// - Socket vivant → le toast in-app (déjà gaté par `allowsNotification`)
-///   prend le relais : pas de bannière système, badge seul si activé.
+/// - Socket vivant → le toast in-app (gaté, lui, par `allowsInAppBanner` —
+///   règle plus permissive : l'utilisateur est DANS l'app) prend le relais :
+///   pas de bannière système, badge seul si activé.
 /// - Socket down → bannière système UNIQUEMENT si `allowsNotification` accepte
 ///   le type (master push, DND, toggle par catégorie) ; `.sound` seulement si
 ///   « Sons » est actif ; `.badge` seulement si « Badges » est actif.

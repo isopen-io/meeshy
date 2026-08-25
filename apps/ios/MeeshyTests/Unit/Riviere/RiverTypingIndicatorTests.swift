@@ -13,7 +13,7 @@ import XCTest
 /// `internal` — elle était `private`, donc à portée de FICHIER, donc invisible
 /// depuis `Riviere/View/` : il n'existait aucun moyen de monter la MÊME vue
 /// sans en déclarer une seconde. `RiverStreamHost` reçoit désormais le roster
-/// de son hôte (`typingNames`, dit par `ConversationView` depuis
+/// de son hôte (`typingParticipants`, dit par `ConversationView` depuis
 /// `ConversationViewModel.typingUsernames`) et le rend en OVERLAY BAS du pane,
 /// au-dessus du composeur.
 ///
@@ -154,11 +154,11 @@ final class RiverTypingIndicatorTests: XCTestCase {
     /// Le roster entre dans la peau, il est RENDU par la MÊME vue que le Fil,
     /// et il ne compose AUCUN couloir : ni la grille ni la bande basse ne le
     /// connaissent.
-    func test_typingNames_areRendered_withoutCreatingALane() throws {
+    func test_typingParticipants_areRendered_withoutCreatingALane() throws {
         let host = try normalizedSkin("RiverStreamHost.swift")
 
         XCTAssertTrue(
-            host.contains("var typingNames: [String] = []"),
+            host.contains("var typingParticipants: [TypingParticipant] = []"),
             "`RiverStreamHost` doit RECEVOIR le roster de son appelant — la peau ne lit aucun " +
             "singleton de frappe, elle est dite."
         )
@@ -199,20 +199,20 @@ final class RiverTypingIndicatorTests: XCTestCase {
 
         let conversationHost = try normalizedSkin("RiverConversationHost.swift")
         XCTAssertTrue(
-            conversationHost.contains("var typingNames: [String] = []"),
+            conversationHost.contains("var typingParticipants: [TypingParticipant] = []"),
             "l'hôte de conversation porte le roster…"
         )
         XCTAssertTrue(
-            conversationHost.contains("typingNames: [String] = [],"),
+            conversationHost.contains("typingParticipants: [TypingParticipant] = [],"),
             "…et son init EXPLICITE le déclare — sans quoi l'appelant ne peut pas le dire " +
             "(cet hôte n'a pas d'init mémberwise : il en écrit un)."
         )
         XCTAssertTrue(
-            conversationHost.contains("self.typingNames = typingNames"),
+            conversationHost.contains("self.typingParticipants = typingParticipants"),
             "…qu'il assigne…"
         )
         XCTAssertTrue(
-            conversationHost.contains("typingNames: typingNames,"),
+            conversationHost.contains("typingParticipants: typingParticipants,"),
             "…et RELAIE au lecteur. Un champ reçu mais jamais transmis serait un correctif que " +
             "personne n'affiche."
         )
@@ -225,7 +225,7 @@ final class RiverTypingIndicatorTests: XCTestCase {
         let host = try normalizedSkin("RiverStreamHost.swift")
         let overlay = try Self.block(after: ".overlay(alignment: .bottom) {", in: host)
         XCTAssertTrue(
-            overlay.hasPrefix(" if !typingNames.isEmpty {"),
+            overlay.hasPrefix(" if !typingParticipants.isEmpty {"),
             "le montage est GARDÉ sur un roster non vide, et cette garde est la PREMIÈRE chose " +
             "que fait l'overlay. Corps lu : \(overlay)"
         )
@@ -238,19 +238,19 @@ final class RiverTypingIndicatorTests: XCTestCase {
     func test_theGuardsAbove_wouldCatchAnUngatedBanner_orAnInsetChild() {
         XCTAssertFalse(
             Self.bannerIsGatedOnAnEmptyRoster(
-                " TypingIndicatorBubble( names: typingNames, isFlat: true ) .padding(.bottom, bottomInset) "
+                " TypingIndicatorBubble( participants: typingParticipants, isFlat: true ) .padding(.bottom, bottomInset) "
             ),
-            "un bandeau monté SANS `if !typingNames.isEmpty` doit faire rougir la garde"
+            "un bandeau monté SANS `if !typingParticipants.isEmpty` doit faire rougir la garde"
         )
         XCTAssertTrue(
             Self.bannerIsGatedOnAnEmptyRoster(
-                " if !typingNames.isEmpty { TypingIndicatorBubble( names: typingNames ) } "
+                " if !typingParticipants.isEmpty { TypingIndicatorBubble( participants: typingParticipants ) } "
             ),
             "…et le montage gardé, lui, doit passer"
         )
         XCTAssertFalse(
             Self.bottomSafeAreaInsetStaysEmpty(
-                ".safeAreaInset(edge: .bottom, spacing: 0) { TypingIndicatorBubble(names: typingNames) }"
+                ".safeAreaInset(edge: .bottom, spacing: 0) { TypingIndicatorBubble(participants: typingParticipants) }"
             ),
             "un bandeau devenu enfant du `safeAreaInset` doit faire rougir la garde"
         )
@@ -265,7 +265,7 @@ final class RiverTypingIndicatorTests: XCTestCase {
     // MARK: - Prédicats partagés par les gardes et leur contre-épreuve
 
     private static func bannerIsGatedOnAnEmptyRoster(_ overlayBody: String) -> Bool {
-        overlayBody.hasPrefix(" if !typingNames.isEmpty {")
+        overlayBody.hasPrefix(" if !typingParticipants.isEmpty {")
             && overlayBody.contains("TypingIndicatorBubble(")
     }
 

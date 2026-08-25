@@ -1,83 +1,66 @@
-# Cycle 126 — note de CONVERGENCE : deux passes ont trouvé le même défaut, séparément
+# Notifications in-app + indicateurs de frappe — 2026-08-25
 
-> Ce document ne décrit pas un lot, il décrit une RENCONTRE. Le lot lui-même est
-> `tasks/todo-cycle126-bannieres-jumelles-2026-08-24.md` et
-> `tasks/realtime-sync-audit-2026-08-24-cycle126.md` — ceux de la passe qui a mergé la première.
+## Règle produit (validée avec l'utilisateur)
 
-## Ce qui s'est passé
+1. **Un message rétracte la frappe qui l'annonçait.** L'arrivée d'un message d'un
+   auteur éteint immédiatement son indicateur de frappe dans cette conversation,
+   sur toutes les surfaces. Pendant exact de la règle déjà gravée
+   (« typing:start reçu = preuve d'activité »).
+2. **Toute notification arrive en bannière in-app quand l'app est au premier plan.**
+   Seule exception : la conversation où l'on se trouve. Les toggles PAR TYPE restent
+   honorés (les réglages gardent un effet) ; `pushEnabled`, Ne-pas-déranger et le
+   Focus iOS ne gouvernent plus l'in-app — ce sont des filtres pour ne pas être
+   dérangé quand on n'est PAS dans l'app.
 
-Deux passes ont instruit le même suivi MESURÉ du cycle 124 en parallèle, sans se voir, et ont
-trouvé le même défaut : **les éventails RÉPONSE et MENTION ne poussaient pas `messageCreatedAt` /
-`messageType`**, donc la bulle que la NSE iOS pré-enregistre au démarrage à froid portait l'horloge
-du DEVICE et se rendait en `text` — un rectangle vide pour une réponse vocale, ces éventails ne
-poussant pas `attachmentMimeType` non plus (décision du cycle 125 bis).
+## Lots
 
-Les deux correctifs sont **fonctionnellement équivalents**, y compris sur les trois arbitrages qui
-comptent :
+- [x] 1. Rétractation de la frappe par le message (web + iOS)
+- [x] 2. Vitesse de rendu (prop morte `index` + memo web ; churn RootView iOS)
+- [x] 3. Couverture in-app : ouvrir les gates sauf la conversation ouverte
+- [x] 4. SyncPill remontée de 3× sa hauteur
+- [x] 5. NotificationToastView opaque clair/foncé
+- [x] 6. Vrai avatar dans l'indicateur de frappe en conversation
+- [x] 7. Bouton scroll-to-bottom : avatars des frappeurs + points animés
+- [x] 8. Bouton scroll-to-bottom stable pendant la frappe locale
+- [x] 9. Fond de conversation opaque
 
-| arbitrage | passe mergée (PR #3483) | cette passe |
+## Ce qui a été fait, par site
+
+| Lot | Site | Changement |
 |---|---|---|
-| une seule requête (colonnes ajoutées au `select` existant) | ✅ | ✅ |
-| l'estampille N'EST PAS gardée comme du contenu (elle survit au placeholder de protection) | ✅ | ✅ |
-| fail-OPEN : relecture en échec ⇒ aucune clé, jamais une horloge inventée | ✅ | ✅ |
-| garde `instanceof Date` sur la colonne | ✅ | ✅ |
+| 1 | `typing.service.ts` | `clearTypingForUser()` — retrait immédiat, annule le linger ; le linger 3 s reste pour la PAUSE |
+| 1 | `messaging.service.ts` | `setTypingRetractor()`, appelé après le dedup et AVANT `decryptMessage` |
+| 1 | `orchestrator.service.ts` | câble les deux services (le lien vit chez le propriétaire, hors socket) |
+| 1 | `ConversationListViewModel.swift` | abonnement `messageReceived` → `handleTypingStopped` |
+| 2 | `NotificationItem/List/Dropdown.tsx` | prop morte `index` retirée (elle invalidait `memo` sur toute la liste) |
+| 2 | `use-notifications-manager-rq.tsx` | `useMemo` sur le `flatMap` |
+| 2 | `NotificationToastManager.swift` | `activeConversationId`/`activePostId` dépubliés (churn racine) |
+| 3 | `UserNotificationPreferences+Filter.swift` | `allowsInAppBanner(type:)` — seuls les toggles par type |
+| 3 | `NotificationToastManager.swift` | gate `activePostId` retiré ; `focusFilterProvider` supprimé (plus aucun lecteur) |
+| 4 | `SyncPill.swift`, `ConnectionBanner.swift` | `SyncPillMetrics.topLift` + `liftedTopPadding(base:)`, appliqué aux 3 hôtes qui ont de la marge |
+| 5 | `NotificationToastView.swift` | fond opaque `backgroundPrimary(isDark:)`, `isDark` lu sur `ThemeManager` (même source que le texte) |
+| 6/7 | `TypingParticipant.swift` (neuf) | type porteur userId + displayName + avatarURL, résolu LOCALEMENT |
+| 6 | `MessageListViewController.swift` | `TypingIndicatorBubble` porte le visage, en mode bulles ET plat |
+| 7 | `ConversationScrollControlsView.swift` | pile d'avatars + points animés par-dessus ; toutes les features existantes conservées |
+| 8 | `ConversationView.swift` | `resolvedScrollButtonAnchor` — l'ancrage se fige pendant la rédaction |
+| 9 | `ConversationAnimatedBackground.swift` | plancher opaque + teintes composées au lieu d'alphas |
 
-Elles ne diffèrent que par la FORME du type porteur — `MessageBannerSource` plat contre un
-`MessageNotificationSource { prism, stamp }` imbriqué — et par le site de la projection
-(`messageClockFields` dédié contre un `prePersistedMessageFields` élargi).
+## Décisions produit prises avec l'utilisateur
 
-## Ce qui a été retenu, et pourquoi
+- **Bannière in-app** : seuls les interrupteurs PAR TYPE la gouvernent. `pushEnabled`, « Ne pas déranger »
+  et le Focus iOS ne s'y appliquent plus — ils protègent l'attention d'un utilisateur ABSENT.
+- **Conséquence signalée** : `MeeshyFocusFilter` / `MeeshyFocusStore` et leur App Intent n'ont plus de
+  consommateur. À supprimer ou à rebrancher — décision produit laissée ouverte.
+- **Story/post ouvert** : ne supprime plus la bannière (une seule exception au monde : la conversation ouverte).
 
-**L'implémentation de la passe mergée la première**, conformément au précédent posé au cycle 123
-(« Note de convergence — l'implémentation retenue est celle de l'itération 257, la première
-mergée »). Faire cohabiter deux abstractions parallèles pour la même règle est strictement pire que
-l'une des deux : c'est exactement le mécanisme qui a produit les familles divergentes des
-cycles 118 à 122.
+## Faits mesurés à l'origine du chantier
 
-**Et elle couvrait PLUS.** La passe mergée a trouvé un second champ resté derrière le cycle 125 bis
-que celle-ci n'avait pas vu : `notificationLocKey` — la clé qui QUALIFIE le placeholder de
-protection et sert de SECOND VERROU à `createNotification`. Sa leçon (§ 279, « un lot qui fait
-CONVERGER une chaîne laisse derrière tout ce qui la QUALIFIE ») généralise mieux que la formulation
-de cette passe, centrée sur le seul helper.
-
-## Ce que cette passe a apporté au lot mergé
-
-Un témoin que le lot mergé n'avait pas, ajouté à son propre fichier
-(`replyMentionBannerClock.test.ts`) :
-
-> **`createMentionNotificationsBatch` — deux mentionnés ⇒ UNE seule relecture du message.**
-
-Les témoins du lot mergé exercent `createMentionNotification` en SOLO. Le chemin de production est
-le BATCH, et c'est lui qui porte le risque que ce correctif introduit : **élargir un `select` est
-exactement le geste qui invite à ouvrir une seconde lecture**, et une lecture PAR DESTINATAIRE ne
-rougit nulle part — elle se paie en latence de fan-out, sur un chemin que personne ne mesure.
-
-Le témoin exige N > 1 : à un seul mentionné, « une lecture » et « une lecture par destinataire »
-rendent le même compte, et l'assertion ne peut pas tomber. C'est la leçon 276 transposée — un
-témoin de rang s'écrit sur un rang autre que le premier ; ici, sur un lot autre que le singleton.
-
-**ROUGE prouvé** : en retirant le `prismSource` que le batch relaie, le témoin tombe (3 lectures au
-lieu d'1) et **aucun autre témoin du dépôt ne bouge**.
-
-## Gates de cette passe
-
-| gate | résultat |
-|---|---|
-| `replyMentionBannerClock.test.ts` (fichier mergé + témoin ajouté) | **20 témoins verts** ; le nouveau prouvé ROUGE sous mutation |
-| suite gateway complète, sur l'arbre APRÈS merge | **859 suites / 19 539 témoins verts** (exit 0) |
-| `services/gateway` `tsc --noEmit` | 0 erreur |
-
-Les 19 539 témoins de l'arbre mergé se comparent aux 19 527 mesurés sur cette passe seule et
-aux 19 538 annoncés par la passe mergée : l'écart de +1 est le témoin de batch ajouté ci-dessus.
-
-## La leçon de la rencontre elle-même
-
-C'est la **deuxième** convergence de ce type en quatre cycles (la première : itération 257 ↔
-cycle 123, qui avait câblé COMMENTAIRES et STATUS à l'identique). Les deux fois, le point de départ
-était un **suivi MESURÉ écrit dans le dépôt** — et c'est précisément ce qui rend la collision
-probable : un suivi bien écrit est une piste que n'importe quelle passe suivante saura reprendre.
-
-> Ce n'est pas du gaspillage à supprimer, c'est le prix d'un backlog LISIBLE — et il se paie en
-> travail dupliqué, jamais en défaut manqué. La contre-mesure n'est pas d'écrire des suivis plus
-> vagues : c'est de **relire `origin/main` avant de committer**, et de converger sur la première
-> implémentation mergée plutôt que de défendre la sienne.
+| # | Site | Fait |
+|---|---|---|
+| A1 | `typing.service.ts:87` | `handleTypingStopWithDelay` retarde le retrait de 3 s ; l'expéditeur émet `typing:stop` à l'ENVOI ⇒ « X écrit… » survit 3 s au message affiché. |
+| A2 | `useConversationTyping.ts` | aucun chemin `message:new` → retrait ; filet à 8 s. |
+| A3 | `ConversationListViewModel.swift:940` | écoute `typingStarted`/`typingStopped`, jamais `messageReceived` ; nettoyage à 15 s. |
+| A4 | `StatusHandler.ts` | le gateway n'émet aucun `typing:stop` implicite à la création d'un message. |
+| B1 | `NotificationItem.tsx:32,44` | prop `index` MORTE ⇒ `memo` invalidé sur toute la liste à chaque insertion en tête. |
+| B2 | `use-notifications-manager-rq.tsx:95` | `flatMap` sans `useMemo` ⇒ identité neuve à chaque rendu. |
+| B3 | `RootView.swift:197`, `iPadRootView.swift:52` | `@ObservedObject NotificationToastManager.shared` ⇒ la racine se ré-évalue sur `unreadCount`/`activeConversationId`/`activePostId`/`currentToast`. Churn documenté par `ConversationSocketHandler.swift:137`. |

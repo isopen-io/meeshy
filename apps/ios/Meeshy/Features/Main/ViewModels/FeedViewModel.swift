@@ -1092,15 +1092,13 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    /// Re-sharing a SHARE must reference the ORIGINAL reel/post (root), never the
-    /// intermediate share — otherwise the new post embeds an empty share card
-    /// (the gateway hydrates `repostOf` only one level deep). When `postId` is
-    /// itself a repost, resolve to its recorded root (`originalRepostOfId`, else
-    /// the directly reposted content's id). Non-shares repost with their own id.
-    private func resolveRepostTargetId(_ postId: String) -> String {
-        guard let repost = posts.first(where: { $0.id == postId })?.repost else { return postId }
-        return repost.originalRepostOfId ?? repost.id
-    }
+    // `resolveRepostTargetId(_:)` a vécu ici sans site d'appel. La règle qu'elle
+    // portait — re-partager un PARTAGE doit référencer la RACINE, jamais le
+    // partage intermédiaire — est bien appliquée, mais par `ComposerIntent`
+    // (`let reference = originalRepostOfId ?? repostOfId ?? cardId`), que ce
+    // fichier alimente déjà en lui passant `originalRepostOfId` directement.
+    // Le retrait ne relâche donc aucun invariant : il retire la SECONDE
+    // implémentation d'une règle qui n'en veut qu'une.
 
     /// Server-side payload returned by `POST /posts/:postId/share`. The
     /// counter fields are always present; `shortUrl` + `token` are only

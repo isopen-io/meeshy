@@ -26,7 +26,7 @@ struct RiverConversationHost: View {
     /// cet hôte ne le regarde pas, et il n'entre JAMAIS dans
     /// `RiverConversationMapping` — la frappe décore la peau, elle ne compose
     /// aucun couloir.
-    var typingNames: [String] = []
+    var typingParticipants: [TypingParticipant] = []
     /// R-5 — résolveurs d'identité vivante et ouvertures, DITS par l'appelant
     /// (qui possède `PresenceManager`, `StoryViewModel`, le routeur).
     var presence: (MeeshyMessage) -> PresenceState? = { _ in nil }
@@ -64,7 +64,7 @@ struct RiverConversationHost: View {
         viewerId: String,
         topInset: CGFloat = 0,
         bottomInset: CGFloat = 0,
-        typingNames: [String] = [],
+        typingParticipants: [TypingParticipant] = [],
         presence: @escaping (MeeshyMessage) -> PresenceState? = { _ in nil },
         storyRing: @escaping (MeeshyMessage) -> StoryRingState = { _ in .none },
         onOpenProfile: ((ProfileSheetUser) -> Void)? = nil,
@@ -77,7 +77,7 @@ struct RiverConversationHost: View {
         self.viewerId = viewerId
         self.topInset = topInset
         self.bottomInset = bottomInset
-        self.typingNames = typingNames
+        self.typingParticipants = typingParticipants
         self.presence = presence
         self.storyRing = storyRing
         self.onOpenProfile = onOpenProfile
@@ -140,7 +140,7 @@ struct RiverConversationHost: View {
                 paneWidth: proxy.size.width,
                 headerInset: topInset,
                 bottomInset: bottomInset,
-                typingNames: typingNames,
+                typingParticipants: typingParticipants,
                 landingToken: landingToken,
                 onOpenProfile: onOpenProfile,
                 onViewStory: onViewStory,

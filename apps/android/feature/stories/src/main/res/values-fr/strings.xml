@@ -88,6 +88,9 @@
     <string name="stories_composer_filter_intensity">Intensité du filtre</string>
     <string name="stories_composer_slide_duration">Durée de la diapo</string>
     <string name="stories_composer_slide_duration_value">%1$ds</string>
+    <string name="stories_composer_background">Fond</string>
+    <string name="stories_composer_background_none">Aucun</string>
+    <string name="stories_composer_background_random">Aléatoire</string>
     <string name="stories_composer_filter_none">Aucun</string>
     <string name="stories_composer_filter_vintage">Vintage</string>
     <string name="stories_composer_filter_bw">N&amp;B</string>

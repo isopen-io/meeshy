@@ -215,11 +215,6 @@ struct MeeshyApp: App {
                     // APRÈS restoreEnvironment, sinon on publierait la valeur
                     // par défaut au lieu de l'environnement restauré.
                     WidgetDataManager.shared.publishAPIBaseURL()
-                    // Bridge iOS Focus filter selection into the SDK so in-app
-                    // toasts respect the currently-active Focus filter.
-                    NotificationToastManager.shared.focusFilterProvider = {
-                        MeeshyFocusStore.shared.current.toSDKSnapshot()
-                    }
                     // Local-First : résous le sous-titre des toasts de
                     // conversation (nom renommé + favori) depuis le snapshot
                     // local App Group, jamais le titre brut serveur.

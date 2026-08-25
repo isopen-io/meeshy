@@ -88,6 +88,9 @@
     <string name="stories_composer_filter_intensity">Filter strength</string>
     <string name="stories_composer_slide_duration">Slide duration</string>
     <string name="stories_composer_slide_duration_value">%1$ds</string>
+    <string name="stories_composer_background">Background</string>
+    <string name="stories_composer_background_none">None</string>
+    <string name="stories_composer_background_random">Random</string>
     <string name="stories_composer_filter_none">None</string>
     <string name="stories_composer_filter_vintage">Vintage</string>
     <string name="stories_composer_filter_bw">B&amp;W</string>

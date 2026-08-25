@@ -129,7 +129,7 @@ struct StoryViewerContainer: View {
             // Connection status banner (banner manages its own socket observation)
             VStack {
                 ConnectionBanner(conversationListViewModel: conversationListViewModel, isStoryViewerPresenting: isStoryViewerPresenting)
-                    .padding(.top, 8)
+                    .padding(.top, ConnectionBanner.liftedTopPadding(base: 8))
                 Spacer()
             }
             .allowsHitTesting(false)

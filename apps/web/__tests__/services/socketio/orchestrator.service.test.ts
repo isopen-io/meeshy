@@ -129,6 +129,9 @@ jest.mock('@/services/socketio/connection.service', () => ({
   })),
 }));
 
+const mockMsgSetTypingRetractor = jest.fn();
+const mockTypClearTypingForUser = jest.fn();
+
 jest.mock('@/services/socketio/messaging.service', () => ({
   MessagingService: jest.fn(() => ({
     hasEncryptionHandlers: (...args: unknown[]) => mockMsgHasEncryptionHandlers(...args),
@@ -136,6 +139,7 @@ jest.mock('@/services/socketio/messaging.service', () => ({
     clearEncryptionHandlers: (...args: unknown[]) => mockMsgClearEncryptionHandlers(...args),
     isConversationEncrypted: (...args: unknown[]) => mockMsgIsConversationEncrypted(...args),
     setCurrentUserId: (...args: unknown[]) => mockMsgSetCurrentUserId(...args),
+    setTypingRetractor: (...args: unknown[]) => mockMsgSetTypingRetractor(...args),
     setupEventListeners: (...args: unknown[]) => mockMsgSetupEventListeners(...args),
     sendMessage: (...args: unknown[]) => mockMsgSendMessage(...args),
     editMessage: (...args: unknown[]) => mockMsgEditMessage(...args),
@@ -162,6 +166,7 @@ jest.mock('@/services/socketio/typing.service', () => ({
     cleanup: (...args: unknown[]) => mockTypCleanup(...args),
     clearAllTypingState: (...args: unknown[]) => mockTypClearAllTypingState(...args),
     clearConversationTypingState: (...args: unknown[]) => mockTypClearConversationTypingState(...args),
+    clearTypingForUser: (...args: unknown[]) => mockTypClearTypingForUser(...args),
   })),
 }));
 
@@ -2062,6 +2067,22 @@ describe('SocketIOOrchestrator', () => {
         'Error',
         expect.objectContaining({ error })
       );
+    });
+
+    it('wires the typing retractor: a message arrival clears that sender typing', () => {
+      SocketIOOrchestrator.getInstance();
+
+      // La closure remise à MessagingService est le SEUL lien entre les deux
+      // services. La poser ne suffit pas — on déroule ce qu'elle fait.
+      const retract = mockMsgSetTypingRetractor.mock.calls.at(-1)?.[0] as
+        | ((conversationId: string, userId: string) => void)
+        | undefined;
+      expect(retract).toBeInstanceOf(Function);
+
+      mockTypClearTypingForUser.mockClear();
+      retract?.('conv-42', 'alice');
+
+      expect(mockTypClearTypingForUser).toHaveBeenCalledWith('conv-42', 'alice');
     });
 
     it('onSessionRevoked callback dispatches meeshy:session-revoked DOM event and logs warn', () => {
