@@ -1,4 +1,5 @@
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { truncateByCodePoints } from '../../utils/truncate-text';
 import type {
   ReproducedNotification,
   ReproducedNotificationAnnouncer,
@@ -107,12 +108,6 @@ function objectId(raw: RawObjectId | undefined): string | undefined {
   return raw?.$oid;
 }
 
-function truncatePreview(content: string): string {
-  return content.length > PREVIEW_MAX_LENGTH
-    ? `${content.substring(0, PREVIEW_MAX_LENGTH)}…`
-    : content;
-}
-
 function asBlob(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? { ...(value as Record<string, unknown>) }
@@ -137,7 +132,7 @@ export async function reproduceEditedSubjectNotifications(
   if (!edited.subject.id) return 0;
 
   const previewKey = PREVIEW_KEY[edited.subject.kind];
-  const nextPreview = truncatePreview((edited.content ?? '').trim());
+  const nextPreview = truncateByCodePoints((edited.content ?? '').trim(), PREVIEW_MAX_LENGTH, '…');
   const reproduced: ReproducedNotification[] = [];
   // Le drainage relit APRÈS écriture, or la réécriture ne retire pas les lignes
   // du prédicat : il faut donc paginer par `_id` croissant, sinon le premier
