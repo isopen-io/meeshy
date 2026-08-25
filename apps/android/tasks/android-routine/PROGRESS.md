@@ -2,6 +2,62 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-25 **the viewer honours a timed element's own visibility WINDOW** (slice
+> `story-element-timing-window-gate`, feature-parity E. Stories — "Per-element + per-slide duration"). The prior
+> slices gave the composer per-SLIDE duration authoring; this one closes a distinct, foundational reader gap: a
+> text overlay or foreground media clip that authored its OWN `[startTime, startTime + duration)` window was
+> **never gated** on Android — it stayed on screen the entire slide, regardless of its window — while iOS's
+> `StoryRenderer.shouldRender(item:at:mode:)` drops the layer entirely outside that window in `.play` mode. Found
+> by asking of the reader "which wire field does the Android canvas still not honour?": `startTime`/`duration`
+> WERE carried onto `StoryTextObjectView`/`StoryForegroundMediaView` and fed the fade envelope, but nothing
+> enforced a HARD visibility cut when no fade was authored.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3511/#3509/#3508, all
+> shared/ios/gateway branches (`claude/brave-archimedes-*`, `claude/intelligent-noether-*`), none a
+> `claude/apps/android/*` slice from THIS routine. Prior slice (`story-composer-slide-background`, #3510) already
+> merged into main (`610d9ca6`). Branched off freshly-fetched `origin/main` (`610d9ca6`).
+>
+> **The fix — one pure resolver + two view delegators + a render-loop guard.** (1) `StoryElementVisibility`
+> (`:feature:stories`, pure `object`) ports iOS `shouldRender` EXACTLY: `isVisible(startTime, duration,
+> currentTime)` → `currentTime ∈ [start, end)`, inclusive start / exclusive end, a **sharp** on/off cut (the
+> smooth ramp stays in `StoryMediaFadeResolver`, applied only while on screen). Deliberate, documented deviation
+> from iOS's literal `duration.map { start + $0 }`: a non-positive/non-finite `duration` = OPEN-ENDED (`end =
+> +∞`), because the Android wire projection collapses an ABSENT duration to `0.0` — matching how
+> `StoryMediaFadeResolver` and the clip-transition path already read `duration <= 0` across the module; a
+> non-finite playhead **fails open** (never blanks the canvas on a clock glitch); a non-finite `startTime` → `0`.
+> (2) `StoryTextObjectView.isVisible(atSeconds)` and `StoryForegroundMediaView.isVisible(atSeconds)` delegate to
+> it (Float→Double). (3) The viewer canvas render loop (`StoryViewerScreen`) computes the playhead once and skips
+> a `foregroundMedia`/`textObjects` entry whose `isVisible(playhead)` is false — the previously-always-drawn
+> layer now respects its window.
+>
+> **Tests: +16** — 12 `StoryElementVisibilityTest` (untimed=always-visible; before/inside/after; inclusive
+> start; exclusive end; start-only open-ended; negative duration open-ended; negative start opens earlier;
+> infinite duration; non-finite playhead fail-open; non-finite start→0), 2 added to `StoryTextObjectViewTest`
+> and 2 to `StoryForegroundFadeTest` (untimed always-visible + timed gated-to-window, per view). **RED-proof
+> isolated**: neutering `isVisible` to a constant `true` reddened EXACTLY the 6 hiding assertions (before/after
+> window, exclusive end, negative-start end, start-open-ended pre-open, non-finite-start post-window) while the 6
+> always-visible tests stayed green — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the copy→patch
+> (`source.properties` ApiLevel 37.0→37, `build.prop` `sdk_full` fields) keeping android-37.0 ALONGSIDE
+> android-37 resolved it — same THIRD mode as prior runs.
+>
+> **Verified**: targeted `:feature:stories` suites (`StoryElementVisibilityTest`/`StoryTextObjectViewTest`/
+> `StoryForegroundFadeTest`) green, then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest,
+> 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any push (one transient KSP daemon-collision flake
+> on the first run — `StreamCorruptedException` from a stray parallel daemon — cleared by `--stop` + cache clean;
+> the clean rerun is green). Reviewer PASS. Diff is `apps/android` only (1 new prod file + 2 amended prod files +
+> 1 glue file in :feature:stories, +1 new test file + 2 amended, tracking docs). Verdict: **PASS** — a pure
+> visibility SSOT mirroring iOS's authority, two view delegators, and a render-loop guard; behavioural tests
+> through the public API; no production logic outside `apps/android`.
+>
+> **Next**: per-ELEMENT duration AUTHORING — a composer control that WRITES a text element's
+> `startTime`/`duration` (serialised to `StoryTextObject.startTime`/`duration`, the very fields this slice's
+> reader gate now honours), closing the author→reader loop exactly as the slide-duration pin did. Adjacent §E
+> backlog: background IMAGE with transform, looping/non-looping background-video designation, and the media-OBJECT
+> authoring foundation those share. Scout `feature-parity.md` read-only before branching.
+
 > On 2026-08-25 **the composer AUTHORS a per-slide colour/gradient/random-pastel backdrop** (slice
 > `story-composer-slide-background`, feature-parity E. Stories — "Backgrounds: random pastel, colour/gradient
 > palette, …"). The prior slice (`story-slide-background-value`) made the *reader* honour
