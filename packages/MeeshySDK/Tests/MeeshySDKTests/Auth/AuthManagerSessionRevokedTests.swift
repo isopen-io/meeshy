@@ -19,10 +19,22 @@ final class AuthManagerSessionRevokedTests: XCTestCase {
     private var mockAuthService: RefreshCountingAuthService!
     private var originalKeychain: (any KeychainStoring)!
     private var mockKeychain: RevocationKeychainStore!
+    /// État de session du singleton AVANT la suite. Le chemin testé remet
+    /// `isAuthenticated` à false — mais une assertion qui casse avant la
+    /// révocation, ou un test qui ne fait que se connecter, laisserait le
+    /// singleton AUTHENTIFIÉ pour tout le processus, et la garde
+    /// `isUserAuthenticated` de `UserPreferencesManager` s'ouvrirait pour les
+    /// suites suivantes (voir `AuthManagerVoicePublicRevalidationTests`).
+    private var originalUser: MeeshyUser?
+    private var originalIsAuthenticated = false
+    private var originalAuthToken: String?
 
     override func setUp() async throws {
         try await super.setUp()
 
+        originalUser = AuthManager.shared.currentUser
+        originalIsAuthenticated = AuthManager.shared.isAuthenticated
+        originalAuthToken = APIClient.shared.authToken
         originalAuthService = AuthManager.shared.authService
         mockAuthService = RefreshCountingAuthService()
         AuthManager.shared.authService = mockAuthService
@@ -43,6 +55,9 @@ final class AuthManagerSessionRevokedTests: XCTestCase {
         // indisponible dans un binaire de test SPM sans app hôte.
         AuthManager.shared.authService = originalAuthService
         AuthManager.shared.keychain = originalKeychain
+        AuthManager.shared.currentUser = originalUser
+        AuthManager.shared.isAuthenticated = originalIsAuthenticated
+        APIClient.shared.authToken = originalAuthToken
         try await super.tearDown()
     }
 

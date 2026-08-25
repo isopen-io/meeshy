@@ -27,11 +27,25 @@ final class AuthManagerVoicePublicRevalidationTests: XCTestCase {
     /// `OfflineQueuePendingUIItemsPublisherTests` rougissaient par pollution
     /// d'ordre (gate 2026-08-25, relance 2).
     private var originalUser: MeeshyUser?
+    /// `applySession` (atteint par `login`) pose AUSSI `isAuthenticated = true`
+    /// et `APIClient.shared.authToken`. Restaurer `currentUser` seul (gate
+    /// 2026-08-25, relance 2) laissait le singleton AUTHENTIFIÉ pour le reste
+    /// du processus : la garde `isUserAuthenticated` de
+    /// `UserPreferencesManager.syncCategoryToBackend` s'ouvrait, et le
+    /// débounce de 1 s armé par `NotificationToastHapticTests` enfilait un
+    /// `updateSettings` dans la VRAIE `OfflineQueue.shared` — en plein
+    /// `OfflineQueueOutcomeTests` (CI, tentative 1) ou
+    /// `OfflineQueuePendingUIItemsPublisherTests` (tentative 2). Aucun test de
+    /// main n'authentifie le singleton : c'est cette suite qui ouvrait la porte.
+    private var originalIsAuthenticated = false
+    private var originalAuthToken: String?
 
     override func setUp() async throws {
         try await super.setUp()
 
         originalUser = AuthManager.shared.currentUser
+        originalIsAuthenticated = AuthManager.shared.isAuthenticated
+        originalAuthToken = APIClient.shared.authToken
         originalAuthService = AuthManager.shared.authService
         mockAuthService = VoicePublicRevalidationAuthServiceStub()
         AuthManager.shared.authService = mockAuthService
@@ -64,6 +78,8 @@ final class AuthManagerVoicePublicRevalidationTests: XCTestCase {
         AuthManager.shared.authService = originalAuthService
         AuthManager.shared.keychain = originalKeychain
         AuthManager.shared.currentUser = originalUser
+        AuthManager.shared.isAuthenticated = originalIsAuthenticated
+        APIClient.shared.authToken = originalAuthToken
         try await super.tearDown()
     }
 
