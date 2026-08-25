@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.StoryClipTransition
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.StoryKeyframe
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StoryTextObjectTranslationMerge
@@ -159,6 +160,15 @@ data class StorySlideView(
      * flat constant. Defaults to the 6s static baseline.
      */
     val autoAdvanceMillis: Int = StorySlideDuration.DEFAULT_STATIC_MS,
+    /**
+     * The author's colour backdrop (`StoryEffects.background`), parsed once at
+     * projection time via the shared [StoryBackgroundValue] rule: a solid colour or
+     * a two-colour gradient. `null` when the slide carries no background string — the
+     * viewer then keeps its accent→black fallback. Painted only as the base layer when
+     * the slide has no background media (media covers it), mirroring iOS's
+     * `renderBackground` priority.
+     */
+    val background: StoryBackgroundValue? = null,
 )
 
 /**
@@ -668,6 +678,9 @@ class StoryViewerViewModel @Inject constructor(
             backgroundAudioUrl = resolveAudioUrl(preferBackground = true),
             foregroundAudioUrl = resolveAudioUrl(preferBackground = false),
             autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects),
+            background = storyEffects?.background
+                ?.takeIf { it.isNotBlank() }
+                ?.let { StoryBackgroundValue.parse(it) },
         )
     }
 

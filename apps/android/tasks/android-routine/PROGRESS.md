@@ -2,6 +2,63 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-25 **the viewer honours a slide's serialised COLOUR background** (slice
+> `story-slide-background-value`, feature-parity E. Stories — "Backgrounds: random pastel, colour/gradient
+> palette, …"). The viewer already painted a slide's background MEDIA (image/video) but IGNORED
+> `StoryEffects.background`, the serialised colour backdrop, so a text-only iOS/backend story published with a
+> solid colour or a `gradient:RRGGBB:RRGGBB` two-colour gradient rendered on Android as the generic
+> accent→black fallback — the author's chosen backdrop silently dropped. A real, user-visible reader-side
+> parity gap, found by asking of the composer-side "Next" (per-element / background-designation, both of which
+> need a media-OBJECT authoring foundation the composer lacks): *which existing wire field does the Android
+> reader still not consume?* — `effects.background`.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3506/#3504/#3502/#3500/#3498/#3497,
+> all gateway/ios/shared branches (`claude/brave-archimedes-*`, `claude/intelligent-noether-*`), none a
+> `claude/apps/android/*` slice from THIS routine. Prior slice (`story-composer-slide-duration-pin`, #3505)
+> already merged into main (`27d79477`). Branched off freshly-fetched `origin/main` (`27d79477`).
+>
+> **The fix — a pure parse SSOT + a projection + a screen consumer.** (1) `StoryBackgroundValue` (`:core:model`,
+> pure sealed `Hex(hex)` / `Gradient(start,end)`) ports iOS's SSOT
+> `StoryBackgroundValue.parse` (`packages/MeeshySDK/.../Models/StoryBackgroundValue.swift`) EXACTLY: a
+> `gradient:` prefix carrying exactly two six-digit hex colours → `Gradient`, everything else decays TOLERANTLY
+> to `Hex(rawWhole)` so the renderer keeps its solid-colour path (iOS's historical invalid-value behaviour).
+> Interior empty colour runs are dropped to mirror Swift `split(separator:)` (`omittingEmptySubsequences`) —
+> Kotlin's `split` keeps them, so the port filters, and the filter is mutation-proven load-bearing.
+> `serialized()` is the exact inverse for a valid value (round-trip tested, ready for the composer slice).
+> (2) `StoryViewerViewModel.toSlideView` projects `StorySlideView.background` ONCE (null when the slide has no
+> or a blank background string → the viewer keeps its accent→black fallback), preserved through the translation
+> re-projection's `copy`. (3) `StoryViewerScreen`'s no-media branch paints a solid colour or a
+> top-leading→bottom-trailing `linearGradient` (iOS `storyBackgroundStyle` convention) via `slideBackgroundBrush`,
+> reusing the `hexColor` SSOT and falling back gracefully when a degraded hex cannot resolve (never blank).
+>
+> **Tests: +18** — 14 `StoryBackgroundValueTest` (pure, every branch: bare hex; well-formed gradient; gradient &
+> hex round-trips; colon-wire serialise; one/three-colour & non-hex & short & bare-prefix decays; comma-form not
+> a gradient; hash-prefixed solid not a gradient; double-colon iOS-split parity; lowercase hex), 4
+> `StoryViewerViewModelTest` (gradient projects a `Gradient`; solid projects a `Hex`; absent → null; blank →
+> null). **RED-proof isolated (twice)**: neutering the gradient-recognition branch reddened EXACTLY the 4
+> gradient tests while the tolerant-fallback/hex tests stayed green; dropping the empty-filter reddened EXACTLY
+> the double-colon parity test; neutering the projection reddened EXACTLY the 2 positive VM tests while the
+> null-path tests stayed green — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch
+> (`source.properties` ApiLevel 37.0→37, `package.xml` `<api-level>` + `path=`, BOTH `build.prop` `sdk_full`
+> fields) keeping android-37.0 ALONGSIDE resolved it — same THIRD mode as the prior two runs.
+>
+> **Verified**: targeted `:core:model` (`StoryBackgroundValueTest`) + `:feature:stories`
+> (`StoryViewerViewModelTest`) suites green, then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any push. Reviewer PASS. Diff is
+> `apps/android` only (1 new prod file in :core:model, 2 prod files in :feature:stories, +1 new test file + 1
+> amended, tracking docs). Verdict: **PASS** — a pure parse SSOT mirroring iOS's authority, a projection, and a
+> screen consumer; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the composer AUTHORING of a slide backdrop — a control that WRITES `effects.background` (solid
+> colour picker, gradient palette, and a random-pastel generator, closing the author→reader loop this slice's
+> reader half opened, exactly as `story-composer-slide-duration-pin` did for the duration pin). Adjacent §E
+> backlog: background IMAGE with transform, looping/non-looping background-video designation, per-ELEMENT
+> duration, and the media-OBJECT authoring foundation those last two share. Scout `feature-parity.md`
+> read-only before branching.
+
 > On 2026-08-25 **the composer AUTHORS a per-slide duration pin** (slice `story-composer-slide-duration-pin`,
 > feature-parity E. Stories — "Per-element + per-slide duration"). The prior slice made the *reader* honour
 > `effects.timelineDuration`; this one gives Android's own composer a control that *writes* it, closing the
