@@ -94,7 +94,7 @@ final class MeeshySDKCoreDeinitSourceGuardTests: XCTestCase {
     /// (`@MainActor`/`nonisolated` par lookahead « aucune accolade jusqu'au
     /// mot-clé »), présence d'un `deinit` AU NIVEAU 1 du corps. Exclut
     /// `class var`/`func`/`let`/`subscript`.
-    static func parse(_ code: String, relativePath: String) -> [ClassDecl] {
+    private static func parse(_ code: String, relativePath: String) -> [ClassDecl] {
         let chars = Array(code)
         var out: [ClassDecl] = []
         var i = code.startIndex
@@ -122,7 +122,7 @@ final class MeeshySDKCoreDeinitSourceGuardTests: XCTestCase {
 
     /// `deinit` déclaré au niveau 1 du corps de classe uniquement (pas dans un
     /// type imbriqué — constat 2 de la revue Opus).
-    static func bodyContainsDeinit(chars: [Character], startOffset: Int) -> Bool {
+    private static func bodyContainsDeinit(chars: [Character], startOffset: Int) -> Bool {
         guard let open = (startOffset..<chars.count).first(where: { chars[$0] == "{" }) else { return false }
         var depth = 0
         var topLevel = ""
