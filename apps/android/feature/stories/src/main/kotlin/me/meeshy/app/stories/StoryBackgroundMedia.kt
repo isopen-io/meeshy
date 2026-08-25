@@ -22,6 +22,7 @@ data class StoryBackgroundMedia(
     val url: String,
     val mimeType: String,
     val durationSeconds: Double?,
+    val loop: Boolean = true,
 ) {
     /** A `video/…` MIME denotes a looping background video; anything else is an image. */
     val isVideo: Boolean get() = mimeType.startsWith("video", ignoreCase = true)
@@ -33,8 +34,13 @@ data class StoryBackgroundMedia(
      * Builds the `isBackground` [StoryMediaObject] the reader honours. A video carries
      * its [durationSeconds] onto both `intrinsicDuration` and `duration` so the reader's
      * `StorySlideDuration` `bgVideoDur` branch can loop the slide to at least the video's
-     * length; an image carries no duration (it does not drive slide length). `loop = true`
-     * matches the "looping background" contract and the reader's `loop ?: true` default.
+     * length; an image carries no duration (it does not drive slide length).
+     *
+     * [loop] is honoured **only for a video** — mirroring iOS's `supportsLoop` (looping is
+     * a video/audio-background affordance, never an image's): the reader's video branch
+     * reads `backgroundObject?.loop ?: true`, while its image branch is unconditionally
+     * looping. Emitting the author's `loop = false` onto an image would be a wire value no
+     * reader honours, so an image always publishes `loop = true`.
      */
     fun toMediaObject(): StoryMediaObject = StoryMediaObject(
         id = mediaId,
@@ -43,7 +49,7 @@ data class StoryBackgroundMedia(
         mediaType = if (isVideo) "video" else "image",
         placement = "media",
         isBackground = true,
-        loop = true,
+        loop = if (isVideo) loop else true,
         intrinsicDuration = publishableDuration?.takeIf { isVideo },
         duration = publishableDuration?.takeIf { isVideo },
     )

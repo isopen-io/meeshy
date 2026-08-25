@@ -465,6 +465,85 @@ class StorySlideDeckTest {
         assertThat(after.selectedSlideBackgroundMediaId).isEqualTo("m1")
     }
 
+    // --- setSelectedBackgroundLoop / selectedSlideBackgroundLoop ---
+
+    @Test
+    fun `a fresh slide's background loops by default`() {
+        val deck = StorySlideDeck.single("a").addMediaToSelected("m1")
+        assertThat(deck.selectedSlideBackgroundLoop).isTrue()
+    }
+
+    @Test
+    fun `setSelectedBackgroundLoop turns looping off on the designated-background slide`() {
+        val deck = StorySlideDeck.single("a")
+            .addMediaToSelected("m1")
+            .toggleSelectedBackgroundMedia("m1")
+
+        val after = deck.setSelectedBackgroundLoop(false)
+
+        assertThat(after.selectedSlideBackgroundLoop).isFalse()
+    }
+
+    @Test
+    fun `setSelectedBackgroundLoop is inert when the selected slide has no background media`() {
+        val deck = StorySlideDeck.single("a").addMediaToSelected("m1")
+
+        assertThat(deck.setSelectedBackgroundLoop(false)).isSameInstanceAs(deck)
+    }
+
+    @Test
+    fun `setSelectedBackgroundLoop is inert when the value already equals the slide's loop`() {
+        val deck = StorySlideDeck.single("a")
+            .addMediaToSelected("m1")
+            .toggleSelectedBackgroundMedia("m1")
+
+        assertThat(deck.setSelectedBackgroundLoop(true)).isSameInstanceAs(deck)
+    }
+
+    @Test
+    fun `setSelectedBackgroundLoop only touches the selected slide`() {
+        val deck = StorySlideDeck(
+            slides = listOf(
+                StorySlide(id = "a", mediaIds = listOf("m1"), backgroundMediaId = "m1"),
+                StorySlide(id = "b", mediaIds = listOf("m2"), backgroundMediaId = "m2"),
+            ),
+            selectedId = "b",
+        )
+
+        val after = deck.setSelectedBackgroundLoop(false)
+
+        assertThat(after.slides.first { it.id == "a" }.backgroundLoop).isTrue()
+        assertThat(after.slides.first { it.id == "b" }.backgroundLoop).isFalse()
+    }
+
+    @Test
+    fun `designating a different background media resets looping to the default`() {
+        val deck = StorySlideDeck.single("a")
+            .addMediaToSelected("m1")
+            .addMediaToSelected("m2")
+            .toggleSelectedBackgroundMedia("m1")
+            .setSelectedBackgroundLoop(false)
+
+        val after = deck.toggleSelectedBackgroundMedia("m2")
+
+        assertThat(after.selectedSlideBackgroundMediaId).isEqualTo("m2")
+        assertThat(after.selectedSlideBackgroundLoop).isTrue()
+    }
+
+    @Test
+    fun `removeMedia of the background media resets looping to the default`() {
+        val deck = StorySlideDeck.single("a")
+            .addMediaToSelected("m1")
+            .addMediaToSelected("m2")
+            .toggleSelectedBackgroundMedia("m1")
+            .setSelectedBackgroundLoop(false)
+
+        val after = deck.removeMedia("m1")
+
+        assertThat(after.selectedSlideBackgroundMediaId).isNull()
+        assertThat(after.selectedSlide.backgroundLoop).isTrue()
+    }
+
     // --- hasMedia / isWithinMediaLimit / selectedRemainingMediaSlots ---
 
     @Test
