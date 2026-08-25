@@ -10,6 +10,7 @@ final class MessageActionResolverTests: XCTestCase {
         isPinned: Bool = false, isStarred: Bool = false,
         isEdited: Bool = false, hasEditRevisions: Bool = false,
         saveableAttachmentCount: Int = 0,
+        canComposeMedia: Bool = false,
         showReadReceipts: Bool = true,
         isForwardable: Bool = true
     ) -> MessageMenuContext {
@@ -18,6 +19,7 @@ final class MessageActionResolverTests: XCTestCase {
             isPinned: isPinned, isStarred: isStarred, isEdited: isEdited,
             hasEditRevisions: hasEditRevisions,
             saveableAttachmentCount: saveableAttachmentCount,
+            canComposeMedia: canComposeMedia,
             showReadReceipts: showReadReceipts,
             isForwardable: isForwardable)
     }
@@ -88,6 +90,182 @@ final class MessageActionResolverTests: XCTestCase {
         let a = MessageActionResolver.primaryActions(ctx(hasText: false))
         XCTAssertGreaterThanOrEqual(a.count, 2)
         XCTAssertEqual(a.last, .more)
+    }
+
+    // MARK: - Lot 5 (O13) — « Composer » : DEUX gestes, jamais trois
+
+    /// Fabrique de messages pour la RÈGLE d'offre. Elle prend des pièces jointes
+    /// RÉELLES parce que la règle lit leurs drapeaux de protection : un contexte
+    /// de primitives ne pourrait pas la mesurer.
+    private func msg(
+        attachments: [MessageAttachment],
+        isViewOnce: Bool = false,
+        isBlurred: Bool = false,
+        isEncrypted: Bool = false
+    ) -> Message {
+        var m = MeeshyMessage(
+            conversationId: "conv-1", content: "",
+            isEncrypted: isEncrypted, attachments: attachments)
+        m.isViewOnce = isViewOnce
+        m.isBlurred = isBlurred
+        return m
+    }
+
+    private func piece(
+        _ mimeType: String,
+        isViewOnce: Bool = false,
+        isBlurred: Bool = false,
+        isEncrypted: Bool = false
+    ) -> MessageAttachment {
+        MeeshyMessageAttachment(
+            mimeType: mimeType, fileUrl: "https://cdn.example/x",
+            isViewOnce: isViewOnce, isBlurred: isBlurred, isEncrypted: isEncrypted)
+    }
+
+    /// O13 fixe le budget : **2 gestes**. La feuille « Plus… » en coûte trois
+    /// (appui long → « Plus… » → « Composer »), la liste verticale de l'overlay
+    /// en coûte deux — et elle porte déjà le voisin naturel de ce geste,
+    /// « Enregistrer », gaté sur la même forme de contexte.
+    func test_primaryActions_singleComposableMedia_offersCompose() {
+        let a = MessageActionResolver.primaryActions(
+            ctx(hasText: false, hasMedia: true,
+                saveableAttachmentCount: 1, canComposeMedia: true))
+
+        XCTAssertEqual(a, [.saveMedia, .compose, .more])
+    }
+
+    /// Le voisinage n'est pas décoratif : « Composer » suit immédiatement
+    /// « Enregistrer », parce que ce sont les deux gestes qui EMPORTENT le
+    /// média hors de la conversation. Le placer après « Plus… » le sortirait de
+    /// ce voisinage — et personne ne le trouverait.
+    func test_primaryActions_compose_followsSaveMedia() throws {
+        let a = MessageActionResolver.primaryActions(
+            ctx(hasText: false, hasMedia: true,
+                saveableAttachmentCount: 1, canComposeMedia: true))
+        let save = try XCTUnwrap(a.firstIndex(of: .saveMedia))
+        let compose = try XCTUnwrap(a.firstIndex(of: .compose))
+
+        XCTAssertEqual(compose, save + 1)
+    }
+
+    /// **Le cas qui SÉPARE composabilité et publiabilité : l'AUDIO.** Une note
+    /// vocale s'enregistre (`saveableAttachmentCount == 1`) et ne se compose
+    /// pas — la graine ne sait pas la poser sur un canvas.
+    func test_primaryActions_audioOnly_offersSave_butNeverCompose() {
+        let a = MessageActionResolver.primaryActions(
+            ctx(hasText: false, hasMedia: true,
+                saveableAttachmentCount: 1, canComposeMedia: false))
+
+        XCTAssertEqual(a, [.saveMedia, .more])
+    }
+
+    // MARK: - LA règle d'offre : UN site, trois lecteurs
+
+    /// **`ComposableAttachment.offers` est la règle, et le résolveur n'en tient
+    /// qu'un FAIT.** Elle vit ici plutôt qu'en trois exemplaires parce que ses
+    /// trois lecteurs — le menu d'appui long, le menu natif et la feuille de
+    /// transfert — mènent au MÊME plein écran : une conjonction recopiée dans
+    /// une `private var` de `View` n'est mesurable par aucun test, et diverge au
+    /// premier `&&` devenu `||`.
+    func test_offers_singleImage_isOffered() {
+        XCTAssertTrue(ComposableAttachment.offers(message: msg(attachments: [piece("image/jpeg")])))
+    }
+
+    /// **Un LOT ne se compose pas.** La première pièce déciderait pour toutes,
+    /// et le composer mentirait sur ce qui part — la même raison qui tient
+    /// « Enregistrer » à exactement UNE pièce.
+    func test_offers_aBatchIsRefused() {
+        XCTAssertFalse(ComposableAttachment.offers(
+            message: msg(attachments: [piece("image/jpeg"), piece("video/mp4")])))
+    }
+
+    /// **Une VUE UNIQUE ne se compose pas** — clause O13, lue par le prédicat
+    /// qui l'énonce déjà une fois (`Message.isForwardable`).
+    func test_offers_viewOnceMessage_isRefused() {
+        XCTAssertFalse(ComposableAttachment.offers(
+            message: msg(attachments: [piece("image/jpeg")], isViewOnce: true)))
+    }
+
+    /// **La protection se lit aux DEUX niveaux qui la déclarent.**
+    ///
+    /// `Message.isForwardable` ne dit que la vue unique du MESSAGE. Le dépôt
+    /// déclare la protection une seconde fois sur la PIÈCE JOINTE
+    /// (`MeeshyMessageAttachment.isViewOnce` / `.isBlurred`), et cinq gardes de
+    /// production la lisent déjà sous ce nom — `attachmentIsProtected`. Sans ce
+    /// second niveau, une photo FLOUTÉE offrait « Composer », et la porte
+    /// matérialisait le fichier D'ORIGINE : le flou n'est qu'un masque de rendu,
+    /// jamais une transformation du blob. Le média serait parti EN CLAIR vers un
+    /// fil public.
+    func test_offers_protectedAttachment_isRefused_atBothLevels() {
+        let protegees: [(nom: String, piece: MessageAttachment)] = [
+            ("vue unique", piece("image/jpeg", isViewOnce: true)),
+            ("floutée", piece("image/jpeg", isBlurred: true)),
+            ("chiffrée", piece("image/jpeg", isEncrypted: true))
+        ]
+        for cas in protegees {
+            XCTAssertFalse(
+                ComposableAttachment.offers(message: msg(attachments: [cas.piece])),
+                "\(cas.nom) : la porte publierait l'original en clair sur un fil public."
+            )
+        }
+    }
+
+    /// Le MESSAGE flouté, lui aussi : `BubbleContentBuilder` le lit et le rend
+    /// masqué, et « Composer » n'a aucune raison d'être la seule surface qui
+    /// l'ignore. La vue unique passe déjà par `isForwardable` ; le flou n'avait
+    /// AUCUN lecteur dans les trois portes de « Composer ».
+    func test_offers_blurredMessage_isRefused() {
+        XCTAssertFalse(ComposableAttachment.offers(
+            message: msg(attachments: [piece("image/jpeg")], isBlurred: true)))
+    }
+
+    func test_offers_encryptedMessage_isRefused() {
+        XCTAssertFalse(ComposableAttachment.offers(
+            message: msg(attachments: [piece("image/jpeg")], isEncrypted: true)))
+    }
+
+    /// Une pièce PROTÉGÉE qui voyage à côté de la composable suffit à tout
+    /// refuser : la graine n'emporterait qu'une pièce, mais l'offre porterait sur
+    /// un message dont une partie est masquée.
+    func test_offers_aProtectedNeighbourIsEnoughToRefuse() {
+        XCTAssertFalse(ComposableAttachment.offers(
+            message: msg(attachments: [piece("image/jpeg"), piece("application/pdf", isViewOnce: true)])))
+    }
+
+    /// La CIBLE est l'unique pièce composable, où qu'elle soit dans le lot —
+    /// et c'est la MÊME décision que l'offre, jamais une seconde.
+    func test_target_isTheSingleComposablePiece_whereverItSits() throws {
+        let image = piece("image/jpeg")
+        let cible = try XCTUnwrap(ComposableAttachment.target(
+            in: msg(attachments: [piece("application/pdf"), image])))
+
+        XCTAssertEqual(cible.id, image.id)
+    }
+
+    func test_target_isNilWheneverTheOfferIsRefused() {
+        XCTAssertNil(ComposableAttachment.target(
+            in: msg(attachments: [piece("image/jpeg", isBlurred: true)])))
+    }
+
+    // MARK: - La règle de COMPOSABILITÉ, éprouvée sur les mimes réels
+
+    func test_composableForm_acceptsImagesAndVideos_only() {
+        XCTAssertEqual(ComposableAttachment.form(mimeType: "image/jpeg"), .image)
+        XCTAssertEqual(ComposableAttachment.form(mimeType: "image/HEIC"), .image)
+        XCTAssertEqual(ComposableAttachment.form(mimeType: "video/mp4"), .video)
+        XCTAssertEqual(ComposableAttachment.form(mimeType: "video/quicktime"), .video)
+    }
+
+    /// Chaque refus vaut par sa RAISON, pas par la liste : l'audio parce que
+    /// l'atelier n'a pas de place pour lui, le lieu parce qu'`AttachmentKind` le
+    /// range en `.other` — ce qui tient la garde O13 « jamais `.location` »
+    /// GRATUITEMENT, sans condition qu'on puisse oublier de recopier.
+    func test_composableForm_refusesAudioLocationAndDocuments() {
+        for mime in ["audio/m4a", "audio/mpeg", "application/x-location",
+                     "application/pdf", "application/msword", "text/plain",
+                     "application/zip", "text/csv", "application/json", ""] {
+            XCTAssertNil(ComposableAttachment.form(mimeType: mime), mime)
+        }
     }
 
     // MARK: - moreSections : SSOT « Plus… » (accueille pin/star/delete sortis du primaire)

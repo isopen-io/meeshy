@@ -464,12 +464,20 @@ public struct StoryComposerView: View {
         .onAppear {
             switch Self.openingDraftAction(
                 isEditingExistingStory: isEditingExistingStory,
-                isAdoptedDraftSession: viewModel.isAdoptedDraftSession
+                isAdoptedDraftSession: viewModel.isAdoptedDraftSession,
+                isSeededSession: viewModel.isSeededSession
             ) {
             case .restoreAdoptedDraft:
                 // Brouillon CHOISI dans « Mes stories » : restauration directe,
                 // sans bandeau — `restoreDraft()` seed lui-même l'historique.
                 restoreDraft()
+            case .adoptSeededCanvas:
+                // Session SEMÉE : le canvas porte déjà son média. On le recopie
+                // dans l'état de la vue — `selectedImage` est un INSTANTANÉ que
+                // rien d'autre ne repeuple — et on n'offre AUCUNE reprise :
+                // `restoreDraft()` écraserait `slides`, donc la graine.
+                restoreCanvas(from: viewModel.currentSlide)
+                viewModel.seedHistory()
             case .offerDraftResume:
                 checkForDraft()
                 // C9 — trajectoire d'annulation : seed sur l'état d'entrée

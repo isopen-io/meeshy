@@ -73,6 +73,20 @@ public enum PublicationTargetRule {
     /// elle est vue avant d'expirer. C'est le fait d'OUVRIR le média au-delà de
     /// la conversation qui se confirme, pas la durée pendant laquelle il reste
     /// ouvert.
+    ///
+    /// **Ce qu'elle gouverne, et ce qu'elle ne gouverne PAS — dit ici pour que
+    /// la phrase ci-dessus ne se lise pas comme universelle.** Elle garde le
+    /// geste où UN TAP publie : les pilules de destination de la feuille de
+    /// partage, seul site qui l'appelle. Elle ne garde pas le geste
+    /// « Composer » (lot 5, `ConversationMediaComposerDoor`), qui ouvre un
+    /// ATELIER : rien n'y part tant que l'auteur n'a pas choisi son format, son
+    /// audience, et pressé la flèche. Le consentement y est plus riche que cette
+    /// confirmation, pas plus pauvre — et poser une alerte avant d'ouvrir un
+    /// atelier où rien ne se publie serait une fausse alarme, qu'on apprendrait
+    /// à écarter avant d'atteindre le tap qui compte.
+    ///
+    /// Si un jour un troisième chemin publie en UN geste, c'est lui qui doit
+    /// appeler cette règle — pas elle qui doit s'élargir.
     public static func needsCaptureConfirmation(
         capturedInApp: Bool,
         target: PublicationTarget

@@ -293,6 +293,11 @@ final class AppInitWireupTests: XCTestCase {
     /// Un maillon qui l'oublie retombe sur `PostVisibility.friends` sans un mot.
     private static let storyComposerCreationMounts: [(path: String, mount: String)] = [
         ("Meeshy/Features/Main/Views/StoryTrayActions.swift", "MeeshyComposerHost("),
+        // Lot 5 — la porte du média REÇU est le second site qui monte une
+        // SCÈNE, et l'audience y traverse les mêmes deux maillons. Elle entre
+        // ici plutôt que dans une garde à elle : le jour où un troisième site
+        // ouvre l'atelier, c'est cette liste qu'on relira.
+        ("Meeshy/Features/Main/Composer/ConversationMediaComposerDoor.swift", "MeeshyComposerHost("),
         ("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift", "StoryComposerView(")
     ]
 

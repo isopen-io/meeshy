@@ -1,8 +1,17 @@
 import Foundation
+import MeeshySDK
 
 /// Action affichée dans la liste verticale de l'overlay appui-long.
 enum PrimaryAction: String, Equatable {
     case edit, translate, copy, saveMedia, pin, unpin, star, unstar, more, delete
+    /// **Composer** (lot 5, O13) — ouvre l'atelier sur le média reçu, déjà
+    /// posé. Elle vit dans la liste VERTICALE et non dans « Plus… » parce que
+    /// O13 fixe le budget à DEUX gestes : la feuille en coûterait trois.
+    ///
+    /// Le libellé est « Composer », jamais « Publier » : la pilule de la feuille
+    /// de transfert PUBLIE ; cette entrée-ci ouvre un atelier, où rien ne part
+    /// tant que l'auteur n'a pas pressé la flèche.
+    case compose
     /// Feuille de détail d'un appel (durée précise, données, qualité réseau,
     /// transcript). Elle vivait sur l'appui long de la CARTE d'appel jusqu'au
     /// 2026-08-24 ; l'appui long étant rendu au menu du message, la
@@ -53,6 +62,16 @@ struct MessageMenuContext: Equatable {
     /// « Enregistrer » n'apparaît que pour EXACTEMENT UN attachment —
     /// le multi-attachment passe par la galerie (qui a son propre save).
     var saveableAttachmentCount: Int = 0
+    /// Le VERDICT de `ComposableAttachment.offers(message:)`, jamais ses
+    /// ingrédients.
+    ///
+    /// C'est un fait, pas une règle, et la distinction est le fond de l'affaire :
+    /// « Composer » a TROIS lecteurs — cette liste verticale, le menu natif et
+    /// la feuille de transfert — qui mènent au MÊME plein écran. Porter ici le
+    /// COMPTE des pièces composables et un drapeau de chiffrement obligeait
+    /// chaque lecteur à recomposer la conjonction lui-même, et la feuille l'avait
+    /// déjà réécrite dans une `private var` de `View` qu'aucun test ne peut voir.
+    var canComposeMedia: Bool = false
     /// Réciprocité : qui ne partage pas ses accusés de lecture ne voit pas ceux
     /// des autres. L'entrée « vues » disparaît plutôt que d'ouvrir une feuille
     /// vide — le serveur ne renverrait rien de toute façon.
@@ -69,6 +88,79 @@ struct MessageMenuContext: Equatable {
     var isForwardable: Bool = true
 }
 
+/// **Ce qu'une graine de composer sait poser sur un canvas.**
+///
+/// Écrit ICI, à côté du résolveur, parce que trois surfaces le lisent — le menu
+/// d'appui long, le menu natif et la feuille de transfert — et qu'une règle
+/// produit recopiée sur trois sites est une règle qui a déjà commencé à
+/// diverger.
+///
+/// **Ce n'est PAS `PublicationTargetRule.targets`**, et les fondre serait le
+/// raccourci coûteux de ce lot. Ce sont deux questions différentes : `targets`
+/// répond « où le PONT peut-il envoyer ces octets tels quels ? » (POST / REEL /
+/// STORY, note vocale comprise) ; celle-ci répond « la GRAINE peut-elle poser
+/// ceci sur un CANVAS ? ». Offrir « Composer » sur un audio ouvrirait un
+/// atelier où l'objet posé n'aurait aucun actif chargé — `runStoryUpload` le
+/// saute en journalisant « layer will be invisible to viewers », et le geste
+/// aurait l'air de marcher.
+nonisolated enum ComposableAttachment {
+
+    /// La forme sous laquelle la graine accepte le média. `nil` = pas
+    /// composable, ce qui écarte GRATUITEMENT le lieu (`AttachmentKind` range
+    /// `application/x-location` en `.other`) : la garde O13 « jamais
+    /// `.location` » n'a donc aucune condition propre à oublier.
+    enum Form: Equatable { case image, video }
+
+    static func form(mimeType: String) -> Form? {
+        switch AttachmentKind(mimeType: mimeType) {
+        case .image: return .image
+        case .video: return .video
+        case .audio, .pdf, .spreadsheet, .document, .presentation,
+             .archive, .code, .text, .other:
+            return nil
+        }
+    }
+
+    /// **La PROTECTION d'une pièce jointe, lue aux DEUX niveaux qui la
+    /// déclarent.**
+    ///
+    /// `Message.isForwardable` ne dit que la vue unique du MESSAGE. Le dépôt
+    /// déclare la protection une seconde fois sur la PIÈCE JOINTE, et cinq
+    /// gardes de production la lisent déjà sous ce nom — `attachmentIsProtected`
+    /// (`BubbleStandardLayout+Media`, `MessageListViewController`,
+    /// `ConversationView+MessageRow`, `ConversationViewModel`). Le flou n'est
+    /// qu'un MASQUE DE RENDU, jamais une transformation du blob : matérialiser
+    /// une pièce floutée rend le fichier d'origine, EN CLAIR.
+    static func isProtected(_ attachment: MessageAttachment) -> Bool {
+        attachment.isViewOnce || attachment.isBlurred || attachment.isEncrypted
+    }
+
+    /// **LA règle d'offre de « Composer » — un site, trois lecteurs.**
+    ///
+    /// Rend la pièce que la graine posera, ou `nil` dès qu'une condition
+    /// refuse. Chacune porte sa raison :
+    ///
+    /// - `isForwardable` — clause O13, lue par le prédicat qui l'énonce déjà
+    ///   une fois plutôt que ré-encodée ici ;
+    /// - message NI flouté NI chiffré — publier au-delà de la conversation ce
+    ///   qui est masqué DANS la conversation est une divulgation ;
+    /// - EXACTEMENT une pièce composable — un lot mentirait sur ce qui part ;
+    /// - AUCUNE pièce protégée dans le message, fût-ce une voisine.
+    static func target(in message: Message) -> MessageAttachment? {
+        guard message.isForwardable, !message.isBlurred, !message.isEncrypted else { return nil }
+        let composables = message.attachments.filter { form(mimeType: $0.mimeType) != nil }
+        guard composables.count == 1, let seule = composables.first else { return nil }
+        guard !message.attachments.contains(where: Self.isProtected) else { return nil }
+        return seule
+    }
+
+    /// Le même verdict, sous la forme que lisent les surfaces qui n'ont pas
+    /// besoin de la pièce. `target` en est l'UNIQUE implémentation : deux
+    /// écritures de la même conjonction sont deux règles qui ont déjà commencé
+    /// à diverger.
+    static func offers(message: Message) -> Bool { target(in: message) != nil }
+}
+
 /// Logique pure de composition du menu appui-long. Aucune dépendance UI —
 /// entièrement testable. Source unique de vérité pour « quelle action, où ».
 enum MessageActionResolver {
@@ -82,6 +174,12 @@ enum MessageActionResolver {
         if ctx.hasText { out.append(.translate) }
         if ctx.hasText { out.append(.copy) }
         if ctx.saveableAttachmentCount == 1 { out.append(.saveMedia) }
+        // « Composer » suit immédiatement « Enregistrer » : ce sont les deux
+        // gestes qui EMPORTENT le média hors de la conversation, et le second se
+        // cherche à côté du premier. La CONDITION, elle, n'est pas ici : elle
+        // vit dans `ComposableAttachment.offers`, que les trois lecteurs de ce
+        // geste partagent. Le résolveur n'en tient qu'un fait.
+        if ctx.canComposeMedia { out.append(.compose) }
         // Repli : jamais de menu réduit à « Plus… » seul (média-seul non
         // enregistrable, localisation…) → épingler comme action visible.
         if out.isEmpty { out.append(ctx.isPinned ? .unpin : .pin) }

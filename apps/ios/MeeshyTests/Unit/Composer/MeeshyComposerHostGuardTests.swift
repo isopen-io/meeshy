@@ -1052,18 +1052,70 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         )
     }
 
+    /// **La GRAINE DU MÉDIA non plus** — troisième fois que la même discipline
+    /// se pose dans ce fichier, sur un troisième échec silencieux.
+    ///
+    /// Un défaut la ferait disparaître de `ConversationMediaComposerDoor` sans
+    /// casser la moindre compilation : la porte du média reçu ouvrirait alors un
+    /// atelier VIDE, sous une entrée de menu qui vient de promettre une photo
+    /// déjà posée. Le produit resterait plausible — l'auteur croirait avoir mal
+    /// visé — et c'est exactement ce qui rend l'échec coûteux.
+    func test_laGraineDuMedia_nAAucuneValeurParDefaut() throws {
+        let compacte = try hostCompact()
+        XCTAssertTrue(
+            compacte.contains(compact("mediaSeed: StoryComposerSeed?,")),
+            "Le paramètre doit rester OBLIGATOIRE dans l'`init` : un défaut ferait ouvrir un composer VIDE "
+                + "à la porte du média reçu, sans casser la moindre compilation."
+        )
+    }
+
+    /// **Le meuble construit UN ViewModel, semé ou non.**
+    ///
+    /// Deux constructions hors de la branche laisseraient le composer
+    /// s'autosauvegarder sous un id neuf pendant que le brouillon adopté
+    /// resterait intact à côté — le doublon exact que `adoptDraft` existe pour
+    /// éviter. Et l'ADOPTION doit venir APRÈS la graine : un brouillon que
+    /// l'auteur vient de désigner l'emporte sur ce qu'une porte sème.
+    func test_leMeuble_construitUnSeulAtelier_etAdopteApresAvoirSeme() throws {
+        let compacte = try hostCompact()
+
+        XCTAssertTrue(
+            compacte.contains(compact("StoryComposerViewModel(seeding: mediaSeed)")),
+            "Sans cette construction, `mediaSeed` est un paramètre TRANSPORTÉ que personne ne consomme — "
+                + "la porte sèmerait dans le vide."
+        )
+        let graine = compacte.range(of: compact("StoryComposerViewModel(seeding: mediaSeed)"))
+        let adoption = compacte.range(of: compact("composer.adoptDraft(id: draftId)"))
+        XCTAssertNotNil(adoption, "L'adoption d'un brouillon a disparu du meuble.")
+        if let graine, let adoption {
+            XCTAssertTrue(
+                graine.lowerBound < adoption.lowerBound,
+                "L'adoption doit venir APRÈS la graine : inversée, elle laisserait une graine écraser "
+                    + "l'identité d'autosave d'un brouillon repris — perte silencieuse d'un travail en cours."
+            )
+        }
+    }
+
     /// Tout site qui monte le meuble lui donne son canal ET sa graine — celui
     /// qui n'en a pas doit l'ÉCRIRE. Cette garde a été posée au lot 4.5 pour le
     /// lot 4.6, et le lot 4.6 lui a donné son second site : sans elle, un montage
     /// pourrait naître avec un canal qui refuse, et le mood s'y composerait sans
     /// jamais partir.
     ///
-    /// Le compte est écrit en dur — TROIS sites depuis le lot 4.10, et ce que
-    /// la liste affirme n'est pas « ces trois fichiers-là » mais **« seules des
+    /// Le compte est écrit en dur — QUATRE sites depuis le lot 5, et ce que
+    /// la liste affirme n'est pas « ces quatre fichiers-là » mais **« seules des
     /// PORTES montent le meuble, jamais une feuille de présentation »** : la
     /// porte de création de story (`StoryTrayActions`), la porte du mood
-    /// (`MoodComposerDoor`) et la porte du document (`DocumentComposerDoor`),
-    /// ces deux dernières vivant dans le fichier de leur surface.
+    /// (`MoodComposerDoor`), la porte du document (`DocumentComposerDoor`) —
+    /// ces deux dernières vivant dans le fichier de leur surface — et la porte
+    /// du média reçu (`ConversationMediaComposerDoor`).
+    ///
+    /// **Ce quatrième nom a une histoire qu'il faut garder.** Le plan du lot 5
+    /// dirigeait le montage vers `ConversationView`, une feuille de
+    /// PRÉSENTATION. Cette garde l'a refusé, et elle avait raison : le montage
+    /// porte l'envoi, la reprise et la sortie, et posé dans une feuille il
+    /// aurait été recopié au premier second site — la feuille de forward, qui
+    /// est justement le SECOND déclencheur du même chemin.
     ///
     /// Les quatre feuilles du mood ne montent PAS le meuble elles-mêmes : elles
     /// montent la porte, qui porte la reprise hors-ligne et l'envoi. Quatre
@@ -1091,11 +1143,17 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 "\(url.lastPathComponent) monte le meuble sans lui dire ce qu'il sème — un site qui n'a rien à "
                     + "semer doit écrire `moodSeed: nil`, et écrire pourquoi."
             )
+            XCTAssertTrue(
+                code.contains("mediaSeed:"),
+                "\(url.lastPathComponent) monte le meuble sans lui dire quel MÉDIA il sème — un site qui n'en "
+                    + "sème aucun doit écrire `mediaSeed: nil`, et écrire pourquoi."
+            )
         }
         XCTAssertFalse(sitesVus.isEmpty, "Aucun site ne monte le meuble — la garde ne mesurerait RIEN.")
         XCTAssertEqual(
             Set(sitesVus),
-            ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "ComposerDocumentSurface.swift"],
+            ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "ComposerDocumentSurface.swift",
+             "ConversationMediaComposerDoor.swift"],
             "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
                 + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "
                 + "et la reprise hors-ligne que `MoodComposerDoor` et `DocumentComposerDoor` tiennent une "
@@ -1128,7 +1186,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         XCTAssertEqual(
             attendus,
             ["intent", "initialVisibility", "draftId", "onPublishAllInBackground",
-             "onPublishDocument", "moodSeed", "onPreview", "onDismiss"],
+             "onPublishDocument", "moodSeed", "mediaSeed", "onPreview", "onDismiss"],
             "La liste des paramètres du meuble a changé. Ce n'est pas un échec en soi — elle est écrite en "
                 + "toutes lettres ici pour qu'un changement d'ordre se lise dans un diff au lieu de se "
                 + "découvrir à la compilation, et pour que la sous-suite ci-dessous ait une référence stable."

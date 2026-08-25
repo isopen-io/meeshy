@@ -36,6 +36,11 @@ struct MessageOverlayMenu: View {
     /// Composant unifié « Enregistrer » : déclenché par l'action `.saveMedia`
     /// (message à exactement un attachment enregistrable).
     var onSaveMedia: (() -> Void)? = nil
+    /// « Composer » — ouvre l'atelier sur le média reçu (lot 5, O13).
+    /// L'overlay ne monte RIEN lui-même : il rend la main à son hôte, qui pose
+    /// le même état de présentation que le second déclencheur (la feuille de
+    /// transfert). Un montage ici en ferait un second contrat d'envoi.
+    var onCompose: (() -> Void)? = nil
 
     // Full bubble-rendering context — when `messageBubbleFrame != .zero`, the
     // overlay renders a REAL `ThemedMessageBubble` at the source position
@@ -180,6 +185,7 @@ struct MessageOverlayMenu: View {
             hasEditRevisions: true,
             hasCallSummary: message.callSummary != nil,
             saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count,
+            canComposeMedia: ComposableAttachment.offers(message: message),
             showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
             isForwardable: message.isForwardable
         )
@@ -199,6 +205,8 @@ struct MessageOverlayMenu: View {
             onCopy?()
         case .saveMedia:
             onSaveMedia?()
+        case .compose:
+            onCompose?()
         case .pin, .unpin:
             onPin?()
         case .star, .unstar:

@@ -883,6 +883,13 @@ struct MoodComposerDoor: View {
             // tient désormais l'ordre, pour le jour où un paramètre s'insérera
             // au milieu de cet `init` (lot 5.5, collision déclarée).
             moodSeed: graine,
+            // La porte du mood ne sème AUCUN média : elle n'atteint que la
+            // surface du mood, qui n'a ni canvas ni pièce jointe. Écrit en
+            // toutes lettres parce que le paramètre n'a pas de défaut — un
+            // défaut l'aurait fait disparaître de la porte du média reçu, qui
+            // aurait alors ouvert un atelier VIDE sous une entrée de menu
+            // promettant une photo posée.
+            mediaSeed: nil,
             onPreview: { _, _, _, _, _ in },
             onDismiss: { dismiss() }
         )

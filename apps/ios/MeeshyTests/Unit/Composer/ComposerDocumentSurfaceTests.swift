@@ -21,7 +21,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     private static let tousLesFormats: [ComposerFormat] = [.story, .post, .reel, .status]
     private static let toutesLesSurfaces: [ComposerSurfaceKind] = [.scene, .document, .mood]
     private static let toutesLesOuvertures: [ComposerOpening] = [
-        .cameraReady, .keyboardOnContent, .videoCameraReady, .moodGrid, .resume
+        .cameraReady, .keyboardOnContent, .videoCameraReady, .moodGrid, .resume, .mediaSeeded
     ]
 
     private func nom(_ format: ComposerFormat) -> String {
@@ -40,6 +40,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         case .videoCameraReady: return "videoCameraReady"
         case .moodGrid: return "moodGrid"
         case .resume: return "resume"
+        case .mediaSeeded: return "mediaSeeded"
         }
     }
 
@@ -510,18 +511,27 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     ///
     /// **`.conversationMedia` est celui qui la rend nécessaire dans l'AUTRE
     /// sens, et il est arrivé dans cette table le 2026-08-25.** Son profil
-    /// (`initialFormat: .story`, offre `[.story, .post]`, ouverture
-    /// `.keyboardOnContent`) monte la SCÈNE à l'ouverture — et la branche
-    /// `.scene` de la règle rendait alors `true` SANS CONDITION, au motif que
-    /// les trois ouvertures de capture / reprise collent à la scène quel que
-    /// soit le format. Vrai de ces trois ouvertures, faux de la branche :
-    /// l'éventail s'y peignait, puis DISPARAISSAIT au premier tap sur « Post ».
-    /// Une porte à sens unique — le message d'échec ci-dessous le nommait déjà,
-    /// et la règle l'autorisait.
+    /// portait alors `opensWith: .keyboardOnContent` : la scène à l'ouverture
+    /// (format `.story`), le DOCUMENT au premier tap sur « Post ». La branche
+    /// `.scene` de la règle rendait `true` sans condition, au motif que les
+    /// trois ouvertures de capture / reprise collent à la scène quel que soit le
+    /// format — vrai de ces trois ouvertures, faux de la branche. L'éventail s'y
+    /// peignait donc, puis DISPARAISSAIT : une porte à sens unique.
     ///
-    /// Le profil n'est câblé par aucun site de production (« câblage lot G »),
-    /// donc ces deux cas ne décrivent aucun écran. Ils sont ici pour la raison
-    /// inverse : le jour où le lot G le câblera, la règle aura déjà tranché.
+    /// **Ces deux lignes ont changé de côté au lot 5, et il faut savoir
+    /// pourquoi : c'est l'OUVERTURE qui a changé, pas la règle.** La règle avait
+    /// tranché contre le profil ; câbler la porte telle quelle aurait livré un
+    /// composer qui DÉCLARE trois formats et n'en offre aucun contrôle — l'UI
+    /// morte que la loi 4 nomme. Des deux issues possibles — rétrécir l'offre
+    /// à `[.story]`, ou faire atterrir tous ses formats sur la scène — le lot a
+    /// retenu la seconde : `.keyboardOnContent` promettait ici un clavier qui
+    /// ne se lève jamais (l'atelier n'a aucun champ « contenu » à mettre au
+    /// foyer), et entre supprimer un mensonge et supprimer une capacité, on
+    /// supprime le mensonge. `.mediaSeeded` dit exactement ce que la porte fait
+    /// — le média est DÉJÀ posé — et route ses trois formats sur la scène.
+    ///
+    /// Remettre `opensWith: .keyboardOnContent` fait retomber ces deux lignes en
+    /// `false` : c'est la mutation qui les garde.
     func test_lePlacementDeLEventail_suitLaSurfaceOuAtterrissentSesFormats() {
         let repostDeMood = ComposerOrigin.repost(ofPostId: "mood-source", sourceFormat: .status)
         let mediaRecu = ComposerOrigin.conversationMedia(messageId: "msg-1", attachmentId: "att-1")
@@ -532,8 +542,8 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             ("repost d'un mood · Mood", repostDeMood, .status, true),
             ("repost d'un mood · Post", repostDeMood, .post, true),
             ("composer du fil · Post", .feedComposer, .post, false),
-            ("média de conversation · Story", mediaRecu, .story, false),
-            ("média de conversation · Post", mediaRecu, .post, false)
+            ("média de conversation · Story", mediaRecu, .story, true),
+            ("média de conversation · Post", mediaRecu, .post, true)
         ]
 
         for (nom, origine, format, attendu) in cas {
@@ -602,7 +612,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             ("repost d'un mood · mood", repostDeMood, .mood, true),
             ("repost d'un mood · document", repostDeMood, .document, true),
             ("composer du fil · document", .feedComposer, .document, false),
-            ("média de conversation · scène", mediaRecu, .scene, false)
+            ("média de conversation · scène", mediaRecu, .scene, true)
         ]
 
         for (nom, origine, surface, attendu) in cas {
@@ -615,9 +625,66 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                 ),
                 attendu,
                 "\(nom) : le MONTAGE de l'éventail a changé. Attendu \(attendu) — la puce de mood tombe si "
-                    + "la visibilité cesse de compter (rangée VIDE), le composer du fil et le média de "
-                    + "conversation tombent si le placement cesse de compter (saisie perdue, porte à sens "
-                    + "unique), et le tray tombe si la conjonction est niée."
+                    + "la visibilité cesse de compter (rangée VIDE), le composer du fil tombe si le placement "
+                    + "cesse de compter (saisie perdue), le média de conversation tombe si son ouverture "
+                    + "recommence à envoyer « Post » sur un document (la photo disparaîtrait de l'écran ET de "
+                    + "la publication), et le tray tombe si la conjonction est niée."
+            )
+        }
+    }
+
+    // MARK: - Lot 5 — la porte du média reçu peint enfin son éventail
+
+    /// **Les TROIS formats de la porte atterrissent sur la SCÈNE.**
+    ///
+    /// C'est ce qui tient la loi 6 ici, et il ne faut pas le lire comme un
+    /// détail de routage : `ComposerDocumentDraft` n'a **ni `mediaIds`, ni
+    /// fichier, ni lieu**. Si « Post » montait le document, la photo que la
+    /// porte vient de semer disparaîtrait de l'écran ET de la publication —
+    /// un aperçu qui ment sur ce qui part, exactement ce que la loi 6 interdit.
+    /// Le chip change le `publishTargetType` ; il ne change jamais la surface.
+    func test_leMediaSeme_faitAtterrirTousSesFormats_surLaScene() {
+        let profil = ComposerProfile.profile(
+            for: .conversationMedia(messageId: "msg-1", attachmentId: "att-1"),
+            compositionQualifiesAsReel: true
+        )
+
+        XCTAssertEqual(
+            profil.opensWith, .mediaSeeded,
+            "Prémisse : la porte ouvre sur une graine posée. Sans elle, les assertions suivantes mesurent "
+                + "une autre porte."
+        )
+        for format in [ComposerFormat.story, .post, .reel] {
+            XCTAssertEqual(
+                ComposerSurfaceRouting.surface(opening: .mediaSeeded, format: format),
+                .scene,
+                "\(nom(format)) sous une graine média doit rester dans l'ATELIER : le document ne porte "
+                    + "aucun média, et y router ferait disparaître la photo de la publication."
+            )
+        }
+    }
+
+    /// **L'éventail de la porte se MONTE**, éventail qualifiant ou non.
+    ///
+    /// La garde qui vaut : `mounts` est la conjonction, et c'est elle que le
+    /// meuble lit. Interroger `paints` seul laisserait passer une offre
+    /// rétrécie à un chip unique — un contrôle absent, sous une table qui
+    /// promet trois formats.
+    func test_leMediaSeme_monteSonEventail_qualifiantOuNon() {
+        for gate in [true, false] {
+            let profil = ComposerProfile.profile(
+                for: .conversationMedia(messageId: "msg-1", attachmentId: "att-1"),
+                compositionQualifiesAsReel: gate
+            )
+            XCTAssertTrue(
+                ComposerFormatFanPlacement.mounts(
+                    surface: ComposerSurfaceRouting.surface(
+                        opening: profil.opensWith, format: profil.initialFormat),
+                    opening: profil.opensWith,
+                    offeredFormats: profil.offeredFormats
+                ),
+                "réel=\(gate) : la porte DÉCLARE \(profil.offeredFormats.count) formats et n'en offrirait "
+                    + "aucun contrôle — l'UI morte que la loi 4 nomme."
             )
         }
     }
@@ -1311,12 +1378,41 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_clavier_seLeveALaSeuleOuvertureQuiLaPromis() {
         XCTAssertTrue(ComposerSurfaceRouting.focusesContentOnAppear(opening: .keyboardOnContent))
 
-        for opening in [ComposerOpening.cameraReady, .videoCameraReady, .moodGrid, .resume] {
+        for opening in [ComposerOpening.cameraReady, .videoCameraReady, .moodGrid, .resume, .mediaSeeded] {
             XCTAssertFalse(
                 ComposerSurfaceRouting.focusesContentOnAppear(opening: opening),
                 "\(nom(opening)) n'a promis aucun champ à remplir : lever le clavier masquerait l'écran."
             )
         }
+    }
+
+    /// **La garde de CORPUS des ouvertures** — celle qui empêche qu'un cas
+    /// s'ajoute sans verdict.
+    ///
+    /// Une ouverture n'est rien d'autre qu'une CLÉ DE ROUTAGE : elle n'a que
+    /// deux lecteurs de production dans tout le dépôt, `surface(opening:format:)`
+    /// et `focusesContentOnAppear(opening:)` (plus `ComposerFormatFanPlacement`,
+    /// qui la reçoit en paramètre). Un septième cas ajouté sans entrer dans le
+    /// corpus ci-dessus n'aurait donc AUCUNE mesure.
+    ///
+    /// **La confrontation se fait à `allCases`, et c'est la seule formulation
+    /// qui tienne cette phrase.** Un `count == 6` écrit en dur ne rougit que si
+    /// l'on modifie le TABLEAU ; parcourir le corpus pour vérifier que le
+    /// routage rend « une surface du corpus des surfaces » est pire encore —
+    /// `ComposerSurfaceKind` n'a que ces trois cas, donc l'assertion ne peut PAS
+    /// tomber. La seule protection réelle venait alors du compilateur (`nom(_:)`
+    /// est un `switch` exhaustif), et le doc-comment s'en attribuait le mérite.
+    func test_leCorpusDesOuvertures_estComplet_etChacuneARendUnVerdict() {
+        XCTAssertEqual(
+            ComposerOpening.allCases.map(nom).sorted(),
+            Self.toutesLesOuvertures.map(nom).sorted(),
+            "Le corpus doit être l'ÉNUMÉRATION COMPLÈTE : une ouverture déclarée hors de ce tableau "
+                + "n'aurait ni verdict de routage ni verdict de foyer."
+        )
+        XCTAssertEqual(
+            Set(Self.toutesLesOuvertures.map(nom)).count, Self.toutesLesOuvertures.count,
+            "Deux entrées du corpus désignent la même ouverture : une ouverture resterait sans mesure."
+        )
     }
 
     // MARK: - La rangée d'outils

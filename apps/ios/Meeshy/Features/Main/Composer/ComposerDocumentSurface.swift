@@ -34,11 +34,15 @@ nonisolated enum ComposerSurfaceKind: Equatable {
 ///
 /// Trois règles, et l'ordre entre elles est le fond de l'affaire :
 ///
-/// 1. **Une porte qui a ouvert une CAPTURE a une scène, quel que soit le
-///    format.** Basculer une story en post ne détruit pas le canvas déjà
-///    composé : la loi 9 autorise à changer de format, jamais à jeter ce qui
-///    est composé. Faire décider le format seul aurait vidé l'écran de
-///    quiconque tape « Post » depuis le tray.
+/// 1. **Une porte qui a ouvert une CAPTURE — ou qui a DÉJÀ posé son média —
+///    a une scène, quel que soit le format.** Basculer une story en post ne
+///    détruit pas le canvas déjà composé : la loi 9 autorise à changer de
+///    format, jamais à jeter ce qui est composé. Faire décider le format seul
+///    aurait vidé l'écran de quiconque tape « Post » depuis le tray. C'est la
+///    même raison, un cran plus littéral, qui range `.mediaSeeded` ici : le
+///    document ne porte NI `mediaIds`, NI fichier, NI lieu, si bien qu'un
+///    « Post » routé vers lui ferait disparaître le média semé de l'écran ET de
+///    la publication.
 /// 2. **Une REPRISE monte la surface où la composition reprise vit
 ///    RÉELLEMENT.** Le seul mécanisme de reprise du meuble est
 ///    `StoryComposerViewModel.adoptDraft`, qui repeuple l'ATELIER. Laisser le
@@ -77,7 +81,7 @@ nonisolated enum ComposerSurfaceRouting {
 
     static func surface(opening: ComposerOpening, format: ComposerFormat) -> ComposerSurfaceKind {
         switch opening {
-        case .cameraReady, .videoCameraReady, .resume:
+        case .cameraReady, .videoCameraReady, .resume, .mediaSeeded:
             return .scene
         case .keyboardOnContent, .moodGrid:
             switch format {
@@ -92,6 +96,11 @@ nonisolated enum ComposerSurfaceRouting {
     /// d'emblée. Une reprise de brouillon ne le lève pas : le clavier
     /// recouvrirait le document qu'on vient de rouvrir pour le relire.
     ///
+    /// `.mediaSeeded` ne le lève pas davantage, et c'est le sens même du cas :
+    /// il n'existe aucun champ « contenu » sous l'atelier — on y écrit en
+    /// posant un OBJET TEXTE. La porte du média reçu a annoncé ce clavier
+    /// jusqu'au lot 5 sans qu'aucune ligne ne le lève.
+    ///
     /// `.moodGrid` ne le lève pas non plus, et ce cas n'a PAS bougé au lot 4
     /// alors même que le mood changeait de surface : on choisit un emoji avant
     /// d'écrire, et lever le clavier recouvrirait la grille — c'est-à-dire le
@@ -99,7 +108,7 @@ nonisolated enum ComposerSurfaceRouting {
     static func focusesContentOnAppear(opening: ComposerOpening) -> Bool {
         switch opening {
         case .keyboardOnContent: return true
-        case .cameraReady, .videoCameraReady, .moodGrid, .resume: return false
+        case .cameraReady, .videoCameraReady, .moodGrid, .resume, .mediaSeeded: return false
         }
     }
 }
@@ -1205,6 +1214,10 @@ struct DocumentComposerDoor: View {
             // réordonnancement, et une garde le tient désormais pour le jour où
             // un paramètre s'insérera au milieu de cet `init`.
             moodSeed: nil,
+            // Ni média : `ComposerDocumentDraft` n'a NI `mediaIds`, NI fichier,
+            // NI lieu — semer ici poserait un canvas que cette porte ne monte
+            // jamais, et dont le publieur ne saurait rien faire.
+            mediaSeed: nil,
             onPreview: { _, _, _, _, _ in },
             onDismiss: { dismiss() }
         )

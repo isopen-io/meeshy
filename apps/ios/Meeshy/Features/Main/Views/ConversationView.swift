@@ -176,6 +176,18 @@ struct ConversationComposerState {
     var showOptions = false
     var actionAlert: String? = nil
     var forwardMessage: Message? = nil
+    /// La cible de « Composer » — le média reçu que la porte va semer.
+    /// Non-nil = la porte est présentée.
+    var composeMediaTarget: ComposableMediaTarget? = nil
+    /// La même cible, RETENUE le temps qu'une feuille se referme.
+    ///
+    /// Le second déclencheur de « Composer » vit dans la feuille de transfert,
+    /// et présenter un plein écran pendant qu'une feuille se démonte est la
+    /// course que ce dépôt a déjà payée (« Attempt to present … which is
+    /// already presenting »). La promotion se fait donc dans l'`onDismiss` de
+    /// la feuille — la primitive SwiftUI prévue pour ce cas exact, là où un
+    /// délai n'est qu'un pari.
+    var pendingComposeTarget: ComposableMediaTarget? = nil
     var showConversationInfo = false
 
     // Popup consentement vocal à l'envoi d'audio (2026-07-08) : proposé UNE
@@ -860,8 +872,25 @@ struct ConversationView: View {
                 ShareSheet(activityItems: [viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content])
                     .presentationDetents([.medium, .large])
             }
-            .sheet(item: $composerState.forwardMessage) { msgToForward in
-                ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor, onOpenConversation: { router.navigateToConversation($0) }) { composerState.forwardMessage = nil }
+            .sheet(item: $composerState.forwardMessage, onDismiss: {
+                // La feuille est DÉMONTÉE : le plein écran peut prendre sa
+                // place. Promouvoir plus tôt présenterait deux modaux à la fois.
+                guard let attendue = composerState.pendingComposeTarget else { return }
+                composerState.pendingComposeTarget = nil
+                composerState.composeMediaTarget = attendue
+            }) { msgToForward in
+                ForwardPickerSheet(
+                    message: msgToForward,
+                    sourceConversationId: conversation?.id ?? "",
+                    accentColor: accentColor,
+                    onOpenConversation: { router.navigateToConversation($0) },
+                    // Loi 6 — SECOND point d'entrée du MÊME chemin, jamais une
+                    // dixième porte : la feuille se referme et rend la main,
+                    // l'hôte pose le même état que l'appui long. Elle ne monte
+                    // pas le meuble, ce qui en ferait un second contrat d'envoi.
+                    onCompose: { composerState.pendingComposeTarget = ComposableMediaTarget(message: msgToForward) },
+                    onDismiss: { composerState.forwardMessage = nil }
+                )
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                     // ForwardPickerSheet reads `@EnvironmentObject StatusViewModel`
@@ -918,6 +947,29 @@ struct ConversationView: View {
     private var bodyWithCovers: AnyView {
         AnyView(
         bodyWithLifecycle
+            // La PORTE du média reçu (lot 5, O13). Un plein écran, pas une
+            // feuille : c'est un atelier, et il occupe l'écran comme celui de
+            // la création. Elle vit dans la couche des COVERS et non dans celle
+            // des feuilles, où le débordement de pile par profondeur de type a
+            // déjà coûté dix-huit rapports device.
+            //
+            // Le montage du MEUBLE, lui, reste dans la porte : le poser ici
+            // recopierait son envoi, sa reprise hors-ligne et sa sortie — et
+            // ce lot livre justement un SECOND déclencheur du même chemin.
+            .fullScreenCover(item: $composerState.composeMediaTarget) { cible in
+                ConversationMediaComposerDoor(
+                    // L'INTENTION naît dans la porte, pas ici : un second site
+                    // qui la construirait serait un second contrat à tenir
+                    // d'accord, et ce lot a DEUX déclencheurs pour une seule
+                    // présentation. L'hôte ne remet que la cible.
+                    target: cible,
+                    storyViewModel: storyViewModel,
+                    router: router,
+                    conversationListViewModel: conversationListViewModel,
+                    statusViewModel: statusViewModel,
+                    onDismiss: { composerState.composeMediaTarget = nil }
+                )
+            }
             .fullScreenCover(item: $scrollState.galleryStartAttachment) { startAttachment in
                 ConversationMediaGalleryView(
                     allAttachments: viewModel.allVisualAttachments,
@@ -2489,6 +2541,11 @@ struct ConversationView: View {
                         attachmentId: attachment.id.isEmpty ? nil : attachment.id
                     ))
                 },
+                onCompose: {
+                    // L'overlay ne monte rien : il rend la main. Le même état
+                    // que le second déclencheur, un seul chemin de présentation.
+                    composerState.composeMediaTarget = ComposableMediaTarget(message: msg)
+                },
                 isDirect: isDirect,
                 preferredTranslation: viewModel.preferredTranslation(for: msg.id),
                 mentionDisplayNames: viewModel.mentionDisplayNames,
@@ -2544,7 +2601,13 @@ struct ConversationView: View {
             hasEditRevisions: true,
             hasCallSummary: msg.callSummary != nil,
             saveableAttachmentCount: msg.attachments.filter { $0.type != .location }.count,
-            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
+            canComposeMedia: ComposableAttachment.offers(message: msg),
+            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
+            // `isForwardable` profitait ici de son défaut `true`, inoffensif
+            // tant que `primaryActions` ne le lisait pas. Le lot 5 le rend
+            // LOAD-BEARING : sans lui, « Composer » s'offrirait sur une vue
+            // unique, et la clause O13 tomberait par un simple défaut.
+            isForwardable: msg.isForwardable
         )
         let actions = MessageActionResolver.primaryActions(ctx)
         // 4 emojis les plus utilisés (fallback sur les défauts) — rangée rapide
@@ -2644,6 +2707,13 @@ struct ConversationView: View {
                 ))
             } label: {
                 Label(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main), systemImage: "arrow.down.to.line")
+            }
+        case .compose:
+            Button {
+                HapticFeedback.light()
+                composerState.composeMediaTarget = ComposableMediaTarget(message: msg)
+            } label: {
+                Label(String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main), systemImage: "wand.and.stars")
             }
         case .pin:
             Button {

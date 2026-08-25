@@ -734,11 +734,25 @@ extension StoryComposerView {
         /// Session vierge : découverte PASSIVE d'un brouillon éventuel, offre
         /// par bandeau (`checkForDraft`).
         case offerDraftResume
+        /// Session SEMÉE par une porte (`StoryComposerViewModel(seeding:)`) :
+        /// le canvas porte déjà son média, et l'ouverture doit l'ADOPTER —
+        /// c'est-à-dire le recopier dans l'état de la vue — sans offrir la
+        /// moindre reprise de brouillon.
+        ///
+        /// Ce cas ferme DEUX défauts, qu'il faut nommer séparément parce que
+        /// n'en fermer qu'un laisserait un produit parfaitement plausible :
+        /// sans lui, le fond semé n'est jamais recopié dans `selectedImage`
+        /// (`restoreCanvas` est le seul écrivain de cet instantané) ⇒ canvas
+        /// VIDE ; et la carte « Reprendre » se propose par-dessus la graine,
+        /// alors que `restoreDraft()` écrase `slides` sans condition ⇒ le média
+        /// disparaît d'un tap, sans un mot.
+        case adoptSeededCanvas
     }
 
     nonisolated static func openingDraftAction(
         isEditingExistingStory: Bool,
-        isAdoptedDraftSession: Bool
+        isAdoptedDraftSession: Bool,
+        isSeededSession: Bool
     ) -> ComposerOpeningDraftAction {
         // L'ADOPTION prime (2026-08-02, point c) : un brouillon portant
         // `editingPostId` rouvre le mode édition en session adoptée — c'est
@@ -746,6 +760,10 @@ extension StoryComposerView {
         // qui écraserait le travail repris. Une entrée en édition FRAÎCHE
         // (« Modifier », jamais adoptée) reste hydratée depuis la story.
         if isAdoptedDraftSession { return .restoreAdoptedDraft }
+        // La GRAINE vient ensuite, et avant l'édition : un composer semé n'a
+        // rien à hydrater depuis le serveur — son média est déjà là, et le
+        // relire écraserait exactement ce que la porte vient de poser.
+        if isSeededSession { return .adoptSeededCanvas }
         return isEditingExistingStory ? .hydratedByEditMode : .offerDraftResume
     }
 

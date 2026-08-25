@@ -99,6 +99,7 @@ struct MessageActionsMenu: View {
         case .translate: return "globe"
         case .copy: return "doc.on.doc"
         case .saveMedia: return "arrow.down.to.line"
+        case .compose: return "wand.and.stars"
         case .pin: return "pin.fill"
         case .unpin: return "pin.slash.fill"
         case .star: return "star.fill"
@@ -115,6 +116,7 @@ struct MessageActionsMenu: View {
         case .translate: return String(localized: "action.translate", defaultValue: "Traduire", bundle: .main)
         case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)
         case .saveMedia: return String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main)
+        case .compose: return String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main)
         case .pin: return String(localized: "action.pin", defaultValue: "Épingler", bundle: .main)
         case .unpin: return String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main)
         case .star: return String(localized: "action.star", defaultValue: "Favori", bundle: .main)

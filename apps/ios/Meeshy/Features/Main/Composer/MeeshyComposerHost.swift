@@ -287,6 +287,25 @@ struct MeeshyComposerHost: View {
     /// deviendrait un mood neuf — sans bandeau, sans `repostOfId`, sans un mot.
     let moodSeed: ComposerMoodSeed?
 
+    /// **La graine de la SCÈNE** — le média qu'une porte a déjà posé sur le
+    /// canvas (`ConversationMediaComposerDoor`, lot 5).
+    ///
+    /// Elle est la JUMELLE de `moodSeed` et n'en partage pourtant ni le moment
+    /// ni le mécanisme, et il faut le dire pour que la prochaine session ne les
+    /// fonde pas : le mood s'adopte APRÈS coup, parce que sa graine arrive de la
+    /// file durable une boucle plus tard ; le média, lui, se pose à la
+    /// CONSTRUCTION, parce que le fond de slide est recopié dans un `@State` de
+    /// l'atelier par un INSTANTANÉ (`restoreCanvas`) qui ne relit jamais ce qui
+    /// arrive après lui. C'est aussi pourquoi elle n'est pas un `@State` : elle
+    /// n'existe que le temps de construire le ViewModel.
+    ///
+    /// **Sans valeur par défaut**, pour la raison qui a déjà coûté trois fois
+    /// dans ce dossier (`onPublishDocument`, `moodSeed`, puis le `repostOfId` de
+    /// `ComposerDocumentDraft.document`) : un défaut la ferait disparaître d'un
+    /// site de montage sans casser la moindre compilation, et la porte du média
+    /// reçu ouvrirait un composer VIDE — un produit parfaitement plausible.
+    let mediaSeed: StoryComposerSeed?
+
     let onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     let onDismiss: () -> Void
 
@@ -381,6 +400,7 @@ struct MeeshyComposerHost: View {
         onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference], ComposerMediaAccessibility, PostType) -> Bool,
         onPublishDocument: @escaping @MainActor (ComposerDocumentDraft) async -> Bool,
         moodSeed: ComposerMoodSeed?,
+        mediaSeed: StoryComposerSeed?,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -390,10 +410,25 @@ struct MeeshyComposerHost: View {
         self.onPublishAllInBackground = onPublishAllInBackground
         self.onPublishDocument = onPublishDocument
         self.moodSeed = moodSeed
+        self.mediaSeed = mediaSeed
         self.onPreview = onPreview
         self.onDismiss = onDismiss
 
-        let composer = StoryComposerViewModel()
+        // UN seul ViewModel, semé ou non. En fabriquer un second hors de cette
+        // branche laisserait le composer s'autosauvegarder sous un id neuf,
+        // pendant que le brouillon repris resterait intact à côté — le doublon
+        // exact que l'adoption existe pour éviter.
+        //
+        // L'ADOPTION vient APRÈS la graine, et l'ordre est load-bearing : un
+        // brouillon que l'auteur vient de désigner l'emporte sur ce qu'une porte
+        // sème. `openingDraftAction` tient la même précédence côté SDK, et les
+        // deux doivent rester d'accord.
+        let composer: StoryComposerViewModel
+        if let mediaSeed {
+            composer = StoryComposerViewModel(seeding: mediaSeed)
+        } else {
+            composer = StoryComposerViewModel()
+        }
         if let draftId { composer.adoptDraft(id: draftId) }
         _viewModel = StateObject(wrappedValue: composer)
 

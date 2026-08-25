@@ -249,13 +249,24 @@ final class ComposerIntentTests: XCTestCase {
     /// La règle est écrite ici AVEC sa raison : une assertion qui porte une
     /// valeur sans sa justification ressemble à un défaut, et le prochain
     /// lecteur la « corrigerait » de bonne foi.
+    ///
+    /// **L'OUVERTURE a changé au lot 5, et la raison est double.** Elle valait
+    /// `.keyboardOnContent`, ce qui disait deux choses fausses : que le clavier
+    /// se lèverait (`focusesContentOnAppear` n'a qu'un consommateur de
+    /// production, la surface DOCUMENT — sous la scène, rien ne le lit, et
+    /// l'atelier n'a aucun champ « contenu » à mettre au foyer), et que « Post »
+    /// monterait un document (où la photo semée disparaîtrait de l'écran ET de
+    /// la publication). `.mediaSeeded` dit ce que la porte FAIT — le média est
+    /// déjà posé — et route ses trois formats sur la scène, ce qui rend enfin
+    /// son éventail peignable.
     func test_profile_conversationMedia_ouvreUneStorySurSaGraine() {
         let profil = profil(.conversationMedia(messageId: "msg-7", attachmentId: "piece-3"))
 
-        XCTAssertEqual(profil.initialFormat, .story, "e9/O13 — profil DÉFINI, câblage lot G.")
+        XCTAssertEqual(profil.initialFormat, .story, "e9/O13 — le média reçu ouvre une story.")
         XCTAssertEqual(
-            profil.opensWith, .keyboardOnContent,
-            "Le média reçu est déjà posé par la porte : il ne reste que le mot à écrire."
+            profil.opensWith, .mediaSeeded,
+            "Le média reçu est DÉJÀ posé par la porte : il n'y a ni capture à ouvrir, ni champ à mettre "
+                + "au foyer — et tous ses formats doivent rester dans l'atelier."
         )
         XCTAssertNil(profil.routesToLegacy)
     }
@@ -450,18 +461,25 @@ final class ComposerIntentTests: XCTestCase {
     /// ce champ : y lever le clavier viserait le vide.
     /// REFORMULÉE, pas supprimée. C1 déduisait « clavier sur `content` ⟹ format
     /// post », en tenant `content` pour un champ du seul post. La loi du miroir
-    /// invalide l'inférence, pas ce qu'elle protégeait : un repost de story et
-    /// un média reçu lèvent aussi le clavier, sur une LÉGENDE.
+    /// invalide l'inférence, pas ce qu'elle protégeait : un repost de story lève
+    /// aussi le clavier, sur une LÉGENDE.
     ///
     /// Ce que la règle protège vraiment : le clavier ne se lève que là où il y a
     /// un texte à écrire d'emblée. Une porte qui ouvre sur la caméra, la grille
     /// de moods ou la reprise d'un document ne le lève pas — sinon elle
     /// masquerait sa propre surface derrière un clavier.
+    ///
+    /// **`.conversationMedia` a QUITTÉ cette liste au lot 5.** Elle y figurait
+    /// depuis C1 et n'y avait jamais eu sa place : `focusesContentOnAppear` n'a
+    /// qu'un consommateur de production — la surface DOCUMENT —, et cette porte
+    /// monte l'ATELIER, où il n'y a aucun champ « contenu » à mettre au foyer
+    /// (on écrit dans une story en posant un OBJET TEXTE). La ligne ANNONÇAIT
+    /// donc un clavier qui ne se lève pas, et c'est cette annonce que le lot a
+    /// retirée, pas une capacité.
     func test_clavierSurContenu_seulementLaOuUnTexteSEcritDEmblee() {
         let portesAClavier: [ComposerOrigin] = [
             .feedComposer,
-            .repost(ofPostId: "post-source", sourceFormat: .story),
-            .conversationMedia(messageId: "msg-7", attachmentId: "piece-3")
+            .repost(ofPostId: "post-source", sourceFormat: .story)
         ]
 
         for origin in Self.toutesLesOrigines {

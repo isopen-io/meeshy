@@ -45,7 +45,7 @@ final class StoryComposerAdoptedDraftTests: XCTestCase {
     func test_openingDraftAction_adoptedSession_restoresWithoutOffering() {
         XCTAssertEqual(
             StoryComposerView.openingDraftAction(
-                isEditingExistingStory: false, isAdoptedDraftSession: true),
+                isEditingExistingStory: false, isAdoptedDraftSession: true, isSeededSession: false),
             .restoreAdoptedDraft
         )
     }
@@ -53,7 +53,7 @@ final class StoryComposerAdoptedDraftTests: XCTestCase {
     func test_openingDraftAction_freshSession_offersPassiveResume() {
         XCTAssertEqual(
             StoryComposerView.openingDraftAction(
-                isEditingExistingStory: false, isAdoptedDraftSession: false),
+                isEditingExistingStory: false, isAdoptedDraftSession: false, isSeededSession: false),
             .offerDraftResume
         )
     }
@@ -66,7 +66,7 @@ final class StoryComposerAdoptedDraftTests: XCTestCase {
     func test_openingDraftAction_adoptedEditSession_restoresTheAdoptedDraft() {
         XCTAssertEqual(
             StoryComposerView.openingDraftAction(
-                isEditingExistingStory: true, isAdoptedDraftSession: true),
+                isEditingExistingStory: true, isAdoptedDraftSession: true, isSeededSession: false),
             .restoreAdoptedDraft,
             "Rouvrir un brouillon d'édition doit restaurer CE brouillon, jamais ré-hydrater le serveur par-dessus."
         )
@@ -78,7 +78,7 @@ final class StoryComposerAdoptedDraftTests: XCTestCase {
     func test_openingDraftAction_freshEditSession_staysHydratedByEditMode() {
         XCTAssertEqual(
             StoryComposerView.openingDraftAction(
-                isEditingExistingStory: true, isAdoptedDraftSession: false),
+                isEditingExistingStory: true, isAdoptedDraftSession: false, isSeededSession: false),
             .hydratedByEditMode
         )
     }

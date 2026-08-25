@@ -65,12 +65,18 @@ nonisolated enum ComposerFormatFanPolicy {
 /// aussi la scène sur `.keyboardOnContent` + `.story` / `.reel`. Une porte de ce
 /// profil peignait donc l'éventail à l'ouverture puis le PERDAIT au premier tap
 /// vers un format-document — une porte à SENS UNIQUE, c'est-à-dire le défaut
-/// même que cette règle existe pour nommer. Le cas est déjà dans la table :
-/// `.conversationMedia` (`initialFormat: .story`, offre `[.story, .post]`,
-/// ouverture `.keyboardOnContent`), profil DÉFINI dont le câblage appartient au
-/// lot G. Les quatre portes de production n'en changent pas d'un pixel — toutes
-/// ouvrent sur une capture ou une reprise, où tous les formats atterrissent sur
-/// la scène.
+/// même que cette règle existe pour nommer.
+///
+/// **Le cas qui l'a imposée a été TRANCHÉ au lot 5, et pas dans le sens qu'on
+/// attendait.** `.conversationMedia` portait `opensWith: .keyboardOnContent` et
+/// une offre `[.story, .post]` : la règle rendait donc `false`, et câbler la
+/// porte telle quelle aurait livré trois formats déclarés sans aucun contrôle.
+/// C'est le PROFIL qui a cédé, pas la règle — son ouverture est devenue
+/// `.mediaSeeded`, qui envoie ses trois formats sur la scène. La règle a fait
+/// exactement ce qu'on lui demandait : elle a nommé un défaut avant qu'un
+/// utilisateur ne le voie. Les portes de production n'en changent pas d'un
+/// pixel — toutes ouvrent sur une capture, une reprise ou une graine, où tous
+/// les formats atterrissent sur la scène.
 ///
 /// Le cas qui rend cette règle nécessaire dans l'AUTRE sens est
 /// `.feedComposer` : son offre contient `.story`, que le routage envoie à la

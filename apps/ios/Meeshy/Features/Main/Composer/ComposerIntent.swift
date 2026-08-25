@@ -85,7 +85,28 @@ nonisolated extension ComposerFormat {
 }
 
 /// L'état dans lequel la porte livre le composer — jamais un écran d'attente.
-nonisolated enum ComposerOpening: Equatable { case cameraReady, keyboardOnContent, videoCameraReady, moodGrid, resume }
+///
+/// **C'est une CLÉ DE ROUTAGE, et rien d'autre.** Elle n'a que deux lecteurs de
+/// production dans tout le dépôt — `ComposerSurfaceRouting.surface` et
+/// `.focusesContentOnAppear` (plus `ComposerFormatFanPlacement`, qui la reçoit
+/// en paramètre). `.cameraReady` n'ouvre AUCUNE caméra : c'est
+/// `profile.allowsCapture` qui gate la capture. Un cas ajouté ici ne fait donc
+/// rien de lui-même ; il choisit une surface et décide d'un foyer.
+///
+/// `.mediaSeeded` (lot 5) dit que la porte a DÉJÀ posé son média sur le canvas :
+/// ni capture à ouvrir, ni champ à mettre au foyer, et **tous** les formats
+/// atterrissent sur la scène — sans quoi choisir « Post » monterait un document
+/// qui ne porte aucun média, et la photo semée disparaîtrait de l'écran comme de
+/// la publication.
+/// `CaseIterable` n'est pas décoratif : c'est ce qui permet à la garde de
+/// corpus (`ComposerDocumentSurfaceTests`) de confronter son tableau à
+/// l'ÉNUMÉRATION COMPLÈTE. Sans elle, la garde ne pouvait qu'écrire un compte en
+/// dur — donc ne rougir que si on modifiait le tableau, jamais si on ajoutait un
+/// cas.
+nonisolated enum ComposerOpening: Equatable, CaseIterable {
+    case cameraReady, keyboardOnContent, videoCameraReady, moodGrid, resume
+    case mediaSeeded
+}
 
 /// Les composers historiques que ce lot ROUTE sans les migrer (périmètre v1).
 ///
@@ -477,8 +498,8 @@ nonisolated extension ComposerProfile {
             )
 
         case .conversationMedia:
-            // e9/O13 : le média reçu est déjà posé par la porte, il ne reste que
-            // le mot à écrire. Profil DÉFINI, câblage lot G.
+            // e9/O13 : le média reçu est DÉJÀ posé par la porte
+            // (`ConversationMediaComposerDoor` → `StoryComposerViewModel(seeding:)`).
             //
             // Le format d'ouverture est une STORY, pas un post (directive du
             // 2026-08-23, doctrine alignée en rév. 3). Le coût de l'erreur est
@@ -486,12 +507,37 @@ nonisolated extension ComposerProfile {
             // se répare d'un tap dans l'éventail, tandis qu'un post publié ne se
             // dé-publie pas. Le défaut tombe donc du côté réversible, et le
             // geste courant sur un média reçu est bref.
+            //
+            // Rév. 8 (lot 5) : l'ouverture passe de `.keyboardOnContent` à
+            // `.mediaSeeded`, et ce n'est pas un renommage. L'ancienne valeur
+            // disait DEUX choses fausses, chacune d'un côté de la même phrase de
+            // commentaire (« il ne reste que le mot à écrire ») :
+            //
+            // - elle promettait un CLAVIER. `focusesContentOnAppear` n'a qu'un
+            //   consommateur de production — `ComposerDocumentSurface`. Sous la
+            //   scène, personne ne le lit, et l'atelier n'a aucun champ
+            //   « contenu » à mettre au foyer : on écrit dans une story en
+            //   posant un OBJET TEXTE ;
+            // - elle envoyait « Post » sur la surface DOCUMENT, qui ne porte
+            //   NI `mediaIds`, NI fichier, NI lieu. Un tap sur le chip aurait
+            //   fait disparaître la photo semée de l'écran ET de la publication
+            //   — la loi 6 rompue par le ROUTAGE, pas par une vue.
+            //
+            // Conséquence mesurable, et c'est elle qui rendait le câblage
+            // impossible : `ComposerFormatFanPlacement.paints` exige que TOUS
+            // les formats offerts atterrissent du même côté de la frontière
+            // scène / pas-de-scène. Avec `.keyboardOnContent`, `.post` partait
+            // vers `.document` ⇒ l'éventail ne se peignait PAS DU TOUT, et la
+            // porte livrait trois formats déclarés sans aucun contrôle — l'UI
+            // morte que la loi 4 nomme. L'offre, elle, n'a pas bougé d'un
+            // format : entre supprimer un mensonge et supprimer une capacité,
+            // on supprime le mensonge.
             return ComposerProfile(
                 initialFormat: .story,
                 offeredFormats: plusReel([.story, .post]),
                 showsSlides: true,
                 showsTimeline: true,
-                opensWith: .keyboardOnContent,
+                opensWith: .mediaSeeded,
                 allowsCapture: true,
                 routesToLegacy: nil
             )

@@ -23,6 +23,14 @@ struct ForwardPickerSheet: View {
     let sourceConversationId: String
     let accentColor: String
     var onOpenConversation: ((Conversation) -> Void)? = nil
+    /// **Le second déclencheur de « Composer »** (loi 6). La feuille ne monte
+    /// PAS le meuble : elle se referme et rend la main à son hôte, qui pose le
+    /// même état de présentation que l'appui long. Y monter le composer en
+    /// ferait une seconde porte — donc un second contrat d'envoi, une seconde
+    /// sortie et une seconde reprise hors-ligne à tenir d'accord.
+    ///
+    /// `nil` = l'hôte n'a rien branché, et l'entrée est ABSENTE (loi 4).
+    var onCompose: (() -> Void)? = nil
     let onDismiss: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -283,10 +291,25 @@ struct ForwardPickerSheet: View {
 
     // MARK: - Publication
 
-    /// La PREMIÈRE pièce jointe décide — comme sur le web. Le fil rend un média
-    /// par publication, et une feuille qui proposerait « publier » sur un lot
-    /// hétérogène mentirait sur ce qui partirait réellement.
-    private var primaryAttachment: MessageAttachment? { message.attachments.first }
+    /// **La pièce que cette rangée DÉSIGNE — une seule, pour ses deux
+    /// contrôles.**
+    ///
+    /// Le fil rend un média par publication, et une feuille qui proposerait
+    /// « publier » sur un lot hétérogène mentirait sur ce qui partirait
+    /// réellement : il faut donc élire. Ce qui compte est qu'on élise UNE fois.
+    /// Les pilules élisaient `attachments.first` pendant que « Composer »
+    /// composait l'unique pièce composable, où qu'elle soit — et sur
+    /// `[document.pdf, photo.jpg]` (un envoi nominal : `MultiAttachmentSendPlanner`
+    /// range `.file` et `.image` dans le MÊME lot) cela donnait un en-tête
+    /// « Publier » sans une seule pilule, au-dessus d'un « Composer » qui visait
+    /// une AUTRE pièce que celle que les pilules annonçaient.
+    ///
+    /// La règle d'offre décide donc pour les deux, et le repli reste la première
+    /// pièce — sans quoi un message sans pièce composable (une note vocale)
+    /// perdrait ses pilules.
+    private var primaryAttachment: MessageAttachment? {
+        ComposableAttachment.target(in: message) ?? message.attachments.first
+    }
 
     /// Les destinations publiques offertes pour ce média, vides quand il n'en a
     /// aucune (document, PDF, code) — la section n'est alors pas montée du tout,
@@ -295,9 +318,26 @@ struct ForwardPickerSheet: View {
         PublicationTargetRule.targets(forMimeType: primaryAttachment?.mimeType)
     }
 
+    /// **La COMPOSABILITÉ, qui n'est pas la publiabilité.** `publicationTargets`
+    /// dit où le PONT peut envoyer ces octets tels quels — note vocale
+    /// comprise ; `ComposableAttachment.offers` dit si la GRAINE sait poser le
+    /// média sur un canvas, ET si elle a le DROIT de l'emporter (vue unique,
+    /// flou, chiffrement, lot hétérogène).
+    ///
+    /// La règle est LUE, jamais réécrite : ce déclencheur et l'appui long
+    /// mènent au même plein écran, et la conjonction vivait ici en double — dans
+    /// une `private var` de `View` qu'aucun test ne peut voir passer de `&&` à
+    /// `||`. Ne reste ici que ce qui est PROPRE à la feuille : `onCompose != nil`,
+    /// parce qu'un contrôle dont l'hôte n'a branché aucun effet est de l'UI
+    /// morte (loi 4).
+    private var offersCompose: Bool {
+        guard onCompose != nil else { return false }
+        return ComposableAttachment.offers(message: message)
+    }
+
     @ViewBuilder
     private var publicationSection: some View {
-        if !publicationTargets.isEmpty {
+        if !publicationTargets.isEmpty || offersCompose {
             VStack(alignment: .leading, spacing: 8) {
                 Text(String(localized: "forward.publish-section", defaultValue: "Publier", bundle: .main))
                     .font(MeeshyFont.relative(11, weight: .semibold))
@@ -331,6 +371,10 @@ struct ForwardPickerSheet: View {
                             .disabled(isPublishing)
                         }
 
+                        if offersCompose {
+                            composeEntry
+                        }
+
                         if isPublishing {
                             ProgressView().tint(Color(hex: accentColor))
                         }
@@ -352,6 +396,47 @@ struct ForwardPickerSheet: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
+    }
+
+    /// **« Composer »** — le second point d'entrée de `.conversationMedia`.
+    ///
+    /// Elle se distingue des pilules voisines par ce qu'elle FAIT : les pilules
+    /// PUBLIENT (le pont duplique les octets, la publication existe au relâché
+    /// du doigt) ; celle-ci ouvre un ATELIER, où rien ne part tant que l'auteur
+    /// n'a pas pressé la flèche. Le libellé le dit — « Composer », jamais
+    /// « Publier ».
+    ///
+    /// Elle se REFERME avant d'appeler sa fermeture : présenter un plein écran
+    /// pendant qu'une feuille se démonte est la course « already presenting »
+    /// que ce dépôt a déjà payée.
+    ///
+    /// **Et elle ne passe PAS par `handlePublishTap`, donc pas par la
+    /// confirmation de capture — décision assumée, écrite ici et dans le
+    /// doc-comment de `PublicationTargetRule.needsCaptureConfirmation`.** Cette
+    /// confirmation garde le geste où UN TAP publie ; l'atelier, lui, demande à
+    /// l'auteur son format, son audience et un appui sur la flèche avant que
+    /// quoi que ce soit ne parte. Une alerte posée avant d'OUVRIR l'atelier
+    /// serait une fausse alarme — et une fausse alarme s'apprend à écarter avant
+    /// d'atteindre le tap qui compte.
+    private var composeEntry: some View {
+        Button {
+            dismiss()
+            onCompose?()
+        } label: {
+            Label(
+                String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main),
+                systemImage: "wand.and.stars"
+            )
+            .font(MeeshyFont.relative(13, weight: .semibold))
+            .foregroundColor(Color(hex: accentColor))
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background(
+                Capsule().fill(Color(hex: accentColor).opacity(0.12))
+            )
+            .contentShape(Capsule())
+        }
+        .disabled(isPublishing)
     }
 
     /// La confirmation posée avant d'ouvrir une CAPTURE au-delà de la

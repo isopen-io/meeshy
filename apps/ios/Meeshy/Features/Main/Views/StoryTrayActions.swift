@@ -233,6 +233,12 @@ struct StoryComposerCover: ViewModifier {
                 // fait disparaître d'un site de republication, où son absence
                 // transformerait la republication en mood neuf, sans un mot.
                 moodSeed: nil,
+                // Ni média : la création part d'une ARDOISE. Ce que l'auteur y
+                // pose vient de la caméra, de la pellicule ou du presse-papier,
+                // par les fournisseurs que le meuble installe — jamais d'une
+                // graine. Écrit en toutes lettres, le paramètre n'ayant pas de
+                // défaut.
+                mediaSeed: nil,
                 onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in
                     previewAssets = StoryPreviewAssets(
                         slides: slides,
