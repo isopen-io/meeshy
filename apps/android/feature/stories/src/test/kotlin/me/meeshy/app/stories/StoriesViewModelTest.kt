@@ -11,6 +11,7 @@ import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -23,7 +24,9 @@ import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.model.SocketStoryDeletedData
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.FailedStoryPublish
 import me.meeshy.sdk.story.PendingStoryPublish
 import me.meeshy.sdk.story.StoryPublishQueue
@@ -88,6 +91,13 @@ class StoriesViewModelTest {
 
     private val workManager: WorkManager = mockk(relaxed = true)
 
+    private val storyDeletedFlow = MutableSharedFlow<SocketStoryDeletedData>(extraBufferCapacity = 8)
+
+    private fun socialSocket(): SocialSocketManager =
+        mockk<SocialSocketManager>(relaxed = true).also {
+            every { it.storyDeleted } returns storyDeletedFlow
+        }
+
     private fun queueOf(
         pending: List<PendingStoryPublish> = emptyList(),
         failed: List<FailedStoryPublish> = emptyList(),
@@ -102,8 +112,11 @@ class StoriesViewModelTest {
             every { it.publishQueue() } returns queue
         }
 
-    private fun viewModel(repo: StoryRepository, session: SessionRepository = session()) =
-        StoriesViewModel(repo, session, MeeshyConfig(), workManager)
+    private fun viewModel(
+        repo: StoryRepository,
+        session: SessionRepository = session(),
+        social: SocialSocketManager = socialSocket(),
+    ) = StoriesViewModel(repo, session, MeeshyConfig(), workManager, social)
 
     @Test
     fun `cold empty cache shows the skeleton with no tray`() = runTest(dispatcher) {
@@ -238,7 +251,7 @@ class StoriesViewModelTest {
                 queueOf(pending = listOf(pendingPublish("pending_1", "hello"))),
                 queueOf(),
             )
-            val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager)
+            val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager, socialSocket())
             advanceUntilIdle()
 
             assertThat(vm.state.value.tray.isEmpty).isTrue()
@@ -252,7 +265,7 @@ class StoriesViewModelTest {
             flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0))
         every { repo.publishQueue() } returns
             flowOf(queueOf(pending = listOf(pendingPublish("pending_1", "hello"))))
-        val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager)
+        val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager, socialSocket())
         advanceUntilIdle()
 
         assertThat(vm.state.value.tray.self?.storyCount).isEqualTo(1)
@@ -271,7 +284,7 @@ class StoriesViewModelTest {
                 queueOf(pending = listOf(pendingPublish("pending_1", "hello"))),
                 queueOf(failed = listOf(failedPublish("c1", "pending_1", "hello"))),
             )
-            val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager)
+            val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager, socialSocket())
             advanceUntilIdle()
 
             assertThat(vm.state.value.failedPublishes.map { it.cmid }).containsExactly("c1")
@@ -324,5 +337,47 @@ class StoriesViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { repo.discardPublish("c1") }
+    }
+
+    @Test
+    fun `a realtime story deletion drops the story from the tray`() = runTest(dispatcher) {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Fresh(
+                listOf(story("s1", "u1", "alice"), story("s2", "u2", "bob")),
+                ageMillis = 0,
+            ),
+        )
+        val repo = mockk<StoryRepository>(relaxed = true)
+        every { repo.storiesStream(any(), any()) } returns stream
+        every { repo.publishQueue() } returns flowOf(queueOf())
+        // The authoritative cache removal: the Room-backed stream re-emits without the row.
+        coEvery { repo.removeCachedStory("s1") } answers {
+            stream.value = CacheResult.Fresh(listOf(story("s2", "u2", "bob")), ageMillis = 0)
+        }
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+        assertThat(vm.state.value.tray.others.map { it.userId }).containsExactly("u1", "u2")
+
+        storyDeletedFlow.emit(SocketStoryDeletedData(storyId = "s1", authorId = "u1"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.removeCachedStory("s1") }
+        assertThat(vm.state.value.tray.others.map { it.userId }).containsExactly("u2")
+    }
+
+    @Test
+    fun `a realtime deletion is folded even for the current user's own story`() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(story("s1", "me", "self")), ageMillis = 0)),
+        )
+        val vm = viewModel(repo, session = session(userId = "me"))
+        advanceUntilIdle()
+
+        // Unlike a reaction (own echo dropped), a deletion purges unconditionally — a
+        // story deleted on another device must vanish for its author too (iOS parity).
+        storyDeletedFlow.emit(SocketStoryDeletedData(storyId = "s1", authorId = "me"))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.removeCachedStory("s1") }
     }
 }

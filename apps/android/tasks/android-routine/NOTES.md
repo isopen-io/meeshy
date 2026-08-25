@@ -5,6 +5,25 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-25 — fold a realtime removal into the AUTHORITATIVE cache, not an in-memory overlay (slice `story-deleted-realtime-tray`)
+A Room-cache-driven surface (the story tray, `StoriesViewModel` ← `StoryRepository.storiesStream()`) folds a
+realtime `story:deleted` by DELETING the row from the cache — `StoryDao.deleteById` → `StoryCacheSource.deleteLocal`
+→ `StoryRepository.removeCachedStory` — and letting the cache-first stream repaint. NOT by keeping an in-memory
+`Set<deletedId>` overlay and re-triggering an emission: the cache is the single source of truth, and an overlay
+would drift the moment a background revalidation re-fetched the (now server-deleted) row. Bonus correctness for
+free: an unknown id is a 0-row DELETE, so Room emits nothing → an over-broadcast delivery (a friend's feed room
+gets deletes for stories never cached) causes no spurious repaint. Own-echo guard: NONE for a deletion (unlike a
+reaction) — a story deleted anywhere must vanish for its author too (iOS `purgeDeadStories`). Test the VM fold by
+backing the mocked `storiesStream` with a `MutableStateFlow` and having the fake `removeCachedStory` mutate it —
+a faithful stand-in for Room re-emitting, so the assertion is end-to-end (socket → cache → tray) not a bare
+`coVerify`. RED-proof: neuter the subscription (collect-but-don't-remove) → exactly the new VM tests redden.
+
+## 2026-08-25 — scout before believing a "Next" pointer: STATUS realtime was already DONE
+The prior run's "Next" offered STATUS realtime folds as an alternative to the story tray. Scouting first
+(`grep statusCreated|statusUpdated|… StatusesViewModel`) showed `subscribeToSocketEvents` already folds all five
+status events. A "Next" pointer is a hypothesis, not a fact — verify the gap still exists before branching. Cost
+of the check: one grep. Cost of skipping it: a slice that reinvents a done fold.
+
 ## 2026-08-25 — re-project a realtime whole-object swap through the LOAD-TIME mapper, not a bespoke one (slice `story-updated-realtime-viewer`)
 `story:updated` carries the COMPLETE edited story (`ApiPost`), exactly like the initial `list()` load. The
 temptation is to hand-map the payload's changed fields into the existing slide. Don't: the viewer already has

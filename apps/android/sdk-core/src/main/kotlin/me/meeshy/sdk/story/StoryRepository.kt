@@ -74,6 +74,16 @@ class StoryRepository @Inject constructor(
         cacheSource.revalidate()
     }
 
+    /**
+     * Folds a realtime `story:deleted` into the authoritative Room cache so the tray
+     * stream repaints without the removed story. Idempotent and inert for an unknown id
+     * (over-broadcast delivery). Mirrors the viewer's `StoryPlayback.removingSlide`, but
+     * for the Room-backed tray. Port of iOS `StoryViewModel.storyDeleted → purgeDeadStories`.
+     */
+    suspend fun removeCachedStory(storyId: String) {
+        cacheSource.deleteLocal(storyId)
+    }
+
     suspend fun list(cursor: String? = null, limit: Int = 50): NetworkResult<List<ApiPost>> =
         apiCall { storyApi.list(cursor, limit) }
 
