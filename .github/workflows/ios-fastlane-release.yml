@@ -43,6 +43,11 @@ on:
         required: false
         default: ''
         type: string
+      skip_review:
+        description: 'release only: upload binary + metadata WITHOUT submitting to App Review (submit later with `andp submit`)'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ios-release
@@ -113,6 +118,7 @@ jobs:
           echo "skip_tests=${{ github.event.inputs.skip_tests }}" >> "$GITHUB_OUTPUT"
           echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
           echo "changelog=${{ github.event.inputs.changelog }}" >> "$GITHUB_OUTPUT"
+          echo "skip_review=${{ github.event.inputs.skip_review }}" >> "$GITHUB_OUTPUT"
 
       # Same invocation contract as meeshy.sh's do_release: build the fastlane
       # args in a bash array (preserves spaces in the changelog), then
@@ -142,12 +148,16 @@ jobs:
           SKIP_TESTS: ${{ steps.lane.outputs.skip_tests }}
           RELEASE_VERSION: ${{ steps.lane.outputs.version }}
           RELEASE_CHANGELOG: ${{ steps.lane.outputs.changelog }}
+          SKIP_REVIEW: ${{ steps.lane.outputs.skip_review }}
         run: |
           cd apps/ios
           args=()
           [ "${SKIP_TESTS}" = "true" ] && args+=("skip_tests:true")
           [ -n "${RELEASE_CHANGELOG}" ] && args+=("changelog:${RELEASE_CHANGELOG}")
           [ -n "${RELEASE_VERSION}" ] && args+=("version:${RELEASE_VERSION}")
+          # release only — upload binary + metadata, leave the version editable
+          # on App Store Connect so the listing can be reviewed before `andp submit`.
+          [ "${SKIP_REVIEW}" = "true" ] && args+=("skip_review:true")
           echo "→ bundle exec fastlane ${LANE} ${args[*]}"
           bundle exec fastlane "${LANE}" "${args[@]}"
 

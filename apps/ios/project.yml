@@ -84,7 +84,7 @@ settings:
   # la série locale : une valeur restée à 1271 ici ne bloquerait pas les lanes
   # fastlane — elles prennent max(dépôt, dernier TestFlight) + 1 — mais rendrait
   # le prochain numéro imprévisible, ce que le bloc ci-dessus proscrit.
-  CURRENT_PROJECT_VERSION: "1796"
+  CURRENT_PROJECT_VERSION: "1799"
   # Alignée sur la version App Store Connect. Passée à 1.0.1 le 2026-07-31 :
   # la 1.0.0 avait été rejetée (déclaration Age Rating `ageAssurance` à true
   # sans mécanisme de vérification d'âge dans l'app), et l'enregistrement ASC a
@@ -107,7 +107,7 @@ settings:
   # (Ne vaut QUE pour la version commerciale : le build number, lui, est imposé
   # par le compteur CI_BUILD_NUMBER de Xcode Cloud — cf. le bloc
   # CURRENT_PROJECT_VERSION ci-dessus.)
-  MARKETING_VERSION: "1.0.5"
+  MARKETING_VERSION: "1.0.6"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
   # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature

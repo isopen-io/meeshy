@@ -1,6 +1,7 @@
-Meeshy opens up to the world:
-• Translated voice notes — listen to voice messages in your language, in a voice that sounds like the sender
-• Live translated subtitles during video calls
-• Stories, reels and statuses: your feed, in your language
-• Join any conversation with a simple link, no account needed
-• Faster, smoother, and ready to meet the planet
+New: "Nearby"
+• Discover posts around you on a map — density, pins or a list, within the radius you choose
+• Make your own posts discoverable nearby, at the precision YOU decide: exact, neighborhood, city or region — never more precise than your choice
+• "See what's nearby" from any place shown on a post
+
+Also
+• More stable: a crash when opening "Nearby" is fixed

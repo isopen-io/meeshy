@@ -1,0 +1,7 @@
+Novidade: «Por perto»
+• Descubra as publicações ao seu redor num mapa: densidade, pontos ou lista, no raio que você escolher
+• Torne as suas publicações encontráveis por perto, na precisão que VOCÊ decidir: exata, bairro, cidade ou região, nunca mais precisa do que a sua escolha
+• «Ver o que há por perto» a partir de qualquer lugar mostrado numa publicação
+
+E mais
+• Mais estabilidade: corrigido um fechamento inesperado ao abrir «Por perto»
