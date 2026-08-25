@@ -34,7 +34,7 @@ import {
 } from '../../services/conversations/conversationEntryAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
-import { sliceByIdCursor } from '../../utils/pagination';
+import { sliceByIdCursor, validatePagination } from '../../utils/pagination';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantsRoutes' });
 
 const participantListUserSelect = {
@@ -227,7 +227,10 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Access denied: you are not a member of this conversation or it no longer exists', { code: 'CONVERSATION_ACCESS_DENIED' });
       }
 
-      const pageLimit = limit ? Math.min(parseInt(limit, 10), 100) : 20;
+      // SSOT guard: a malformed `?limit` (string schema, no AJV coercion)
+      // otherwise makes `parseInt` NaN, and `sliceByIdCursor(items, cursor, NaN)`
+      // slices to an empty page for well-formed cursor requests.
+      const { limit: pageLimit } = validatePagination(undefined, limit, { defaultLimit: 20, maxLimit: 100 });
       const platformRole = authRequest.authContext.registeredUser?.role ?? null;
 
       // Le participant du LECTEUR, résolu UNE fois. Son rôle de conversation

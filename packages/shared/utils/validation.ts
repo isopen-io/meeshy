@@ -670,7 +670,10 @@ export const MessageSchemas = {
   // Envoyer un message (alias pour compatibilité)
   send: z.object({
     content: z.string().min(1, 'Le message ne peut pas être vide').max(10000, 'Message trop long'),
-    originalLanguage: z.string().min(2).max(5).default('fr'),
+    // `.max(6)` : parité avec `CommonSchemas.language` ci-dessus — admet un code
+    // ISO 639-3 régionalisé (`bas-CM`). Le `.max(5)` contredisait le plafond de
+    // la SSOT (voir le commentaire de `CommonSchemas.language`).
+    originalLanguage: z.string().min(2).max(6).default('fr'),
     messageType: messageTypeEnum.default('text'),
     replyToId: z.string().optional(),
   }),
@@ -678,7 +681,7 @@ export const MessageSchemas = {
   // Éditer un message (alias pour compatibilité)
   edit: z.object({
     content: z.string().min(1, 'Le message ne peut pas être vide').max(10000, 'Message trop long'),
-    originalLanguage: z.string().min(2).max(5).optional(),
+    originalLanguage: z.string().min(2).max(6).optional(),
   }),
 };
 
@@ -1938,7 +1941,8 @@ export const TranslatedAudioSchemas = {
   // Demander une traduction audio
   request: z.object({
     transcriptionId: z.string().min(1),
-    targetLanguage: z.string().min(2).max(5),
+    // `.max(6)` : parité avec `CommonSchemas.language` (code 639-3 régionalisé).
+    targetLanguage: z.string().min(2).max(6),
     voiceModelId: z.string().optional(),
   }),
 };
@@ -1967,7 +1971,8 @@ export const VoiceModelSchemas = {
   // Créer un modèle vocal
   create: z.object({
     name: z.string().min(1).max(100),
-    language: z.string().min(2).max(5),
+    // `.max(6)` : parité avec `CommonSchemas.language` (code 639-3 régionalisé).
+    language: z.string().min(2).max(6),
     isPublic: z.boolean().default(false),
   }),
 
@@ -2299,7 +2304,8 @@ export const AnonymousParticipantSchemas = {
   // Rejoindre en anonyme
   join: z.object({
     nickname: z.string().min(2).max(30).optional(),
-    language: z.string().min(2).max(5).default('fr'),
+    // `.max(6)` : parité avec `CommonSchemas.language` (code 639-3 régionalisé).
+    language: z.string().min(2).max(6).default('fr'),
     email: z.email().optional(),
   }),
 };

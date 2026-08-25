@@ -5,6 +5,25 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-25 — find the reader gap by asking which wire field the client still doesn't consume (slice `story-slide-background-value`)
+The PROGRESS "Next" pointed at two composer-side pieces (per-element duration, background-designation) that both
+need a media-OBJECT authoring foundation the composer doesn't have yet — a big slice, not a thin one. Rather than
+force it, I turned the question around: **the wire model (`StoryEffects`) is richer than what the Android reader
+renders — which of its fields does the viewer still ignore?** `effects.background` (a slide's serialised colour
+backdrop) was the answer: the viewer painted background media but dropped the author's solid/gradient colour, so a
+text-only iOS/backend story showed the generic accent→black fallback instead of its chosen backdrop. A real,
+user-visible parity gap and a complete, thin READER-side vertical (parse SSOT → projection → screen), no
+authoring foundation required.
+- **A reader-side gap is often a cleaner thin slice than the composer-side "Next".** When the next authoring step
+  needs infrastructure that doesn't exist, look for an existing wire field the reader under-consumes — it ships a
+  complete vertical against REAL backend/iOS data with no dead ends, and it usually fixes a live bug.
+- **Kotlin `String.split` ≠ Swift `split(separator:)`.** Swift omits empty subsequences by default; Kotlin keeps
+  them. Porting a `gradient:A:B` colon-split faithfully means `.split(":").filter { it.isNotEmpty() }`, else
+  `gradient:A::B` diverges between clients. Made this a mutation-proven test so the filter can't silently rot.
+- **Keep the hex→Color bridge in the glue, the parse in `:core:model`.** `StoryBackgroundValue` stays pure (hex
+  strings, no `Color`); the Composable maps to a `Brush`/`SolidColor` via the existing `hexColor` SSOT and falls
+  back to accent→black when a degraded hex won't resolve — the slide is never blank.
+
 ## 2026-08-25 — the AUTHORING bound is a second SSOT, distinct from the reader SSOT (slice `story-composer-slide-duration-pin`)
 The reader honours `effects.timelineDuration`; the composer had no way to write it, so Android could only
 *read back* a pin an iOS author or the backend set. Closing the loop needs a SECOND single source: not the

@@ -4,6 +4,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostFeedService } from '../../services/PostFeedService';
 import { FeedQuerySchema, ReelFeedQuerySchema, UserParams, CommunityParams } from './types';
 import { sendSuccess, sendUnauthorized, sendInternalError } from '../../utils/response';
+import { validatePagination } from '../../utils/pagination';
 import { getCacheStore } from '../../services/CacheStore';
 import { wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
 
@@ -70,8 +71,10 @@ export function registerFeedRoutes(
       // hasMore/nextCursor voyagent dans `pagination`.
       const rawCursor = (request.query as Record<string, unknown> | undefined)?.cursor;
       const cursor = typeof rawCursor === 'string' && rawCursor.length > 0 ? rawCursor : undefined;
-      const rawLimit = Number((request.query as Record<string, unknown> | undefined)?.limit);
-      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 50) : 50;
+      // SSOT `validatePagination` (cursor route: limit only) — NaN→default,
+      // below-1→floor, over-50→cap. Consolidates the hand-rolled clamp.
+      const rawLimit = (request.query as Record<string, unknown> | undefined)?.limit;
+      const { limit } = validatePagination(undefined, typeof rawLimit === 'string' ? rawLimit : undefined, { defaultLimit: 50, maxLimit: 50 });
 
       const result = await feedService.getStories(authContext.registeredUser.id, {
         updatedSince, projection, cursor, limit,
@@ -121,8 +124,10 @@ export function registerFeedRoutes(
 
       const rawCursor = (request.query as Record<string, unknown> | undefined)?.cursor;
       const cursor = typeof rawCursor === 'string' && rawCursor.length > 0 ? rawCursor : undefined;
-      const rawLimit = Number((request.query as Record<string, unknown> | undefined)?.limit);
-      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 50) : 20;
+      // SSOT `validatePagination` (cursor route: limit only) — NaN→default,
+      // below-1→floor, over-50→cap. Consolidates the hand-rolled clamp.
+      const rawLimit = (request.query as Record<string, unknown> | undefined)?.limit;
+      const { limit } = validatePagination(undefined, typeof rawLimit === 'string' ? rawLimit : undefined, { defaultLimit: 20, maxLimit: 50 });
 
       const result = await feedService.getStories(authContext.registeredUser.id, {
         cursor, limit, archiveOfAuthor: true,

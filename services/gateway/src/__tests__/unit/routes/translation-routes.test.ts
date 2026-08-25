@@ -182,4 +182,28 @@ describe('POST /translate-blocking', () => {
     });
     expect(res.statusCode).toBe(404);
   });
+
+  // Parité avec la SSOT `CommonSchemas.language` (`packages/shared/utils/validation.ts`),
+  // délibérément élargie à `.max(6)` pour admettre un code ISO 639-3 régionalisé
+  // (`bas-CM`, `ewo-CM` — langues camerounaises officiellement supportées). Le
+  // `.max(5)` local rejouait la régression exacte que la SSOT documente avoir
+  // corrigée : le code voyage jusqu'au handler (404 message introuvable), il
+  // n'est plus refusé à la frontière AJV/Zod.
+  it('accepts region-tagged 6-char language codes (SSOT max=6) on source and target', async () => {
+    (app as any).prisma.message.findUnique.mockResolvedValueOnce(null);
+    const res = await app.inject({
+      method: 'POST', url: '/translate-blocking',
+      payload: { message_id: MSG_ID, source_language: 'bas-CM', target_language: 'ewo-CM' },
+    });
+    expect(res.statusCode).not.toBe(400);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('still rejects an over-long language code (7 chars) at the boundary', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/translate-blocking',
+      payload: { message_id: MSG_ID, target_language: 'abcd-CM' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });

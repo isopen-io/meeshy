@@ -75,6 +75,44 @@ describe('lookupGeoIp — private IPs', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
+
+  // ─── IPv6: an internal address must NEVER reach the third-party API ──────────
+  // ip-api.com is an external service; leaking an internal IPv6 address to it is
+  // a privacy regression and burns the 45/min rate-limit budget on a lookup that
+  // can only fail.
+
+  it.each([
+    ['::1', 'IPv6 loopback'],
+    ['::', 'IPv6 unspecified'],
+    ['fd00::1', 'IPv6 unique-local (fd, fc00::/7)'],
+    ['fc00::abcd', 'IPv6 unique-local (fc, fc00::/7)'],
+    ['fe80::1ff:fe23:4567:890a', 'IPv6 link-local (fe80::/10)'],
+    ['FE80::1', 'IPv6 link-local, upper-case'],
+    ['::ffff:192.168.1.1', 'IPv4-mapped private 192.168.x'],
+    ['::ffff:10.0.0.5', 'IPv4-mapped private 10.x'],
+    ['::ffff:172.16.0.1', 'IPv4-mapped private 172.16–31.x'],
+  ])('skips the API for %s (%s)', async (ip) => {
+    const fetchSpy = jest.spyOn(global, 'fetch' as any);
+    const result = await lookupGeoIp(ip);
+
+    expect(result).not.toBeNull();
+    expect(result!.location).toBe('Local');
+    expect(result!.ip).toBe(ip);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  // Guard the boundary: a PUBLIC IPv4-mapped address is NOT private and must
+  // still be resolved through the API (it is a real, routable address).
+  it('still resolves a PUBLIC IPv4-mapped IPv6 address via the API', async () => {
+    const fetchSpy = jest
+      .spyOn(global, 'fetch' as any)
+      .mockResolvedValue(makeJsonResponse({ status: 'success', country: 'US' }));
+    await lookupGeoIp('::ffff:8.8.8.8');
+
+    expect(fetchSpy).toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
 });
 
 // ─── lookupGeoIp — API calls ──────────────────────────────────────────────────

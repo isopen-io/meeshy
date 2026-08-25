@@ -1,17 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import type { ConfigCache } from '../config/config-cache';
 
 const cacheInvalidateSchema = z.object({
-  conversationId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
+  conversationId: z.string().regex(OBJECT_ID_REGEX).optional(),
   global: z.boolean().optional(),
 }).refine((d) => d.conversationId || d.global, {
   message: 'Either conversationId or global=true is required',
 });
 
 const conversationIdParamSchema = z.object({
-  conversationId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+  conversationId: z.string().regex(OBJECT_ID_REGEX),
 });
 
 /**

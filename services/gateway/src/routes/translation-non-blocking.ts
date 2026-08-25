@@ -9,8 +9,10 @@ import type { UnifiedAuthRequest } from '../middleware/auth';
 // ===== SCHEMAS DE VALIDATION =====
 const TranslateRequestSchema = z.object({
   text: z.string().min(1).max(1000).optional(),
-  source_language: z.string().min(2).max(5).optional(),
-  target_language: z.string().min(2).max(5),
+  // Borne alignée sur la SSOT `CommonSchemas.language` (`packages/shared/utils/validation.ts`,
+  // `.max(6)`) : un code ISO 639-3 régionalisé (`bas-CM`, `ewo-CM`) fait 6 caractères.
+  source_language: z.string().min(2).max(6).optional(),
+  target_language: z.string().min(2).max(6),
   model_type: z.enum(['basic', 'medium', 'premium']).optional(),
   message_id: z.string().optional(),
   conversation_id: z.string().optional()
@@ -50,15 +52,15 @@ const translateRequestSchema = {
     source_language: {
       type: 'string',
       minLength: 2,
-      maxLength: 5,
-      description: 'Source language code (ISO 639-1). Optional, can be auto-detected.',
+      maxLength: 6,
+      description: 'Source language code (ISO 639-1/639-3, optional BCP-47 region subtag e.g. bas-CM). Optional, can be auto-detected.',
       example: 'en'
     },
     target_language: {
       type: 'string',
       minLength: 2,
-      maxLength: 5,
-      description: 'Target language code (ISO 639-1). Required.',
+      maxLength: 6,
+      description: 'Target language code (ISO 639-1/639-3, optional BCP-47 region subtag e.g. bas-CM). Required.',
       example: 'fr'
     },
     model_type: {

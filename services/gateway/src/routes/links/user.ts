@@ -13,6 +13,7 @@ import {
   sendInternalError,
   createPaginationMeta
 } from '../../utils/response.js';
+import { validatePagination } from '../../utils/pagination';
 
 /**
  * Routes de gestion des liens de partage user-scoped
@@ -90,8 +91,9 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
       }
 
       const userId = request.authContext.registeredUser!.id;
-      const limit = Math.min(parseInt((request.query as any).limit || '50', 10), 100);
-      const offset = parseInt((request.query as any).offset || '0', 10);
+      // SSOT guard: `?limit`/`?offset` are plain strings, so a malformed value
+      // would otherwise reach Prisma as `take: NaN`/negative → HTTP 500.
+      const { limit, offset } = validatePagination((request.query as any).offset, (request.query as any).limit, { defaultLimit: 50, maxLimit: 100 });
 
       const [links, total] = await Promise.all([
         fastify.prisma.conversationShareLink.findMany({

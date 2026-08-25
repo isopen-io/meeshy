@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { validatePagination } from '../../utils/pagination';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest
@@ -162,13 +163,16 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Accès non autorisé à ce lien');
       }
 
-      const { limit = '50', offset = '0' } = request.query as { limit?: string; offset?: string };
+      const { limit: limitStr, offset: offsetStr } = request.query as { limit?: string; offset?: string };
+      // SSOT guard: string-schema pagination (no AJV coercion). Raw parseInt
+      // yielded `NaN`/negative skip/take on malformed input, with no upper cap.
+      const { limit, offset } = validatePagination(offsetStr, limitStr, { defaultLimit: 50, maxLimit: 100 });
 
       const messages = await getConversationMessages(
         fastify.prisma,
         shareLink.conversationId,
-        parseInt(limit),
-        parseInt(offset)
+        limit,
+        offset
       );
 
       const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId);
@@ -222,7 +226,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
         totalMembers: shareLink.conversation.participants.filter(p => p.type === "user").length,
         totalAnonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").length,
         onlineAnonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").filter(p => p.isOnline).length,
-        hasMore: totalMessages > parseInt(offset) + messages.length
+        hasMore: totalMessages > offset + messages.length
       };
 
       return sendSuccess(reply, {

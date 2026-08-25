@@ -17,6 +17,7 @@ import {
   enrichTrackingLink
 } from './types';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { validatePagination } from '../../utils/pagination';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { isHttpUrl } from '@meeshy/shared/utils/validation';
 
@@ -424,8 +425,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
-      const limit = Math.min(parseInt((request.query as any).limit || '20', 10), 50);
-      const offset = parseInt((request.query as any).offset || '0', 10);
+      // SSOT guard: string-schema pagination → prevent `NaN`/negative reaching Prisma.
+      const { limit, offset } = validatePagination((request.query as any).offset, (request.query as any).limit, { defaultLimit: 20, maxLimit: 50 });
 
       const userId = request.authContext.registeredUser!.id;
 

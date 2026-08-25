@@ -142,7 +142,23 @@ NC='\033[0m'
 # DELTA mesuré en LOCAL sur cette même machine, jamais l'absolu (cf. écart de
 # 14 documenté ci-dessus) : 9 erreurs de moins entre l'arbre fusionné avec et
 # sans ce correctif, appliquées à la baseline ancrée CI (1205 → 1196).
-readonly WEB_BASELINE=1196
+#
+# 1196 → 1194 au train beta du 2026-08-25 : effet du lot 6 W8-W9 + lot 7 (commit
+# `39e1688538`, « éditer un REEL republie le reconvertissait en POST »), déjà sur
+# `main`. La marge n'avait pas été enregistrée, si bien que `main` LUI-MÊME
+# rougissait — « AMÉLIORATION NON ENREGISTRÉE : 1194 erreurs, baseline 1196 » —
+# et faisait rougir toute PR ouverte après lui, sans qu'aucune n'en soit la
+# cause. C'est précisément le cas que ce cliquet existe pour capturer : deux
+# points regagnés par un lot produit redeviennent dépensables tant qu'ils ne sont
+# pas gravés.
+# Valeur ancrée sur la mesure du RUNNER (1194, lue dans le log CI de `main`),
+# jamais sur la mesure locale — cet arbre en lit 1208, l'écart de 14 documenté
+# ci-dessus, re-vérifié à cette occasion. Le train qui grave cette valeur ne
+# touche AUCUN fichier d'`apps/web` : son seul changement sous `packages/shared`
+# est un `.max(5)` → `.max(6)` sur des schémas Zod, une borne de validation
+# RUNTIME dont `z.string()` infère le même type — delta de types nul, par
+# construction.
+readonly WEB_BASELINE=1194
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #

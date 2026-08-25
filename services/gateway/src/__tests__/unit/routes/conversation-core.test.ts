@@ -76,7 +76,12 @@ jest.mock('../../../routes/conversations/utils/identifier-generator', () => ({
   ensureUniqueConversationIdentifier: (...args: any[]) => mockEnsureUniqueConversationIdentifier(...args),
 }));
 
+// `jest.requireActual` + surcharge CIBLÉE : `GET /conversations` route désormais
+// son `limit`/`offset` par le SSOT `validatePagination` (garde `take: NaN`/négatif
+// → 500). Un double partiel du module l'aurait rendu `undefined` — le piège du
+// double partiel documenté dans `services/gateway/CLAUDE.md`.
 jest.mock('../../../utils/pagination', () => ({
+  ...(jest.requireActual('../../../utils/pagination') as Record<string, unknown>),
   buildCursorPaginationMeta: (...args: any[]) => mockBuildCursorPaginationMeta(...args),
 }));
 

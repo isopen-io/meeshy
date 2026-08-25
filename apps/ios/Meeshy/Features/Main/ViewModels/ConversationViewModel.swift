@@ -96,7 +96,6 @@ class ConversationViewModel: ObservableObject {
             _allVisualAttachments = nil
             _mediaCaptionMap = nil
             _allAudioItems = nil
-            _replyCountMap = nil
             _mentionDisplayNames = nil
             _mentionCandidates = nil
         }
@@ -765,21 +764,6 @@ class ConversationViewModel: ObservableObject {
             }
         }
         _mediaCaptionMap = map
-        return map
-    }
-
-    // MARK: - Reply Count Map (cached, O(1) lookup per message)
-
-    private var _replyCountMap: [String: Int]?
-    var replyCountMap: [String: Int] {
-        if let cached = _replyCountMap { return cached }
-        var map = [String: Int]()
-        for msg in messages {
-            if let parentId = msg.replyToId {
-                map[parentId, default: 0] += 1
-            }
-        }
-        _replyCountMap = map
         return map
     }
 

@@ -213,6 +213,31 @@ describe('POST /translate', () => {
     await appNoMsg.close();
   });
 
+  // Parité SSOT `CommonSchemas.language` (`.max(6)`) : un code ISO 639-3
+  // régionalisé (`bas-CM`) traverse la frontière AJV/Zod et atteint le handler.
+  it('accepts region-tagged 6-char language codes (SSOT max=6)', async () => {
+    const appNoMsg = await buildApp({ messageFindUnique: null });
+    const res = await appNoMsg.inject({
+      method: 'POST',
+      url: '/translate',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ message_id: MSG_ID, source_language: 'bas-CM', target_language: 'ewo-CM' }),
+    });
+    expect(res.statusCode).not.toBe(400);
+    expect(res.statusCode).toBe(404);
+    await appNoMsg.close();
+  });
+
+  it('still rejects an over-long language code (7 chars)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/translate',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ message_id: MSG_ID, target_language: 'abcd-CM' }),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it('returns 400 when neither text nor message_id is provided', async () => {
     const res = await app.inject({
       method: 'POST',

@@ -34,10 +34,26 @@ import XCTest
 /// Swift local :
 /// - `a11y.feed.post.like` (le VERBE « Aimer » — pas un compteur) ;
 /// - `a11y.comment.like`, `a11y.post.like`, `a11y.post.unlike`, `a11y.post.like.hint`
-///   (verbes / hints) ;
-/// - `conversation.view.reply.count.{one,many}` (messagerie, pas fil — deux
-///   branches en Swift, l'arabe y est lésé ; hors périmètre 240i par leçon
-///   238i : découper par NIVEAU DE DOUTE, pas par famille).
+///   (verbes / hints).
+///
+/// ## Le report qui décrivait un défaut sans lecteur (243i)
+///
+/// `conversation.view.reply.count.{one,many}` a figuré ICI, puis dans le report
+/// de 240i, 241i et 242i, sous une phrase reprise telle quelle à chaque
+/// itération : « messagerie, deux branches en Swift, l'arabe y est lésé ».
+/// La phrase était vraie et la conclusion fausse : `replyCountPill`, seul site
+/// à lire ces deux clés, n'était appelée par AUCUN commit du dépôt. Personne
+/// n'était lésé parce que personne ne voyait rien — et `.many` n'était même pas
+/// dans le catalogue, si bien que les sept locales auraient rendu son
+/// `defaultValue` français non accentué (« 3 reponses ») le jour où on l'aurait
+/// montée. 243i a retiré la pastille et ses clés.
+///
+/// > **Un report propage la DESCRIPTION d'un défaut, jamais sa vérification.**
+/// > Avant de corriger une ligne héritée d'une liste de suites, poser la
+/// > question que la liste ne pose pas : **qui affiche ça ?** L'ajouter aux clés
+/// > bannies ci-dessous fige la réponse : si la pastille revient, elle passera
+/// > par `PostStatAccessibility.repliesLabel(_:)` — une entrée pluralisée,
+/// > 7 locales, 6 formes arabes — au lieu de ressusciter deux clés plates.
 final class EngagementCountConsolidationGuardTests: XCTestCase {
 
     /// Les clés plates supprimées en 240i. Ce sont des IDENTIFIANTS de catalogue,
@@ -49,6 +65,11 @@ final class EngagementCountConsolidationGuardTests: XCTestCase {
         "\"a11y.feed.post.like.value\"",
         "\"a11y.comment.replies.count\"",
         "\"feed.post.comment.replies_count\"",
+        // 243i — les deux clés de la pastille de réponses en conversation.
+        // Plates toutes les deux, et `.many` absente du catalogue : elles ne
+        // reviennent qu'en passant par la source unique.
+        "\"conversation.view.reply.count.one\"",
+        "\"conversation.view.reply.count.many\"",
     ]
 
     /// Les fichiers qui APPELLENT la source unique. Sans ce versant, la garde
