@@ -192,3 +192,30 @@ deinit 26.1 lui est invisible — question produit : ajouter une matrice 26.x.
 ## Revue
 
 *(à remplir au fil des gates — un P0 périmé est un défaut bloquant)*
+
+## Revue — Vague 1c (balayage deinit iOS 26.1), session 38a9181c 2026-08-26
+
+**Livré (2 commits sur `feat/composer-v2-ios-2026-08-25`)** :
+- `9fb54c40d0` fix(ios) — 71 classes `@MainActor ObservableObject` de `apps/ios/Meeshy/**`
+  sans deinit reçoivent `nonisolated deinit {}` ; garde `MainActorDeinitSourceGuardTests`.
+- `a18a428e69` fix(sdk) — 69 classes non-`nonisolated` de `Sources/MeeshyUI/**` sans deinit
+  reçoivent `nonisolated deinit {}` ; garde `MeeshyUIDeinitSourceGuardTests` (critère LARGE :
+  des crashers mesurés ne sont pas ObservableObject).
+
+**Mesuré (simulateurs dédiés iOS 26.1)** : RED 71 app + 69 sdk offenders → GREEN 0/0
+(miroir source + méta-tests). Sur 26.1, les 3 suites app crashantes balayées passent
+(ActiveSessionsViewModelTests, AudioBubbleRouterTests, ReelFeedSoundIntentTests), malloc=0.
+
+**⚠️ Découverte / SUIVI — `AudioRecorderManagerTests` crashe ENCORE 14/15 sur 26.1.**
+Cette classe ÉCRIT déjà une deinit (hors scope du sweep par directive) ; le WIP de l'agent 1c
+(`nonisolated deinit`) NE la corrige PAS (mesuré, binaire vérifié). La cause n'est donc pas
+l'isolation de sa propre deinit — même le test trivial `test_init_isRecordingIsFalse` (crée puis
+détruit `AudioRecorderManager()`) crashe, alors que d'autres classes @MainActor sans deinit dans
+la MÊME process passent. AVFoundation/AVAudioSession/AVAudioRecorder suspectés (seule spécificité).
+WIP reverté. Crasher PRÉEXISTANT (mesuré par l'agent 1c avant tout sweep), distinct de la famille
+SE-0466. **À investiguer séparément** (leçon SE-0466 mise à jour : une deinit écrite touchant un
+état isolé peut crasher aussi ; ici même ce n'est pas la deinit).
+
+**Note de méthode** : plusieurs `xcodebuild` concurrents dans le worktree ont verrouillé la build
+DB et corrompu des mesures intermédiaires ; parade appliquée = un seul xcodebuild à la fois, kill
+ciblé par PID (jamais pkill global), nettoyage `XCBuildData` avant relance.
