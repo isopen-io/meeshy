@@ -174,6 +174,14 @@ data class StoryComposerUiState(
     val isEditingTextElement: Boolean get() = selectedTextElement != null
 
     /**
+     * The effective on-screen duration (seconds) of the **selected** slide — the
+     * author's pin when set, otherwise the content-derived value — projected from the
+     * pure [StorySlideDeck.selectedSlideDurationSeconds] so the duration control shows a
+     * live value and the screen stays glue.
+     */
+    val selectedSlideDurationSeconds: Double get() = deck.selectedSlideDurationSeconds
+
+    /**
      * What the single text field shows and edits: the selected element's text while
      * one is selected, otherwise the selected slide's caption. One field, two roles —
      * the screen stays glue.
@@ -617,6 +625,15 @@ class StoryComposerViewModel @Inject constructor(
     fun onFilterIntensityChange(intensity: Float) = applyDeck { it.setSelectedFilterIntensity(intensity) }
 
     /**
+     * Pins the **selected** slide's on-screen duration to [seconds] — the timeline
+     * "pin duration" control. The value is bounded to the iOS `[2, 600]`s range by the
+     * pure [StorySlideDeck.setSelectedDuration]/[me.meeshy.sdk.model.StoryDurationPin],
+     * and rides to the reader as `effects.timelineDuration`, which the reader honours
+     * over content ([me.meeshy.sdk.model.StorySlideDuration]).
+     */
+    fun onSlideDurationChange(seconds: Double) = applyDeck { it.setSelectedDuration(seconds) }
+
+    /**
      * Applies a structural deck transform and re-syncs the editor buffer to the
      * (possibly new) selected slide's text **and** media, keeping `draft` a faithful
      * mirror of the selected slide — the single invariant the screen relies on.
@@ -799,6 +816,7 @@ class StoryComposerViewModel @Inject constructor(
                 stickers = slide.stickers,
                 filter = slide.filter,
                 filterIntensity = slide.filterIntensity,
+                durationSecondsPin = slide.durationSecondsPin,
             )
             PublishPlan(
                 request = draft.toCreateStoryRequest(language),

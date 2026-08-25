@@ -1,6 +1,9 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryDurationPin
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StorySlideDuration
+import me.meeshy.sdk.model.StoryTextObject
 
 /**
  * A z-order restack of an on-canvas text element within its slide's paint order.
@@ -27,6 +30,7 @@ data class StorySlide(
     val stickers: List<StoryStickerElement> = emptyList(),
     val filter: StoryFilter? = null,
     val filterIntensity: Float = StoryFilterMatrix.DEFAULT_INTENSITY,
+    val durationSecondsPin: Double? = null,
 )
 
 /**
@@ -392,6 +396,39 @@ data class StorySlideDeck(
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(filterIntensity = clamped) else slide }
         return copy(slides = next)
     }
+
+    /**
+     * Pins the **selected** slide's on-screen duration to [seconds] (bounded by the
+     * single-source [StoryDurationPin.clamp] to `[2, 600]`s, iOS parity), leaving every
+     * other slide and the selection untouched. This is the authoring counterpart of the
+     * reader-side [StorySlideDuration]: the pin serialises to `effects.timelineDuration`
+     * and wins over content on playback. Inert (same instance) when the clamped value
+     * already equals the slide's pin, so the slider never churns recomposition.
+     */
+    fun setSelectedDuration(seconds: Double): StorySlideDeck {
+        val clamped = StoryDurationPin.clamp(seconds)
+        if (selectedSlide.durationSecondsPin == clamped) return this
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(durationSecondsPin = clamped) else slide }
+        return copy(slides = next)
+    }
+
+    /**
+     * The **selected** slide's effective on-screen duration in seconds — the author's
+     * [StorySlide.durationSecondsPin] when set, otherwise the content-derived value from
+     * the single-source [StorySlideDuration] (mirroring iOS's
+     * `timelineDuration ?? computedTotalDuration()` getter). The composer models only the
+     * on-canvas caption text so far, so the fallback is fed the publishable text elements;
+     * a background media pipeline will extend the same call when it lands.
+     */
+    val selectedSlideDurationSeconds: Double
+        get() = selectedSlide.durationSecondsPin ?: StorySlideDuration.contentDerivedSeconds(
+            mediaObjects = null,
+            audioPlayerObjects = null,
+            textObjects = selectedSlide.elements
+                .filter { it.isPublishable }
+                .map { StoryTextObject(id = it.id, text = it.text) },
+        )
 
     /**
      * Appends a fresh empty slide with [newId] and selects it. Inert (same
