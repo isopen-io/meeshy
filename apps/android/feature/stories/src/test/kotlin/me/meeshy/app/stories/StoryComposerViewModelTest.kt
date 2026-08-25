@@ -2019,4 +2019,39 @@ class StoryComposerViewModelTest {
         coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
         assertThat(request.captured.storyEffects?.timelineDuration).isEqualTo(7.0)
     }
+
+    @Test
+    fun `onSlideBackgroundChange sets the selected slide backdrop through the public state`() = runTest {
+        val vm = viewModel()
+        val teal = me.meeshy.sdk.model.StoryBackgroundValue.Hex("08D9D6")
+
+        vm.onSlideBackgroundChange(teal)
+
+        assertThat(vm.state.value.deck.selectedSlide.background).isEqualTo(teal)
+        assertThat(vm.state.value.selectedSlideBackground).isEqualTo(teal)
+    }
+
+    @Test
+    fun `onSlideBackgroundChange(null) clears the selected slide backdrop`() = runTest {
+        val vm = viewModel()
+        vm.onSlideBackgroundChange(me.meeshy.sdk.model.StoryBackgroundValue.Hex("08D9D6"))
+
+        vm.onSlideBackgroundChange(null)
+
+        assertThat(vm.state.value.selectedSlideBackground).isNull()
+    }
+
+    @Test
+    fun `a chosen backdrop rides into the wire request as effects background on publish`() = runTest {
+        val vm = viewModel()
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+        vm.onTextChange("bonjour")
+        vm.onSlideBackgroundChange(me.meeshy.sdk.model.StoryBackgroundValue.Gradient("FF2E63", "08D9D6"))
+
+        vm.publish()
+
+        coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
+        assertThat(request.captured.storyEffects?.background).isEqualTo("gradient:FF2E63:08D9D6")
+    }
 }
