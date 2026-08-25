@@ -26,8 +26,29 @@ public final class NotificationToastManager: ObservableObject {
     @Published public private(set) var unreadCount: Int = 0
 
     @Published public private(set) var currentToast: SocketNotificationEvent?
-    @Published public private(set) var activeConversationId: String?
-    @Published public var activePostId: String?
+
+    /// Délibérément PAS `@Published` — aucune vue ne les observe.
+    ///
+    /// Ce sont des gardes de suppression, lues SYNCHRONIQUEMENT au moment de
+    /// décider si une notification doit se signaler (`handleNewNotification`),
+    /// et une fois par `FeedCommentsSheet` à l'ouverture. Personne n'en dérive
+    /// d'affichage.
+    ///
+    /// Publiées, elles coûtaient très cher : `RootView` et `iPadRootView`
+    /// observent ce singleton en `@ObservedObject`, donc CHAQUE ouverture ou
+    /// fermeture de conversation, et chaque slide de story (`onPostOpened` est
+    /// ré-annoncé à chaque révélation), ré-évaluait la racine entière. Cette
+    /// ré-évaluation reconstruit un `ConversationViewModel` jetable — donc un
+    /// `ConversationSocketHandler` jetable — dont la boucle create/destroy est
+    /// documentée en tête de `ConversationSocketHandler.swift` (pic CPU, storm
+    /// 429 sur `/read`) et n'était jusqu'ici que CONTENUE par des gardes
+    /// idempotents, jamais tarie à la source.
+    ///
+    /// Même raisonnement, et même formulation, que
+    /// `ConversationStateStore.messages`. Ne pas les republier sans montrer
+    /// d'abord une vue qui les LIT.
+    public private(set) var activeConversationId: String?
+    public var activePostId: String?
 
     public let newNotificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
     public let notificationMarkedRead = PassthroughSubject<String, Never>()
@@ -46,13 +67,8 @@ public final class NotificationToastManager: ObservableObject {
     /// dédié (demandes d'ajout).
     public let typeNotificationsRead = PassthroughSubject<[String], Never>()
 
-    /// Optional hook the app target uses to inject the current iOS Focus
-    /// filter snapshot. The SDK can't observe `SetFocusFilterIntent` directly
-    /// (it lives in the app target), so we ask for a pull closure instead.
-    public var focusFilterProvider: (@MainActor () -> FocusFilterSnapshot)?
-
     /// Joueur d'haptique injecté par la cible app (le SDK core n'importe pas
-    /// UIKit) — même pattern que `focusFilterProvider`. Appelé à l'apparition
+    /// UIKit) — même pattern que `conversationPresentationProvider`. Appelé à l'apparition
     /// d'un toast, UNIQUEMENT si la préférence « Vibrations »
     /// (`vibrationEnabled`) est active : c'est le consommateur réel de ce
     /// toggle côté in-app.
@@ -61,7 +77,7 @@ public final class NotificationToastManager: ObservableObject {
     /// Présentation Local-First (nom renommé + emoji favori) d'une conversation
     /// pour les toasts in-app. Le SDK ne peut pas lire le snapshot local des
     /// conversations de l'app, donc la cible app injecte une closure de pull —
-    /// même pattern que `focusFilterProvider`. Retourne `nil` → on retombe sur
+    /// même pattern que `hapticPlayer`. Retourne `nil` → on retombe sur
     /// le titre serveur (`event.toastSubtitle`).
     public var conversationPresentationProvider: (@MainActor (_ conversationId: String) -> ConversationPresentation?)?
 
@@ -477,15 +493,14 @@ public final class NotificationToastManager: ObservableObject {
             return
         }
 
-        // Même traitement pour un contenu social déjà à l'écran (story ouverte,
-        // détail de post) : le serveur a créé la notification et incrémenté SON
-        // compteur. Un simple `return` laissait la ligne non lue côté serveur et
-        // le compteur client en retard — au prochain `notification:counts` la
-        // cloche remontait toute seule. On consomme donc explicitement.
-        if let postId = event.postId, postId == activePostId {
-            markConsumedOnArrival(event)
-            return
-        }
+        // NOTE — un contenu social à l'écran (story ouverte, détail de post) ne
+        // supprime PLUS la bannière. La règle produit ne connaît qu'UNE
+        // exception, la conversation ouverte ci-dessus : tout le reste doit
+        // remonter à l'utilisateur tant qu'il est dans l'application. Une story
+        // ouverte reste donc signalée, et sa notification suit le chemin
+        // nominal — persistée NON lue, comptée, affichée. `activePostId` garde
+        // ses autres emplois (`onPostOpened` marque lu à l'OUVERTURE, ce qui
+        // couvre le rattrapage du compteur).
 
         // Keep FriendshipCache in sync with real-time friend request events
         updateFriendshipCacheIfNeeded(event)
@@ -513,14 +528,13 @@ public final class NotificationToastManager: ObservableObject {
         NotificationCoordinator.shared.incrementInAppNotificationUnread()
         newNotificationReceived.send(event)
 
+        // La bannière in-app a sa propre règle, plus permissive que celle du
+        // push : `allowsInAppBanner` n'applique que les interrupteurs PAR TYPE.
+        // `pushEnabled`, la fenêtre « Ne pas déranger » et le Focus iOS
+        // protègent l'attention de l'utilisateur ABSENT — ici il est devant
+        // l'écran. Cf. le doc-comment de `allowsInAppBanner(type:)`.
         let prefs = UserPreferencesManager.shared.notification
-        let focus = focusFilterProvider?() ?? .permissive
-        let isDirect = event.isDirect
-        if prefs.allowsNotification(
-            type: event.notificationType,
-            isDirectConversation: isDirect,
-            focus: focus
-        ) {
+        if prefs.allowsInAppBanner(type: event.notificationType) {
             showToast(event)
         }
     }

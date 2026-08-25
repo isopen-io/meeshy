@@ -60,6 +60,43 @@ final class WindowMetricsSSOTTests: XCTestCase {
         "Meeshy/Features/Main/Components/RecentMediaStrip.swift"
     ]
 
+    // MARK: - L'ancrage du bouton « redescendre en bas »
+
+    /// Le défaut, en une assertion : le bouton suivait `composerHeight`, donc
+    /// chaque ligne tapée le faisait remonter — pendant que l'utilisateur
+    /// relisait son historique.
+    func test_scrollButtonAnchor_whileComposing_doesNotFollowTheGrowingComposer() {
+        let anchor = ConversationView.resolvedScrollButtonAnchor(
+            current: 130,
+            composerHeight: 186,
+            isComposing: true
+        )
+
+        XCTAssertEqual(anchor, 130,
+                       "écrire trois lignes ne doit pas déplacer le bouton de retour au bas")
+    }
+
+    func test_scrollButtonAnchor_withAnEmptyComposer_realignsOnIt() {
+        let anchor = ConversationView.resolvedScrollButtonAnchor(
+            current: 130,
+            composerHeight: 164,
+            isComposing: false
+        )
+
+        XCTAssertEqual(anchor, 164,
+                       "champ vide : plus aucune position de lecture en jeu, l'ancrage se recale")
+    }
+
+    /// Les autres causes de redimensionnement — options ouvertes, barre de
+    /// réponse — ne sont pas « écrire » et doivent continuer de déplacer le
+    /// bouton : elles passent par `isComposing == false`.
+    func test_scrollButtonAnchor_shrinkingComposer_isFollowedWhenNotComposing() {
+        XCTAssertEqual(
+            ConversationView.resolvedScrollButtonAnchor(current: 186, composerHeight: 130, isComposing: false),
+            130
+        )
+    }
+
     // MARK: - The composer height rule, without a window
 
     /// The safe area is added only while the keyboard is down. `nil` means

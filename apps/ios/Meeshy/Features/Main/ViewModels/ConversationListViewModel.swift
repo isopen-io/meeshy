@@ -964,6 +964,33 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Un message rétracte la frappe qui l'annonçait.
+        //
+        // `typingStopped` ci-dessus ne couvre PAS ce cas : le `typing:stop` de
+        // l'expéditeur voyage sur un canal distinct, dans un ordre non garanti
+        // vis-à-vis de `message:new`, et peut se perdre (arrière-plan, coupure
+        // brève, crash de l'onglet). Le gateway, lui, n'émet aucun `typing:stop`
+        // implicite à la création d'un message — seul `handleSocketDisconnecting`
+        // le fait. Sans ce chemin, la pastille affichait « @alice ⋯ » jusqu'à
+        // l'échéance de `scheduleTypingCleanup` (15 s) APRÈS l'arrivée du
+        // message, pendant que le toast annonçait ce même message trente points
+        // plus bas — deux états contradictoires de la même conversation.
+        //
+        // Pendant exact de la règle inverse déjà en vigueur (`typing:start`
+        // reçu = preuve d'activité) : l'arrivée du message est la preuve la plus
+        // forte que la frappe est terminée. `handleTypingStopped` est réutilisé
+        // tel quel — il ne retire que CET auteur et laisse les autres frappeurs
+        // de la conversation en place.
+        messageSocket.messageReceived
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                self?.handleTypingStopped(
+                    userId: message.senderId,
+                    conversationId: message.conversationId
+                )
+            }
+            .store(in: &cancellables)
+
         messageSocket.userPreferencesUpdated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in

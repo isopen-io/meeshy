@@ -149,6 +149,13 @@ struct ConversationAnimatedBackground: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
+                // Plancher opaque, sous le dégradé lui-même : les cinq calques
+                // de décor empilés au-dessus sont tous en `opacity(0.12)`, et
+                // il suffirait qu'un futur calque de BASE reprenne un alpha
+                // pour re-trouer le fond. Cette couche rend la translucidité
+                // impossible par construction, quel que soit ce qu'on empile.
+                MeeshyColors.backgroundPrimary(isDark: config.isDarkMode)
+
                 baseGradient
 
                 baseAnimation(in: geo.size)
@@ -180,16 +187,37 @@ struct ConversationAnimatedBackground: View {
 
     // MARK: - Base Gradient
 
+    /// Substrat OPAQUE du fil — foncé en sombre, clair en clair.
+    ///
+    /// Le dégradé teintait l'accent par ALPHA (`accent.opacity(0.08)`,
+    /// `Color.white.opacity(0.92)`) : en clair, huit pour cent du fond de la vue
+    /// parente traversaient le fil, et la même teinte alpha trouait le milieu du
+    /// dégradé sombre. Un fond de conversation doit être un fond — les bulles s'y
+    /// posent, les médias s'y découpent, et rien de ce qui vit derrière l'écran ne
+    /// doit s'y deviner.
+    ///
+    /// Les mêmes teintes sont donc COMPOSÉES en amont, à poids égal, sur la
+    /// couleur de base : la lecture visuelle est inchangée, l'alpha disparaît.
+    /// `DynamicColorGenerator.blendTwo` est le mélangeur du dépôt — n'en écrire
+    /// aucun autre.
+    private static func tinted(_ base: String, with accentHex: String, amount: Double) -> Color {
+        Color(hex: DynamicColorGenerator.blendTwo(
+            accentHex, weight1: amount,
+            base, weight2: 1 - amount
+        ))
+    }
+
     private var baseGradient: some View {
-        LinearGradient(
+        let accent = config.accentHex
+        return LinearGradient(
             colors: config.isDarkMode ? [
                 Color(hex: "0F0C29"),
-                config.accentColor.opacity(0.12),
+                Self.tinted("0F0C29", with: accent, amount: 0.12),
                 Color(hex: "24243E")
             ] : [
-                config.accentColor.opacity(0.08),
-                Color.white.opacity(0.92),
-                config.accentColor.opacity(0.05)
+                Self.tinted("FFFFFF", with: accent, amount: 0.08),
+                Color(hex: "FFFFFF"),
+                Self.tinted("FFFFFF", with: accent, amount: 0.05)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
