@@ -15795,3 +15795,74 @@ une valeur, et l'écrit dans une colonne NOT NULL. Distinguer « absent » de
 « vide » une fois, à la lecture (`nonEmptyString`), est ce qui évite d'avoir à
 y penser à chaque champ — même famille que « `[]` par défaut décide à la place
 du consommateur » (cycle 116), un étage plus bas.
+
+---
+
+## Leçon 286 — un report propage la DESCRIPTION d'un défaut, jamais sa vérification (2026-08-25, itération 243i)
+
+Une ligne de la liste de suites de 240i, recopiée telle quelle par 241i, 242i
+puis 243i :
+
+> `conversation.view.reply.count.{one,many}` — messagerie, deux branches en
+> Swift, l'arabe y est lésé (6 formes CLDR → 2 branches).
+
+Chaque mot est vrai **du code décrit**. Le correctif attendu était évident et
+deux fois précédenté dans le dépôt (226i, 240i) : une entrée `variations.plural`,
+sept locales, six formes arabes.
+
+Avant de l'écrire, une question que la liste ne pose pas : **qui affiche ça ?**
+
+```
+$ for c in $(git log --all --format=%H -S"replyCountPill" -- apps/ios); do
+    git grep -h "replyCountPill(" $c -- apps/ios | grep -v "func replyCountPill"
+  done
+(vide)
+```
+
+`replyCountPill`, seul site à lire ces deux clés, n'est appelée par **aucun
+commit de l'histoire du dépôt**. Et `conversation.view.reply.count.many` n'est
+dans **aucun** des quatre catalogues : la branche `count ≥ 2` retombait sur son
+`defaultValue`, `"\(count) reponses"` — du français non accentué, en dur, pour
+les sept locales à la fois.
+
+Le défaut réel n'était donc pas « l'arabe est lésé ». C'était « **personne
+n'aurait rien reçu** », et il n'aurait mordu personne, faute de lecteur.
+
+> **Une description se propage seule ; une vérification, non.** Une liste de
+> suites transmet fidèlement ce qu'une itération a VU, et rien de ce qu'elle n'a
+> pas MESURÉ. Trois reprises l'ont fait circuler sans jamais rouvrir le fichier.
+> Avant de corriger une ligne héritée d'un report, poser la question que le
+> report ne pose pas — ici « qui affiche ça ? ». Elle a coûté une mesure et rendu
+> **cinq** fonctions sans site d'appel dans la même surface.
+
+### Le corollaire d'outillage : deux gardes qui se croisent laissent un trou entre elles
+
+Les trois clés retirées passaient les DEUX gardes i18n du dépôt :
+
+| garde | question posée | verdict |
+|---|---|---|
+| `LocalizationConsistencyTests` dir. 1 | cette clé citée en code existe-t-elle au catalogue ? | ✓ |
+| `LocalizationConsistencyTests` dir. 2 | cette clé du catalogue est-elle citée en code ? | ✓ |
+| — | **le code qui la cite s'exécute-t-il ?** | *personne ne demandait* |
+
+Une bidirectionnalité a l'air exhaustive : elle ferme le cycle
+code ↔ catalogue. Elle ne dit rien de l'axe perpendiculaire — l'**atteignabilité**
+du site qui cite. C'est le trou où trois traductions × sept locales ont vécu.
+
+> **Deux gardes qui se répondent l'une l'autre décrivent un cycle, pas une
+> couverture.** Demander ce qu'aucune des deux n'interroge, plutôt que de
+> conclure de leur symétrie qu'il n'y a plus rien à voir.
+
+### Et une garde d'atteignabilité MESURE ses faux positifs avant d'asserter
+
+La première mesure signalait `makeUIViewController` / `updateUIViewController` :
+des conformances `UIViewControllerRepresentable`, appelées par le FRAMEWORK et
+par rien d'autre. Elles sortent par un ensemble de **noms de contrat**, jamais
+par la liste des exceptions — un contrat couvre d'avance toute conformance
+future, une liste d'exceptions attend qu'on y pense.
+
+Second point load-bearing : le **dépouillement des commentaires**. Ce dépôt
+retire son code mort en laissant une épitaphe qui le NOMME (précédent
+`focalOverlayPreview`). Sans dépouillement, ces épitaphes compteraient comme des
+références et rendraient la garde aveugle à exactement le défaut qu'elle vient
+de figer.

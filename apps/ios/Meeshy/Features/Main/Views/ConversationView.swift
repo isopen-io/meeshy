@@ -116,7 +116,6 @@ struct ConversationScrollState {
     /// server-loaded path (jumpToQuotedMessage). The MessageListView bridge
     /// compares old vs. new to fire the VC's scrollToMessage.
     var scrollToMessageTrigger: Int = 0
-    var highlightedMessageId: String? = nil
     var swipedMessageId: String? = nil
     var swipeOffset: CGFloat = 0
     var galleryStartAttachment: MessageAttachment? = nil
