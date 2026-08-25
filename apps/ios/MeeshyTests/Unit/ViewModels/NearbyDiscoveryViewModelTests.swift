@@ -134,7 +134,8 @@ final class NearbyDiscoveryViewModelTests: XCTestCase {
         service: FakeNearbyService = FakeNearbyService(),
         location: FakeLocationProvider = FakeLocationProvider(coordinate: paris),
         network: FakeNetworkMonitor = FakeNetworkMonitor(isOnline: true),
-        cache: FakeNearbyCache = FakeNearbyCache()
+        cache: FakeNearbyCache = FakeNearbyCache(),
+        viewerRole: String? = nil
     ) -> (
         sut: NearbyDiscoveryViewModel,
         service: FakeNearbyService,
@@ -147,7 +148,8 @@ final class NearbyDiscoveryViewModelTests: XCTestCase {
             location: location,
             network: network,
             cache: cache,
-            languageProvider: MockLanguageProvider(preferredLanguages: [])
+            languageProvider: MockLanguageProvider(preferredLanguages: []),
+            viewerRole: viewerRole
         )
         return (sut, service, location, cache)
     }
@@ -797,6 +799,85 @@ final class NearbyDiscoveryViewModelTests: XCTestCase {
         )
         let sink = try XCTUnwrap(body.range(of: ".sink"), "observeNetwork doit poser un sink")
         XCTAssertLessThan(hop.lowerBound, sink.lowerBound, "le saut sur le main doit PRÉCÉDER le sink")
+    }
+
+    // MARK: - Le mode Discover — réservé au staff de la plateforme
+
+    /// **Directive du 2026-08-26 : la carte « Posts sur la carte » fusionne
+    /// dans « À proximité » sous un mode Discover, accessible UNIQUEMENT aux
+    /// modérateurs, admins et bigboss.** Cette carte montre le LIEU AFFICHÉ
+    /// des publications du fil — pas le point consenti — c'est pourquoi elle
+    /// n'est pas offerte à tout le monde.
+    func test_availableModes_offerDiscoverToPlatformStaffOnly() {
+        for role in ["BIGBOSS", "ADMIN", "MODERATOR", "moderator"] {
+            let (sut, _, _, _) = makeSUT(viewerRole: role)
+            XCTAssertTrue(sut.canDiscover, "\(role) doit voir le mode Discover")
+            XCTAssertEqual(sut.availableModes, [.density, .pins, .list, .discover], role)
+        }
+        for role in ["USER", "AUDIT", "ANALYST", "", nil] as [String?] {
+            let (sut, _, _, _) = makeSUT(viewerRole: role)
+            XCTAssertFalse(sut.canDiscover, "\(role ?? "nil") ne doit pas voir Discover")
+            XCTAssertEqual(sut.availableModes, [.density, .pins, .list], role ?? "nil")
+        }
+    }
+
+    func test_mode_discoverIsRefusedToARegularUser() {
+        let (sut, _, _, _) = makeSUT(viewerRole: "USER")
+
+        sut.mode = .discover
+
+        XCTAssertEqual(sut.mode, .density, "un rôle non autorisé retombe sur la densité")
+    }
+
+    /// Discover = ce que montrait le bouton carte : les publications DU FIL
+    /// qui portent un lieu, servies depuis le cache `main-feed` — sans réseau,
+    /// et sans dépendre de la position de l'appareil : un modérateur qui a
+    /// refusé la localisation voit quand même la carte.
+    func test_load_forStaff_servesLocatedFeedPostsFromTheMainFeedCache_evenWithoutLocation() async {
+        let cache = FakeNearbyCache()
+        cache.stored["main-feed"] = .stale(
+            [makeFeedPost(id: "located"), makeFeedPost(id: "unlocated", located: false)],
+            age: 900
+        )
+        let denied = FakeLocationProvider(status: .denied, coordinate: nil)
+        let (sut, service, _, _) = makeSUT(location: denied, cache: cache, viewerRole: "MODERATOR")
+
+        await sut.load()
+
+        XCTAssertEqual(sut.discoverPosts.map(\.id), ["located"])
+        XCTAssertEqual(service.nearbyCallCount, 0, "Discover ne touche pas au réseau")
+        XCTAssertEqual(sut.emptyReason, .locationDenied, "la raison de proximité reste dite")
+    }
+
+    func test_load_forRegularUser_neverReadsTheMainFeedCache() async {
+        let cache = FakeNearbyCache()
+        cache.stored["main-feed"] = .fresh([makeFeedPost(id: "located")], age: 0)
+        let (sut, _, _, _) = makeSUT(initialCoordinate: Self.paris, cache: cache, viewerRole: "USER")
+
+        await sut.load()
+
+        XCTAssertTrue(sut.discoverPosts.isEmpty)
+        XCTAssertFalse(cache.loadedKeys.contains("main-feed"), "aucune lecture du fil pour un simple utilisateur")
+    }
+
+    func test_discoverEmptyReason_saysNothingOnTheMap_onlyInDiscoverModeWithoutLocatedPosts() async {
+        let (sut, _, _, _) = makeSUT(initialCoordinate: Self.paris, viewerRole: "ADMIN")
+        await sut.load()
+
+        XCTAssertNil(sut.discoverEmptyReason, "hors du mode Discover, rien à dire")
+        sut.mode = .discover
+        XCTAssertEqual(sut.discoverEmptyReason, .nothingOnTheMap)
+    }
+
+    /// Un post du fil AVEC ou SANS lieu affiché : Discover ne retient que les
+    /// premiers, et c'est le second qui prouve le filtre.
+    private func makeFeedPost(id: String, located: Bool = true) -> FeedPost {
+        let location = located ? #","location":{"latitude":48.86,"longitude":2.29,"name":"Lieu"}"# : ""
+        let post: APIPost = JSONStub.decode("""
+        {"id":"\(id)","type":"POST","content":"Ici","createdAt":"2026-08-24T10:00:00.000Z",
+         "author":{"id":"a1","username":"alice"}\(location)}
+        """)
+        return post.toFeedPost(preferredLanguages: [])
     }
 
     private func waitUntil(

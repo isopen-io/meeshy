@@ -3,198 +3,27 @@ import MapKit
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - Feed Posts Map (retour user 2026-08-12)
+// MARK: - Carte des posts du feed (retour user 2026-08-12 → mode Discover 2026-08-26)
 
-/// Carte plein écran des posts géolocalisés du feed.
+/// La carte des publications du fil qui portent un lieu.
 ///
-/// UX d'accès retenue : bouton `map` dans le slot `trailing` du header du
-/// feed — toujours visible, découvrable, un tap, même langage que le
-/// basculement liste ↔ carte des apps de référence. Les alternatives ont été
-/// écartées : onglet dédié (la tab bar est déjà pleine), entrée dans le menu
-/// « + » (c'est un menu de CRÉATION), long-press sur le sticker de lieu (non
-/// découvrable). Le sticker de lieu d'un post continue d'ouvrir le LIEU du
-/// post (`LocationFullscreenView`) ; cette carte est le niveau au-dessus —
-/// tous les posts localisés d'un coup.
+/// Née comme carte plein écran derrière un bouton `map` du header du feed
+/// (2026-08-12), elle vit depuis le 2026-08-26 DANS « À proximité », sous le
+/// mode Discover réservé au staff de la plateforme (`NearbyDiscoverAccess`) :
+/// elle plante le LIEU AFFICHÉ de chaque publication, pas le point consenti
+/// à la découvrabilité, et n'a donc pas à être offerte à tout le monde. Le
+/// wrapper plein écran, son en-tête et sa carte de post sélectionné ont été
+/// retirés — `NearbyDiscoveryView` fournit les siens.
 ///
-/// Volontairement app-side (pas SDK) : elle lit les posts du feed et route
-/// vers `.postDetail` — de l'orchestration produit, pas un atome.
-struct FeedPostsMapView: View {
-    @Environment(\.dismiss) private var dismiss
-
-    /// Posts géolocalisés uniquement — le filtre vit chez l'appelant pour que
-    /// le compteur du bouton d'entrée et la carte partagent la même source.
-    let posts: [FeedPost]
-    /// Ouvre le détail du post sélectionné (l'appelant ferme la carte et
-    /// pousse la route — la navigation ne traverse pas le fullScreenCover).
-    let onOpenPost: (FeedPost) -> Void
-
-    @State private var selectedPostId: String?
-
-    private var selectedPost: FeedPost? {
-        selectedPostId.flatMap { id in posts.first(where: { $0.id == id }) }
-    }
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            PostsMapRepresentable(posts: posts, selectedPostId: $selectedPostId)
-                .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                headerBar
-                Spacer()
-                if let post = selectedPost {
-                    selectedPostCard(post)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
-
-            if posts.isEmpty {
-                emptyState
-            }
-        }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: selectedPostId)
-        .environment(\.colorScheme, .dark)
-    }
-
-    // MARK: - Chrome
-
-    private var headerBar: some View {
-        HStack(spacing: 10) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.black.opacity(0.5)))
-            }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-
-            Spacer()
-
-            Text(String(localized: "feed.map.title", defaultValue: "Posts sur la carte", bundle: .main))
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Capsule().fill(Color.black.opacity(0.5)))
-
-            Spacer()
-
-            // Contrepoids du bouton fermer pour centrer le titre.
-            Color.clear.frame(width: 36, height: 36)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "mappin.slash")
-                .font(.system(size: 34, weight: .medium))
-                .foregroundColor(.white.opacity(0.85))
-                .accessibilityHidden(true)
-            Text(String(localized: "feed.map.empty.title", defaultValue: "Aucun post localisé", bundle: .main))
-                .font(.headline)
-                .foregroundColor(.white)
-            Text(String(localized: "feed.map.empty.detail", defaultValue: "Les posts partagés avec une position apparaîtront ici", bundle: .main))
-                .font(.subheadline)
-                .foregroundColor(.white.opacity(0.8))
-                .multilineTextAlignment(.center)
-        }
-        .padding(24)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.black.opacity(0.55)))
-        .padding(.horizontal, 40)
-        .frame(maxHeight: .infinity)
-    }
-
-    // MARK: - Carte du post sélectionné
-
-    private func selectedPostCard(_ post: FeedPost) -> some View {
-        Button {
-            HapticFeedback.light()
-            onOpenPost(post)
-        } label: {
-            HStack(spacing: 12) {
-                MeeshyAvatar(
-                    name: post.author,
-                    context: .custom(44),
-                    accentColor: post.authorColor,
-                    avatarURL: post.authorAvatarURL
-                )
-                .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(post.author)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    if !post.displayContent.isEmpty {
-                        Text(post.displayContent)
-                            .font(.footnote)
-                            .foregroundColor(.white.opacity(0.85))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                    }
-                    if let placeLabel = post.location.flatMap({ $0.name ?? $0.address }), !placeLabel.isEmpty {
-                        HStack(spacing: 4) {
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.caption2.weight(.semibold))
-                                .accessibilityHidden(true)
-                            Text(placeLabel)
-                                .lineLimit(1)
-                        }
-                        .font(.caption)
-                        .foregroundColor(MeeshyColors.indigo200)
-                    }
-                }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: "chevron.forward")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(.white.opacity(0.7))
-                    .accessibilityHidden(true)
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.ultraThinMaterial)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(MeeshyColors.indigo500.opacity(0.5), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
-        .accessibilityLabel(post.author + (post.displayContent.isEmpty ? "" : " — \(post.displayContent)"))
-        .accessibilityHint(String(localized: "feed.map.openPost.hint", defaultValue: "Ouvre le post", bundle: .main))
-    }
-}
-
-// MARK: - MKMapView (annotations + clustering, iOS 16+)
-
-/// Un point par post géolocalisé. `MKMapView` natif plutôt que l'API SwiftUI
-/// Map : le plancher iOS 16 n'offre ni annotations custom riches ni
-/// clustering côté SwiftUI — MKMarkerAnnotationView les fournit gratuitement.
-private final class PostMapAnnotation: NSObject, MKAnnotation {
-    let postId: String
-    let coordinate: CLLocationCoordinate2D
-    let title: String?
-    let subtitle: String?
-
-    init(post: FeedPost, place: SharedPlace) {
-        self.postId = post.id
-        self.coordinate = CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude)
-        self.title = post.author
-        self.subtitle = place.name ?? place.address
-    }
-}
-
-private struct PostsMapRepresentable: UIViewRepresentable {
+/// `MKMapView` natif plutôt que l'API SwiftUI `Map` : le plancher iOS 16
+/// n'offre ni annotations custom riches ni clustering côté SwiftUI —
+/// `MKMarkerAnnotationView` les fournit gratuitement.
+///
+/// Volontairement app-side (pas SDK) : elle lit des `FeedPost` et remonte une
+/// sélection que l'hôte route vers `.postDetail` — de l'orchestration produit.
+struct PostsMapRepresentable: UIViewRepresentable {
+    /// Posts géolocalisés uniquement — le filtre vit chez l'appelant
+    /// (`NearbyDiscoveryViewModel.discoverPosts`), source unique de la carte.
     let posts: [FeedPost]
     @Binding var selectedPostId: String?
 
@@ -287,5 +116,22 @@ private struct PostsMapRepresentable: UIViewRepresentable {
             guard view.annotation is PostMapAnnotation else { return }
             selectedPostId.wrappedValue = nil
         }
+    }
+}
+
+// MARK: - Un pin par post géolocalisé
+
+/// Un point par post géolocalisé, planté sur le LIEU AFFICHÉ (`FeedPost.location`).
+private final class PostMapAnnotation: NSObject, MKAnnotation {
+    let postId: String
+    let coordinate: CLLocationCoordinate2D
+    let title: String?
+    let subtitle: String?
+
+    init(post: FeedPost, place: SharedPlace) {
+        self.postId = post.id
+        self.coordinate = CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude)
+        self.title = post.author
+        self.subtitle = place.name ?? place.address
     }
 }

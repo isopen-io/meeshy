@@ -15,6 +15,30 @@ enum NearbyDiscoveryMode: String, CaseIterable, Sendable {
     case density
     case pins
     case list
+    /// **Les publications du fil sur la carte** — l'ancienne carte « Posts sur
+    /// la carte » du header du feed, fusionnée ici (directive du 2026-08-26).
+    /// Elle plante le LIEU AFFICHÉ de chaque publication, pas le point
+    /// consenti : c'est pourquoi elle est réservée au staff de la plateforme
+    /// (`NearbyDiscoverAccess`).
+    case discover
+}
+
+// MARK: - Qui peut voir Discover
+
+/// Le staff de la plateforme, et lui seul : modérateurs, admins, bigboss.
+/// Même famille que `ConversationView.isCurrentUserAdminOrMod`, mais le rôle
+/// de CONVERSATION n'y entre pas — Discover est une vue de plateforme.
+///
+/// `nonisolated` sur le TYPE : la cible app compile sous
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests sous
+/// `nonisolated`.
+nonisolated enum NearbyDiscoverAccess {
+    static let staffRoles: Set<String> = ["BIGBOSS", "ADMIN", "MODERATOR"]
+
+    static func isAllowed(role: String?) -> Bool {
+        guard let role else { return false }
+        return staffRoles.contains(role.uppercased())
+    }
 }
 
 // MARK: - Pourquoi c'est vide
@@ -55,6 +79,10 @@ enum NearbyEmptyReason: Equatable, Sendable {
     /// rayon — ou pas du tout, tant que personne n'a publié de contenu
     /// découvrable ici.
     case noneInRadius
+    /// Mode Discover : aucune publication du fil ne porte de lieu. Ne dépend
+    /// ni de la position, ni du réseau — seulement du cache du fil. Se lève en
+    /// relisant.
+    case nothingOnTheMap
 }
 
 // MARK: - Où planter un pin
@@ -289,8 +317,33 @@ final class NearbyDiscoveryViewModel: ObservableObject {
 
     private static let pageLimit = 30
 
-    @Published var mode: NearbyDiscoveryMode = .density
+    /// Le mode Discover ne se pose que si le rôle le permet : un état
+    /// restauré ou un geste hors picker retombe sur la densité.
+    @Published var mode: NearbyDiscoveryMode = .density {
+        didSet {
+            if mode == .discover, !canDiscover { mode = .density }
+        }
+    }
     @Published private(set) var posts: [FeedPost] = []
+    /// **Discover** : les publications du fil qui portent un lieu affiché,
+    /// servies depuis le cache `main-feed` — la source même de l'ancienne
+    /// carte du header. Jamais lues pour un rôle non autorisé.
+    @Published private(set) var discoverPosts: [FeedPost] = []
+    /// Le rôle du lecteur tranche UNE fois, à la construction.
+    let canDiscover: Bool
+
+    static let discoverSourceKey = "main-feed"
+
+    var availableModes: [NearbyDiscoveryMode] {
+        NearbyDiscoveryMode.allCases.filter { $0 != .discover || canDiscover }
+    }
+
+    /// L'écran vide du mode Discover, distinct des raisons de proximité : une
+    /// position refusée n'empêche pas de voir le fil sur la carte.
+    var discoverEmptyReason: NearbyEmptyReason? {
+        guard canDiscover, mode == .discover, discoverPosts.isEmpty else { return nil }
+        return .nothingOnTheMap
+    }
     @Published private(set) var cells: [NearbyDensityCell] = []
     @Published private(set) var center: CLLocationCoordinate2D?
     @Published private(set) var radiusKm: Double = NearbyDiscoveryViewModel.defaultRadiusKm
@@ -344,13 +397,15 @@ final class NearbyDiscoveryViewModel: ObservableObject {
         location: NearbyLocationProviding = NearbyLocationProvider.shared,
         network: NetworkMonitorProviding = NetworkMonitor.shared,
         cache: NearbyPostCaching = NearbyFeedPostCache(),
-        languageProvider: LanguageProviding = AuthManagerLanguageProvider()
+        languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
+        viewerRole: String? = AuthManager.shared.currentUser?.role
     ) {
         self.service = service
         self.location = location
         self.network = network
         self.cache = cache
         self.languageProvider = languageProvider
+        self.canDiscover = NearbyDiscoverAccess.isAllowed(role: viewerRole)
         // La coordonnée d'entrée n'est qu'une GRAINE — voir `resolveCenter`.
         self.center = initialCoordinate
         self.isOffline = !network.isOnline
@@ -478,6 +533,11 @@ final class NearbyDiscoveryViewModel: ObservableObject {
         // ci-dessous sans jamais effacer un `isOffline` posé au tour précédent,
         // et l'écran affichait « Hors ligne » à un utilisateur connecté.
         isOffline = !network.isOnline
+
+        // AVANT la position : Discover ne dépend ni d'un relevé ni du réseau,
+        // et un modérateur qui a refusé la localisation doit quand même voir
+        // le fil sur la carte.
+        await serveDiscoverPosts()
 
         guard let coordinate = await resolveCenter() else { return }
         center = coordinate
@@ -706,6 +766,20 @@ final class NearbyDiscoveryViewModel: ObservableObject {
     }
 
     // MARK: - Publication de l'état
+
+    /// Cache-first et cache-SEUL : le fil est déjà chargé et persisté par
+    /// `FeedViewModel` sous `main-feed` ; ne retenir que ce qui porte un lieu.
+    /// Un cache expiré ou vide rend une carte vide qui le DIT
+    /// (`discoverEmptyReason`), jamais un appel réseau de plus.
+    private func serveDiscoverPosts() async {
+        guard canDiscover else { return }
+        switch await cache.load(key: Self.discoverSourceKey) {
+        case .fresh(let feed, _), .stale(let feed, _):
+            discoverPosts = feed.filter { $0.location != nil }
+        case .expired, .empty:
+            discoverPosts = []
+        }
+    }
 
     private func serve(cached: [FeedPost], age: TimeInterval) {
         posts = cached
