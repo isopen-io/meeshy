@@ -7,6 +7,7 @@ import { PostTranslationService } from '../../services/posts/PostTranslationServ
 import { PostAudioService } from '../../services/posts/PostAudioService';
 import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, UnlikeSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { safeBroadcast } from '../../socketio/serverEmit';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
@@ -583,13 +584,15 @@ export function registerCommentRoutes(
       // Broadcast comment liked via Socket.IO
       const socialEvents = fastify.socialEvents;
       if (socialEvents && result.authorId) {
-        socialEvents.broadcastCommentLiked({
-          postId: commentPostId,
-          commentId,
-          userId: authContext.registeredUser.id,
-          emoji,
-          likeCount: result.likeCount,
-        }, result.authorId);
+        safeBroadcast('comment:liked', () => {
+          socialEvents.broadcastCommentLiked({
+            postId: commentPostId,
+            commentId,
+            userId: authContext.registeredUser.id,
+            emoji,
+            likeCount: result.likeCount,
+          }, result.authorId);
+        });
       }
 
       // Notify comment author — l'extrait du commentaire liké voyage en
@@ -675,13 +678,15 @@ export function registerCommentRoutes(
       // cette valeur qui adresse la room et sert de clé de cache aux clients.
       const socialEvents = fastify.socialEvents;
       if (socialEvents && result.authorId) {
-        socialEvents.broadcastCommentUnliked({
-          postId: thread.postId,
-          commentId,
-          userId: authContext.registeredUser.id,
-          emoji,
-          likeCount: result.likeCount,
-        }, result.authorId);
+        safeBroadcast('comment:unliked', () => {
+          socialEvents.broadcastCommentUnliked({
+            postId: thread.postId,
+            commentId,
+            userId: authContext.registeredUser.id,
+            emoji,
+            likeCount: result.likeCount,
+          }, result.authorId);
+        });
       }
 
       // Le symétrique du `createCommentLikeNotification` de la route de pose :

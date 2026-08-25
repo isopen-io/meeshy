@@ -383,7 +383,19 @@ export class PostCommentService {
       list.push(r.emoji);
       userReactionsMap.set(r.commentId, list);
     });
-    const enriched = items.map((c) => ({ ...c, currentUserReactions: userReactionsMap.get(c.id) ?? [] }));
+    // `isLikedByMe` DÉRIVÉ des réactions déjà lues — aucune requête de plus : le
+    // like d'un commentaire EST une `CommentReaction`, exactement comme celui
+    // d'un post (`PostFeedService.enrichWithLikeStatus`).
+    //
+    // Servi EXPLICITEMENT, y compris `false`, et y compris pour un lecteur
+    // anonyme : c'est l'ABSENCE du champ qui faisait mentir le client (le SDK
+    // décode un champ manquant en `?? false`), donc un commentaire liké
+    // s'affichait éteint. Même défaut que celui corrigé le même jour sur les
+    // posts, une couche plus bas.
+    const enriched = items.map((c) => {
+      const reactions = userReactionsMap.get(c.id) ?? [];
+      return { ...c, currentUserReactions: reactions, isLikedByMe: reactions.length > 0 };
+    });
 
     return { items: enriched, nextCursor, hasMore };
   }
@@ -449,7 +461,11 @@ export class PostCommentService {
       list.push(r.emoji);
       userReactionsMap.set(r.commentId, list);
     });
-    const enriched = items.map((r) => ({ ...r, currentUserReactions: userReactionsMap.get(r.id) ?? [] }));
+    // Même règle que `getComments` : une réponse est un commentaire.
+    const enriched = items.map((r) => {
+      const reactions = userReactionsMap.get(r.id) ?? [];
+      return { ...r, currentUserReactions: reactions, isLikedByMe: reactions.length > 0 };
+    });
 
     return { items: enriched, nextCursor, hasMore };
   }

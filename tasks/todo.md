@@ -136,3 +136,44 @@ serait masquer l'erreur. Décision à prendre — cf. rapport.
 - Disque local PLEIN (100 %, 460 Gi) — a bloqué la session. 4 Go libérés en
   supprimant mes propres artefacts ; `apps/ios/Build` (10 Go) laissé intact car
   partagé.
+
+## B — CAUSE RACINE TROUVÉE (2026-08-25, après instrumentation)
+
+```
+TypeError: Cannot read properties of undefined (reading 'adapter')
+    at emit (socket.io/dist/broadcast-operator.js:169)
+    at emitServerEvent (serverEmit.js:7)
+    at SocialEventsHandler.emitToUser → broadcastPostBookmarked
+```
+
+`emitServerEvent` — la porte UNIQUE d'émission, empruntée par 14 sites — faisait :
+
+```ts
+const emit = target.emit;   // méthode EXTRAITE de son objet
+emit(event, payload);       // appelée sans `this`
+```
+
+`BroadcastOperator.emit` lit `this.adapter` dès sa première ligne. `this` valant
+`undefined`, **toute émission levait**. Ce n'était donc pas un défaut du favori :
+c'est le temps réel social ENTIER qui ne fonctionnait pas.
+
+Pourquoi invisible : la plupart des broadcasts sont `async`, et leur exception
+devenait une promesse rejetée que personne n'attend — la route rendait 200 en
+n'ayant rien émis. Seuls les broadcasts SYNCHRONES la laissaient remonter, d'où
+le 500 du favori et du like de commentaire : les deux seuls symptômes visibles.
+
+Corrigés :
+1. `emitServerEvent` appelle `target.emit(...)` en MÉTHODE (test qui reproduit le
+   message de prod mot pour mot ; le module n'avait aucun test).
+2. `safeBroadcast(label, emit)` — un broadcast est l'effet de bord d'une écriture
+   COMMITTÉE, il ne peut plus faire échouer sa requête, et il JOURNALISE.
+   Appliqué aux 5 broadcasts synchrones.
+3. `isLikedByMe` sur les commentaires (`getComments` + `getReplies`), dérivé de
+   `currentUserReactions` déjà calculé — zéro requête ajoutée.
+
+### Ce que ça enseigne
+
+Un `catch` muet et un `async` non attendu sont deux façons de perdre la même
+exception. Ici les deux se sont superposés : `logger: false` rendait les 166
+`fastify.log.*` inertes, et les broadcasts `async` avalaient le reste. La panne
+a survécu à tout parce qu'AUCUN de ses canaux de signalement ne fonctionnait.

@@ -9,6 +9,7 @@ import { MediaService } from '../../services/MediaService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
 import { LikeSchema, UnlikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { safeBroadcast } from '../../socketio/serverEmit';
 import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
@@ -333,10 +334,16 @@ export function registerInteractionRoutes(
       // Sync temps réel (perso) : le feed et le reel viewer réhydratent
       // `isBookmarkedByMe` + le `bookmarkCount` absolu → le favori et son
       // compteur survivent à la fermeture/réouverture, sans reload.
-      fastify.socialEvents?.broadcastPostBookmarked(
-        { postId, bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 },
-        authContext.registeredUser.id,
-      );
+      // Le favori est ÉCRIT : plus rien de ce qui suit n'a le droit de faire
+      // échouer la requête. Sans cette porte, une panne d'émission rendait 500
+      // sur une opération réussie, et le client effaçait de l'écran un favori
+      // bien présent en base.
+      safeBroadcast('post:bookmarked', () => {
+        fastify.socialEvents?.broadcastPostBookmarked(
+          { postId, bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 },
+          authContext.registeredUser.id,
+        );
+      });
       return sendSuccess(reply, { bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
       enhancedLogger.error('[POST /posts/:postId/bookmark]', error);
@@ -356,10 +363,12 @@ export function registerInteractionRoutes(
 
       const { postId } = request.params;
       const result = await postService.unbookmarkPost(postId, authContext.registeredUser.id);
-      fastify.socialEvents?.broadcastPostBookmarked(
-        { postId, bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 },
-        authContext.registeredUser.id,
-      );
+      safeBroadcast('post:unbookmarked', () => {
+        fastify.socialEvents?.broadcastPostBookmarked(
+          { postId, bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 },
+          authContext.registeredUser.id,
+        );
+      });
       return sendSuccess(reply, { bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
       enhancedLogger.error('[DELETE /posts/:postId/bookmark]', error);
@@ -409,12 +418,14 @@ export function registerInteractionRoutes(
         // plus diverger.
         const post = await postService.getPostById(postId, viewerId);
         if (post && post.type === 'STORY' && post.authorId !== authContext.registeredUser.id) {
-          socialEvents.broadcastStoryViewed({
-            storyId: postId,
-            viewerId: authContext.registeredUser.id,
-            viewerUsername: authContext.registeredUser.username ?? '',
-            viewCount: post.viewCount,
-          }, post.authorId);
+          safeBroadcast('story:viewed', () => {
+            socialEvents.broadcastStoryViewed({
+              storyId: postId,
+              viewerId: authContext.registeredUser.id,
+              viewerUsername: authContext.registeredUser.username ?? '',
+              viewCount: post.viewCount,
+            }, post.authorId);
+          });
         }
       }
 
