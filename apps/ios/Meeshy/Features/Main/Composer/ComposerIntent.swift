@@ -115,9 +115,9 @@ nonisolated enum ComposerOpening: Equatable, CaseIterable {
 ///
 /// - `feedComposer` depuis le lot 3 : `FeedComposerSheet` existe toujours et le
 ///   fil la monte encore ;
-/// - `statusComposer` depuis le lot 4.6 : `StatusComposerView.swift` existe
-///   toujours — son retrait est la tâche 4.8, conditionnelle et séparée — mais
-///   plus aucune porte ne le désigne, et plus aucune feuille ne le monte.
+/// - `statusComposer` depuis le lot 4.6 : plus aucune porte ne le désigne et
+///   plus aucune feuille ne le monte. `StatusComposerView.swift` a été RETIRÉ
+///   au lot 4.8, la parité prouvée bloc par bloc — le cas, lui, reste.
 ///
 /// Surtout : les deux gardes négatives qui interdisent à toute porte d'y
 /// retomber (`ComposerIntentTests.test_aucunePorte_neRetombeSurLaFeuilleDuFil`
@@ -342,10 +342,10 @@ nonisolated extension ComposerProfile {
             // le mood n'a pas de pièce jointe, donc pas de rangée, donc rien
             // qui le retienne.
             //
-            // `StatusComposerView.swift` EXISTE ENCORE, et ce n'est pas un
-            // oubli : son retrait est la tâche 4.8, conditionnelle, qui exige
-            // d'abord de confronter la parité bloc par bloc. Le laisser en
-            // place ne coûte rien — plus personne ne le monte.
+            // `StatusComposerView.swift` a été RETIRÉ au lot 4.8, après que la
+            // parité de la surface a été confrontée bloc par bloc. Le cas
+            // `.statusComposer` de la table, lui, reste : c'est l'interdit que
+            // les deux gardes négatives doivent pouvoir NOMMER.
             return ComposerProfile(
                 initialFormat: .status,
                 offeredFormats: [.status],

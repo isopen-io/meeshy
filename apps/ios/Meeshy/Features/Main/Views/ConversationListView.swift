@@ -1498,7 +1498,7 @@ struct ConversationListView: View {
 
     /// Vue PURE routée vers les portes EXISTANTES : nouveau message
     /// (`onNewConversation`), story (`StoryViewModel.showStoryComposer`),
-    /// mood (`StatusComposerView`, déjà hébergé ici), post (drapeau `Router
+    /// mood (`MoodComposerDoor`, déjà hébergé ici), post (drapeau `Router
     /// .pendingOpenFeedComposer`, consommé par le flux), invitation
     /// (`AffiliateCreateView`, lien de parrainage), lien raccourci
     /// (`CreateTrackingLinkView`, `/l/<token>`).

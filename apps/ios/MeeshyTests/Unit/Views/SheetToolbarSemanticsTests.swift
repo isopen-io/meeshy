@@ -35,24 +35,52 @@ final class SheetToolbarSemanticsTests: XCTestCase {
         try String(contentsOf: iosRoot.appendingPathComponent(path), encoding: .utf8)
     }
 
-    // MARK: - Migrated in 221i
+    // MARK: - Migrated in 221i, RE-VISÉ au lot 4.8
 
-    func test_statusComposer_usesSemanticToolbarPlacements() throws {
-        let source = try readSource("Meeshy/Features/Main/Views/StatusComposerView.swift")
+    /// Les fichiers du meuble, nommés. La liste est ADDITIVE : en retirer une
+    /// entrée sans la remplacer perd une surface de la mesure, en silence.
+    private static let moodComposerFiles = [
+        "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift",
+        "Meeshy/Features/Main/Composer/ComposerMoodSurface.swift",
+    ]
+
+    /// **La raison d'origine, portée sur la surface qui a remplacé l'écran.**
+    ///
+    /// `StatusComposerView` déclarait sa paire en `.cancellationAction` /
+    /// `.confirmationAction` pour rendre les CÔTÉS au système — c'est cela, et
+    /// non le nom des placements, qui fait miroiter la paire en locale RTL et
+    /// qui lie Échap / Retour. Le meuble (lot 4.6) n'a plus de barre de
+    /// navigation du tout : il PEINT sa croix (`ComposerMoodSurface.header`,
+    /// tenue par `onClose`) et sa flèche (`MeeshyComposerHost.publishButton`)
+    /// dans des piles qui miroitent d'elles-mêmes.
+    ///
+    /// La propriété se dédouble donc : la paire existe toujours, et aucun de ses
+    /// deux membres n'est épinglé à un côté de barre déprécié. Laisser cette
+    /// garde sur l'ancien chemin l'aurait fait ÉCHOUER à la lecture ; la
+    /// supprimer aurait laissé le meuble libre d'y revenir sans un mot.
+    func test_moodComposer_paintsItsDismissAndCommitWithoutAnyBarSide() throws {
+        let host = try readSource(Self.moodComposerFiles[0])
+        let surface = try readSource(Self.moodComposerFiles[1])
 
         XCTAssertTrue(
-            source.contains("ToolbarItem(placement: .cancellationAction)"),
-            "The composer's dismiss must be declared as a cancellation, not as a bar side."
+            surface.contains("let onClose: () -> Void"),
+            "La surface du mood doit porter sa SORTIE : sans barre de navigation, personne d'autre ne " +
+            "peint la croix, et la feuille n'aurait plus de congé explicite."
         )
         XCTAssertTrue(
-            source.contains("ToolbarItem(placement: .confirmationAction)"),
-            "The composer's publish must be declared as a confirmation, not as a bar side."
+            host.contains("private var publishButton: some View"),
+            "Le socle doit porter la flèche de publication : c'est l'autre membre de la paire, et sans " +
+            "elle cette garde ne mesurerait plus qu'une moitié."
         )
-        for placement in Self.deprecatedPlacements {
-            XCTAssertFalse(
-                source.contains(placement),
-                "StatusComposerView must not pin its toolbar to \(placement)."
-            )
+        for file in Self.moodComposerFiles {
+            let source = try readSource(file)
+            for placement in Self.deprecatedPlacements {
+                XCTAssertFalse(
+                    source.contains(placement),
+                    "\(file) épingle une affordance à \(placement) : le côté cesse alors d'appartenir au " +
+                    "système, et la paire ne miroite plus en locale RTL — le catalogue porte `ar`."
+                )
+            }
         }
     }
 
@@ -105,9 +133,16 @@ final class SheetToolbarSemanticsTests: XCTestCase {
             "migrated to .cancellationAction / .confirmationAction, shrink this expectation; if a new " +
             "one appeared, prefer the semantic placement instead."
         )
-        XCTAssertFalse(
-            offenders.contains("StatusComposerView.swift"),
-            "StatusComposerView was migrated in 221i and must not regress."
-        )
+        // RE-VISÉ au lot 4.8 : `StatusComposerView.swift` est retiré, et cette
+        // ligne serait devenue vraie sur un fichier absent — verte en ayant
+        // perdu son objet. Ce qui la remplace nomme les fichiers du meuble, qui
+        // servent désormais le mood.
+        for file in Self.moodComposerFiles {
+            XCTAssertFalse(
+                offenders.contains((file as NSString).lastPathComponent),
+                "\(file) épingle un item de barre à un côté déprécié : le mood a été porté sur le meuble " +
+                "en 4.6 précisément pour que sa paire appartienne au système."
+            )
+        }
     }
 }

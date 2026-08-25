@@ -1305,15 +1305,18 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
 
     /// **L'affordance de publication RÉELLE porte son état accessible.**
     ///
-    /// Les quatre tests de `StatusComposerAccessibilityTests` mesurent le bouton
-    /// de `StatusComposerView`, que plus AUCUN site ne monte depuis le lot 4.6 :
-    /// ils restent verts sur un écran sans public. Le bouton que VoiceOver
-    /// rencontre désormais est celui-ci, et rien ne l'assérait — retirer
+    /// Les quatre tests de `StatusComposerAccessibilityTests` mesuraient le
+    /// bouton de `StatusComposerView`, que plus aucun site ne montait depuis le
+    /// lot 4.6 : ils restaient verts sur un écran sans public. Le bouton que
+    /// VoiceOver rencontre est celui-ci, et rien ne l'assérait — retirer
     /// `.accessibilityValue` et `.accessibilityHint` de `publishButton` n'aurait
     /// fait rougir aucune suite, pendant que le tableau restait vert.
     ///
-    /// C'est le motif d'extinction silencieuse RETOURNÉ : la garde n'a pas perdu
-    /// sa cible, sa cible a perdu son public.
+    /// C'était le motif d'extinction silencieuse RETOURNÉ : la garde n'avait pas
+    /// perdu sa cible, sa cible avait perdu son public. Le lot 4.8 a retiré
+    /// l'écran et RE-VISÉ cette suite-là sur ce même bouton, où elle mesure
+    /// désormais ce que celle-ci ne mesure pas : le NOM que la flèche garde
+    /// pendant l'envoi.
     func test_laFlecheDuSocle_porteSonEtatAccessible() throws {
         guard let bloc = declarationBody(startingAt: "private var publishButton", in: try hostCode()) else {
             return XCTFail("La zone de publication du socle est introuvable — la garde ne mesurerait RIEN")

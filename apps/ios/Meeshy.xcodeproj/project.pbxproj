@@ -265,7 +265,6 @@
 		3572E7FE0988BA8B8D11A390 /* FeedPostCardLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504C59EB711EC0CB5FEE3080 /* FeedPostCardLayout.swift */; };
 		3597836A7AA7E4E9685564C7 /* PiPSourceAnchor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76F17DEB0A27F244F9E14273 /* PiPSourceAnchor.swift */; };
 		35FE10FA07B11D5DC069B5AA /* CharacterCountLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CFFAFA02143A5984FBBFEB1 /* CharacterCountLabel.swift */; };
-		3613ED850A06BC1CEEB4D71C /* StatusComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00DE18C46D8CE35926B47D4 /* StatusComposerView.swift */; };
 		3641D623B3308F39EAEF5CA2 /* ContactsListTabAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAF059EBF91B97861A308183 /* ContactsListTabAccessibilityTests.swift */; };
 		36570DF8D6BED955EACEE5C7 /* FriendRequestTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BE9E3F8A2038DE0A368311C /* FriendRequestTestHelpers.swift */; };
 		36E171098B2B6E062DC8359F /* LentilleFocusElectionCadenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38D3B0ABCCBADA252D2144F4 /* LentilleFocusElectionCadenceTests.swift */; };
@@ -2228,7 +2227,6 @@
 		9F2CA9AD1B3992B470CD395A /* MeeshyAppLogoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAppLogoutTests.swift; sourceTree = "<group>"; };
 		9F349230ACD79DFC5BA70F37 /* DeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkTests.swift; sourceTree = "<group>"; };
 		9F418C63D56E159D163ED428 /* EdgeHiddenChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeHiddenChrome.swift; sourceTree = "<group>"; };
-		A00DE18C46D8CE35926B47D4 /* StatusComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusComposerView.swift; sourceTree = "<group>"; };
 		A01DFD5C24FBECBC615A19D3 /* ForwardPickerModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardPickerModelTests.swift; sourceTree = "<group>"; };
 		A032A2F5F8B4053F3490F2DD /* ThreadViewCacheSeedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadViewCacheSeedTests.swift; sourceTree = "<group>"; };
 		A04A4BCC25FCF65633869CCB /* iPadRootView+Sheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "iPadRootView+Sheets.swift"; sourceTree = "<group>"; };
@@ -3914,7 +3912,6 @@
 				353450F62264AA9373DE1298 /* StarredMessagesView.swift */,
 				EE3DBBE835ADF40328C099E8 /* StatsTimelineChart.swift */,
 				D1B2446EAD64EF6515AD5AFC /* StatusBarView.swift */,
-				A00DE18C46D8CE35926B47D4 /* StatusComposerView.swift */,
 				741F8F7CD5D651CDE6F246C4 /* StoryAuthorIdentityCard.swift */,
 				F3CBE7F32FF8F6F276CFBA3B /* StoryCanvasAccessibility.swift */,
 				6C2199A158A780F0AAF603A5 /* StoryContentPresence.swift */,
@@ -5407,7 +5404,6 @@
 				53BBBFB27C354C59777AB140 /* StatusBarView.swift in Sources */,
 				2AA6D803D02BA4C3CC85E2F5 /* StatusBubbleController.swift in Sources */,
 				4B73EFE53D2A699081580D4C /* StatusBubbleOverlay.swift in Sources */,
-				3613ED850A06BC1CEEB4D71C /* StatusComposerView.swift in Sources */,
 				80DA971C0FCBD2E811647853 /* StatusViewModel.swift in Sources */,
 				22E8A0C28416FCA912A313A5 /* StickerLibraryPaste.swift in Sources */,
 				FAA839BDB0E5C8AA9034F9C2 /* StickerLibraryStore.swift in Sources */,

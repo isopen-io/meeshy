@@ -5,7 +5,8 @@ import MeeshyUI
 ///
 /// Consolidates the hand-rolled `"\(text.count)/LIMIT"` labels that were
 /// duplicated — with divergent styling, ad-hoc warning thresholds and zero
-/// accessibility — in `ReportUserView` and `StatusComposerView`.
+/// accessibility — in `ReportUserView` and the mood composer, dont la surface
+/// actuelle est `ComposerMoodSurface.characterCount`.
 ///
 /// - Numbers are rendered with `Int.formatted()` so they respect the user's
 ///   locale (grouping separators, Eastern-Arabic digits, …) instead of raw

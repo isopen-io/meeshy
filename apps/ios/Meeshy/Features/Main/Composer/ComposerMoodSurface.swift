@@ -275,17 +275,17 @@ nonisolated enum ComposerAnchorComment {
 ///
 /// - `a11y.status.publish.in-progress` et `a11y.status.publish.disabled.hint`
 ///   ont MIGRÉ — `ComposerSocleCopy` (`MeeshyComposerHost.swift`) les lit. Elles
-///   ne sont plus suspendues au retrait de `StatusComposerView` ;
-/// - `status.composer.publish` n'a TOUJOURS qu'un lecteur, et c'est lui. Le
-///   socle dit « Publier » par `composer.socle.publish`, qui n'est PAS la même
-///   phrase — vérifié langue par langue, `en` rend « Publish » d'un côté et
-///   « Post » de l'autre. Fondre les deux est une édition de catalogue qu'aucune
-///   tâche de ce lot ne possède.
-///
-/// Reste donc UNE clé à décider avant que le lot 4.8 puisse partir, pas trois —
-/// sans quoi son retrait la rendrait orpheline et
-/// `LocalizationConsistencyTests.test_everyAppCatalogIdentifierKeyIsReferencedInCode`
-/// rougirait. C'est une condition, jamais un acquis.
+///   ne sont plus suspendues au retrait de `StatusComposerView`, effectué au
+///   lot 4.8 ;
+/// - `status.composer.publish` n'avait qu'un lecteur, et c'était lui. Le socle
+///   dit « Publier » par `composer.socle.publish`, qui n'est PAS la même phrase
+///   — vérifié langue par langue, `en` rend « Publish » d'un côté et « Post » de
+///   l'autre. Fondre les deux aurait été une édition de catalogue qu'aucune
+///   tâche de ce lot ne possède, et la garder l'aurait rendue orpheline : le lot
+///   4.8 l'a donc RETIRÉE des sept locales avec l'écran qui la lisait. Mesuré :
+///   `LocalizationConsistencyTests
+///   .test_everyAppCatalogIdentifierKeyIsReferencedInCode` a rougi sur cette
+///   seule clé au retrait du fichier, et pas sur les sept autres.
 nonisolated enum ComposerMoodCopy {
 
     static var title: String {
