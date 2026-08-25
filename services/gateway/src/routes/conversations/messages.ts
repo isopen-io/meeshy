@@ -2402,8 +2402,9 @@ export function registerMessagesRoutes(
     try {
       const authRequest = request as UnifiedAuthRequest;
       const { id } = request.params;
-      const limit = Math.min(parseInt(request.query.limit || '50', 10), 100);
-      const offset = parseInt(request.query.offset || '0', 10);
+      // SSOT guard: a malformed `?limit`/`?offset` (string schema, no AJV
+      // coercion) would otherwise reach Prisma as `take: NaN` → HTTP 500.
+      const { limit, offset } = validatePagination(request.query.offset, request.query.limit, { defaultLimit: 50, maxLimit: 100 });
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
