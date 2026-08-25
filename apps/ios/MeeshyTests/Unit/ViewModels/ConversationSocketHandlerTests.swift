@@ -48,6 +48,15 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
         evictedMessages.append(message)
     }
 
+    /// Les ids dont les traductions ont été évincées, dans l'ordre. Une LISTE
+    /// et non un ensemble : l'absence d'appel sur la branche `callSummary` fait
+    /// partie du contrat testé.
+    var invalidatedTranslationIds: [String] = []
+    func invalidateTranslations(for messageId: String) {
+        invalidatedTranslationIds.append(messageId)
+        messageTranslations.removeValue(forKey: messageId)
+    }
+
     func markMessageAsConsumed(messageId: String) {
         consumedMessageIds.append(messageId)
     }
@@ -555,6 +564,79 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         // Without persistence wired, delegate.messages stays as seeded.
         XCTAssertEqual(delegate.messages[0].content, "Original")
+    }
+
+    /// Le gateway pose `translations: null` dans le même `updateMany` que
+    /// `content` : une traduction du texte d'AVANT ne décrit plus rien. Le
+    /// client doit poser le même verdict, sinon la bulle (et la copie, et le
+    /// partage) servent le texte périmé jusqu'à la prochaine
+    /// `translation:completed`. Pendant la fenêtre, l'ORIGINAL est servi —
+    /// règle 1 du Prisme.
+    func test_messageEdited_clearsStaleTranslations() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        delegate.messageTranslations["msg-edit-tr"] = [
+            MessageTranslation(
+                id: "t-es", messageId: "msg-edit-tr",
+                sourceLanguage: "fr", targetLanguage: "es",
+                translatedContent: "Hola", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+
+        let editedApiMsg: APIMessage = JSONStub.decode("""
+        {
+            "id":"msg-edit-tr",
+            "conversationId":"\(conversationId)",
+            "senderId":"\(otherUserId)",
+            "content":"Bonsoir",
+            "isEdited":true,
+            "createdAt":"2026-03-06T12:00:00.000Z"
+        }
+        """)
+        socket.simulateMessageEdited(editedApiMsg)
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(delegate.invalidatedTranslationIds, ["msg-edit-tr"],
+                       "l'édition doit demander au ViewModel d'évincer les quatre caches")
+        XCTAssertNil(delegate.messageTranslations["msg-edit-tr"],
+                     "la traduction du texte d'avant l'édition ne doit plus être servie")
+    }
+
+    /// Contre-épreuve : la transition live → terminal d'un avis d'appel n'est
+    /// PAS une édition de contenu. Y évincer les traductions rendrait le fil
+    /// à l'original sur un message que personne n'a modifié.
+    func test_messageEdited_withCallSummary_keepsTranslations() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        delegate.messageTranslations["msg-call-tr"] = [
+            MessageTranslation(
+                id: "t-en", messageId: "msg-call-tr",
+                sourceLanguage: "fr", targetLanguage: "en",
+                translatedContent: "Audio call · 04:32", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+
+        let editedApiMsg: APIMessage = JSONStub.decode("""
+        {
+            "id":"msg-call-tr",
+            "conversationId":"\(conversationId)",
+            "senderId":"\(otherUserId)",
+            "content":"Appel audio · 04:32",
+            "createdAt":"2026-03-06T12:00:00.000Z",
+            "updatedAt":"2026-03-06T12:05:00.000Z",
+            "metadata":{"kind":"call","callId":"call_tr","initiatorId":"\(otherUserId)","callType":"audio","outcome":"completed","durationSeconds":272,"bytesEstimated":false}
+        }
+        """)
+        socket.simulateMessageEdited(editedApiMsg)
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertTrue(delegate.invalidatedTranslationIds.isEmpty,
+                      "une transition d'état d'appel ne périme aucune traduction")
+        XCTAssertEqual(delegate.messageTranslations["msg-call-tr"]?.count, 1)
     }
 
     // MARK: - messageDeleted

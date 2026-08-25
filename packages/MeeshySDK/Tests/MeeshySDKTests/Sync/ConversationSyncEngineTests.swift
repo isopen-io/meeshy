@@ -771,6 +771,88 @@ final class ConversationSyncEngineTests: XCTestCase {
         await fulfillment(of: [persisted], timeout: 2.0)
     }
 
+    // MARK: - Coalescence des accusés de réception
+
+    /// `POST /conversations/{id}/mark-as-received` ne porte aucun `messageId` :
+    /// dix messages d'une rafale produisaient dix requêtes IDENTIQUES, sur une
+    /// route dont le quota de 30 req/min est PARTAGÉ avec `mark-read`. Une
+    /// conversation animée épuisait donc à elle seule le budget des accusés de
+    /// LECTURE, que rien ne rejoue.
+    func test_tenIncomingMessagesInOneBurst_triggerASingleMarkAsReceived() async throws {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("conv-burst", 0)])
+        let coalescing = makeCoalescingEngine(window: 1.0)
+        await coalescing.startSocketRelay()
+
+        for index in 0..<10 {
+            mockMessageSocket.messageReceived.send(
+                TestFactories.makeAPIMessage(
+                    id: "burst-\(index)", conversationId: "conv-burst", senderId: "other-user"
+                )
+            )
+        }
+
+        try await Task.sleep(nanoseconds: 2_200_000_000)
+
+        XCTAssertEqual(mockConvService.markAsReceivedCounts["conv-burst"], 1,
+                       "une rafale doit se réduire à un seul accusé de réception")
+    }
+
+    /// Contre-épreuve : la coalescence est PAR CONVERSATION. La replier sur un
+    /// seul verrou global perdrait l'accusé de la seconde conversation.
+    func test_twoDistinctConversations_eachGetTheirOwnMarkAsReceived() async throws {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("conv-a", 0), ("conv-b", 0)])
+        let coalescing = makeCoalescingEngine(window: 1.0)
+        await coalescing.startSocketRelay()
+
+        mockMessageSocket.messageReceived.send(
+            TestFactories.makeAPIMessage(id: "a-1", conversationId: "conv-a", senderId: "other-user")
+        )
+        mockMessageSocket.messageReceived.send(
+            TestFactories.makeAPIMessage(id: "b-1", conversationId: "conv-b", senderId: "other-user")
+        )
+
+        try await Task.sleep(nanoseconds: 2_200_000_000)
+
+        XCTAssertEqual(mockConvService.markAsReceivedCounts["conv-a"], 1)
+        XCTAssertEqual(mockConvService.markAsReceivedCounts["conv-b"], 1)
+    }
+
+    /// La fenêtre ne survit pas au relais : sur un changement de compte, un
+    /// envoi encore en attente partirait sous la session SUIVANTE.
+    func test_stopSocketRelay_dropsPendingMarkAsReceived() async throws {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("conv-logout", 0)])
+        let coalescing = makeCoalescingEngine(window: 1.0)
+        await coalescing.startSocketRelay()
+
+        mockMessageSocket.messageReceived.send(
+            TestFactories.makeAPIMessage(id: "logout-1", conversationId: "conv-logout", senderId: "other-user")
+        )
+        // Assez pour que la fenêtre soit ARMÉE, bien avant qu'elle n'expire —
+        // sans quoi le témoin passerait au vert sans rien avoir annulé.
+        try await Task.sleep(nanoseconds: 400_000_000)
+        await coalescing.stopSocketRelay()
+
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+
+        XCTAssertNil(mockConvService.markAsReceivedCounts["conv-logout"],
+                     "un accusé armé sous la session précédente ne doit jamais partir")
+    }
+
+    private func makeCoalescingEngine(window: TimeInterval) -> ConversationSyncEngine {
+        ConversationSyncEngine(
+            cache: .shared,
+            conversationService: mockConvService,
+            messageService: mockMsgService,
+            messageSocket: mockMessageSocket,
+            socialSocket: mockSocialSocket,
+            api: mockAPI,
+            markAsReceivedWindow: window
+        )
+    }
+
     // MARK: - Total Unread Aggregator (cross-conversation)
 
     /// The sync engine must expose a CurrentValueSubject that aggregates the
@@ -1549,10 +1631,19 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     /// n'est jamais atteint. Un offset absent retombe sur `listResult`.
     var listResultsByOffset: [Int: Result<OffsetPaginatedAPIResponse<[APIConversation]>, Error>] = [:]
 
+    /// Compte des `mark-as-received` par conversation. Verrouillé : les envois
+    /// partent de tâches détachées pendant que le test lit le compteur.
+    private let markAsReceivedLock = NSLock()
+    private var _markAsReceivedCounts: [String: Int] = [:]
+    var markAsReceivedCounts: [String: Int] {
+        markAsReceivedLock.withLock { _markAsReceivedCounts }
+    }
+
     func reset() {
         listCallCount = 0
         listResultsByOffset = [:]
         listResult = .success(OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil))
+        markAsReceivedLock.withLock { _markAsReceivedCounts = [:] }
     }
 
     func list(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]> {
@@ -1571,7 +1662,11 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse { fatalError("Not used in tests") }
     func delete(conversationId: String) async throws {}
     func markRead(conversationId: String) async throws {}
-    func markAsReceived(conversationId: String) async throws {}
+    func markAsReceived(conversationId: String) async throws {
+        markAsReceivedLock.withLock {
+            _markAsReceivedCounts[conversationId, default: 0] += 1
+        }
+    }
     func markUnread(conversationId: String) async throws {}
     func getParticipants(conversationId: String, limit: Int, cursor: String?) async throws -> PaginatedAPIResponse<[APIParticipant]> { fatalError("Not used in tests") }
     func deleteForMe(conversationId: String) async throws {}

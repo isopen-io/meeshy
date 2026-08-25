@@ -40,6 +40,12 @@ protocol ConversationSocketDelegate: AnyObject {
     func containsMessage(id: String) -> Bool
 
     func evictViewOnceMedia(message: Message)
+    /// Évince les traductions d'un message dont le CONTENU vient de changer —
+    /// dictionnaire en mémoire, cache de résolution du Prisme ET les deux
+    /// caches PERSISTANTS (CacheCoordinator, GRDB). Un site unique côté
+    /// ViewModel : ne vider que ce que le handler voit (`messageTranslations`)
+    /// laisserait l'hydratation réinjecter le texte d'avant l'édition.
+    func invalidateTranslations(for messageId: String)
     func markMessageAsConsumed(messageId: String)
     func handleParticipantRoleUpdated(participantId: String, newRole: String)
     func syncMissedMessages() async
@@ -581,6 +587,17 @@ final class ConversationSocketHandler {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiMsg in
                 guard let self else { return }
+                // Une édition de CONTENU périme les traductions du message : le
+                // gateway pose `translations: null` dans le même `updateMany`
+                // que `content`, le client doit poser le même verdict sinon la
+                // bulle (et la copie, et le partage) servent le texte traduit
+                // d'AVANT. Hors branche `callSummary` : la transition live →
+                // terminal d'un avis d'appel n'est pas une édition de contenu.
+                // Posé avant l'écriture persistée et indépendamment d'elle —
+                // l'invalidation ne dépend pas de la présence du store.
+                if apiMsg.callSummary == nil {
+                    self.delegate?.invalidateTranslations(for: apiMsg.id)
+                }
                 if let persistence = self.persistence {
                     // Write through persistence; store observation surfaces the edit.
                     let msgId = apiMsg.id

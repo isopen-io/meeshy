@@ -349,6 +349,65 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(fetched[0].id, "m1-en", "l'id est remplacé par celui du dernier écrivain")
     }
 
+    /// Éditer un message périme TOUTES ses traductions : elles décrivent un
+    /// texte qui n'existe plus. Vider le seul dictionnaire en mémoire serait
+    /// cosmétique — l'hydratation GRDB réinjecterait le texte d'avant, et le
+    /// symptôme survivrait au redémarrage.
+    func test_deleteTranslations_removesEveryLanguageOfTheMessage() async throws {
+        for (index, lang) in ["en", "es"].enumerated() {
+            try await actor.saveTranslation(TranslationRecord(
+                id: "edited-\(lang)", messageLocalId: "edited", messageServerId: nil,
+                targetLanguage: lang, translatedContent: "v\(index)",
+                translationModel: "nllb-200", confidenceScore: nil,
+                sourceLanguage: "fr", receivedAt: Date()
+            ))
+        }
+
+        try await actor.deleteTranslations(messageLocalId: "edited")
+
+        XCTAssertTrue(try actor.translations(for: "edited").isEmpty)
+    }
+
+    /// Un message « own » garde sa ligne optimiste `cid_*` en local alors que
+    /// `message:edited` porte l'id SERVEUR. Résoudre sur la seule colonne locale
+    /// ne toucherait AUCUNE ligne — l'édition de son propre message depuis un
+    /// autre appareil laisserait la traduction périmée en base.
+    func test_deleteTranslations_byServerId_alsoRemovesRowsKeyedOnTheLocalId() async throws {
+        try await actor.saveTranslation(TranslationRecord(
+            id: "cid-en", messageLocalId: "cid_own", messageServerId: "srv_own",
+            targetLanguage: "en", translatedContent: "Hello",
+            translationModel: "nllb-200", confidenceScore: nil,
+            sourceLanguage: "fr", receivedAt: Date()
+        ))
+
+        try await actor.deleteTranslations(messageLocalId: "srv_own")
+
+        XCTAssertTrue(try actor.translations(for: "cid_own").isEmpty)
+    }
+
+    /// Contre-épreuve de la purge : elle est CIBLÉE. Une éviction qui emporte
+    /// les traductions des messages voisins ferait retomber tout le fil sur
+    /// l'original.
+    func test_deleteTranslations_leavesOtherMessagesUntouched() async throws {
+        try await actor.saveTranslation(TranslationRecord(
+            id: "keep-en", messageLocalId: "keep", messageServerId: nil,
+            targetLanguage: "en", translatedContent: "Kept",
+            translationModel: "nllb-200", confidenceScore: nil,
+            sourceLanguage: "fr", receivedAt: Date()
+        ))
+        try await actor.saveTranslation(TranslationRecord(
+            id: "drop-en", messageLocalId: "drop", messageServerId: nil,
+            targetLanguage: "en", translatedContent: "Dropped",
+            translationModel: "nllb-200", confidenceScore: nil,
+            sourceLanguage: "fr", receivedAt: Date()
+        ))
+
+        try await actor.deleteTranslations(messageLocalId: "drop")
+
+        XCTAssertEqual(try actor.translations(for: "keep").count, 1)
+        XCTAssertTrue(try actor.translations(for: "drop").isEmpty)
+    }
+
     /// La collision ne doit plus faire lever le db.write entier : avant le fix,
     /// le throw sur la ligne translations faisait rollback TOUT le batch — un
     /// message sans rapport avec la collision était droppé collatéralement.
