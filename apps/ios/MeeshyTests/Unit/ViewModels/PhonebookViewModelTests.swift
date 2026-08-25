@@ -514,4 +514,19 @@ final class DirectoryPagingTests: XCTestCase {
         XCTAssertEqual(all.count, 600)
         XCTAssertEqual(stub.listOffsets.count, 3)
     }
+
+    /// Le filet de lecture était calibré sur l'ÉCRITURE tronquée à 2 000 fiches
+    /// (25 × 200 = 5 000). Depuis que la synchronisation part en lots sans
+    /// plafond, un répertoire peut légitimement dépasser 5 000 — le filet doit
+    /// rester un filet, jamais une troncature de fait.
+    func test_maxPages_coversADirectoryFarBeyondTheOldFiveThousandCap() {
+        XCTAssertEqual(DirectoryPaging.maxPages, 250)
+        XCTAssertEqual(DirectoryPaging.maxPages * DirectoryPaging.pageSize, 50_000)
+    }
+
+    func test_listAll_defaultCap_readsWellPastFiveThousandContacts() async throws {
+        let stub = PagedDirectoryStub(total: 6_000)
+        let all = try await stub.listAll(filter: .all, query: nil)
+        XCTAssertEqual(all.count, 6_000, "l'ancien plafond de 25 pages en perdait 1 000 en silence")
+    }
 }

@@ -248,8 +248,11 @@ final class DiscoverViewModel: ObservableObject {
     /// SYNCHRONISE le carnet dans le répertoire persisté, puis affiche ceux qui
     /// ont déjà un compte Meeshy.
     ///
-    /// Une seule lecture du carnet et un seul envoi : la synchronisation fait
-    /// le rapprochement ET la conservation. Les correspondances affichées sont
+    /// Une seule lecture du carnet, un seul appel : la synchronisation fait le
+    /// rapprochement ET la conservation. Le carnet part ensuite en autant de
+    /// LOTS réseau que sa taille l'exige (`ContactSyncService`), ce qui ne
+    /// change rien ici — `.replace` reste le vœu « miroir de l'appareil », que
+    /// le dernier lot réalise par sa purge. Les correspondances affichées sont
     /// relues du répertoire — l'utilisateur les retrouve ensuite dans l'onglet
     /// Répertoire, sans avoir à re-scanner son appareil.
     func importContacts() async {
