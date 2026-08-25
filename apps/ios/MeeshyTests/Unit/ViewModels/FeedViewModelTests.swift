@@ -2249,4 +2249,108 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(result[0].likes, 4)
     }
 
+
+    // MARK: - BW-IOS-03 : politique d'auto-téléchargement du préchargement du feed
+
+    /// La fenêtre de 9 posts tirait le fichier AUDIO ENTIER de chaque post
+    /// audio, jamais joué, sans consulter `MediaDownloadPolicyEngine`.
+    func test_shouldPrefetchFeedMedia_audioOnBadCellular_returnsFalse() {
+        let allowAudio = MediaDownloadPolicyEngine.shouldAutoDownload(
+            kind: .audio, condition: .badCellular, prefs: .defaults
+        )
+
+        XCTAssertFalse(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .audio, hasThumbnail: false,
+            allowImage: true, allowVideo: true, allowAudio: allowAudio
+        ), "sur cellulaire contraint, l'audio se charge à l'appui sur lecture")
+    }
+
+    func test_shouldPrefetchFeedMedia_imageOnWifi_returnsTrue() {
+        let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(
+            kind: .image, condition: .wifi, prefs: .defaults
+        )
+
+        XCTAssertTrue(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .image, hasThumbnail: true,
+            allowImage: allowImage, allowVideo: false, allowAudio: false
+        ), "en Wi-Fi, le fil reste préchargé comme avant")
+    }
+
+    /// Une vidéo AVEC vignette ne tire qu'une image distante : `prefs.image`.
+    /// `hasThumbnail` signifie « vignette RÉSOLVABLE » (l'appelant le calcule
+    /// via `media.thumbnailUrl.flatMap { MeeshyConfig.resolveMediaURL($0) } != nil`),
+    /// pas seulement « champ non-nil » — sinon une `thumbnailUrl` mal formée
+    /// ferait passer ce prédicat sous `allowImage` pendant que le code exécuté
+    /// bascule sur le décodage de la première frame du MP4 (`prefs.video`).
+    func test_shouldPrefetchFeedMedia_videoWithThumbnail_followsImagePolicy() {
+        XCTAssertTrue(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .video, hasThumbnail: true,
+            allowImage: true, allowVideo: false, allowAudio: false
+        ))
+        XCTAssertFalse(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .video, hasThumbnail: true,
+            allowImage: false, allowVideo: true, allowAudio: true
+        ))
+    }
+
+    /// Une vidéo SANS vignette passe par `StoryMediaLoader.videoThumbnail`, qui
+    /// décode la première frame du MP4 DISTANT : ce sont des octets VIDÉO, donc
+    /// `prefs.video` (`.wifiOnly` par défaut). La ranger sous `prefs.image`
+    /// (`.wifiAndGoodCellular`) laisserait tirer de la vidéo en bon cellulaire.
+    func test_shouldPrefetchFeedMedia_videoWithoutThumbnail_followsVideoPolicy() {
+        XCTAssertFalse(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .video, hasThumbnail: false,
+            allowImage: true, allowVideo: false, allowAudio: true
+        ), "pas de lecture réseau sur le MP4 quand prefs.video refuse")
+        XCTAssertTrue(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .video, hasThumbnail: false,
+            allowImage: false, allowVideo: true, allowAudio: false
+        ))
+    }
+
+    /// Un document n'a jamais été préchargé (branche `default` du routage) —
+    /// la garde ne doit pas lui ouvrir une porte au passage.
+    func test_shouldPrefetchFeedMedia_document_isNeverPrefetched() {
+        XCTAssertFalse(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .document, hasThumbnail: true,
+            allowImage: true, allowVideo: true, allowAudio: true
+        ))
+    }
+
+    // MARK: - Source guard — le prefetch consulte bien la politique (câblage, pas seulement la table de vérité)
+
+    /// Les tests `test_shouldPrefetchFeedMedia_*` ci-dessus couvrent la table
+    /// de vérité du prédicat PUR, jamais son câblage : supprimer le
+    /// `guard FeedViewModel.shouldPrefetchFeedMedia(…) else { … }` ou le
+    /// `if allowVideo,` du preroll dans `prefetchMedia(around:)` les
+    /// laisserait tous verts alors que le défaut BW-IOS-03 serait entièrement
+    /// rétabli. Garde de SOURCE visant le BLOC de la fonction (jamais le
+    /// fichier entier), équilibrée par accolades via `DeclarationBodyScanner`
+    /// — insensible aux commentaires ajoutés au-dessus.
+    func test_prefetchMedia_blockConsultsTheDownloadPolicy() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/ViewModels
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/ViewModels/FeedViewModel.swift")
+        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+
+        guard let body = DeclarationBodyScanner.body(containing: "func prefetchMedia(around index: Int)", in: source) else {
+            XCTFail("prefetchMedia(around:) body not found — FeedViewModel.swift changed shape, update this guard's anchor.")
+            return
+        }
+
+        XCTAssertTrue(
+            body.contains("shouldPrefetchFeedMedia("),
+            "prefetchMedia(around:) must consult FeedViewModel.shouldPrefetchFeedMedia(...) before touching a URL — " +
+            "otherwise the truth-table tests above stay green while the download policy is silently bypassed."
+        )
+        XCTAssertTrue(
+            body.contains("if allowVideo,"),
+            "the video preroll inside prefetchMedia(around:) must stay gated on allowVideo — " +
+            "otherwise a good-cellular connection preloads the AVPlayer's MP4 regardless of prefs.video."
+        )
+    }
+
 }

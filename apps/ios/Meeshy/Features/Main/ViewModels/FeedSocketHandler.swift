@@ -66,6 +66,16 @@ final class FeedSocketHandler {
 
         socialSocket.postReposted
             .sink { [weak self] data in
+                // `post:reposted` n'est pas typé : une story repostée y arrive
+                // et s'insérait dans `feed_posts`, la table que le secours de
+                // pagination hors-ligne (`FeedViewModel.loadMoreIfNeeded`)
+                // mappe TELLE QUELLE en `FeedPost`. Le chemin socket EN DIRECT
+                // applique déjà ce partage (`FeedViewModel`) : la persistance
+                // doit le partager, sinon le tray reparaît dans le fil dès que
+                // le réseau tombe. Les lignes STORY DÉJÀ persistées ne sont pas
+                // purgées par cette garde — un résidu après mise à jour n'est
+                // donc pas un échec du filtre.
+                guard !data.repost.belongsToStoryTray else { return }
                 Task { await self?.handlePostUpsert(data.repost) }
             }
             .store(in: &cancellables)
