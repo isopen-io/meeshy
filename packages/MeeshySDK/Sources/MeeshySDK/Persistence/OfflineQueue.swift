@@ -469,6 +469,16 @@ public protocol OfflineQueueing: Sendable {
     /// qu'il croyait.
     func enqueuePostMedia(
         sourceMediaURLs: [URL],
+        /// Le MIME **DÉCLARÉ** de chaque fichier, aligné par INDEX sur
+        /// `sourceMediaURLs`. `nil` ⇒ le dispatcher le re-dérive de
+        /// l'extension, comme avant ce champ.
+        ///
+        /// Sur la REQUIREMENT, et SANS défaut : le site d'envoi d'un vocal
+        /// CONNAÎT le MIME (il l'a servi à `ReelComposition` pour élire le
+        /// type) et ne l'emportait pas. Ce que le dispatcher re-dérivait alors
+        /// pouvait valoir `application/octet-stream` — et le gateway ne
+        /// reconnaît un média audio qu'à `mimeType.startsWith('audio/')`.
+        sourceMediaMimeTypes: [String]?,
         clientMutationId: String,
         content: String?,
         visibility: String,
@@ -490,7 +500,20 @@ public protocol OfflineQueueing: Sendable {
         /// Sur la REQUIREMENT et non en défaut concret : un défaut sur
         /// l'implémentation ne satisfait pas une exigence de protocole, et le
         /// mock l'aurait jeté en silence.
-        discoverabilityPrecision: DiscoverabilityPrecision?
+        discoverabilityPrecision: DiscoverabilityPrecision?,
+        /// Ce qui QUALIFIE un enregistrement vocal : le texte transcrit SUR
+        /// L'APPAREIL. Le gateway le persiste sur le premier `PostMedia` audio
+        /// et évite la re-transcription Whisper ; sans lui, la transcription
+        /// que l'auteur a relue avant d'envoyer est jetée en silence et refaite
+        /// côté serveur, avec un résultat qui peut différer.
+        ///
+        /// Sur la REQUIREMENT, et SANS défaut nulle part — ni ici ni sur
+        /// l'implémentation concrète. C'est le filet compile-time : un défaut
+        /// ferait disparaître ce champ d'un site d'appel sans casser la moindre
+        /// compilation, ce qui est exactement le mécanisme par lequel
+        /// `CreatePostPayload` avait perdu trois champs sur la branche hors
+        /// ligne de `setStatus`.
+        mobileTranscription: MobileTranscriptionPayload?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 
     /// Draft recovery — returns the most recent unsent `.createPost` row whose
@@ -1846,14 +1869,20 @@ public actor OfflineQueue {
     /// `enqueueMedia` (messages). Computes the pending paths, inserts the
     /// `.createPost` row referencing them via the generic enqueue (write-ahead),
     /// then copies each source under `Documents/pending-media/<cmid>/` (extension
-    /// preserved so the dispatcher derives the MIME per file). A copy failure is
-    /// permanent → the row is flipped `.exhausted` + cleaned + a terminal signal
-    /// emitted (S6), rather than retried against a missing file. The dispatcher
-    /// (U1b ST1) replays `localMediaPaths` via TUS on flush. Until the caller
-    /// (ST2b) wires it, this has no caller, so no row can mis-dispatch.
+    /// preserved, ce qui reste le REPLI du dispatcher pour dériver le MIME —
+    /// mais le MIME DÉCLARÉ, quand l'appelant en a un, voyage désormais dans la
+    /// charge : une extension inconnue de la table retombait sur
+    /// `application/octet-stream` et faisait perdre au gateway la nature audio
+    /// du fichier). A copy failure is permanent → the row is flipped
+    /// `.exhausted` + cleaned + a terminal signal emitted (S6), rather than
+    /// retried against a missing file. The dispatcher (U1b ST1) replays
+    /// `localMediaPaths` via TUS on flush.
     @discardableResult
     public func enqueuePostMedia(
         sourceMediaURLs: [URL],
+        /// SANS défaut, délibérément — voir la REQUIREMENT du protocole. Un
+        /// site qui n'a aucun MIME sous la main passe `nil` en toutes lettres.
+        sourceMediaMimeTypes: [String]?,
         clientMutationId cmid: String,
         content: String?,
         visibility: String,
@@ -1872,7 +1901,11 @@ public actor OfflineQueue {
         type: String? = nil,
         location: SharedPlace? = nil,
         mentions: [PostMentionInput]? = nil,
-        discoverabilityPrecision: DiscoverabilityPrecision? = nil
+        discoverabilityPrecision: DiscoverabilityPrecision? = nil,
+        /// SANS défaut, délibérément — voir la REQUIREMENT du protocole. Tout
+        /// appelant DÉCLARE s'il a une transcription embarquée ou non ; un
+        /// média visuel passe `nil` en toutes lettres.
+        mobileTranscription: MobileTranscriptionPayload?
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -1891,7 +1924,9 @@ public actor OfflineQueue {
             visibilityUserIds: visibilityUserIds,
             location: location,
             mentions: mentions,
-            discoverabilityPrecision: discoverabilityPrecision
+            discoverabilityPrecision: discoverabilityPrecision,
+            mobileTranscription: mobileTranscription,
+            localMediaMimeTypes: sourceMediaMimeTypes
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the

@@ -1368,7 +1368,13 @@ struct FeedView: View {
                 onPublish: { audioURL, mimeType, durationMs, transcription in
                     showAudioComposer = false
                     Task {
-                        await publishAudioPost(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription, originalLanguage: transcription?.language)
+                        // La langue n'est plus passée ici : elle est celle de la
+                        // transcription, et `PublishIntent` l'en tire. Ce site
+                        // passait déjà `transcription?.language` — le paramètre
+                        // n'était qu'une porte ouverte sur la divergence du
+                        // jumeau de la feuille, qui empruntait la langue du
+                        // sélecteur de TEXTE quand la transcription manquait.
+                        await publishAudioPost(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription)
                     }
                 },
                 onPublishBorrowed: { sound in

@@ -830,7 +830,7 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, _, _, postService) = makeSUT(offlineQueue: queue)
         let urls = [URL(fileURLWithPath: "/tmp/a.jpg"), URL(fileURLWithPath: "/tmp/b.mp4")]
 
-        await sut.createOfflineMediaPost(localMediaURLs: urls, content: "Photo post", originalLanguage: "en")
+        await sut.createOfflineMediaPost(localMediaURLs: urls, content: "Photo post", originalLanguage: "en", mobileTranscription: nil)
 
         // Optimistic post with a local-media preview, keyed by the cmid.
         XCTAssertEqual(sut.posts.count, 1)
@@ -862,7 +862,8 @@ final class FeedViewModelTests: XCTestCase {
             localMediaURLs: urls,
             content: "My reel",
             originalLanguage: "en",
-            type: "REEL"
+            type: "REEL",
+            mobileTranscription: nil
         )
 
         // The optimistic post is a REEL so it surfaces on the reel pager
@@ -889,7 +890,8 @@ final class FeedViewModelTests: XCTestCase {
         await sut.createOfflineMediaPost(
             localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")],
             content: "Vue depuis le toit",
-            location: place
+            location: place,
+            mobileTranscription: nil
         )
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
@@ -902,7 +904,7 @@ final class FeedViewModelTests: XCTestCase {
         queue.enqueuePostMediaError = APIError.networkError(URLError(.timedOut))
         let (sut, _, _, _) = makeSUT(offlineQueue: queue)
 
-        await sut.createOfflineMediaPost(localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")], content: "Doomed")
+        await sut.createOfflineMediaPost(localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")], content: "Doomed", mobileTranscription: nil)
 
         XCTAssertTrue(sut.posts.isEmpty, "optimistic media post must be removed when the outbox refuses the row")
         XCTAssertNotNil(sut.publishError)
@@ -913,12 +915,44 @@ final class FeedViewModelTests: XCTestCase {
         let queue = MockOfflineQueue()
         let (sut, _, _, _) = makeSUT(offlineQueue: queue)
 
-        await sut.createOfflineMediaPost(localMediaURLs: [], content: "Just text")
+        await sut.createOfflineMediaPost(localMediaURLs: [], content: "Just text", mobileTranscription: nil)
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 0, "no media → no media enqueue")
         XCTAssertEqual(queue.enqueueCalls.count, 1, "falls back to the durable text-only path")
         XCTAssertEqual(queue.enqueueCalls.first?.kind, .createPost)
         XCTAssertEqual(sut.posts.count, 1)
+    }
+
+    /// **Le repli « aucun média » perdait la liste NOMMÉE de l'audience.**
+    ///
+    /// `enqueueDurableTextPost` porte un défaut `nil` sur `visibilityUserIds`,
+    /// et le repli ne le passait pas : un post `ONLY`/`EXCEPT` qui retombait là
+    /// partait sans ses destinataires. Le gateway le refuse
+    /// (`CreatePostSchema.refine`), le rejet est PERMANENT — la ligne est
+    /// épuisée, le post est perdu.
+    ///
+    /// C'est le mécanisme même que ce lot documente partout ailleurs : un
+    /// défaut fait disparaître un champ d'un site d'appel sans casser la
+    /// moindre compilation.
+    func test_createOfflineMediaPost_sansMedia_nePerdPasLAudienceNommee() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.createOfflineMediaPost(
+            localMediaURLs: [],
+            content: "Pour vous deux",
+            visibility: "ONLY",
+            visibilityUserIds: ["u1", "u2"],
+            mobileTranscription: nil
+        )
+
+        let payload = queue.lastPayload as? CreatePostPayload
+        XCTAssertEqual(
+            payload?.visibilityUserIds, ["u1", "u2"],
+            "L'audience nommée est perdue par le repli sans média : le gateway refusera la charge, et le "
+                + "rejet étant permanent, le post ne repartira jamais."
+        )
+        XCTAssertEqual(payload?.visibility, "ONLY")
     }
 
     // MARK: - Offline draft recovery (post / reel)

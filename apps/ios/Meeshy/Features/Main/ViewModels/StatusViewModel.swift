@@ -208,10 +208,25 @@ class StatusViewModel: ObservableObject {
     func setStatus(emoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, audioUrl: String? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil) async {
         // Offline: persist the mood durably through the SAME `.createPost` outbox
         // row as posts/reels (type STATUS) so it is not lost, and survives an app
-        // kill. We do NOT insert an optimistic entry — unlike posts, the gateway
-        // does not echo the clientMutationId on `status:created`, so the mood is
-        // reconciled when it actually lands (via the socket) on reconnect. The
-        // composer can recover this stuck row as a draft (recoverUnsentStatus).
+        // kill. Aucune entrée optimiste n'est insérée ici : le mood est
+        // réconcilié quand il atterrit pour de bon (par le socket) à la
+        // reconnexion, et le composer peut relever cette ligne bloquée comme
+        // brouillon (recoverUnsentStatus).
+        //
+        // NE PAS réécrire ici que « le gateway n'échoue pas le clientMutationId
+        // sur `status:created` » : c'était vrai, ça ne l'est plus —
+        // `broadcastStatusCreated` le porte désormais
+        // (`StatusCreatedEventData.clientMutationId`).
+        //
+        // Mais ne pas écrire non plus l'inverse : côté iOS le champ est encore
+        // JETÉ avant d'arriver ici. `SocketStatusCreatedData` (SDK) ne déclare
+        // que `status`, et `statusCreated` est un
+        // `PassthroughSubject<APIPost, Never>` là où son homologue
+        // `postCreated` transporte tout l'événement. Une insertion optimiste
+        // n'est donc PAS encore réconciliable sur ce client : la dette est le
+        // câblage du décodeur, et `packages/shared/types/post.ts` la nomme au
+        // même endroit (« faux SERVEUR et toujours vrai CLIENT »). Tant qu'elle
+        // est ouverte, l'absence d'entrée optimiste reste la bonne décision.
         if isOffline() {
             let payload = CreatePostPayload(
                 clientMutationId: ClientMutationId.generate(),
@@ -221,8 +236,18 @@ class StatusViewModel: ObservableObject {
                 originalLanguage: DefaultComposerLanguage.resolve(),
                 type: "STATUS",
                 moodEmoji: emoji,
+                // La VOIX et la SOURCE, que cette branche laissait tomber
+                // pendant que sa jumelle en ligne les passait toutes deux :
+                // republier un mood vocal sans réseau produisait un mood
+                // ORIGINAL et MUET. Il n'y a PAS de durée à porter à côté —
+                // aucun étage de ce chemin n'en connaît (`setStatus`,
+                // `StatusServiceProviding.create` et les deux composers n'en
+                // ont aucune) ; celle d'un vocal republié vit sur sa source,
+                // que le serveur relit par `repostOfId`.
+                audioUrl: audioUrl,
                 visibilityUserIds: visibilityUserIds,
-                mentions: (mentions?.isEmpty ?? true) ? nil : mentions
+                mentions: (mentions?.isEmpty ?? true) ? nil : mentions,
+                repostOfId: repostOfId
             )
             do {
                 try await offlineQueue.enqueue(.createPost, payload: payload, conversationId: nil)

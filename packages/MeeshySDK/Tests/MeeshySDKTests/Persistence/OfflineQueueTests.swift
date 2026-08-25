@@ -542,10 +542,12 @@ final class OfflineQueueTests: XCTestCase {
 
         let result = try await queue.enqueuePostMedia(
             sourceMediaURLs: [url1, url2],
+            sourceMediaMimeTypes: nil,
             clientMutationId: cmid,
             content: "Photo post",
             visibility: "PUBLIC",
-            originalLanguage: "fr"
+            originalLanguage: "fr",
+            mobileTranscription: nil
         )
 
         XCTAssertEqual(result.localMediaPaths.count, 2)
@@ -577,6 +579,46 @@ final class OfflineQueueTests: XCTestCase {
         XCTAssertEqual(payload.originalLanguage, "fr")
         XCTAssertTrue(payload.attachmentIds.isEmpty)
         XCTAssertNil(payload.type, "default media post carries no type → gateway POST default")
+        XCTAssertNil(payload.localMediaMimeTypes,
+            "aucun MIME déclaré ici : la ligne doit le dire, et le dispatcher retombe sur l'extension.")
+    }
+
+    /// **Le MIME DÉCLARÉ voyage jusque dans la ligne persistée.**
+    ///
+    /// L'extension seule ne suffit pas : un vocal importé en `.caf` (ou `.aiff`,
+    /// `.opus`) était re-dérivé par le dispatcher en
+    /// `application/octet-stream`, et le gateway ne reconnaît un média audio
+    /// qu'à `mimeType.startsWith('audio/')` — le message partait alors sans sa
+    /// transcription embarquée ET sans re-transcription Whisper. Le site
+    /// d'envoi connaissait pourtant le MIME depuis le début.
+    func test_enqueuePostMedia_persisteLeMimeDeclare_alignteParIndex() async throws {
+        let cmid = "cmid_\(UUID().uuidString.lowercased())"
+        let url1 = try makeTempMediaFile(ext: "caf")
+        let url2 = try makeTempMediaFile(ext: "jpg")
+
+        _ = try await queue.enqueuePostMedia(
+            sourceMediaURLs: [url1, url2],
+            sourceMediaMimeTypes: ["audio/mp4", "image/jpeg"],
+            clientMutationId: cmid,
+            content: nil,
+            visibility: "PUBLIC",
+            mobileTranscription: nil
+        )
+
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        let record = try await pool.read { db in
+            try OutboxRecord.filter(Column("id") == "ofqm_\(cmid)").fetchOne(db)
+        }
+        let row = try XCTUnwrap(record)
+        let payload = try JSONDecoder().decode(CreatePostPayload.self, from: row.payload)
+
+        XCTAssertEqual(payload.localMediaMimeTypes, ["audio/mp4", "image/jpeg"])
+        XCTAssertEqual(payload.declaredMimeType(at: 0), "audio/mp4",
+            "Sans le MIME déclaré, `.caf` se re-dérive en application/octet-stream et le vocal cesse d'être un vocal.")
+        XCTAssertEqual(payload.declaredMimeType(at: 1), "image/jpeg")
+        XCTAssertNil(payload.declaredMimeType(at: 2),
+            "Un index hors bornes doit rendre nil, jamais planter : le dispatcher retombe alors sur l'extension.")
     }
 
     func test_enqueuePostMedia_reelType_persistsReelOnCreatePostRow() async throws {
@@ -585,11 +627,13 @@ final class OfflineQueueTests: XCTestCase {
 
         _ = try await queue.enqueuePostMedia(
             sourceMediaURLs: [url],
+            sourceMediaMimeTypes: nil,
             clientMutationId: cmid,
             content: "My reel",
             visibility: "PUBLIC",
             originalLanguage: "en",
-            type: "REEL"
+            type: "REEL",
+            mobileTranscription: nil
         )
 
         // The durable row must carry the REEL type so the dispatcher creates the

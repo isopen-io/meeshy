@@ -451,19 +451,40 @@ struct OutboxDispatcher: OutboxDispatching {
             }
             let uploader = TusUploadManager(baseURL: baseURL)
             var uploadedIds: [String] = []
-            for stored in pendingMediaPaths {
+            for (index, stored) in pendingMediaPaths.enumerated() {
                 let absolutePath = OfflineQueue.absoluteMediaPath(forStored: stored)
                 guard FileManager.default.fileExists(atPath: absolutePath) else {
                     logger.error("Post media file missing on dispatch, path=\(stored, privacy: .public)")
                     continue
                 }
                 do {
-                    let mime = MimeTypeResolver.mimeType(
-                        forExtension: URL(fileURLWithPath: absolutePath).pathExtension)
+                    // Le MIME **DÉCLARÉ** par le site d'envoi l'emporte ; la
+                    // dérivation depuis l'extension n'est que le REPLI des
+                    // lignes qui n'en portent pas. L'extension ne suffit pas :
+                    // un vocal importé en `.caf` / `.aiff` / `.opus` s'y
+                    // re-dérivait en `application/octet-stream`, et le gateway
+                    // ne reconnaît un média audio qu'à
+                    // `mimeType.startsWith('audio/')` — la transcription
+                    // embarquée était alors ignorée ET Whisper jamais
+                    // déclenché, pour un fichier que l'expéditeur savait
+                    // pourtant être une voix.
+                    let mime = payload.declaredMimeType(at: index)
+                        ?? MimeTypeResolver.mimeType(
+                            forExtension: URL(fileURLWithPath: absolutePath).pathExtension)
                     let tusResult = try await uploader.uploadFile(
                         fileURL: URL(fileURLWithPath: absolutePath),
                         mimeType: mime,
-                        credential: .bearer(token)
+                        credential: .bearer(token),
+                        // POUR QUI ce fichier est téléversé — et sans lui, le
+                        // gateway crée un `MessageAttachment` puis répond 201
+                        // avec un id parfaitement valide. `PostService.createPost`
+                        // ne réclame ensuite que des `PostMedia` : il n'en
+                        // réclame AUCUN, ne journalise qu'un `logger.warn`, et le
+                        // post arrive publié et VIDE. Les trois chemins EN LIGNE
+                        // le passaient déjà ; seule la file durable ne le passait
+                        // pas, si bien que le média perdu ne l'était QUE hors
+                        // ligne — la condition la moins observée de toutes.
+                        uploadContext: "post"
                     )
                     uploadedIds.append(tusResult.id)
                     uploadedLocalPaths.append(absolutePath)
@@ -493,7 +514,9 @@ struct OutboxDispatcher: OutboxDispatching {
             visibilityUserIds: payload.visibilityUserIds,
             location: payload.location,
             mentions: payload.mentions,
-            discoverabilityPrecision: payload.discoverabilityPrecision
+            discoverabilityPrecision: payload.discoverabilityPrecision,
+            repostOfId: payload.repostOfId,
+            mobileTranscription: payload.mobileTranscription
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/posts",
@@ -1377,6 +1400,18 @@ nonisolated struct CreatePostBody: Encodable {
     /// que `location` a payé avant lui, et sur le chemin que prend le cas
     /// nominal (post TEXTE + lieu).
     let discoverabilityPrecision: DiscoverabilityPrecision?
+    /// La publication REPARTAGÉE — même clé top-level `repostOfId` que le
+    /// chemin direct (`CreatePostRequest`). Sans elle ICI, l'attribution
+    /// survivrait jusqu'au décodage de `CreatePostPayload` puis serait jetée en
+    /// silence à l'ultime saut réseau : le défaut que `location` a payé avant
+    /// elle. **Seul porteur de l'attribution** — pas de `viaUsername`, que le
+    /// gateway n'a jamais lu.
+    let repostOfId: String?
+    /// La transcription faite SUR L'APPAREIL. Le gateway la persiste sur le
+    /// premier `PostMedia` audio et évite alors la re-transcription Whisper.
+    /// Sa graphie (`duration_ms`, `speaker_id`) est portée par les
+    /// `CodingKeys` du type lui-même — ne pas la réécrire ici.
+    let mobileTranscription: MobileTranscriptionPayload?
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -1399,11 +1434,18 @@ nonisolated struct CreatePostBody: Encodable {
         if let discoverabilityPrecision {
             try container.encode(discoverabilityPrecision, forKey: .discoverabilityPrecision)
         }
+        // Encodés seulement quand ils existent : un post d'origine n'a pas de
+        // source, un post visuel n'a pas de voix — et un `null` explicite est
+        // une affirmation là où il n'y en a aucune.
+        if let repostOfId, !repostOfId.isEmpty { try container.encode(repostOfId, forKey: .repostOfId) }
+        if let mobileTranscription {
+            try container.encode(mobileTranscription, forKey: .mobileTranscription)
+        }
     }
 
     enum CodingKeys: String, CodingKey {
         case content, mediaIds, visibility, originalLanguage, type
         case moodEmoji, audioUrl, audioDuration, visibilityUserIds, location, mentions
-        case discoverabilityPrecision
+        case discoverabilityPrecision, repostOfId, mobileTranscription
     }
 }

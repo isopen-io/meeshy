@@ -1,0 +1,169 @@
+import Foundation
+import MeeshySDK
+
+/// **Ce que l'auteur a produit, composé UNE seule fois.**
+///
+/// Un même geste — enregistrer sa voix, puis publier — était composé à deux
+/// endroits, et les deux compositions divergeaient sur trois points à la fois :
+/// l'une DÉTRUISAIT le fichier dans son `catch` et l'autre le laissait
+/// orphelin ; l'une étiquetait l'enregistrement avec la langue de la
+/// TRANSCRIPTION et l'autre avec celle du sélecteur de TEXTE du composer ;
+/// elles ne portaient pas les mêmes mentions. Aucune de ces trois divergences
+/// ne se voit en lisant l'un des deux sites.
+///
+/// Ce type est la réponse : **la matière d'une publication se compose une fois,
+/// à un endroit nommé, et le reste du chemin ne fait que la transporter.**
+///
+/// ## Trois règles gravées ici, et pourquoi
+///
+/// 1. **Aucune valeur par défaut sur les fabriques.** Un défaut fait
+///    disparaître un champ d'un site d'appel sans casser la moindre
+///    compilation. Ce n'est pas une crainte théorique : `CreatePostPayload.init`
+///    pose un défaut sur ses dix derniers paramètres, et c'est très exactement
+///    par là que la branche hors ligne de `StatusViewModel.setStatus` a perdu la
+///    source et la voix d'un mood pendant que sa jumelle en ligne les passait.
+///    Chaque geste DÉCLARE tout ce qu'il publie, `nil` compris. Une garde de
+///    source le tient (`PublishIntentTests`).
+/// 2. **L'init est PRIVÉ.** On n'entre dans ce type que par un geste NOMMÉ. Un
+///    huitième site de publication ne peut donc pas se composer une intention à
+///    sa façon : il doit d'abord dire QUEL GESTE il publie.
+/// 3. **`type` est une chaîne SERVEUR (`"POST"` / `"REEL"`), pas un format
+///    d'UI.** Ce qui voyage sur le fil est ce que `ReelComposition.defaultType`
+///    élit ; faire dépendre la matière d'une publication du vocabulaire d'une
+///    surface la ferait bouger à chaque refonte du meuble.
+///
+/// ## Ce que ce type n'est PAS
+///
+/// Ce n'est **pas** une table de routage. Il n'existe aucun `PublishRouting`
+/// dans le dépôt, et il ne doit pas en naître ici : le routage du document est
+/// déjà tranché par `ComposerDocumentSendRouting`, qui vit dans le meuble et
+/// n'a le droit qu'à UN appelant. Une seconde table répondant à la même
+/// question serait un second chemin d'envoi — et elle divergerait dès sa
+/// naissance, pas un jour.
+///
+/// Ce n'est pas non plus le format ON-DISK : `CreatePostPayload` le reste.
+/// L'intention est la porte d'entrée SANS défaut ; la charge persistée est
+/// construite en aval par `OfflineQueue`.
+///
+/// `nonisolated` : l'app compile sous `defaultIsolation(MainActor)`, et cette
+/// matière se compose depuis une vue puis se lit depuis un modèle — la clouer
+/// au main actor la rendrait intransportable, exactement comme pour
+/// `CreatePostBody`.
+nonisolated struct PublishIntent: Equatable, Sendable {
+
+    /// Le jeton d'ENVOI, jamais une empreinte de contenu : deux envois d'une
+    /// même matière sont deux envois. Un identifiant dérivé du contenu ferait
+    /// prendre le second pour un rejeu du premier, et le gateway répondrait le
+    /// résultat du premier au lieu de publier.
+    let clientMutationId: String
+    /// Le type SERVEUR (`"POST"` / `"REEL"`), élu par `ReelComposition`.
+    let type: String
+    /// Les fichiers LOCAUX à téléverser. Ils ne sont ni effacés ni déplacés par
+    /// ce type : la file durable les relocalise, et c'est elle qui en dispose.
+    let localMediaURLs: [URL]
+    /// Le MIME **DÉCLARÉ** de chaque fichier, aligné par INDEX sur
+    /// `localMediaURLs`.
+    ///
+    /// Il était REÇU par la fabrique et JETÉ : il ne servait qu'à élire le type
+    /// (`ReelComposition`), après quoi le dispatcher re-dérivait un MIME depuis
+    /// l'EXTENSION du fichier relocalisé. Pour un vocal importé depuis Fichiers
+    /// en `.caf` / `.aiff` / `.opus`, cette dérivation rendait
+    /// `application/octet-stream` : le gateway, qui ne reconnaît un média audio
+    /// qu'à `mimeType.startsWith('audio/')`, ignorait alors la transcription
+    /// embarquée ET ne déclenchait pas Whisper — et la carte optimiste
+    /// s'affichait comme une IMAGE. Un paramètre consommé puis jeté se lit
+    /// comme s'il voyageait ; celui-ci voyage.
+    let localMediaMimeTypes: [String]
+    let content: String?
+    let visibility: String
+    let visibilityUserIds: [String]?
+    /// La langue DÉCLARÉE du contenu. `nil` ⇒ le serveur détecte.
+    let originalLanguage: String?
+    let mentions: [PostMentionInput]?
+    let location: SharedPlace?
+    let discoverabilityPrecision: DiscoverabilityPrecision?
+    /// Ce qui QUALIFIE un enregistrement vocal : le texte transcrit SUR
+    /// L'APPAREIL, celui que l'auteur a relu avant d'envoyer. Sans lui, le
+    /// serveur re-transcrit et jette ce travail en silence.
+    let mobileTranscription: MobileTranscriptionPayload?
+
+    private init(
+        clientMutationId: String,
+        type: String,
+        localMediaURLs: [URL],
+        localMediaMimeTypes: [String],
+        content: String?,
+        visibility: String,
+        visibilityUserIds: [String]?,
+        originalLanguage: String?,
+        mentions: [PostMentionInput]?,
+        location: SharedPlace?,
+        discoverabilityPrecision: DiscoverabilityPrecision?,
+        mobileTranscription: MobileTranscriptionPayload?
+    ) {
+        self.clientMutationId = clientMutationId
+        self.type = type
+        self.localMediaURLs = localMediaURLs
+        self.localMediaMimeTypes = localMediaMimeTypes
+        self.content = content
+        self.visibility = visibility
+        self.visibilityUserIds = visibilityUserIds
+        self.originalLanguage = originalLanguage
+        self.mentions = mentions
+        self.location = location
+        self.discoverabilityPrecision = discoverabilityPrecision
+        self.mobileTranscription = mobileTranscription
+    }
+
+    /// Le geste « **j'ai enregistré ma voix** ».
+    ///
+    /// **AUCUN paramètre n'a de valeur par défaut**, et une garde de source le
+    /// vérifie sur le code dépouillé de ses commentaires. Un appelant qui n'a
+    /// ni lieu ni mentions écrit `nil` en toutes lettres : c'est le prix, et
+    /// c'est le seul moyen qu'un champ ajouté demain ne disparaisse pas
+    /// silencieusement d'un site d'appel.
+    ///
+    /// **La langue n'est PAS un paramètre, et c'est le cœur du correctif.**
+    /// Elle est celle de la transcription — celle qu'on a PARLÉE — ou aucune.
+    /// L'un des deux jumeaux empruntait la langue du sélecteur de TEXTE du
+    /// composer quand la transcription manquait : un vocal en wolof composé
+    /// dans un composer réglé sur « fr » partait déclaré français, et le Prisme
+    /// le servait au rang 0 sous une étiquette fausse. Accepter ici un
+    /// `composerLanguage`, même optionnel, garderait l'occasion de refaire
+    /// exactement cela.
+    static func audioRecording(
+        fileURL: URL,
+        mimeType: String,
+        durationMs: Int,
+        transcription: MobileTranscriptionPayload?,
+        forcePlainPost: Bool,
+        content: String?,
+        visibility: String,
+        visibilityUserIds: [String]?,
+        mentions: [PostMentionInput]?,
+        location: SharedPlace?,
+        discoverabilityPrecision: DiscoverabilityPrecision?
+    ) -> PublishIntent {
+        PublishIntent(
+            clientMutationId: ClientMutationId.generate(),
+            // La règle de composition vit dans `ReelComposition`, et nulle part
+            // ailleurs : un `"REEL"` codé en dur ici ferait diverger la surface
+            // d'atterrissage d'un vocal de celle d'un média visuel.
+            type: ReelComposition.defaultType(
+                mimeTypes: [mimeType],
+                durationsMs: [durationMs],
+                forcePlainPost: forcePlainPost
+            ).rawValue,
+            localMediaURLs: [fileURL],
+            localMediaMimeTypes: [mimeType],
+            content: content,
+            visibility: visibility,
+            visibilityUserIds: visibilityUserIds,
+            originalLanguage: transcription?.language,
+            mentions: mentions,
+            location: location,
+            discoverabilityPrecision: discoverabilityPrecision,
+            mobileTranscription: transcription
+        )
+    }
+}

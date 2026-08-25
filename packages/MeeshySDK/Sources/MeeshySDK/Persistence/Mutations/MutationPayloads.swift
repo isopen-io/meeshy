@@ -392,6 +392,66 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// Rien ici n'arrondit `location` : la coordonnée est persistée puis
     /// envoyée telle qu'elle a été reçue, le serveur seul quantifie.
     public let discoverabilityPrecision: DiscoverabilityPrecision?
+    /// La publication que celle-ci REPARTAGE. **Seul porteur de l'attribution
+    /// dans cette charge** : il n'y a pas de `viaUsername` sur le fil, et il
+    /// n'y en a jamais eu que le gateway lise — `CreatePostSchema` ne le
+    /// déclare pas, et un `z.object()` écarte les clés inconnues en silence. Le
+    /// « via @X » qu'un composer affiche est un fait LOCAL d'affichage, jamais
+    /// une écriture. Ne pas rouvrir ce champ-là en croyant compléter celui-ci.
+    ///
+    /// Porté ici parce que le chemin HORS LIGNE de `StatusViewModel.setStatus`
+    /// est le seul des deux à ne pas l'avoir : republier un mood sans réseau
+    /// publiait un mood ORIGINAL, sans sa source — un contenu attribué à
+    /// quelqu'un d'autre par omission. `nil` — le cas immensément majoritaire —
+    /// vaut « publication d'origine ». Optionnel aussi pour que toute ligne
+    /// persistée avant ce champ continue de décoder.
+    public let repostOfId: String?
+    /// La transcription faite SUR L'APPAREIL, telle que l'auteur l'a relue
+    /// avant d'envoyer. Le gateway la persiste sur le premier `PostMedia` audio
+    /// et **évite alors la re-transcription Whisper** (`PostService.createPost`).
+    ///
+    /// Sans elle ici, un vocal routé par la file durable arrivait sans son
+    /// texte : le serveur re-transcrivait, le travail de l'appareil était jeté
+    /// en silence, et le résultat pouvait différer de celui qui avait été
+    /// affiché. C'est ce qui QUALIFIE un enregistrement, pas ce qui le compose
+    /// — et c'est précisément ce genre de champ qu'un lot de convergence laisse
+    /// derrière lui.
+    ///
+    /// Sa graphie est celle du serveur (`duration_ms`, `speaker_id`,
+    /// `MobileTranscriptionSchema`) : elle est portée par les `CodingKeys` du
+    /// type lui-même, jamais réécrite ici.
+    public let mobileTranscription: MobileTranscriptionPayload?
+    /// Le type MIME **DÉCLARÉ** de chaque fichier de `localMediaPaths`, aligné
+    /// par INDEX sur lui. `nil` (ou un index absent) ⇒ le dispatcher le
+    /// re-dérive de l'extension, ce qui est le comportement des lignes écrites
+    /// avant ce champ.
+    ///
+    /// Il existe parce que l'extension NE SUFFIT PAS. La file relocalise les
+    /// fichiers « extension préservée pour que le dispatcher en dérive le
+    /// MIME » — un contrat qui tient tant que la table des extensions connaît
+    /// le conteneur. Un vocal importé depuis Fichiers en `.caf` / `.aiff` /
+    /// `.opus` retombait sur `application/octet-stream`, et le gateway ne
+    /// reconnaît un média audio qu'à `mimeType.startsWith('audio/')` : le
+    /// message partait sans sa transcription embarquée ET sans
+    /// re-transcription. Le site d'envoi, LUI, connaissait le MIME depuis le
+    /// début — il ne l'emportait simplement pas.
+    ///
+    /// C'est un champ de QUALIFICATION, pas de composition : il ne dit rien de
+    /// ce que la publication CONTIENT, seulement de la façon dont ses octets
+    /// doivent être annoncés. Un lot de convergence est exactement ce qui les
+    /// laisse derrière.
+    public let localMediaMimeTypes: [String]?
+
+    /// Le MIME que ce média a DÉCLARÉ, ou `nil` si la ligne n'en portait pas
+    /// (écrite avant ce champ, ou site d'envoi qui n'en connaît aucun).
+    ///
+    /// Un accès par index sur un tableau parallèle est une lecture hors bornes
+    /// en puissance : la lire à UN endroit, ici, vaut mieux que de la répéter
+    /// chez chaque consommateur.
+    public func declaredMimeType(at index: Int) -> String? {
+        guard let mimes = localMediaMimeTypes, mimes.indices.contains(index) else { return nil }
+        return mimes[index]
+    }
 
     public init(
         clientMutationId: String,
@@ -407,7 +467,10 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         visibilityUserIds: [String]? = nil,
         location: SharedPlace? = nil,
         mentions: [PostMentionInput]? = nil,
-        discoverabilityPrecision: DiscoverabilityPrecision? = nil
+        discoverabilityPrecision: DiscoverabilityPrecision? = nil,
+        repostOfId: String? = nil,
+        mobileTranscription: MobileTranscriptionPayload? = nil,
+        localMediaMimeTypes: [String]? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -423,6 +486,9 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.location = location
         self.mentions = mentions
         self.discoverabilityPrecision = discoverabilityPrecision
+        self.repostOfId = repostOfId
+        self.mobileTranscription = mobileTranscription
+        self.localMediaMimeTypes = localMediaMimeTypes
     }
 }
 

@@ -845,6 +845,102 @@ final class StatusViewModelTests: XCTestCase {
         )
     }
 
+    /// **Republier un mood sans réseau cesse d'en couper la source — et un mood
+    /// vocal cesse de partir muet.**
+    ///
+    /// La branche EN LIGNE passait `audioUrl` et `repostOfId` à
+    /// `StatusService.create` ; la branche HORS LIGNE composait sa charge sans
+    /// ni l'un ni l'autre. Un même geste produisait donc deux publications
+    /// différentes selon l'état du réseau : avec réseau une republication
+    /// vocale attribuée, sans réseau un mood ORIGINAL et MUET — un contenu
+    /// attribué à quelqu'un d'autre par omission.
+    ///
+    /// **Ce que ce témoin n'assère PAS, et pourquoi.** Pas `audioDuration` :
+    /// il n'existe nulle part sur ce chemin — ni sur `setStatus`, ni sur
+    /// `StatusServiceProviding.create`, ni chez ses deux appelants
+    /// (`ComposerMoodSurface.publishMood`, `StatusComposerView`). La branche en
+    /// ligne ne le passe pas davantage. L'exiger ici obligerait à inventer un
+    /// paramètre sans aucun producteur — un champ sans écrivain, testé vert.
+    /// La durée d'un mood vocal REPARTAGÉ vit sur sa source, que le serveur
+    /// relit par `repostOfId`.
+    func test_setStatus_horsLigne_porteLaSourceDuRepost_etSaVoix() async {
+        let queue = MockOfflineQueue()
+        let offlineSUT = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            offlineQueue: queue,
+            isOffline: { true }
+        )
+
+        await offlineSUT.setStatus(
+            emoji: "🎤",
+            content: nil,
+            visibility: "PUBLIC",
+            audioUrl: "https://cdn.meeshy.me/a.m4a",
+            repostOfId: "p1"
+        )
+
+        XCTAssertEqual(mockStatusService.createCallCount, 0)
+        let payload = queue.enqueueCalls.first?.payload as? CreatePostPayload
+        XCTAssertEqual(
+            payload?.repostOfId, "p1",
+            "La ligne durable perd la SOURCE de la republication : le mood repart comme un original, "
+                + "attribué à celui qui republie. `repostOfId` est le seul porteur de l'attribution — il "
+                + "n'y a pas de `viaUsername` sur le fil, le gateway ne l'a jamais lu."
+        )
+        XCTAssertEqual(
+            payload?.audioUrl, "https://cdn.meeshy.me/a.m4a",
+            "La ligne durable perd la VOIX : le mood vocal republié hors ligne arrive muet."
+        )
+    }
+
+    /// **Le commentaire qui affirmait le contraire de ce que fait le serveur.**
+    ///
+    /// La branche hors ligne portait, pour justifier son absence d'insertion
+    /// optimiste, la phrase « the gateway does not echo the clientMutationId on
+    /// `status:created` ». Elle était vraie quand elle a été écrite ; elle a
+    /// cessé de l'être quand `broadcastStatusCreated` a gagné
+    /// `clientMutationId` (`SocialEventsHandler.ts`,
+    /// `StatusCreatedEventData.clientMutationId`).
+    ///
+    /// Un commentaire faux n'est pas un détail de forme : c'est la LOI que lira
+    /// la prochaine session, et celle-ci renoncerait à l'insertion optimiste
+    /// d'un mood hors ligne en croyant citer le serveur.
+    ///
+    /// **Cette garde lit la source BRUTE, commentaires compris** — la seule du
+    /// dépôt à le faire, et c'est exigé par ce qu'elle mesure : passer par
+    /// `AppSourceGuard.stripComments` effacerait précisément la phrase qu'on
+    /// cherche, et la garde serait verte pour la mauvaise raison, à jamais.
+    func test_leModeleDeStatut_neCitePlusUnServeurQuiAChange() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/ViewModels
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/ViewModels/StatusViewModel.swift")
+        let brut = try String(contentsOf: url, encoding: .utf8)
+
+        XCTAssertTrue(
+            brut.contains("func setStatus("),
+            "Le fichier lu n'est pas celui du modèle de statut — la garde ne mesurerait RIEN."
+        )
+        XCTAssertFalse(
+            brut.contains("does not echo the clientMutationId"),
+            "Le modèle cite encore un serveur qui a changé : `broadcastStatusCreated` échoue désormais le "
+                + "`clientMutationId`. Corriger la phrase, pas la garde."
+        )
+        XCTAssertFalse(
+            brut.contains("est donc RÉCONCILIABLE"),
+            "Le modèle affirme maintenant l'INVERSE, et c'est faux du côté qui compte : `SocketStatusCreatedData` "
+                + "(SDK) ne déclare pas `clientMutationId` et `statusCreated` n'émet qu'un `APIPost` — le champ "
+                + "échoué par le serveur est jeté par le décodeur avant d'arriver ici. Corriger un commentaire "
+                + "faux en en installant un autre laisse la même LOI fausse à lire pour la session suivante. "
+                + "Cette assertion se lève le jour où le décodeur porte le champ, pas avant."
+        )
+    }
+
     func test_recoverUnsentStatus_queriesStatusTypeWithOfflineThreshold() async {
         let queue = MockOfflineQueue()
         queue.recoverLastUnsentPostResult = RecoveredOfflinePost(

@@ -234,7 +234,16 @@ extension FeedView {
                 sourceURL: url, deleteSourceAfterCompression: false, context: .feedPost)
             trackFeedPreparation(prep)
         case .audio:
-            // Audio offline posts aren't queued through this composer path yet.
+            // **Inatteignable, et c'est une GARDE, pas une chance.** Un vocal
+            // enregistré depuis le feed EST désormais enfilé dans cette file
+            // (`FeedViewModel.publish`), donc une ligne bloquée peut en porter
+            // un. Ce composer ne sait pas rouvrir un enregistrement : si la
+            // ligne arrivait ici, le brouillon « restauré » serait VIDE, et la
+            // publication suivante — quelle qu'elle soit — supprimerait la
+            // ligne ET le fichier par `supersedeRecoveredPost`. C'est
+            // `FeedViewModel.recoverUnsentPost` qui refuse la ligne en amont ;
+            // ce `break` n'est que le second verrou. NE PAS lever l'un sans
+            // savoir rendre l'autre inutile.
             break
         default:
             guard let image = UIImage(contentsOfFile: url.path) else { return }
@@ -339,7 +348,12 @@ extension FeedView {
                     type: postType,
                     location: pendingPlace,
                     mentions: declaredReferences,
-                    discoverabilityPrecision: nearbyPrecision
+                    discoverabilityPrecision: nearbyPrecision,
+                    // Un média VISUEL n'a pas de voix, et il le DIT : la
+                    // fabrique de charge ne pose aucun défaut, précisément pour
+                    // qu'un champ neuf ne disparaisse pas d'un site d'appel en
+                    // silence.
+                    mobileTranscription: nil
                 )
             }
             return
@@ -446,55 +460,73 @@ extension FeedView {
     }
 
     // MARK: - Audio Post
-    func publishAudioPost(audioURL: URL, mimeType: String, durationMs: Int, transcription: MobileTranscriptionPayload?, originalLanguage: String? = nil) async {
-        guard let token = APIClient.shared.authToken,
-              let baseURL = URL(string: MeeshyConfig.shared.serverOrigin) else { return }
-
+    /// **Publier une voix : la matière est composée UNE fois, et elle part par
+    /// la file DURABLE — en ligne comme hors ligne.**
+    ///
+    /// Ce corps montait le fichier par TUS sans aucune garde réseau, puis
+    /// effaçait l'enregistrement dans son `catch`. Hors ligne, cette montée
+    /// échouait SYSTÉMATIQUEMENT : l'enregistrement était donc DÉTRUIT à coup
+    /// sûr, avec un toast d'erreur pour tout reste. Son jumeau
+    /// `publishAudioFromSheet` perdait le même geste autrement — fichier
+    /// orphelin que personne ne relit —, et les deux divergeaient en plus sur la
+    /// LANGUE et sur les mentions. Trois divergences qu'aucune lecture de l'un
+    /// des deux sites ne pouvait montrer.
+    ///
+    /// Ce qui est perdu en passant par la file est mesuré et NUL : ni l'un ni
+    /// l'autre jumeau n'écrivait `uploadProgress` (seulement `isUploading`),
+    /// donc aucune progression n'existe à perdre. Ce qui est gagné : un post
+    /// optimiste immédiat, qui survit à un kill de l'app.
+    ///
+    /// **`originalLanguage` a disparu de la signature, et c'est le correctif.**
+    /// La langue d'un vocal est celle qu'on PARLE : `PublishIntent` la tire de
+    /// la transcription, ou de rien. L'unique appelant passait déjà
+    /// `transcription?.language` ; le paramètre n'était qu'une porte ouverte sur
+    /// la divergence du jumeau, qui empruntait la langue du sélecteur de TEXTE.
+    ///
+    /// **L'audience choisie GOUVERNE le vocal.** Elle ne le gouvernait pas :
+    /// l'ancien corps appelait `createPost(...)` sans `visibility`, donc sur son
+    /// défaut `"PUBLIC"`, et choisir « seulement ces personnes » avant
+    /// d'enregistrer publiait quand même à tout le monde. La convergence a
+    /// d'abord ÉCRIT ce défaut en toutes lettres, ce qui est pire qu'un
+    /// défaut : un contrôle sans effet cesse d'être un oubli et devient une
+    /// décision apparente. Loi 4 — un contrôle existe s'il a un EFFET.
+    func publishAudioPost(audioURL: URL, mimeType: String, durationMs: Int, transcription: MobileTranscriptionPayload?) async {
         await MainActor.run { isUploading = true }
 
-        do {
-            let uploader = TusUploadManager(baseURL: baseURL)
-            let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, credential: .bearer(token), uploadContext: "post")
-            try? FileManager.default.removeItem(at: audioURL)
+        await viewModel.publish(PublishIntent.audioRecording(
+            fileURL: audioURL,
+            mimeType: mimeType,
+            durationMs: durationMs,
+            transcription: transcription,
+            forcePlainPost: composerForcePlainPost,
+            content: nil,
+            visibility: postVisibility,
+            // `nil` et non `[]` quand la liste est vide : `[]` est entendu par
+            // le gateway comme un effacement. Même expression qu'aux cinq
+            // autres sites de publication de ce fichier.
+            visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds,
+            // Le composer reste ouvert pendant l'enregistrement : les personnes
+            // qu'on venait d'y nommer partent avec le post audio, au lieu
+            // d'être jetées au changement de surface.
+            mentions: feedDeclaredReferences,
+            location: nil,
+            discoverabilityPrecision: nil
+        ))
 
-            await viewModel.createPost(
-                // Même moteur de classification que les chemins visuels : un
-                // audio qualifie (REEL par défaut), et `forcePlainPost` reste
-                // respecté — plus de "REEL" codé en dur.
-                type: ReelComposition.defaultType(
-                    mimeTypes: [mimeType],
-                    durationsMs: [durationMs],
-                    forcePlainPost: composerForcePlainPost
-                ).rawValue,
-                mediaIds: [result.id],
-                originalLanguage: originalLanguage ?? transcription?.language,
-                mobileTranscription: transcription,
-                // Le composer reste ouvert pendant l'enregistrement : les
-                // personnes qu'on venait d'y nommer partent avec le post audio,
-                // au lieu d'être jetées au changement de surface.
-                mentions: feedDeclaredReferences
-            )
-
-            guard viewModel.publishError == nil else {
-                await MainActor.run {
-                    isUploading = false
-                    HapticFeedback.error()
-                    FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
-                }
-                return
-            }
-
-            await MainActor.run {
-                isUploading = false
-                HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main))
-            }
-        } catch {
-            try? FileManager.default.removeItem(at: audioURL)
-            await MainActor.run {
-                isUploading = false
+        await MainActor.run {
+            isUploading = false
+            if viewModel.publishError != nil {
                 HapticFeedback.error()
                 FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
+            } else {
+                HapticFeedback.success()
+                // Le chemin est UN, le mot est deux : le post est enfilé dans
+                // les deux cas, mais dire « publié » sans réseau serait faux.
+                FeedbackToastManager.shared.showSuccess(
+                    NetworkMonitor.shared.isOffline
+                        ? String(localized: "feed.post.toast.pendingOffline", defaultValue: "Post en attente d'envoi", bundle: .main)
+                        : String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main)
+                )
             }
         }
     }
@@ -1743,7 +1775,8 @@ struct FeedComposerSheet: View {
                     type: postType,
                     location: pendingPlace,
                     mentions: declared,
-                    discoverabilityPrecision: nearbyPrecision
+                    discoverabilityPrecision: nearbyPrecision,
+                    mobileTranscription: nil
                 )
             }
             return
@@ -1813,47 +1846,51 @@ struct FeedComposerSheet: View {
         }
     }
 
+    /// Jumelle de `FeedView.publishAudioPost` — MÊME matière, composée par la
+    /// MÊME fabrique. C'est tout l'objet du lot : les deux divergeaient sur la
+    /// perte du fichier (celui-ci le laissait ORPHELIN au lieu de l'effacer),
+    /// sur la LANGUE (il empruntait `composerLanguage` quand la transcription
+    /// manquait — un vocal en wolof composé dans un composer réglé sur « fr »
+    /// partait déclaré français, et le Prisme le servait au rang 0 sous une
+    /// étiquette fausse) et sur les mentions.
+    ///
+    /// L'audience choisie voyage ici comme chez le jumeau. **Résidu nommé** :
+    /// une audience INCOMPLÈTE (`ONLY`/`EXCEPT` sans destinataire — ce que
+    /// `postAudienceIncomplete` retient sur le bouton d'envoi TEXTE) n'est pas
+    /// retenue sur ce chemin ; le gateway la refuse alors (400), la ligne
+    /// quitte la file et l'auteur est prévenu. Bruyant, mais jamais silencieux
+    /// — c'est l'inverse exact du défaut d'hier, qui publiait PUBLIC sans rien
+    /// dire.
     private func publishAudioFromSheet(audioURL: URL, mimeType: String, durationMs: Int, transcription: MobileTranscriptionPayload?) async {
-        guard let token = APIClient.shared.authToken,
-              let baseURL = URL(string: MeeshyConfig.shared.serverOrigin) else { return }
         await MainActor.run { isUploading = true }
-        do {
-            let uploader = TusUploadManager(baseURL: baseURL)
-            let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, credential: .bearer(token), uploadContext: "post")
-            try? FileManager.default.removeItem(at: audioURL)
-            await viewModel.createPost(
-                // Même moteur de classification que les chemins visuels : un
-                // audio qualifie (REEL par défaut), et `forcePlainPost` reste
-                // respecté — plus de "REEL" codé en dur.
-                type: ReelComposition.defaultType(
-                    mimeTypes: [mimeType],
-                    durationsMs: [durationMs],
-                    forcePlainPost: forcePlainPost
-                ).rawValue,
-                mediaIds: [result.id],
-                originalLanguage: transcription?.language ?? composerLanguage,
-                mobileTranscription: transcription,
-                mentions: declaredReferences
-            )
-            guard viewModel.publishError == nil else {
-                await MainActor.run {
-                    isUploading = false
-                    HapticFeedback.error()
-                    FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
-                }
-                return
-            }
-            await MainActor.run {
-                isUploading = false
-                onDismiss()
-                HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main))
-            }
-        } catch {
-            await MainActor.run {
-                isUploading = false
+
+        await viewModel.publish(PublishIntent.audioRecording(
+            fileURL: audioURL,
+            mimeType: mimeType,
+            durationMs: durationMs,
+            transcription: transcription,
+            forcePlainPost: forcePlainPost,
+            content: nil,
+            visibility: postVisibility,
+            visibilityUserIds: postVisibilityUserIds.isEmpty ? nil : postVisibilityUserIds,
+            mentions: declaredReferences,
+            location: nil,
+            discoverabilityPrecision: nil
+        ))
+
+        await MainActor.run {
+            isUploading = false
+            if viewModel.publishError != nil {
                 HapticFeedback.error()
                 FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audioPublishError", defaultValue: "Échec de la publication du post audio", bundle: .main))
+            } else {
+                onDismiss()
+                HapticFeedback.success()
+                FeedbackToastManager.shared.showSuccess(
+                    NetworkMonitor.shared.isOffline
+                        ? String(localized: "feed.post.toast.pendingOffline", defaultValue: "Post en attente d'envoi", bundle: .main)
+                        : String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main)
+                )
             }
         }
     }

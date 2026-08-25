@@ -31,6 +31,10 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
 
     struct EnqueuePostMediaCall {
         let sourceMediaURLs: [URL]
+        /// Le MIME DÉCLARÉ de chaque fichier — observable ici, sinon un vocal
+        /// pourrait repartir annoncé `application/octet-stream` sans qu'aucun
+        /// test ne puisse le voir.
+        let sourceMediaMimeTypes: [String]?
         let clientMutationId: String
         let content: String?
         let visibility: String
@@ -43,6 +47,10 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         let location: SharedPlace?
         let mentions: [PostMentionInput]?
         let discoverabilityPrecision: DiscoverabilityPrecision?
+        /// Ce qui QUALIFIE un enregistrement vocal — observable ici, sinon un
+        /// vocal routé par la file durable pourrait perdre en silence la
+        /// transcription faite sur l'appareil, et le serveur la referait.
+        let mobileTranscription: MobileTranscriptionPayload?
     }
 
     var enqueuePostMediaCalls: [EnqueuePostMediaCall] = []
@@ -53,6 +61,7 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
     @discardableResult
     func enqueuePostMedia(
         sourceMediaURLs: [URL],
+        sourceMediaMimeTypes: [String]?,
         clientMutationId: String,
         content: String?,
         visibility: String,
@@ -61,10 +70,12 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         type: String?,
         location: SharedPlace?,
         mentions: [PostMentionInput]?,
-        discoverabilityPrecision: DiscoverabilityPrecision?
+        discoverabilityPrecision: DiscoverabilityPrecision?,
+        mobileTranscription: MobileTranscriptionPayload?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         enqueuePostMediaCalls.append(EnqueuePostMediaCall(
             sourceMediaURLs: sourceMediaURLs,
+            sourceMediaMimeTypes: sourceMediaMimeTypes,
             clientMutationId: clientMutationId,
             content: content,
             visibility: visibility,
@@ -73,7 +84,8 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
             type: type,
             location: location,
             mentions: mentions,
-            discoverabilityPrecision: discoverabilityPrecision
+            discoverabilityPrecision: discoverabilityPrecision,
+            mobileTranscription: mobileTranscription
         ))
         if let enqueuePostMediaError { throw enqueuePostMediaError }
         return OfflineQueue.EnqueueMediaResult(

@@ -32,7 +32,15 @@ public struct AddReactionRequest: Encodable {
 
 // MARK: - Mobile Transcription
 
-public struct MobileTranscriptionSegment: Encodable, Sendable {
+/// `Codable` (et non `Encodable` seul) parce qu'une transcription faite sur
+/// l'appareil doit pouvoir être PERSISTÉE : elle voyage dans
+/// `CreatePostPayload`, le format on-disk de la file durable, qui est relu au
+/// flush. Sans `Decodable`, un vocal composé hors ligne partait sans sa
+/// transcription et le serveur la refaisait — le travail de l'appareil jeté, et
+/// un texte possiblement différent de celui que l'auteur avait relu.
+/// `Equatable` pour la même raison : `CreatePostPayload` l'est, et un test de
+/// fidélité on-disk ne se prouve pas autrement.
+public struct MobileTranscriptionSegment: Codable, Sendable, Equatable {
     public let text: String
     public let start: Double?
     public let end: Double?
@@ -48,7 +56,7 @@ public struct MobileTranscriptionSegment: Encodable, Sendable {
     }
 }
 
-public struct MobileTranscriptionPayload: Encodable, Sendable {
+public struct MobileTranscriptionPayload: Codable, Sendable, Equatable {
     public let text: String
     public let language: String
     public let confidence: Double?

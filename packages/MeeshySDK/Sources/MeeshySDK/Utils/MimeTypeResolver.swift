@@ -94,6 +94,17 @@ public enum MimeTypeResolver {
         "oga":  "audio/ogg",
         "flac": "audio/flac",
         "wma":  "audio/x-ms-wma",
+        // Conteneurs audio des plateformes Apple. Leur absence n'était pas
+        // inoffensive : une extension inconnue retombe sur
+        // `application/octet-stream`, et le gateway ne reconnaît un média audio
+        // qu'à `mimeType.startsWith('audio/')` (`PostService.createPost`) — un
+        // vocal importé en `.caf` ou `.aiff` arrivait donc sans transcription
+        // ET sans re-transcription Whisper, tout en s'affichant comme une image.
+        "caf":  "audio/x-caf",
+        "aiff": "audio/aiff",
+        "aif":  "audio/aiff",
+        "opus": "audio/opus",
+        "amr":  "audio/amr",
         // Documents
         "pdf":  "application/pdf",
         "doc":  "application/msword",
@@ -154,6 +165,10 @@ public enum MimeTypeResolver {
         "audio/ogg":      "ogg",
         "audio/flac":     "flac",
         "audio/x-ms-wma": "wma",
+        "audio/x-caf":    "caf",
+        "audio/aiff":     "aiff",
+        "audio/opus":     "opus",
+        "audio/amr":      "amr",
         "application/pdf":     "pdf",
         "application/msword":  "doc",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",

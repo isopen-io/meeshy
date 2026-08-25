@@ -126,7 +126,8 @@ final class FeedViewModelDiscoverabilityTests: XCTestCase {
             content: "Concert",
             type: "REEL",
             location: makePlace(),
-            discoverabilityPrecision: .city
+            discoverabilityPrecision: .city,
+            mobileTranscription: nil
         )
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
@@ -144,7 +145,8 @@ final class FeedViewModelDiscoverabilityTests: XCTestCase {
             localMediaURLs: [URL(fileURLWithPath: "/tmp/concert.mp4")],
             content: "Concert",
             type: "REEL",
-            location: makePlace()
+            location: makePlace(),
+            mobileTranscription: nil
         )
 
         XCTAssertNil(queue.enqueuePostMediaCalls.first?.discoverabilityPrecision)
