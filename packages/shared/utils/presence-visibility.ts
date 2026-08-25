@@ -1,11 +1,10 @@
-import { isGlobalModerator } from '../types/role-types.js';
+import { isGlobalAdmin } from '../types/role-types.js';
 import type { GlobalUserRoleType } from '../types/role-types.js';
 
 export type PresenceVisibilityInput = {
   readonly isSelf: boolean;
   readonly viewerRole: GlobalUserRoleType;
   readonly areConnected: boolean;
-  readonly sharesConversation?: boolean;
   readonly targetShowOnlineStatus: boolean;
   readonly targetShowLastSeen: boolean;
   readonly targetIsDeactivated: boolean;
@@ -23,13 +22,36 @@ const HIDDEN: PresenceVisibility = { showOnline: false, showLastSeenTimestamp: f
  * Politique pure de visibilité de la présence (lastActiveAt/isOnline).
  * Décide deux drapeaux ; l'appelant injecte la vraie valeur.
  *
+ * Directive produit (2026-08-25), gravée verbatim : « Lorsqu'on n'est pas
+ * ami (aucune connexion) : je veux supprimer ma présence en ligne — c'est
+ * seulement quand on m'écrit / je réponds que la personne saura que je
+ * suis en ligne, et personne ne doit savoir ma dernière connexion sur
+ * l'application si on n'est pas ami. Les utilisateurs avec le rôle Admin
+ * et supérieur peuvent constamment avoir l'état de présence de
+ * l'utilisateur. »
+ *
+ * Privilégié = soi-même OU administrateur global (`isGlobalAdmin` :
+ * ADMIN/BIGBOSS). Un MODERATOR n'est ni un ami ni un administrateur — la
+ * directive ne cite que « Admin et supérieur » — donc il rejoint AUDIT,
+ * ANALYST, USER, AGENT côté non-privilégié (revirement du 2026-08-25 :
+ * jusque-là le bypass suivait `isGlobalModerator`).
+ *
+ * Autorisé = privilégié OU amitié acceptée (`areConnected`). Le partage
+ * d'une conversation N'EST PLUS un critère d'autorisation (`sharesConversation`
+ * retiré du type ce même jour) : une conversation n'est pas une relation, et
+ * deux inconnus qui échangent dans un salon ne se doivent aucune présence
+ * hors de l'échange lui-même. Le seul signal qu'un non-ami reste autorisé à
+ * recevoir est l'ACTIVITÉ — frappe (`typing:start`), message envoyé — et
+ * elle voyage par ses propres événements Socket.IO, jamais par ce résolveur.
+ *
  * @see docs/superpowers/specs/2026-06-30-profile-last-seen-visibility-design.md
+ * @see services/gateway/decisions.md (entrée 2026-08-25 « Visibilité de la présence »)
  */
 export const resolvePresenceVisibility = (input: PresenceVisibilityInput): PresenceVisibility => {
   if (input.targetIsDeactivated || input.isBlockedEitherWay) return HIDDEN;
 
-  const privileged = input.isSelf || isGlobalModerator(input.viewerRole);
-  const allowed = privileged || input.areConnected || (input.sharesConversation ?? false);
+  const privileged = input.isSelf || isGlobalAdmin(input.viewerRole);
+  const allowed = privileged || input.areConnected;
   if (!allowed) return HIDDEN;
 
   if (privileged) return { showOnline: true, showLastSeenTimestamp: true };

@@ -10,7 +10,6 @@ const baseInput = (over: Partial<PresenceVisibilityInput> = {}): PresenceVisibil
   isSelf: false,
   viewerRole: 'USER',
   areConnected: false,
-  sharesConversation: false,
   targetShowOnlineStatus: true,
   targetShowLastSeen: true,
   targetIsDeactivated: false,
@@ -18,6 +17,10 @@ const baseInput = (over: Partial<PresenceVisibilityInput> = {}): PresenceVisibil
   ...over,
 });
 
+// Directive produit (2026-08-25) : hors amitié acceptée (`areConnected`),
+// la présence est supprimée pour tout le monde sauf ADMIN et supérieur
+// (BIGBOSS). MODERATOR a perdu son bypass ; le partage d'une conversation
+// n'est plus un critère d'autorisation.
 describe('resolvePresenceVisibility', () => {
   it('shows everything to the user themselves, even with all preferences off', () => {
     const v = resolvePresenceVisibility(
@@ -26,14 +29,14 @@ describe('resolvePresenceVisibility', () => {
     expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: true });
   });
 
-  it('lets a moderator bypass the preferences of a stranger', () => {
+  it('does NOT let a moderator bypass the preferences of a stranger (below ADMIN)', () => {
     const v = resolvePresenceVisibility(
       baseInput({ viewerRole: 'MODERATOR', targetShowOnlineStatus: false, targetShowLastSeen: false }),
     );
-    expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+    expect(v).toEqual({ showOnline: false, showLastSeenTimestamp: false });
   });
 
-  it('lets ADMIN and BIGBOSS bypass too', () => {
+  it('lets ADMIN and BIGBOSS bypass (directive: "Admin et supérieur")', () => {
     for (const role of ['ADMIN', 'BIGBOSS'] as const) {
       expect(resolvePresenceVisibility(baseInput({ viewerRole: role }))).toEqual({
         showOnline: true,
@@ -42,8 +45,8 @@ describe('resolvePresenceVisibility', () => {
     }
   });
 
-  it('does NOT let AUDIT or ANALYST bypass (below MODERATOR)', () => {
-    for (const role of ['AUDIT', 'ANALYST'] as const) {
+  it('does NOT let MODERATOR, AUDIT, or ANALYST bypass (below ADMIN)', () => {
+    for (const role of ['MODERATOR', 'AUDIT', 'ANALYST'] as const) {
       expect(resolvePresenceVisibility(baseInput({ viewerRole: role }))).toEqual({
         showOnline: false,
         showLastSeenTimestamp: false,
@@ -70,14 +73,14 @@ describe('resolvePresenceVisibility', () => {
     ).toEqual({ showOnline: false, showLastSeenTimestamp: false });
   });
 
-  it('shows presence to a conversation co-participant when context is allowed', () => {
-    expect(resolvePresenceVisibility(baseInput({ sharesConversation: true }))).toEqual({
-      showOnline: true,
-      showLastSeenTimestamp: true,
+  it('hides presence from a conversation co-participant who is not a contact — sharing a conversation is not a relationship', () => {
+    expect(resolvePresenceVisibility(baseInput({ areConnected: false }))).toEqual({
+      showOnline: false,
+      showLastSeenTimestamp: false,
     });
   });
 
-  it('hides presence from a stranger (no relation, no context, not privileged)', () => {
+  it('hides presence from a stranger (no relation, not privileged)', () => {
     expect(resolvePresenceVisibility(baseInput())).toEqual({
       showOnline: false,
       showLastSeenTimestamp: false,

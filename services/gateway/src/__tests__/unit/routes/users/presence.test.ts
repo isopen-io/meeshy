@@ -58,15 +58,25 @@ async function buildApp(opts: {
   auth?: 'authenticated' | 'unauthenticated';
   prisma?: ReturnType<typeof makePrisma>;
   presenceChecker?: ReturnType<typeof makePresenceChecker> | null;
+  // Rôle du viewer, tel que porté par `authContext.registeredUser.role` en
+  // production (`viewerFromAuthContext` exige aussi `type: 'user'`). Absent
+  // par défaut : reproduit le fixture historique (authContext sans `type`),
+  // que `viewerFromAuthContext` traite comme non-enregistré.
+  viewerRole?: string;
 } = {}): Promise<{ app: FastifyInstance; prisma: ReturnType<typeof makePrisma> }> {
-  const { auth = 'authenticated', prisma = makePrisma(), presenceChecker = makePresenceChecker() } = opts;
+  const { auth = 'authenticated', prisma = makePrisma(), presenceChecker = makePresenceChecker(), viewerRole } = opts;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma);
   app.decorate('presenceChecker', presenceChecker);
   app.decorate('authenticate', async (req: FastifyRequest) => {
     (req as any).authContext = auth === 'authenticated'
-      ? { isAuthenticated: true, userId: CURRENT_USER_ID, registeredUser: { id: CURRENT_USER_ID } }
+      ? {
+          isAuthenticated: true,
+          userId: CURRENT_USER_ID,
+          registeredUser: { id: CURRENT_USER_ID, ...(viewerRole ? { role: viewerRole } : {}) },
+          ...(viewerRole ? { type: 'user' } : {}),
+        }
       : { isAuthenticated: false, registeredUser: null };
   });
 
@@ -140,5 +150,75 @@ describe('GET /users/presence — DB error', () => {
     const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${USER_ID_1}` });
     expect(res.statusCode).toBe(500);
     await app.close();
+  });
+});
+
+// ─── Anonymes : directive produit 2026-08-25 ───────────────────────────────────
+// « Personne ne doit savoir ma dernière connexion si on n'est pas ami » — un
+// participant anonyme n'a jamais d'ami : sa présence sort BRUTE aujourd'hui
+// (`vis` absent de `visibilityMap`, qui ne couvre que les `users`), ce que
+// cette section verrouille comme une fuite. Seul un administrateur global
+// (ADMIN/BIGBOSS) doit continuer à la voir.
+
+const ANON_PARTICIPANT_ID = '507f1f77bcf86cd799439033';
+
+function makeAnonParticipantPrisma(lastActiveAt: Date | null = new Date('2024-01-01')) {
+  return makePrisma({
+    participant: {
+      findMany: jest.fn<any>().mockResolvedValue([{ id: ANON_PARTICIPANT_ID, lastActiveAt }]),
+    },
+  });
+}
+
+describe('GET /users/presence — anonymous participant presence', () => {
+  it('hides an anonymous participant from a non-admin registered viewer', async () => {
+    const prisma = makeAnonParticipantPrisma();
+    const checker = makePresenceChecker([ANON_PARTICIPANT_ID]);
+    const { app } = await buildApp({ prisma, presenceChecker: checker, viewerRole: 'USER' });
+    const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${ANON_PARTICIPANT_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.users).toEqual([
+      { userId: ANON_PARTICIPANT_ID, isOnline: false, lastActiveAt: null },
+    ]);
+    await app.close();
+  });
+
+  it('hides an anonymous participant from a MODERATOR viewer — MODERATOR is not privileged since 2026-08-25', async () => {
+    const prisma = makeAnonParticipantPrisma();
+    const checker = makePresenceChecker([ANON_PARTICIPANT_ID]);
+    const { app } = await buildApp({ prisma, presenceChecker: checker, viewerRole: 'MODERATOR' });
+    const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${ANON_PARTICIPANT_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.users).toEqual([
+      { userId: ANON_PARTICIPANT_ID, isOnline: false, lastActiveAt: null },
+    ]);
+    await app.close();
+  });
+
+  it('hides an anonymous participant from an unauthenticated viewer', async () => {
+    const prisma = makeAnonParticipantPrisma();
+    const checker = makePresenceChecker([ANON_PARTICIPANT_ID]);
+    const { app } = await buildApp({ prisma, presenceChecker: checker, auth: 'unauthenticated' });
+    const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${ANON_PARTICIPANT_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.users).toEqual([
+      { userId: ANON_PARTICIPANT_ID, isOnline: false, lastActiveAt: null },
+    ]);
+    await app.close();
+  });
+
+  it('shows an anonymous participant to ADMIN/BIGBOSS viewers (directive: "Admin et supérieur")', async () => {
+    const lastActiveAt = new Date('2024-01-01');
+    for (const role of ['ADMIN', 'BIGBOSS']) {
+      const prisma = makeAnonParticipantPrisma(lastActiveAt);
+      const checker = makePresenceChecker([ANON_PARTICIPANT_ID]);
+      const { app } = await buildApp({ prisma, presenceChecker: checker, viewerRole: role });
+      const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${ANON_PARTICIPANT_ID}` });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.users).toEqual([
+        { userId: ANON_PARTICIPANT_ID, isOnline: true, lastActiveAt: lastActiveAt.toISOString() },
+      ]);
+      await app.close();
+    }
   });
 });

@@ -11,12 +11,15 @@ import type { GlobalUserRoleType } from '../types/role-types';
 // `isOnline`/`lastActiveAt`). @see docs/superpowers/specs/2026-06-30-profile-last-seen-visibility-design.md
 // Ces tests VERROUILLENT la règle : un refactor ne doit jamais fuiter la présence
 // (metadata leakage) ni masquer à tort la présence d'un pair légitime.
+//
+// Directive produit (2026-08-25) gravée : hors amitié acceptée, la présence
+// est supprimée pour tout le monde sauf ADMIN et supérieur (BIGBOSS). Le
+// partage d'une conversation n'est plus un critère d'autorisation.
 
 const inputFor = (overrides: Partial<PresenceVisibilityInput> = {}): PresenceVisibilityInput => ({
   isSelf: false,
   viewerRole: 'USER' as GlobalUserRoleType,
   areConnected: false,
-  sharesConversation: false,
   targetShowOnlineStatus: true,
   targetShowLastSeen: true,
   targetIsDeactivated: false,
@@ -28,7 +31,7 @@ const HIDDEN: PresenceVisibility = { showOnline: false, showLastSeenTimestamp: f
 const FULL: PresenceVisibility = { showOnline: true, showLastSeenTimestamp: true };
 
 describe('resolvePresenceVisibility — verrous de fuite de présence', () => {
-  it('cache tout pour une cible désactivée, même à un modérateur global', () => {
+  it('cache tout pour une cible désactivée, même à un administrateur global', () => {
     expect(resolvePresenceVisibility(inputFor({ targetIsDeactivated: true, viewerRole: 'ADMIN' as GlobalUserRoleType }))).toEqual(HIDDEN);
     expect(resolvePresenceVisibility(inputFor({ targetIsDeactivated: true, isSelf: true }))).toEqual(HIDDEN);
   });
@@ -39,48 +42,50 @@ describe('resolvePresenceVisibility — verrous de fuite de présence', () => {
   });
 
   it('la désactivation/blocage prime sur toute autre autorisation', () => {
-    expect(resolvePresenceVisibility(inputFor({ targetIsDeactivated: true, areConnected: true, sharesConversation: true }))).toEqual(HIDDEN);
+    expect(resolvePresenceVisibility(inputFor({ targetIsDeactivated: true, areConnected: true, viewerRole: 'ADMIN' as GlobalUserRoleType }))).toEqual(HIDDEN);
   });
 });
 
-describe('resolvePresenceVisibility — accès privilégié (self / modérateur global)', () => {
+describe('resolvePresenceVisibility — accès privilégié (self / administrateur global)', () => {
   it('self voit online + last seen, indépendamment des préférences privacy de la cible', () => {
     expect(resolvePresenceVisibility(inputFor({ isSelf: true, targetShowOnlineStatus: false, targetShowLastSeen: false }))).toEqual(FULL);
   });
 
-  it('un modérateur global (MODERATOR/ADMIN/BIGBOSS) voit tout malgré l\'opt-out de la cible', () => {
-    for (const role of ['MODERATOR', 'ADMIN', 'BIGBOSS'] as GlobalUserRoleType[]) {
+  it('ADMIN et BIGBOSS voient tout malgré l\'opt-out de la cible (directive : « Admin et supérieur »)', () => {
+    for (const role of ['ADMIN', 'BIGBOSS'] as GlobalUserRoleType[]) {
       expect(
         resolvePresenceVisibility(inputFor({ viewerRole: role, targetShowOnlineStatus: false, targetShowLastSeen: false })),
       ).toEqual(FULL);
     }
   });
 
-  it('un privilégié voit la présence sans être connecté ni partager de conversation', () => {
-    expect(resolvePresenceVisibility(inputFor({ isSelf: true, areConnected: false, sharesConversation: false }))).toEqual(FULL);
+  it('MODERATOR n\'est PLUS privilégié (revirement 2026-08-25) — soumis aux mêmes règles qu\'un pair non-ami', () => {
+    expect(resolvePresenceVisibility(inputFor({ viewerRole: 'MODERATOR' as GlobalUserRoleType }))).toEqual(HIDDEN);
+    expect(
+      resolvePresenceVisibility(inputFor({ viewerRole: 'MODERATOR' as GlobalUserRoleType, targetShowOnlineStatus: false, targetShowLastSeen: false })),
+    ).toEqual(HIDDEN);
+  });
+
+  it('un privilégié voit la présence sans être connecté', () => {
+    expect(resolvePresenceVisibility(inputFor({ isSelf: true, areConnected: false }))).toEqual(FULL);
   });
 });
 
 describe('resolvePresenceVisibility — pair non privilégié : gating par relation', () => {
-  it('cache tout à un inconnu (ni connecté, ni conversation partagée)', () => {
-    expect(resolvePresenceVisibility(inputFor({ areConnected: false, sharesConversation: false }))).toEqual(HIDDEN);
+  it('cache tout à un inconnu (aucune connexion)', () => {
+    expect(resolvePresenceVisibility(inputFor({ areConnected: false }))).toEqual(HIDDEN);
   });
 
-  it('autorise via connexion (contacts)', () => {
+  it('autorise via connexion (amitié acceptée)', () => {
     expect(resolvePresenceVisibility(inputFor({ areConnected: true }))).toEqual(FULL);
   });
 
-  it('autorise via conversation partagée', () => {
-    expect(resolvePresenceVisibility(inputFor({ areConnected: false, sharesConversation: true }))).toEqual(FULL);
+  it('un co-participant de conversation qui n\'est pas ami ne voit RIEN — partager une conversation n\'est pas une relation', () => {
+    expect(resolvePresenceVisibility(inputFor({ areConnected: false }))).toEqual(HIDDEN);
   });
 
-  it('sharesConversation absent (undefined) est traité comme false', () => {
-    const { sharesConversation: _omit, ...rest } = inputFor();
-    expect(resolvePresenceVisibility(rest as PresenceVisibilityInput)).toEqual(HIDDEN);
-  });
-
-  it('un rôle non-modérateur (AUDIT/ANALYST/AGENT) n\'est PAS privilégié', () => {
-    for (const role of ['AUDIT', 'ANALYST', 'AGENT'] as GlobalUserRoleType[]) {
+  it('un rôle non-admin (MODERATOR/AUDIT/ANALYST/AGENT) n\'est PAS privilégié', () => {
+    for (const role of ['MODERATOR', 'AUDIT', 'ANALYST', 'AGENT'] as GlobalUserRoleType[]) {
       expect(resolvePresenceVisibility(inputFor({ viewerRole: role }))).toEqual(HIDDEN);
     }
   });
@@ -99,7 +104,7 @@ describe('resolvePresenceVisibility — respect des préférences de la cible po
 
   it('online + last seen visibles quand les deux préférences sont actives', () => {
     expect(
-      resolvePresenceVisibility(inputFor({ sharesConversation: true, targetShowOnlineStatus: true, targetShowLastSeen: true })),
+      resolvePresenceVisibility(inputFor({ areConnected: true, targetShowOnlineStatus: true, targetShowLastSeen: true })),
     ).toEqual(FULL);
   });
 });

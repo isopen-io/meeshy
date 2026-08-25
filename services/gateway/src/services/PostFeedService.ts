@@ -1210,9 +1210,7 @@ export class PostFeedService {
         ? presence.resolvePrefsOnly([...contextIds])
         : Promise.resolve(new Map<string, PresenceVisibility>()),
       publicOnlyIds.size > 0
-        ? presence.resolveForTargets({ userId: viewerId, role: 'USER' }, [...publicOnlyIds], {
-            allowConversationContext: true,
-          })
+        ? presence.resolveForTargets({ userId: viewerId, role: 'USER' }, [...publicOnlyIds])
         : Promise.resolve(new Map<string, PresenceVisibility>()),
     ]);
     return new Map([...context, ...strict]);
