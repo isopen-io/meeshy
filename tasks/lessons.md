@@ -15866,3 +15866,33 @@ retire son code mort en laissant une épitaphe qui le NOMME (précédent
 `focalOverlayPreview`). Sans dépouillement, ces épitaphes compteraient comme des
 références et rendraient la garde aveugle à exactement le défaut qu'elle vient
 de figer.
+
+### Corollaire d'exécution — un opt-in de CI se pose sur le SUJET du commit, et le NOM du check est ce qui l'atteste
+
+Le premier push de 243i portait le sujet sans son suffixe ` — run test`.
+`Portée du run` a résolu `run_tests=false`, et le check s'est nommé
+**« Build app (app + cibles de test) »** au lieu de « Build app + tests
+unitaires ». La suite neuve — **toute la valeur de l'itération** — aurait
+compilé sans jamais s'exécuter.
+
+Deux détails qui se paient :
+
+- Le workflow lit `git log -1 --pretty=%s` de la **tête de branche**. Un mot-clé
+  enfoui dans le CORPS du message ne compte pas (« le corps sert à expliquer, le
+  sujet à décider », `.github/workflows/ios.yml`). Et jamais le commit de merge
+  synthétique d'un event `pull_request`, dont le sujet est toujours « Merge … ».
+- Le NOM du check est le SEUL signal, dans l'interface de la PR, qui distingue
+  un vert qui a **bâti** d'un vert qui a **bâti ET exécuté**. Le workflow le dit
+  dans son propre commentaire.
+
+> **Lire le nom du check fait partie du gate, pas de l'après-coup.** Un « iOS
+> Tests : vert » se lit comme « les tests passent » alors que la plupart des runs
+> n'en exécutent aucun.
+
+Et la forme du défaut mérite d'être nommée : la phrase « gate réel = CI iOS
+Tests, suite complète via l'opt-in ` — run test` » était écrite **dans le tableau
+de vérification de cette itération même**, une ligne au-dessus du premier
+contrôle — et le commit est parti sans. C'est la leçon 242i (*connaître un piège
+ne protège pas d'y tomber : il faut l'appliquer AU BANC D'ESSAI*) d'un cran plus
+haut : citer une doctrine dans sa propre documentation ne l'applique pas
+davantage que la citer dans un doc-comment.

@@ -147,6 +147,21 @@ décidable sans compilateur — il n'existe aucune toolchain Swift sous Linux.
 Aucune toolchain Swift ici — **gate réel = CI `iOS Tests`**, suite complète via
 l'opt-in ` — run test` (leçons 238i / 268 : relire le NOM du check).
 
+> **Et je l'ai cité puis oublié.** Le premier push portait le sujet sans son
+> suffixe : `Portée du run` a résolu `run_tests=false` et le check s'est nommé
+> **« Build app (app + cibles de test) »** — compilation seule. La suite neuve
+> aurait COMPILÉ sans jamais s'exécuter, sur une itération dont toute la valeur
+> est une garde. Corrigé par amend du SUJET (le workflow lit `git log -1
+> --pretty=%s` de la tête de branche ; **un mot-clé dans le CORPS ne compte
+> pas**), force-with-lease sur une branche sans relecture.
+>
+> C'est la forme de la leçon 242i — *connaître un piège ne protège pas d'y
+> tomber* — d'un cran plus haut : là je citais la doctrine dans le code testé en
+> l'oubliant au banc d'essai ; ici je l'ai écrite dans ce tableau même, à la
+> ligne qui précède, en l'oubliant sur le commit. **Le NOM du check est ce qui
+> distingue un vert qui a bâti d'un vert qui a exécuté** — le lire fait partie
+> du gate, pas de l'après-coup.
+
 | Contrôle déterministe rejoué hors Swift | Résultat |
 |---|---|
 | **RED** — la garde neuve rejouée sur `origin/main` | **5 fonctions signalées** : `replyCountFor`, `replyCountPill`, `scrollToAndHighlight`, `formatRecordingTime`, `addCurrentLocation` |
