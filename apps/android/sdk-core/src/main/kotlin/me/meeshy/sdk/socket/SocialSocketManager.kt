@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.SocketCommentLikedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.model.SocketCommentReactionUpdateData
 import me.meeshy.sdk.model.SocketStoryCreatedData
+import me.meeshy.sdk.model.SocketStoryUpdatedData
 import me.meeshy.sdk.model.SocketStoryViewedData
 import me.meeshy.sdk.model.SocketStoryReactedData
 import me.meeshy.sdk.model.SocketStoryTranslationUpdatedData
@@ -60,6 +61,7 @@ class SocialSocketManager @Inject constructor(
     private val _commentReactionRemoved = buf<SocketCommentReactionUpdateData>()
     private val _commentTranslationUpdated = buf<SocketCommentTranslationUpdatedData>()
     private val _storyCreated = buf<SocketStoryCreatedData>()
+    private val _storyUpdated = buf<SocketStoryUpdatedData>()
     private val _storyViewed = buf<SocketStoryViewedData>()
     private val _storyReacted = buf<SocketStoryReactedData>()
     private val _storyUnreacted = buf<SocketStoryUnreactedData>()
@@ -131,6 +133,14 @@ class SocialSocketManager @Inject constructor(
     val commentTranslationUpdated: SharedFlow<SocketCommentTranslationUpdatedData> =
         _commentTranslationUpdated.asSharedFlow()
     val storyCreated: SharedFlow<SocketStoryCreatedData> = _storyCreated.asSharedFlow()
+
+    /**
+     * `story:updated` — an author edited a story; carries the COMPLETE new story. The
+     * open viewer re-projects the matched slide in place (content/media/text objects),
+     * and re-seeds its reaction count when `engagementReset` is set — the edit sibling
+     * of [storyCreated]. Mirror of iOS `SocialSocketManager.storyUpdated`.
+     */
+    val storyUpdated: SharedFlow<SocketStoryUpdatedData> = _storyUpdated.asSharedFlow()
     val storyViewed: SharedFlow<SocketStoryViewedData> = _storyViewed.asSharedFlow()
     val storyReacted: SharedFlow<SocketStoryReactedData> = _storyReacted.asSharedFlow()
     val storyUnreacted: SharedFlow<SocketStoryUnreactedData> = _storyUnreacted.asSharedFlow()
@@ -167,6 +177,7 @@ class SocialSocketManager @Inject constructor(
         listen("comment:reaction-removed", _commentReactionRemoved)
         listen("comment:translation-updated", _commentTranslationUpdated)
         listen("story:created", _storyCreated)
+        listen("story:updated", _storyUpdated)
         listen("story:viewed", _storyViewed)
         listen("story:reacted", _storyReacted)
         listen("story:unreacted", _storyUnreacted)

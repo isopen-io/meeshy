@@ -206,6 +206,40 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `story updated payload carries the complete story and the engagement-reset flag`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyUpdated.test {
+            handlers.getValue("story:updated").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"story":{"id":"s5","content":"Édité","author":{"id":"u2","username":"amy"}},""" +
+                            """"engagementReset":true}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.story.id).isEqualTo("s5")
+            assertThat(event.story.content).isEqualTo("Édité")
+            assertThat(event.engagementReset).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `story updated payload decodes with a null engagement-reset when absent`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyUpdated.test {
+            handlers.getValue("story:updated").invoke(
+                arrayOf(JSONObject("""{"story":{"id":"s6","content":"Visibilité"}}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.story.id).isEqualTo("s6")
+            assertThat(event.engagementReset).isNull()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `post reposted payload nests the complete repost under repost`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.postReposted.test {

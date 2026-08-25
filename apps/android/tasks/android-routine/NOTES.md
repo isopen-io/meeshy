@@ -5,6 +5,26 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-25 — re-project a realtime whole-object swap through the LOAD-TIME mapper, not a bespoke one (slice `story-updated-realtime-viewer`)
+`story:updated` carries the COMPLETE edited story (`ApiPost`), exactly like the initial `list()` load. The
+temptation is to hand-map the payload's changed fields into the existing slide. Don't: the viewer already has
+ONE canonical wire→slide path — `ApiPost.toStoryItem()` (`:sdk-core/StoryGrouping.kt`, was `private`) →
+`StoryItem.toSlideView()` (the VM's projector, which also repopulates `rawItems`, the single source of truth
+`emit()` re-projects the current slide from). Promoting `toStoryItem()` to `public` and routing the update
+through the SAME two calls guarantees the edited slide is projected byte-identically to a freshly-loaded one —
+media, text objects, audio, translations all handled, no field silently dropped. A second mapper would drift.
+**The pure engine method stays dumb on purpose**: `StoryPlayback.replacingSlide(newSlide)` just swaps a slide
+by id and keeps the cursor — all the projection richness lives in the (already-tested) `toSlideView`, so the
+new pure logic is a tiny, fully-discriminated container op.
+
+**The `engagementReset` flag is the ONLY behavioural fork, and it lives in the reaction-count cache, not the
+slide.** `seededReactionState` reads `reactionStates[storyId]` first (a live count from prior deltas), falling
+back to the slide's `reactionCount`. So after a `replacingSlide`, a stale `reactionStates` entry would mask the
+fresh story's count. Purge it ONLY on `engagementReset: true` (a content edit wiped engagement server-side → 0);
+a metadata-only update (visibility) must KEEP the live count. The test that proves the fork is the metadata-only
+arm: fire a `reacted` delta (count→3), then a non-reset update carrying the old count (2) → assert it stays 3.
+Without the flag check, that test reddens — it's the witness the two arms diverge.
+
 ## 2026-08-24 — a broadcast can reach a client via a room it never explicitly joins (slice `story-deleted-realtime-viewer`)
 `story:deleted` is emitted by `emitToFriends` to `ROOMS.feed(id)` — NOT the post room the story viewer joins
 (`joinPostRoom`). So the first instinct — "the viewer joins the post room, therefore it can fold post-room

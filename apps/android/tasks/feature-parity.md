@@ -3912,8 +3912,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `reactionStates`), and re-projects via `emit()`. +16 tests (10 pure engine, 5 viewmodel, 2 socket);
       RED-proof isolated: stubbing `removingSlide` to `return this` reddened exactly the 9 structural engine
       cases while the unknown-id case (correctly expecting `this`) stayed green. No wire/production logic outside
-      `apps/android`. Remaining STORY realtime gap: `story:updated` (engagement-reset + whole-story content swap,
-      needs a viewed-monotonicity rule) — a distinct future slice.
+      `apps/android`.
+- [x] **Realtime story update** done (slice `story-updated-realtime-viewer`, 2026-08-25): Android had **no**
+      handler for `story:updated` — the gateway broadcasts the COMPLETE edited story `{ story, engagementReset }`
+      to every visibility-filtered feed room (`SocialEventsHandler.broadcastStoryUpdated`), iOS folds it
+      (`StoryViewModel.storyUpdated`), Android dropped it: an edit made on another device never reached the open
+      viewer. New pure `StoryPlayback.replacingSlide(newSlide)` swaps the matched slide in place, keeping every
+      group's order and the cursor on the SAME slot so the reader's content simply refreshes (unknown id → inert).
+      New `SocketStoryUpdatedData(story, engagementReset?)` + `SocialSocketManager.storyUpdated` flow wired to
+      `listen("story:updated", …)`; `StoryViewerViewModel.observeStoryUpdates` re-projects the matched slide
+      through the same `toStoryItem().toSlideView` conversion the initial load used (repopulating `rawItems`),
+      swaps it via `replacingSlide`, and — only on `engagementReset` (a content edit that wiped engagement
+      server-side) — purges `reactionStates[storyId]` so the count re-seeds from the fresh story; a metadata-only
+      update leaves any live reaction count in place. `ApiPost.toStoryItem()` made `public` in `:sdk-core` so the
+      viewer re-projects through the one canonical wire→item mapper. +11 tests (5 pure engine, 4 viewmodel
+      incl. the engagement-reset vs metadata-only split, 2 socket); RED-proof isolated: stubbing `replacingSlide`
+      to `return this` reddened exactly the 3 structural engine cases while the unknown-id inert case stayed green.
+      The tray fold (iOS `storyGroups` + `shouldKeepLocalViewed` viewed-monotonicity) remains a distinct future
+      slice — Android's tray is Room-cache-driven, a larger surface. No wire/production logic outside `apps/android`.
 - [ ] Per-clip inspector EDITOR (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)
