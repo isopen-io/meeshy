@@ -16084,3 +16084,33 @@ Deux corollaires de méthode :
   extrayant UN site.** Le correctif n'ajoute pas le nettoyage quatre fois : il
   factorise `stripMimeParameters()` et remplace les DEUX copies in-line
   existantes — le mécanisme même qui empêche la prochaine divergence.
+
+### Corollaire 245i — une garde d'analyse de source est adaptée à une FORME DE FICHIER, pas à un langage
+
+La suite naturelle de 244i était « étendre la garde d'atteignabilité au reste de
+l'app ». Mesuré avant d'asserter — comme la leçon 287 l'exige — le balayage rend
+**355 fonctions sur 190 fichiers**, et ce nombre est **dominé par des faux
+positifs structurels** :
+
+1. **Exigences de protocole.** Un nom déclaré dans un `protocol` PUIS implémenté
+   apparaît deux fois ; l'arithmétique `usages − déclarations` retombe donc à
+   zéro **même quand le protocole est appelé**. `StoryComposerProviding` en
+   fabrique huit à lui seul.
+2. **Conformances de délégué** (`DropDelegate`, `UIScrollViewDelegate`…) :
+   appelées par le framework, jamais nommées par le dépôt.
+3. **Sièges de test** (`…ForTesting`, `…ForTest`), légitimes par construction.
+
+> **La garde de 243i/244i n'est pas générale : elle est adaptée aux fichiers
+> d'EXTENSION de vue SwiftUI**, où les conformances de protocole sont rares.
+> Elle a trouvé treize vraies fonctions mortes là ; ailleurs, son arithmétique
+> ne discrimine plus.
+
+Deux conséquences :
+
+- **Une allowlist de NOMS ne rattrape pas un défaut de FORME.** `frameworkInvoked`
+  énumère une douzaine de contrats à la main ; il en faudrait des centaines. Ce
+  qu'il faut est une exclusion STRUCTURELLE — ne pas compter une déclaration
+  écrite dans un corps de `protocol`, reconnaître une conformance `: XxxDelegate`.
+- **Le bon geste, quand une mesure rend un nombre trop gros, est de demander ce
+  que l'outil confond**, pas de trier 355 entrées à la main. Ici la réponse
+  tenait en deux `grep` : un `protocol` et un `DropDelegate`.
