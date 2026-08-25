@@ -7,6 +7,36 @@ import MeeshyUI
 
 /// Fullscreen gallery that allows swiping through ALL visual media in the conversation.
 /// Opened when tapping any image/video in a message bubble.
+///
+/// ## Budget de rendu (2026-08-25)
+///
+/// La galerie freezait au défilement pour trois raisons cumulées, toutes du
+/// même genre : **de l'état à la racine que seule UNE page consomme**.
+///
+/// 1. `scale` / `offset` vivaient sur la racine. Un pincement ou un glissement
+///    les réécrit à la fréquence d'affichage — chaque écriture invalidait le
+///    `body` racine, donc le pager, donc TOUTES les pages réalisées.
+/// 2. `currentIndex` était un `@State` mis à jour par un `firstIndex(where:)`
+///    linéaire à chaque changement de page ; il est désormais DÉRIVÉ d'une
+///    carte `id → index` construite une fois (O(1), aucune écriture d'état).
+/// 3. Le `LazyHStack` réalise les pages paresseusement mais ne les libère
+///    JAMAIS : après vingt swipes, vingt images plein format restaient
+///    décodées en mémoire, chaque page vidéo gardait ses trois abonnements
+///    Combine et sa résolution de disponibilité — et déclenchait même son
+///    auto-téléchargement. Le coût grandissait donc avec la distance parcourue,
+///    ce qui est exactement le symptôme rapporté (« plus je défile, plus ça
+///    rame »).
+///
+/// La réponse tient en trois règles, appliquées ici :
+/// - **L'état de transformation appartient à la page** (`GalleryImagePage`,
+///   `GalleryVideoPage` portent leur propre zoom/offset).
+/// - **Chaque page est `Equatable` et montée en `.equatable()`** : une
+///   réévaluation de la racine ne re-rend que les pages dont la position
+///   relative a réellement changé (au plus quatre), jamais les autres.
+/// - **Une fenêtre de rendu bornée** (`GalleryRenderWindow`) : hors de ±1 page, on ne
+///   rend qu'un aperçu léger (thumbHash / vignette sous-échantillonnée) au lieu
+///   du média plein format. Le nombre d'images décodées vivantes est donc
+///   constant, quel que soit le nombre de médias de la conversation.
 struct ConversationMediaGalleryView: View {
     let allAttachments: [MessageAttachment]
     let startAttachmentId: String
@@ -16,12 +46,14 @@ struct ConversationMediaGalleryView: View {
     /// Maps attachment.id → sender info (name, avatar, color, date)
     var senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
 
+    /// `id → position`, construite une fois à la présentation. Remplace les
+    /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
+    /// ET à chaque fermeture (`stopActiveVideoAudio`).
+    private let indexByID: [String: Int]
+
     @Environment(\.dismiss) private var dismiss
     @State private var currentPageID: String?
-    @State private var currentIndex: Int = 0
     @State private var showControls = true
-    @State private var scale: CGFloat = 1.0
-    @State private var offset: CGSize = .zero
     @StateObject private var saveCoordinator = MediaSaveCoordinator()
     // Plain reference (NOT @ObservedObject): only `activeURL`/`player` identity
     // drive this root's rendering (`videoTransportLayer`) — the manager also
@@ -30,6 +62,38 @@ struct ConversationMediaGalleryView: View {
     private let videoManager = SharedAVPlayerManager.shared
     @State private var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
     @State private var videoManagerPlayer: AVPlayer?
+
+    init(
+        allAttachments: [MessageAttachment],
+        startAttachmentId: String,
+        accentColor: String,
+        captionMap: [String: String] = [:],
+        senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:]
+    ) {
+        self.allAttachments = allAttachments
+        self.startAttachmentId = startAttachmentId
+        self.accentColor = accentColor
+        self.captionMap = captionMap
+        self.senderInfoMap = senderInfoMap
+        let positions = Dictionary(
+            allAttachments.enumerated().map { ($0.element.id, $0.offset) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        self.indexByID = positions
+        _currentPageID = State(
+            initialValue: positions[startAttachmentId] != nil
+                ? startAttachmentId
+                : allAttachments.first?.id
+        )
+    }
+
+    /// Position courante, DÉRIVÉE de `currentPageID` — plus de `@State`
+    /// miroir à tenir synchronisé (et donc plus d'écriture d'état, donc plus
+    /// d'invalidation racine, à chaque page traversée).
+    private var currentIndex: Int {
+        guard let currentPageID, let index = indexByID[currentPageID] else { return 0 }
+        return index
+    }
 
     /// Annonce VoiceOver de l'état du bouton d'enregistrement. Vide au repos.
     private var saveStateAccessibilityValue: String {
@@ -79,6 +143,27 @@ struct ConversationMediaGalleryView: View {
 
             galleryPager
 
+            overlayLayer
+        }
+        .statusBar(hidden: true)
+        .onAppear {
+            // Filet de sécurité : `scrollPosition(id:)` honore la valeur initiale
+            // posée en `init`, mais une présentation qui recycle un état
+            // précédent doit revenir sur le média réellement tapé.
+            if currentPageID != startAttachmentId, indexByID[startAttachmentId] != nil {
+                currentPageID = startAttachmentId
+            }
+            prefetchNeighbors(around: currentIndex)
+        }
+        .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
+        .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
+    }
+
+    /// L'animation de `showControls` est portée ICI et non sur la racine :
+    /// posée sur le `ZStack` racine, elle installait une transaction animée sur
+    /// TOUT l'arbre — pager compris — à chaque bascule des contrôles.
+    private var overlayLayer: some View {
+        ZStack {
             if showControls {
                 controlsOverlay
                     .transition(.opacity)
@@ -91,17 +176,7 @@ struct ConversationMediaGalleryView: View {
                     .transition(.opacity)
             }
         }
-        .statusBar(hidden: true)
-        .onAppear {
-            if let idx = allAttachments.firstIndex(where: { $0.id == startAttachmentId }) {
-                currentIndex = idx
-                currentPageID = startAttachmentId
-            }
-            cacheAttachment(allAttachments.first(where: { $0.id == startAttachmentId }))
-        }
         .animation(.easeInOut(duration: 0.2), value: showControls)
-        .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
-        .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
     }
 
     // MARK: - Pager
@@ -111,63 +186,79 @@ struct ConversationMediaGalleryView: View {
             items: allAttachments,
             currentPageID: $currentPageID,
             fillVertical: true
-        ) { _, attachment in
-            galleryPage(attachment)
+        ) { index, attachment in
+            galleryPage(attachment, index: index)
         }
         .ignoresSafeArea()
-        .adaptiveOnChange(of: currentPageID) { _, newID in
-            guard let newID,
-                  let newIdx = allAttachments.firstIndex(where: { $0.id == newID })
-            else { return }
-
-            let oldIdx = currentIndex
-            currentIndex = newIdx
-
-            if oldIdx != newIdx {
-                let oldAtt = allAttachments[oldIdx]
-                if oldAtt.type == .video && videoManager.activeURL == oldAtt.fileUrl {
-                    // BUG B (round 4) — `release(urlString:)` (URL-gated) clears
-                    // `activeURL` so the underlying conversation bubble's footer
-                    // reappears once the gallery closes. Bare `pause()` left
-                    // `activeURL` set → `hasPlayingInlineVideo` stayed true.
-                    videoManager.release(urlString: oldAtt.fileUrl)
-                }
-                HapticFeedback.light()
-            }
-
-            prefetchNeighbors(around: newIdx)
-
-            withAnimation(.spring(response: 0.3)) {
-                scale = 1.0
-                offset = .zero
-            }
+        .adaptiveOnChange(of: currentPageID) { oldID, newID in
+            handlePageChange(from: oldID, to: newID)
         }
+    }
+
+    private func handlePageChange(from oldID: String?, to newID: String?) {
+        guard let newID, let newIndex = indexByID[newID] else { return }
+
+        if let oldID, oldID != newID, let oldIndex = indexByID[oldID] {
+            let oldAtt = allAttachments[oldIndex]
+            if oldAtt.type == .video && videoManager.activeURL == oldAtt.fileUrl {
+                // BUG B (round 4) — `release(urlString:)` (URL-gated) clears
+                // `activeURL` so the underlying conversation bubble's footer
+                // reappears once the gallery closes. Bare `pause()` left
+                // `activeURL` set → `hasPlayingInlineVideo` stayed true.
+                videoManager.release(urlString: oldAtt.fileUrl)
+            }
+            HapticFeedback.light()
+        }
+
+        prefetchNeighbors(around: newIndex)
     }
 
     // MARK: - Gallery Page
 
+    /// Chaque page est montée en `.equatable()` : la réévaluation du `body`
+    /// racine (changement de page, bascule des contrôles) reconstruit les
+    /// `struct` de page mais SwiftUI n'en re-rend que celles dont la position
+    /// relative a bougé. Les autres — potentiellement des dizaines — sont
+    /// comparées égales et sautées.
     @ViewBuilder
-    private func galleryPage(_ attachment: MessageAttachment) -> some View {
-        ZStack {
+    private func galleryPage(_ attachment: MessageAttachment, index: Int) -> some View {
+        let distance = abs(index - currentIndex)
+
+        switch attachment.type {
+        case .image:
+            GalleryImagePage(
+                attachment: attachment,
+                isActive: distance == 0,
+                rendersFullPixels: GalleryRenderWindow.rendersFullPixels(distance: distance),
+                accessibilityLabel: imageAccessibilityLabel(attachment),
+                onToggleControls: { toggleControls() },
+                onDismiss: { dismissGallery() }
+            )
+            .equatable()
+
+        case .video:
+            GalleryVideoPage(
+                attachment: attachment,
+                accentColor: accentColor,
+                isWindowed: GalleryRenderWindow.rendersFullPixels(distance: distance),
+                onToggleControls: { toggleControls() },
+                onCacheActivation: { cacheAttachment(attachment) },
+                onDismiss: { dismiss() }
+            )
+            .equatable()
+
+        default:
             Color.black
-
-            switch attachment.type {
-            case .image:
-                galleryImagePage(attachment)
-            case .video:
-                galleryVideoPage(attachment)
-            default:
-                EmptyView()
-            }
-
-            // Caption is now shown in controlsOverlay (bottom, below author info)
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                showControls.toggle()
-            }
-        }
+    }
+
+    private func toggleControls() {
+        showControls.toggle()
+    }
+
+    private func dismissGallery() {
+        stopActiveVideoAudio()
+        dismiss()
     }
 
     // MARK: - Caption Overlay
@@ -181,149 +272,15 @@ struct ConversationMediaGalleryView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.black.opacity(0.3))
-    }
-
-    // MARK: - Vertical-only drag gesture (does not capture horizontal → ScrollView paging works)
-
-    private var verticalDismissGesture: some Gesture {
-        DragGesture(minimumDistance: 30)
-            .onChanged { value in
-                // Only respond to primarily vertical drags
-                guard abs(value.translation.height) > abs(value.translation.width) else { return }
-                if scale <= 1.0 {
-                    offset = CGSize(width: 0, height: value.translation.height)
-                }
-            }
-            .onEnded { value in
-                guard abs(value.translation.height) > abs(value.translation.width) else {
-                    withAnimation(.spring()) { offset = .zero }
-                    return
-                }
-                if scale <= 1.0 && abs(value.translation.height) > 150 {
-                    stopActiveVideoAudio()
-                    dismiss()
-                } else {
-                    withAnimation(.spring()) { offset = .zero }
-                }
-            }
-    }
-
-    private func videoDismissGesture(_ attachment: MessageAttachment) -> some Gesture {
-        DragGesture(minimumDistance: 30)
-            .onChanged { value in
-                guard abs(value.translation.height) > abs(value.translation.width) else { return }
-                offset = CGSize(width: 0, height: value.translation.height)
-            }
-            .onEnded { value in
-                guard abs(value.translation.height) > abs(value.translation.width) else {
-                    withAnimation(.spring()) { offset = .zero }
-                    return
-                }
-                if abs(value.translation.height) > 150 {
-                    if videoManager.isPlaying && videoManager.activeURL == attachment.fileUrl {
-                        videoManager.startPip()
-                    } else if videoManager.activeURL == attachment.fileUrl {
-                        // Vidéo EN PAUSE : pas de handoff PiP — sans cette
-                        // libération, le player partagé restait attaché
-                        // (`activeURL` posé) et la bulle en dessous rendait la
-                        // frame gelée au lieu de son thumbnail, footer masqué.
-                        videoManager.release(urlString: attachment.fileUrl)
-                    }
-                    dismiss()
-                } else {
-                    withAnimation(.spring()) { offset = .zero }
-                }
-            }
-    }
-
-    // MARK: - Image Page (pinch-to-zoom, vertical drag-to-dismiss)
-
-    /// 5.2 — URL d'image à charger en plein écran : la plus petite variante
-    /// `>=` la largeur écran (évite l'original multi-Mo quand une 1920 suffit).
-    /// Sans variante (image chiffrée) → l'original. Utilisée pour l'affichage ET
-    /// le préchauffage (cohérence : on warm ce qu'on affiche). Pas de `targetSize`
-    /// downsample côté plein écran : le pinch-zoom a besoin des pixels de la
-    /// variante. La sauvegarde Photos garde l'original (qualité maximale).
-    private func fullscreenImageURL(_ attachment: MessageAttachment) -> String {
-        let original = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
-        guard !original.isEmpty else { return "" }
-        let targetPx = Int((UIScreen.main.bounds.width * UIScreen.main.scale).rounded())
-        return ImageVariantSelector.bestImageURL(
-            variants: attachment.imageVariants ?? [],
-            originalURL: original,
-            originalWidth: attachment.width,
-            targetWidthPx: targetPx
-        )
-    }
-
-    @ViewBuilder
-    private func galleryImagePage(_ attachment: MessageAttachment) -> some View {
-        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-
-        if fullUrl != nil || thumbUrl != nil || attachment.thumbHash != nil {
-            let selected = fullscreenImageURL(attachment)
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbUrl,
-                fullUrl: !selected.isEmpty ? selected : (fullUrl ?? thumbUrl)
-            ) {
-                ProgressView().tint(.white)
-            }
-            .aspectRatio(contentMode: .fit)
-            .scaleEffect(scale)
-            .offset(offset)
-            .gesture(
-                MagnificationGesture()
-                    .onChanged { scale = $0 }
-                    .onEnded { _ in
-                        withAnimation(.spring()) {
-                            scale = max(1, min(5, scale))
-                        }
-                    }
-            )
-            .gesture(verticalDismissGesture)
-            .onTapGesture(count: 2) {
-                withAnimation(.spring()) {
-                    scale = scale > 1 ? 1 : 2.5
-                    offset = .zero
-                }
-            }
-            // Sans label, l'image plein écran est un élément VoiceOver muet quand
-            // on balaie la galerie. Caption si fournie, sinon libellé générique.
-            .accessibilityLabel(imageAccessibilityLabel(attachment))
-            .accessibilityAddTraits(.isImage)
-        } else {
-            // Glyphe d'état-vide décoratif ≥40pt figé (doctrine 74i/86i).
-            Image(systemName: "photo")
-                .font(.system(size: 48))
-                .foregroundColor(.white.opacity(0.3))
-                .accessibilityHidden(true)
-        }
-    }
-
-    // MARK: - Video Page
-
-    @ViewBuilder
-    private func galleryVideoPage(_ attachment: MessageAttachment) -> some View {
-        GalleryVideoPage(
-            attachment: attachment,
-            accentColor: accentColor,
-            onCacheActivation: { cacheAttachment(attachment) }
-        )
-        .gesture(videoDismissGesture(attachment))
-        .offset(y: offset.height)
     }
 
     // MARK: - Controls Overlay
 
     private var controlsOverlay: some View {
-        VStack {
+        VStack(spacing: 0) {
             HStack {
                 Button {
-                    stopActiveVideoAudio()
-                    dismiss()
+                    dismissGallery()
                 } label: {
                     // Chrome : glyphe `xmark` figé dans un cercle glass 40pt
                     // (doctrine 82i) — ne pas scaler. Glass APRÈS le sizing.
@@ -382,22 +339,45 @@ struct ConversationMediaGalleryView: View {
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
-            // Bottom: author info always, caption below if present
-            if currentIndex < allAttachments.count {
-                let att = allAttachments[currentIndex]
-                VStack(spacing: 0) {
-                    bottomMetadataOverlay(att)
-                    if let caption = captionMap[att.id], !caption.isEmpty {
-                        captionOverlay(caption)
-                    }
+            bottomOverlay
+        }
+    }
+
+    /// Bas de l'écran : auteur du média, légende, puis — sur TOUTE la rangée,
+    /// par-dessous — la pellicule de toute la conversation.
+    @ViewBuilder
+    private var bottomOverlay: some View {
+        if currentIndex < allAttachments.count {
+            let att = allAttachments[currentIndex]
+            VStack(alignment: .leading, spacing: 0) {
+                bottomMetadataOverlay(att)
+                if let caption = captionMap[att.id], !caption.isEmpty {
+                    captionOverlay(caption)
+                }
+                if allAttachments.count > 1 {
+                    ConversationMediaFilmstrip(
+                        attachments: allAttachments,
+                        currentPageID: $currentPageID,
+                        accentColor: accentColor
+                    )
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom)
+            )
         }
     }
 
     // MARK: - Video Transport Controls (for the currently playing video)
+
+    /// Marge basse du transport vidéo : il doit rester au-dessus du bloc bas,
+    /// dont la hauteur change selon que la pellicule est montée ou non.
+    private var videoTransportBottomInset: CGFloat {
+        allAttachments.count > 1 ? 132 + ConversationMediaFilmstrip.reservedHeight : 132
+    }
 
     @ViewBuilder
     private var videoTransportLayer: some View {
@@ -413,7 +393,7 @@ struct ConversationMediaGalleryView: View {
                 )
                 // Ancré entre la top bar (close/save) et les métadonnées bas.
                 .padding(.top, 64)
-                .padding(.bottom, 132)
+                .padding(.bottom, videoTransportBottomInset)
             }
         }
     }
@@ -469,10 +449,8 @@ struct ConversationMediaGalleryView: View {
             .accessibilityHidden(mediaMetadataAccessibilityLabel(att).isEmpty)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(
-            LinearGradient(colors: [.clear, .black.opacity(0.5)], startPoint: .top, endPoint: .bottom)
-        )
+        .padding(.top, 12)
+        .padding(.bottom, 8)
     }
 
     // MARK: - Actions
@@ -512,7 +490,7 @@ struct ConversationMediaGalleryView: View {
         default:
             // 5.2 — préchauffer la MÊME variante que celle affichée, pas l'original,
             // sinon on téléchargerait les deux.
-            urlStr = fullscreenImageURL(attachment)
+            urlStr = GalleryImageSource.fullscreenURL(for: attachment)
         }
         guard !urlStr.isEmpty,
               let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString
@@ -520,11 +498,13 @@ struct ConversationMediaGalleryView: View {
         Task { _ = await CacheCoordinator.shared.images.image(for: resolved) }
     }
 
+    /// Préchauffe STRICTEMENT la fenêtre de rendu. L'ancienne valeur (±2)
+    /// décodait cinq images plein format par page traversée alors que trois
+    /// seulement peuvent s'afficher. Règle et bornes : `GalleryRenderWindow`.
     private func prefetchNeighbors(around index: Int) {
-        let range = max(0, index - 2)...min(allAttachments.count - 1, index + 2)
-        for i in range {
-            cacheAttachment(allAttachments[i])
-        }
+        guard let range = GalleryRenderWindow.prefetchRange(around: index, count: allAttachments.count)
+        else { return }
+        range.forEach { cacheAttachment(allAttachments[$0]) }
     }
 
     private func requestSaveCurrent() {
@@ -542,6 +522,262 @@ struct ConversationMediaGalleryView: View {
     }
 }
 
+// MARK: - Render window
+
+/// Combien de pages, de part et d'autre de la page courante, rendent le média
+/// PLEIN FORMAT — et lesquelles se contentent d'un aperçu.
+///
+/// C'est LA règle qui borne le coût de la galerie. Sans elle, le `LazyHStack`
+/// réalise une page de plus à chaque swipe et n'en libère jamais aucune : le
+/// travail vivant croît avec la distance parcourue, ce qui est exactement le
+/// symptôme « plus je défile, plus ça rame ». Isolée ici parce qu'une règle qui
+/// borne un coût doit pouvoir être VÉRIFIÉE : le ralentissement qu'elle évite
+/// ne se voit sur aucune capture d'écran.
+enum GalleryRenderWindow {
+    /// Rayon en pages. `1` — la page visible et ses deux voisines immédiates,
+    /// soit exactement ce qu'un glissement en cours peut montrer.
+    static let radius = 1
+
+    static func rendersFullPixels(distance: Int) -> Bool {
+        abs(distance) <= radius
+    }
+
+    /// Ce qu'on préchauffe : STRICTEMENT la fenêtre de rendu. Préchauffer
+    /// au-delà décoderait des images que personne ne peut voir, donc de la
+    /// pression mémoire pure — donc des évictions, donc un re-décodage au
+    /// retour, l'inverse de l'intention.
+    static func prefetchRange(around index: Int, count: Int) -> ClosedRange<Int>? {
+        guard count > 0, index >= 0, index < count else { return nil }
+        return max(0, index - radius)...min(count - 1, index + radius)
+    }
+}
+
+// MARK: - Fullscreen image source
+
+/// Sélection de la variante d'image servie en plein écran.
+///
+/// Vit ici — et non dans un fichier de pellicule séparé — parce que
+/// `UIScreen.main.bounds` y est un budget de DÉCODAGE (la largeur maximale
+/// qu'une image pourra jamais devoir couvrir), pas une mesure de mise en page :
+/// `WindowMetricsSSOTTests` n'autorise cette lecture que dans les deux fichiers
+/// qui la font pour cette raison.
+private enum GalleryImageSource {
+    /// 5.2 — URL d'image à charger en plein écran : la plus petite variante
+    /// `>=` la largeur écran (évite l'original multi-Mo quand une 1920 suffit).
+    /// Sans variante (image chiffrée) → l'original. Utilisée pour l'affichage ET
+    /// le préchauffage (cohérence : on warm ce qu'on affiche). Pas de `targetSize`
+    /// downsample côté plein écran : le pinch-zoom a besoin des pixels de la
+    /// variante. La sauvegarde Photos garde l'original (qualité maximale).
+    @MainActor
+    static func fullscreenURL(for attachment: MessageAttachment) -> String {
+        let original = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+        guard !original.isEmpty else { return "" }
+        let targetPx = Int((UIScreen.main.bounds.width * UIScreen.main.scale).rounded())
+        return ImageVariantSelector.bestImageURL(
+            variants: attachment.imageVariants ?? [],
+            originalURL: original,
+            originalWidth: attachment.width,
+            targetWidthPx: targetPx
+        )
+    }
+}
+
+// MARK: - Gallery Image Page (pinch-to-zoom, pan, vertical drag-to-dismiss)
+
+/// Une page image de la galerie, PROPRIÉTAIRE de sa transformation.
+///
+/// C'est le point clé du correctif de fluidité : zoom et déplacement sont un
+/// état LOCAL. Un pincement ne peut donc plus invalider la racine — et par elle
+/// toutes les autres pages réalisées — à la fréquence d'affichage.
+private struct GalleryImagePage: View, Equatable {
+    let attachment: MessageAttachment
+    /// La page visible. Seule l'active répond aux gestes et rend l'image plein
+    /// format en priorité ; les autres se contentent d'être prêtes.
+    let isActive: Bool
+    /// Dans la fenêtre de rendu : rend le média plein format. Hors fenêtre, la
+    /// page ne rend qu'un aperçu léger — le décodage plein format est LIBÉRÉ.
+    let rendersFullPixels: Bool
+    let accessibilityLabel: String
+    let onToggleControls: () -> Void
+    let onDismiss: () -> Void
+
+    /// Les fermetures ne participent pas : elles n'encapsulent que des actions
+    /// stables (bascule des contrôles, fermeture). Comparer l'identité + les
+    /// deux drapeaux de position suffit à décider d'un re-rendu.
+    static func == (lhs: GalleryImagePage, rhs: GalleryImagePage) -> Bool {
+        lhs.attachment.id == rhs.attachment.id
+            && lhs.isActive == rhs.isActive
+            && lhs.rendersFullPixels == rhs.rendersFullPixels
+            && lhs.accessibilityLabel == rhs.accessibilityLabel
+    }
+
+    /// Échelle EN COURS de pincement. `committedScale` est celle acquise à la
+    /// fin du geste : sans elle, un second pincement repartait de 1 (le geste
+    /// rend un facteur RELATIF), ce qui faisait sauter l'image.
+    @State private var scale: CGFloat = 1
+    @State private var committedScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var committedOffset: CGSize = .zero
+
+    private static let maxScale: CGFloat = 5
+    private static let dismissThreshold: CGFloat = 150
+    /// Aperçu hors fenêtre : la VIGNETTE, décodée à une taille d'affichage
+    /// modeste. Une page à ±2 n'est pas atteignable sans être traversée — elle
+    /// n'a donc aucun pixel à fournir au zoom.
+    private static let previewSize = CGSize(width: 320, height: 320)
+
+    private var isZoomed: Bool { committedScale > 1 }
+
+    private var thumbnailURL: String? {
+        attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+    }
+
+    private var hasRenderableSource: Bool {
+        !attachment.fileUrl.isEmpty || thumbnailURL != nil || attachment.thumbHash != nil
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black
+
+            if hasRenderableSource {
+                imageLayer
+                    .aspectRatio(contentMode: .fit)
+                    .scaleEffect(scale)
+                    .offset(offset)
+                    .gesture(zoomGesture, including: isActive ? .all : .none)
+                    .highPriorityGesture(panGesture, including: isActive && isZoomed ? .all : .none)
+                    .gesture(dismissGesture, including: isActive && !isZoomed ? .all : .none)
+                    .onTapGesture(count: 2) { toggleZoom() }
+                    // Sans label, l'image plein écran est un élément VoiceOver muet quand
+                    // on balaie la galerie. Caption si fournie, sinon libellé générique.
+                    .accessibilityLabel(accessibilityLabel)
+                    .accessibilityAddTraits(.isImage)
+            } else {
+                // Glyphe d'état-vide décoratif ≥40pt figé (doctrine 74i/86i).
+                Image(systemName: "photo")
+                    .font(.system(size: 48))
+                    .foregroundColor(.white.opacity(0.3))
+                    .accessibilityHidden(true)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onToggleControls() }
+        .adaptiveOnChange(of: isActive) { _, active in
+            guard !active else { return }
+            resetTransform()
+        }
+    }
+
+    /// L'URL servie DANS la fenêtre : la variante élue, avec repli sur
+    /// l'original puis sur la vignette. Écrit en retours anticipés — un
+    /// ternaire imbriqué mêlant `String` et `String?` se lit mal.
+    private var fullPixelURL: String? {
+        let selected = GalleryImageSource.fullscreenURL(for: attachment)
+        if !selected.isEmpty { return selected }
+        if !attachment.fileUrl.isEmpty { return attachment.fileUrl }
+        return thumbnailURL
+    }
+
+    /// Hors fenêtre de rendu on ne monte JAMAIS l'URL plein format : c'est ce
+    /// qui borne le nombre d'images décodées vivantes, quel que soit le nombre
+    /// de médias traversés. La bascule se produit à ±2 pages — jamais à
+    /// l'écran, donc jamais visible.
+    @ViewBuilder
+    private var imageLayer: some View {
+        if rendersFullPixels {
+            ProgressiveCachedImage(
+                thumbHash: attachment.thumbHash,
+                thumbnailUrl: thumbnailURL,
+                fullUrl: fullPixelURL
+            ) {
+                ProgressView().tint(.white)
+            }
+        } else {
+            ProgressiveCachedImage(
+                thumbHash: attachment.thumbHash,
+                thumbnailUrl: thumbnailURL,
+                fullUrl: thumbnailURL,
+                targetSize: Self.previewSize
+            ) {
+                Color.black
+            }
+        }
+    }
+
+    // MARK: Gestures
+
+    private var zoomGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                scale = min(Self.maxScale, max(1, committedScale * value))
+            }
+            .onEnded { _ in
+                let settled = min(Self.maxScale, max(1, scale))
+                withAnimation(.spring(response: 0.3)) {
+                    scale = settled
+                    if settled <= 1 { offset = .zero }
+                }
+                committedScale = settled
+                committedOffset = settled <= 1 ? .zero : offset
+            }
+    }
+
+    /// Déplacement quand l'image est zoomée. En `highPriorityGesture` : sans
+    /// cela le `ScrollView` de pagination gagne l'arbitrage horizontal et
+    /// l'utilisateur ne peut pas atteindre les bords d'une image agrandie.
+    private var panGesture: some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                offset = CGSize(
+                    width: committedOffset.width + value.translation.width,
+                    height: committedOffset.height + value.translation.height
+                )
+            }
+            .onEnded { _ in committedOffset = offset }
+    }
+
+    /// Glissement VERTICAL de fermeture. `minimumDistance: 30` est délibéré :
+    /// il laisse la pagination horizontale gagner l'arbitrage.
+    private var dismissGesture: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onChanged { value in
+                // Only respond to primarily vertical drags
+                guard abs(value.translation.height) > abs(value.translation.width) else { return }
+                offset = CGSize(width: 0, height: value.translation.height)
+            }
+            .onEnded { value in
+                guard abs(value.translation.height) > abs(value.translation.width) else {
+                    withAnimation(.spring()) { offset = .zero }
+                    return
+                }
+                if abs(value.translation.height) > Self.dismissThreshold {
+                    onDismiss()
+                } else {
+                    withAnimation(.spring()) { offset = .zero }
+                }
+            }
+    }
+
+    private func toggleZoom() {
+        let target: CGFloat = committedScale > 1 ? 1 : 2.5
+        withAnimation(.spring()) {
+            scale = target
+            offset = .zero
+        }
+        committedScale = target
+        committedOffset = .zero
+    }
+
+    private func resetTransform() {
+        guard scale != 1 || offset != .zero else { return }
+        scale = 1
+        committedScale = 1
+        offset = .zero
+        committedOffset = .zero
+    }
+}
+
 // MARK: - Gallery Video Page (per-item availability gate)
 
 /// Per-page gating wrapper for the video viewer inside
@@ -549,10 +785,23 @@ struct ConversationMediaGalleryView: View {
 /// `CacheCoordinator.shared.video`, triggers auto-DL via the policy engine,
 /// and only invokes `SharedAVPlayerManager.load()` once the video is on
 /// disk — coherent with the streaming-fallback removal in the manager.
-private struct GalleryVideoPage: View {
+///
+/// `isWindowed` borne le travail : hors fenêtre, la page ne résout AUCUNE
+/// disponibilité et ne déclenche AUCUN auto-téléchargement. Sans cette porte,
+/// traverser une conversation de vingt vidéos en lançait vingt.
+private struct GalleryVideoPage: View, Equatable {
     let attachment: MessageAttachment
     let accentColor: String
-    var onCacheActivation: () -> Void
+    let isWindowed: Bool
+    let onToggleControls: () -> Void
+    let onCacheActivation: () -> Void
+    let onDismiss: () -> Void
+
+    static func == (lhs: GalleryVideoPage, rhs: GalleryVideoPage) -> Bool {
+        lhs.attachment.id == rhs.attachment.id
+            && lhs.accentColor == rhs.accentColor
+            && lhs.isWindowed == rhs.isWindowed
+    }
 
     // Plain reference (NOT @ObservedObject): only `activeURL`/`player`/
     // `isPlaying` drive this page's rendering — the manager also publishes
@@ -564,6 +813,8 @@ private struct GalleryVideoPage: View {
     @State private var videoManagerIsPlaying: Bool = SharedAVPlayerManager.shared.isPlaying
     @State private var resolvedAvailability: VideoAvailability = .needsDownload
     @StateObject private var downloader = AttachmentDownloader()
+    /// Décalage de fermeture, LOCAL à la page (cf. `GalleryImagePage`).
+    @State private var offset: CGSize = .zero
 
     private var availability: VideoAvailability {
         if downloader.isDownloading {
@@ -623,7 +874,14 @@ private struct GalleryVideoPage: View {
                 playOrDownloadButton
             }
         }
-        .task(id: attachment.id) {
+        .contentShape(Rectangle())
+        .onTapGesture { onToggleControls() }
+        .offset(y: offset.height)
+        .gesture(dismissGesture)
+        // La clé inclut `isWindowed` : la tâche ne tourne QUE dans la fenêtre,
+        // et rejoue dès qu'une page y entre.
+        .task(id: "\(attachment.id)#\(isWindowed)") {
+            guard isWindowed else { return }
             if !downloader.isDownloading {
                 downloader.isCached = false
             }
@@ -641,6 +899,34 @@ private struct GalleryVideoPage: View {
         .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
         .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
         .onReceive(videoManager.$isPlaying) { videoManagerIsPlaying = $0 }
+    }
+
+    private var dismissGesture: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onChanged { value in
+                guard abs(value.translation.height) > abs(value.translation.width) else { return }
+                offset = CGSize(width: 0, height: value.translation.height)
+            }
+            .onEnded { value in
+                guard abs(value.translation.height) > abs(value.translation.width) else {
+                    withAnimation(.spring()) { offset = .zero }
+                    return
+                }
+                if abs(value.translation.height) > 150 {
+                    if videoManager.isPlaying && videoManager.activeURL == attachment.fileUrl {
+                        videoManager.startPip()
+                    } else if videoManager.activeURL == attachment.fileUrl {
+                        // Vidéo EN PAUSE : pas de handoff PiP — sans cette
+                        // libération, le player partagé restait attaché
+                        // (`activeURL` posé) et la bulle en dessous rendait la
+                        // frame gelée au lieu de son thumbnail, footer masqué.
+                        videoManager.release(urlString: attachment.fileUrl)
+                    }
+                    onDismiss()
+                } else {
+                    withAnimation(.spring()) { offset = .zero }
+                }
+            }
     }
 
     @ViewBuilder
