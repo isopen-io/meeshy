@@ -873,12 +873,47 @@ export function useConversationMessagesRQ(
     void syncNewerMessages();
   }, [reconnectEpoch, syncNewerMessages]);
 
-  // NOTE — il n'y a volontairement PAS de catch-up au montage : ouvrir une
-  // conversation relit désormais la dernière page côté serveur
-  // (`refetchOnMount: 'always'` ci-dessus), ce qui couvre strictement plus que
-  // le watermark « en avant » du catch-up — lequel, par construction, ne peut
-  // pas combler un trou antérieur au message le plus récent déjà en cache.
-  // Les deux lectures au montage se seraient de surcroît concurrencées.
+  // Trigger 3 — OUVERTURE d'une conversation.
+  //
+  // Une note vivait ici, disant qu'il n'y avait « volontairement PAS de
+  // catch-up au montage : ouvrir une conversation relit désormais la dernière
+  // page côté serveur (`refetchOnMount: 'always'`) ». Son raisonnement était
+  // juste ; sa PRÉMISSE est fausse chez son hôte, et c'est ce qui a coûté des
+  // messages manquants à l'ouverture d'une conversation.
+  //
+  // `refetchOnMount` n'est lu qu'à la SOUSCRIPTION de l'observateur. Or
+  // `ConversationLayout` ne se démonte JAMAIS entre deux conversations : la
+  // route est un catch-all et la sélection se fait par état local avec
+  // `window.history.replaceState`. Changer de conversation n'est donc qu'un
+  // changement de `queryKey`, qui passe par `shouldFetchOptionally` → `isStale`
+  // → `isStaleByTime(Infinity)` = FAUX. Rien n'est relu. Le fil servait le
+  // cache tel quel pendant que la liste, elle, était réparée par le delta sur
+  // reconnexion et focus — d'où « la liste a le dernier message, le fil ne l'a
+  // pas ».
+  //
+  // La seconde objection de la note — « les deux lectures se concurrenceraient »
+  // — est désamorcée PAR CONSTRUCTION : `syncNewerMessages` sort si le cache
+  // est absent, et c'est exactement le seul cas où le refetch de souscription
+  // part. Les deux gardes sont disjointes.
+  //
+  // On saute le PREMIER passage, et ce n'est pas une optimisation : au tout
+  // premier montage l'observateur SE SOUSCRIT, donc `refetchOnMount: 'always'`
+  // lit déjà le serveur. Y ajouter un rattrapage ferait deux lectures pour un
+  // seul geste. Ce que la souscription ne couvre PAS — et qui est le défaut
+  // rapporté — c'est le CHANGEMENT de conversation à hôte monté : là, aucune
+  // souscription neuve, donc aucune lecture.
+  //
+  // DÉPENDANCES : `conversationId` SEUL, jamais `messages` ni `data`. Le
+  // rattrapage ÉCRIT dans le cache : l'y faire dépendre boucle sans fin.
+  const conversationPrecedenteRef = useRef<string | null>(null);
+  useEffect(() => {
+    const precedente = conversationPrecedenteRef.current;
+    conversationPrecedenteRef.current = conversationId;
+    if (precedente === null || precedente === conversationId) return;
+    if (!enabled || !conversationId || linkId) return;
+    void syncNewerMessages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, enabled, linkId]);
 
   // Trigger 2 — window focus: safety net replacing the destructive
   // refetchOnWindowFocus (disabled above). Debounced so rapid tab switches
