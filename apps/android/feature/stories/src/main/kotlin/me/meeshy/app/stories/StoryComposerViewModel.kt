@@ -190,6 +190,25 @@ data class StoryComposerUiState(
         get() = deck.selectedSlideBackground
 
     /**
+     * Whether the **selected** slide's designated background media is a VIDEO — the only
+     * background kind whose looping is authorable (an image always loops on the reader).
+     * The screen shows the loop toggle only when this is true, so the control is never a
+     * no-op. Resolved against the uploaded [attachments] by the designated background id.
+     */
+    val selectedSlideBackgroundIsVideo: Boolean
+        get() = deck.selectedSlideBackgroundMediaId
+            ?.let { id -> attachments.firstOrNull { it.id == id } }
+            ?.mimeType?.startsWith("video", ignoreCase = true) == true
+
+    /**
+     * Whether the **selected** slide's background loops — what the loop toggle reflects,
+     * projected from the pure [StorySlideDeck.selectedSlideBackgroundLoop]. Meaningful only
+     * while [selectedSlideBackgroundIsVideo] is true.
+     */
+    val selectedSlideBackgroundLoop: Boolean
+        get() = deck.selectedSlideBackgroundLoop
+
+    /**
      * What the single text field shows and edits: the selected element's text while
      * one is selected, otherwise the selected slide's caption. One field, two roles —
      * the screen stays glue.
@@ -700,6 +719,16 @@ class StoryComposerViewModel @Inject constructor(
         applyDeck { it.toggleSelectedBackgroundMedia(mediaId) }
 
     /**
+     * Sets whether the **selected** slide's designated (video) background loops — the
+     * authoring counterpart of the reader's `loop` on the `isBackground`
+     * [me.meeshy.sdk.model.StoryMediaObject]. Inert when the slide has no designated
+     * background ([StorySlideDeck.setSelectedBackgroundLoop] enforces it). On publish,
+     * [publishPlans] carries this onto the emitted background media object.
+     */
+    fun onSetSlideBackgroundLoop(loop: Boolean) =
+        applyDeck { it.setSelectedBackgroundLoop(loop) }
+
+    /**
      * Applies a structural deck transform and re-syncs the editor buffer to the
      * (possibly new) selected slide's text **and** media, keeping `draft` a faithful
      * mirror of the selected slide — the single invariant the screen relies on.
@@ -884,7 +913,7 @@ class StoryComposerViewModel @Inject constructor(
                 filterIntensity = slide.filterIntensity,
                 durationSecondsPin = slide.durationSecondsPin,
                 background = slide.background,
-                backgroundMedia = resolveBackgroundMedia(slide.backgroundMediaId, current.attachments),
+                backgroundMedia = resolveBackgroundMedia(slide, current.attachments),
             )
             PublishPlan(
                 request = draft.toCreateStoryRequest(language),
@@ -894,19 +923,21 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
-     * Resolves a slide's designated background media [id] to the [StoryBackgroundMedia]
-     * the wire mapping needs, from the already-uploaded [attachments]. Returns `null` when
+     * Resolves a [slide]'s designated background media to the [StoryBackgroundMedia] the
+     * wire mapping needs, from the already-uploaded [attachments]. Returns `null` when
      * nothing is designated or the id has no uploaded media yet (a still-pending offline
      * upload has no server URL to point the reader's background layer at, so it publishes
-     * as a plain flat-media slide until the upload lands) — never a broken object.
+     * as a plain flat-media slide until the upload lands) — never a broken object. Carries
+     * the slide's author-chosen [StorySlide.backgroundLoop] (honoured only for a video).
      */
-    private fun resolveBackgroundMedia(id: String?, attachments: List<UploadedMedia>): StoryBackgroundMedia? {
-        val media = id?.let { bgId -> attachments.firstOrNull { it.id == bgId } } ?: return null
+    private fun resolveBackgroundMedia(slide: StorySlide, attachments: List<UploadedMedia>): StoryBackgroundMedia? {
+        val media = slide.backgroundMediaId?.let { bgId -> attachments.firstOrNull { it.id == bgId } } ?: return null
         return StoryBackgroundMedia(
             mediaId = media.id,
             url = media.url,
             mimeType = media.mimeType,
             durationSeconds = media.durationMs?.let { it / 1000.0 },
+            loop = slide.backgroundLoop,
         )
     }
 

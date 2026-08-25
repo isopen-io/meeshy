@@ -3779,8 +3779,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       pastel brightness/saturation bands + preset-avoidance; 7 deck set/clear/inert/selection; 4 draft
       serialise incl. gradient wire form + effects-materialisation; 3 VM intent/publish). Mutation-RED-proven
       (neutering `hsbToHex` reddens exactly the 4 conversion tests; neutering the inert guard reddens exactly
-      the 2 inert tests). Pending: background IMAGE with transform, and looping/non-looping background video
-      designation.
+      the 2 inert tests). **Looping/non-looping background VIDEO designation done**
+      (`story-composer-background-video-loop`): before this the composer hard-coded `loop = true` on every
+      designated background — the author could not publish a background video that plays ONCE. Ports iOS's
+      `ClipInspector.supportsLoop` semantics (looping is a VIDEO/audio-background affordance, never an image's).
+      `StoryBackgroundMedia.loop` (default true) is honoured only for a video — `toMediaObject()` emits
+      `loop = if (isVideo) loop else true` so a stale `loop = false` never rides onto an image object (the
+      reader's image branch is unconditionally looping, its video branch reads `backgroundObject?.loop ?: true`).
+      `StorySlide.backgroundLoop`; `StorySlideDeck.setSelectedBackgroundLoop` (inert with no designated
+      background or on equal value) + `selectedSlideBackgroundLoop`; a FRESH designation
+      (`toggleSelectedBackgroundMedia`) and a background-clearing `removeMedia` both RESET loop to the default,
+      so no stale off-state leaks to a new background. VM `onSetSlideBackgroundLoop` + derived
+      `selectedSlideBackgroundIsVideo`/`selectedSlideBackgroundLoop`; the resolver carries the slide's loop onto
+      publish. A `Loop` toggle badge appears on the designated-background thumbnail **only when it is a video**
+      (the control is never a no-op), localised en/fr/es/pt. +13 tests (7 deck default/set/inert×2/only-selected/
+      reset-on-redesignate/reset-on-remove; 2 draft video-loop-false + image-always-loops; 4 VM
+      intent/publish-loop-false/is-video-derivation). Mutation-RED-proven (forcing `loop = true` in
+      `toMediaObject` reddened EXACTLY the 2 loop-false tests while image-always-loops stayed green). Pending:
+      background IMAGE with transform.
 - [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
       (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —
       `StoryFilterMatrix.baseMatrix(StoryFilter)` → a `StoryColorMatrix` (4×5 `List<Float>`, value
