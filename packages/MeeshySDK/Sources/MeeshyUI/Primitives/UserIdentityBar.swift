@@ -470,10 +470,18 @@ extension UserIdentityBar {
 
         var contextMenuItems: [AvatarContextMenuItem] = []
         if let onViewStory, storyRingState != .none {
-            contextMenuItems.append(AvatarContextMenuItem(label: "Voir la story", icon: "play.circle.fill", action: onViewStory))
+            contextMenuItems.append(AvatarContextMenuItem(
+                label: String(localized: "avatar.menu.view_story", defaultValue: "Voir la story", bundle: .module),
+                icon: "play.circle.fill",
+                action: onViewStory
+            ))
         }
         if let onAvatarTap {
-            contextMenuItems.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle", action: onAvatarTap))
+            contextMenuItems.append(AvatarContextMenuItem(
+                label: String(localized: "avatar.menu.view_profile", defaultValue: "Voir le profil", bundle: .module),
+                icon: "person.circle",
+                action: onAvatarTap
+            ))
         }
 
         let avatarConfig = AvatarConfig(
@@ -534,7 +542,11 @@ extension UserIdentityBar {
         var contextMenuItems: [AvatarContextMenuItem]?
         if let onAvatarTap {
             contextMenuItems = [
-                AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle", action: onAvatarTap)
+                AvatarContextMenuItem(
+                    label: String(localized: "avatar.menu.view_profile", defaultValue: "Voir le profil", bundle: .module),
+                    icon: "person.circle",
+                    action: onAvatarTap
+                )
             ]
         }
 
@@ -589,7 +601,11 @@ extension UserIdentityBar {
         var contextMenuItems: [AvatarContextMenuItem]?
         if let onAvatarTap {
             contextMenuItems = [
-                AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle", action: onAvatarTap)
+                AvatarContextMenuItem(
+                    label: String(localized: "avatar.menu.view_profile", defaultValue: "Voir le profil", bundle: .module),
+                    icon: "person.circle",
+                    action: onAvatarTap
+                )
             ]
         }
 

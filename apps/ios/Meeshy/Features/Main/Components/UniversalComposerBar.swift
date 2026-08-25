@@ -926,7 +926,10 @@ struct UniversalComposerBar: View {
 
     var sendButton: some View {
         let editColors = [MeeshyColors.warning, MeeshyColors.warning.opacity(0.75)]
-        let sendColors = [MeeshyColors.indigo500, MeeshyColors.indigo400]
+        // Le bouton d'envoi porte l'accent de la CONVERSATION (ou du post /
+        // de la story qui héberge le composer), miroir exact du bouton
+        // « Écrire » de la variante minimisée. `editColors` reste sémantique.
+        let sendColors = [Color(hex: accentColor), Color(hex: secondaryColor)]
         let colors = isEditMode ? editColors : sendColors
         let icon = isEditMode ? "checkmark" : "paperplane.fill"
 

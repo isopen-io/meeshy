@@ -29,6 +29,8 @@ final class HardcodedStringsSweepTests: XCTestCase {
     /// `community.settings.color`).
     private static let sweptKeys: [String] = [
         "auth.forgot.sent_message",
+        "avatar.menu.view_profile",
+        "avatar.menu.view_story",
         "category.create",
         "category.remove",
         "category.select",

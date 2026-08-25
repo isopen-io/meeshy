@@ -688,12 +688,27 @@ struct StoryComposerBarView: View {
     @State private var composerIsFocused: Bool = false
     @StateObject private var audioRecorder = AudioRecorderManager()
 
+    /// Accent RÉSOLU du composer : celui du commentaire auquel on répond,
+    /// sinon celui de la story.
+    private var composerAccent: String {
+        replyingToStoryComment?.authorColor ?? accentColor
+    }
+
+    /// Second arrêt du dégradé servi au composer. Dérivé de `composerAccent`
+    /// par la formule de palette du SDK (`secondary = shiftHue(primary, +30°)`) :
+    /// sans lui, le composer retombe sur son défaut de marque et le bouton
+    /// d'envoi rend un dégradé hybride accent → indigo.
+    private var composerSecondaryColor: String {
+        DynamicColorGenerator.hueShiftedHex(composerAccent, degrees: 30)
+    }
+
     var body: some View {
         UniversalComposerBar(
             style: .dark,
             mode: .comment,
             onIngest: { ingests in handleComposerIngest(ingests) },
-            accentColor: replyingToStoryComment?.authorColor ?? accentColor,
+            accentColor: composerAccent,
+            secondaryColor: composerSecondaryColor,
             forceShowAttachment: true,
             forceShowVoice: true,
             selectedLanguage: composerLanguage,
