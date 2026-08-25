@@ -155,6 +155,24 @@ qu'aucun défaut vivant n'était connu.
   hors chemin critique. C'est la dépendance gravée au §E de la conception v2 ;
   l'audit ne l'a pas contredite.
 
+## Livraison — directive du porteur produit (2026-08-25, 22:00)
+
+Ordre OPPOSABLE, aucune vague de développement ne le devance :
+1. Corrections closes (vague 1c : balayage « deinit isolée iOS 26.1 », rév. 24 ter,
+   intégration d'`origin/main` par `xcodegen`, revue Opus, re-gate COMPLET app + SDK sur 26.1).
+2. PR depuis `feat/composer-v2-ios-2026-08-25` ; merge avec un commit portant **`(beta)`**
+   (`chore(beta): …`) — seule voie qui n'écrase pas le WIP de l'autre session sur `main`.
+   Vérifier `ios-beta-trigger` : `gh run view <id> --log | grep "Build Xcode Cloud #"`.
+3. Attendre le build Xcode Cloud « TestFlight beta test iOS » (traité sur ASC).
+4. **Décision du porteur (⚠️ irréversible sur la file de review)** : la 1.0.5 iOS est
+   `IN_REVIEW` sur ASC → la RETIRER (`andp unlock me.meeshy.app 1.0.5 -y`), attacher le
+   nouveau build, RESOUMETTRE (`andp submit me.meeshy.app 1.0.5`). Option écartée : viser 1.0.6.
+5. **UNIQUEMENT après la soumission** : lancer la vague 2 (planche P0, ordre D6).
+
+Faits mesurés : `MARKETING_VERSION` déjà `1.0.5`, `CURRENT_PROJECT_VERSION` 1796 ; `andp verify`
+vert (clé `5542B6LVNL`, app `6760208591`) ; la CI iOS épingle iOS 18.2 (`ios.yml`), donc la famille
+deinit 26.1 lui est invisible — question produit : ajouter une matrice 26.x.
+
 ## Questions qui restent au porteur produit (l'agent avance sans, il ne les tranche pas)
 
 1. `.reelTab` : point d'entrée Réels réel (iOS ET web), ou hors périmètre écrit ?
