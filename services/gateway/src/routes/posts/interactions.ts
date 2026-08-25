@@ -8,6 +8,7 @@ import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
 import { LikeSchema, UnlikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema } from './types';
+import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
@@ -165,7 +166,7 @@ export function registerInteractionRoutes(
             emoji,
             ...counters,
           }, post.authorId, target.visibility, target.visibilityUserIds,
-          ).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/like]: broadcast post liked failed'));
+          ).catch((err) => enhancedLogger.warn('[POST /posts/:postId/like]: broadcast post liked failed', { err }));
         }
       }
 
@@ -181,7 +182,7 @@ export function registerInteractionRoutes(
           postPreview: (post as { content?: string | null }).content?.slice(0, 80) ?? undefined,
           postCreatedAt: (post as { createdAt?: Date | string | null }).createdAt ?? undefined,
           postExpiresAt: (post as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-        }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/like]: notify post like failed'));
+        }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/like]: notify post like failed', { err }));
       }
 
       return sendSuccess(reply, { liked: true, reactionSummary: post.reactionSummary });
@@ -192,7 +193,7 @@ export function registerInteractionRoutes(
       if (error instanceof ConflictError) {
         return sendConflict(reply, error.message, { code: error.code });
       }
-      fastify.log.error(`[POST /posts/:postId/like] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/like]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -306,13 +307,13 @@ export function registerInteractionRoutes(
             emoji: removedEmoji,
             ...counters,
           }, post.authorId, target.visibility, target.visibilityUserIds,
-          ).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId/like]: broadcast post unliked failed'));
+          ).catch((err) => enhancedLogger.warn('[DELETE /posts/:postId/like]: broadcast post unliked failed', { err }));
         }
       }
 
       return sendSuccess(reply, { liked: false, reactionSummary: post.reactionSummary });
     } catch (error) {
-      fastify.log.error(`[DELETE /posts/:postId/like] Error: ${error}`);
+      enhancedLogger.error('[DELETE /posts/:postId/like]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -338,7 +339,7 @@ export function registerInteractionRoutes(
       );
       return sendSuccess(reply, { bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/bookmark] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/bookmark]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -361,7 +362,7 @@ export function registerInteractionRoutes(
       );
       return sendSuccess(reply, { bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
-      fastify.log.error(`[DELETE /posts/:postId/bookmark] Error: ${error}`);
+      enhancedLogger.error('[DELETE /posts/:postId/bookmark]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -388,7 +389,7 @@ export function registerInteractionRoutes(
       // éviter de rejouer la requête à chaque impression répétée du feed.
       // Fire-and-forget : ne bloque pas la réponse, émet `notification:counts`.
       if (isNewView) {
-        fastify.notificationService.markPostNotificationsAsRead(viewerId, postId).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/view]: mark post notifications as read failed'));
+        fastify.notificationService.markPostNotificationsAsRead(viewerId, postId).catch((err) => enhancedLogger.warn('[POST /posts/:postId/view]: mark post notifications as read failed', { err }));
       }
 
       // If this is a story, broadcast the view to the story author
@@ -419,7 +420,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, { viewed: true });
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/view] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/view]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -445,7 +446,7 @@ export function registerInteractionRoutes(
       const counted = await postService.recordAnonymousOpen(postId, sessionKey);
       return sendSuccess(reply, { counted });
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/anonymous-view] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/anonymous-view]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -508,7 +509,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, { recorded: true });
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/impression] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/impression]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -615,7 +616,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, { recorded: capped.length });
     } catch (error) {
-      fastify.log.error(`[POST /posts/impressions/batch] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/impressions/batch]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -652,7 +653,7 @@ export function registerInteractionRoutes(
       );
       return sendSuccess(reply, { recorded });
     } catch (error) {
-      fastify.log.error(`[POST /posts/engagement/batch] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/engagement/batch]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -722,7 +723,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, payload);
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/share] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/share]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -747,7 +748,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, link);
     } catch (error) {
-      fastify.log.error(`[GET /posts/:postId/share] Error: ${error}`);
+      enhancedLogger.error('[GET /posts/:postId/share]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -786,7 +787,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, result);
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/downloads] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/downloads]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -812,7 +813,7 @@ export function registerInteractionRoutes(
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Only the author can pin this post', { code: 'FORBIDDEN' });
       }
-      fastify.log.error(`[POST /posts/:postId/pin] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/pin]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -838,7 +839,7 @@ export function registerInteractionRoutes(
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Only the author can unpin this post', { code: 'FORBIDDEN' });
       }
-      fastify.log.error(`[DELETE /posts/:postId/pin] Error: ${error}`);
+      enhancedLogger.error('[DELETE /posts/:postId/pin]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -871,7 +872,7 @@ export function registerInteractionRoutes(
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Only the author can view this list', { code: 'FORBIDDEN' });
       }
-      fastify.log.error(`[GET /posts/:postId/views] Error: ${error}`);
+      enhancedLogger.error('[GET /posts/:postId/views]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -904,7 +905,7 @@ export function registerInteractionRoutes(
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Only the author can view interactions', { code: 'FORBIDDEN' });
       }
-      fastify.log.error(`[GET /posts/:postId/interactions] Error: ${error}`);
+      enhancedLogger.error('[GET /posts/:postId/interactions]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -977,7 +978,7 @@ export function registerInteractionRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents && isFreshRepublish) {
         socialEvents.broadcastStoryCreated(broadcastPayload as unknown as Post, authContext.registeredUser.id)
-          .catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/republish]: broadcast story created failed'));
+          .catch((err) => enhancedLogger.warn('[POST /posts/:postId/republish]: broadcast story created failed', { err }));
       }
 
       return sendSuccess(reply, payload);
@@ -996,7 +997,7 @@ export function registerInteractionRoutes(
       if (error instanceof Error && error.message === 'NOT_A_STORY') {
         return sendBadRequest(reply, 'Only stories can be republished', { code: 'NOT_A_STORY' });
       }
-      fastify.log.error(`[POST /posts/:postId/republish] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/republish]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -1112,7 +1113,7 @@ export function registerInteractionRoutes(
         socialEvents.broadcastPostReposted({
           originalPostId: postId,
           repost: broadcastPayload as unknown as Post,
-        }, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/repost]: broadcast post reposted failed'));
+        }, authContext.registeredUser.id).catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: broadcast post reposted failed', { err }));
       }
 
       // Notify original post author
@@ -1133,7 +1134,7 @@ export function registerInteractionRoutes(
             postPreview: (original as { content?: string | null }).content?.slice(0, 80) ?? undefined,
             postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
             postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-          }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/repost]: notify post repost failed'));
+          }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: notify post repost failed', { err }));
         }
       }
 
@@ -1150,7 +1151,7 @@ export function registerInteractionRoutes(
       if (error instanceof Error && (error as any).statusCode === 403) {
         return sendForbidden(reply, error.message);
       }
-      fastify.log.error(`[POST /posts/:postId/repost] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/repost]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });

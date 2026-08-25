@@ -64,3 +64,75 @@
 | B1 | `NotificationItem.tsx:32,44` | prop `index` MORTE ⇒ `memo` invalidé sur toute la liste à chaque insertion en tête. |
 | B2 | `use-notifications-manager-rq.tsx:95` | `flatMap` sans `useMemo` ⇒ identité neuve à chaque rendu. |
 | B3 | `RootView.swift:197`, `iPadRootView.swift:52` | `@ObservedObject NotificationToastManager.shared` ⇒ la racine se ré-évalue sur `unreadCount`/`activeConversationId`/`activePostId`/`currentToast`. Churn documenté par `ConversationSocketHandler.swift:137`. |
+
+---
+
+# Like / favori dans l'onglet Posts d'un profil — 2026-08-25
+
+## Deux défauts DISTINCTS, tous deux prouvés
+
+### A — Parité des flags personnels (CORRIGÉ)
+
+`isLikedByMe` / `isBookmarkedByMe` / `isRepostedByMe` ne décrivent pas le post :
+ils décrivent la RELATION DU LECTEUR au post. Servis séparément, ils mentent —
+le SDK décode un champ absent en `?? false`.
+
+Mesuré sur l'API réelle (`GET /posts/user/:id`) : `isLikedByMe` présent,
+`isBookmarkedByMe` et `isRepostedByMe` **absents du JSON**, alors que
+`GET /posts/bookmarks` contenait ce même post. Le favori existait, la surface ne
+pouvait pas le savoir.
+
+Audit des 6 méthodes servant des posts — **seule `getFeed` posait les trois** :
+
+| méthode | avant | surface |
+|---|---|---|
+| `getFeed` | 3 flags | feed principal |
+| `getUserPosts` | like seul | **onglet Posts d'un profil** |
+| `getCommunityFeed` | like seul | feed de communauté |
+| `getBookmarks` | AUCUN | écran Favoris (ne disait pas que ses posts sont en favori) |
+| `enrichReelsForViewer` | like + favori | réels — commentaire « aligné sur getFeed » MENSONGER |
+| `getStories` | like seul | stories (suivi, cf. plus bas) |
+
+Correctif : `resolvePersonalFlags()` + `personalFlagsFor()` — un helper UNIQUE,
+appliqué aux 5 sites, `getFeed` compris. C'est la recopie des deux requêtes qui a
+produit la divergence ; il n'y a plus de recopie à faire diverger.
+
+Gate : 876 suites / 19 750 tests gateway, 0 échec.
+
+### B — Le bookmark répond 500 en PRODUCTION (diagnostiqué, NON corrigé)
+
+`POST` et `DELETE /posts/:postId/bookmark` → **500 systématique**, sur tous les
+posts testés. C'est lui qui produit le symptôme rapporté : le client applique
+l'optimistic, l'appel échoue, `catch` → `bookmarkedOverrides[postId] = current`
+→ « ça met et quitte immédiatement ».
+
+Pire : **l'écriture est committée avant le 500.** La ligne `PostBookmark` a été
+créée à `17:19:01.943Z` pendant un appel qui a rendu 500. Le client rollback
+pendant que la base dit l'inverse — désynchronisation garantie.
+
+Ce qui est PROUVÉ :
+- le 500 survient AUSSI pour un `postId` inexistant, où `bookmarkPost` rend
+  `null` sans aucun create ni update ⇒ l'exception naît APRÈS `bookmarkPost` ;
+- le seul appel restant est `broadcastPostBookmarked(...)` — **le seul broadcast
+  SYNCHRONE non protégé** du fichier ; le like protège le sien par `.catch()`,
+  ce qui explique qu'il survive là où le favori tombe ;
+- la prod tourne bien le code du dépôt (bundle vérifié) ;
+- `POST_BOOKMARKED`, `ROOMS.feed` et `SocialEventsHandler` existent en prod.
+
+Ce qui MANQUE : l'exception exacte. Les `fastify.log.error` de ces deux routes
+sont muets en prod (défaut connu, 166 sites) — rien dans `docker logs`, rien dans
+`/app/logs/error.log`.
+
+**Non corrigé volontairement** : protéger le broadcast sans connaître la cause
+serait masquer l'erreur. Décision à prendre — cf. rapport.
+
+## Suivis ouverts
+
+- `getStories` ne sert ni favori ni repost : à trancher (une story est-elle
+  bookmarkable dans l'UI ?), pas supposé.
+- `likeCount` / `bookmarkCount` sont stockés en **Long (int64)** sur les 763
+  posts, alors que Prisma les déclare `Int`. Lecture OK aujourd'hui — noté comme
+  anomalie de données, écartée comme cause du 500.
+- Disque local PLEIN (100 %, 460 Gi) — a bloqué la session. 4 Go libérés en
+  supprimant mes propres artefacts ; `apps/ios/Build` (10 Go) laissé intact car
+  partagé.

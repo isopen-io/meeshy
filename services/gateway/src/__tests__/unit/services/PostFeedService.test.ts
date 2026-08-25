@@ -65,7 +65,11 @@ let mockPostMentionFindMany: jest.Mock;
 let mockPrisma: PrismaClient;
 
 beforeEach(() => {
-  mockPostFindMany = jest.fn();
+  // Défaut `[]` comme tous les autres mocks du fichier : sans lui, un mock non
+  // configuré rend `undefined`, et toute requête AJOUTÉE à une méthode déjà
+  // testée casse ses témoins par un `TypeError` — un faux rouge qui ne parle
+  // pas du comportement mesuré.
+  mockPostFindMany = jest.fn().mockResolvedValue([]);
   mockPostReactionFindMany = jest.fn();
   mockFriendRequestFindMany = jest.fn().mockResolvedValue([]);
   mockParticipantFindMany = jest.fn().mockResolvedValue([]);
@@ -900,6 +904,90 @@ describe('PostFeedService.getUserPosts', () => {
     const result = await service.getUserPosts('author-1', 'viewer-1');
 
     expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Parité des flags d'action PERSONNELS
+//
+// `isLikedByMe` / `isBookmarkedByMe` / `isRepostedByMe` décrivent le LECTEUR,
+// pas le post. Ils n'ont donc de sens que servis ENSEMBLE : un client qui reçoit
+// l'un et pas les autres décode les absents en `false` (SDK :
+// `isBookmarkedByMe ?? false`) et affiche « pas en favori » d'un post qui l'est.
+//
+// Le défaut mesuré le 2026-08-25 : seul `getFeed` posait les trois. L'onglet
+// Posts d'un profil (`getUserPosts`) n'annonçait ni le favori ni le repost, et
+// `getBookmarks` — la liste des favoris — ne disait pas que ses propres posts
+// étaient en favori.
+// ---------------------------------------------------------------------------
+
+describe('PostFeedService — parité des flags personnels', () => {
+  beforeEach(() => {
+    mockPostReactionFindMany.mockResolvedValue([]);
+  });
+
+  it('getUserPosts sert isBookmarkedByMe et isRepostedByMe', async () => {
+    mockPostFindMany
+      .mockResolvedValueOnce([makePost('pf-1'), makePost('pf-2')])
+      .mockResolvedValueOnce([{ repostOfId: 'pf-2' }]);
+    mockPostBookmarkFindMany.mockResolvedValue([{ postId: 'pf-1' }]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getUserPosts('author-1', 'viewer-1');
+
+    const [first, second] = result.items as any[];
+    expect(first.isBookmarkedByMe).toBe(true);
+    expect(first.isRepostedByMe).toBe(false);
+    expect(second.isBookmarkedByMe).toBe(false);
+    expect(second.isRepostedByMe).toBe(true);
+  });
+
+  it('getUserPosts sert les flags à false — jamais absents — pour un lecteur sans favori', async () => {
+    mockPostFindMany.mockResolvedValueOnce([makePost('pf-3')]).mockResolvedValueOnce([]);
+    mockPostBookmarkFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getUserPosts('author-1', 'viewer-1');
+
+    const item = result.items[0] as any;
+    expect(item).toHaveProperty('isBookmarkedByMe', false);
+    expect(item).toHaveProperty('isRepostedByMe', false);
+  });
+
+  it('getUserPosts anonyme sert les flags à false sans interroger la base', async () => {
+    mockPostFindMany.mockResolvedValue([makePost('pf-4')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getUserPosts('author-1', undefined);
+
+    const item = result.items[0] as any;
+    expect(item.isBookmarkedByMe).toBe(false);
+    expect(item.isRepostedByMe).toBe(false);
+    expect(mockPostBookmarkFindMany).not.toHaveBeenCalled();
+  });
+
+  it('getBookmarks dit que ses propres posts SONT en favori', async () => {
+    mockPostBookmarkFindMany.mockResolvedValue([{ postId: 'bm-1', post: makePost('bm-1') }]);
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getBookmarks('viewer-1');
+
+    expect((result.items[0] as any).isBookmarkedByMe).toBe(true);
+  });
+
+  it('getCommunityFeed sert isBookmarkedByMe et isRepostedByMe', async () => {
+    mockPostFindMany
+      .mockResolvedValueOnce([makePost('cf-1')])
+      .mockResolvedValueOnce([]);
+    mockPostBookmarkFindMany.mockResolvedValue([{ postId: 'cf-1' }]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getCommunityFeed('community-1', 'viewer-1');
+
+    const item = result.items[0] as any;
+    expect(item.isBookmarkedByMe).toBe(true);
+    expect(item).toHaveProperty('isRepostedByMe', false);
   });
 });
 
