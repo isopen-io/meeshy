@@ -45,7 +45,16 @@
 > (`source.properties` ApiLevel 37.0→37) keeping android-37.0 ALONGSIDE android-37 resolved it — same THIRD mode
 > as prior runs.
 >
-> **Verified**: `<PENDING — fill from gate output>`.
+> **Verified**: targeted `:feature:stories` suites (`StorySlideDeckTest`/`StoryComposerDraftTest`/
+> `StoryComposerViewModelTest`) green, then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL in 4m 43s** before any push. Mutation-RED
+> proven: neutering `toggleSelectedBackgroundMedia` to `return this` reddened exactly 4 `StorySlideDeckTest`
+> assertions (designate / replace-prior / toggle-off / a removeMedia case that sets up via the toggle) while the
+> fresh-no-designation, inert-unattached-id, and remove-different-media-keeps-designation ones stayed green —
+> genuine discrimination, not an assertion echo. Reviewer PASS. Diff is `apps/android` only (1 new prod file + 3
+> amended prod files + 1 screen glue + 4 strings.xml in :feature:stories, +3 amended test files, tracking docs).
+> Verdict: **PASS** — a pure background-designation reducer + a pure wire-mapping value + a VM intent/resolver + a
+> screen toggle; behavioural tests through the public API; no production logic outside `apps/android`.
 >
 > **Next**: the AUDIO half of the same background-designation item (mark one borrowed-sound / audio track per
 > slide as the looping background → `audioPlayerObjects[].isBackground`, the other input the reader's
