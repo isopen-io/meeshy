@@ -221,7 +221,15 @@ export class SecuritySanitizer {
       return input;
     }
 
-    return input.substring(0, maxLength).trim() + '...';
+    // A cut on a UTF-16 code-unit boundary can split a surrogate pair (any
+    // non-BMP character: emoji, CJK extensions, symbols), leaving a lone high
+    // surrogate that renders as `�`. Back off one unit so a whole code
+    // point is never severed. ASCII/BMP cuts are unaffected.
+    const lastCharCode = input.charCodeAt(maxLength - 1);
+    const isHighSurrogate = lastCharCode >= 0xd800 && lastCharCode <= 0xdbff;
+    const end = isHighSurrogate ? maxLength - 1 : maxLength;
+
+    return input.substring(0, end).trim() + '...';
   }
 
   /**
