@@ -27,7 +27,7 @@ final class ConversationStateStore: ObservableObject {
     @Published var isSending = false
     @Published var error: String?
     @Published var scrollAnchorId: String?
-    @Published var typingUsernames: [String] = []
+    @Published var typingParticipants: [TypingParticipant] = []
     
     @Published var messageTranslations: [String: [MessageTranslation]] = [:]
     @Published var messageTranscriptions: [String: MessageTranscription] = [:]

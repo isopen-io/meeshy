@@ -104,6 +104,14 @@ export class SocketIOOrchestrator {
     this.translationService = new TranslationService();
     this.preferencesSyncService = new PreferencesSyncService();
 
+    // Un message rétracte la frappe qui l'annonçait. Les deux services
+    // s'ignorent ; l'orchestrateur, qui les possède, porte le lien. Câblé ici
+    // et non dans `setupEventListeners` : la règle ne dépend d'aucun socket et
+    // ne doit pas se re-poser à chaque reconnexion.
+    this.messagingService.setTypingRetractor((conversationId, userId) => {
+      this.typingService.clearTypingForUser(conversationId, userId);
+    });
+
     // A boot whose stored JWT had already expired gets NO socket at all:
     // ConnectionService.initializeConnection() bails out and leaves the REST
     // 401 path to refresh silently. That refresh works — and nothing told the

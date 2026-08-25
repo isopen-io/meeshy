@@ -925,7 +925,7 @@ final class MessageListViewController: UIViewController {
                 cell.contentConfiguration = nil
                 return
             }
-            let typingNames = self.conversationViewModel?.typingUsernames ?? []
+            let typingRoster = self.conversationViewModel?.typingParticipants ?? []
             let typingAccent = self.accentColor
             let typingDark = self.isDark
             // Matrice §5 « Typing indicator » : en rangée plate (Focal/Script),
@@ -934,7 +934,7 @@ final class MessageListViewController: UIViewController {
             let typingFlat = self.readingMode != .bubbles
             cell.contentConfiguration = UIHostingConfiguration {
                 TypingIndicatorBubble(
-                    names: typingNames,
+                    participants: typingRoster,
                     accentHex: typingAccent,
                     isDark: typingDark,
                     isFlat: typingFlat
@@ -1697,7 +1697,7 @@ final class MessageListViewController: UIViewController {
         // The typing indicator is a real cell at index 0 — the visual bottom of
         // the inverted layout, just below the newest message. A live message
         // then inserts at index 1 and pushes the conversation up naturally.
-        let showTyping = !(conversationViewModel?.typingUsernames.isEmpty ?? true)
+        let showTyping = !(conversationViewModel?.typingParticipants.isEmpty ?? true)
         let items: [MessageListItem] = showTyping ? [.typingIndicator] + bodyItems : bodyItems
         // RETRAIT FOCAL iOS (2026-08-18) : `.conversationStart` vivait dans
         // l'espace réservé par l'inset de tête du mode Focal — plus jamais
@@ -1722,7 +1722,12 @@ final class MessageListViewController: UIViewController {
         // apply). Inserted items are configured fresh anyway, so excluding them
         // here is both correct and sufficient.
         let previousItems = Set(dataSource.snapshot().itemIdentifiers)
-        let typingRosterFingerprint = (conversationViewModel?.typingUsernames ?? []).joined(separator: "|")
+        // L'empreinte inclut l'AVATAR : la rangée doit se reconfigurer quand le
+        // visage d'un frappeur devient connu (il vient d'écrire son premier
+        // message du fil), pas seulement quand le roster change de composition.
+        let typingRosterFingerprint = (conversationViewModel?.typingParticipants ?? [])
+            .map { "\($0.id):\($0.displayName):\($0.avatarURL ?? "")" }
+            .joined(separator: "|")
         let startFingerprint = (conversationViewModel?.currentConversationName ?? "")
             + "|" + (reversedMessages.last?.localId ?? "")
         var itemsToReconfigure: [MessageListItem]
@@ -2029,7 +2034,7 @@ final class MessageListViewController: UIViewController {
         // Typing roster — re-snapshot : la cellule typing entre/sort du flux
         // comme toute rangée du rouleau, sans animation. Low-frequency signal, no debounce.
         // Uses stateStore publisher so typing doesn't trigger full ConversationViewModel re-render.
-        vm.typingUsernamesPublisher
+        vm.typingParticipantsPublisher
             .receive(on: DispatchQueue.main)
             .dropFirst()
             .sink { [weak self] _ in
@@ -2783,7 +2788,7 @@ extension MessageListViewController: UICollectionViewDelegate {
 /// (bas visuel de la liste inversée). Alignée côté expéditeur ; les points
 /// s'animent en autonomie via `@State` (pas de timer externe).
 private struct TypingIndicatorBubble: View {
-    let names: [String]
+    let participants: [TypingParticipant]
     let accentHex: String
     let isDark: Bool
     /// Rangée PLATE (Focal/Script, matrice §5) : pastille 22 de l'auteur +
@@ -2793,12 +2798,34 @@ private struct TypingIndicatorBubble: View {
 
     @State private var animating = false
 
+    private var names: [String] { participants.displayNames }
+
     private var label: String {
         switch names.count {
         case 0: return ""
         case 1: return String(format: String(localized: "typing.named", bundle: .main), names[0])
         case 2: return String(format: String(localized: "typing.double", bundle: .main), names[0], names[1])
         default: return String(localized: "typing.several", bundle: .main)
+        }
+    }
+
+    /// Le frappeur dont on montre le visage : le premier du roster, dans
+    /// l'ordre de première apparition tenu par `ConversationSocketHandler`.
+    private var lead: TypingParticipant? { participants.first }
+
+    /// Pastille de l'auteur — sa VRAIE photo dès qu'elle est connue localement,
+    /// ses initiales déterministes sinon. `MeeshyAvatar` porte déjà la cascade
+    /// (cache disque → réseau → initiales) : lui passer `avatarURL` suffit.
+    @ViewBuilder
+    private func leadAvatar(size: CGFloat) -> some View {
+        if let lead {
+            MeeshyAvatar(
+                name: lead.displayName,
+                context: .custom(size),
+                accentColor: accentHex,
+                avatarURL: lead.avatarURL,
+                isDark: isDark
+            )
         }
     }
 
@@ -2826,12 +2853,7 @@ private struct TypingIndicatorBubble: View {
         HStack(spacing: 0) {
             if isFlat {
                 HStack(spacing: 7) {
-                    MeeshyAvatar(
-                        name: names.first ?? "",
-                        context: .custom(22),
-                        accentColor: accentHex,
-                        isDark: isDark
-                    )
+                    leadAvatar(size: 22)
                     pulsingDots(accent: accent)
                 }
                 // Aligné sur la colonne d'identité de FocalRow (retrait
@@ -2839,6 +2861,11 @@ private struct TypingIndicatorBubble: View {
                 .padding(.horizontal, FocalMetrics.Row.paddingHorizontal)
             } else {
                 HStack(spacing: 6) {
+                    // Le visage AVANT le libellé : « qui écrit » se lit d'un
+                    // coup d'œil, sans lire le nom. La capsule du mode bulles
+                    // ne le portait pas — seule la rangée plate en avait un, et
+                    // sans photo (initiales seules).
+                    leadAvatar(size: 18)
                     if !label.isEmpty {
                         Text(label)
                             // Dynamic Type (153i) : libellé « X écrit… » réel et localisé —

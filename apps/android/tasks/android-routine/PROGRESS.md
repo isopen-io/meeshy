@@ -2,6 +2,237 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-25 **the composer AUTHORS which media is a slide's looping background** (slice
+> `story-composer-background-media`, feature-parity E. Stories — "background designation toggle (1 visual +
+> 1 audio/slide)"). Before this, an Android-composed multi-media slide had **no way to say which media is the
+> background**: every media rode as a flat `mediaIds` list and the reader fell back to "first video, else first
+> image" as the background. iOS designates exactly one canvas media object `isBackground: true` per slide; this
+> slice ports the **visual** half of that (audio-background deferred — the composer has no audio track yet), so
+> the author picks the background and the reader's `resolveBackgroundMedia` (`firstOrNull { it.isBackground }`)
+> and `StorySlideDuration` `bgVideoDur` branch honour exactly that pick.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3517 (`claude/brave-archimedes-*`,
+> Android `core:model` legacy-ISO fix), #3515 (`feat/ios-alignment-*`, iOS), #3514 (`claude/intelligent-noether-*`,
+> docs/shared) — none a `claude/apps/android/<slice-id>` slice from THIS routine. Prior slice
+> (`story-composer-element-timing`, #3512) already merged into main. Branched off freshly-fetched `origin/main`
+> (`0b6a6e9e`).
+>
+> **The fix — one pure wire-mapping value + one slide field/reducer + one VM intent/resolver + one screen toggle.**
+> (1) `StoryBackgroundMedia` (`:feature:stories`, pure `data class` — the resolved `(mediaId, url, mimeType,
+> durationSeconds)` of a designated background) with `toMediaObject()` producing the `isBackground` +
+> `loop = true` `StoryMediaObject`: `mediaType` from the MIME (`video/*` → `"video"`), and a **video** carries
+> its duration onto both `duration` and `intrinsicDuration` (feeding the reader's `bgVideoDur` loop-extend) while
+> an **image** carries none. (2) `StorySlide.backgroundMediaId: String?`; `StorySlideDeck.toggleSelectedBackgroundMedia`
+> (at most one per slide — designating replaces the prior, re-designating clears it, inert on an id not attached
+> to the selected slide) + `selectedSlideBackgroundMediaId`/`isSelectedBackgroundMedia`; `removeMedia` now
+> **clears the designation when it removes the background media** (no orphan pointer). (3) VM intent
+> `onToggleSlideBackgroundMedia` + `resolveBackgroundMedia(id, attachments)` that maps the id to its uploaded
+> URL/MIME/duration on publish (returns `null` for a still-pending upload — no server URL yet — so it publishes
+> as a plain flat-media slide until the upload lands). (4) A `Wallpaper` toggle badge on each real media
+> thumbnail, tinted `primary` when it is the background, localised in 4 locales (en/fr/es/pt).
+>
+> **Tests: +21** — 8 `StorySlideDeckTest` (fresh=no designation; designate; replace prior=at-most-one; toggle
+> off; inert on unattached id; only the selected slide; removeMedia clears the bg designation; removeMedia keeps
+> a different media's designation), 5 `StoryComposerDraftTest` (image bg → one `isBackground` object with
+> URL/type/loop; video bg carries duration onto `duration`+`intrinsicDuration`; image bg carries no duration even
+> when present; a bg-media-alone materialises effects; no designation ⇒ `mediaObjects` null), 5
+> `StoryComposerViewModelTest` (designate attached media; toggle off; inert unknown id; publishing a designated
+> **video** bg emits an `isBackground` object resolved from attachments with its duration; no designation ⇒ no
+> media objects).
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the copy→patch
+> (`source.properties` ApiLevel 37.0→37) keeping android-37.0 ALONGSIDE android-37 resolved it — same THIRD mode
+> as prior runs.
+>
+> **Verified**: targeted `:feature:stories` suites (`StorySlideDeckTest`/`StoryComposerDraftTest`/
+> `StoryComposerViewModelTest`) green, then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL in 4m 43s** before any push. Mutation-RED
+> proven: neutering `toggleSelectedBackgroundMedia` to `return this` reddened exactly 4 `StorySlideDeckTest`
+> assertions (designate / replace-prior / toggle-off / a removeMedia case that sets up via the toggle) while the
+> fresh-no-designation, inert-unattached-id, and remove-different-media-keeps-designation ones stayed green —
+> genuine discrimination, not an assertion echo. Reviewer PASS. Diff is `apps/android` only (1 new prod file + 3
+> amended prod files + 1 screen glue + 4 strings.xml in :feature:stories, +3 amended test files, tracking docs).
+> Verdict: **PASS** — a pure background-designation reducer + a pure wire-mapping value + a VM intent/resolver + a
+> screen toggle; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the AUDIO half of the same background-designation item (mark one borrowed-sound / audio track per
+> slide as the looping background → `audioPlayerObjects[].isBackground`, the other input the reader's
+> `StorySlideDuration` `bgAudioDur` branch reads) — blocked until the composer gains an audio-track authoring
+> surface (borrowed sound / voice-over), so scout that first. Adjacent §E backlog: background IMAGE with per-slide
+> transform, looping/non-looping video designation. Scout `feature-parity.md` read-only before branching.
+
+> On 2026-08-25 **the composer AUTHORS a text element's per-element visibility timing** (slice
+> `story-composer-element-timing`, feature-parity E. Stories — "Per-element + per-slide duration"). The prior
+> slice (`story-element-timing-window-gate`, #3512) gave the *reader* a per-element `[start, start+duration)`
+> window gate; this one gives Android's own composer the controls that *write* `startTime`/`duration`, closing
+> the author→reader loop. Before this, an Android-authored text element could never carry a per-element window:
+> `StoryTextElement.toTextObject` set `fadeIn`/`fadeOut` but never `startTime`/`duration`, so the reader gate had
+> nothing local to honour. Ports iOS's `StoryTextEditorView` start/duration fields (`0…30 s`, a `0` folded back
+> to `nil`) into the same tap-cycle shape the fade authoring already ships.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3515 (`feat/ios-alignment-*`, iOS),
+> #3514 (`claude/intelligent-noether-*`, docs/shared) — neither a `claude/apps/android/*` slice from THIS
+> routine. Prior slice (`story-element-timing-window-gate`, #3512) already merged into main. Branched off
+> freshly-fetched `origin/main` (`d4401986`).
+>
+> **The fix — one pure value type + one element field/serialiser + two VM intents + two screen controls.**
+> (1) `StoryElementTiming` (`:feature:stories`, pure `data class`) mirrors `StoryTextFade` exactly:
+> `(startSeconds, durationSeconds)` flat pair (two independent ends, iOS binds each to its own control),
+> `NONE_SECONDS = 0f`, `hasStart`/`isTimed`/`isActive` predicates, `cycledStart()`/`cycledDuration()` delegating
+> to `StoryElementTimingCycle.advance` (discrete ladder `[1,2,3,5,10,15,30]`, all within iOS's `0…30 s` range,
+> `firstOrNull { it > current } ?: NONE_SECONDS` wrap). (2) `StoryTextElement.timing` field; `toTextObject`
+> serialises `startTime = timing.startSeconds.takeIf { it > NONE_SECONDS }?.toDouble()` and `duration` likewise
+> — matching iOS's `$0 > 0 ? Double($0) : nil` and the `fadeIn`/`fadeOut` omit-a-zero convention beside it.
+> (3) `onTextElementCycleStart(id)`/`onTextElementCycleDuration(id)` advance each end independently through
+> `updateTextElement` (inert on unknown id). (4) Two toolbar `IconButton`s in `TextStyleToolbar` (clock =
+> `Schedule` for start, `Timelapse` for duration; tinted `primary` when `hasStart`/`isTimed`), wired to the VM,
+> localised in 4 locales (en/fr/es/pt).
+>
+> **Tests: +18** — 10 `StoryElementTimingTest` (fresh=inactive; positive start active; positive duration active;
+> cycledStart/cycledDuration touch only their end; advance visits every step then wraps; between-steps jumps
+> higher; past/beyond longest wraps to none; the offered steps within 30 s), 4 added to `StoryTextElementTest`
+> (fresh no-timing; `toTextObject` omits both when unset; start-only onto `startTime`; duration-only onto
+> `duration`; both ends), 4 added to `StoryComposerViewModelTest` (start/duration advance the edited element;
+> wrap; unknown-id inert on each). **Mutation-RED-proven isolated**: neutering `StoryElementTimingCycle.advance`
+> to a constant reddened EXACTLY the 9 advance/cycle/VM-advance assertions while the model-shape
+> (fresh/positive-start/positive-duration/steps-list) and inert-id tests stayed green — genuine discrimination,
+> not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the copy→patch
+> (`source.properties` ApiLevel 37.0→37, `build.prop` `sdk_full`/`sdk` fields) keeping android-37.0 ALONGSIDE
+> android-37 resolved it — same THIRD mode as prior runs.
+>
+> **Verified**: targeted `:feature:stories` suites (`StoryElementTimingTest`/`StoryTextElementTest`/
+> `StoryComposerViewModelTest`) green, then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any push. Reviewer PASS. Diff is
+> `apps/android` only (1 new prod file + 3 amended prod files + 4 strings.xml in :feature:stories, +1 new test
+> file + 2 amended, tracking docs). Verdict: **PASS** — a pure timing SSOT mirroring `StoryTextFade`, an element
+> serialiser, two VM intents, and two screen controls; behavioural tests through the public API; no production
+> logic outside `apps/android`.
+>
+> **Next**: the background-designation toggle (mark one visual + one audio per slide as the looping background,
+> feeding the content-derived `bgVideoDur` branch the reader duration SSOT already reads) — the last unchecked
+> piece of feature-parity E's "Per-element + per-slide duration; background designation toggle" item. It shares
+> the media-OBJECT authoring foundation the composer still lacks (`mediaObjects` with `isBackground`). Adjacent
+> §E backlog: background IMAGE with per-slide transform. Scout `feature-parity.md` read-only before branching.
+
+> On 2026-08-25 **the viewer honours a timed element's own visibility WINDOW** (slice
+> `story-element-timing-window-gate`, feature-parity E. Stories — "Per-element + per-slide duration"). The prior
+> slices gave the composer per-SLIDE duration authoring; this one closes a distinct, foundational reader gap: a
+> text overlay or foreground media clip that authored its OWN `[startTime, startTime + duration)` window was
+> **never gated** on Android — it stayed on screen the entire slide, regardless of its window — while iOS's
+> `StoryRenderer.shouldRender(item:at:mode:)` drops the layer entirely outside that window in `.play` mode. Found
+> by asking of the reader "which wire field does the Android canvas still not honour?": `startTime`/`duration`
+> WERE carried onto `StoryTextObjectView`/`StoryForegroundMediaView` and fed the fade envelope, but nothing
+> enforced a HARD visibility cut when no fade was authored.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3511/#3509/#3508, all
+> shared/ios/gateway branches (`claude/brave-archimedes-*`, `claude/intelligent-noether-*`), none a
+> `claude/apps/android/*` slice from THIS routine. Prior slice (`story-composer-slide-background`, #3510) already
+> merged into main (`610d9ca6`). Branched off freshly-fetched `origin/main` (`610d9ca6`).
+>
+> **The fix — one pure resolver + two view delegators + a render-loop guard.** (1) `StoryElementVisibility`
+> (`:feature:stories`, pure `object`) ports iOS `shouldRender` EXACTLY: `isVisible(startTime, duration,
+> currentTime)` → `currentTime ∈ [start, end)`, inclusive start / exclusive end, a **sharp** on/off cut (the
+> smooth ramp stays in `StoryMediaFadeResolver`, applied only while on screen). Deliberate, documented deviation
+> from iOS's literal `duration.map { start + $0 }`: a non-positive/non-finite `duration` = OPEN-ENDED (`end =
+> +∞`), because the Android wire projection collapses an ABSENT duration to `0.0` — matching how
+> `StoryMediaFadeResolver` and the clip-transition path already read `duration <= 0` across the module; a
+> non-finite playhead **fails open** (never blanks the canvas on a clock glitch); a non-finite `startTime` → `0`.
+> (2) `StoryTextObjectView.isVisible(atSeconds)` and `StoryForegroundMediaView.isVisible(atSeconds)` delegate to
+> it (Float→Double). (3) The viewer canvas render loop (`StoryViewerScreen`) computes the playhead once and skips
+> a `foregroundMedia`/`textObjects` entry whose `isVisible(playhead)` is false — the previously-always-drawn
+> layer now respects its window.
+>
+> **Tests: +16** — 12 `StoryElementVisibilityTest` (untimed=always-visible; before/inside/after; inclusive
+> start; exclusive end; start-only open-ended; negative duration open-ended; negative start opens earlier;
+> infinite duration; non-finite playhead fail-open; non-finite start→0), 2 added to `StoryTextObjectViewTest`
+> and 2 to `StoryForegroundFadeTest` (untimed always-visible + timed gated-to-window, per view). **RED-proof
+> isolated**: neutering `isVisible` to a constant `true` reddened EXACTLY the 6 hiding assertions (before/after
+> window, exclusive end, negative-start end, start-open-ended pre-open, non-finite-start post-window) while the 6
+> always-visible tests stayed green — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the copy→patch
+> (`source.properties` ApiLevel 37.0→37, `build.prop` `sdk_full` fields) keeping android-37.0 ALONGSIDE
+> android-37 resolved it — same THIRD mode as prior runs.
+>
+> **Verified**: targeted `:feature:stories` suites (`StoryElementVisibilityTest`/`StoryTextObjectViewTest`/
+> `StoryForegroundFadeTest`) green, then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest,
+> 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any push (one transient KSP daemon-collision flake
+> on the first run — `StreamCorruptedException` from a stray parallel daemon — cleared by `--stop` + cache clean;
+> the clean rerun is green). Reviewer PASS. Diff is `apps/android` only (1 new prod file + 2 amended prod files +
+> 1 glue file in :feature:stories, +1 new test file + 2 amended, tracking docs). Verdict: **PASS** — a pure
+> visibility SSOT mirroring iOS's authority, two view delegators, and a render-loop guard; behavioural tests
+> through the public API; no production logic outside `apps/android`.
+>
+> **Next**: per-ELEMENT duration AUTHORING — a composer control that WRITES a text element's
+> `startTime`/`duration` (serialised to `StoryTextObject.startTime`/`duration`, the very fields this slice's
+> reader gate now honours), closing the author→reader loop exactly as the slide-duration pin did. Adjacent §E
+> backlog: background IMAGE with transform, looping/non-looping background-video designation, and the media-OBJECT
+> authoring foundation those share. Scout `feature-parity.md` read-only before branching.
+
+> On 2026-08-25 **the composer AUTHORS a per-slide colour/gradient/random-pastel backdrop** (slice
+> `story-composer-slide-background`, feature-parity E. Stories — "Backgrounds: random pastel, colour/gradient
+> palette, …"). The prior slice (`story-slide-background-value`) made the *reader* honour
+> `effects.background`; this one gives Android's own composer the control that *writes* it, closing the
+> author→reader loop (today only iOS-authored / back-end stories carried a colour backdrop). Ports iOS's
+> authoring SSOT `StoryBackgroundPalette`
+> (`packages/MeeshySDK/.../MeeshyUI/Story/StoryComposerSupportTypes.swift`) + `applyBackgroundColorToCurrentSlide`.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3509/#3508, both iOS/gateway
+> branches (`claude/intelligent-noether-*`, `claude/brave-archimedes-*`), none a `claude/apps/android/*`
+> slice from THIS routine. Prior slice (`story-slide-background-value`, `1fdeff70`) already merged into main.
+> Branched off freshly-fetched `origin/main` (`ae52866a`).
+>
+> **The fix — a pure palette SSOT + a slide field/reducer + a draft serialiser + a VM intent + a screen picker.**
+> (1) `StoryBackgroundPalette` (`:core:model`, pure `object`) ports iOS exactly: `SOLID_COLORS` (17 preset
+> hex, no `#`), `GRADIENTS` (6 `(start,end)` pairs), `presets()` projecting solids as `StoryBackgroundValue.Hex`
+> then gradients as `.Gradient`, `hsbToHex(h,s,b)` (pure HSB→uppercase-6-hex matching UIColor + `Int(x*255)`
+> truncation), and `randomPastelHex(random: Random)` (injectable RNG, saturation 0.14–0.24 / brightness
+> 0.93–0.98, looping until the pick is not a preset). (2) `StorySlide.background: StoryBackgroundValue?`;
+> `StorySlideDeck.setSelectedBackground(value)` writes the selected slide only, inert (same instance) when the
+> value already equals the slide's backdrop, clears on `null`; `selectedSlideBackground` reads it back. (3)
+> `StoryComposerDraft.background` serialises onto `StoryEffects.background` via `StoryBackgroundValue.serialized()`
+> (a backdrop alone now materialises effects). (4) `StoryComposerViewModel.onSlideBackgroundChange` +
+> `selectedSlideBackground`, and the backdrop flows per-slide through `publishPlans`. (5) A "Background" swatch
+> picker in the Effets band (Compose glue, exempt) — a None chip, one tappable swatch per preset (painted with
+> the reader's `hexColor` SSOT so swatch = publish), and a "Random" pastel button; localised in 4 locales.
+>
+> **Tests: +23** — 10 `StoryBackgroundPaletteTest` (pure: 17 solids / 6 gradients / 23 presets; `hsbToHex`
+> primary hues + grey ramp; `randomPastelHex` valid-hex / brightness band / saturation band / never-a-preset;
+> `randomPastel` wraps the hex), 7 `StorySlideDeckBackgroundTest` (fresh slide has none; write selected-only;
+> gradient stored; clear; inert on equal; inert clear-of-blank; survives selection change), 4 new
+> `StoryComposerDraftTest` (solid → bare hex; gradient → `gradient:…:…` wire; backdrop alone materialises
+> effects; no backdrop → null), 3 new `StoryComposerViewModelTest` (intent sets through public state; clears;
+> backdrop rides into the wire request on publish). **RED-proof isolated**: neutering `hsbToHex` to a constant
+> reddened EXACTLY the 4 conversion-dependent tests (primary hues, grey ramp, brightness band, saturation
+> band) while the list/valid-hex/preset-avoidance/wrap tests stayed green; neutering the `setSelectedBackground`
+> inert guard reddened EXACTLY the 2 inert tests while the 5 write/clear/gradient/selection tests stayed green —
+> genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch
+> (`source.properties` ApiLevel 37.0→37, `package.xml` `path=`, BOTH `build.prop` `sdk_full` fields) keeping
+> android-37.0 ALONGSIDE resolved it — same THIRD mode as the prior runs.
+>
+> **Verified**: targeted `:core:model` (`StoryBackgroundPaletteTest`) + `:feature:stories`
+> (`StorySlideDeckBackgroundTest` / `StoryComposerDraftTest` / `StoryComposerViewModelTest`) suites green, then
+> full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate)
+> **BUILD SUCCESSFUL** before any push. Reviewer PASS. Diff is `apps/android` only (1 new prod file in
+> :core:model, 4 prod files + 4 strings.xml in :feature:stories, +2 new test files + 2 amended, tracking docs).
+> Verdict: **PASS** — a pure palette SSOT mirroring iOS's authority, a deck reducer, a draft serialiser, a VM
+> intent, and a screen picker; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the two remaining pieces of feature-parity E's background item — background **IMAGE** with a
+> per-slide transform (pan/zoom/rotation, `StoryBackgroundTransform`), and the **looping/non-looping background
+> video designation** (mark one visual as the looping background, feeding the content-derived `bgVideoDur`
+> branch the reader duration SSOT already reads). Both share a media-OBJECT authoring foundation the composer
+> still lacks (`mediaObjects` with `isBackground`). Adjacent: per-ELEMENT duration. Scout `feature-parity.md`
+> read-only before branching.
+
 > On 2026-08-25 **the viewer honours a slide's serialised COLOUR background** (slice
 > `story-slide-background-value`, feature-parity E. Stories — "Backgrounds: random pastel, colour/gradient
 > palette, …"). The viewer already painted a slide's background MEDIA (image/video) but IGNORED

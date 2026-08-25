@@ -1716,6 +1716,89 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.typingUsernames["conv2"], "Bob")
     }
 
+    // MARK: - Typing: un message rétracte la frappe qui l'annonçait
+
+    private func makeTypingRetractionMessage(
+        id: String = "m1",
+        conversationId: String,
+        senderId: String
+    ) -> APIMessage {
+        JSONStub.decode("""
+        {
+            "id":"\(id)",
+            "conversationId":"\(conversationId)",
+            "senderId":"\(senderId)",
+            "content":"Bonjour",
+            "createdAt":"2026-08-25T12:00:00.000Z",
+            "sender":{"id":"\(senderId)","username":"alice","displayName":"Alice"}
+        }
+        """)
+    }
+
+    /// L'arrivée du message est la preuve la plus forte que la frappe est
+    /// finie. Sans ce chemin, la pastille affichait « @alice ⋯ » jusqu'à 15 s
+    /// APRÈS que son message soit arrivé — pendant que le toast, trente points
+    /// plus bas, annonçait ce même message.
+    func test_messageReceived_retractsTheTypingIndicatorOfItsAuthor() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+
+        messageSocket.typingStarted.send(
+            TypingEvent(userId: "u1", username: "alice", displayName: "Alice", conversationId: "conv1")
+        )
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(sut.typingUsers["conv1"], "alice", "précondition : la frappe est affichée")
+
+        messageSocket.messageReceived.send(
+            makeTypingRetractionMessage(conversationId: "conv1", senderId: "u1")
+        )
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertNil(sut.typingUsers["conv1"],
+                     "le message est arrivé : son auteur n'écrit plus")
+        XCTAssertNil(sut.typingUsernames["conv1"],
+                     "les deux vues publiques désignent le même frappeur, elles tombent ensemble")
+    }
+
+    func test_messageReceived_leavesTheOtherTypersOfTheSameConversation() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+
+        messageSocket.typingStarted.send(
+            TypingEvent(userId: "u1", username: "alice", displayName: "Alice", conversationId: "conv1")
+        )
+        messageSocket.typingStarted.send(
+            TypingEvent(userId: "u2", username: "bob", displayName: "Bob", conversationId: "conv1")
+        )
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        messageSocket.messageReceived.send(
+            makeTypingRetractionMessage(conversationId: "conv1", senderId: "u1")
+        )
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.typingUsers["conv1"], "bob",
+                       "Bob écrit toujours : un message d'Alice ne le fait pas taire")
+    }
+
+    func test_messageReceived_doesNotTouchAnotherConversation() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+
+        messageSocket.typingStarted.send(
+            TypingEvent(userId: "u1", username: "alice", displayName: "Alice", conversationId: "conv2")
+        )
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        messageSocket.messageReceived.send(
+            makeTypingRetractionMessage(conversationId: "conv1", senderId: "u1")
+        )
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.typingUsers["conv2"], "alice",
+                       "la rétractation est bornée à la conversation du message")
+    }
+
     // MARK: - moveToSection
 
     func test_moveToSection_updatesSectionIdViaStore() async throws {

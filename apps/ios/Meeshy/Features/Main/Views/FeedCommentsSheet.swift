@@ -2334,10 +2334,25 @@ struct CommentRowView: View, Equatable {
                     } label: {
                         HStack(spacing: 4) {
                             let heartColor: Color = isLiked ? MeeshyColors.error : (likeCount > 0 ? Color(hex: accentColor) : theme.textMuted)
-                            Image(systemName: isLiked || likeCount > 0 ? "heart.fill" : "heart")
-                                .font(MeeshyFont.relative(isReply ? 12 : 14))
-                                .foregroundColor(heartColor)
-                                .scaleEffect(isLiked ? 1.1 : 1.0)
+                            // Le contour d'accent — « c'est MOI qui ai liké » —
+                            // manquait ici alors que le fil des posts le porte
+                            // depuis toujours : un commentaire que j'avais aimé
+                            // ne se distinguait que par sa teinte, la même que
+                            // celle d'un commentaire simplement aimé par
+                            // d'autres. `filledWhenInactive` garde le cœur plein
+                            // dès qu'il existe des likes, sans revendiquer les
+                            // miens.
+                            EngagementGlyph(
+                                outline: "heart",
+                                filled: "heart.fill",
+                                participated: isLiked,
+                                accentHex: accentColor,
+                                activeTint: MeeshyColors.error,
+                                inactiveTint: heartColor,
+                                filledWhenInactive: likeCount > 0,
+                                size: isReply ? 12 : 14
+                            )
+                            .scaleEffect(isLiked ? 1.1 : 1.0)
 
                             Text("\(likeCount)")
                                 .font(MeeshyFont.relative(12, weight: .medium))

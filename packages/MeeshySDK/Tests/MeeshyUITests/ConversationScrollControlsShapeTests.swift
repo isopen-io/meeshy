@@ -116,7 +116,7 @@ final class ConversationScrollControlsShapeTests: XCTestCase {
     ) -> ConversationScrollControlsView {
         ConversationScrollControlsView(
             unreadCount: unreadCount,
-            typingUsernames: [],
+            typingParticipants: [],
             lastUnreadMessageContent: lastUnreadMessageContent,
             unreadAttachmentTypeLabel: nil,
             unreadAttachmentThumbHash: nil,

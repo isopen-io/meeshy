@@ -922,6 +922,7 @@ export function PostsFeedScreen() {
                       name: post.author?.displayName ?? post.author?.username ?? t('unknownAuthor', 'Unknown'),
                       avatar: post.author?.avatar ?? undefined,
                     }}
+                    authorId={post.authorId ?? post.author?.id}
                     lang={post.originalLanguage ?? 'unknown'}
                     content={post.content ?? ''}
                     translations={postToTranslations(post)}

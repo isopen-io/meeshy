@@ -188,6 +188,48 @@ describe('isAcceptedMimeType', () => {
   );
 });
 
+// Régression It. 267 — quatre gardes sur six ignoraient les paramètres MIME
+// (`; charset=utf-8`), classant `text/plain; charset=utf-8` differemment de
+// `audio/webm;codecs=opus` à la frontière accept/reject. Le nettoyage doit
+// être cohérent sur les SIX familles.
+describe('MIME parameter tolerance (regression It. 267)', () => {
+  it('isImageMimeType strips params (image/png; charset=utf-8 → image/png)', () => {
+    expect(isImageMimeType('image/png; charset=utf-8')).toBe(true);
+  });
+
+  it('isTextMimeType strips params (text/plain; charset=utf-8 → text/plain)', () => {
+    expect(isTextMimeType('text/plain; charset=utf-8')).toBe(true);
+  });
+
+  it('isDocumentMimeType strips params (application/pdf; charset=binary → application/pdf)', () => {
+    expect(isDocumentMimeType('application/pdf; charset=binary')).toBe(true);
+  });
+
+  it('isCodeMimeType strips params (application/json; charset=utf-8 → application/json)', () => {
+    expect(isCodeMimeType('application/json; charset=utf-8')).toBe(true);
+  });
+
+  it('isAcceptedMimeType accepts a parametrised text type, like it does audio', () => {
+    expect(isAcceptedMimeType('text/plain; charset=utf-8')).toBe(true);
+    expect(isAcceptedMimeType('application/json; charset=utf-8')).toBe(true);
+  });
+
+  it('getAttachmentType routes a parametrised code type to code, not the document default', () => {
+    expect(getAttachmentType('application/json; charset=utf-8')).toBe('code');
+  });
+
+  it('getAttachmentType routes a parametrised text type to text', () => {
+    expect(getAttachmentType('text/plain; charset=utf-8')).toBe('text');
+  });
+
+  // Le nettoyage n'ÉLARGIT jamais aux types de base non listés : une base
+  // absente de la liste reste rejetée, paramètre ou non.
+  it('does not widen acceptance to an unlisted base type carrying a param', () => {
+    expect(isImageMimeType('image/svg+xml; charset=utf-8')).toBe(false);
+    expect(isAcceptedMimeType('image/svg+xml; charset=utf-8')).toBe(false);
+  });
+});
+
 describe('getAttachmentType — MIME-based detection (priority 1)', () => {
   it('detects image from MIME type', () => {
     expect(getAttachmentType('image/png')).toBe('image');

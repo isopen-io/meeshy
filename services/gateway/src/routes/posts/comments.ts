@@ -6,6 +6,8 @@ import { retractReactionNotifications } from '../../services/notifications/retra
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
 import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, UnlikeSchema } from './types';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+import { safeBroadcast } from '../../socketio/serverEmit';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
@@ -96,7 +98,7 @@ export function registerCommentRoutes(
         meta: { mentionedUsers },
       });
     } catch (error) {
-      fastify.log.error(`[GET /posts/:postId/comments] Error: ${error}`);
+      enhancedLogger.error('[GET /posts/:postId/comments]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -136,7 +138,7 @@ export function registerCommentRoutes(
         meta: { mentionedUsers: replyMentionedUsers },
       });
     } catch (error) {
-      fastify.log.error(`[GET comments/:commentId/replies] Error: ${error}`);
+      enhancedLogger.error('[GET comments/:commentId/replies]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -231,7 +233,7 @@ export function registerCommentRoutes(
           // L'écho porte le cmid du créateur : l'émetteur remplace sa ligne
           // optimiste (id local = cmid) au lieu d'en insérer un doublon.
           clientMutationId: request.clientMutationId,
-        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments]: broadcast comment added failed'));
+        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: broadcast comment added failed', { err }));
       }
 
       const notifService = fastify.notificationService;
@@ -254,7 +256,7 @@ export function registerCommentRoutes(
 
           if (mentionedUserIds.length > 0) {
             mentionService.createCommentMentions(comment.id, mentionedUserIds)
-              .catch(err => fastify.log.error(`comment mention persistence failed: ${err}`));
+              .catch(err => enhancedLogger.error('comment mention persistence failed', err));
 
             notifService.createCommentMentionNotificationsBatch({
               commentId: comment.id,
@@ -271,7 +273,7 @@ export function registerCommentRoutes(
               postAuthorId: post.authorId,
               visibility: post.visibility,
               visibilityUserIds: post.visibilityUserIds ?? [],
-            }).catch(err => fastify.log.error(`comment mention notification failed: ${err}`));
+            }).catch(err => enhancedLogger.error('comment mention notification failed', err));
           }
         }
       }
@@ -301,7 +303,7 @@ export function registerCommentRoutes(
               postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
               postCreatedAt: post?.createdAt ?? undefined,
               postExpiresAt: post?.expiresAt ?? undefined,
-            }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments]: notify comment reply failed'));
+            }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: notify comment reply failed', { err }));
           }
         } else if (post?.authorId && post.type !== 'STORY' && !mentionedUserIds.includes(post.authorId)) {
           // Top-level comment on a regular post/mood/status — notify the
@@ -319,7 +321,7 @@ export function registerCommentRoutes(
             postPreview: post.content?.slice(0, 80),
             postCreatedAt: post.createdAt ?? undefined,
             postExpiresAt: post.expiresAt ?? undefined,
-          }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments]: notify post comment failed'));
+          }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: notify post comment failed', { err }));
         }
       }
 
@@ -341,7 +343,7 @@ export function registerCommentRoutes(
           // de perdre. Une visibilité absente doit restreindre, pas ouvrir.
           visibility: post.visibility,
           visibilityUserIds: post.visibilityUserIds ?? [],
-        }).catch(err => fastify.log.error(`story comment notification fan-out failed: ${err}`));
+        }).catch(err => enhancedLogger.error('story comment notification fan-out failed', err));
       }
 
       // Trigger async translation for comment content (fire-and-forget)
@@ -353,7 +355,7 @@ export function registerCommentRoutes(
             targetPostId,
             parsed.data.content,
             (comment as any).originalLanguage,
-          ).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments]: translate comment failed'));
+          ).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: translate comment failed', { err }));
         } catch {
           // PostTranslationService not initialized — skip silently
         }
@@ -375,7 +377,7 @@ export function registerCommentRoutes(
           postMediaId: linkedMedia.id,
           fileUrl: linkedMedia.fileUrl ?? '',
           authorId: authContext.registeredUser.id,
-        }).catch((err) => fastify.log.error(`comment audio processing failed: ${err}`));
+        }).catch((err) => enhancedLogger.error('comment audio processing failed', err));
       }
 
       const newCommentMentionedUsers = parsed.data.content
@@ -398,7 +400,7 @@ export function registerCommentRoutes(
       if (error instanceof Error && error.message === 'MEDIA_NOT_AVAILABLE') {
         return sendBadRequest(reply, 'Attached media not found or already linked', { code: 'MEDIA_NOT_AVAILABLE' });
       }
-      fastify.log.error(`[POST /posts/:postId/comments] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/comments]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -467,7 +469,7 @@ export function registerCommentRoutes(
         socialEvents.broadcastCommentUpdated({
           postId: comment.postId,
           comment: hoistCommentLocation(hoistCommentTrackingLinks(comment as unknown as Record<string, unknown>)) as unknown as typeof comment,
-        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => fastify.log.warn({ err }, '[PATCH /posts/:postId/comments/:commentId]: broadcast comment updated failed'));
+        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => enhancedLogger.warn('[PATCH /posts/:postId/comments/:commentId]: broadcast comment updated failed', { err }));
       }
 
       // Contenu modifié → les traductions stockées ont été purgées par le
@@ -480,7 +482,7 @@ export function registerCommentRoutes(
             comment.postId,
             sanitizedContent,
             (comment as { originalLanguage?: string | null }).originalLanguage ?? undefined,
-          ).catch((err) => fastify.log.warn({ err }, '[PATCH /posts/:postId/comments/:commentId]: translate comment failed'));
+          ).catch((err) => enhancedLogger.warn('[PATCH /posts/:postId/comments/:commentId]: translate comment failed', { err }));
         } catch {
           // PostTranslationService not initialized — skip silently
         }
@@ -494,7 +496,7 @@ export function registerCommentRoutes(
       if (error instanceof Error && error.message === 'EMPTY_CONTENT') {
         return sendBadRequest(reply, 'A text comment cannot be edited to blank', { code: 'EMPTY_CONTENT' });
       }
-      fastify.log.error(`[PATCH /posts/:postId/comments/:commentId] Error: ${error}`);
+      enhancedLogger.error('[PATCH /posts/:postId/comments/:commentId]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -529,14 +531,14 @@ export function registerCommentRoutes(
 
       try {
         PostTranslationService.shared.translateCommentOnDemand(commentId, targetLanguage, { force })
-          .catch((err) => fastify.log.warn({ err }, '[POST comments/:commentId/translate]: on-demand translate failed'));
+          .catch((err) => enhancedLogger.warn('[POST comments/:commentId/translate]: on-demand translate failed', { err }));
       } catch {
         // PostTranslationService not initialized — skip silently
       }
 
       return sendSuccess(reply, { requested: true, targetLanguage });
     } catch (error) {
-      fastify.log.error(`[POST comments/:commentId/translate] Error: ${error}`);
+      enhancedLogger.error('[POST comments/:commentId/translate]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -582,13 +584,15 @@ export function registerCommentRoutes(
       // Broadcast comment liked via Socket.IO
       const socialEvents = fastify.socialEvents;
       if (socialEvents && result.authorId) {
-        socialEvents.broadcastCommentLiked({
-          postId: commentPostId,
-          commentId,
-          userId: authContext.registeredUser.id,
-          emoji,
-          likeCount: result.likeCount,
-        }, result.authorId);
+        safeBroadcast('comment:liked', () => {
+          socialEvents.broadcastCommentLiked({
+            postId: commentPostId,
+            commentId,
+            userId: authContext.registeredUser.id,
+            emoji,
+            likeCount: result.likeCount,
+          }, result.authorId);
+        });
       }
 
       // Notify comment author — l'extrait du commentaire liké voyage en
@@ -617,7 +621,7 @@ export function registerCommentRoutes(
           emoji,
           commentPreview: likedComment?.content?.slice(0, 80),
           postType: likedPost?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
-        }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments/:commentId/like]: notify comment like failed'));
+        }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments/:commentId/like]: notify comment like failed', { err }));
       }
 
       return sendSuccess(reply, { liked: true, likeCount: result.likeCount, reactionSummary: result.reactionSummary });
@@ -629,7 +633,7 @@ export function registerCommentRoutes(
       if (error instanceof ConflictError) {
         return sendConflict(reply, error.message, { code: error.code });
       }
-      fastify.log.error(`[POST comments/:commentId/like] Error: ${error}`);
+      enhancedLogger.error('[POST comments/:commentId/like]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -674,13 +678,15 @@ export function registerCommentRoutes(
       // cette valeur qui adresse la room et sert de clé de cache aux clients.
       const socialEvents = fastify.socialEvents;
       if (socialEvents && result.authorId) {
-        socialEvents.broadcastCommentUnliked({
-          postId: thread.postId,
-          commentId,
-          userId: authContext.registeredUser.id,
-          emoji,
-          likeCount: result.likeCount,
-        }, result.authorId);
+        safeBroadcast('comment:unliked', () => {
+          socialEvents.broadcastCommentUnliked({
+            postId: thread.postId,
+            commentId,
+            userId: authContext.registeredUser.id,
+            emoji,
+            likeCount: result.likeCount,
+          }, result.authorId);
+        });
       }
 
       // Le symétrique du `createCommentLikeNotification` de la route de pose :
@@ -696,11 +702,11 @@ export function registerCommentRoutes(
           emoji: result.removedEmoji ?? emoji ?? '',
         },
         notifService
-      ).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId/comments/:commentId/like]: retract comment like notification failed'));
+      ).catch((err) => enhancedLogger.warn('[DELETE /posts/:postId/comments/:commentId/like]: retract comment like notification failed', { err }));
 
       return sendSuccess(reply, { liked: false, likeCount: result.likeCount, reactionSummary: result.reactionSummary });
     } catch (error) {
-      fastify.log.error(`[DELETE comments/:commentId/like] Error: ${error}`);
+      enhancedLogger.error('[DELETE comments/:commentId/like]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -807,7 +813,7 @@ export function registerCommentRoutes(
             deletedCommentIds,
             ...(result.parentId !== undefined ? { parentId: result.parentId } : {}),
             commentCount: post.commentCount,
-          }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId/comments/:commentId]: broadcast comment deleted failed'));
+          }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => enhancedLogger.warn('[DELETE /posts/:postId/comments/:commentId]: broadcast comment deleted failed', { err }));
         }
       }
 
@@ -816,7 +822,7 @@ export function registerCommentRoutes(
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to delete this comment', { code: 'FORBIDDEN' });
       }
-      fastify.log.error(`[DELETE comments/:commentId] Error: ${error}`);
+      enhancedLogger.error('[DELETE comments/:commentId]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });

@@ -131,6 +131,40 @@ export class TypingService {
   }
 
   /**
+   * Retire IMMÉDIATEMENT un frappeur — un message vient d'arriver de sa part.
+   *
+   * `typing:stop` a DEUX causes que le fil ne distingue pas : une PAUSE de
+   * frappe, pour laquelle `handleTypingStopWithDelay` garde volontairement
+   * l'indicateur 3 s de plus (le frappeur réfléchit, il n'a pas fini), et un
+   * ENVOI, où l'indicateur doit tomber à l'instant. L'arrivée du message est la
+   * preuve la plus forte que la frappe est finie : sans ce chemin, « X écrit… »
+   * survivait 3 s AU MESSAGE DÉJÀ AFFICHÉ, et jusqu'à 15 s si le `typing:stop`
+   * se perdait. Pendant exact de la règle inverse déjà en vigueur ci-dessus
+   * (`typing:start` reçu = preuve d'activité, on force l'état online).
+   *
+   * Annule tout linger en vol pour ce (conversation, utilisateur) afin que le
+   * `typing:stop` retardé ne re-notifie pas une seconde fois après coup.
+   */
+  clearTypingForUser(conversationId: string, userId: string): void {
+    const timeoutKey = `${conversationId}:${userId}`;
+    const pending = this.typingTimeouts.get(timeoutKey);
+    if (pending) {
+      clearTimeout(pending);
+      this.typingTimeouts.delete(timeoutKey);
+    }
+
+    const typers = this.typingUsers.get(conversationId);
+    if (!typers?.delete(userId)) return;
+    if (typers.size === 0) {
+      this.typingUsers.delete(conversationId);
+    }
+
+    this.typingListeners.forEach(listener =>
+      listener({ conversationId, userId, isTyping: false } as any)
+    );
+  }
+
+  /**
    * Start typing indicator. Throttled to one emit per
    * TYPING_EMIT_THROTTLE_MS — the server-side safety timeout and
    * the receiver's 3s linger window keep the indicator visible

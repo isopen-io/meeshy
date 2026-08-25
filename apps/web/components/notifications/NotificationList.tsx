@@ -86,7 +86,7 @@ export const NotificationList = memo(function NotificationList({
     return (
       <div className="divide-y divide-border/60">
         <AnimatePresence mode="popLayout">
-          {notifications.map((notification, index) => (
+          {notifications.map((notification) => (
             <NotificationItem
               key={notification.id}
               notification={notification}
@@ -97,7 +97,6 @@ export const NotificationList = memo(function NotificationList({
               t={t}
               locale={locale}
               compact={compact}
-              index={index}
             />
           ))}
         </AnimatePresence>
@@ -109,8 +108,6 @@ export const NotificationList = memo(function NotificationList({
 
   const groups = groupNotificationsByDate(notifications, groupLabels);
 
-  let globalIndex = 0;
-
   return (
     <div>
       {groups.map((group) => (
@@ -120,23 +117,19 @@ export const NotificationList = memo(function NotificationList({
           </h3>
           <div className="divide-y divide-border/60">
             <AnimatePresence mode="popLayout">
-              {group.notifications.map((notification) => {
-                const idx = globalIndex++;
-                return (
-                  <NotificationItem
-                    key={notification.id}
-                    notification={notification}
-                    onMarkAsRead={onMarkAsRead}
-                    onDelete={onDelete}
-                    onClick={onClick}
-                    formatTimeAgo={formatTimeAgo}
-                    t={t}
-                    locale={locale}
-                    compact={compact}
-                    index={idx}
-                  />
-                );
-              })}
+              {group.notifications.map((notification) => (
+                <NotificationItem
+                  key={notification.id}
+                  notification={notification}
+                  onMarkAsRead={onMarkAsRead}
+                  onDelete={onDelete}
+                  onClick={onClick}
+                  formatTimeAgo={formatTimeAgo}
+                  t={t}
+                  locale={locale}
+                  compact={compact}
+                />
+              ))}
             </AnimatePresence>
           </div>
         </div>

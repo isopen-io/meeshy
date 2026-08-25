@@ -110,6 +110,56 @@ beforeEach(() => {
 // getComments — currentUserReactions enrichment
 // ---------------------------------------------------------------------------
 
+describe('PostCommentService — isLikedByMe sur un commentaire', () => {
+  // Le pendant, sur les commentaires, du défaut corrigé le 2026-08-25 pour les
+  // posts : l'API ne servait PAS `isLikedByMe`, donc un commentaire que le
+  // lecteur avait liké s'affichait éteint — le SDK décode un champ absent en
+  // `?? false`. Aucune requête n'est ajoutée : le like d'un commentaire EST une
+  // `CommentReaction`, et `currentUserReactions` est déjà calculé ici.
+
+  it('dit vrai quand le lecteur a réagi au commentaire', async () => {
+    const comment = makeComment('c-1');
+    mockPostCommentFindMany.mockResolvedValue([comment]);
+    mockCommentReactionFindMany.mockResolvedValue([{ commentId: 'c-1', emoji: '❤️' }]);
+
+    const service = new PostCommentService(mockPrisma);
+    const result = await service.getComments('post-1', undefined, 20, 'user-1');
+
+    expect((result.items[0] as any).isLikedByMe).toBe(true);
+  });
+
+  it('dit faux — explicitement, jamais un champ absent — quand il n a pas réagi', async () => {
+    const comment = makeComment('c-2');
+    mockPostCommentFindMany.mockResolvedValue([comment]);
+    mockCommentReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostCommentService(mockPrisma);
+    const result = await service.getComments('post-1', undefined, 20, 'user-1');
+
+    expect(result.items[0]).toHaveProperty('isLikedByMe', false);
+  });
+
+  it('dit faux pour un lecteur anonyme, sans interroger les réactions', async () => {
+    mockPostCommentFindMany.mockResolvedValue([makeComment('c-3')]);
+
+    const service = new PostCommentService(mockPrisma);
+    const result = await service.getComments('post-1', undefined, 20, undefined);
+
+    expect(result.items[0]).toHaveProperty('isLikedByMe', false);
+    expect(mockCommentReactionFindMany).not.toHaveBeenCalled();
+  });
+
+  it('sert aussi le flag sur les RÉPONSES — même règle, même surface', async () => {
+    mockPostCommentFindMany.mockResolvedValue([makeComment('r-1')]);
+    mockCommentReactionFindMany.mockResolvedValue([{ commentId: 'r-1', emoji: '👍' }]);
+
+    const service = new PostCommentService(mockPrisma);
+    const result = await service.getReplies('c-1', undefined, 20, 'user-1');
+
+    expect((result.items[0] as any).isLikedByMe).toBe(true);
+  });
+});
+
 describe('PostCommentService.getComments', () => {
   it('returns currentUserReactions: [] when the user has not reacted to any comment', async () => {
     const comment = makeComment('c-1');

@@ -79,16 +79,34 @@ export class MessagingService {
   private currentUserId: string | null = null;
   private markReceivedTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private recentMessageIds: Map<string, number> = new Map();
+  private typingRetractor: ((conversationId: string, userId: string) => void) | null = null;
 
   setCurrentUserId(userId: string | null): void {
     this.currentUserId = userId;
   }
 
+  /**
+   * Câble la rétractation de frappe : l'arrivée d'un message éteint
+   * immédiatement l'indicateur « X écrit… » de son auteur.
+   *
+   * Le service ne connaît pas `TypingService` — il reçoit une closure opaque,
+   * posée par l'orchestrateur qui possède les deux. C'est le seul endroit du
+   * client web qui sait qu'un message VIENT D'ARRIVER avant toute autre
+   * couche ; le `typing:stop` de l'expéditeur, lui, arrive par un canal
+   * séparé, dans un ordre non garanti, et peut se perdre.
+   */
+  setTypingRetractor(retract: ((conversationId: string, userId: string) => void) | null): void {
+    this.typingRetractor = retract;
+  }
+
+  private static senderIdOf(message: Message): string | undefined {
+    const sender = message.sender;
+    return sender?.userId ?? sender?.id ?? message.senderId;
+  }
+
   private isOwnMessage(message: Message): boolean {
     if (!this.currentUserId) return false;
-    const sender = message.sender;
-    const senderId = sender?.userId ?? sender?.id ?? message.senderId;
-    return senderId === this.currentUserId;
+    return MessagingService.senderIdOf(message) === this.currentUserId;
   }
 
   private isDuplicateMessage(id: string): boolean {
@@ -174,6 +192,16 @@ export class MessagingService {
       if (socketMessage.id && this.isDuplicateMessage(socketMessage.id)) return;
 
       let message: Message = convertMessageFn(socketMessage);
+
+      // Un message rétracte la frappe qui l'annonçait — AVANT le déchiffrement.
+      // Placé après ce point, la latence E2EE s'ajouterait à la rétractation et
+      // l'indicateur « X écrit… » survivrait au message déjà affiché. Le
+      // dedup ci-dessus est franchi en premier : un doublon ne rétracte pas
+      // deux fois.
+      const senderId = MessagingService.senderIdOf(message);
+      if (this.typingRetractor && message.conversationId && senderId) {
+        this.typingRetractor(message.conversationId, senderId);
+      }
 
       // E2EE: Decrypt message if encrypted
       message = await this.decryptMessage(socketMessage, message);

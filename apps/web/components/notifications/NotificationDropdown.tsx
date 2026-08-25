@@ -110,7 +110,7 @@ export function NotificationDropdown({ className = '' }: NotificationDropdownPro
             </div>
           ) : (
             <div className="divide-y divide-border/60">
-              {recentNotifications.map((notification, index) => (
+              {recentNotifications.map((notification) => (
                 <NotificationItem
                   key={notification.id}
                   notification={notification}
@@ -121,7 +121,6 @@ export function NotificationDropdown({ className = '' }: NotificationDropdownPro
                   t={t}
                   locale={locale}
                   compact
-                  index={index}
                 />
               ))}
             </div>

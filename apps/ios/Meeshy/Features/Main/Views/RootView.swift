@@ -915,7 +915,9 @@ struct RootView: View {
                     onItemTap: handleSyncPillTap,
                     activeConversationId: { router.currentConversationId ?? notificationPreviewConversation?.id }
                 )
-                .padding(.top, router.currentConversationId != nil ? 72 : 0)
+                .padding(.top, ConnectionBanner.liftedTopPadding(
+                    base: router.currentConversationId != nil ? 72 : 0
+                ))
             }
         }
         // Présentation d'appel (cover plein écran + PiP + pastille + bulle +

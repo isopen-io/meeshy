@@ -9,7 +9,14 @@ import MeeshySDK
 @MainActor
 final class MockConversationSocketDelegate: ConversationSocketDelegate {
     var messages: [Message] = []
-    var typingUsernames: [String] = []
+    var typingParticipants: [TypingParticipant] = []
+    /// Projection de lecture — les témoins de ce fichier assertent sur des noms,
+    /// pas sur des visages. Miroir exact de `ConversationViewModel.typingUsernames`.
+    var typingUsernames: [String] { typingParticipants.displayNames }
+    /// Avatars injectés par témoin : `nil` par défaut (l'auteur n'a rien écrit
+    /// dans le fil), une entrée pour vérifier qu'un visage connu est bien relayé.
+    var stubbedAvatarURLs: [String: String] = [:]
+    func localAvatarURL(forSender userId: String) -> String? { stubbedAvatarURLs[userId] }
     var lastUnreadMessage: Message?
     var messageTranslations: [String: [MessageTranslation]] = [:]
     var messageTranscriptions: [String: MessageTranscription] = [:]
@@ -1168,6 +1175,41 @@ final class ConversationSocketHandlerTests: XCTestCase {
         )
     }
 
+    // MARK: - Le frappeur porte son visage
+
+    /// « Le vrai avatar de l'utilisateur si existant en local » : le fil ne
+    /// transporte aucun avatar (`TypingEvent` n'a que userId/username/displayName),
+    /// donc le roster interroge le délégué, qui le retrouve dans les messages
+    /// déjà en mémoire.
+    func test_typingStarted_carriesTheLocallyKnownAvatar() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        delegate.stubbedAvatarURLs = [otherUserId: "https://cdn/bob.jpg"]
+
+        socket.typingStarted.send(
+            TypingEvent(userId: otherUserId, username: "bob", displayName: "Bob", conversationId: conversationId)
+        )
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(delegate.typingParticipants.first?.avatarURL, "https://cdn/bob.jpg")
+        XCTAssertEqual(delegate.typingParticipants.first?.id, otherUserId,
+                       "le roster est clé par userId — deux membres peuvent partager un nom")
+    }
+
+    func test_typingStarted_withoutAnyLocalAvatar_leavesItNil() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+
+        socket.typingStarted.send(
+            TypingEvent(userId: otherUserId, username: "bob", displayName: "Bob", conversationId: conversationId)
+        )
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertNil(delegate.typingParticipants.first?.avatarURL,
+                     "rien de local à montrer : la vue retombe sur les initiales, aucune requête ne part")
+        XCTAssertEqual(delegate.typingParticipants.first?.displayName, "Bob")
+    }
+
     // MARK: - messageReceived clears typing indicator for sender
 
     func test_messageReceived_clearsTypingForSender() async throws {
@@ -1312,7 +1354,10 @@ final class ConversationSocketHandlerTests: XCTestCase {
     func test_reconnect_clearsStaleTypingIndicators() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
-        delegate.typingUsernames = ["Alice", "Bob"]
+        delegate.typingParticipants = [
+            TypingParticipant(id: "a", displayName: "Alice"),
+            TypingParticipant(id: "b", displayName: "Bob")
+        ]
 
         socket.simulateReconnect()
 
@@ -1340,7 +1385,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
             )
             sut.delegate = delegate
             sut.armSocketSubscriptions()
-            delegate.typingUsernames = ["Alice"]
+            delegate.typingParticipants = [TypingParticipant(id: "a", displayName: "Alice")]
             _ = sut
         }
         // `sut` has no other strong referrers, so it deallocates here.

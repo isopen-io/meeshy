@@ -5,6 +5,53 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-25 — an authoring designation must produce the exact wire object the reader ALREADY reads (slice `story-composer-background-media`)
+The Android composer published slide media as a flat `mediaIds` list and emitted **no** `effects.mediaObjects` — so
+the reader's rich background path (`resolveBackgroundMedia` → `firstOrNull { it.isBackground }`, and the
+`StorySlideDuration` `bgVideoDur`/`bgAudioDur` loop-extend) was only ever exercised by RAW-publish/legacy wire
+shapes, never by an Android-composed story, which fell back to "first video else first image". Letting the author
+DESIGNATE the background is therefore not just a bit of state — it only becomes real by producing the one
+`StoryMediaObject { isBackground = true }` the reader already consumes. Two things that make the wire correct rather
+than merely present: (1) the composer holds only a media **id**, but the reader needs a **URL + kind + duration** —
+resolve the id against the uploaded-media the VM already tracks (`resolveBackgroundMedia`), keeping the pure mapping
+(`StoryBackgroundMedia.toMediaObject`) unit-testable and off the upload state; (2) only a **video** background feeds
+the duration branch, so carry duration onto `duration`/`intrinsicDuration` for video and OMIT it for an image —
+otherwise an image would spuriously stretch the slide. Corollary invariant: a "designate one" reducer must also
+**clear the pointer when the pointed-at media is removed** (`removeMedia`), or a stale id survives its media.
+Deferred the AUDIO half honestly — the composer has no audio-track surface yet, so `audioPlayerObjects[].isBackground`
+has nothing to designate; a half-slice that shipped a dead audio toggle would be worse than a scoped one.
+
+## 2026-08-25 — a reader gate is only half a feature: the author→reader loop, and the `toTextObject` field census (slice `story-composer-element-timing`)
+The prior slice made the reader HONOUR a text element's `startTime`/`duration` window, but nothing on Android could
+WRITE those fields: `StoryTextElement.toTextObject` set `fadeIn`/`fadeOut` yet omitted `startTime`/`duration`, so the
+only stories that ever carried a per-element window were iOS/back-end authored. **A resolution/reader slice leaves a
+standing authoring debt — the loop closes only when the composer can produce the very wire field the reader now
+consumes.** The tell is mechanical and worth running after any reader-gate slice: read the projection function
+(`toTextObject`) field by field against the wire model (`StoryTextObject`) and list which wire fields it never sets —
+each omission is either intentional (server-owned) or a missing authoring control. Mirror the nearest existing
+authored field's shape exactly (here `StoryTextFade` → `StoryElementTiming`: same flat-pair value type, same
+tap-cycle ladder, same `takeIf { it > 0 }?.toDouble()` omit-a-zero serialisation matching iOS's `$0 > 0 ? … : nil`)
+so the new control is coherent with what shipped, not a new idiom.
+
+## 2026-08-25 — "carried" is not "honoured": a wire field can ride the projection and still change nothing (slice `story-element-timing-window-gate`)
+`StoryTextObjectView`/`StoryForegroundMediaView` already carried `startTime`/`duration` and even fed them to the
+fade envelope — so a grep for the field name reads as "supported". But the fade resolver returns `null` outside the
+window (caller keeps base opacity), so an element with a timing window BUT no authored fade stayed fully visible the
+whole slide. iOS gates it hard via `StoryRenderer.shouldRender` (a sharp on/off cut, separate from the fade). The
+lesson generalises the "which wire field does the client still not consume?" heuristic: **a field being decoded and
+projected does not mean its SEMANTICS are enforced — ask what OBSERVABLE behaviour the field is supposed to drive,
+then check that path exists.** Here the field drove a fade ramp but not the visibility cut. Two behaviours, one field;
+one was wired, one wasn't.
+
+- **Convention when porting a `T?`-vs-`0` distinction iOS keeps but the wire projection has flattened.** iOS's
+  `shouldRender` reads `duration.map { start + $0 } ?? .infinity` — a PRESENT `0` → zero-length window (never
+  visible), `nil` → infinity (always). Android's projection collapses absent→`0.0`, losing that distinction. The
+  right port is NOT the literal iOS formula (it would hide every untimed element) but the module's ESTABLISHED
+  reading of `duration <= 0` as open-ended (`StoryMediaFadeResolver`, the clip-transition path). Match the codebase's
+  existing convention for the flattened value, not the foreign source's, and document the deviation at the site.
+- **Fail-open on a degenerate clock.** A visibility gate fed a non-finite playhead should return `true`, never hide
+  everything — a slice that can blank the canvas on a NaN is worse than the gap it closes. Made it a tested branch.
+
 ## 2026-08-25 — find the reader gap by asking which wire field the client still doesn't consume (slice `story-slide-background-value`)
 The PROGRESS "Next" pointed at two composer-side pieces (per-element duration, background-designation) that both
 need a media-OBJECT authoring foundation the composer doesn't have yet — a big slice, not a thin one. Rather than

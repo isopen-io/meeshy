@@ -214,6 +214,21 @@ struct ConnectionBanner: View {
             }
     }
 
+    /// Marge haute d'un point de montage, une fois la remontée appliquée.
+    ///
+    /// Les quatre hôtes de la pastille lui réservaient chacun leur propre marge
+    /// (72 pt sous le header de conversation, 56/72 pt en flux invité, 8 pt sur
+    /// le viewer de story, 0 sur iPad). La remontée se retranche de cette marge
+    /// plutôt que de s'appliquer en `offset` : bornée à `0`, elle ne peut
+    /// jamais pousser la pastille par-dessus la barre d'état ou la Dynamic
+    /// Island — un hôte déjà collé en haut reste où il est, un hôte qui a de la
+    /// marge la rend.
+    ///
+    /// Fonction pure `static` : c'est la DÉCISION qui se teste, pas le rendu.
+    static func liftedTopPadding(base: CGFloat) -> CGFloat {
+        max(0, base - SyncPillMetrics.topLift)
+    }
+
     var body: some View {
         // Skip rendering when StoryViewerView est présenté plein écran —
         // le fullScreenCover du root ne supprime pas les safeAreaInset /

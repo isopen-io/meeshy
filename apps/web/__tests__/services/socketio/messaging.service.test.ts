@@ -197,6 +197,91 @@ describe('MessagingService', () => {
     mockAnonymousCanSendViaLink.mockReturnValue(false);
   });
 
+  // ─── setTypingRetractor (un message rétracte la frappe) ───────────────────
+
+  describe('setTypingRetractor', () => {
+    it('retracts the sender typing indicator when their message arrives', () => {
+      const svc = new MessagingService();
+      const retract = jest.fn();
+      svc.setTypingRetractor(retract);
+
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+      socket._trigger(
+        SERVER_EVENTS_MOCK.MESSAGE_NEW,
+        makeSocketMessage({ id: 'm-1', conversationId: 'conv-9', senderId: 'alice' })
+      );
+
+      expect(retract).toHaveBeenCalledWith('conv-9', 'alice');
+    });
+
+    it('reads the sender from the nested sender object when present', () => {
+      const svc = new MessagingService();
+      const retract = jest.fn();
+      svc.setTypingRetractor(retract);
+
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+      socket._trigger(
+        SERVER_EVENTS_MOCK.MESSAGE_NEW,
+        makeSocketMessage({ id: 'm-2', conversationId: 'conv-9', sender: { userId: 'bob' } })
+      );
+
+      expect(retract).toHaveBeenCalledWith('conv-9', 'bob');
+    });
+
+    it('retracts BEFORE decryption — an encrypted message must not delay the retraction', async () => {
+      const svc = new MessagingService();
+      const order: string[] = [];
+      svc.setTypingRetractor(() => order.push('retract'));
+      svc.onNewMessage(() => order.push('deliver'));
+      svc.setEncryptionHandlers({
+        encrypt: jest.fn(),
+        decrypt: jest.fn(async () => {
+          order.push('decrypt');
+          return 'clear';
+        }),
+        isConversationEncrypted: () => true,
+      } as never);
+
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+      socket._trigger(
+        SERVER_EVENTS_MOCK.MESSAGE_NEW,
+        makeSocketMessage({ id: 'm-3', conversationId: 'conv-9', senderId: 'alice' })
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(order[0]).toBe('retract');
+    });
+
+    it('does not retract for a duplicate message', () => {
+      const svc = new MessagingService();
+      const retract = jest.fn();
+      svc.setTypingRetractor(retract);
+
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+      const msg = makeSocketMessage({ id: 'm-4', conversationId: 'conv-9', senderId: 'alice' });
+      socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_NEW, msg);
+      retract.mockClear();
+      socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_NEW, msg);
+
+      expect(retract).not.toHaveBeenCalled();
+    });
+
+    it('stays silent when no retractor is wired', () => {
+      const svc = new MessagingService();
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+      expect(() =>
+        socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_NEW, makeSocketMessage({ id: 'm-5' }))
+      ).not.toThrow();
+    });
+  });
+
   // ─── setCurrentUserId / isOwnMessage ──────────────────────────────────────
 
   describe('setCurrentUserId / isOwnMessage', () => {

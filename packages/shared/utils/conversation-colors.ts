@@ -406,6 +406,27 @@ function stableHash(value: string): bigint {
  * (`ColorGeneration.swift` L234-237) : même hash DJB2, même palette de 39
  * couleurs (voir note de tête de fichier sur le décompte), même modulo.
  */
+/**
+ * Accent d'un CONTENU (post, réel, story, commentaire) — la couleur qui trace
+ * le renforcement « c'est moi qui ai fait cette action ».
+ *
+ * Miroir exact d'iOS (`FeedModels.swift:255`) :
+ *   `authorColor = colorForName(authorId.isEmpty ? author : authorId)`
+ *
+ * L'identifiant prime sur le nom : deux auteurs homonymes doivent recevoir deux
+ * couleurs, et un auteur qui se renomme doit garder la sienne. Le repli sur le
+ * nom ne sert que les surfaces qui n'ont pas encore l'identifiant sous la main.
+ *
+ * Cette règle vit ICI plutôt que chez ses appelants : recopiée d'un client à
+ * l'autre, elle divergerait — et deux appareils peindraient le même post de
+ * deux couleurs, ce qui rend le renforcement illisible dès qu'on change
+ * d'écran.
+ */
+export function authorAccentColor(authorId: string | undefined | null, authorName: string): string {
+  const seed = authorId && authorId.length > 0 ? authorId : authorName;
+  return colorForName(seed);
+}
+
 export function colorForName(name: string): string {
   const hash = stableHash(name);
   const index = Number(hash % BigInt(VIBRANT_PALETTE.length));

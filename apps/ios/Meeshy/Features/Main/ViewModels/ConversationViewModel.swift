@@ -203,14 +203,29 @@ class ConversationViewModel: ObservableObject {
     /// Users currently typing in this conversation.
     /// Backed by stateStore — changes fire stateStore.objectWillChange, NOT self.objectWillChange.
     /// This prevents the full conversation view graph from re-evaluating on every keystroke.
-    var typingUsernames: [String] {
-        get { stateStore.typingUsernames }
-        set { stateStore.typingUsernames = newValue }
+    var typingParticipants: [TypingParticipant] {
+        get { stateStore.typingParticipants }
+        set { stateStore.typingParticipants = newValue }
     }
 
-    /// Combine publisher for typing usernames — used by UIKit consumers (MessageListViewController).
-    var typingUsernamesPublisher: AnyPublisher<[String], Never> {
-        stateStore.$typingUsernames.eraseToAnyPublisher()
+    /// Projection en noms seuls — libellés d'accessibilité et empreinte de
+    /// roster. Dérivée, jamais stockée : une seconde copie divergerait du
+    /// roster dès qu'un frappeur entre ou sort.
+    var typingUsernames: [String] { typingParticipants.displayNames }
+
+    /// Combine publisher for the typing roster — used by UIKit consumers (MessageListViewController).
+    var typingParticipantsPublisher: AnyPublisher<[TypingParticipant], Never> {
+        stateStore.$typingParticipants.eraseToAnyPublisher()
+    }
+
+    /// Avatar déjà connu de cet auteur — lu dans les messages EN MÉMOIRE, comme
+    /// `mentionCandidates` et `topActiveMembersList` le font déjà. Le plus
+    /// récent gagne : un membre qui vient de changer de photo ne réapparaît pas
+    /// avec l'ancienne. `nil` quand il n'a rien écrit dans ce fil — la vue
+    /// retombe alors sur ses initiales.
+    func localAvatarURL(forSender userId: String) -> String? {
+        guard !userId.isEmpty else { return nil }
+        return messages.last { $0.senderId == userId && $0.senderAvatarURL != nil }?.senderAvatarURL
     }
 
     /// Real-time translation/transcription/audio data keyed by messageId

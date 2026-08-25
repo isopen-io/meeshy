@@ -341,6 +341,11 @@ platform :ios do
 
     build_production
 
+    # Les métadonnées versionnées (fastlane/metadata/) partent avec deliver :
+    # on vérifie les limites App Store Connect ICI, avant l'upload, pour que
+    # le dépassement échoue localement et pas en fin de soumission chez Apple.
+    sh("./check_metadata.sh") unless options[:skip_metadata]
+
     upload_to_app_store(
       api_key: api_key,
       submit_for_review: !options[:skip_review],

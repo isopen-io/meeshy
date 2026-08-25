@@ -99,137 +99,24 @@ nonisolated struct StoryOpeningEntrance: Equatable {
 
 extension StoryViewerView {
 
-    // MARK: - Text Content
-
-    func storyTextContent(_ content: String, storyEffects: StoryEffects? = nil) -> some View {
-        let effects = storyEffects ?? currentStory?.storyEffects
-        let position = effects?.textPosition ?? "center"
-        let color = effects?.textColor.map { Color(hex: $0) } ?? .white
-        let fontStyle = effects?.textStyle ?? "normal"
-        let align = effects?.textAlign ?? "center"
-        let sizeOverride = effects?.textSize
-        let textBg = effects?.textBg
-        let offsetY = effects?.textOffsetY ?? 0
-
-        return Text(content)
-            .font(fontForStyle(fontStyle, sizeOverride: sizeOverride))
-            .foregroundColor(color)
-            .multilineTextAlignment(textAlignmentFor(align))
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(
-                Group {
-                    if let bg = textBg {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(hex: bg).opacity(0.6))
-                    }
-                }
-            )
-            .shadow(color: .black.opacity(0.4), radius: 6, y: 2)
-            // Neon glow effect for neon text style
-            .shadow(
-                color: fontStyle == "neon" ? color.opacity(0.7) : .clear,
-                radius: fontStyle == "neon" ? 12 : 0
-            )
-            .shadow(
-                color: fontStyle == "neon" ? color.opacity(0.4) : .clear,
-                radius: fontStyle == "neon" ? 24 : 0
-            )
-            .padding(.horizontal, 24)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compositeAlignment(position: position, align: align))
-            .offset(y: offsetY)
-            .accessibilityLabel(String(localized: "story.viewer.a11y.storyText", defaultValue: "Texte de la story: \(content)", bundle: .main))
-    }
-
-    private func fontForStyle(_ style: String, sizeOverride: CGFloat? = nil) -> Font {
-        switch style {
-        case "bold":
-            return .system(size: sizeOverride ?? 28, weight: .bold, design: .default)
-        case "italic":
-            return .system(size: sizeOverride ?? 24, weight: .medium, design: .serif).italic()
-        case "handwriting":
-            return .system(size: sizeOverride ?? 26, weight: .medium, design: .serif)
-        case "typewriter":
-            return .system(size: sizeOverride ?? 20, weight: .regular, design: .monospaced)
-        case "neon":
-            return .system(size: sizeOverride ?? 32, weight: .black, design: .rounded)
-        case "retro":
-            return .system(size: sizeOverride ?? 26, weight: .bold, design: .rounded)
-        default:
-            return .system(size: sizeOverride ?? 22, weight: .medium)
-        }
-    }
-
-    private func textAlignmentFor(_ align: String) -> TextAlignment {
-        switch align {
-        case "left": return .leading
-        case "right": return .trailing
-        default: return .center
-        }
-    }
-
-    private func compositeAlignment(position: String, align: String) -> Alignment {
-        let v: VerticalAlignment = {
-            switch position {
-            case "top": return .top
-            case "bottom": return .bottom
-            default: return .center
-            }
-        }()
-        let h: HorizontalAlignment = {
-            switch align {
-            case "left": return .leading
-            case "right": return .trailing
-            default: return .center
-            }
-        }()
-        return Alignment(horizontal: h, vertical: v)
-    }
-
-    // MARK: - Media Overlay
-
-    func mediaOverlay(media: FeedMedia, geometry: GeometryProxy) -> some View {
-        Group {
-            if media.url != nil {
-                ProgressiveCachedImage(
-                    thumbHash: media.thumbHash,
-                    thumbnailUrl: media.thumbnailUrl,
-                    fullUrl: media.url,
-                    autoLoad: true
-                ) {
-                    coloredMediaFallback(media: media)
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(width: geometry.size.width, height: geometry.size.height)
-                .clipped()
-            } else {
-                coloredMediaFallback(media: media)
-            }
-        }
-        .overlay(alignment: .center) {
-            if media.type == .video {
-                Image(systemName: "play.circle.fill")
-                    // Doctrine 84i/86i : indicateur de lecture décoratif surdimensionné
-                    // (≥40pt) centré sur la vidéo → taille figée (le Dynamic Type
-                    // déformerait le repère visuel). Déjà `accessibilityHidden`.
-                    .font(.system(size: 56))
-                    .foregroundColor(.white.opacity(0.8))
-                    .shadow(color: .black.opacity(0.4), radius: 8, y: 2)
-                    .accessibilityHidden(true)
-            }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityLabel(media.type == .video ? "Video de la story" : "Image de la story")
-    }
-
-    private func coloredMediaFallback(media: FeedMedia) -> some View {
-        LinearGradient(
-            colors: [Color(hex: media.thumbnailColor).opacity(0.6), Color(hex: media.thumbnailColor).opacity(0.3)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
+    // MARK: - Text Content · Media Overlay — RETIRÉS (244i)
+    //
+    // Six fonctions vivaient ici sans qu'aucun commit du dépôt ne les appelle :
+    // `storyTextContent(_:storyEffects:)` et `mediaOverlay(media:geometry:)`, plus
+    // les quatre privées qu'elles SEULES appelaient — `fontForStyle`,
+    // `textAlignmentFor`, `compositeAlignment`, `coloredMediaFallback`.
+    //
+    // C'était le lecteur de story d'AVANT le canvas : du texte SwiftUI positionné
+    // par `StoryEffects.textPosition/textAlign`, et une image posée en overlay. Le
+    // rendu vivant est le canvas — `StoryViewerView+Canvas.swift` côté app,
+    // `StorySlideRenderer` côté SDK, qui honore `fontFamily`/`textStyle` (c'est
+    // l'extension à 18 familles du 2026-08-20 : `italic` et `retro` y sont entrés
+    // précisément parce que des stories publiées portaient le vocabulaire
+    // historique de `fontForStyle`).
+    //
+    // Elles emportaient `story.viewer.a11y.storyText` — une clé traduite en sept
+    // locales pour un `accessibilityLabel` qu'aucun lecteur d'écran n'a jamais
+    // annoncé.
 
     // MARK: - Filter Overlay
 
@@ -2913,10 +2800,23 @@ struct StoryCommentRowView: View, Equatable {
                 }
             } label: {
                 HStack(spacing: 3) {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(isLiked ? MeeshyColors.error : overlayColor.opacity(0.92))
-                        .scaleEffect(isLiked ? 1.15 : 1.0)
+                    // Le contour à l'accent de l'auteur — « c'est MOI qui ai
+                    // aimé ce commentaire ». Sans lui, un commentaire de story
+                    // que j'avais aimé ne se distinguait que par sa teinte, la
+                    // même qu'un commentaire aimé par d'autres. Le `scaleEffect`
+                    // d'origine est conservé.
+                    EngagementGlyph(
+                        outline: "heart",
+                        filled: "heart.fill",
+                        participated: isLiked,
+                        accentHex: comment.authorColor,
+                        activeTint: MeeshyColors.error,
+                        inactiveTint: overlayColor.opacity(0.92),
+                        size: 13,
+                        // Posé sur un média : l'ombre porte la lisibilité.
+                        shadowed: true
+                    )
+                    .scaleEffect(isLiked ? 1.15 : 1.0)
                     if likeCount > 0 {
                         Text("\(likeCount)")
                             .font(MeeshyFont.relative(11, weight: .semibold))

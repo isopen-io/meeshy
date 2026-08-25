@@ -67,13 +67,16 @@ public struct FocusFilterSnapshot: Sendable, Equatable {
 /// Client-side filtering rules for notifications based on the user's
 /// `UserNotificationPreferences`. The gateway also applies these filters before
 /// sending pushes, but we double-check locally so:
-///   1. In-app toasts respect the same rules as background banners.
-///   2. Toggling a preference off is immediate — no wait for backend sync.
-///   3. DND windows honour the device clock (user's local timezone).
-///   4. The active iOS Focus filter (if any) can further restrict.
+///   1. Toggling a preference off is immediate — no wait for backend sync.
+///   2. DND windows honour the device clock (user's local timezone).
+///   3. The active iOS Focus filter (if any) can further restrict.
+///
+/// **La bannière IN-APP n'obéit pas à cette règle** — elle a la sienne,
+/// `allowsInAppBanner(type:)`. Ne pas rétablir l'amalgame : voir son
+/// doc-comment pour la raison.
 public extension UserNotificationPreferences {
     /// Returns `true` when an incoming notification of this type should surface
-    /// to the user (toast, banner, sound).
+    /// as a BACKGROUND alert (push banner, sound, lock screen).
     func allowsNotification(
         type: MeeshyNotificationType,
         isDirectConversation: Bool = false,
@@ -85,6 +88,32 @@ public extension UserNotificationPreferences {
         guard isTypeEnabled(type) else { return false }
         guard focus.allows(type: type, isDirectConversation: isDirectConversation) else { return false }
         return true
+    }
+
+    /// Returns `true` when an incoming notification of this type should surface
+    /// as an IN-APP banner — l'utilisateur a l'application SOUS LES YEUX.
+    ///
+    /// Volontairement plus permissif que `allowsNotification` : seuls les
+    /// interrupteurs PAR TYPE s'appliquent. Sont écartés —
+    ///
+    /// * `pushEnabled` — gouverne les notifications PUSH. Couper les push, c'est
+    ///   demander à ne pas être interrompu quand on n'est PAS dans l'app ; ce
+    ///   n'est pas demander à devenir aveugle dedans.
+    /// * la fenêtre « Ne pas déranger » et le Focus iOS — même raison, portée à
+    ///   son terme : on ne dérange pas quelqu'un en lui montrant ce qu'il est
+    ///   venu regarder. Ces deux filtres protègent l'attention de l'utilisateur
+    ///   ABSENT ; ici il est présent.
+    ///
+    /// Les interrupteurs par type restent honorés : ce sont eux, et eux seuls,
+    /// que l'écran Réglages ▸ Notifications promet à l'utilisateur de faire
+    /// respecter à l'intérieur de l'app. Les retirer aussi ferait de ces
+    /// bascules des contrôles sans effet.
+    ///
+    /// L'appelant garde une exception, qu'aucune préférence ne porte : la
+    /// conversation OUVERTE ne se signale jamais — son contenu est déjà à
+    /// l'écran (`NotificationToastManager.handleNewNotification`).
+    func allowsInAppBanner(type: MeeshyNotificationType) -> Bool {
+        isTypeEnabled(type)
     }
 
     /// Pure predicate for the per-type toggles.

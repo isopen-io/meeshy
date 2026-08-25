@@ -816,6 +816,24 @@ describe('SecuritySanitizer', () => {
       const result = SecuritySanitizer.truncate(longString, 50);
       expect(result.length).toBe(53); // 50 chars + '...'
     });
+
+    it('should never emit a lone surrogate when the cut splits an emoji', () => {
+      // '😀' is 2 UTF-16 code units; maxLength 5 lands mid-pair on the 3rd emoji.
+      const result = SecuritySanitizer.truncate('😀😀😀😀', 5);
+      const hasLoneSurrogate = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(result);
+      expect(hasLoneSurrogate).toBe(false);
+      expect(result).toBe('😀😀...');
+    });
+
+    it('should back off to the last whole code point when cutting mixed content', () => {
+      // 'ab😀cd' → a b [😀=2 units] c d; maxLength 3 lands on the emoji's high surrogate.
+      expect(SecuritySanitizer.truncate('ab😀cd', 3)).toBe('ab...');
+    });
+
+    it('should keep a clean cut that lands exactly on a code-point boundary', () => {
+      // maxLength 4 ends on the 2nd emoji's low surrogate — a complete pair, no back-off.
+      expect(SecuritySanitizer.truncate('😀😀😀', 4)).toBe('😀😀...');
+    });
   });
 
   describe('hashForLogging', () => {

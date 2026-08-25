@@ -4,6 +4,7 @@ import type {
   ServerToClientEvents,
   SocketIOMessage,
 } from '@meeshy/shared/types/socketio-events';
+import { enhancedLogger } from '../utils/logger-enhanced';
 
 /**
  * La porte d'ÉMISSION, dérivée du contrat au lieu d'être redéclarée.
@@ -167,12 +168,57 @@ export function emitServerEvent(
   emissionOrEvent: ServerEmission | ServerEventName,
   maybePayload?: unknown,
 ): void {
-  const emit = target.emit as (event: ServerEventName, payload: unknown) => unknown;
+  // `target.emit(...)` en APPEL DE MÉTHODE, jamais une référence extraite.
+  //
+  // La version précédente faisait `const emit = target.emit` puis `emit(...)` :
+  // la méthode partait DÉTACHÉE de son objet, donc `this` valait `undefined` à
+  // l'exécution. `BroadcastOperator.emit` (socket.io) lit `this.adapter` dès sa
+  // première ligne — chaque émission levait donc
+  // `TypeError: Cannot read properties of undefined (reading 'adapter')`.
+  //
+  // Mesuré en production le 2026-08-25, sur les QUATORZE sites qui empruntent
+  // cette porte. Le défaut est resté invisible parce que la plupart des
+  // broadcasts sont `async` : l'exception y devenait une promesse rejetée que
+  // personne n'attendait, et la route rendait 200 en n'ayant rien émis. Seuls
+  // les broadcasts SYNCHRONES la laissaient remonter — d'où le 500 du favori et
+  // du like de commentaire, seuls symptômes visibles d'une panne générale du
+  // temps réel social.
+  //
+  // Le cast reste nécessaire (la corrélation événement/charge n'est pas
+  // exprimable ici, cf. le doc-comment des surcharges), mais il porte désormais
+  // sur l'APPEL et non sur une référence à la fonction.
+  const emitting = target as { emit: (event: ServerEventName, payload: unknown) => unknown };
   if (typeof emissionOrEvent === 'string') {
-    emit(emissionOrEvent, maybePayload);
+    emitting.emit(emissionOrEvent, maybePayload);
     return;
   }
-  emit(emissionOrEvent.event, emissionOrEvent.payload);
+  emitting.emit(emissionOrEvent.event, emissionOrEvent.payload);
+}
+
+/**
+ * Émet SANS jamais faire échouer l'appelant.
+ *
+ * Un broadcast temps réel est un EFFET DE BORD d'une écriture déjà committée.
+ * Le laisser remonter, c'est répondre 500 pour une opération qui a RÉUSSI : le
+ * client applique alors son rollback optimiste pendant que la base dit
+ * l'inverse — une désynchronisation garantie, pire que l'absence de temps réel.
+ *
+ * Mesuré le 2026-08-25 : `POST /posts/:postId/bookmark` rendait 500 alors que la
+ * ligne `PostBookmark` VENAIT D'ÊTRE ÉCRITE. Le favori existait en base, le
+ * client l'effaçait de l'écran.
+ *
+ * Les broadcasts `async` avaient déjà cette propriété — par accident, leur
+ * exception devenant une promesse rejetée que personne n'attend. Les
+ * synchrones ne l'avaient pas. Cette porte la leur donne EXPRÈS, et surtout
+ * elle JOURNALISE : une émission perdue en silence est ce qui a laissé la panne
+ * de `emitServerEvent` vivre sans témoin.
+ */
+export function safeBroadcast(label: string, emit: () => void): void {
+  try {
+    emit();
+  } catch (error) {
+    enhancedLogger.error(`[broadcast] ${label}`, error);
+  }
 }
 
 /**

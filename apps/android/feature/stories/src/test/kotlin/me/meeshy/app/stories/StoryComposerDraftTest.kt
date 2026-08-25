@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
 import org.junit.Test
 
@@ -364,5 +365,129 @@ class StoryComposerDraftTest {
         )
         assertThat(draft.canPublish).isFalse()
         assertThat(draft.hasStickers).isFalse()
+    }
+
+    @Test
+    fun `a solid background serialises onto storyEffects background as bare hex`() {
+        val request = StoryComposerDraft(text = "hi", background = StoryBackgroundValue.Hex("FF2E63"))
+            .toCreateStoryRequest("en")
+
+        assertThat(request.storyEffects?.background).isEqualTo("FF2E63")
+    }
+
+    @Test
+    fun `a gradient background serialises to the gradient wire form`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            background = StoryBackgroundValue.Gradient("FF2E63", "08D9D6"),
+        ).toCreateStoryRequest("en")
+
+        assertThat(request.storyEffects?.background).isEqualTo("gradient:FF2E63:08D9D6")
+    }
+
+    @Test
+    fun `a background alone materialises effects`() {
+        // No text elements, no stickers, no filter, no pin — the backdrop is the only reason effects exist.
+        val request = StoryComposerDraft(text = "bonjour", background = StoryBackgroundValue.Hex("2ECC71"))
+            .toCreateStoryRequest("fr")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.background).isEqualTo("2ECC71")
+        assertThat(request.storyEffects?.textObjects).isEmpty()
+    }
+
+    @Test
+    fun `a draft with no background leaves storyEffects background null`() {
+        val request = StoryComposerDraft(text = "x", filter = StoryFilter.VINTAGE)
+            .toCreateStoryRequest("en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.background).isNull()
+    }
+
+    // --- background media (isBackground StoryMediaObject) ---
+
+    @Test
+    fun `a designated background media serialises to a single isBackground media object`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("m1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "m1",
+                url = "https://cdn/m1.jpg",
+                mimeType = "image/jpeg",
+                durationSeconds = null,
+            ),
+        ).toCreateStoryRequest("en")
+
+        val objects = request.storyEffects?.mediaObjects
+        assertThat(objects).hasSize(1)
+        assertThat(objects?.single()?.isBackground).isTrue()
+        assertThat(objects?.single()?.postMediaId).isEqualTo("m1")
+        assertThat(objects?.single()?.mediaURL).isEqualTo("https://cdn/m1.jpg")
+        assertThat(objects?.single()?.mediaType).isEqualTo("image")
+        assertThat(objects?.single()?.loop).isTrue()
+    }
+
+    @Test
+    fun `a video background carries its duration so the reader can loop the slide`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("v1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "v1",
+                url = "https://cdn/v1.mp4",
+                mimeType = "video/mp4",
+                durationSeconds = 4.0,
+            ),
+        ).toCreateStoryRequest("en")
+
+        val obj = request.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.mediaType).isEqualTo("video")
+        assertThat(obj?.duration).isEqualTo(4.0)
+        assertThat(obj?.intrinsicDuration).isEqualTo(4.0)
+    }
+
+    @Test
+    fun `an image background carries no duration even when one is present`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("m1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "m1",
+                url = "https://cdn/m1.jpg",
+                mimeType = "image/jpeg",
+                durationSeconds = 9.0,
+            ),
+        ).toCreateStoryRequest("en")
+
+        val obj = request.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.duration).isNull()
+        assertThat(obj?.intrinsicDuration).isNull()
+    }
+
+    @Test
+    fun `a background media alone materialises effects`() {
+        val request = StoryComposerDraft(
+            mediaIds = listOf("m1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "m1",
+                url = "https://cdn/m1.jpg",
+                mimeType = "image/jpeg",
+                durationSeconds = null,
+            ),
+        ).toCreateStoryRequest("en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.mediaObjects).hasSize(1)
+    }
+
+    @Test
+    fun `no designated background media leaves storyEffects mediaObjects null`() {
+        val request = StoryComposerDraft(text = "hi", background = StoryBackgroundValue.Hex("2ECC71"))
+            .toCreateStoryRequest("en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.mediaObjects).isNull()
     }
 }

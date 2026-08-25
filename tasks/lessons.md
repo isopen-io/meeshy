@@ -15968,3 +15968,149 @@ Deux conséquences de méthode :
   course, qui vit dans un autre sous-système, a été SIGNALÉE avec son correctif
   proposé plutôt que réparée en élargissant la PR. Rendre le test « robuste »
   côté test l'aurait masquée.
+
+## « Le remonter » — une consigne spatiale qui n'en était pas une (2026-08-25)
+
+**Correction reçue.** L'utilisateur écrit : « Lorsqu'une notification utilisateur
+existe est fait il faut le remonter... ». Le contexte immédiat était géométrique
+(la phrase précédente demandait de remonter la SyncPill de 3× sa hauteur), et
+j'ai lu « le remonter » comme un troisième déplacement vertical — j'ai même
+annoncé cette lecture. Elle était fausse : il fallait entendre **faire remonter
+l'information JUSQU'À l'utilisateur**. La règle visée n'était pas un décalage de
+quelques points, mais « tout ce qui constitue une notification doit se signaler
+in-app, sauf la conversation ouverte » — un audit de couverture sur quatre
+gardes, sans le moindre pixel à déplacer.
+
+**Ce qui a marché.** Avoir DIT ma lecture à voix haute (« je l'interprète comme :
+la SyncPill se décale quand un toast est présent ») plutôt que de l'appliquer en
+silence. La correction est arrivée avant la première ligne de code.
+
+**La règle.** Quand une consigne courte hérite du champ lexical de la phrase
+d'à côté, ce voisinage est un PIÈGE, pas un indice : un verbe polysémique
+(« remonter », « pousser », « descendre », « sortir ») s'y aimante au sens
+spatial. Énoncer l'interprétation retenue, en une ligne, avant d'agir — et la
+placer là où elle sera lue, pas en fin de message.
+
+**Le corollaire, plus coûteux.** Ma lecture fausse était aussi la plus PETITE :
+déplacer une vue de 66 pt au lieu d'auditer quatre gardes de suppression et la
+couverture de types d'un éventail entier. Devant deux lectures d'une consigne
+ambiguë, se méfier de celle qui tient en un `.padding()` : l'ambiguïté se
+résout rarement du côté du moindre effort.
+---
+
+## Leçon 287 — une garde d'atteignabilité trouve la FEUILLE ; seule son itération trouve l'ARBRE (2026-08-25, itération 244i)
+
+243i avait écrit, dans le doc-comment de sa propre garde, ce qu'elle
+n'attrapait pas :
+
+> Une fonction citée uniquement par une autre fonction elle-même morte reste
+> verte. La garde attrape la FEUILLE de l'arbre mort, pas l'arbre.
+
+244i l'a validé **par l'exemple, sur le dépôt lui-même**. Retirer deux feuilles
+mortes de `StoryViewerView+Content` — `storyTextContent`, `mediaOverlay` — a
+fait apparaître **quatre** branches qui n'étaient appelées que par elles :
+`fontForStyle`, `textAlignmentFor`, `compositeAlignment`,
+`coloredMediaFallback`.
+
+> **Un retrait de code mort n'est pas un événement, c'est une ITÉRATION.**
+> Chaque suppression change le graphe d'appel et peut en détacher un morceau.
+> Relancer la mesure APRÈS chaque tour, jusqu'au point fixe — sinon on livre
+> l'arbre en autant de lots qu'il a d'étages, un par itération.
+
+Corollaire d'inventaire, découvert au même endroit : **élargir une garde d'un
+cran élargit aussi son inventaire**. Ajouter le répertoire `ViewModels/` au
+balayage a fait apparaître six fonctions que la première mesure, bornée à
+`Views/`, ne voyait pas. Ne jamais présumer propre un périmètre voisin.
+
+### Le corollaire le plus cher : le code TESTÉ et le code EXPÉDIÉ peuvent différer
+
+`FeedViewModel.likePost` et `.bookmarkPost` sont largement couvertes par
+`FeedViewModelTests` — et appelées par **aucun** code de production. `FeedView`
+a réécrit leur logique en ligne ; ses propres commentaires l'avouent (« same one
+`FeedViewModel.likePost` already uses », « Mirror the pre-fix behaviour from
+FeedViewModel.bookmarkPost »). La vue porte le toggle optimiste, l'appel socket,
+le repli REST, la file hors-ligne et l'observation d'issue ; l'implémentation
+canonique ne tourne jamais.
+
+> **Une suite verte sur du code que personne n'appelle n'atteste rien du
+> produit : elle mesure une seconde implémentation que personne ne rend.**
+> C'est la forme la plus coûteuse de « code mort testé vert » — les autres
+> retirent de la confiance, celle-ci en ACHÈTE.
+
+Le symptôme se repère à une phrase, dans un commentaire de vue : *« mirrors »*,
+*« same one X already uses »*, *« pre-fix behaviour from X »*. Un commentaire
+qui dit qu'un code en COPIE un autre nomme une divergence à venir.
+
+### Et le partage entre retirer et inscrire
+
+La mesure brute proposait quinze suppressions. Sept auraient cassé la suite
+(leur seul appelant est un test), deux auraient laissé de l'état orphelin —
+dont `markProgrammaticScroll`, unique écrivain d'un drapeau que deux sites
+LISENT encore. **Retirer ce qui est mort de bout en bout ; inscrire nommément,
+avec sa raison, ce qui est vivant d'un côté.** Une allowlist commentée est une
+dette VUE ; une suppression hâtive est une dette DÉPLACÉE.
+## Leçon 287 — un prédicat de validation se mesure sur TOUTES les formes de son entrée, pas la seule famille qu'on avait en tête (2026-08-25, itération 267)
+
+`packages/shared/types/attachment.ts` exposait six type-guards MIME agrégés par
+`isAcceptedMimeType` — la porte accept/reject des pièces jointes. Deux gardes
+(audio, vidéo) NETTOYAIENT les paramètres MIME avant de comparer
+(`audio/webm;codecs=opus` → `audio/webm`) ; les quatre autres (image, texte,
+document, code) faisaient une comparaison exacte. Résultat : **la même forme
+d'entrée était classée différemment selon sa seule famille média**.
+`isAcceptedMimeType('audio/webm;codecs=opus')` → true ;
+`isAcceptedMimeType('text/plain; charset=utf-8')` → **false** — alors que
+`; charset=utf-8` est le paramètre que `fetch`/`axios`/tout serveur HTTP ajoute
+par défaut à un `Content-Type` texte/JSON. Un upload JSON légitime était rejeté,
+et `getAttachmentType('application/json; charset=utf-8')` tombait au défaut
+`'document'` au lieu de `'code'`.
+
+> **Le nettoyage a été ajouté là où le symptôme est apparu (AUDIO/VIDÉO, où
+> `MediaRecorder` émet un paramètre), et jamais généralisé.** C'est la forme, à
+> une frontière de validation, de la règle du dépôt : *une protection se mesure
+> sur tout ce que la charge TRANSPORTE* — ici l'ensemble des formes d'entrée
+> (avec/sans paramètre), pas la seule famille qu'on regardait. Jumelle directe
+> de l'It. 266 (`isPrivateIp` ne connaissait que l'IPv4) et de l'It. 260
+> (`isIpInRange` hors plage).
+
+Deux corollaires de méthode :
+
+- **Le témoin qui l'attrape s'écrit sur la famille AUTRE que celle qui marche.**
+  Les tests audio/vidéo EXERÇAIENT déjà le cas paramétré (prouvant l'INTENTION
+  du dépôt : tolérer les paramètres) ; image/texte/document/code n'étaient
+  testés qu'avec des MIME nus, donc le trou était invisible. Comme la leçon 276
+  (« un témoin de rang s'écrit sur un rang autre que le premier »), transposée à
+  une famille.
+- **Une divergence entre N implémentations de la même règle se supprime en
+  extrayant UN site.** Le correctif n'ajoute pas le nettoyage quatre fois : il
+  factorise `stripMimeParameters()` et remplace les DEUX copies in-line
+  existantes — le mécanisme même qui empêche la prochaine divergence.
+
+### Corollaire 245i — une garde d'analyse de source est adaptée à une FORME DE FICHIER, pas à un langage
+
+La suite naturelle de 244i était « étendre la garde d'atteignabilité au reste de
+l'app ». Mesuré avant d'asserter — comme la leçon 287 l'exige — le balayage rend
+**355 fonctions sur 190 fichiers**, et ce nombre est **dominé par des faux
+positifs structurels** :
+
+1. **Exigences de protocole.** Un nom déclaré dans un `protocol` PUIS implémenté
+   apparaît deux fois ; l'arithmétique `usages − déclarations` retombe donc à
+   zéro **même quand le protocole est appelé**. `StoryComposerProviding` en
+   fabrique huit à lui seul.
+2. **Conformances de délégué** (`DropDelegate`, `UIScrollViewDelegate`…) :
+   appelées par le framework, jamais nommées par le dépôt.
+3. **Sièges de test** (`…ForTesting`, `…ForTest`), légitimes par construction.
+
+> **La garde de 243i/244i n'est pas générale : elle est adaptée aux fichiers
+> d'EXTENSION de vue SwiftUI**, où les conformances de protocole sont rares.
+> Elle a trouvé treize vraies fonctions mortes là ; ailleurs, son arithmétique
+> ne discrimine plus.
+
+Deux conséquences :
+
+- **Une allowlist de NOMS ne rattrape pas un défaut de FORME.** `frameworkInvoked`
+  énumère une douzaine de contrats à la main ; il en faudrait des centaines. Ce
+  qu'il faut est une exclusion STRUCTURELLE — ne pas compter une déclaration
+  écrite dans un corps de `protocol`, reconnaître une conformance `: XxxDelegate`.
+- **Le bon geste, quand une mesure rend un nombre trop gros, est de demander ce
+  que l'outil confond**, pas de trier 355 entrées à la main. Ici la réponse
+  tenait en deux `grep` : un `protocol` et un `DropDelegate`.

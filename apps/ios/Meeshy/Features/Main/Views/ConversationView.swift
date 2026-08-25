@@ -419,6 +419,10 @@ struct ConversationView: View {
     // Scroll, Media & Swipe state
     @State var scrollState = ConversationScrollState()
     @State var composerHeight: CGFloat = 130
+    /// Hauteur de composer sur laquelle le bouton « redescendre en bas » est
+    /// ancré. FIGÉE tant qu'un message est en cours de rédaction : voir
+    /// `resolvedScrollButtonAnchor(current:composerHeight:isComposing:)`.
+    @State var composerScrollButtonAnchor: CGFloat = 130
     @State private var keyboardHeight: CGFloat = 0
     @State private var initialScrollCompleted: Bool = false
 
@@ -486,6 +490,28 @@ struct ConversationView: View {
         return contentHeight + safeAreaBottom
     }
 
+    /// Ancrage vertical du bouton « redescendre en bas ».
+    ///
+    /// Le bouton était posé sur `composerHeight`, qui grandit d'une ligne à
+    /// chaque retour à la ligne du champ de saisie : écrire un message faisait
+    /// donc REMONTER le bouton sous le doigt, et ce déplacement se lisait comme
+    /// un retour au bas de la conversation alors que l'utilisateur était en
+    /// train de relire son historique.
+    ///
+    /// Pendant la rédaction, l'ancrage reste donc celui d'avant la première
+    /// frappe. Il se réaligne dès que le champ redevient vide — à l'envoi, ou
+    /// quand l'utilisateur efface — c'est-à-dire aux seuls moments où plus
+    /// aucune position de lecture n'est en jeu. Les autres causes de
+    /// redimensionnement du composer (ouverture des options, barre de réponse)
+    /// continuent de le déplacer : elles ne sont pas « écrire ».
+    static func resolvedScrollButtonAnchor(
+        current: CGFloat,
+        composerHeight: CGFloat,
+        isComposing: Bool
+    ) -> CGFloat {
+        isComposing ? current : composerHeight
+    }
+
     private func updateComposerHeight(_ contentHeight: CGFloat) {
         // `DeviceLayout.safeAreaBottom` et non un parcours de `connectedScenes` :
         // ce dernier est un `Set` NON ORDONNÉ, donc `.first` peut renvoyer une
@@ -497,6 +523,11 @@ struct ConversationView: View {
             safeAreaBottom: DeviceLayout.safeAreaBottom
         ) else { return }
         composerHeight = height
+        composerScrollButtonAnchor = Self.resolvedScrollButtonAnchor(
+            current: composerScrollButtonAnchor,
+            composerHeight: height,
+            isComposing: !composerText.text.isEmpty
+        )
     }
 
     // MARK: - Computed Properties
@@ -1844,7 +1875,9 @@ struct ConversationView: View {
             // iPadRootView (cf. showsOwnConnectionBanner ci-dessus).
             if showsOwnConnectionBanner {
                 VStack {
-                    Color.clear.frame(height: composerState.showOptions ? 72 : 56)
+                    Color.clear.frame(height: ConnectionBanner.liftedTopPadding(
+                        base: composerState.showOptions ? 72 : 56
+                    ))
                     ConnectionBanner(conversationListViewModel: conversationListViewModel, isStoryViewerPresenting: isStoryViewerPresenting, activeConversationId: { viewModel.conversationId })
                     Spacer()
                 }
@@ -1889,7 +1922,7 @@ struct ConversationView: View {
                 // plus proche) en fondant pendant le défilement et en revient
                 // (`EdgeHiddenChrome`) ; ses propres entrées/sorties (proximité
                 // du bas) suivent la même direction.
-                VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerHeight + MeeshySpacing.sm) } }
+                VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerScrollButtonAnchor + MeeshySpacing.sm) } }
                     .hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)
                     .zIndex(60)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
