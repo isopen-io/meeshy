@@ -599,9 +599,12 @@ describe('useConversationMessagesRQ', () => {
       jest.useRealTimers();
     });
 
-    // The catch-up now runs on window focus / socket reconnect only — opening a
-    // conversation goes through the always-on refetch instead (see
-    // "Open conversation → always revalidate").
+    // Le rattrapage a TROIS déclencheurs : focus, reconnexion socket, et le
+    // CHANGEMENT de conversation à hôte monté (2026-08-25). Ce dernier a été
+    // ajouté parce que la phrase qui vivait ici — « ouvrir une conversation
+    // passe par le refetch toujours-actif » — était fausse : `refetchOnMount`
+    // n'est lu qu'à la souscription, et l'hôte ne se démonte jamais entre deux
+    // conversations.
     async function triggerFocusCatchUp() {
       jest.useFakeTimers();
       act(() => {
@@ -613,6 +616,56 @@ describe('useConversationMessagesRQ', () => {
       });
       jest.useRealTimers();
     }
+
+    // LE GESTE RAPPORTÉ PAR L'UTILISATEUR : « j'ouvre la conversation, même
+    // après 1h, et il manque des messages récents — alors que la LISTE a bien
+    // le dernier ».
+    //
+    // `ConversationLayout` ne se démonte JAMAIS entre deux conversations
+    // (route catch-all + sélection par état local avec `replaceState`).
+    // Changer de conversation n'est donc qu'un changement de `queryKey` :
+    // `refetchOnMount` n'est lu qu'à la SOUSCRIPTION, et un changement de clé
+    // passe par `shouldFetchOptionally` → `isStale` → `isStaleByTime(Infinity)`
+    // = FAUX. Sur un cache encore chaud, RIEN n'était relu.
+    it('changer de conversation à hôte MONTÉ déclenche le rattrapage — c’est le geste qui manquait', async () => {
+      const cacheChaudB = [
+        createMockMessage('b-vieux', 'déjà vu', new Date('2024-01-03T00:00:00.000Z')),
+      ];
+      const manqueB = createMockMessage('b-neuf', 'arrivé pendant mon absence', new Date('2024-01-05T00:00:00.000Z'));
+
+      const { wrapper, queryClient } = createPersistedWrapper();
+      // Le cache de B est CHAUD — on y est déjà passé dans cette session.
+      queryClient.setQueryData(['messages', 'list', 'conv-B', 'infinite'], {
+        pages: [{ messages: cacheChaudB, hasMore: false, total: 1 }],
+        pageParams: [1],
+      });
+
+      mockGetMessages.mockResolvedValue({ messages: [manqueB], hasMore: false, total: 1 });
+
+      const { rerender } = renderHook(
+        ({ id }: { id: string }) => useConversationMessagesRQ(id, mockUser),
+        { wrapper, initialProps: { id: 'conv-A' } }
+      );
+
+      await waitFor(() => {
+        expect(mockGetMessages).toHaveBeenCalled();
+      });
+      mockGetMessages.mockClear();
+
+      // L'utilisateur bascule sur B. Aucune souscription neuve : seule la clé change.
+      rerender({ id: 'conv-B' });
+
+      // Un rattrapage DOIT partir pour B, avec un watermark — sinon le fil
+      // reste sur son cache périmé et `b-neuf` n'apparaît jamais.
+      await waitFor(() => {
+        expect(mockGetMessages).toHaveBeenCalled();
+      });
+      const appelsB = mockGetMessages.mock.calls.filter(([id]) => id === 'conv-B');
+      expect(appelsB.length).toBeGreaterThan(0);
+      // Le 6e argument est le watermark `after` : c'est ce qui distingue un
+      // rattrapage incrémental d'une relecture destructrice.
+      expect(appelsB.some((call) => typeof call[5] === 'string' && call[5].length > 0)).toBe(true);
+    });
 
     it('fetches only messages newer than the cached watermark on focus and merges them without replacing pages', async () => {
       const cachedOld = [
