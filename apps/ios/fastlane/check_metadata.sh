@@ -5,6 +5,10 @@
 # avant upload_to_app_store pour que le rejet arrive ici, pas chez Apple.
 set -euo pipefail
 
+# wc -m ne compte les caractères multi-octets que sous une locale UTF-8 ;
+# sous LC_ALL=C il compte des octets et surcompte accents et tirets.
+export LC_ALL=C.UTF-8 2>/dev/null || export LC_ALL=en_US.UTF-8
+
 cd "$(dirname "$0")"
 META_DIR="metadata"
 [ -d "$META_DIR" ] || { echo "Aucun dossier $META_DIR — rien à vérifier."; exit 1; }
