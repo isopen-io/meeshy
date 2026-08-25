@@ -20,10 +20,18 @@ final class AuthManagerVoicePublicRevalidationTests: XCTestCase {
     private var mockAuthService: VoicePublicRevalidationAuthServiceStub!
     private var originalKeychain: (any KeychainStoring)!
     private var mockKeychain: InMemoryKeychainStoreForVoicePublicTests!
+    /// `currentUser` du singleton AVANT cette suite : elle y pose des fixtures
+    /// (`reset-placeholder`, `makeUser`) que les suites suivantes du même hôte
+    /// liraient sinon comme l'utilisateur courant — `ConversationSyncEngineTests`
+    /// (« lecture PROPRE » décidée sur `currentUser`) et
+    /// `OfflineQueuePendingUIItemsPublisherTests` rougissaient par pollution
+    /// d'ordre (gate 2026-08-25, relance 2).
+    private var originalUser: MeeshyUser?
 
     override func setUp() async throws {
         try await super.setUp()
 
+        originalUser = AuthManager.shared.currentUser
         originalAuthService = AuthManager.shared.authService
         mockAuthService = VoicePublicRevalidationAuthServiceStub()
         AuthManager.shared.authService = mockAuthService
@@ -55,6 +63,7 @@ final class AuthManagerVoicePublicRevalidationTests: XCTestCase {
     override func tearDown() async throws {
         AuthManager.shared.authService = originalAuthService
         AuthManager.shared.keychain = originalKeychain
+        AuthManager.shared.currentUser = originalUser
         try await super.tearDown()
     }
 
