@@ -487,11 +487,8 @@ struct FeedView: View {
                 }
             }
             do {
-                _ = try await PostService.shared.repost(
-                    postId: cible.postId,
-                    targetType: cible.targetType,
-                    content: nil,
-                    isQuote: false
+                try await RepostPublisher.shared.publish(
+                    .simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
                 )
                 FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
             } catch {
@@ -1776,7 +1773,7 @@ struct FeedView: View {
                     originalVisibilityUserIds: post.visibilityUserIds ?? [],
                     isRepost: post.repost != nil,
                     onSave: { draft in
-                        await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds)
+                        await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
                     },
                     onDismiss: { editingPost = nil }
                 )

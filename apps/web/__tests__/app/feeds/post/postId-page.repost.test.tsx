@@ -127,16 +127,33 @@ jest.mock('@/components/v2/PostDetail', () => ({
     </div>
   ),
 }));
-jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
-type RepostModalStubProps = { open: boolean; onRepost: () => void; onQuote: (c: string) => void };
-jest.mock('@/components/v2/RepostModal', () => ({
-  RepostModal: ({ open, onRepost, onQuote }: RepostModalStubProps) =>
-    open ? (
+
+// W8 — le bouton `onRepost` de `PostDetail` ouvre désormais la porte `repost`
+// du meuble unifié, pas `RepostModal`. `onRepostAsPost` (l'ANCRAGE direct, un
+// tap, aucun dialogue) n'est PAS affecté par ce lot : il n'a jamais mounté
+// `RepostModal`, voir `MeeshyComposer.tsx` — donc rien à mocker pour lui ici.
+type MeeshyComposerRepostStubProps = {
+  door: { kind: string; sourceFormat?: string };
+  onRepost?: (payload: { targetType: string; isQuote: boolean; content?: string }) => void;
+};
+jest.mock('@/components/composer/MeeshyComposer', () => ({
+  MeeshyComposer: ({ door, onRepost }: MeeshyComposerRepostStubProps) => {
+    if (door.kind !== 'repost') return null;
+    const targetType = (door.sourceFormat ?? 'post').toUpperCase();
+    return (
       <div>
-        <button data-testid="detail-modal-repost" onClick={onRepost}>Confirm repost</button>
-        <button data-testid="detail-modal-quote" onClick={() => onQuote('mon commentaire')}>Confirm quote</button>
+        <button data-testid="detail-modal-repost" onClick={() => onRepost?.({ targetType, isQuote: false })}>
+          Confirm repost
+        </button>
+        <button
+          data-testid="detail-modal-quote"
+          onClick={() => onRepost?.({ targetType, isQuote: true, content: 'mon commentaire' })}
+        >
+          Confirm quote
+        </button>
       </div>
-    ) : null,
+    );
+  },
 }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 jest.mock('@/components/layout/DashboardLayout', () => ({

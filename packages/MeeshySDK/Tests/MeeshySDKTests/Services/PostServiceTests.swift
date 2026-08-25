@@ -240,6 +240,45 @@ final class PostServiceTests: XCTestCase {
         XCTAssertNil(mock.lastRequest?.bodyJSON?["visibility"] ?? nil)
     }
 
+    // MARK: - repost IDEMPOTENT (fil rouge du repost, lot 7 tâche 7.5)
+
+    /// `repostPost` fabrique un `Post` NEUF à chaque appel : rien ne le rend
+    /// naturellement idempotent. Sans cet en-tête, `withMutationOutcome`
+    /// (tâche 7.1b) n'a aucune clé pour reconnaître un rejeu — deux taps après
+    /// un délai d'expiration, ou une ligne d'outbox rejouée au retour du
+    /// réseau, font deux republications.
+    func test_PostService_repost_sendsTheClientMutationIdHeader() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "story-1"), error: nil)
+        mock.stub("/posts/story-1/repost", result: response)
+
+        _ = try await service.repost(postId: "story-1", targetType: .story, content: nil,
+                                     isQuote: false, visibility: nil,
+                                     clientMutationId: "cmid_11111111-2222-3333-4444-555555555555")
+
+        XCTAssertEqual(mock.lastRequest?.path, "/posts/story-1/repost")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+        XCTAssertEqual(
+            mock.lastRequest?.headers?["X-Client-Mutation-Id"],
+            "cmid_11111111-2222-3333-4444-555555555555"
+        )
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["targetType"] as? String, "STORY",
+                       "Le format doit voyager AVEC le jeton — loi 5, le repost miroite.")
+    }
+
+    /// Un jeton absent ou vide retombe sur le chemin sans en-tête : la
+    /// surcharge idempotente ne doit pas fabriquer un `X-Client-Mutation-Id`
+    /// vide, que la regex serveur refuserait.
+    func test_PostService_repost_withoutMutationId_fallsBackToThePlainCall() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "story-1"), error: nil)
+        mock.stub("/posts/story-1/repost", result: response)
+
+        _ = try await service.repost(postId: "story-1", targetType: .post, content: nil,
+                                     isQuote: false, visibility: nil, clientMutationId: "")
+
+        XCTAssertNil(mock.lastRequest?.headers?["X-Client-Mutation-Id"] ?? nil)
+        XCTAssertEqual(mock.lastRequest?.path, "/posts/story-1/repost")
+    }
+
     // MARK: - share
 
     func testShareCallsCorrectEndpoint() async throws {

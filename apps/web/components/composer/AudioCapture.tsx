@@ -18,17 +18,17 @@ import { Button } from '@/components/v2/Button';
  * la rangée d'outils de `ComposerDocumentSurface`, à côté de photo et vidéo,
  * et rend le fichier produit à son appelant — jamais il ne publie lui-même.
  *
- * ### Ce qui est PORTÉ tel quel de `components/v2/AudioPostComposer.tsx`
+ * ### Ce qui était PORTÉ tel quel de `components/v2/AudioPostComposer.tsx`
  *
  * La machine à quatre phases (`idle → recording → transcribing → preview`,
  * `transcribing` restant inatteint — quirk du composer hérité, reproduit à
  * l'identique), la négociation de `mimeType` (mêmes candidats, même ordre),
  * les quatre locales de `SPEECH_RECOGNITION_LOCALES`, la forme d'onde via
  * `AnalyserNode` + `requestAnimationFrame`, et les contraintes stéréo
- * 44,1 kHz de `getUserMedia`. `AudioPostComposer.tsx` reste intact et monté
- * ailleurs (son retrait est la Task W9, derrière la double preuve) — ce
- * fichier ne l'importe pas et ne le modifie pas ; il en re-code la machine de
- * capture, qui n'a jamais eu d'autre appelant à partager.
+ * 44,1 kHz de `getUserMedia`. `AudioPostComposer.tsx` a été RETIRÉ à la
+ * Task W9, derrière la double preuve (appelants recâblés, capacités tenues) —
+ * ce fichier ne l'a jamais importé ni modifié ; il en avait re-codé la
+ * machine de capture, qui n'a jamais eu d'autre appelant à partager.
  *
  * ### Ce qui CHANGE, et pourquoi
  *

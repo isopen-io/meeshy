@@ -99,6 +99,72 @@ const AUDIO_TOOL_KEYS = [
   'postComposer.audio.error',
 ] as const;
 
+/**
+ * W8 — les clés des deux surfaces neuves, repost et édition. Ni l'une ni
+ * l'autre ne réutilisent le mécanisme de repli inline anglais que le reste du
+ * dépôt utilise massivement (`t(key, fallback)`) : chaque libellé vit dans les
+ * quatre catalogues, même discipline que W2/W4 ci-dessus.
+ *
+ * `composer.repost.posting` bascule le libellé du bouton pendant la
+ * republication (`ComposerRepostSurface.saving`, câblé depuis
+ * `MeeshyComposer.repostSaving` — constat MINEUR de la revue adversariale,
+ * corrigé au même lot que ce fichier).
+ */
+const REPOST_KEYS = [
+  'composer.repost.title',
+  'composer.repost.quote',
+  'composer.repost.contentLabel',
+  'composer.repost.posting',
+] as const;
+
+/**
+ * `composer.edit.keepMedia` et `composer.edit.reelMinMedia` ont été RETIRÉES
+ * (constat MINEUR de la revue adversariale, même lot) : aucun fichier source
+ * ne les rendait. `reelMinMedia` était le plus trompeur — elle affirmait un
+ * message d'erreur pour une règle que `ComposerDocumentSurface.handleToggleExistingMedia`
+ * refuse EXPLICITEMENT d'appliquer (son commentaire : « Aucun blocage au
+ * moins un média ici » — c'est la dégradation RÉEL→POST, `publishedType`, qui
+ * absorbe ce cas). Une garde verte qui documente une affordance inexistante
+ * devient la loi lue par la session suivante ; ces deux clés en sont retirées
+ * avec la garde, plutôt que de peindre un pixel qu'aucune spécification ne
+ * demandait.
+ */
+const EDIT_KEYS = [
+  'composer.edit.title',
+  'composer.edit.contentLabel',
+  'composer.edit.removeMedia',
+] as const;
+
+describe("W8 — clés du repost et de l'édition, joignables via useI18n('common')", () => {
+  LOCALES.forEach((locale) => {
+    const ns = loadScopedCommon(locale);
+
+    [...REPOST_KEYS, ...EDIT_KEYS].forEach((key) => {
+      it(`[${locale}] t('${key}') résout vers une chaîne non vide sous la portée réelle 'common'`, () => {
+        const value = resolve(ns, key);
+        expect(typeof value).toBe('string');
+        expect((value as string).trim().length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  it('les quatre clés repost sont DISTINCTES dans chaque locale', () => {
+    LOCALES.forEach((locale) => {
+      const ns = loadScopedCommon(locale);
+      const labels = REPOST_KEYS.map((key) => resolve(ns, key) as string);
+      expect(new Set(labels).size).toBe(REPOST_KEYS.length);
+    });
+  });
+
+  it('les trois clés edit sont DISTINCTES dans chaque locale', () => {
+    LOCALES.forEach((locale) => {
+      const ns = loadScopedCommon(locale);
+      const labels = EDIT_KEYS.map((key) => resolve(ns, key) as string);
+      expect(new Set(labels).size).toBe(EDIT_KEYS.length);
+    });
+  });
+});
+
 describe("W2 — clés de l'éventail, joignables via useI18n('common')", () => {
   LOCALES.forEach((locale) => {
     const ns = loadScopedCommon(locale);

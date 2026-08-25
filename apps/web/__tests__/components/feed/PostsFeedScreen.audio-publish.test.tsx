@@ -79,8 +79,6 @@ function latestFeedComposerCall(): CapturedProps {
   return matches[matches.length - 1];
 }
 
-jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
-jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
 jest.mock('@/hooks/social/use-stories', () => ({

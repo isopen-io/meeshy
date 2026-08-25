@@ -288,7 +288,7 @@ struct ProfileUserPostsList: View {
                 originalVisibilityUserIds: post.visibilityUserIds ?? [],
                 isRepost: post.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds)
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
                 },
                 onDismiss: { editingPost = nil }
             )
@@ -972,8 +972,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
                 cardId: postId, cardType: post.type,
                 repostOfId: post.repost?.id, originalRepostOfId: post.repost?.originalRepostOfId
             )
-            _ = try await postService.repost(postId: cible.postId, targetType: cible.targetType,
-                                             content: nil, isQuote: false, visibility: nil)
+            try await RepostPublisher(postService: postService).publish(
+                .simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
+            )
             FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.repost.success", defaultValue: "Repartagé", bundle: .main))
         } catch {
             repostedOverrides[postId] = nil
@@ -1029,7 +1030,8 @@ final class ProfileUserPostsViewModel: ObservableObject {
         removeMediaIds: [String]? = nil,
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
-        visibilityUserIds: [String]? = nil
+        visibilityUserIds: [String]? = nil,
+        known: Set<PostEditField> = EditPostDraft.documentFields
     ) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
@@ -1048,7 +1050,14 @@ final class ProfileUserPostsViewModel: ObservableObject {
         }
         posts[idx] = optimistic
         do {
-            let updated = try await postService.update(postId: postId, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            // Le corps ne se construit plus ici : `known` dit ce que la
+            // surface a su RENDRE, `PostEditPayload.build` en tire le PUT. Un
+            // champ non déclaré est OMIS, et le serveur préserve le sien.
+            let updated = try await postService.update(postId: postId, known: known, draft: PostEditDraft(
+                content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                location: location
+            ))
             if let newIdx = posts.firstIndex(where: { $0.id == postId }) {
                 let edited = updated.toFeedPost(preferredLanguages: languageProvider.preferredLanguages)
                 posts[newIdx] = edited

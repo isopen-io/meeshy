@@ -125,7 +125,30 @@ nonisolated enum ComposerOpening: Equatable, CaseIterable {
 /// leur interdit. Supprimer l'un de ces cas rendrait sa garde inécrivable, et le
 /// retour du routage passerait alors sans un mot — le mode d'extinction
 /// silencieuse propre aux gardes négatives.
-nonisolated enum LegacyComposer: Equatable { case statusComposer, repostComposer, storyEdit, feedComposer }
+///
+/// **`editPostSheet` est arrivé au lot 7.8, et il répare un MENSONGE — pas un
+/// manque.** La table rendait `.storyEdit` pour les QUATRE formats d'édition.
+/// Or `.storyEdit` désigne `storyEditComposerCover` (`StoryTrayView`, quatre
+/// montages), qui monte `StoryComposerView` sur une `StoryEditSession` : c'est
+/// l'atelier d'une STORY. Éditer un POST ou un RÉEL — ce que font les CINQ
+/// montages d'`EditPostSheet` (`PostDetailView`, `ProfileUserPostsList`,
+/// `ReelsPlayerView`, `RootViewComponents`, `FeedView`) — n'avait donc AUCUNE
+/// représentation ici. Une valeur manquante se voit ; une valeur voisine qui
+/// tient la place a l'air d'avoir été décidée, et c'est le pire des deux.
+///
+/// **Ce que ce cas n'est PAS.** Aucun site de production ne construit
+/// `ComposerIntent(origin: .edit(...))` — zéro occurrence, mesurée : les deux
+/// feuilles sont montées directement, hors du routeur. Le défaut était
+/// STRUCTUREL, et il se juge en fonction pure ; prétendre qu'il corrigeait un
+/// écran serait une victoire inventée.
+///
+/// La doctrine du « cas qui reste déclaré » vaut désormais pour QUATRE valeurs,
+/// et l'inventaire de parité qui gouverne le retrait d'`EditPostSheet.swift`
+/// vit dans `EditParityInventoryTests` — pas ici. Ce fichier ROUTE ; il ne
+/// décide pas d'un retrait.
+nonisolated enum LegacyComposer: Equatable {
+    case statusComposer, repostComposer, storyEdit, editPostSheet, feedComposer
+}
 
 /// Ce que la porte décide, et rien de plus.
 ///
@@ -454,6 +477,51 @@ nonisolated extension ComposerProfile {
             case .reel: offerts = [.reel, .post]
             case .post: offerts = plusReel([.post])
             }
+            // Rév. 9 (lot 7.8) : le routage de cette porte devient fonction du
+            // FORMAT PORTÉ — la même doctrine que `.repost` au lot 4.7, et pour
+            // une raison plus dure encore. Cette ligne rendait `.storyEdit`
+            // pour les QUATRE formats, alors que `.storyEdit` désigne
+            // `storyEditComposerCover` : l'atelier d'une STORY, monté sur une
+            // `StoryEditSession` qu'un post n'a pas. La table faisait donc
+            // passer un post pour une story, et éditer un POST ou un RÉEL
+            // n'avait aucune représentation — alors que la feuille qui le fait
+            // existe, et compte CINQ montages de production.
+            //
+            // Les deux branches nomment des surfaces qui EXISTENT, et c'est la
+            // condition à laquelle une table a le droit de router :
+            //
+            // - `.story` monte `storyEditComposerCover` — quatre montages
+            //   (`StoryTrayView` deux fois, `iPadRootView`, `RootView`) ;
+            // - `.post` et `.reel` montent `EditPostSheet` — cinq montages
+            //   (`PostDetailView`, `ProfileUserPostsList`, `ReelsPlayerView`,
+            //   `RootViewComponents`, `FeedView`), et c'est la seule surface du
+            //   dépôt qui sache basculer POST vers RÉEL.
+            //
+            // `.status` REJOINT la seconde branche, et il faut dire pourquoi
+            // plutôt que de le laisser tomber par défaut : aucun site du dépôt
+            // n'offre d'éditer un mood — mesuré, zéro état d'édition de statut,
+            // zéro montage. La branche nomme donc la seule feuille du dépôt qui
+            // édite une ligne de post qui n'est pas une story ; c'est un
+            // ROUTAGE, jamais la promesse qu'une affordance existe. Le faire
+            // retomber sur `.storyEdit` aurait reconduit le mensonge exact que
+            // cette révision retire, et le faire retomber sur `nil` aurait dit
+            // que le meuble sert l'édition d'un mood — ce qu'aucune de ses
+            // trois surfaces ne fait.
+            //
+            // CE QUE CETTE LIGNE NE CHANGE PAS, et il faut le lire au mot près :
+            // aucun site de production ne construit `ComposerIntent(origin:
+            // .edit(...))` — zéro occurrence. Les deux feuilles sont présentées
+            // directement par leurs hôtes, hors du routeur. La correction est
+            // STRUCTURELLE et se juge en fonction pure ; elle ne recâble aucun
+            // écran, et la lire comme un correctif d'écran serait exactement le
+            // vieillissement de commentaire que ce dossier traque ailleurs.
+            //
+            // Le RETRAIT d'`EditPostSheet.swift` n'a PAS lieu ici. Ses sept
+            // capacités sont inventoriées, mesurées et gardées par
+            // `EditParityInventoryTests` — deux tenues, cinq manquantes —, et
+            // les deux tenues le sont côté CRÉATION : cette porte ouvre en
+            // `.resume`, que `ComposerSurfaceRouting` fait atterrir sur la
+            // SCÈNE, où le socle ne peint rien.
             return ComposerProfile(
                 initialFormat: documentFormat,
                 offeredFormats: offerts,
@@ -461,7 +529,7 @@ nonisolated extension ComposerProfile {
                 showsTimeline: true,
                 opensWith: .resume,
                 allowsCapture: false,
-                routesToLegacy: .storyEdit
+                routesToLegacy: documentFormat == .story ? .storyEdit : .editPostSheet
             )
 
         case .draft, .share:

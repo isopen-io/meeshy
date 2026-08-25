@@ -16,7 +16,7 @@
  * dialogue autonome et la surface montée en meuble.
  */
 import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MeeshyComposer } from '@/components/composer/MeeshyComposer';
 import { StoryComposer, StoryComposerSurface, type ComposerStoryPayload } from '@/components/v2/StoryComposer';
@@ -57,6 +57,32 @@ jest.mock('@/services/attachmentService', () => ({
   AttachmentService: { validateFiles: () => mockValidation },
 }));
 
+jest.mock('use-debounce', () => ({
+  useDebounce: (value: unknown) => [value],
+}));
+
+jest.mock('@/components/ui/popover', () => ({
+  Popover: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  PopoverTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  PopoverContent: ({ children }: { children: React.ReactNode }) => <div data-testid="popover-content">{children}</div>,
+}));
+
+jest.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DropdownMenuItem: ({ children, onSelect, onClick }: { children: React.ReactNode; onSelect?: () => void; onClick?: () => void }) => (
+    <button type="button" onClick={onClick || onSelect}>{children}</button>
+  ),
+}));
+
+const mockSearchUsers = jest.fn();
+jest.mock('@/services/users.service', () => ({
+  usersService: {
+    searchUsers: (...args: unknown[]) => mockSearchUsers(...args),
+  },
+}));
+
 global.URL.createObjectURL = jest.fn(() => 'blob:mock-story-meuble');
 global.URL.revokeObjectURL = jest.fn();
 
@@ -64,6 +90,8 @@ beforeEach(() => {
   mockUploadedAttachments = [];
   mockSelectedFiles = [new File(['x'], 'placeholder.jpg', { type: 'image/jpeg' })];
   mockValidation = { valid: true, errors: [] };
+  mockSearchUsers.mockReset();
+  mockSearchUsers.mockResolvedValue([{ id: 'u-a', username: 'alice', displayName: 'Alice' }]);
 });
 
 function typeContent(text: string): void {
@@ -72,6 +100,13 @@ function typeContent(text: string): void {
 
 function clickPublish(): void {
   fireEvent.click(screen.getByText('publish'));
+}
+
+async function pickAliceFromPicker() {
+  fireEvent.click(screen.getByLabelText('Mention someone'));
+  fireEvent.change(screen.getByPlaceholderText('Search for someone'), { target: { value: 'ali' } });
+  await waitFor(() => expect(mockSearchUsers).toHaveBeenCalled());
+  fireEvent.click(await screen.findByText('Alice'));
 }
 
 /** Neutralise les ids générés aléatoirement par `generateStoryObjectId()`
@@ -125,6 +160,31 @@ describe('W5 — `storyTray` peint la surface story dans le meuble', () => {
 
     typeContent('Bonjour');
     expect(() => clickPublish()).not.toThrow();
+  });
+});
+
+/**
+ * Reformulation W9 Step 3 — le volet `StoryComposer — references` de
+ * `PostComposerReferences.test.tsx` (fichier retiré : il importait aussi
+ * `PostComposer`/`PostEditor`, deux modules qui ne survivent pas à ce lot).
+ * `StoryComposer.tsx` LUI reste (§G, opposable) — cette suite ne perd donc
+ * PAS sa cible, seulement son ancien fichier d'accueil. Rendu via le
+ * dialogue autonome, exactement comme l'original : le chemin POSITIF du
+ * picker (choisir Alice ⇒ `mentions: [{ userId, display: 'SILENT' }]`) que
+ * la garde d'ABSENCE ci-dessus, à elle seule, ne prouve pas.
+ */
+describe('StoryComposer (dialogue autonome) — références', () => {
+  it('publie la personne choisie au picker en SILENT', async () => {
+    const onPublish = jest.fn();
+    render(<StoryComposer open onClose={jest.fn()} onPublish={onPublish} />);
+
+    typeContent('Soirée');
+    await pickAliceFromPicker();
+    clickPublish();
+
+    expect(onPublish).toHaveBeenCalledWith(
+      expect.objectContaining({ mentions: [{ userId: 'u-a', display: 'SILENT' }] }),
+    );
   });
 });
 

@@ -307,15 +307,17 @@ struct PostDetailView: View {
             repostOfId: carte?.repost?.id,
             originalRepostOfId: carte?.repost?.originalRepostOfId
         )
+        // « Citer » ouvre une alerte SANS champ de saisie : ce site DÉCLARE la
+        // citation sans recueillir de commentaire. `declaredQuote` porte ce
+        // geste tel qu'il est plutôt que de le normaliser en repartage sec —
+        // `isQuote` change côté serveur où s'enracinent les réactions.
+        let intention: RepostIntent = quote
+            ? RepostIntent.declaredQuote(postId: cible.postId, targetType: cible.targetType, visibility: nil)
+            : RepostIntent.simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
         Task {
             defer { Task { @MainActor in isRepostInFlight = false } }
             do {
-                _ = try await PostService.shared.repost(
-                    postId: cible.postId,
-                    targetType: cible.targetType,
-                    content: nil,
-                    isQuote: quote
-                )
+                try await RepostPublisher.shared.publish(intention)
                 FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
             } catch {
                 isPostReposted = false
@@ -974,7 +976,7 @@ struct PostDetailView: View {
                     originalVisibilityUserIds: post.visibilityUserIds ?? [],
                     isRepost: post.repost != nil,
                     onSave: { draft in
-                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds)
+                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
                     },
                     onDismiss: { isEditing = false }
                 )

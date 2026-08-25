@@ -56,10 +56,6 @@ jest.mock('@/components/v2', () => ({
   StatusComposer: () => null,
 }));
 
-jest.mock('@/components/v2/PostComposer', () => ({ PostComposer: () => null }));
-jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
-jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
-jest.mock('@/components/v2/AudioPostComposer', () => ({ AudioPostComposer: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
 const mockSharePost = jest.fn();

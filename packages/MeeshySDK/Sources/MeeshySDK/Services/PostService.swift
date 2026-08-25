@@ -78,6 +78,19 @@ public protocol PostServiceProviding: Sendable {
     /// alternatif par média — même patron que `create(… allowSoundExtraction:
     /// mediaAlt:)` ci-dessus.
     func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost
+    /// L'édition à DÉCLARATION — **on n'écrit que ce qu'on sait complet et
+    /// qu'on a su rendre**. L'appelant dit ce que sa surface a PEINT
+    /// (`known`) et ce qu'elle DÉTIENT (`draft`) ; le corps se construit à un
+    /// seul endroit, `PostEditPayload.build`.
+    ///
+    /// Les surcharges positionnelles ci-dessus déclarent implicitement TOUT
+    /// (`PostEditField.all`) : leurs `nil` valaient déjà « je n'en parle
+    /// pas ». Elles restent le chemin des appelants qui n'ont rien à taire.
+    ///
+    /// Requirement SÉPARÉE avec défaut ci-dessous — même convention que le
+    /// reste de ce protocole : un double de test qui ne la surcharge pas
+    /// reste conforme, et continue d'observer le corps par ses paramètres.
+    func update(postId: String, known: Set<PostEditField>, draft: PostEditDraft) async throws -> APIPost
     func delete(postId: String) async throws
     func like(postId: String) async throws
     func unlike(postId: String) async throws
@@ -114,6 +127,30 @@ public protocol PostServiceProviding: Sendable {
     /// requirement séparée avec défaut ci-dessous pour garder les mocks valides.
     func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String?) async throws -> APIPost
+    /// Variante IDEMPOTENTE — envoie `clientMutationId` en header
+    /// `X-Client-Mutation-Id`, ce que le gateway attend depuis que
+    /// `POST /posts/:id/repost` passe par `withMutationOutcome`
+    /// (`replayCost: 'diverges'`, lot 7 tâche 7.1b).
+    ///
+    /// Elle est INDISPENSABLE au repost, plus qu'à un like : `repostPost`
+    /// fabrique un `Post` NEUF à chaque appel, donc rien ne le rend
+    /// naturellement idempotent — une ligne d'outbox rejouée, ou un envoi
+    /// relancé après un délai d'expiration d'`URLSession`, en faisait deux.
+    ///
+    /// **Ce que ce jeton couvre EXACTEMENT : le REJEU d'un MÊME envoi.** Le
+    /// gateway rapproche deux requêtes par leur `X-Client-Mutation-Id`, et par
+    /// rien d'autre. Deux TAPS sont deux gestes, donc deux jetons, qu'aucun
+    /// `MutationLog` ne peut rapprocher — et les rapprocher en dérivant le
+    /// jeton du CONTENU coûterait un geste LÉGITIME : republier, supprimer,
+    /// republier, où le gateway rend déjà 410 sur le rejeu d'un repost
+    /// supprimé. Le double tap se retient donc EN AMONT, par le verrou « en
+    /// vol » par CIBLE de l'écrivain applicatif (`RepostPublisher`, app iOS) —
+    /// jamais par ce header, qui n'en a pas les moyens.
+    ///
+    /// Requirement SÉPARÉE, avec un défaut ci-dessous qui laisse tomber le
+    /// jeton : les conformeurs existants (mocks) restent valides sans une
+    /// ligne de changement. Patron d'`addComment(… clientMutationId:)`.
+    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String?, clientMutationId: String?) async throws -> APIPost
     func share(postId: String) async throws
     func share(postId: String, platform: String?, generateLink: Bool) async throws -> PostShareResult
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?) async throws -> APIPost
@@ -235,6 +272,22 @@ public extension PostServiceProviding {
                          location: location, mentions: mentions)
     }
 
+    /// Défaut : un conformeur qui n'implémente que les signatures
+    /// positionnelles (tous les doubles de test existants) reste valide. La
+    /// déclaration est appliquée ICI — un champ non déclaré connu part à
+    /// `nil`, donc absent du JSON — puis le corps repart par le chemin
+    /// historique. Le double observe donc EXACTEMENT ce qui partirait.
+    func update(postId: String, known: Set<PostEditField>, draft: PostEditDraft) async throws -> APIPost {
+        let body = PostEditPayload.build(known: known, draft: draft)
+        return try await update(postId: postId, content: body.content, visibility: body.visibility,
+                                visibilityUserIds: body.visibilityUserIds, moodEmoji: body.moodEmoji,
+                                originalLanguage: body.originalLanguage, type: body.type,
+                                removeMediaIds: body.removeMediaIds, storyEffects: body.storyEffects,
+                                mediaIds: body.mediaIds, location: body.location,
+                                mentions: body.mentions, allowSoundExtraction: body.allowSoundExtraction,
+                                mediaAlt: body.mediaAlt)
+    }
+
     /// Compat : la signature historique 8-params reste disponible pour les
     /// call sites existants — les protocoles Swift ne portent pas de valeurs
     /// par défaut. `storyEffects` / `mediaIds` (édition de story) partent à nil.
@@ -340,6 +393,16 @@ public extension PostServiceProviding {
         try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
                              attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
                              originalLanguage: originalLanguage, location: location)
+    }
+
+    /// Défaut de la variante idempotente du repost : laisse tomber le jeton et
+    /// retombe sur la variante sans en-tête. `PostService` la surcharge
+    /// réellement ; un double de test peut la surcharger pour OBSERVER le
+    /// jeton, ce que le défaut ne permet pas.
+    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool,
+                visibility: String?, clientMutationId: String?) async throws -> APIPost {
+        try await repost(postId: postId, targetType: targetType, content: content,
+                         isQuote: isQuote, visibility: visibility)
     }
 }
 
@@ -571,6 +634,44 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         return response.data
     }
 
+    /// Surcharge porteuse du jeton : envoyé en header `X-Client-Mutation-Id`,
+    /// le gateway dédoublonne les rejeux (`withMutationOutcome`,
+    /// `replayCost: 'diverges'`) et rend 410 quand le repost a été supprimé
+    /// entre l'envoi et le rejeu.
+    ///
+    /// **AUCUNE valeur par défaut sur ces six paramètres**, contrairement à la
+    /// surcharge ci-dessus qui les défaute tous : deux surcharges défautées se
+    /// disputeraient chaque appel partiel (`repost(postId:)` deviendrait
+    /// ambigu). L'unique appelant applicatif — `RepostPublisher` — les passe
+    /// tous, explicitement.
+    public func repost(
+        postId: String,
+        targetType: PostType?,
+        content: String?,
+        isQuote: Bool,
+        visibility: String?,
+        clientMutationId: String?
+    ) async throws -> APIPost {
+        let body = RepostRequest(
+            content: content,
+            isQuote: isQuote,
+            targetType: targetType?.rawValue,
+            visibility: visibility
+        )
+        guard let clientMutationId, !clientMutationId.isEmpty else {
+            let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts/\(postId)/repost", body: body)
+            return response.data
+        }
+        let response: APIResponse<APIPost> = try await api.requestWithHeaders(
+            endpoint: "/posts/\(postId)/repost",
+            method: "POST",
+            body: try JSONEncoder().encode(body),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": clientMutationId]
+        )
+        return response.data
+    }
+
     public func share(postId: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/share", method: "POST")
     }
@@ -753,7 +854,24 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         // `visibilityUserIds` était déclaré dans `UpdatePostRequest` mais JAMAIS
         // renseigné ici : il partait toujours à `nil`, et le `refine` Zod du
         // gateway rejetait donc systématiquement EXCEPT/ONLY.
-        let body = UpdatePostRequest(content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects, mediaIds: mediaIds, location: location, mentions: mentions, allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt)
+        //
+        // Un appelant positionnel n'a rien à TAIRE : ses `nil` valaient déjà
+        // « je n'en parle pas ». Il déclare donc tout connu, et le corps se
+        // construit au seul endroit qui le construise encore.
+        return try await update(postId: postId, known: PostEditField.all, draft: PostEditDraft(
+            content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+            moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type,
+            removeMediaIds: removeMediaIds, storyEffects: storyEffects, mediaIds: mediaIds,
+            location: location, mentions: mentions, allowSoundExtraction: allowSoundExtraction,
+            mediaAlt: mediaAlt
+        ))
+    }
+
+    /// **Le seul PUT d'édition du dépôt**, et le seul consommateur de
+    /// `PostEditPayload.build`. Toute surcharge positionnelle ci-dessus
+    /// retombe ici.
+    public func update(postId: String, known: Set<PostEditField>, draft: PostEditDraft) async throws -> APIPost {
+        let body = PostEditPayload.build(known: known, draft: draft)
         let response: APIResponse<APIPost> = try await api.put(endpoint: "/posts/\(postId)", body: body)
         return response.data
     }

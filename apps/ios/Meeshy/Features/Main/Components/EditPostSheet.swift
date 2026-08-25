@@ -24,6 +24,28 @@ struct EditPostDraft {
     /// Accompagne `visibility` quand celle-ci exige une liste nommée
     /// (EXCEPT/ONLY) ; vide dès que l'auteur quitte ces deux modes.
     var visibilityUserIds: [String]? = nil
+    /// **Ce que la feuille a su RENDRE** — la déclaration qui gouverne le
+    /// corps du PUT (`PostEditPayload.build`). Un champ absent d'ici est OMIS,
+    /// et le serveur préserve alors ce qu'il tient : c'est la seule lecture
+    /// juste pour une surface qui n'a jamais peint ce champ.
+    ///
+    /// Elle voyage AVEC le brouillon plutôt que d'être devinée en aval : un
+    /// `nil` reçu par un ViewModel ne dit pas si le champ est INCHANGÉ ou
+    /// JAMAIS AFFICHÉ, et seule la feuille connaît la différence.
+    var known: Set<PostEditField> = EditPostDraft.documentFields
+
+    /// Le plus large que cette feuille puisse déclarer. `save()` la RESSERRE
+    /// selon ce qui a réellement été peint : le sélecteur de type n'existe pas
+    /// sur un repost, la bande de médias n'existe pas sans média.
+    ///
+    /// Six champs du corps n'y figurent JAMAIS — `moodEmoji`, `storyEffects`,
+    /// `mediaIds`, `mentions`, `allowSoundExtraction`, `mediaAlt` — parce que
+    /// cette feuille ne les a jamais rendus. Les déclarer les rendrait
+    /// écrasables par une surface qui ne les a jamais montrés à l'auteur.
+    static let documentFields: Set<PostEditField> = [
+        .content, .visibility, .visibilityUserIds, .originalLanguage,
+        .type, .removeMediaIds, .location
+    ]
 }
 
 /// Règles PURES de l'audience en édition — extraites de la vue pour être
@@ -642,6 +664,14 @@ struct EditPostSheet: View {
     private func save() async {
         guard isValid, !isSaving else { return }
         isSaving = true
+        // La déclaration suit ce que l'écran a MONTRÉ, pas ce que le
+        // brouillon porte : le sélecteur POST/RÉEL n'est pas peint sur un
+        // repost (`showTypePicker`), et la bande de retrait n'existe pas sans
+        // média (`mediaSection`). Sans médias rendus, un `removeMediaIds`
+        // déclaré connu autoriserait un vidage que l'auteur n'a pas pu voir.
+        var known = EditPostDraft.documentFields
+        if !showTypePicker { known.remove(.type) }
+        if media.isEmpty { known.remove(.removeMediaIds) }
         let draft = EditPostDraft(
             content: trimmedContent,
             language: languageChanged ? selectedLanguage : nil,
@@ -649,7 +679,8 @@ struct EditPostSheet: View {
             removeMediaIds: Array(removedMediaIds),
             location: locationEdit,
             visibility: audienceChanged ? selectedVisibility.rawValue : nil,
-            visibilityUserIds: audienceChanged ? draftAudience : nil
+            visibilityUserIds: audienceChanged ? draftAudience : nil,
+            known: known
         )
         await onSave(draft)
         isSaving = false

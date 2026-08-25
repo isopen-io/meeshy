@@ -39,41 +39,43 @@ jest.mock('@/components/v2', () => ({
   StatusComposer: () => null,
 }));
 
-type EditorStubProps = {
-  initialVisibility?: string;
-  initialVisibilityUserIds?: readonly string[];
-  onSave: (data: {
-    content: string;
-    visibility: string;
-    visibilityUserIds: string[];
-    removeMediaIds: string[];
-  }) => void;
+// W8 — le fil ouvre désormais la porte `edit` du meuble unifié, pas
+// `PostEditor`. Le stub ne peint la surface édition QUE pour cette porte ;
+// les autres portes que `PostsFeedScreen` monte aussi (`feedComposer`,
+// `moodChip`, `repost`) restent hors de portée de cette suite.
+type EditSourceStub = {
+  postId: string;
+  visibility: string;
+  visibilityUserIds: readonly string[];
 };
-jest.mock('@/components/v2/PostEditor', () => ({
-  PostEditor: ({ initialVisibility, initialVisibilityUserIds, onSave }: EditorStubProps) => (
-    <div>
-      <span data-testid="editor-initial-visibility">{initialVisibility}</span>
-      <span data-testid="editor-initial-audience">{(initialVisibilityUserIds ?? []).join(',')}</span>
-      <button
-        data-testid="editor-save"
-        onClick={() =>
-          onSave({
-            content: 'Texte réécrit',
-            visibility: 'ONLY',
-            visibilityUserIds: ['user-9'],
-            removeMediaIds: [],
-          })
-        }
-      >
-        Save
-      </button>
-    </div>
-  ),
+type MeeshyComposerEditStubProps = {
+  door: { kind: string };
+  editSource?: EditSourceStub;
+  onSaveEdit?: (payload: { postId: string; data: Record<string, unknown> }) => void;
+};
+jest.mock('@/components/composer/MeeshyComposer', () => ({
+  MeeshyComposer: ({ door, editSource, onSaveEdit }: MeeshyComposerEditStubProps) => {
+    if (door.kind !== 'edit' || !editSource) return null;
+    return (
+      <div>
+        <span data-testid="editor-initial-visibility">{editSource.visibility}</span>
+        <span data-testid="editor-initial-audience">{editSource.visibilityUserIds.join(',')}</span>
+        <button
+          data-testid="editor-save"
+          onClick={() =>
+            onSaveEdit?.({
+              postId: editSource.postId,
+              data: { content: 'Texte réécrit', visibility: 'ONLY', visibilityUserIds: ['user-9'] },
+            })
+          }
+        >
+          Save
+        </button>
+      </div>
+    );
+  },
 }));
 
-jest.mock('@/components/v2/PostComposer', () => ({ PostComposer: () => null }));
-jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
-jest.mock('@/components/v2/AudioPostComposer', () => ({ AudioPostComposer: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
 jest.mock('@/services/posts.service', () => ({

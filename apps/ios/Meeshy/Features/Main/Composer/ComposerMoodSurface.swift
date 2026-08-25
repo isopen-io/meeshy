@@ -994,14 +994,22 @@ struct MoodComposerDoor: View {
     /// perdu ; `StatusViewModel.anchorStatusAsPost` le rend immédiatement sur un
     /// `isOffline()`, sans attendre le délai d'expiration d'`URLSession`.
     ///
-    /// **Ne pas lire cette phrase comme « la file ne saurait pas le porter ».**
-    /// Elle l'a dit deux lots durant, en nommant `OutboxKind`, et le fil rouge
-    /// du repost (lot 7) y a depuis posé sa ligne. Ce qui manque n'est pas le
-    /// KIND mais un ÉCRIVAIN — et l'y brancher apporterait en prime
-    /// l'idempotence (`X-Client-Mutation-Id`), que cet appel direct n'a pas :
-    /// laisser le composer OUVERT sur un échec rend le geste normal « retaper la
-    /// flèche », et deux taps après un délai d'expiration font deux posts. DETTE
-    /// nommée, non refermée ici : elle traverse la file, pas le composer.
+    /// **La dette nommée ici a été payée À MOITIÉ au lot 7.5 — lire les deux
+    /// moitiés avant de la reprendre.** Elle disait « ce qui manque n'est pas le
+    /// KIND mais un ÉCRIVAIN ». L'écrivain existe (`RepostPublisher`) et
+    /// l'ancrage passe désormais par lui : il porte son `X-Client-Mutation-Id`,
+    /// donc le REJEU d'un même envoi cesse de republier. Deux TAPS restent deux
+    /// gestes, donc deux jetons, qu'aucun `MutationLog` ne rapproche : ce sont
+    /// le verrou « en vol » par CIBLE de l'écrivain (`RepostInFlightRegistry`)
+    /// et le drapeau `isPublishingDocument` du meuble qui les retiennent.
+    ///
+    /// **Ce qui reste est la DURABILITÉ, et elle a changé de propriétaire.**
+    /// L'écrivain sait enfiler ; c'est cette porte-ci qui refuse avant de
+    /// l'atteindre, parce que `ComposerDocumentSendPath.quotedRepost.isDurable`
+    /// vaut `false` et que `ComposerDocumentSendPlan` en fait un refus. Rendre
+    /// l'ancrage durable sans RETOURNER cette table poserait un meuble qui
+    /// DÉCLARE non durable un chemin qui l'est. Les deux se lèvent ensemble, par
+    /// le lot qui possède la surface document — plus par la file.
     ///
     /// Le `guard` sur la source n'est pas une redite du gate de la flèche : le
     /// gate garde l'ARMEMENT, celui-ci garde l'ENVOI, et un ancrage sans source

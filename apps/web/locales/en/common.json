@@ -293,6 +293,17 @@
       "media": {
         "limitReached": "You can attach up to {max} media files.",
         "limitPartial": "You can attach up to {max} media files. Only {added} added."
+      },
+      "repost": {
+        "title": "Repost",
+        "quote": "Quote",
+        "contentLabel": "Quote content",
+        "posting": "Posting..."
+      },
+      "edit": {
+        "title": "Edit post",
+        "contentLabel": "Edit post content",
+        "removeMedia": "Remove this media"
       }
     },
     "postComposer": {

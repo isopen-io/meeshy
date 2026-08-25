@@ -1207,6 +1207,58 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertTrue(EditPostAudienceRule.isComplete(visibility: .community, audienceCount: 0))
     }
 
+    // MARK: - EditPostSheet — ce que la feuille a su RENDRE (loi 3)
+
+    /// **On n'écrit que ce qu'on sait complet et qu'on a su rendre.** Six
+    /// champs du corps d'édition ne sont JAMAIS déclarés par cette feuille :
+    /// elle ne les a jamais peints, donc elle ne peut pas les réécrire. Les
+    /// déclarer les rendrait écrasables par une surface qui ne les a jamais
+    /// montrés à l'auteur — et `mentions: []` RÉVOQUE.
+    func test_editPostDraft_neverDeclaresWhatTheSheetHasNeverPainted() {
+        let neverPainted: Set<PostEditField> = [
+            .moodEmoji, .storyEffects, .mediaIds, .mentions, .allowSoundExtraction, .mediaAlt
+        ]
+
+        XCTAssertTrue(EditPostDraft.documentFields.isDisjoint(with: neverPainted))
+        XCTAssertEqual(EditPostDraft.documentFields, [
+            .content, .visibility, .visibilityUserIds, .originalLanguage,
+            .type, .removeMediaIds, .location
+        ])
+    }
+
+    /// La déclaration VOYAGE avec le brouillon, et son effet se mesure sur ce
+    /// qui part : un `nil` reçu par le ViewModel ne dirait pas si le champ est
+    /// INCHANGÉ ou JAMAIS AFFICHÉ. Ici il porte une valeur, et il est tu.
+    func test_updatePost_whenTypeWasNeverRendered_omitsItEvenThoughTheDraftCarriesOne() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "body", type: "REEL",
+                             known: EditPostDraft.documentFields.subtracting([.type]))
+
+        XCTAssertNil(postService.lastUpdateType,
+                     "le sélecteur POST/RÉEL n'existe pas sur un repost — le serveur doit préserver le sien")
+        XCTAssertEqual(postService.lastUpdateContent, "body")
+    }
+
+    /// Non-régression : sans déclaration explicite, un appelant reçoit la
+    /// déclaration la plus LARGE de la feuille — exactement ce que les quatre
+    /// chemins d'édition envoyaient avant ce lot.
+    func test_updatePost_defaultDeclaration_carriesEverythingTheSheetPaints() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "body", language: "fr", type: "REEL",
+                             removeMediaIds: ["m1"], visibility: "ONLY", visibilityUserIds: ["u1"])
+
+        XCTAssertEqual(postService.lastUpdateContent, "body")
+        XCTAssertEqual(postService.lastUpdateOriginalLanguage, "fr")
+        XCTAssertEqual(postService.lastUpdateType, "REEL")
+        XCTAssertEqual(postService.lastUpdateRemoveMediaIds, ["m1"])
+        XCTAssertEqual(postService.lastUpdateVisibility, "ONLY")
+        XCTAssertEqual(postService.lastUpdateVisibilityUserIds, ["u1"])
+    }
+
     // MARK: - refresh()
 
     func test_refresh_resetsNewPostsCountAndReloads() async {

@@ -640,7 +640,8 @@ class PostDetailViewModel: ObservableObject {
         removeMediaIds: [String]? = nil,
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
-        visibilityUserIds: [String]? = nil
+        visibilityUserIds: [String]? = nil,
+        known: Set<PostEditField> = EditPostDraft.documentFields
     ) async {
         guard let snapshot = post else { return }
         var optimistic = snapshot
@@ -661,7 +662,14 @@ class PostDetailViewModel: ObservableObject {
         }
         self.post = optimistic
         do {
-            let updated = try await postService.update(postId: snapshot.id, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            // Le corps ne se construit plus ici : `known` dit ce que la
+            // surface a su RENDRE, `PostEditPayload.build` en tire le PUT. Un
+            // champ non déclaré est OMIS, et le serveur préserve le sien.
+            let updated = try await postService.update(postId: snapshot.id, known: known, draft: PostEditDraft(
+                content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                location: location
+            ))
             self.post = updated.toFeedPost(preferredLanguages: preferredLanguages)
             FeedbackToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
         } catch {

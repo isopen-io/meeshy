@@ -293,6 +293,17 @@
       "media": {
         "limitReached": "Puedes adjuntar hasta {max} archivos multimedia.",
         "limitPartial": "Puedes adjuntar hasta {max} archivos multimedia. Solo se añadieron {added}."
+      },
+      "repost": {
+        "title": "Volver a publicar",
+        "quote": "Cita",
+        "contentLabel": "Contenido de la cita",
+        "posting": "Publicando..."
+      },
+      "edit": {
+        "title": "Editar publicación",
+        "contentLabel": "Editar contenido de la publicación",
+        "removeMedia": "Eliminar este archivo"
       }
     },
     "postComposer": {

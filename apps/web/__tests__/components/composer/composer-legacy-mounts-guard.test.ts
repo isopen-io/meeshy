@@ -59,3 +59,45 @@ describe('Garde G1 — PostsFeedScreen ne monte plus aucun des trois composers h
     expect(hostSource()).toContain('<MeeshyComposer');
   });
 });
+
+/**
+ * Garde G2 (Task W8) — les QUATRE sites qui montaient `<RepostModal` et/ou
+ * `<PostEditor` (les six surfaces de repost du plan sont les quatre montages
+ * ci-dessous PLUS les deux boutons de `StoryViewer.tsx`, qui ne montent ni
+ * l'un ni l'autre — voir `MeeshyComposer.tsx`) ne les montent plus.
+ * `RepostModal.tsx`/`PostEditor.tsx` restent des fichiers légitimes (retrait
+ * programmé pour W9, derrière la preuve de parité) — cette garde protège leur
+ * DÉMONTAGE des écrans, pas leur suppression.
+ *
+ * Même modèle que la garde G1 : NÉGATIVE et ÉNUMÉRÉE, jamais un motif large —
+ * « rougirait-elle si le mount était réintroduit ? » (Piège n°1 du plan).
+ */
+const W8_HOSTS = [
+  'components/feed/PostsFeedScreen.tsx',
+  'components/feed/ReelsFeedScreen.tsx',
+  'app/feeds/post/[postId]/page.tsx',
+  'app/reel/[postId]/page.tsx',
+] as const;
+
+function sourceOf(relativePath: string): string {
+  return fs.readFileSync(path.join(WEB_ROOT, relativePath), 'utf8');
+}
+
+describe('Garde G2 — les quatre sites de repost/édition ne montent plus RepostModal ni PostEditor', () => {
+  W8_HOSTS.forEach((host) => {
+    it(`${host} ne contient aucun mount JSX <RepostModal`, () => {
+      expect(sourceOf(host)).not.toContain('<RepostModal');
+    });
+  });
+
+  it('PostsFeedScreen.tsx et app/feeds/post/[postId]/page.tsx ne montent plus <PostEditor (les deux SEULS sites d\'édition)', () => {
+    expect(sourceOf('components/feed/PostsFeedScreen.tsx')).not.toContain('<PostEditor');
+    expect(sourceOf('app/feeds/post/[postId]/page.tsx')).not.toContain('<PostEditor');
+  });
+
+  it('les quatre sites montent tous `<MeeshyComposer` — la surface qui remplace RepostModal', () => {
+    W8_HOSTS.forEach((host) => {
+      expect(sourceOf(host)).toContain('<MeeshyComposer');
+    });
+  });
+});

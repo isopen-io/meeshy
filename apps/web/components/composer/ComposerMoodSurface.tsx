@@ -21,15 +21,16 @@ import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/ty
 /**
  * La surface MOOD — le format STATUS du meuble (W6).
  *
- * Port frais, dans l'esprit de `ComposerDocumentSurface` (W3) : elle NE
- * MODIFIE PAS `components/v2/StatusComposer.tsx`, qui reste monté tel quel
- * (contrairement à la STORY, absorbée à W5 — le mood n'a aucun canevas à
- * partager entre deux enrobages, donc rien à extraire en commun). Les
- * constantes qui suivent (`MOOD_EMOJIS`, `MAX_CONTENT_LENGTH`) sont donc
- * DUPLIQUÉES depuis `StatusComposer.tsx` plutôt qu'importées : le composer
- * hérité est promis à la suppression (W9), et en dépendre créerait une
- * dépendance qui casserait ce jour-là — même choix que `CHAR_LIMIT`/`MEDIA_LIMIT`
- * dans `ComposerDocumentSurface.tsx`.
+ * Port frais, dans l'esprit de `ComposerDocumentSurface` (W3) : elle N'A
+ * JAMAIS MODIFIÉ `components/v2/StatusComposer.tsx`, qui restait monté tel
+ * quel jusqu'à son retrait à la Task W9 (contrairement à la STORY, absorbée
+ * à W5 — le mood n'avait aucun canevas à partager entre deux enrobages, donc
+ * rien à extraire en commun). Les constantes qui suivent (`MOOD_EMOJIS`,
+ * `MAX_CONTENT_LENGTH`) sont donc DUPLIQUÉES depuis ce qu'était
+ * `StatusComposer.tsx` plutôt qu'importées : le composer hérité a depuis été
+ * supprimé (W9), et en dépendre aurait créé une dépendance qui aurait cassé
+ * ce jour-là — même choix que `CHAR_LIMIT`/`MEDIA_LIMIT` dans
+ * `ComposerDocumentSurface.tsx`.
  *
  * Ce que cette surface AJOUTE au-delà de la parité, tel que le plan le nomme
  * explicitement (§ Task W6) :

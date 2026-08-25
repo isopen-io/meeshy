@@ -8,13 +8,16 @@ import { useI18n } from '@/hooks/use-i18n';
 import { Button, useToast, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer } from '@/components/v2';
 import type { StoryVisibility } from '@/components/v2';
 import { Dialog, DialogBody, DialogHeader } from '@/components/v2/Dialog';
-import { PostEditor } from '@/components/v2/PostEditor';
-import { RepostModal } from '@/components/v2/RepostModal';
 import { Skeleton } from '@/components/v2/Skeleton';
 import { MeeshyComposer } from '@/components/composer/MeeshyComposer';
-import type { ComposerDoor } from '@/lib/composer-door';
-import type { ComposerDocumentPayload as PostPublishPayload } from '@/components/composer/payload';
+import { composerFormatOf, type ComposerDoor } from '@/lib/composer-door';
+import type {
+  ComposerDocumentPayload as PostPublishPayload,
+  ComposerDocumentEditPayload,
+  ComposerRepostPayload,
+} from '@/components/composer/payload';
 import type { ComposerStatusPayload } from '@/components/composer/ComposerMoodSurface';
+import { useComposerRepost } from '@/hooks/composer/useComposerRepost';
 
 // Stories
 import { useStoriesFeedQuery, useCreateStoryMutation, useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
@@ -28,7 +31,7 @@ import { postToStatusItem } from '@/lib/status-transforms';
 
 // Posts (real API integration — same hooks as v2)
 import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use-feed-query';
-import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useRepostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
+import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
 import { useCreateCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage, usePreferredLanguages } from '@/hooks/use-post-translation';
@@ -37,7 +40,7 @@ import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useAuthStore } from '@/stores/auth-store';
 import { reportService } from '@/services/report.service';
 import { postsService } from '@/services/posts.service';
-import type { Post, PostType, PostVisibility } from '@meeshy/shared/types/post';
+import type { Post, PostMedia, PostType, PostVisibility } from '@meeshy/shared/types/post';
 import { repostTargetId } from '@meeshy/shared/utils/repost-target';
 import type { PostReferenceInput } from '@meeshy/shared/types/post-reference';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
@@ -61,6 +64,9 @@ const MOOD_DOOR: ComposerDoor = { kind: 'moodChip' };
  * catalogues, n'aurait plus aucun site de rendu.
  */
 const MOOD_DIALOG_TITLE_ID = 'mood-composer-title';
+/** Même rôle que `MOOD_DIALOG_TITLE_ID`, pour les portes `edit` et `repost` (W8). */
+const EDIT_DIALOG_TITLE_ID = 'edit-composer-title';
+const REPOST_DIALOG_TITLE_ID = 'repost-composer-title';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -187,12 +193,23 @@ export function PostsFeedScreen() {
   const translateMutation = useTranslatePostMutation();
   const deletePostMutation = useDeletePostMutation();
   const pinPostMutation = usePinPostMutation();
-  const repostMutation = useRepostMutation();
   const updatePostMutation = useUpdatePostMutation();
+  // W8 — le site UNIQUE de la charge repost (`{ isQuote, targetType, content? }`) ;
+  // ce fil, `ReelsFeedScreen`, les deux pages de détail et le geste direct du
+  // viewer de story le partagent tous — voir `useComposerRepost.ts`.
+  const { repost: submitRepost, isPending: isReposting } = useComposerRepost();
 
   // Edit + Repost + Audio modals
   const [editingPost, setEditingPost] = useState<
-    { id: string; content: string; visibility: PostVisibility; visibilityUserIds: readonly string[] } | null
+    | {
+        postId: string;
+        content: string;
+        visibility: PostVisibility;
+        visibilityUserIds: readonly string[];
+        media: readonly PostMedia[];
+        postType: PostType;
+      }
+    | null
   >(null);
   /**
    * Le `type` est transporté DÈS l'ouverture de la modale : la loi du miroir
@@ -429,16 +446,18 @@ export function PostsFeedScreen() {
       // (`StoryViewerView.repostAsPostDirect` envoie `story.id`, quand les
       // surfaces de CARTE passent par `RepostTargeting`) : une source éphémère
       // est recopiée dans son repost, donc autonome, et grimper vers une
-      // racine dont l'échéance est passée ferait échouer le geste.
-      repostMutation.mutate(
-        { postId: storyId, data: { isQuote: false, targetType } },
+      // racine dont l'échéance est passée ferait échouer le geste. `story.id`
+      // n'est PAS `repostTargetId()` — voir `packages/shared/utils/repost-target.ts`,
+      // § « où cette loi ne s'applique pas ».
+      submitRepost(
+        { targetId: storyId, targetType, isQuote: false },
         {
           onSuccess: () => showToast(t('toast.reposted', 'Reposted!'), 'success'),
           onError: () => showToast(t('toast.error', 'Error'), 'error'),
         },
       );
     },
-    [repostMutation, showToast, t],
+    [submitRepost, showToast, t],
   );
 
   /** Le miroir — la story repartagée reste éphémère. */
@@ -632,10 +651,12 @@ export function PostsFeedScreen() {
       const post = posts.find((p) => p.id === postId);
       if (post) {
         setEditingPost({
-          id: post.id,
+          postId: post.id,
           content: post.content ?? '',
           visibility: post.visibility,
           visibilityUserIds: post.visibilityUserIds ?? [],
+          media: post.media ?? [],
+          postType: post.type,
         });
       }
     },
@@ -643,17 +664,9 @@ export function PostsFeedScreen() {
   );
 
   const handleSaveEdit = useCallback(
-    (data: { content: string; visibility: PostVisibility; visibilityUserIds: string[] }) => {
-      if (!editingPost) return;
+    (payload: ComposerDocumentEditPayload) => {
       updatePostMutation.mutate(
-        {
-          postId: editingPost.id,
-          data: {
-            content: data.content,
-            visibility: data.visibility,
-            visibilityUserIds: data.visibilityUserIds,
-          },
-        },
+        { postId: payload.postId, data: payload.data },
         {
           onSuccess: () => {
             setEditingPost(null);
@@ -663,7 +676,7 @@ export function PostsFeedScreen() {
         },
       );
     },
-    [editingPost, updatePostMutation, showToast, t],
+    [updatePostMutation, showToast, t],
   );
 
   const handleRepostOpen = useCallback(
@@ -680,40 +693,25 @@ export function PostsFeedScreen() {
     [posts],
   );
 
-  const handleRepost = useCallback(() => {
-    if (!repostingPost) return;
-    repostMutation.mutate(
-      // Loi du miroir : le format suit la CARTE. Le fil sert POST **et** REEL,
-      // donc le changement est bien observable — sans ce champ, reposter un réel
-      // depuis le fil fabriquait un POST et le sortait du fil des réels.
-      { postId: repostingPost.targetId, data: { isQuote: false, targetType: repostingPost.type } },
-      {
-        onSuccess: () => {
-          setRepostingPost(null);
-          showToast(t('toast.reposted', 'Reposted!'), 'success');
-        },
-        onError: () => showToast(t('toast.error', 'Error'), 'error'),
-      },
-    );
-  }, [repostingPost, repostMutation, showToast, t]);
-
-  const handleQuote = useCallback(
-    (content: string) => {
+  // Loi du miroir + loi de l'ancrage (§ loi 5) : `payload.targetType` porte le
+  // format ACTUELLEMENT sélectionné dans l'éventail de `ComposerRepostSurface`
+  // — celui de la carte agie par défaut, celui de l'ancrage si l'auteur l'a
+  // choisi. `submitRepost` est le site UNIQUE (`useComposerRepost.ts`).
+  const handleRepostSubmit = useCallback(
+    (payload: ComposerRepostPayload) => {
       if (!repostingPost) return;
-      repostMutation.mutate(
-        // La citation publie autant que le repost sec : elle porte la même loi.
-        // Les sites réel et post l'envoient déjà sur leurs DEUX gestes.
-        { postId: repostingPost.targetId, data: { content, isQuote: true, targetType: repostingPost.type } },
+      submitRepost(
+        { targetId: repostingPost.targetId, targetType: payload.targetType, isQuote: payload.isQuote, content: payload.content },
         {
           onSuccess: () => {
             setRepostingPost(null);
-            showToast(t('toast.quoted', 'Quoted!'), 'success');
+            showToast(t(payload.isQuote ? 'toast.quoted' : 'toast.reposted', payload.isQuote ? 'Quoted!' : 'Reposted!'), 'success');
           },
           onError: () => showToast(t('toast.error', 'Error'), 'error'),
         },
       );
     },
-    [repostingPost, repostMutation, showToast, t],
+    [repostingPost, submitRepost, showToast, t],
   );
 
   const handleDismissNewPosts = useCallback(() => {
@@ -1041,30 +1039,45 @@ export function PostsFeedScreen() {
         </DialogBody>
       </Dialog>
 
-      {/* Post Editor */}
+      {/* Post Editor — porte `edit` (Task W8). */}
       {editingPost && (
-        <PostEditor
-          open
-          initialContent={editingPost.content}
-          initialVisibility={editingPost.visibility}
-          initialVisibilityUserIds={editingPost.visibilityUserIds}
-          onSave={handleSaveEdit}
-          onClose={() => setEditingPost(null)}
-          saving={updatePostMutation.isPending}
-        />
+        <Dialog open onClose={() => setEditingPost(null)} labelledBy={EDIT_DIALOG_TITLE_ID}>
+          <DialogHeader>
+            <h2 id={EDIT_DIALOG_TITLE_ID} className="text-base font-semibold text-[var(--gp-text-primary)]">
+              {t('composer.edit.title')}
+            </h2>
+          </DialogHeader>
+          <DialogBody>
+            <MeeshyComposer
+              door={{ kind: 'edit', documentFormat: composerFormatOf(editingPost.postType) }}
+              onPublish={handlePublish}
+              editSource={editingPost}
+              onSaveEdit={handleSaveEdit}
+              disabled={updatePostMutation.isPending}
+            />
+          </DialogBody>
+        </Dialog>
       )}
 
-      {/* Repost Modal */}
+      {/* Repost — porte `repost` (Task W8). */}
       {repostingPost && (
-        <RepostModal
-          open
-          originalAuthor={repostingPost.author}
-          originalContent={repostingPost.content}
-          onRepost={handleRepost}
-          onQuote={handleQuote}
-          onClose={() => setRepostingPost(null)}
-          saving={repostMutation.isPending}
-        />
+        <Dialog open onClose={() => setRepostingPost(null)} labelledBy={REPOST_DIALOG_TITLE_ID}>
+          <DialogHeader>
+            <h2 id={REPOST_DIALOG_TITLE_ID} className="text-base font-semibold text-[var(--gp-text-primary)]">
+              {t('composer.repost.title')}
+            </h2>
+          </DialogHeader>
+          <DialogBody>
+            <MeeshyComposer
+              door={{ kind: 'repost', sourceFormat: composerFormatOf(repostingPost.type) }}
+              onPublish={handlePublish}
+              repostSource={{ author: repostingPost.author, content: repostingPost.content }}
+              onRepost={handleRepostSubmit}
+              disabled={isReposting}
+              repostSaving={isReposting}
+            />
+          </DialogBody>
+        </Dialog>
       )}
     </DashboardLayout>
   );

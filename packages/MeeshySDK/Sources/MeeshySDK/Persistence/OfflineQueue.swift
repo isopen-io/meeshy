@@ -453,6 +453,28 @@ public protocol OfflineQueueing: Sendable {
 
     func outcomeStream(for cmid: String) async -> AsyncStream<OutboxOutcome>
 
+    /// **Une ligne de ce `kind`, rangée sous cette `anchor`, est-elle encore en
+    /// ROUTE ?** — la question qu'un appelant doit pouvoir poser à la file
+    /// AVANT d'enfiler, quand une seconde ligne visant la même chose ne serait
+    /// pas une mutation de plus mais un DOUBLON.
+    ///
+    /// La file répond ; elle ne DÉCIDE pas. Quels kinds se dédupliquent par
+    /// ancre est une règle de PRODUIT (« deux taps sur la même carte ne font
+    /// qu'une republication »), et elle vit chez l'écrivain qui la porte —
+    /// `RepostPublisher`, côté app — jamais ici : ce protocole ne sait pas ce
+    /// qu'un repost, un like ou un signalement veulent dire.
+    ///
+    /// **« En route » = `.pending`, `.inflight` ou `.failed`.** Une ligne qui a
+    /// ABOUTI quitte la table : elle ne peut donc pas retenir un geste neuf, et
+    /// republier-supprimer-republier reste faisable. Une ligne `.exhausted` ne
+    /// compte PAS non plus — le flusher a renoncé, elle n'ira nulle part sans
+    /// une reprise manuelle, et la faire compter rendrait le bouton INERTE
+    /// jusqu'à ce que l'auteur vide sa pastille de synchro.
+    ///
+    /// Rend `false` quand aucun pool n'est câblé : sans magasin il n'y a aucune
+    /// ligne, donc rien à retenir.
+    func hasUnsentRow(kind: OutboxKind, anchor: String) async -> Bool
+
     /// U1b — durable write-ahead enqueue for an OFFLINE media post. Relocates the
     /// source files + inserts the `.createPost` row referencing them; the
     /// dispatcher replays the TUS upload on reconnect. On the protocol so
@@ -1389,6 +1411,40 @@ public actor OfflineQueue {
         await refreshPendingCount()
         mutationEnqueued.send(())
         return outboxId
+    }
+
+    /// See `OfflineQueueing.hasUnsentRow(kind:anchor:)`.
+    ///
+    /// Lecture SEULE, et volontairement sans effet de bord : c'est une question
+    /// posée à la file, pas une réservation. Ce qu'elle rend est vrai de la
+    /// table SQLite — donc du magasin qui survit à la mort de l'app —, jamais
+    /// d'un état de processus.
+    ///
+    /// `.exhausted` est EXCLU des statuts comptés : le flusher a renoncé sur
+    /// cette ligne, elle n'ira nulle part sans une reprise manuelle depuis la
+    /// pastille de synchro. La compter figerait le geste de l'auteur sur une
+    /// ligne morte.
+    public func hasUnsentRow(kind: OutboxKind, anchor: String) async -> Bool {
+        guard let pool = outboxPool else { return false }
+        let enRoute = [
+            OutboxStatus.pending.rawValue,
+            OutboxStatus.inflight.rawValue,
+            OutboxStatus.failed.rawValue
+        ]
+        do {
+            return try await pool.read { db in
+                try OutboxRecord
+                    .filter(Column("kind") == kind.rawValue)
+                    .filter(Column("conversationId") == anchor)
+                    .filter(enRoute.contains(Column("status")))
+                    .fetchCount(db) > 0
+            }
+        } catch {
+            // Une panne de LECTURE ne doit pas retenir un geste : rendre `true`
+            // par prudence avalerait un repartage que personne n'a doublé.
+            logger.error("hasUnsentRow(\(kind.rawValue, privacy: .public)) read failed: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
     }
 
     /// Whether the given `OutboxKind` should coalesce-on-enqueue: every new

@@ -18,11 +18,16 @@ import { join } from 'path';
 import { PUBLICATION_VISIBILITY_OPTIONS } from '@/components/v2/publication-visibility';
 import { isAudienceIncomplete } from '@/components/v2/AudienceUserPicker';
 
+// W9 — les trois surfaces retirées (PostComposer/AudioPostComposer/PostEditor)
+// laissent la place aux DEUX surfaces unifiées qui portent désormais la
+// création ET l'édition de tout format document/mood (loi 3 : un seul site
+// par capacité). `StoryComposer.tsx` reste (§G, opposable). Une garde
+// NÉGATIVE qui perd sa cible sans qu'on lui en donne une nouvelle passe au
+// vert en perdant sa protection — recomposer plutôt que réduire l'ensemble.
 const SURFACES = [
   'components/v2/StoryComposer.tsx',
-  'components/v2/PostComposer.tsx',
-  'components/v2/AudioPostComposer.tsx',
-  'components/v2/PostEditor.tsx',
+  'components/composer/ComposerDocumentSurface.tsx',
+  'components/composer/ComposerMoodSurface.tsx',
 ];
 
 function sourceOf(relative: string): string {

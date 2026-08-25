@@ -5,6 +5,7 @@
  * @see tasks/todo-composer-lot-c-et-v2-2026-08-23.md — V0
  */
 import { describe, it, expect } from 'vitest'
+import { readFile } from 'node:fs/promises'
 import {
   COMPOSER_DOORS,
   COMPOSER_FORMATS,
@@ -231,5 +232,33 @@ describe('buildUpdatePayload — on n\'écrit que ce qu\'on sait complet et qu\'
 
   it('déclarer une clé connue DEUX fois ne la duplique pas', () => {
     expect(buildUpdatePayload(['content', 'content'], draft)).toEqual({ content: 'bonjour' })
+  })
+})
+
+/**
+ * Le ré-export — une loi n'est appliquée que si elle est ATTEIGNABLE.
+ *
+ * `buildUpdatePayload` vivait derrière le seul chemin profond
+ * `@meeshy/shared/utils/composer-contract`, et n'avait AUCUN consommateur de
+ * production : une fonction morte, testée verte. `utils/index.ts` ré-exporte
+ * une douzaine de modules ; celui-ci s'AJOUTE à la liste, il ne la remplace
+ * pas — l'écraser emporterait `repost-target.js`, donc la loi 5 du web.
+ */
+describe('composer-contract est ré-exporté par l\'index des utilitaires', () => {
+  it('buildUpdatePayload est atteignable depuis `utils/index`', async () => {
+    const index = await import('../utils/index.js')
+    expect(typeof index.buildUpdatePayload).toBe('function')
+  })
+
+  it('composerOpening et les deux tables le sont aussi — le contrat entier, pas une fonction isolée', async () => {
+    const index = await import('../utils/index.js')
+    expect(typeof index.composerOpening).toBe('function')
+    expect(index.COMPOSER_DOORS).toHaveLength(9)
+    expect(index.COMPOSER_FORMATS).toHaveLength(4)
+  })
+
+  it('le ré-export porte l\'extension `.js` — un import sans extension crashe en prod ESM', async () => {
+    const source = await readFile(new URL('../utils/index.ts', import.meta.url), 'utf8')
+    expect(source).toContain("from './composer-contract.js'")
   })
 })

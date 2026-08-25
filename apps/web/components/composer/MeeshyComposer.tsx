@@ -5,6 +5,8 @@ import { webComposerOpening, type ComposerDoor, type ComposerFormat } from '@/li
 import { COMPOSER_FORMATS } from '@meeshy/shared/utils/composer-contract';
 import {
   ComposerDocumentSurface,
+  type ComposerDocumentEditPayload,
+  type ComposerDocumentEditSource,
   type ComposerDocumentPayload,
   type DocumentFormat,
 } from '@/components/composer/ComposerDocumentSurface';
@@ -14,6 +16,8 @@ import {
   type StoryVisibility,
 } from '@/components/v2/StoryComposer';
 import { ComposerMoodSurface, type ComposerStatusPayload } from '@/components/composer/ComposerMoodSurface';
+import { ComposerRepostSurface } from '@/components/composer/ComposerRepostSurface';
+import type { ComposerRepostPayload } from '@/components/composer/payload';
 
 /**
  * Le meuble — l'hôte qui lit la PORTE et peint la surface du format courant.
@@ -55,8 +59,9 @@ import { ComposerMoodSurface, type ComposerStatusPayload } from '@/components/co
  * `ComposerDocumentSurface`), celle du format story (`StoryComposerSurface`,
  * W5 — absorbée depuis `components/v2/StoryComposer.tsx`, qui en reste
  * l'enrobage historique), et celle du format mood (`ComposerMoodSurface`, W6 —
- * un PORT frais, pas une absorption : `components/v2/StatusComposer.tsx` reste
- * intact et indépendant). Un format que le meuble ne sait pas peindre n'est
+ * un PORT frais, pas une absorption : `components/v2/StatusComposer.tsx`
+ * restait intact et indépendant jusqu'à son retrait à la Task W9). Un format
+ * que le meuble ne sait pas peindre n'est
  * pas seulement inerte : le choisir démonterait la surface, donc l'éventail
  * qui vit dedans, donc tout chemin de retour — le brouillon entier serait
  * perdu sans recours. La loi 4 l'interdit d'avance : ce que l'auteur peut
@@ -169,6 +174,33 @@ export interface MeeshyComposerProps {
    * pose une fois et ne le change plus.
    */
   readonly onCaptureArmed?: () => void;
+  /**
+   * W8 — présent seulement pour une porte `edit` de format `post`/`reel`
+   * (aucune surface d'édition n'existe pour `story`/`status`, §C). Relayé tel
+   * quel à `ComposerDocumentSurface.editSource` : c'est LUI qui hydrate le
+   * brouillon, ce fichier ne fait que le porter.
+   */
+  readonly editSource?: ComposerDocumentEditSource;
+  /** W8 — le canal de sauvegarde d'une édition, relayé à `ComposerDocumentSurface.onSaveEdit`. */
+  readonly onSaveEdit?: (payload: ComposerDocumentEditPayload) => void;
+  /**
+   * W8 — présent seulement pour une porte `repost`. `ComposerRepostSurface`
+   * n'est routée par AUCUN format : le repost d'une STORY n'ouvre pas la
+   * surface de composition de story (qui créerait, pas reposterait) — c'est
+   * une branche à part, avant le routage par format.
+   */
+  readonly repostSource?: { author?: string; content?: string };
+  /** W8 — le canal de publication d'un repost, voir `ComposerRepostSurface.onRepost`. */
+  readonly onRepost?: (payload: ComposerRepostPayload) => void;
+  /**
+   * Constat MINEUR (revue adversariale) — relayé tel quel à
+   * `ComposerRepostSurface.saving` : c'est LUI qui bascule le libellé du
+   * bouton sur `composer.repost.posting`, une clé posée dans les quatre
+   * catalogues (`composer-i18n-keys.test.ts`) mais qu'aucun hôte ne câblait —
+   * la republication restait grisée SANS libellé pendant l'attente réseau.
+   * `undefined` ⇒ comportement inchangé (le bouton garde son libellé statique).
+   */
+  readonly repostSaving?: boolean;
   readonly disabled?: boolean;
   readonly className?: string;
 }
@@ -184,6 +216,11 @@ export function MeeshyComposer({
   storyDefaultVisibility,
   armCaptureToken,
   onCaptureArmed,
+  editSource,
+  onSaveEdit,
+  repostSource,
+  onRepost,
+  repostSaving,
   disabled,
   className,
 }: MeeshyComposerProps) {
@@ -258,6 +295,24 @@ export function MeeshyComposer({
     [onPublishStatus, initialFormat],
   );
 
+  // W8 — le repost n'est PAS routé par format : `door.sourceFormat` n'est pas
+  // le format d'une SURFACE DE CRÉATION à monter, c'est celui de la carte
+  // reposée. `ComposerRepostSurface` tient son propre éventail (l'ANCRAGE,
+  // loi 5) et ne partage ni le brouillon ni l'état `format` des trois autres
+  // surfaces — la branche précède donc leur routage.
+  if (door.kind === 'repost') {
+    return (
+      <ComposerRepostSurface
+        door={door}
+        original={repostSource}
+        onRepost={(payload) => onRepost?.(payload)}
+        disabled={disabled}
+        saving={repostSaving}
+        className={className}
+      />
+    );
+  }
+
   if (!isRoutableFormat(format)) return null;
 
   if (format === 'story') {
@@ -291,6 +346,8 @@ export function MeeshyComposer({
       door={door}
       format={format}
       onFormatChange={setFormat}
+      editSource={editSource}
+      onSaveEdit={onSaveEdit}
       routableFormats={ROUTABLE_FORMATS}
       currentUser={currentUser}
       onPublish={handlePublish}
@@ -304,4 +361,11 @@ export function MeeshyComposer({
 
 MeeshyComposer.displayName = 'MeeshyComposer';
 
-export type { ComposerDocumentPayload, ComposerStoryPayload, ComposerStatusPayload };
+export type {
+  ComposerDocumentPayload,
+  ComposerDocumentEditPayload,
+  ComposerDocumentEditSource,
+  ComposerStoryPayload,
+  ComposerStatusPayload,
+  ComposerRepostPayload,
+};

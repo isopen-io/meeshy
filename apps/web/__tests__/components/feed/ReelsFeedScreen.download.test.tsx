@@ -93,7 +93,6 @@ jest.mock('@/services/report.service', () => ({
 const mockAddToast = jest.fn();
 jest.mock('@/components/v2', () => ({ useToast: () => ({ addToast: mockAddToast }) }));
 jest.mock('@/components/v2/CommentList', () => ({ CommentList: () => null }));
-jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
 jest.mock('@/components/layout/DashboardLayout', () => ({
   DashboardLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));

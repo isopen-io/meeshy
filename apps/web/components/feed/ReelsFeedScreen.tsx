@@ -7,14 +7,17 @@ import { useToast } from '@/components/v2';
 import { FeedTabs } from '@/components/feed/PostsFeedScreen';
 import { ReelPlayer } from '@/components/feed/ReelPlayer';
 import { CommentList } from '@/components/v2/CommentList';
-import { RepostModal } from '@/components/v2/RepostModal';
+import { Dialog, DialogBody, DialogHeader } from '@/components/v2/Dialog';
+import { MeeshyComposer } from '@/components/composer/MeeshyComposer';
+import { composerFormatOf } from '@/lib/composer-door';
+import type { ComposerRepostPayload } from '@/components/composer/payload';
+import { useComposerRepost } from '@/hooks/composer/useComposerRepost';
 import { useReelsFeedQuery, useReelsFeedPosts } from '@/hooks/queries/use-reels-feed-query';
 import {
   useLikePostMutation,
   useUnlikePostMutation,
   useBookmarkPostMutation,
   useUnbookmarkPostMutation,
-  useRepostMutation,
 } from '@/hooks/queries/use-post-mutations';
 import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
 import {
@@ -36,6 +39,14 @@ import { shareLink } from '@/lib/share-utils';
 import { reportService } from '@/services/report.service';
 import { postsService } from '@/services/posts.service';
 
+const REPOST_DIALOG_TITLE_ID = 'reels-repost-composer-title';
+
+// Ce fil ne monte `MeeshyComposer` que sur la porte `repost` (aucun composer
+// de CRÉATION ici — les réels se publient depuis `PostsFeedScreen`, porte
+// `reelTab`) : `onPublish` reste requis par le contrat mais n'est jamais
+// servi par ce format, voir `MeeshyComposer.tsx`.
+function NOOP_PUBLISH(): void {}
+
 function isReelLiked(post: Post): boolean {
   return isHeartLikedByMe(post);
 }
@@ -53,6 +64,10 @@ function isReelLiked(post: Post): boolean {
 export function ReelsFeedScreen() {
   const router = useRouter();
   const { t } = useI18n('reel');
+  // Le meuble repost (W8) vit sous `common` — deuxième hook, deuxième
+  // portée : la coquille du dialogue ne partage pas le namespace du reste de
+  // cet écran.
+  const { t: tc } = useI18n('common');
   const userLanguage = usePreferredLanguage();
   const preferredLanguages = usePreferredLanguages();
   const toastCtx = useToast();
@@ -68,7 +83,8 @@ export function ReelsFeedScreen() {
   const unlikeMutation = useUnlikePostMutation();
   const bookmarkMutation = useBookmarkPostMutation();
   const unbookmarkMutation = useUnbookmarkPostMutation();
-  const repostMutation = useRepostMutation();
+  // W8 — le site UNIQUE de la charge repost, voir `useComposerRepost.ts`.
+  const { repost: submitRepost, isPending: isReposting } = useComposerRepost();
   const createCommentMutation = useCreateCommentMutation();
   const likeCommentMutation = useLikeCommentMutation();
   const unlikeCommentMutation = useUnlikeCommentMutation();
@@ -179,40 +195,26 @@ export function ReelsFeedScreen() {
     if (current) setRepostModalOpen(true);
   }, [current]);
 
-  const handleRepost = useCallback(() => {
-    if (!current) return;
-    repostMutation.mutate(
-      // Loi du miroir : un réel repartagé RESTE un réel. Sans `targetType`, le
-      // gateway retombait sur `?? POST` et le repost quittait le fil des réels.
-      // Le format vient de la CARTE agie — ce fil affiche aussi des reposts, et
-      // `current.repostOf` porterait le format de la RACINE, pas celui-ci.
-      { postId: repostTargetId(current), data: { isQuote: false, targetType: current.type } },
-      {
-        onSuccess: () => {
-          setRepostModalOpen(false);
-          toastCtx.addToast(t('repost.success', 'Reposted!'), 'success');
-        },
-        onError: () => toastCtx.addToast(t('repost.error', "Couldn't repost"), 'error'),
-      },
-    );
-  }, [current, repostMutation, toastCtx, t]);
-
-  const handleQuote = useCallback(
-    (quoteContent: string) => {
+  // Loi du miroir + loi de l'ancrage (§ loi 5) : `payload.targetType` porte le
+  // format ACTUELLEMENT sélectionné dans l'éventail de `ComposerRepostSurface`
+  // — celui de la CARTE agie par défaut (ce fil affiche aussi des reposts, et
+  // `current.repostOf` porterait le format de la RACINE, pas celui-ci), celui
+  // de l'ancrage si l'auteur l'a choisi. `submitRepost` est le site UNIQUE.
+  const handleRepostSubmit = useCallback(
+    (payload: ComposerRepostPayload) => {
       if (!current) return;
-      repostMutation.mutate(
-        // La citation publie autant que le repost sec : elle porte la même loi.
-        { postId: repostTargetId(current), data: { content: quoteContent, isQuote: true, targetType: current.type } },
+      submitRepost(
+        { targetId: repostTargetId(current), targetType: payload.targetType, isQuote: payload.isQuote, content: payload.content },
         {
           onSuccess: () => {
             setRepostModalOpen(false);
-            toastCtx.addToast(t('repost.quoted', 'Quoted!'), 'success');
+            toastCtx.addToast(t(payload.isQuote ? 'repost.quoted' : 'repost.success', payload.isQuote ? 'Quoted!' : 'Reposted!'), 'success');
           },
           onError: () => toastCtx.addToast(t('repost.error', "Couldn't repost"), 'error'),
         },
       );
     },
-    [current, repostMutation, toastCtx, t],
+    [current, submitRepost, toastCtx, t],
   );
 
   const onDownload = useCallback((mediaId: string, owningPostId: string) => {
@@ -339,17 +341,25 @@ export function ReelsFeedScreen() {
         )}
       </div>
 
-      {/* Repost Modal */}
+      {/* Repost — porte `repost` (Task W8). */}
       {repostModalOpen && current && (
-        <RepostModal
-          open
-          originalAuthor={current.author?.displayName ?? current.author?.username}
-          originalContent={current.content ?? undefined}
-          onRepost={handleRepost}
-          onQuote={handleQuote}
-          onClose={() => setRepostModalOpen(false)}
-          saving={repostMutation.isPending}
-        />
+        <Dialog open onClose={() => setRepostModalOpen(false)} labelledBy={REPOST_DIALOG_TITLE_ID}>
+          <DialogHeader>
+            <h2 id={REPOST_DIALOG_TITLE_ID} className="text-base font-semibold text-[var(--gp-text-primary)]">
+              {tc('composer.repost.title')}
+            </h2>
+          </DialogHeader>
+          <DialogBody>
+            <MeeshyComposer
+              door={{ kind: 'repost', sourceFormat: composerFormatOf(current.type) }}
+              onPublish={NOOP_PUBLISH}
+              repostSource={{ author: current.author?.displayName ?? current.author?.username, content: current.content ?? undefined }}
+              onRepost={handleRepostSubmit}
+              disabled={isReposting}
+              repostSaving={isReposting}
+            />
+          </DialogBody>
+        </Dialog>
       )}
     </DashboardLayout>
   );

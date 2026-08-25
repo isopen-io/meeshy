@@ -93,20 +93,29 @@ const mockAddToast = jest.fn();
 jest.mock('@/components/v2', () => ({ useToast: () => ({ addToast: mockAddToast }) }));
 jest.mock('@/components/v2/CommentList', () => ({ CommentList: () => null }));
 
-type RepostModalStubProps = {
-  open: boolean;
-  onRepost: () => void;
-  onQuote: (content: string) => void;
-  onClose: () => void;
+// W8 — le rail d'action ouvre désormais la porte `repost` du meuble unifié.
+type MeeshyComposerRepostStubProps = {
+  door: { kind: string; sourceFormat?: string };
+  onRepost?: (payload: { targetType: string; isQuote: boolean; content?: string }) => void;
 };
-jest.mock('@/components/v2/RepostModal', () => ({
-  RepostModal: ({ open, onRepost, onQuote }: RepostModalStubProps) =>
-    open ? (
+jest.mock('@/components/composer/MeeshyComposer', () => ({
+  MeeshyComposer: ({ door, onRepost }: MeeshyComposerRepostStubProps) => {
+    if (door.kind !== 'repost') return null;
+    const targetType = (door.sourceFormat ?? 'post').toUpperCase();
+    return (
       <div>
-        <button data-testid="repost-modal-confirm" onClick={onRepost}>Confirm repost</button>
-        <button data-testid="repost-modal-quote" onClick={() => onQuote('mon commentaire')}>Confirm quote</button>
+        <button data-testid="repost-modal-confirm" onClick={() => onRepost?.({ targetType, isQuote: false })}>
+          Confirm repost
+        </button>
+        <button
+          data-testid="repost-modal-quote"
+          onClick={() => onRepost?.({ targetType, isQuote: true, content: 'mon commentaire' })}
+        >
+          Confirm quote
+        </button>
       </div>
-    ) : null,
+    );
+  },
 }));
 
 jest.mock('@/components/layout/DashboardLayout', () => ({

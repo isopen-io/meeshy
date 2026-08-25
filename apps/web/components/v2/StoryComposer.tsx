@@ -73,8 +73,8 @@ const REFERENCE_MODES: readonly Exclude<PostReferenceDisplay, 'INLINE'>[] = ['NO
 
 /// W3 — parité `PostVisibility` complète (inc.2) : EXCEPT/ONLY sont servis
 /// par l'AudienceUserPicker et gatés à la publication (`isAudienceIncomplete`,
-/// partagé avec PostComposer depuis le module du picker) — jamais publiés
-/// sans liste (le trou W6).
+/// partagé avec `ComposerDocumentSurface`/`ComposerMoodSurface` depuis le
+/// module du picker) — jamais publiés sans liste (le trou W6).
 type StoryVisibility = 'PUBLIC' | 'FRIENDS' | 'COMMUNITY' | 'PRIVATE' | 'EXCEPT' | 'ONLY';
 
 /**

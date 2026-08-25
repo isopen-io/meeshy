@@ -88,8 +88,6 @@ jest.mock('@/components/v2/PostDetail', () => ({
     <div>{onReport && <button data-testid="post-detail-report" onClick={onReport}>Report post</button>}</div>
   ),
 }));
-jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
-jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 jest.mock('@/components/layout/DashboardLayout', () => ({
   DashboardLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

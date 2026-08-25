@@ -59,6 +59,14 @@ export interface CreatePostRequest {
 
 export interface UpdatePostRequest {
   readonly content?: string;
+  /**
+   * Conversion POST↔RÉEL par l'édition — W8. `UpdatePostSchema.type` (gateway)
+   * n'accepte que `POST`/`REEL` : l'édition ne convertit jamais vers/depuis
+   * STORY ou STATUS, ce rôle appartient au REPOST (loi 5), pas à l'édition.
+   * `undefined` = inchangé — l'omettre n'est PAS la même chose que le
+   * répéter, exactement comme les autres champs de ce type.
+   */
+  readonly type?: PostType;
   readonly visibility?: PostVisibility;
   readonly visibilityUserIds?: string[];
   readonly storyEffects?: Record<string, unknown>;
@@ -107,8 +115,18 @@ export interface RepostRequest {
    * Le champ est OPTIONNEL au TYPE parce que le gateway garde un filet pour
    * les clients qui l'ignorent — pas parce qu'un site web pourrait s'en
    * passer. Tout site web qui affiche un repost connaît le type de sa carte et
-   * DOIT l'envoyer. Le compilateur ne le vérifie pas : ce sont les tests par
-   * site d'appel qui tiennent la loi.
+   * DOIT l'envoyer.
+   *
+   * Le compilateur ne le vérifie pas — mais depuis W8, ce n'est plus « les
+   * tests par site d'appel » qui tiennent la loi : `useComposerRepost`
+   * (`hooks/composer/useComposerRepost.ts`) est le site UNIQUE qui construit
+   * cette charge, et `useComposerRepost.test.ts` est la suite unique qui la
+   * tient. Chaque écran (`PostsFeedScreen`, `ReelsFeedScreen`, les pages de
+   * détail post/réel/story) résout SON `targetId` — `repostTargetId()` pour
+   * les surfaces de carte, `story.id` pour le viewer de story qui en est
+   * délibérément exclu (`packages/shared/utils/repost-target.ts`) — puis
+   * appelle ce site unique. Un site qui construirait cette charge à la main
+   * au lieu d'appeler `useComposerRepost` reviendrait à l'état d'avant W8.
    */
   readonly targetType?: PostType;
 }

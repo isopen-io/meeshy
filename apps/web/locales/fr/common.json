@@ -293,6 +293,17 @@
       "media": {
         "limitReached": "Vous pouvez joindre jusqu'à {max} médias.",
         "limitPartial": "Vous pouvez joindre jusqu'à {max} médias. Seuls {added} ont été ajoutés."
+      },
+      "repost": {
+        "title": "Repartager",
+        "quote": "Citer",
+        "contentLabel": "Contenu de la citation",
+        "posting": "Publication en cours..."
+      },
+      "edit": {
+        "title": "Modifier le post",
+        "contentLabel": "Modifier le contenu du post",
+        "removeMedia": "Retirer ce média"
       }
     },
     "postComposer": {

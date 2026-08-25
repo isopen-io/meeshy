@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { StoryViewer, useToast } from '@/components/v2';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
 import { useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
-import { useRepostMutation } from '@/hooks/queries/use-post-mutations';
+import { useComposerRepost } from '@/hooks/composer/useComposerRepost';
 import { usePostRoom } from '@/hooks/social/use-post-room';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { postToStoryData } from '@/lib/story-transforms';
@@ -42,7 +42,8 @@ export default function StoryPage() {
   const { data: post, isLoading, isError } = usePostQuery(postId);
   const { recordView } = useRecordStoryViewMutation();
   const deleteStoryMutation = useDeleteStoryMutation();
-  const repostMutation = useRepostMutation();
+  // W8 — le site UNIQUE de la charge repost, voir `useComposerRepost.ts`.
+  const { repost: submitRepost } = useComposerRepost();
 
   // Join the story room + consume its real-time events (reactions, comments)
   // broadcast to `ROOMS.post(postId)`. Mirrors the post detail page so a viewer
@@ -136,15 +137,15 @@ export default function StoryPage() {
       //   - `repostPost` refuse un original dont l'échéance est passée. Une
       //     story repartagée vit plus longtemps que sa racine, donc grimper
       //     ferait échouer un geste qui réussit aujourd'hui.
-      repostMutation.mutate(
-        { postId: storyId, data: { isQuote: false, targetType } },
+      submitRepost(
+        { targetId: storyId, targetType, isQuote: false },
         {
           onSuccess: () => toastCtx.addToast(t('reposted', 'Reposted!'), 'success'),
           onError: () => toastCtx.addToast(t('repostError', "Couldn't repost"), 'error'),
         },
       );
     },
-    [repostMutation, toastCtx, t]
+    [submitRepost, toastCtx, t]
   );
 
   /** Le miroir — une story repartagée reste une story, éphémère. */

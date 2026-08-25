@@ -1616,11 +1616,23 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
     }
 
-    /// La citation part par `POST /posts/:id/repost`, qui n'a pas de file
-    /// durable — mesuré sur `FeedViewModel.repostPost`, un appel réseau direct
-    /// dont l'échec ne produit qu'un toast. Le test le GRAVE plutôt que de le
-    /// laisser se redécouvrir : c'est la seule sortie non durable de la
-    /// surface, et elle prime sur toutes les autres questions.
+    /// La citation part par `POST /posts/:id/repost`. Le test GRAVE le choix de
+    /// chemin plutôt que de le laisser se redécouvrir : c'est la seule sortie
+    /// que cette table déclare non durable, et elle prime sur toutes les autres
+    /// questions.
+    ///
+    /// **Ce que « non durable » veut dire ici a changé au lot 7.5, et la
+    /// distinction est load-bearing.** La mesure d'origine — « mesuré sur
+    /// `FeedViewModel.repostPost`, un appel réseau direct dont l'échec ne
+    /// produit qu'un toast » — est PÉRIMÉE : ce site passe désormais par
+    /// `RepostPublisher`, qui enfile une ligne `.repostPost` hors ligne. La
+    /// FILE du repost existe donc, et elle porte. Ce que ce test dit encore
+    /// est ce que la SURFACE DOCUMENT fait de son côté : elle refuse la
+    /// citation au lieu de la router vers cet écrivain. Retourner cette
+    /// déclaration est le geste du lot qui possède la surface — il devra
+    /// brancher `ComposerDocumentSendPlan` sur `RepostPublisher` dans le même
+    /// commit, sans quoi il déclarerait durable un chemin que personne ne
+    /// dessert.
     func test_envoi_uneCitation_prendLeCheminDuRepost_quoiQuIlArrive() {
         for hasLocalMedia in [true, false] {
             for isOffline in [true, false] {
@@ -1634,8 +1646,9 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         }
         XCTAssertFalse(
             ComposerDocumentSendPath.quotedRepost.isDurable,
-            "La route du repost n'est pas enfilée : une citation composée hors ligne est perdue. "
-                + "Constat consigné, non corrigé par V2 — la file du repost n'existe pas."
+            "La surface document ne route PAS sa citation vers la file : une citation composée ici "
+                + "hors ligne est perdue. Depuis le lot 7.5 ce n'est plus faute de file — `RepostPublisher` "
+                + "enfile `.repostPost` pour les neuf autres sites —, c'est faute de branchement."
         )
     }
 
@@ -1991,10 +2004,12 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// octets instanciés, sans que rien ne le dise.
     ///
     /// La rédaction précédente disait « `OutboxKind` n'a pas de ligne pour cet
-    /// endpoint ». C'était vrai, et le fil rouge du repost (lot 7) y a depuis
-    /// posé la sienne : ce qui manque est un ÉCRIVAIN, pas un kind. Le refus, ce
-    /// faisant, n'a pas bougé — `ComposerDocumentSendPath.quotedRepost` décrit
-    /// ce que le COMPOSER fait, pas ce que la file saurait porter.
+    /// endpoint », puis « ce qui manque est un ÉCRIVAIN, pas un kind ». Les
+    /// deux sont soldées : le lot 7.5 a livré `RepostPublisher`, qui enfile
+    /// `.repostPost`. Le refus, ce faisant, n'a pas bougé —
+    /// `ComposerDocumentSendPath.quotedRepost` décrit ce que le COMPOSER fait,
+    /// pas ce que la file saurait porter, et le composer ne connaît pas encore
+    /// cet écrivain.
     ///
     /// **Ce refus n'est PAS le chemin de l'ancrage livré au lot 4.7.** Un
     /// ancrage de mood part par `MoodComposerDoor`, qui aiguille sur le FORMAT

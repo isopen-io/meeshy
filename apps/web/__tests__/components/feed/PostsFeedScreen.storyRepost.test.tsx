@@ -63,29 +63,35 @@ jest.mock('@/components/v2', () => ({
   StatusComposer: () => null,
 }));
 
-jest.mock('@/components/v2/PostComposer', () => ({ PostComposer: () => null }));
-jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
 
-// Le modal de repost d'une CARTE du fil porte les DEUX gestes — repost sec et
-// citation. Les deux doivent miroiter le format de la source, donc le stub
-// expose les deux rappels plutôt que de rendre `null`.
-type RepostModalStubProps = {
-  onRepost?: () => void;
-  onQuote?: (content: string) => void;
+// W8 — la carte du fil ouvre désormais la porte `repost` du meuble unifié,
+// pas `RepostModal`. Le stub ne peint la surface repost QUE pour cette
+// porte : les doors `feedComposer`/`moodChip`/`edit` que `PostsFeedScreen`
+// monte aussi restent réelles pour les AUTRES suites qui les exercent, mais
+// cette suite-ci ne s'y intéresse pas — elles rendent `null` ici.
+type MeeshyComposerRepostStubProps = {
+  door: { kind: string; sourceFormat?: string };
+  onRepost?: (payload: { targetType: string; isQuote: boolean; content?: string }) => void;
 };
-jest.mock('@/components/v2/RepostModal', () => ({
-  RepostModal: ({ onRepost, onQuote }: RepostModalStubProps) => (
-    <div>
-      <button data-testid="repost-modal-repost" onClick={() => onRepost?.()}>
-        Repost
-      </button>
-      <button data-testid="repost-modal-quote" onClick={() => onQuote?.('mon commentaire')}>
-        Quote
-      </button>
-    </div>
-  ),
+jest.mock('@/components/composer/MeeshyComposer', () => ({
+  MeeshyComposer: ({ door, onRepost }: MeeshyComposerRepostStubProps) => {
+    if (door.kind !== 'repost') return null;
+    const targetType = (door.sourceFormat ?? 'post').toUpperCase();
+    return (
+      <div>
+        <button data-testid="repost-modal-repost" onClick={() => onRepost?.({ targetType, isQuote: false })}>
+          Repost
+        </button>
+        <button
+          data-testid="repost-modal-quote"
+          onClick={() => onRepost?.({ targetType, isQuote: true, content: 'mon commentaire' })}
+        >
+          Quote
+        </button>
+      </div>
+    );
+  },
 }));
-jest.mock('@/components/v2/AudioPostComposer', () => ({ AudioPostComposer: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
 jest.mock('@/services/posts.service', () => ({

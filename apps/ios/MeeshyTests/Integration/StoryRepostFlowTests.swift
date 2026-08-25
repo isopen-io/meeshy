@@ -11,8 +11,14 @@ import XCTest
 /// would otherwise be opaque.
 ///
 /// Flows under test:
-///  1. Kebab "Republier en post" → `PostService.repost(postId:targetType:.post)`
-///     direct call (verified via `MockPostService` call tracking).
+///  1. Kebab "Republier en post" → une republication `targetType: .post`,
+///     sans citation (vérifiée par le compte d'appels de `MockPostService`).
+///     Depuis le lot 7.5 la production ne parle plus au service en direct :
+///     elle passe par `RepostPublisher`, l'écrivain unique, qui y ajoute un
+///     `X-Client-Mutation-Id` et bascule en file durable hors ligne. Ces
+///     tests-ci REJOUENT le contrat contre le double ; c'est
+///     `RepostIntentTests` qui garde le fait qu'aucun site n'appelle plus le
+///     service directement.
 ///  2. Kebab "Editer et republier en post" → `UnifiedPostComposer` repost-mode
 ///     publish callback (verified via internal `triggerPublishForTests`).
 ///  3. Feed cell receives a POST whose `repost.type == "STORY"` → renders
@@ -23,7 +29,7 @@ import XCTest
 /// removed S6 (`test_flux1_shareButton_opensComposerStory_publishesAsStory`,
 /// dead code cleanup): the share button never opened that composer in
 /// production (`repostStoryComposerSource` was never assigned outside its
-/// own `nil` resets), it calls `PostService.repost` directly instead — see
+/// own `nil` resets), it reposts through the single writer instead — see
 /// `StoryViewerView+Sidebar.swift`. The composer-VM contract it exercised
 /// (`StoryComposerViewModel(reposting:authorHandle:)` clone/flatten/badge)
 /// remains covered independently by `StoryComposerViewModelRepostTests`.
@@ -117,10 +123,12 @@ final class StoryRepostFlowTests: XCTestCase {
 
     // MARK: - Flow 2: Kebab "Republier en post" → direct PostService.repost
 
-    /// The kebab item "Republier en post" calls `PostService.repost` directly
-    /// with `targetType: .post`, `content: nil`, `isQuote: false` — see
-    /// `StoryViewerView.repostAsPostDirect()`. We verify the mock receives
-    /// exactly this combination of arguments.
+    /// L'item de kebab « Republier en post » republie avec
+    /// `targetType: .post`, `content: nil`, `isQuote: false` — voir
+    /// `StoryViewerView.repostAsPostDirect()`, qui compose désormais un
+    /// `RepostIntent.simple` et le remet à `RepostPublisher`. On vérifie ici
+    /// que le double reçoit exactement cette combinaison d'arguments : le
+    /// jeton d'idempotence s'AJOUTE, il ne remplace rien.
     func test_flux2_kebabRepublierEnPost_callsBackendDirectly() async throws {
         let mockService = MockPostService()
 
@@ -150,8 +158,10 @@ final class StoryRepostFlowTests: XCTestCase {
     /// The kebab item "Editer et republier en post" presents a
     /// `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
     /// (B.7). The publish callback receives `(content, sourceStory)`; the
-    /// caller in `StoryViewerView` then forwards to
-    /// `PostService.repost(postId:targetType:.post, content:isQuote: !content.isEmpty)`.
+    /// caller in `StoryViewerView` then forwards to `RepostPublisher` a
+    /// `RepostIntent.quoted(postId:targetType:.post, comment:)` — dont la règle
+    /// « un commentaire blanc n'est pas une citation » est celle que ce test
+    /// rejoue à la main par `content.isEmpty ? nil : content`.
     ///
     /// We test the full path: the composer wires the callback correctly, AND
     /// the production callback shape (mirrored here against `MockPostService`)

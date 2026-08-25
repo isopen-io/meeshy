@@ -155,18 +155,6 @@ export type { CommentListProps } from './CommentList';
 export { CommentThread } from './CommentThread';
 export type { CommentThreadProps } from './CommentThread';
 
-export { PostComposer } from './PostComposer';
-export type { PostComposerProps } from './PostComposer';
-
-export { PostEditor } from './PostEditor';
-export type { PostEditorProps } from './PostEditor';
-
-export { RepostModal } from './RepostModal';
-export type { RepostModalProps } from './RepostModal';
-
-export { AudioPostComposer } from './AudioPostComposer';
-export type { AudioPostComposerProps } from './AudioPostComposer';
-
 export { TranslationToggle } from './TranslationToggle';
 export type { TranslationToggleProps, TranslationItem } from './TranslationToggle';
 
@@ -186,9 +174,6 @@ export type { StoryComposerProps, StoryVisibility } from './StoryComposer';
 
 export { StatusBar } from './StatusBar';
 export type { StatusBarProps, StatusItem } from './StatusBar';
-
-export { StatusComposer } from './StatusComposer';
-export type { StatusComposerProps } from './StatusComposer';
 
 // Contacts
 export { ContactCard } from './ContactCard';

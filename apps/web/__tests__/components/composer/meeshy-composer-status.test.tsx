@@ -2,10 +2,11 @@
  * W6 — la surface MOOD entre dans le meuble, avec l'audience qui se souvient
  * PAR FORMAT.
  *
- * `StatusComposer.tsx` (230 l.) reste INTACT et monté ailleurs (contrairement
- * à la STORY, absorbée à W5 : le mood n'a aucun canevas partagé entre deux
- * enrobages, rien à extraire en commun) — `ComposerMoodSurface` est un PORT
- * FRAIS, dans l'esprit de `ComposerDocumentSurface` (W3). Cette suite est
+ * `StatusComposer.tsx` (230 l.) restait INTACT et monté ailleurs jusqu'à son
+ * retrait à la Task W9 (contrairement à la STORY, absorbée à W5 : le mood
+ * n'avait aucun canevas partagé entre deux enrobages, rien à extraire en
+ * commun) — `ComposerMoodSurface` est un PORT FRAIS, dans l'esprit de
+ * `ComposerDocumentSurface` (W3). Cette suite est
  * donc, comme `meeshy-composer-post.test.tsx`, la moitié « capacités » de la
  * preuve de retrait : chaque bloc porte une capacité mesurée sur
  * `StatusComposer.tsx`, citée à sa ligne, et rougirait si la surface neuve la
@@ -44,7 +45,7 @@
  *    (`ComposerMoodSeeding.adopt`, iOS).
  */
 import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MeeshyComposer } from '@/components/composer/MeeshyComposer';
 import type { ComposerStatusPayload } from '@/components/composer/ComposerMoodSurface';
@@ -240,6 +241,32 @@ describe('W6 point 1 — références déclarées, jamais `mentions: []`', () =>
     clickPublish();
 
     expect(published()).not.toHaveProperty('mentions');
+  });
+
+  /**
+   * Reformulation W9 Step 3 — le seul volet de `PostComposerReferences.test.tsx`
+   * (« StatusComposer — references ») que la garde d'ABSENCE ci-dessus ne
+   * couvrait pas : le chemin POSITIF, choisir quelqu'un au picker jusqu'à la
+   * charge publiée. `useReferences` (le hook, testé exhaustivement en
+   * isolation dans `useReferences.test.ts`) fait déjà foi sur le calcul
+   * SILENT/INLINE ; ce test est le SEUL qui prouve que `ComposerMoodSurface`
+   * le CÂBLE bien jusqu'à `onPublishStatus` — une régression de câblage
+   * (le picker ouvert, la sélection perdue en route) ne rougirait nulle part
+   * ailleurs.
+   */
+  it('publie la personne choisie au picker en SILENT', async () => {
+    mockSearchUsers.mockResolvedValue([{ id: 'u-a', username: 'alice', displayName: 'Alice' }]);
+    const { published } = renderMood();
+    fireEvent.click(emojiButton('🎉'));
+
+    fireEvent.click(screen.getByLabelText('Mention someone'));
+    fireEvent.change(screen.getByPlaceholderText('Search for someone'), { target: { value: 'ali' } });
+    await waitFor(() => expect(mockSearchUsers).toHaveBeenCalled());
+    fireEvent.click(await screen.findByText('Alice'));
+
+    clickPublish();
+
+    expect(published()?.mentions).toEqual([{ userId: 'u-a', display: 'SILENT' }]);
   });
 });
 

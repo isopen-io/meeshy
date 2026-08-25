@@ -74,7 +74,6 @@ jest.mock('@/stores/auth-store', () => ({
 
 const mockAddToast = jest.fn();
 jest.mock('@/components/v2', () => ({ useToast: () => ({ addToast: mockAddToast }) }));
-jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
 
 type ReelPlayerStubProps = {
   onShare?: () => void;

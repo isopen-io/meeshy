@@ -26,7 +26,7 @@ import MeeshyUI
 /// Le corpus des origines est verrouillé par des `switch` EXHAUSTIFS
 /// (`nom(de:)`, `reprendUnContenuPublie(_:)`, `reprendUnDocumentExistant(_:)`,
 /// `origine(routantVers:)`) : une dixième porte ajoutée à `ComposerOrigin` — ou
-/// un cinquième composer historique — casse la COMPILATION de cette suite avant
+/// un composer historique de plus — casse la COMPILATION de cette suite avant
 /// de pouvoir passer sans profil éprouvé.
 final class ComposerIntentTests: XCTestCase {
 
@@ -40,7 +40,7 @@ final class ComposerIntentTests: XCTestCase {
         .reelTab,
         .moodChip,
         .repost(ofPostId: "post-source", sourceFormat: .story),
-        .edit(postId: "story-a-moi", documentFormat: .post),
+        .edit(postId: "post-a-moi", documentFormat: .post),
         .draft(id: "brouillon-42"),
         .share,
         .conversationMedia(messageId: "msg-7", attachmentId: "piece-3")
@@ -197,13 +197,25 @@ final class ComposerIntentTests: XCTestCase {
 
     /// L'édition ouvre au format du DOCUMENT, pas à un format fixe — le
     /// document est connu de l'appelant, qui tape « modifier » sur une carte
-    /// rendue. Le routage legacy, lui, ne bouge pas dans ce périmètre.
+    /// rendue. Elle garde son composer historique dans ce périmètre ; ce qui
+    /// change au lot 7.8, c'est LEQUEL.
+    ///
+    /// **Rév. lot 7.8 — la table cesse de faire passer un post pour une
+    /// story.** Elle rendait `.storyEdit` quel que soit le format, or
+    /// `.storyEdit` désigne `storyEditComposerCover`, l'atelier d'une STORY.
+    /// Éditer un post ou un réel — ce que font les cinq montages
+    /// d'`EditPostSheet` — n'avait aucune représentation. Le routage suit
+    /// désormais le FORMAT, ce que la doctrine de la table autorise en toutes
+    /// lettres (« le FORMAT qu'une porte porte fait partie de son identité »),
+    /// et l'inventaire de parité qui gouverne le retrait de la feuille vit dans
+    /// `EditParityInventoryTests`.
     func test_profile_edit_ouvreAuFormatDuDocument_etGardeSonComposerActuel() {
-        let profil = profil(.edit(postId: "story-a-moi", documentFormat: .post))
+        let profil = profil(.edit(postId: "post-a-moi", documentFormat: .post))
 
         XCTAssertEqual(
-            profil.routesToLegacy, .storyEdit,
-            "Périmètre v1 : l'édition garde son composer actuel."
+            profil.routesToLegacy, .editPostSheet,
+            "Périmètre v1 : l'édition garde son composer actuel — et pour un POST, c'est `EditPostSheet`, "
+            + "jamais l'atelier d'une story."
         )
         XCTAssertEqual(profil.initialFormat, .post)
     }
@@ -495,8 +507,14 @@ final class ComposerIntentTests: XCTestCase {
     // MARK: - Règle : ce qui route vers l'historique ne prétend pas ouvrir le neuf
 
     /// L'unique porte de chaque composer historique — **et `nil` pour celui que
-    /// le meuble a repris**. Le `switch` reste exhaustif : un cinquième composer
-    /// historique casse la compilation de cette suite.
+    /// le meuble a repris**. Le `switch` reste exhaustif : un composer historique
+    /// de plus casse la compilation de cette suite. C'est ce qui a fait remonter
+    /// le lot 7.8 jusqu'ici : `.editPostSheet` ne pouvait pas naître en silence.
+    ///
+    /// « Unique » se lit au niveau de la PORTE, pas du format. Deux formats
+    /// atteignent `.editPostSheet` (le post et le réel, plus le mood qu'aucun
+    /// site n'offre d'éditer) ; la porte, elle, reste `.edit`, et ce sont
+    /// `EditParityInventoryTests` qui éprouvent le routage format par format.
     ///
     /// `.feedComposer` y répond `nil` depuis le lot 3. Le cas ne se supprime PAS
     /// de `LegacyComposer` pour autant, et c'est délibéré : une garde négative
@@ -513,13 +531,18 @@ final class ComposerIntentTests: XCTestCase {
         // le retour du routage passerait sans un mot.
         case .statusComposer: return nil
         case .repostComposer: return .repost(ofPostId: "post-source", sourceFormat: .story)
-        case .storyEdit: return .edit(postId: "story-a-moi", documentFormat: .post)
+        // Lot 7.8 : `.storyEdit` désigne `storyEditComposerCover`, et donc
+        // l'édition d'une STORY — c'est le format qui l'atteint, pas la porte.
+        // La table rendait ce cas pour les quatre formats ; l'écrire ici en
+        // `.post` était la moitié test du même mensonge.
+        case .storyEdit: return .edit(postId: "story-a-moi", documentFormat: .story)
+        case .editPostSheet: return .edit(postId: "post-a-moi", documentFormat: .post)
         case .feedComposer: return nil
         }
     }
 
     private static let composersHistoriques: [LegacyComposer] = [
-        .statusComposer, .repostComposer, .storyEdit, .feedComposer
+        .statusComposer, .repostComposer, .storyEdit, .editPostSheet, .feedComposer
     ]
 
     /// REFORMULÉE au lot 3 puis au lot 4.6, jamais affaiblie. Elle affirmait

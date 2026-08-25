@@ -20,25 +20,30 @@ import { useReferences } from '@/hooks/composer/useReferences';
 import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
 import { useAuthStore } from '@/stores/auth-store';
 import { AttachmentService } from '@/services/attachmentService';
-import { postTypeOf, webComposerOpening, type ComposerDoor, type ComposerFormat } from '@/lib/composer-door';
-import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
+import {
+  postTypeOf,
+  webComposerOpening,
+  webUpdatePayload,
+  type ComposerDoor,
+  type ComposerFormat,
+} from '@/lib/composer-door';
+import { qualifiesAsReel, type ReelMediaLike } from '@meeshy/shared/utils/reel-composition';
 import { removingHandle } from '@meeshy/shared/utils/composer-references';
 import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
-import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
+import type { PostMedia, PostType, PostVisibility } from '@meeshy/shared/types/post';
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 import type { PostReferenceDisplay } from '@meeshy/shared/types/post-reference';
-import type { ComposerDocumentPayload } from '@/components/composer/payload';
+import type { ComposerDocumentEditPayload, ComposerDocumentPayload } from '@/components/composer/payload';
 
 /**
  * La surface DOCUMENT — celle des formats POST et RÉEL.
  *
  * Elle porte, capacité par capacité, ce que `components/v2/PostComposer.tsx`
- * (605 l.) sait faire : un plafond de 5 000 caractères, un pool UNIQUE de dix
- * médias, un texte alternatif par média, l'opt-in son en tri-état, les
- * références non-INLINE, les six audiences et l'écho optimiste des médias
- * uploadés. `meeshy-composer-post.test.tsx` en est l'inventaire, cité à la
- * ligne. Ce fichier ne décrit PAS l'état du composer hérité, qui vit sa vie
- * dans son propre fichier.
+ * (605 l., RETIRÉ à la Task W9) savait faire : un plafond de 5 000
+ * caractères, un pool UNIQUE de dix médias, un texte alternatif par média,
+ * l'opt-in son en tri-état, les références non-INLINE, les six audiences et
+ * l'écho optimiste des médias uploadés. `meeshy-composer-post.test.tsx` en
+ * est l'inventaire, cité à la ligne.
  *
  * TROIS choses changent par rapport à ce port, et la troisième est un
  * changement de PRODUIT, pas de forme :
@@ -51,11 +56,11 @@ import type { ComposerDocumentPayload } from '@/components/composer/payload';
  *     étaient anglais en dur ; les recopier tels quels aurait gravé l'anglais
  *     dans un fichier neuf, alors que le web est localisé en quatre langues ;
  *  3. **la CLASSIFICATION PAR DÉFAUT d'une composition qualifiante passe de
- *     RÉEL à POST, depuis le composer du fil.** Le composer hérité naît sur
- *     RÉEL (`PostComposer.tsx`, `useState<PostType>('REEL')`) et ne dégrade
- *     que si la composition ne qualifie pas (son `effectivePostType`) : joindre une vidéo de
- *     5 s et publier sans rien toucher y donne un RÉEL. Ici le format naît de
- *     la PORTE, et `feedComposer` ouvre sur `post`
+ *     RÉEL à POST, depuis le composer du fil.** Le composer hérité naissait sur
+ *     RÉEL (`useState<PostType>('REEL')`) et ne dégradait que si la
+ *     composition ne qualifiait pas (son `effectivePostType`) : joindre une
+ *     vidéo de 5 s et publier sans rien toucher y donnait un RÉEL. Ici le
+ *     format naît de la PORTE, et `feedComposer` ouvre sur `post`
  *     (`composer-contract.ts`, `case 'feedComposer'`) : le même geste publie un POST, et la
  *     publication n'entre plus dans le fil Réels. Passer en RÉEL devient un
  *     geste explicite de l'auteur dans l'éventail.
@@ -68,13 +73,13 @@ import type { ComposerDocumentPayload } from '@/components/composer/payload';
  *     de se découvrir : **une vidéo publiée depuis le fil n'atterrit plus dans
  *     Réels par défaut.**
  *
- *     Conséquence pour le RETRAIT du composer hérité : trois assertions de
- *     `__tests__/components/v2/PostComposer.reelToggle.test.tsx` (les trois
- *     nommées « defaults to REEL ») décrivent le geste inverse de
- *     celui que cette surface tient. Elles ne se **reformulent** pas sur elle :
- *     elles se remplacent par leur contrepartie assumée. Tant que ce n'est pas
- *     fait, deux suites vertes décrivent le même geste avec des issues
- *     opposées.
+ *     Conséquence pour le RETRAIT du composer hérité, SOLDÉE à la Task W9 :
+ *     les trois assertions de `PostComposer.reelToggle.test.tsx` nommées
+ *     « defaults to REEL » décrivaient le geste inverse de celui que cette
+ *     surface tient — elles ne se sont pas reformulées sur elle, elles se
+ *     sont remplacées par leur contrepartie assumée (le test « DIVERGENCE
+ *     ASSUMÉE » de `meeshy-composer-post.test.tsx`), et le fichier entier a
+ *     été retiré avec le composer hérité qu'il testait.
  *
  * ### Deux garde-fous distincts sur le format, et aucun ne remplace l'autre
  *
@@ -85,8 +90,8 @@ import type { ComposerDocumentPayload } from '@/components/composer/payload';
  * même qu'une composition existe (`composer-contract.ts`, `case 'reelTab'` — sans passage
  * par le gate de qualification), donc l'éventail n'a là rien à replier et
  * laisserait partir un RÉEL que le serveur rétrograderait en silence. C'est
- * exactement la fonction que `effectivePostType` remplit dans le composer
- * hérité (`PostComposer.tsx`, `effectivePostType`).
+ * exactement la fonction que remplissait `effectivePostType` dans le composer
+ * hérité.
  */
 
 const REFERENCE_MODES: readonly Exclude<PostReferenceDisplay, 'INLINE'>[] = ['NOTE', 'SILENT'];
@@ -103,12 +108,96 @@ export type DocumentFormat = Extract<ComposerFormat, 'post' | 'reel'>;
  * programmée du second n'emporte pas la déclaration.
  * `meeshy-composer-post.test.tsx` épingle le jeu de clés effectivement émis.
  */
-export type { ComposerDocumentPayload };
+export type { ComposerDocumentPayload, ComposerDocumentEditPayload };
+
+/**
+ * Ce que la surface HYDRATE quand la porte est `edit` — W8. `postType` sème le
+ * format INITIAL (fourni séparément par `door.documentFormat`, traduit par
+ * `MeeshyComposer`) et sert de RÉFÉRENCE pour dire si `type` a changé.
+ * `media` est la composition SERVEUR de départ ; retirer un élément la fait
+ * SORTIR de cette liste (`removedMediaIds`), jamais muter l'objet.
+ *
+ * Optionnel : sans lui, cette surface reste celle de la CRÉATION — un `door`
+ * `edit` sans `editSource` peint un brouillon vide (`meeshy-composer-post.test.tsx`
+ * le documente et n'y touche pas).
+ */
+export interface ComposerDocumentEditSource {
+  readonly postId: string;
+  readonly content: string;
+  readonly visibility: PostVisibility;
+  readonly visibilityUserIds: readonly string[];
+  readonly media: readonly PostMedia[];
+  readonly postType: PostType;
+}
+
+/**
+ * La charge d'édition — pure, testable sans rendre le composant. `known` est
+ * TOUJOURS la même liste structurelle (ce que ce formulaire sait rendre) ;
+ * c'est le DRAFT qui porte `undefined` pour « inchangé » champ par champ.
+ * `webUpdatePayload` (`lib/composer-door.ts`) applique ensuite la loi 3 :
+ * `mentions`/`storyEffects` n'y figurent même pas — ce formulaire ne les rend
+ * jamais, donc il ne les déclare jamais connus.
+ *
+ * `type` compare l'ORIGINAL à `publishedType` — pas au `format` brut de
+ * l'éventail — pour que la DÉGRADATION silencieuse d'un réel qui perd sa
+ * qualification (déjà le mécanisme de la CRÉATION, voir la note de fichier)
+ * s'applique à l'édition SANS second garde-fou dédié : `publishedType` reste
+ * la SEULE valeur consultée ici. Elle est simplement affinée, à sa propre
+ * source, pour ne dégrader que ce que l'auteur a effectivement fait chuter —
+ * voir `editSourceQualifies` à son site de calcul.
+ *
+ * `visibility`/`visibilityUserIds` voyagent ENSEMBLE dès que l'un des deux a
+ * changé — jamais `visibility` seule quand c'est la liste qui a bougé : c'est
+ * la règle du COUPLE que `webUpdatePayload` fait respecter, ici satisfaite en
+ * amont pour qu'un changement d'audience SEUL (Step 1.1) n'entraîne jamais
+ * `content` avec lui.
+ */
+function editDraftPayload(params: {
+  readonly editSource: ComposerDocumentEditSource;
+  readonly content: string;
+  readonly visibility: PostVisibility;
+  readonly visibilityUserIds: readonly string[];
+  readonly publishedType: PostType;
+  readonly newMediaIds: readonly string[];
+  readonly removedMediaIds: readonly string[];
+  readonly mediaAlt: Record<string, string>;
+}): ComposerDocumentEditPayload['data'] {
+  const trimmed = params.content.trim();
+  const effectiveAudience = (AUDIENCE_VISIBILITIES as readonly string[]).includes(params.visibility)
+    ? [...params.visibilityUserIds]
+    : [];
+  const contentChanged = trimmed !== params.editSource.content.trim();
+  const visibilityChanged = params.visibility !== params.editSource.visibility;
+  const audienceChanged =
+    effectiveAudience.join(',') !== [...params.editSource.visibilityUserIds].join(',');
+  const audienceCoupleChanged = visibilityChanged || audienceChanged;
+  const typeChanged = params.editSource.postType !== params.publishedType;
+  const prunedAlt = Object.fromEntries(
+    Object.entries(params.mediaAlt).filter(([id]) => params.newMediaIds.includes(id)),
+  );
+
+  return webUpdatePayload(
+    ['content', 'visibility', 'visibilityUserIds', 'mediaIds', 'removeMediaIds', 'type', 'mediaAlt'],
+    {
+      content: contentChanged ? trimmed : undefined,
+      visibility: audienceCoupleChanged ? params.visibility : undefined,
+      visibilityUserIds: audienceCoupleChanged ? effectiveAudience : undefined,
+      mediaIds: params.newMediaIds.length > 0 ? [...params.newMediaIds] : undefined,
+      removeMediaIds: params.removedMediaIds.length > 0 ? [...params.removedMediaIds] : undefined,
+      type: typeChanged ? params.publishedType : undefined,
+      mediaAlt: Object.keys(prunedAlt).length > 0 ? prunedAlt : undefined,
+    },
+  );
+}
 
 export interface ComposerDocumentSurfaceProps {
   readonly door: ComposerDoor;
   readonly format: DocumentFormat;
   readonly onFormatChange: (format: ComposerFormat) => void;
+  /** W8 — présent seulement pour une porte `edit` ; voir `ComposerDocumentEditSource`. */
+  readonly editSource?: ComposerDocumentEditSource;
+  /** W8 — le canal de sauvegarde d'une édition, DISTINCT de `onPublish`. */
+  readonly onSaveEdit?: (payload: ComposerDocumentEditPayload) => void;
   /**
    * Les formats que l'HÔTE sait peindre. La porte dit ce qui est composable ;
    * l'hôte dit ce qu'il sait rendre ; l'auteur se voit offrir l'intersection.
@@ -159,6 +248,8 @@ export function ComposerDocumentSurface({
   door,
   format,
   onFormatChange,
+  editSource,
+  onSaveEdit,
   routableFormats,
   currentUser,
   onPublish,
@@ -168,11 +259,20 @@ export function ComposerDocumentSurface({
   className,
 }: ComposerDocumentSurfaceProps) {
   const { t } = useI18n('common');
-  const [content, setContent] = useState('');
-  const [visibility, setVisibility] = useState<PostVisibility>(DEFAULT_PUBLICATION_VISIBILITY);
-  const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
+  const isEditing = editSource !== undefined;
+  const [content, setContent] = useState(() => editSource?.content ?? '');
+  const [visibility, setVisibility] = useState<PostVisibility>(
+    () => editSource?.visibility ?? DEFAULT_PUBLICATION_VISIBILITY,
+  );
+  const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>(() => [
+    ...(editSource?.visibilityUserIds ?? []),
+  ]);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(() => isEditing);
+  // Les médias EXISTANTS d'une édition — retirer un id le fait SORTIR de
+  // `remainingExistingMedia`, jamais muter `editSource.media`. Toujours vide
+  // en création : rien à retirer d'un brouillon qui n'a pas encore de serveur.
+  const [removedMediaIds, setRemovedMediaIds] = useState<Set<string>>(() => new Set());
 
   // W7 — l'armement externe force l'expansion : `AudioCapture` n'est monté
   // que dans le bloc `isExpanded` plus bas, donc un jeton reçu avant que
@@ -216,21 +316,59 @@ export function ComposerDocumentSurface({
     uploadContext: 'post',
   });
 
-  const mediaLimitReached = selectedFiles.length >= MEDIA_LIMIT;
+  // Les médias EXISTANTS encore présents — `editSource.media` moins ce que
+  // l'auteur a retiré. Toujours `[]` en création (`editSource` absent).
+  const remainingExistingMedia = (editSource?.media ?? []).filter((m) => !removedMediaIds.has(m.id));
 
-  // `uploadedAttachments` porte déjà la forme que le prédicat partagé attend
-  // (`ReelMediaLike`) : aucune normalisation intermédiaire, donc aucun second
-  // endroit où la règle du réel pourrait glisser.
-  const compositionQualifies = qualifiesAsReel(uploadedAttachments);
-  const { offeredFormats } = webComposerOpening(door, uploadedAttachments);
+  // La composition qui décide de l'éventail et de la dégradation RÉEL→POST :
+  // en édition elle porte les médias EXISTANTS restants ET les fraîchement
+  // téléversés — en création, seuls les seconds existent. Une seule liste,
+  // jamais deux prédicats parallèles qui pourraient diverger.
+  const composition: ReadonlyArray<ReelMediaLike> = isEditing
+    ? [...remainingExistingMedia, ...uploadedAttachments]
+    : uploadedAttachments;
+
+  // Site UNIQUE du plafond de dix médias — `remainingExistingMedia` vaut
+  // toujours `[]` hors édition (`editSource` y est `undefined`), donc
+  // `totalMediaCount` DÉGÉNÈRE en `selectedFiles.length` à la création sans
+  // qu'aucune branche `isEditing` n'ait besoin de le dire deux fois.
+  // `mediaLimitReached` (l'AFFORDANCE — boutons grisés) et `available`
+  // (l'EXÉCUTION — sélection tranchée, `handleMediaSelect` plus bas) lisent
+  // tous deux CETTE valeur : les faire diverger exigerait de dupliquer le
+  // calcul à nouveau, pas seulement d'éditer l'un des deux sites.
+  const totalMediaCount = remainingExistingMedia.length + selectedFiles.length;
+  const mediaLimitReached = totalMediaCount >= MEDIA_LIMIT;
+
+  // `uploadedAttachments`/`composition` portent déjà la forme que le prédicat
+  // partagé attend (`ReelMediaLike`) : aucune normalisation intermédiaire,
+  // donc aucun second endroit où la règle du réel pourrait glisser.
+  const compositionQualifies = qualifiesAsReel(composition);
+  const { offeredFormats } = webComposerOpening(door, composition);
   // L'éventail ne peint que ce que l'hôte sait peindre. La table partagée n'est
   // pas rejouée ici — elle est INTERSECTÉE avec une capacité, et l'intersection
   // ne peut pas être vide tant que la surface est montée : l'hôte ne la monte
   // que sur un format qu'il route, et ce format appartient toujours à
   // `offeredFormats` (invariant du contrat).
   const selectableFormats = offeredFormats.filter((offered) => routableFormats.includes(offered));
+  // La DÉGRADATION silencieuse (réel qui ne qualifie plus → POST au moment
+  // d'envoyer) est le MÊME mécanisme en création et en édition — MAIS elle
+  // n'est FIABLE en édition que si le client tenait, à l'HYDRATATION, une
+  // composition qu'il savait COMPLÈTE et qualifiante (`editSource.media`). Un
+  // repost-cite d'un RÉEL n'a AUCUN `PostMedia` propre (`repostPost` ne
+  // duplique les médias que pour une source ÉPHÉMÈRE) : `editSource.media` y
+  // est TOUJOURS vide alors que `editSource.postType` reste `REEL` — la
+  // composition que ce formulaire connaît n'a jamais été complète, donc
+  // `compositionQualifies` y vaut `false` dès l'ouverture, SANS le moindre
+  // geste de l'auteur. La laisser dégrader ici enverrait `type: 'POST'` au
+  // seul motif d'avoir ouvert la modale. Le retrait EXPLICITE d'un média
+  // qualifiant (le cas voulu, `composer-door-edit.test.tsx`) reste couvert :
+  // c'est alors `editSourceQualifies` qui était vrai, et c'est le retrait de
+  // l'auteur qui fait chuter `compositionQualifies` en dessous. Toujours
+  // AUCUN second garde-fou : une seule valeur, `publishedType`, affinée par
+  // ce qu'`editSource` permettait de savoir dès le départ.
+  const editSourceQualifies = isEditing && editSource ? qualifiesAsReel(editSource.media) : true;
   const publishedType: PostType = postTypeOf(
-    format === 'reel' && compositionQualifies ? 'reel' : 'post',
+    format === 'reel' && (compositionQualifies || (isEditing && !editSourceQualifies)) ? 'reel' : 'post',
   );
 
   // URLs blob mémoïsées par identité de File : retaper la légende re-rend à
@@ -270,7 +408,12 @@ export function ComposerDocumentSurface({
     (files: FileList | null) => {
       if (!files || files.length === 0) return;
 
-      const available = MEDIA_LIMIT - selectedFiles.length;
+      // Même pool UNIQUE que `mediaLimitReached` (`totalMediaCount`, un seul
+      // site) : à l'édition, la place restante compte aussi les médias
+      // EXISTANTS non retirés — sans quoi 9 médias déjà en ligne laissaient
+      // passer 10 de plus (`selectedFiles` seul valait 0), et le pool
+      // franchissait le plafond serveur.
+      const available = MEDIA_LIMIT - totalMediaCount;
       if (available <= 0) {
         setMediaError(t('composer.media.limitReached', { max: MEDIA_LIMIT }));
         return;
@@ -294,7 +437,7 @@ export function ComposerDocumentSurface({
       );
       handleFilesSelected(filesToAdd);
     },
-    [selectedFiles.length, handleFilesSelected, t],
+    [totalMediaCount, handleFilesSelected, t],
   );
 
   const handleRemoveMedia = useCallback(
@@ -354,9 +497,19 @@ export function ComposerDocumentSurface({
   // vocale resterait à 0:00.
   const handleAudioCaptured = useCallback(
     (result: AudioCaptureResult) => {
+      // TROISIÈME écrivain de ce pool, après `handleMediaSelect` et le retrait
+      // d'un média existant — il lit donc le MÊME `mediaLimitReached`, jamais
+      // un second calcul. Le bouton BASCULE d'`AudioCapture` porte bien le
+      // grisé, mais son bouton de CONFIRMATION est atteignable SANS lui :
+      // `armCaptureToken` (W7) ouvre le panneau depuis le bouton rond du fil,
+      // plafond atteint ou non. Une affordance grisée n'est pas une garde.
+      if (mediaLimitReached) {
+        setMediaError(t('composer.media.limitReached', { max: MEDIA_LIMIT }));
+        return;
+      }
       handleFilesSelected([result.file], [{ duration: result.durationMs }]);
     },
-    [handleFilesSelected],
+    [mediaLimitReached, handleFilesSelected, t],
   );
 
   // Une personne écrite `@handle` dans la légende est INLINE côté serveur (le
@@ -439,19 +592,69 @@ export function ComposerDocumentSurface({
     allowSoundExtractionTouched,
   ]);
 
+  // Retirer un média EXISTANT ne le supprime PAS immédiatement — il sort de
+  // `remainingExistingMedia` (dérivé), et son id atterrit dans
+  // `removeMediaIds` au moment d'enregistrer. Aucun blocage « au moins un
+  // média » ici : la dégradation RÉEL→POST (`publishedType`, ci-dessus) est le
+  // mécanisme qui absorbe le cas « plus aucun média qualifiant » — un second
+  // garde-fou qui bloquerait le geste referait ce que la dégradation fait déjà,
+  // avec une UX plus pauvre (bouton désactivé plutôt qu'un format qui cède).
+  const handleToggleExistingMedia = useCallback((mediaId: string) => {
+    setRemovedMediaIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(mediaId)) next.delete(mediaId);
+      else next.add(mediaId);
+      return next;
+    });
+  }, []);
+
+  const editPayloadData = editSource
+    ? editDraftPayload({
+        editSource,
+        content,
+        visibility,
+        visibilityUserIds,
+        publishedType,
+        newMediaIds: uploadedAttachments.map((att) => att.id),
+        removedMediaIds: [...removedMediaIds],
+        mediaAlt,
+      })
+    : undefined;
+
+  const editHasChanges = editPayloadData !== undefined && Object.keys(editPayloadData).length > 0;
+
+  const handleSaveEdit = useCallback(() => {
+    if (!editSource || !editPayloadData || disabled) return;
+    if (content.trim().length > CHAR_LIMIT) return;
+    if (isAudienceIncomplete(visibility, visibilityUserIds.length)) return;
+    if (!editHasChanges) return;
+
+    onSaveEdit?.({ postId: editSource.postId, data: editPayloadData });
+  }, [editSource, editPayloadData, disabled, content, visibility, visibilityUserIds, editHasChanges, onSaveEdit]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        handlePublish();
+        if (isEditing) handleSaveEdit();
+        else handlePublish();
       }
     },
-    [handlePublish],
+    // `isEditing` et `handleSaveEdit` manquaient : retirer un média EXISTANT
+    // ne change ni la référence de `handlePublish` (dédiée à la CRÉATION) ni
+    // aucune de SES dépendances, donc cmd+Entrée retombait sur la fermeture du
+    // MONTAGE — un `handleSaveEdit` figé sur `editHasChanges === false` — et
+    // n'envoyait RIEN, retrait compris.
+    [isEditing, handleSaveEdit, handlePublish],
   );
 
   const trimmedContent = content.trim();
   const hasMedia = uploadedAttachments.length > 0;
-  const isValid = (trimmedContent.length > 0 || hasMedia) && trimmedContent.length <= CHAR_LIMIT;
+  // En édition, un média EXISTANT non retiré compte autant qu'un média frais
+  // pour la validité — un post qui n'a que des médias déjà en ligne, texte
+  // effacé, reste publiable.
+  const hasAnyMedia = isEditing ? totalMediaCount > 0 : hasMedia;
+  const isValid = (trimmedContent.length > 0 || hasAnyMedia) && trimmedContent.length <= CHAR_LIMIT;
   const charCount = content.length;
   const selectedVisibility =
     PUBLICATION_VISIBILITY_OPTIONS.find((v) => v.id === visibility) ?? PUBLICATION_VISIBILITY_OPTIONS[0];
@@ -483,8 +686,44 @@ export function ComposerDocumentSurface({
                 'text-[var(--gp-text-primary)] placeholder:text-[var(--gp-text-muted)]',
                 disabled && 'opacity-50 cursor-not-allowed',
               )}
-              aria-label={t('postComposer.contentLabel')}
+              aria-label={isEditing ? t('composer.edit.contentLabel') : t('postComposer.contentLabel')}
             />
+
+            {isExpanded && isEditing && remainingExistingMedia.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2" data-testid="composer-existing-media">
+                {remainingExistingMedia.map((media) => (
+                  <div
+                    key={media.id}
+                    className="group relative rounded-lg overflow-hidden bg-[var(--gp-hover)]"
+                  >
+                    {media.mimeType.startsWith('image/') ? (
+                      <img
+                        src={media.thumbnailUrl ?? media.fileUrl}
+                        alt={media.alt ?? ''}
+                        className="h-16 w-16 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center text-2xl">
+                        {media.mimeType.startsWith('video/') ? '🎬' : media.mimeType.startsWith('audio/') ? '🎵' : '📄'}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleExistingMedia(media.id)}
+                      disabled={disabled}
+                      className={cn(
+                        'absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full',
+                        'bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100',
+                        'transition-opacity duration-200',
+                      )}
+                      aria-label={t('composer.edit.removeMedia')}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {isExpanded && selectedFiles.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2" data-testid="composer-media-preview">
@@ -547,7 +786,7 @@ export function ComposerDocumentSurface({
               </p>
             )}
 
-            {isExpanded && uploadedAttachments.length > 0 && (
+            {isExpanded && !isEditing && uploadedAttachments.length > 0 && (
               <MediaAccessibilityFields
                 attachments={uploadedAttachments}
                 altById={mediaAlt}
@@ -592,14 +831,20 @@ export function ComposerDocumentSurface({
                     onArmed={onCaptureArmed}
                   />
 
-                  <ReferencePicker
-                    references={references}
-                    onChange={handlePickReference}
-                    onRemove={drop}
-                    modes={REFERENCE_MODES}
-                    open={referencePickerOpen}
-                    onOpenChange={setReferencePickerOpen}
-                  />
+                  {/* Loi 3 — le formulaire d'édition ne rend jamais le jeu
+                      AUTORITAIRE des références déclarées (le `select` du fil
+                      les écarte silencieuses) : un contrôle qui ne peut avoir
+                      aucun effet ne se peint pas (loi 4). */}
+                  {!isEditing && (
+                    <ReferencePicker
+                      references={references}
+                      onChange={handlePickReference}
+                      onRemove={drop}
+                      modes={REFERENCE_MODES}
+                      open={referencePickerOpen}
+                      onOpenChange={setReferencePickerOpen}
+                    />
+                  )}
 
                   <div className="relative">
                     <button
@@ -663,15 +908,20 @@ export function ComposerDocumentSurface({
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={handlePublish}
+                  onClick={isEditing ? handleSaveEdit : handlePublish}
                   disabled={
-                    !isValid ||
-                    disabled ||
-                    isUploading ||
-                    isAudienceIncomplete(visibility, visibilityUserIds.length)
+                    isEditing
+                      ? !isValid ||
+                        disabled ||
+                        !editHasChanges ||
+                        isAudienceIncomplete(visibility, visibilityUserIds.length)
+                      : !isValid ||
+                        disabled ||
+                        isUploading ||
+                        isAudienceIncomplete(visibility, visibilityUserIds.length)
                   }
                 >
-                  {isUploading ? t('uploading') : t('publish')}
+                  {isEditing ? t('save') : isUploading ? t('uploading') : t('publish')}
                 </Button>
               </div>
             )}
@@ -686,7 +936,7 @@ export function ComposerDocumentSurface({
               </div>
             )}
 
-            {isExpanded && references.length > 0 && (
+            {isExpanded && !isEditing && references.length > 0 && (
               <div className="mt-2">
                 <ReferenceChipRow references={references} onOpen={() => setReferencePickerOpen(true)} />
               </div>

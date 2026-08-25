@@ -26,6 +26,7 @@ export * from './member-visibility.js';
 export * from './reaction-limit.js';
 export * from './time-range.js';
 export * from './reel-composition.js';
+export * from './composer-contract.js';
 export * from './anonymous-username.js';
 export * from './join-notice.js';
 export * from './conversation-join-error.js';

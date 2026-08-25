@@ -1,15 +1,13 @@
 /**
  * W4 — le micro devient un OUTIL du format post, pas un cinquième format.
  *
- * `AudioPostComposer.tsx` (531 l.) est une SURFACE DE CAPTURE, pas un format :
- * la table des portes §C n'en connaît que quatre (post/story/reel/status), et
- * un post audio est un POST PORTEUR d'un média audio. `AudioCapture` porte
- * donc, telle quelle, la machine de capture de `AudioPostComposer` — quatre
- * phases, négociation de mimeType, quatre locales de reconnaissance, forme
- * d'onde — et la branche dans la rangée d'outils de `ComposerDocumentSurface`,
- * à côté de photo/vidéo. Ce fichier ne modifie ni ne monte
- * `AudioPostComposer.tsx`, qui reste intact et monté ailleurs (retrait
- * programmé pour W9, derrière la double preuve).
+ * `AudioPostComposer.tsx` (531 l., RETIRÉ à la Task W9) était une SURFACE DE
+ * CAPTURE, pas un format : la table des portes §C n'en connaît que quatre
+ * (post/story/reel/status), et un post audio est un POST PORTEUR d'un média
+ * audio. `AudioCapture` porte donc, telle quelle, la machine de capture qu'
+ * `AudioPostComposer` portait — quatre phases, négociation de mimeType,
+ * quatre locales de reconnaissance, forme d'onde — et la branche dans la
+ * rangée d'outils de `ComposerDocumentSurface`, à côté de photo/vidéo.
  *
  * Ce qui change, et pourquoi :
  *
@@ -38,7 +36,7 @@
  *     n'offre pas RÉEL, exactement comme une vidéo de moins de 3 s.
  */
 import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -343,6 +341,26 @@ describe('W4 point 1 — AudioCapture porte la machine de capture telle quelle',
     });
   });
 
+  /**
+   * Reformulation W9 Step 3 — `audio-post-composer.test.tsx` (« shows error
+   * when microphone access denied ») n'est PAS dans l'inventaire du plan
+   * (il ne teste ni l'audience, ni le tri-état, ni un plafond — les sept
+   * gardes nommées) et sa suite entière est retirée avec `AudioPostComposer`
+   * (redondante partout ailleurs : montage, contraintes stéréo, phases). Ce
+   * SEUL cas ne l'était pas : `AudioCapture.tsx` porte le MÊME `catch` (une
+   * capacité du point 1, « la machine de capture telle quelle »), mais rien
+   * dans cette suite ne l'atteignait avant ce test.
+   */
+  it('un refus de micro affiche une erreur — sans jamais atteindre la phase RECORDING', async () => {
+    mockGetUserMedia.mockRejectedValueOnce(new Error('Permission denied'));
+    render(<AudioCapture onCaptured={jest.fn()} />);
+    openPanel();
+    await clickStart();
+
+    expect(screen.getByTestId('audio-capture-error')).toBeInTheDocument();
+    expect(screen.getByTestId('audio-capture-start')).toBeInTheDocument();
+  });
+
   it('négocie le mimeType dans le MÊME ordre de candidats que le composer hérité — saute webm si non supporté, retombe sur mp4', async () => {
     isTypeSupportedImpl = (mime: string) => mime === 'audio/mp4';
     render(<AudioCapture onCaptured={jest.fn()} />);
@@ -556,6 +574,45 @@ describe("W4 point 2 — une seule stratégie de téléversement", () => {
 
     expect(surfaceSource).not.toContain('TusUploadService');
     expect(captureSource).not.toContain('TusUploadService');
+  });
+});
+
+/**
+ * Reformulation W9 Step 3 de `audio-post-composer-audience.test.tsx` (Task 3
+ * point 4 : `handleAudioPublish` figeait `visibility: 'PUBLIC'` en dur).
+ *
+ * Le composer hérité gérait sa PROPRE audience (son propre sélecteur, son
+ * propre PUBLIC par défaut) parce qu'il était un chemin de publication
+ * SÉPARÉ. Depuis W4, un enregistrement rejoint le MÊME pool que
+ * photo/vidéo (`useAttachmentUpload`) et publie par le MÊME
+ * `ComposerDocumentSurface.handlePublish` — déjà couvert, pour TOUT post,
+ * par « W3 point 6 — une audience nommée ne part jamais vide »
+ * (`meeshy-composer-post.test.tsx`), qui ne branche sur aucun type de média.
+ * Ce test est le SEUL qui ferme la boucle bout en bout sur le geste
+ * spécifique qui a régressé historiquement : enregistrer, PUIS choisir une
+ * audience, PUIS publier.
+ */
+describe("W4 — l'audience d'un post enregistré au micro suit le mécanisme générique, jamais un défaut PUBLIC figé", () => {
+  it('publie avec l’audience choisie APRÈS l’enregistrement — plus de chemin séparé qui la figerait à PUBLIC', async () => {
+    const { published } = renderComposer();
+    expand();
+    await recordSilently(2000);
+    clickConfirm();
+    // `useAttachmentUpload` est intégralement mocké dans cette suite (comme
+    // dans « W4 point 2 ») : confirmer l'enregistrement APPELLE
+    // `handleFilesSelected`, mais rien ne réinjecte automatiquement le
+    // fichier dans `uploadedAttachments` — c'est déjà couvert par ce point 2.
+    // Une légende porte donc le brouillon jusqu'à un état publiable, pour
+    // isoler la seule chose que CE test vérifie : l'audience.
+    fireEvent.change(screen.getByLabelText('postComposer.contentLabel'), { target: { value: 'Bonjour' } });
+
+    fireEvent.click(screen.getByLabelText('postComposer.changeVisibility'));
+    fireEvent.click(
+      within(screen.getByTestId('composer-visibility-options')).getByText('publicationVisibility.friends'),
+    );
+    fireEvent.click(screen.getByText('publish'));
+
+    expect(published()?.visibility).toBe('FRIENDS');
   });
 });
 

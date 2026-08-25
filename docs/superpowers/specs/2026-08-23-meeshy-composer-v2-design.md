@@ -325,8 +325,8 @@ Le chantier réutilise plus qu'il ne crée.
 
 | Mécanisme éprouvé | Où | Ce qu'on en fait |
 |---|---|---|
-| éventail gaté + repli automatique | `EditPostSheet.swift:120-122, 297-308, 478-479` | monte dans `ComposerProfile` (loi 4) |
-| « n'envoyer que ce qui a changé » | `EditPostSheet.swift:490` — `typeChanged ? selectedType : nil` | devient `buildUpdatePayload` (loi 3) |
+| éventail gaté + repli automatique | `EditPostSheet.swift:195-197` (le gate), `:478-485` (le sélecteur), `:350-351` et `:658-659` (les deux replis) — **remesuré au 2026-08-25**, les ancres `120-122, 297-308, 478-479` datent d'avant `690e575f7` | monte dans `ComposerProfile` (loi 4) |
+| « n'envoyer que ce qui a changé » | `EditPostSheet.swift:678` — `typeChanged ? selectedType : nil` | **LIVRÉ** (lot 7.7) : `buildUpdatePayload` + `PostEditPayload.build`, seul écrivain d'`UpdatePostRequest` (loi 3) |
 | hydratation d'édition 7 champs | `StoryComposerViewModel+Edit.swift` | se généralise aux posts et réels (loi 2) |
 | `qualifiesAsReel` | `packages/shared/utils/reel-composition.ts` + miroir SDK | consommé tel quel |
 | snapshot + `detachReposts` + `targetType` | gateway | consommés tels quels (loi 5) |
@@ -400,7 +400,33 @@ Le composer web complet : une entrée, quatre formats, l'éventail, l'édition.
 
 ### Lot 7 — File de publication unique (`PublishIntent`, S2)
 Un seul chemin de publication pour les quatre formats, offline compris.
-**Retrait** : `EditPostSheet.swift` (498 l.), dernier legacy.
+
+**Retrait d'`EditPostSheet.swift` : RE-SÉQUENCÉ, hors du lot 7** — corrigé au
+2026-08-25 (tâche 7.8). Deux mesures contre la rédaction initiale :
+
+- **le compte.** La feuille fait **689 l.**, pas 498. `690e575f7` (2026-08-23)
+  l'a agrandie le jour même où cette spec a été écrite, et le lot 7.7 y a
+  ajouté la déclaration `known` ; « 498 l., dernier legacy » décrivait un
+  fichier qui n'existait déjà plus ;
+- **la parité.** La feuille tient **SEPT** capacités ; le meuble en tient
+  **DEUX**, et les deux côté **CRÉATION** seulement — la porte d'édition ouvre
+  en `.resume`, que `ComposerSurfaceRouting` fait atterrir sur la SCÈNE, où le
+  socle ne peint rien. Retirer la feuille aujourd'hui retirerait cinq capacités
+  à l'utilisateur : langue source, repli automatique du réel, retrait de
+  médias, position tri-état, et la moitié REPOST du gate de l'éventail.
+
+L'inventaire n'est pas de la prose : c'est
+`apps/ios/MeeshyTests/Unit/Composer/EditParityInventoryTests.swift`, qui mesure
+les sept sur des symboles de production et **rougit le jour où une capacité
+arrive** — le seul signal qui dise que le retrait se rapproche. Le STOP est
+opposable : les deux conditions de levée vivent dans `MeeshyUI`, hors d'atteinte
+d'un lot app-side.
+
+**Ce que le lot 7.8 a livré à la place** : la table de routage cesse de mentir.
+`ComposerProfile.profile(for: .edit(...))` rendait `routesToLegacy: .storyEdit`
+pour les quatre formats — or `.storyEdit` désigne `storyEditComposerCover`,
+l'atelier d'une STORY. `LegacyComposer` porte désormais `.editPostSheet`, et
+l'édition route par FORMAT.
 
 ## E bis. Les plans d'exécution v2 *(2026-08-24)*
 
@@ -452,9 +478,13 @@ ouvrir les plans :
    vit sous `packages/MeeshySDK/Sources/MeeshyUI/Story/` (739 l.) ; le lot 4 s'y
    interdit d'écrire, le lot 7 aussi. Le §E lot 4 promet donc un retrait que
    personne ne porte : il attend le lot qui possédera `MeeshyUI`.
-3. **Le retrait d'`EditPostSheet.swift` est hors du lot 7** (658 l. et non 498 —
-   `690e575f7` l'a agrandi le 2026-08-23), derrière un STOP nommé et un
-   inventaire de sept capacités.
+3. **Le retrait d'`EditPostSheet.swift` est hors du lot 7** (**689 l.** au
+   2026-08-25 et non 498 — `690e575f7` l'a agrandi le 2026-08-23, le lot 7.7 y a
+   ajouté la déclaration `known`), derrière un STOP nommé et un inventaire de
+   sept capacités. Cet inventaire EXISTE depuis la tâche 7.8 : il est un test
+   (`EditParityInventoryTests`), pas une table de spec — une table de spec ne
+   rougit pas quand le sol bouge sous elle, et c'est exactement ce qui est
+   arrivé à celle du plan du lot 7 au merge du lot 4.
 4. **Le tableau de bord `2026-08-19-meeshy-composer-views.html` se contredit
    lui-même** au 2026-08-24 (rév. 22 : arc `62 / 70`, puce verte « 57 tâches,
    81,4 % ») et il est **modifié non committé**. Le gate du premier lot qui y

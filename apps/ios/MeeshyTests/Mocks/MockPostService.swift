@@ -110,6 +110,17 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastRepostContent: String?
     var lastRepostIsQuote: Bool?
     var lastRepostVisibility: String?
+    /// Le jeton d'idempotence du repost (lot 7, tâche 7.5). Le défaut de
+    /// `PostServiceProviding` le laisse tomber en silence : sans la surcharge
+    /// ci-dessous, un test qui croirait vérifier son voyage vérifierait qu'il
+    /// disparaît.
+    var lastRepostClientMutationId: String?
+    /// TOUS les jetons partis, dans l'ordre. `lastRepostClientMutationId` ne
+    /// dit que le DERNIER : un témoin du double envoi a besoin de voir les deux
+    /// pour pouvoir les nommer dans son message d'échec.
+    var repostClientMutationIds: [String] = []
+    /// Retient `repost` EN VOL jusqu'à cette date — voir `holdRepost(for:)`.
+    private(set) var repostHoldUntil: Date?
 
     var shareCallCount = 0
     var lastSharePostId: String?
@@ -389,7 +400,44 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastRepostContent = content
         lastRepostIsQuote = isQuote
         lastRepostVisibility = visibility
+        while let limite = repostHoldUntil, Date() < limite {
+            try Task.checkCancellation()
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
         return try repostResult.get()
+    }
+
+    /// Maintient tout `repost` EN VOL pendant AU PLUS `secondes` — le seul
+    /// moyen d'observer ce qui n'arrive qu'à une republication en cours (un
+    /// second tap sur la même carte).
+    ///
+    /// **La retenue est BORNÉE, et ce n'est pas un détail** : contrairement à
+    /// `createStoryHangs`, un témoin du verrou « en vol » doit pouvoir voir un
+    /// second appel NON retenu. Sans borne, ce second appel attendrait pour
+    /// toujours et la suite se PENDRAIT au lieu de rougir — un témoin qui se
+    /// pend ne dit rien de ce qu'il mesurait.
+    func holdRepost(for secondes: TimeInterval) {
+        repostHoldUntil = Date().addingTimeInterval(secondes)
+    }
+
+    /// Laisse retomber les vols retenus.
+    func releaseRepost() { repostHoldUntil = nil }
+
+    /// Surcharge de la variante IDEMPOTENTE : elle enregistre le jeton PUIS
+    /// retombe sur la surcharge ci-dessus, de sorte que `repostCallCount` et
+    /// les autres témoins continuent de compter comme avant ce lot.
+    func repost(
+        postId: String,
+        targetType: PostType?,
+        content: String?,
+        isQuote: Bool,
+        visibility: String?,
+        clientMutationId: String?
+    ) async throws -> APIPost {
+        lastRepostClientMutationId = clientMutationId
+        repostClientMutationIds.append(clientMutationId ?? "<aucun>")
+        return try await repost(postId: postId, targetType: targetType, content: content,
+                                isQuote: isQuote, visibility: visibility)
     }
 
     func share(postId: String) async throws {
@@ -660,6 +708,9 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastRepostContent = nil
         lastRepostIsQuote = nil
         lastRepostVisibility = nil
+        lastRepostClientMutationId = nil
+        repostClientMutationIds = []
+        repostHoldUntil = nil
 
         shareResult = .success(())
         shareCallCount = 0

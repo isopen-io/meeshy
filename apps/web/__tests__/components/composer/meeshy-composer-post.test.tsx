@@ -508,6 +508,32 @@ describe('W3 point 2 bis — l’aperçu des médias et leur retrait', () => {
 // Point 3 — alt PAR MÉDIA via `MediaAccessibilityFields`
 // ─────────────────────────────────────────────────────────────────────────────
 describe('W3 point 3 — le texte alternatif par média', () => {
+  /**
+   * Reformulation W9 Step 3 — deux gardes de `MediaAltCollection.PostComposer.test.tsx`
+   * que les assertions de PAYLOAD ci-dessous ne couvraient pas : la présence
+   * du BLOC à l'écran (gardée par `uploadedAttachments.length`, jamais par le
+   * payload) et l'indépendance d'état ENTRE deux champs (un seul état partagé
+   * ferait fuir la frappe de l'un vers l'autre — invisible tant qu'un seul
+   * champ est rempli).
+   */
+  it("ne monte AUCUN bloc d'accessibilité média tant qu'aucun média n'est uploadé", () => {
+    renderComposer();
+    expand();
+
+    expect(screen.queryByTestId('media-accessibility-fields')).not.toBeInTheDocument();
+  });
+
+  it('garde chaque champ alt INDÉPENDANT — taper dans le premier ne fuit pas vers le second', () => {
+    mockAttachmentState.uploadedAttachments = TWO_IMAGES;
+    renderComposer();
+    expand();
+
+    fireEvent.change(screen.getByTestId('media-alt-input-att-1'), { target: { value: 'un chat' } });
+
+    expect(screen.getByTestId('media-alt-input-att-1')).toHaveValue('un chat');
+    expect(screen.getByTestId('media-alt-input-att-2')).toHaveValue('');
+  });
+
   it('monte un champ alt par média uploadé et publie ce qui a été tapé', () => {
     mockAttachmentState.uploadedAttachments = TWO_IMAGES;
     const { onPublish, published } = renderComposer();
@@ -554,6 +580,30 @@ describe('W3 point 3 — le texte alternatif par média', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe("W3 point 4 — l'opt-in son est un TRI-ÉTAT, pas un booléen", () => {
   const withVideo = [makeAttachment({ id: 'vid-1', mimeType: 'video/mp4', duration: 5000 })];
+
+  /**
+   * Reformulation W9 Step 3 — la moitié DOM de
+   * `SoundExtractionCollection.PostComposer.test.tsx` que les assertions de
+   * TRI-ÉTAT ci-dessous ne couvraient pas : la case n'existe QUE si un média
+   * est une vidéo, et naît décochée. `Post.allowSoundExtraction` est un
+   * drapeau UNIQUE pour tout le post (jamais un par média) — une seule case,
+   * jamais une par vignette.
+   */
+  it('ne monte PAS la case tant qu’aucun média n’est une vidéo', () => {
+    mockAttachmentState.uploadedAttachments = TWO_IMAGES;
+    renderComposer();
+    expand();
+
+    expect(screen.queryByTestId('media-sound-extraction-checkbox')).not.toBeInTheDocument();
+  });
+
+  it('monte la case, décochée, dès qu’une vidéo est présente parmi d’autres médias', () => {
+    mockAttachmentState.uploadedAttachments = [...TWO_IMAGES, ...withVideo];
+    renderComposer();
+    expand();
+
+    expect(screen.getByTestId('media-sound-extraction-checkbox')).not.toBeChecked();
+  });
 
   it('ABSENT tant que la bascule n’a pas été touchée — un défaut non touché n’écrase rien côté serveur', () => {
     mockAttachmentState.uploadedAttachments = withVideo;

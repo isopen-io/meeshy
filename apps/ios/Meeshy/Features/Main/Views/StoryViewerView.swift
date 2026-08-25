@@ -869,12 +869,13 @@ struct StoryViewerView: View {
                 authorHandle: wrapper.authorHandle,
                 onPublishRepost: { content, sourceStory, visibility in
                     do {
-                        _ = try await PostService.shared.repost(
-                            postId: sourceStory.id,
-                            targetType: .post,
-                            content: content.isEmpty ? nil : content,
-                            isQuote: !content.isEmpty,
-                            visibility: visibility
+                        try await RepostPublisher.shared.publish(
+                            .quoted(
+                                postId: sourceStory.id,
+                                targetType: .post,
+                                comment: content,
+                                visibility: visibility
+                            )
                         )
                         editAndRepostAsPostSource = nil
                         FeedbackToastManager.shared.show(String(localized: "story.publish.success", defaultValue: "Publié", bundle: .main))
@@ -1268,36 +1269,46 @@ struct StoryViewerView: View {
         }
     }
 
-    /// `isQuote: false`. Surfaces user-facing toasts on success / known error
-    /// codes (404 = source story gone, 403 = repost forbidden) and a generic
-    /// failure otherwise. Errors are mapped against `APIError.serverError`'s
-    /// status-code payload since that's the shape `APIClient` throws.
+    /// Republication SÈCHE d'une story dans le fil (`isQuote: false`), avec ses
+    /// deux refus NOMMÉS : 404 = la source a disparu, 403 = l'audience demandée
+    /// élargit celle de l'original.
+    ///
+    /// **Ces deux refus étaient INATTEIGNABLES avant le lot 7.5, et le
+    /// doc-comment affirmait le contraire** : il disait « errors are mapped
+    /// against `APIError.serverError` ... since that's the shape `APIClient`
+    /// throws ». C'est faux — mesuré : les vingt-cinq `throw` d'`APIClient`
+    /// lancent tous `MeeshyError`, et pas un seul `APIError`. Les deux `catch`
+    /// typés ne s'exécutaient donc jamais, et TOUT refus tombait dans le
+    /// fourre-tout « Échec de la republication ». Un utilisateur dont la story
+    /// avait simplement expiré n'apprenait rien.
+    ///
+    /// La classification vit désormais dans `RepostFailure`, avec les mêmes
+    /// verdicts que la file durable applique de son côté
+    /// (`OutboxFlusher.isPermanentServerRejection`) : un seul endroit à
+    /// corriger le jour où le gateway changera de forme.
     private func repostAsPostDirect() {
         guard let story = currentStory else { return }
         HapticFeedback.light()
         Task {
             do {
-                _ = try await PostService.shared.repost(
-                    postId: story.id,
-                    targetType: .post,
-                    content: nil,
-                    isQuote: false
+                try await RepostPublisher.shared.publish(
+                    .simple(postId: story.id, targetType: .post, visibility: nil)
                 )
                 await MainActor.run {
                     HapticFeedback.success()
                     FeedbackToastManager.shared.show(String(localized: "story.repost.success", defaultValue: "Republié dans ton feed", bundle: .main))
                 }
-            } catch APIError.serverError(404, _) {
-                await MainActor.run {
-                    FeedbackToastManager.shared.showError(String(localized: "story.repost.error.unavailable", defaultValue: "La story n'est plus disponible", bundle: .main))
-                }
-            } catch APIError.serverError(403, _) {
-                await MainActor.run {
-                    FeedbackToastManager.shared.showError(String(localized: "story.repost.error.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main))
-                }
             } catch {
+                let verdict = RepostFailure.classify(error)
                 await MainActor.run {
-                    FeedbackToastManager.shared.showError(String(localized: "story.repost.error.generic", defaultValue: "Échec de la republication", bundle: .main))
+                    switch verdict {
+                    case .sourceGone:
+                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.unavailable", defaultValue: "La story n'est plus disponible", bundle: .main))
+                    case .audienceWidening:
+                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main))
+                    case .other:
+                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.generic", defaultValue: "Échec de la republication", bundle: .main))
+                    }
                 }
             }
         }

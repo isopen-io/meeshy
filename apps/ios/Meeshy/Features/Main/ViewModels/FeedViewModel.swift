@@ -1058,6 +1058,14 @@ class FeedViewModel: ObservableObject {
         }
     }
 
+    /// L'ÉCRIVAIN UNIQUE de la republication (lot 7, tâche 7.5), construit sur
+    /// les dépendances DÉJÀ injectées de ce modèle : un double de test continue
+    /// donc d'observer l'envoi, et la branche hors ligne écrit dans la même
+    /// file que les autres gestes de ce modèle.
+    private var repostPublisher: RepostPublisher {
+        RepostPublisher(postService: postService, offlineQueue: offlineQueue)
+    }
+
     func repostPost(_ postId: String, content: String? = nil, isQuote: Bool = false) async {
         do {
             // La RÉFÉRENCE remonte à la racine, le FORMAT reste celui de la
@@ -1069,14 +1077,16 @@ class FeedViewModel: ObservableObject {
                 repostOfId: posts.first(where: { $0.id == postId })?.repost?.id,
                 originalRepostOfId: posts.first(where: { $0.id == postId })?.repost?.originalRepostOfId
             )
-            _ = try await postService.repost(
-                postId: cible.postId,
-                targetType: cible.targetType,
-                content: isQuote ? content : nil,
-                isQuote: isQuote ? (content != nil) : false,
-                // Le feed ne propose pas de sélecteur d'audience : on hérite de l'original.
-                visibility: nil
-            )
+            // Le feed ne propose pas de sélecteur d'audience : on hérite de
+            // l'original (`visibility: nil`). La règle « un commentaire blanc
+            // n'est pas une citation » vit dans `RepostIntent.quoted`, avec les
+            // trois autres sites qui l'écrivaient chacun de leur côté.
+            let intention: RepostIntent = isQuote
+                ? RepostIntent.quoted(postId: cible.postId, targetType: cible.targetType,
+                                      comment: content, visibility: nil)
+                : RepostIntent.simple(postId: cible.postId, targetType: cible.targetType,
+                                      visibility: nil)
+            try await repostPublisher.publish(intention)
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Error reposting", bundle: .main))
         }
@@ -1172,7 +1182,8 @@ class FeedViewModel: ObservableObject {
         removeMediaIds: [String]? = nil,
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
-        visibilityUserIds: [String]? = nil
+        visibilityUserIds: [String]? = nil,
+        known: Set<PostEditField> = EditPostDraft.documentFields
     ) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
@@ -1198,7 +1209,14 @@ class FeedViewModel: ObservableObject {
         posts[idx] = optimistic
         debouncedCacheSave()
         do {
-            let updated = try await postService.update(postId: postId, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            // Le corps ne se construit plus ici : `known` dit ce que la
+            // surface a su RENDRE, `PostEditPayload.build` en tire le PUT. Un
+            // champ non déclaré est OMIS, et le serveur préserve le sien.
+            let updated = try await postService.update(postId: postId, known: known, draft: PostEditDraft(
+                content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                location: location
+            ))
             // Re-hydrate from the server response so the gateway-authoritative
             // fields (updatedAt, isEdited, sanitized content, …) replace the
             // optimistic in-memory copy. Preserves the resolved translation

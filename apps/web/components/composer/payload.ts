@@ -4,20 +4,23 @@ import type { PostReferenceInput } from '@meeshy/shared/types/post-reference';
 /**
  * La CHARGE d'une publication document (post/réel), déclarée UNE fois.
  *
- * Ce module n'existe que pour cette unicité. La surface neuve
- * (`ComposerDocumentSurface`) et le composer hérité (`components/v2/PostComposer`)
- * rendent la même charge au même appelant (`PostsFeedScreen.handlePublish`) :
- * tant qu'elle était déclarée des deux côtés, deux formes structurellement
- * identiques mais indépendantes pouvaient DÉRIVER — un champ ajouté d'un seul
- * côté part de la surface, n'est jamais lu par la mutation, et la perte est
- * silencieuse. Une propriété excédentaire sur un objet non-littéral ne fait pas
- * d'erreur, et aucun gate de ce dépôt ne type-vérifie `apps/web` (jest passe par
- * SWC, `next.config.js` porte `ignoreBuildErrors: true`) : la divergence
- * n'aurait donc rougi nulle part.
+ * Ce module n'existe que pour cette unicité. Jusqu'au retrait du composer
+ * hérité (`components/v2/PostComposer`, Task W9), la surface neuve
+ * (`ComposerDocumentSurface`) ET lui rendaient la même charge au même
+ * appelant (`PostsFeedScreen.handlePublish`) : tant qu'elle était déclarée des
+ * deux côtés, deux formes structurellement identiques mais indépendantes
+ * pouvaient DÉRIVER — un champ ajouté d'un seul côté part de la surface,
+ * n'est jamais lu par la mutation, et la perte est silencieuse. Une propriété
+ * excédentaire sur un objet non-littéral ne fait pas d'erreur, et aucun gate
+ * de ce dépôt ne type-vérifie `apps/web` (jest passe par SWC, `next.config.js`
+ * porte `ignoreBuildErrors: true`) : la divergence n'aurait donc rougi nulle
+ * part.
  *
- * Il vit sous `components/composer/` — pas dans l'un des deux consommateurs —
- * pour que la suppression du composer hérité, programmée par le plan, n'emporte
- * pas la déclaration avec elle.
+ * Le composer hérité est retiré depuis la Task W9, mais le module reste sous
+ * `components/composer/` plutôt que dans `ComposerDocumentSurface` : il porte
+ * aussi `ComposerRepostPayload`, consommée par `ComposerRepostSurface.tsx` ET
+ * `MeeshyComposer.tsx` — le loger dans un composant referait la même faute
+ * d'échelle qu'il corrigeait pour la charge document.
  *
  * Ce qui est ici est CLIENT : `optimisticMedia` ne part jamais sur le fil.
  *
@@ -64,4 +67,40 @@ export interface ComposerDocumentPayload {
    * différente par un défaut jamais choisi.
    */
   allowSoundExtraction?: boolean;
+}
+
+/**
+ * Le PUT d'une édition — W8. `data` est déjà le résultat de
+ * `webUpdatePayload` (`lib/composer-door.ts`) : un champ absent ici veut dire
+ * « inchangé », jamais « effacé ». Comme `ComposerDocumentPayload` ci-dessus,
+ * cette forme est déclarée UNE fois, sous `components/composer/`, pour que la
+ * surface neuve et ses deux appelants (`PostsFeedScreen`,
+ * `app/feeds/post/[postId]/page.tsx`) ne recopient pas indépendamment la même
+ * charge.
+ */
+export interface ComposerDocumentEditPayload {
+  readonly postId: string;
+  readonly data: Partial<{
+    content: string;
+    type: PostType;
+    visibility: PostVisibility;
+    visibilityUserIds: string[];
+    mediaIds: string[];
+    removeMediaIds: string[];
+    mediaAlt: Record<string, string>;
+  }>;
+}
+
+/**
+ * Ce qu'un repost émet — W8. `targetId` n'y figure PAS : c'est l'appelant qui
+ * le tient (`repostTargetId()`, `packages/shared/utils/repost-target.ts`,
+ * l'UNIQUE résolveur de cible), et `ComposerRepostSurface` reste agnostique de
+ * la façon dont sa cible a été trouvée — exactement comme elle est agnostique
+ * du réseau. `targetType` est le format choisi dans l'éventail au moment
+ * d'envoyer (loi 5 — l'ANCRAGE), jamais recalculé ailleurs.
+ */
+export interface ComposerRepostPayload {
+  readonly targetType: PostType;
+  readonly isQuote: boolean;
+  readonly content?: string;
 }

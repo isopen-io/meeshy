@@ -41,20 +41,33 @@ jest.mock('@/components/v2', () => ({
   StatusComposer: () => null,
 }));
 
-jest.mock('@/components/v2/PostComposer', () => ({ PostComposer: () => null }));
-jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
-jest.mock('@/components/v2/AudioPostComposer', () => ({ AudioPostComposer: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
-type RepostModalStubProps = { open: boolean; onRepost: () => void; onQuote: (c: string) => void };
-jest.mock('@/components/v2/RepostModal', () => ({
-  RepostModal: ({ open, onRepost, onQuote }: RepostModalStubProps) =>
-    open ? (
+// W8 — la carte du fil ouvre la porte `repost` du meuble unifié. Le stub ne
+// peint la surface repost que pour cette porte ; les autres (`feedComposer`,
+// `moodChip`) restent hors de portée de cette suite.
+type MeeshyComposerRepostStubProps = {
+  door: { kind: string; sourceFormat?: string };
+  onRepost?: (payload: { targetType: string; isQuote: boolean; content?: string }) => void;
+};
+jest.mock('@/components/composer/MeeshyComposer', () => ({
+  MeeshyComposer: ({ door, onRepost }: MeeshyComposerRepostStubProps) => {
+    if (door.kind !== 'repost') return null;
+    const targetType = (door.sourceFormat ?? 'post').toUpperCase();
+    return (
       <div>
-        <button data-testid="modal-repost" onClick={onRepost}>Confirm repost</button>
-        <button data-testid="modal-quote" onClick={() => onQuote('mon commentaire')}>Confirm quote</button>
+        <button data-testid="modal-repost" onClick={() => onRepost?.({ targetType, isQuote: false })}>
+          Confirm repost
+        </button>
+        <button
+          data-testid="modal-quote"
+          onClick={() => onRepost?.({ targetType, isQuote: true, content: 'mon commentaire' })}
+        >
+          Confirm quote
+        </button>
       </div>
-    ) : null,
+    );
+  },
 }));
 
 jest.mock('@/services/posts.service', () => ({

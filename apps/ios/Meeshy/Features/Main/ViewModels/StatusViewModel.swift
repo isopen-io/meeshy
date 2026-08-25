@@ -34,7 +34,12 @@ class StatusViewModel: ObservableObject {
     private let authManager: AuthManaging
     private let offlineQueue: OfflineQueueing
     private let postService: PostServiceProviding
-    private let isOffline: () -> Bool
+    /// `@Sendable` depuis le lot 7.5 : ce prédicat est TRANSMIS à
+    /// `RepostPublisher`, un écrivain `nonisolated` qui doit pouvoir le lire
+    /// hors du main actor. Les quatre sites qui l'injectent passent des
+    /// littéraux sans capture ; le défaut lit `NetworkMonitor`, qui vit dans le
+    /// module core (isolation `nonisolated`) et est `@unchecked Sendable`.
+    private let isOffline: @Sendable () -> Bool
 
     /// Groupement, persistance et flush (arrière-plan / relance) portés par
     /// `ImpressionBatcher`.
@@ -62,7 +67,7 @@ class StatusViewModel: ObservableObject {
         authManager: AuthManaging = AuthManager.shared,
         offlineQueue: OfflineQueueing = OfflineQueue.shared,
         postService: PostServiceProviding = PostService.shared,
-        isOffline: @escaping () -> Bool = { NetworkMonitor.shared.isOffline }
+        isOffline: @escaping @Sendable () -> Bool = { NetworkMonitor.shared.isOffline }
     ) {
         self.mode = mode
         self.statusService = statusService
@@ -322,12 +327,31 @@ class StatusViewModel: ObservableObject {
     ///   aucun champ de liste. Le dire ici pour la session qui lèvera le plafond
     ///   d'ÉLARGISSEMENT de la loi 10 : rouvrir ces deux audiences demanderait
     ///   d'abord un champ sur la requête, pas seulement un argument de plus.
-    /// - Returns: `true` quand le serveur a pris la republication. **Aucune file
-    ///   durable** : cet envoi n'enfile rien, il appelle le réseau — ce que
-    ///   `ComposerDocumentSendPath.quotedRepost.isDurable` déclare déjà. Ne pas
-    ///   lire « la file ne saurait pas le porter » : le fil rouge du repost
-    ///   (lot 7) a posé sa ligne, et ce qui manque est un ÉCRIVAIN, pas un kind.
-    ///   Hors ligne, le refus est DIT — TOUT DE SUITE, sans le délai
+    /// - Returns: `true` quand le serveur a pris la republication.
+    ///
+    ///   **La dette nommée ici a été payée À MOITIÉ, et la moitié restante a
+    ///   changé de propriétaire — lire les deux avant de la reprendre.** Elle
+    ///   disait « ce qui manque est un ÉCRIVAIN, pas un kind ». L'écrivain
+    ///   existe (`RepostPublisher`, lot 7 tâche 7.5) et cet ancrage passe
+    ///   désormais par lui : il gagne le jeton (`X-Client-Mutation-Id`) que
+    ///   l'appel direct n'avait pas, donc le REJEU d'un même envoi cesse de
+    ///   republier. Deux TAPS, eux, sont deux gestes, donc deux jetons, qu'aucun
+    ///   `MutationLog` ne peut rapprocher : ce qui les retient est le verrou
+    ///   « en vol » par CIBLE de l'écrivain (`RepostInFlightRegistry`), pas ce
+    ///   header.
+    ///
+    ///   **Ce qui reste : cette porte ne BASCULE toujours pas en file hors
+    ///   ligne**, alors que l'écrivain sait le faire pour les huit autres
+    ///   sites. Le `guard` ci-dessous refuse avant de l'atteindre, et ce n'est
+    ///   pas un oubli : `ComposerDocumentSendPath.quotedRepost.isDurable` vaut
+    ///   `false`, `ComposerDocumentSendPlan` en fait un refus, et trois tests
+    ///   du lot 4 l'épinglent. Rendre cette porte durable sans retourner cette
+    ///   table poserait un meuble qui DÉCLARE non durable un chemin qui l'est
+    ///   — exactement le commentaire plus large que son correctif que ce
+    ///   dossier traque. Le lot qui possède la surface document lève les deux
+    ///   ENSEMBLE, ou aucun.
+    ///
+    ///   Hors ligne, le refus est donc DIT — TOUT DE SUITE, sans le délai
     ///   d'expiration d'`URLSession` — et la saisie gardée : jamais un envoi
     ///   silencieusement perdu.
     @discardableResult
@@ -345,15 +369,21 @@ class StatusViewModel: ObservableObject {
             return false
         }
 
-        let commentaire = content?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cite = !(commentaire?.isEmpty ?? true)
         do {
-            _ = try await postService.repost(
-                postId: sourceStatusId,
-                targetType: .post,
-                content: cite ? commentaire : nil,
-                isQuote: cite,
-                visibility: visibility
+            // L'ébarbage du commentaire — « vide ou blanc ⇒ repost SIMPLE » —
+            // vit désormais dans `RepostIntent.quoted`, avec les trois autres
+            // sites qui l'écrivaient chacun de leur côté.
+            try await RepostPublisher(
+                postService: postService,
+                offlineQueue: offlineQueue,
+                isOffline: isOffline
+            ).publish(
+                .quoted(
+                    postId: sourceStatusId,
+                    targetType: .post,
+                    comment: content,
+                    visibility: visibility
+                )
             )
             return true
         } catch {

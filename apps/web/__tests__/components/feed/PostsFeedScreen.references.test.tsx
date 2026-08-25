@@ -64,8 +64,6 @@ jest.mock('@/components/composer/MeeshyComposer', () => ({
   },
 }));
 
-jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
-jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
 const mockCreateStoryMutate = jest.fn();

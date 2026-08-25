@@ -431,8 +431,9 @@ final class ReelsViewModel: ObservableObject {
                     cardId: id, cardType: post.type,
                     repostOfId: post.repost?.id, originalRepostOfId: post.repost?.originalRepostOfId
                 )
-                _ = try await service.repost(postId: cible.postId, targetType: cible.targetType,
-                                             content: nil, isQuote: false, visibility: nil)
+                try await RepostPublisher(postService: service).publish(
+                    .simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
+                )
                 FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.repost.success", defaultValue: "Repartage", bundle: .main))
             } catch {
                 repostedIds.remove(id)
@@ -511,7 +512,8 @@ final class ReelsViewModel: ObservableObject {
         removeMediaIds: [String]? = nil,
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
-        visibilityUserIds: [String]? = nil
+        visibilityUserIds: [String]? = nil,
+        known: Set<PostEditField> = EditPostDraft.documentFields
     ) async {
         guard let idx = reels.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = reels[idx]
@@ -533,7 +535,14 @@ final class ReelsViewModel: ObservableObject {
         }
         reels[idx] = optimistic
         do {
-            let updated = try await service.update(postId: postId, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            // Le corps ne se construit plus ici : `known` dit ce que la
+            // surface a su RENDRE, `PostEditPayload.build` en tire le PUT. Un
+            // champ non déclaré est OMIS, et le serveur préserve le sien.
+            let updated = try await service.update(postId: postId, known: known, draft: PostEditDraft(
+                content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                location: location
+            ))
             if let newIdx = reels.firstIndex(where: { $0.id == postId }) {
                 reels[newIdx] = updated.toFeedPost(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
             }
