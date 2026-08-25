@@ -39,7 +39,7 @@ import type {
   ConversationParams,
   CreateConversationBody
 } from './types';
-import { buildCursorPaginationMeta } from '../../utils/pagination';
+import { validatePagination, buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { ConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
@@ -389,8 +389,12 @@ export function registerCoreRoutes(
       // list in fewer pages — previously capped at 50, which forced 88+
       // conversation accounts through 2 pages and exposed pagination bugs
       // (offset stagnation, hasMore mis-reads) for any partial sync.
-      const limit = Math.min(parseInt(request.query.limit || '30', 10), 100); // Max 100
-      const offset = parseInt(request.query.offset || '0', 10);
+      // SSOT `validatePagination` clamps NaN/negative/zero: a malformed
+      // querystring (`?limit=abc`, `?limit=-1`) would otherwise reach Prisma as
+      // `take: NaN`/negative and throw a `PrismaClientValidationError` → HTTP 500
+      // on caller-controlled input. The schema declares `limit`/`offset` as plain
+      // strings (no AJV coercion), so the guard has to live here.
+      const { limit, offset } = validatePagination(request.query.offset, request.query.limit, { defaultLimit: 30, maxLimit: 100 });
       const includeCount = request.query.includeCount === 'true';
 
       // OPTIMIZED: Filtres optionnels pour éviter de charger toutes les conversations

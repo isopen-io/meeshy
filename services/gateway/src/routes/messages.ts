@@ -5,6 +5,7 @@ import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSe
 import { hoistLocationOnto } from '../services/location/sharedPlace';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
+import { validatePagination } from '../utils/pagination';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitToConversationParticipants } from '../socketio/emitToConversationParticipants';
 import { broadcastReadStatus } from '../socketio/broadcastReadStatus';
@@ -1138,9 +1139,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
+      // SSOT guard: `?offset`/`?limit` are plain strings (validated by
+      // `MessageStatusDetailsQuerySchema`, no numeric coercion), so a malformed
+      // value would otherwise reach the service as `NaN` skip/take → HTTP 500.
+      const { offset: pageOffset, limit: pageLimit } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
       const statusDetails = await readStatusService.getMessageStatusDetails(messageId, {
-        offset: parseInt(offset, 10),
-        limit: Math.min(parseInt(limit, 10), 100), // Max 100 par page
+        offset: pageOffset,
+        limit: pageLimit,
         filter
       });
 
@@ -1201,9 +1206,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
+      // SSOT guard: same string-schema pagination as the message variant above.
+      const { offset: pageOffset, limit: pageLimit } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
       const statusDetails = await readStatusService.getAttachmentStatusDetails(attachmentId, {
-        offset: parseInt(offset, 10),
-        limit: Math.min(parseInt(limit, 10), 100), // Max 100 par page
+        offset: pageOffset,
+        limit: pageLimit,
         filter
       });
 

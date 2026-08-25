@@ -8,6 +8,7 @@ import {
   sendNotFound,
   sendInternalError
 } from '../../utils/response.js';
+import { validatePagination } from '../../utils/pagination';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
@@ -129,8 +130,9 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
         return sendUnauthorized(reply, 'Utilisateur non autorisé');
       }
 
-      const limit = Math.min(parseInt((request.query as any).limit || '20', 10), 50);
-      const offset = parseInt((request.query as any).offset || '0', 10);
+      // SSOT guard: `?limit`/`?offset` are plain strings, so a malformed value
+      // would otherwise reach Prisma as `take: NaN`/negative → HTTP 500.
+      const { limit, offset } = validatePagination((request.query as any).offset, (request.query as any).limit, { defaultLimit: 20, maxLimit: 50 });
 
       const totalCount = await fastify.prisma.conversationShareLink.count({
         where: {

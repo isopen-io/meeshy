@@ -23,6 +23,7 @@ import {
   detectDevice
 } from './types';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
+import { validatePagination } from '../../utils/pagination';
 
 /**
  * Routes de suivi et analytics des liens de tracking
@@ -696,8 +697,8 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
       const userId = request.authContext.registeredUser!.id;
       const { token } = request.params as { token: string };
-      const limit = Math.min(parseInt((request.query as any).limit || '50', 10), 100);
-      const offset = parseInt((request.query as any).offset || '0', 10);
+      // SSOT guard: string-schema pagination → prevent `NaN`/negative reaching the service.
+      const { limit, offset } = validatePagination((request.query as any).offset, (request.query as any).limit, { defaultLimit: 50, maxLimit: 100 });
 
       const link = await fastify.prisma.trackingLink.findFirst({
         where: { token, createdBy: userId },
@@ -749,8 +750,8 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     try {
-      const limit = Math.min(parseInt((request.query as any).limit || '20', 10), 100);
-      const offset = parseInt((request.query as any).offset || '0', 10);
+      // SSOT guard: string-schema pagination → prevent `NaN`/negative reaching the service.
+      const { limit, offset } = validatePagination((request.query as any).offset, (request.query as any).limit, { defaultLimit: 20, maxLimit: 100 });
       const search = (request.query as any).search || undefined;
 
       const result = await trackingLinkService.getAllTrackingLinks({ limit, offset, search });
@@ -803,8 +804,8 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const { token } = request.params;
-      const limit = Math.min(parseInt((request.query as any).limit || '50', 10), 100);
-      const offset = parseInt((request.query as any).offset || '0', 10);
+      // SSOT guard: string-schema pagination → prevent `NaN`/negative reaching the service.
+      const { limit, offset } = validatePagination((request.query as any).offset, (request.query as any).limit, { defaultLimit: 50, maxLimit: 100 });
 
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
       if (!trackingLink) {

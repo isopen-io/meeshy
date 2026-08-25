@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { validatePagination } from '../../utils/pagination';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest
@@ -130,11 +131,16 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
         return sendForbidden(reply, 'Accès non autorisé à cette conversation');
       }
 
+      // SSOT guard: string-schema pagination (AJV useDefaults fills '50'/'0'
+      // but does not coerce or bound). Raw parseInt yielded `NaN`/negative
+      // skip/take on malformed input, with no upper cap.
+      const { limit: pageLimit, offset: pageOffset } = validatePagination(offset, limit, { defaultLimit: 50, maxLimit: 100 });
+
       const messages = await getConversationMessagesWithDetails(
         fastify.prisma,
         shareLink.conversationId,
-        parseInt(limit),
-        parseInt(offset)
+        pageLimit,
+        pageOffset
       );
 
       const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId);
@@ -144,7 +150,7 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
       return sendSuccess(reply, {
           messages: formattedMessages.reverse(),
           conversation: shareLink.conversation,
-          hasMore: totalMessages > parseInt(offset.toString()) + messages.length,
+          hasMore: totalMessages > pageOffset + messages.length,
           total: totalMessages
         });
 
