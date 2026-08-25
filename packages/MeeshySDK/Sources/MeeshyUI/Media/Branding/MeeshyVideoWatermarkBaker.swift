@@ -201,6 +201,11 @@ private final class WatermarkTilePainter: @unchecked Sendable {
     private final class TileBox {
         nonisolated(unsafe) var image: CIImage?
         nonisolated init() {}
+        // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+        // défaut) → double-free (abrt) — la boîte « naît et meurt dans le sync »
+        // hors main. Jumelle de la `nonisolated deinit {}` de WatermarkTilePainter ;
+        // attrapée par MeeshyUIDeinitSourceGuardTests après l'intégration d'origin/main.
+        nonisolated deinit {}
     }
 
     nonisolated init(watermark: StoryExportWatermark) {
