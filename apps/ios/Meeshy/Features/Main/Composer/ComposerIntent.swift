@@ -343,65 +343,74 @@ nonisolated extension ComposerProfile {
             // (`StatusViewModel.setStatus`, qui prend déjà `repostOfId`), et son
             // audience est celle que sa propre surface choisit.
             //
-            // DETTE CONSIGNÉE, et à ne pas lire comme acquise : l'ANCRAGE en
-            // post est bien OFFERT par `offeredFormats` ci-dessous, et il
-            // n'atteint AUCUN écran. L'éventail (`ComposerFormatFan`) vit dans
-            // `plateauTools`, que seule la scène monte — ni la surface mood ni
-            // la surface document ne le portent.
+            // DETTE SOLDÉE le 2026-08-25 (lot 4.7, fin) : l'ANCRAGE en post,
+            // offert par `offeredFormats` ci-dessous, atteint désormais un
+            // ÉCRAN. Le plateau — donc l'éventail — est monté par le `body` du
+            // meuble sous `ComposerFormatFanPlacement`, une règle PURE : il se
+            // peint là où tous les formats offerts atterrissent sur une surface
+            // qui partage l'état du meuble. Cette porte offre `[.status, .post]`,
+            // deux surfaces sans atelier ; `.feedComposer` offre `.story`, que
+            // le routage envoie à la scène, et reste donc hors de l'éventail.
+            //
+            // L'ORDRE de la levée n'était pas négociable, et c'est ce que la
+            // rédaction précédente de ce commentaire n'avait pas su ranger : le
+            // PUBLIEUR devait venir en PREMIER, alors qu'il était listé en
+            // troisième. Descendre l'éventail sans lui aurait armé une flèche
+            // qui, pressée, n'aurait rien fait — « le pire des deux mondes,
+            // puisqu'il aurait eu l'air de marcher ». L'ordre livré fut donc :
+            // `StatusViewModel.anchorStatusAsPost`, puis `repostOfId` sur le
+            // brouillon du document, puis l'éventail, puis l'aiguillage de
+            // `MoodComposerDoor.publish`.
             //
             // La raison écrite ici jusqu'au 2026-08-24 (« le socle du document
             // peint une audience INERTE et un œil qui ouvrirait une scène
-            // VIDE ») est PÉRIMÉE : le lot 4.9 a retiré l'œil et rendu
-            // l'audience choisissante, et sa condition de levée — que
-            // `socleZones(for: .document)` cesse de promettre ce que le document
-            // ne tient pas — est REMPLIE. Elle n'était pas la bonne.
+            // VIDE ») était PÉRIMÉE : le lot 4.9 a retiré l'œil et rendu
+            // l'audience choisissante. Elle n'était pas la bonne.
             //
-            // Ce qui retient l'éventail est la LOI 10, la même que le troisième
-            // tiret ci-dessus oppose à l'atelier, et elle mord ici pour une
-            // raison PIRE : l'atelier a un plafond qu'on ne lui passe pas, le
-            // meuble n'a rien à passer. Plafonner exige la visibilité de
-            // l'ORIGINAL ; `ComposerIntent.repost` ne porte qu'un identifiant, et
-            // le canal supposé de la graine (`ComposerMoodSeed.visibility`) est
-            // mort UNE COUCHE plus bas que là où on le cherche : `StatusEntry`
-            // porte bien un `visibility`, mais `APIPost.toStatusEntry()` ne le
-            // lui passe pas — il vaut `nil` pour TOUTE humeur que l'app affiche.
-            // Semer `visibility:` dans les deux graines ne donnerait donc que
+            // CE QUI RESTE OUVERT — et qui ne retient PLUS l'éventail : le
+            // plafond d'ÉLARGISSEMENT de la loi 10. Plafonner exige la
+            // visibilité de l'ORIGINAL ; `ComposerIntent.repost` ne porte qu'un
+            // identifiant, et le canal supposé de la graine
+            // (`ComposerMoodSeed.visibility`) est mort UNE COUCHE plus bas que
+            // là où on le cherche : `StatusEntry` porte bien un `visibility`,
+            // mais `APIPost.toStatusEntry()` ne le lui passe pas — il vaut `nil`
+            // pour TOUTE humeur que l'app affiche. Semer `visibility:` dans les
+            // deux graines ne donnerait donc que
             // `StoryRepostAudience.allowed(fromRawValue: nil)`, c'est-à-dire
-            // `[.private]` : un ancrage dont l'unique audience possible serait
-            // PRIVÉ n'est pas un sélecteur (loi 4). Descendre l'éventail sans ce
-            // plafond offrirait au contraire les audiences élargissantes, que le
-            // gateway refuse par un 403 `REPOST_AUDIENCE_WIDENING` — sur les
-            // DEUX portes, `POST /posts/:id/repost` comme `POST /posts` portant
-            // `repostOfId`, celle qu'emprunte déjà le mood.
+            // `[.private]` : un sélecteur à UN chip, la loi 4 défaite dans
+            // l'autre sens.
             //
-            // AVERTISSEMENT, payé une fois : ce raisonnement a longtemps conclu
-            // « donc on ne descend pas l'éventail » en laissant intact, sur un
-            // écran RÉEL, le sélecteur d'audience que la republication peint
-            // DÉJÀ. Un plafond raisonné pour un contrôle futur ne dispense pas
-            // de regarder le contrôle présent. Ce qui pouvait l'être sans
-            // connaître la source l'a été depuis : `ComposerAudienceOffer` retire
-            // d'une republication les deux audiences dont la PORTÉE appartient à
-            // la source (`ONLY`/`EXCEPT`, dont le serveur écrase la liste), et le
-            // socle comme le ruban lisent cette offre. L'ÉLARGISSEMENT, lui,
-            // reste ouvert — c'est le seul morceau qui exige vraiment la
-            // visibilité de l'original.
+            // POURQUOI CE TROU NE RETIENT PLUS RIEN, et c'est la correction de
+            // fond du lot 4.7. Ce qui pouvait être fermé sans connaître la
+            // source l'a été au lot 4.9 : `ComposerAudienceOffer` retire d'une
+            // republication les deux audiences dont la PORTÉE appartient à la
+            // source (`ONLY`/`EXCEPT`, dont le serveur écrase la liste), et le
+            // socle comme le ruban lisent cette offre. L'ÉLARGISSEMENT, seul
+            // reliquat, pèse EXACTEMENT autant sur le ruban du mood — peint sur
+            // un écran RÉEL depuis le lot 4.6 — que sur le chip d'audience de
+            // l'ancrage. L'ancrage hérite donc d'un trou déjà nommé et déjà
+            // gardé ; il n'en ajoute aucun. Retenir l'éventail pour ce motif
+            // aurait été un plafond raisonné pour un contrôle FUTUR au prix du
+            // contrôle PRÉSENT — l'erreur que l'AVERTISSEMENT de la rédaction
+            // précédente s'était déjà faite une fois.
             //
-            // Condition de levée, en TROIS parties et dans cet ordre : (1)
+            // Ce que l'ancrage apporte en revanche, et que le miroir n'a pas :
+            // un refus qui SE DIT. Un 403 `REPOST_AUDIENCE_WIDENING` fait rendre
+            // `false` à `anchorStatusAsPost`, et le composer reste ouvert avec
+            // sa saisie ; `setStatus` avale (dette du lot 4.5, inchangée).
+            //
+            // Condition de levée, en DEUX parties et dans cet ordre : (1)
             // `APIPost.toStatusEntry()` transmet `visibility`, PUIS les deux
             // sites de republication le sèment dans leur `ComposerMoodSeed` —
             // les deux hors du dossier Composer ; (2) `ComposerAudienceOffer`
-            // intersecte son offre avec `StoryRepostAudience.allowed(from:)` ;
-            // (3) `MoodComposerDoor.publish` gagne sa branche d'ancrage, la
-            // seule des trois qui soit un geste de vingt lignes — et donc la
-            // seule qu'on risque de prendre pour le tout.
+            // intersecte son offre avec `StoryRepostAudience.allowed(from:)`.
             //
             // Deux gardes tiennent ce constat, et il faut les lire ENSEMBLE :
             // `ComposerDocumentSurfaceTests`
-            // `.test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint` (le
-            // fait) et
-            // `.test_lAncrageDUnMood_nAAucunPlafondDAudience_etCEstCE_quiRetientLeventail`
-            // (la raison contraignante). La première, seule, nomme un blocage
-            // réel mais NON contraignant.
+            // `.test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint` (le fait,
+            // retourné) et
+            // `.test_lAncrageDUnMood_nAToujoursAucunPlafondDAudience_etLEventailDescendQuandMeme`
+            // (le reliquat, et le fait qu'il ne contraint plus).
             return ComposerProfile(
                 initialFormat: sourceFormat,
                 offeredFormats: sourceFormat == .post ? [.post] : [sourceFormat, .post],

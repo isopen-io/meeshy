@@ -246,6 +246,110 @@ class StatusViewModel: ObservableObject {
         }
     }
 
+    // MARK: - L'ANCRAGE — republier un mood en POST permanent (loi 5)
+
+    /// **La seconde branche de la loi 5** : une republication MIROITE le format
+    /// de sa source, et l'ANCRAGE est le choix EXPLICITE de sortir de
+    /// l'éphémère. `setStatus` republie en `STATUS` — un contenu que le
+    /// balayage d'expiration détruit une heure plus tard ; ceci republie en
+    /// `POST`, permanent.
+    ///
+    /// **Pourquoi ici, et nulle part ailleurs.** Le meuble TRANSMET (il ne
+    /// connaît ni service, ni file, ni endpoint) et la porte du mood a une
+    /// garde de source qui lui interdit de toucher un service
+    /// (`test_laPorte_neTouchePasLesServicesDirectement`). Le modèle est le
+    /// seul étage qui possède déjà `PostServiceProviding` — injecté, doublé, et
+    /// partagé avec les impressions et les vues.
+    ///
+    /// **Ce qu'elle N'ÉCRIT PAS, et c'est délibéré** : ni `myStatus`, ni
+    /// `statuses`. `setStatus` les écrit parce qu'un mood publié EST une
+    /// humeur ; un ancrage produit un POST, et l'insérer dans la barre de moods
+    /// y ferait apparaître une entrée que le prochain `loadStatuses` effacerait.
+    ///
+    /// **Elle REND un résultat, contrairement à son miroir.** `setStatus` avale
+    /// son échec réseau dans un `catch` qui se contente d'un toast, si bien que
+    /// le composer se referme sur une perte. Ici le refus remonte, et le meuble
+    /// laisse la saisie en place. L'asymétrie est assumée : la lever du côté du
+    /// miroir est la dette nommée du lot 4.5.
+    ///
+    /// - Parameter content: le commentaire que l'auteur a AJOUTÉ. Vide ou blanc
+    ///   ⇒ repost SIMPLE. Ce que « ajouté » veut dire est tranché en amont, par
+    ///   `ComposerAnchorComment.authored` : le composer PRÉREMPLIT sa saisie
+    ///   avec la phrase de la source, et la renvoyer telle quelle déclarerait
+    ///   une citation que personne n'a écrite.
+    ///
+    ///   **Ce que `isQuote` change réellement, ici et pas ailleurs.** Il est
+    ///   tentant d'invoquer l'enracinement des réactions
+    ///   (`!post.isQuote && post.repostOfId` ⇒ la racine) : c'est l'argument des
+    ///   deux publieurs jumeaux, et il ne vaut PAS pour cette porte. Le gateway
+    ///   ajoute un troisième terme, `!repostRootIsEphemeral`, et une source
+    ///   `STATUS` EST éphémère : `reactionRootId` est donc le repost lui-même,
+    ///   quel que soit `isQuote`. Ce qu'un faux `isQuote` coûte ici est autre —
+    ///   le post afficherait le texte de la source DEUX fois (en commentaire et
+    ///   dans la carte citée), et sa langue serait re-DÉTECTÉE sur ces trois
+    ///   mots au lieu d'être héritée de la déclaration de l'original
+    ///   (`inheritStatusBody`), ce qui mal-étiquette le Prisme au rang 0.
+    /// - Parameter visibility: l'audience CHOISIE, et rien d'autre. Elle ne
+    ///   porte AUCUNE liste nominative, et ce n'est pas un oubli à deux
+    ///   niveaux : `ComposerAudienceOffer.offered` retire `ONLY`/`EXCEPT` de
+    ///   toute republication — leur PORTÉE appartient à la source, que le
+    ///   serveur réimpose —, et `PostService.RepostRequest` n'a de toute façon
+    ///   aucun champ de liste. Le dire ici pour la session qui lèvera le plafond
+    ///   d'ÉLARGISSEMENT de la loi 10 : rouvrir ces deux audiences demanderait
+    ///   d'abord un champ sur la requête, pas seulement un argument de plus.
+    /// - Returns: `true` quand le serveur a pris la republication. **Aucune file
+    ///   durable** : cet envoi n'enfile rien, il appelle le réseau — ce que
+    ///   `ComposerDocumentSendPath.quotedRepost.isDurable` déclare déjà. Ne pas
+    ///   lire « la file ne saurait pas le porter » : le fil rouge du repost
+    ///   (lot 7) a posé sa ligne, et ce qui manque est un ÉCRIVAIN, pas un kind.
+    ///   Hors ligne, le refus est DIT — TOUT DE SUITE, sans le délai
+    ///   d'expiration d'`URLSession` — et la saisie gardée : jamais un envoi
+    ///   silencieusement perdu.
+    @discardableResult
+    func anchorStatusAsPost(sourceStatusId: String, content: String?, visibility: String) async -> Bool {
+        // Le hors-ligne se dit AVANT le réseau. Sans ce garde, la promesse du
+        // `- Returns:` ci-dessus n'était tenue qu'après le délai d'expiration
+        // d'`URLSession` : la flèche restait grise (`isPublishingDocument`) tout
+        // ce temps, pour finir sur le même toast. C'est le même prédicat injecté
+        // que `setStatus` consulte — la différence est que le miroir, LUI, a une
+        // file où basculer.
+        guard !isOffline() else {
+            FeedbackToastManager.shared.showError(
+                String(localized: "feed.repost.error", defaultValue: "Error reposting", bundle: .main)
+            )
+            return false
+        }
+
+        let commentaire = content?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cite = !(commentaire?.isEmpty ?? true)
+        do {
+            _ = try await postService.repost(
+                postId: sourceStatusId,
+                targetType: .post,
+                content: cite ? commentaire : nil,
+                isQuote: cite,
+                visibility: visibility
+            )
+            return true
+        } catch {
+            // UN seul message pour TOUS les refus, et c'est une dette NOMMÉE.
+            // Le 403 `REPOST_AUDIENCE_WIDENING` est structurellement atteignable
+            // — le client ne plafonne pas l'élargissement, faute de connaître
+            // l'audience de la source — et « Error reposting » n'apprend rien à
+            // qui vient de le déclencher : la seule issue reste l'essai-erreur.
+            // Le chemin jumeau (`StoryViewerView.repostAsPostDirect`) discrimine
+            // 404 / 403 / générique ; ses trois clés disent « story » dans les
+            // sept langues et ne se prêtent pas à une humeur. Lever cette dette
+            // demande donc une clé NEUVE, ce qu'aucune tâche de ce lot ne
+            // possède : le catalogue est à sept langues avec un cliquet français
+            // à zéro tolérance. Ne pas lire ce toast unique comme un oubli.
+            FeedbackToastManager.shared.showError(
+                String(localized: "feed.repost.error", defaultValue: "Error reposting", bundle: .main)
+            )
+            return false
+        }
+    }
+
     // MARK: - Offline Draft Recovery
 
     /// Returns the last mood that got stuck offline (unsent for more than

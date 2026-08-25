@@ -632,18 +632,26 @@ struct RootView: View {
         // `repostOfId` n'est pas dans la graine : la porte le porte déjà
         // (`ofPostId:`), et le meuble le lit par `ComposerOrigin.repostedPostId`.
         //
-        // CE QUE CE SITE LIVRE, ET CE QU'IL NE LIVRE PAS. Le MIROIR de la loi 5
-        // est livré : republier un mood repart en `STATUS`, avec son emoji, sa
-        // phrase et son attribution. L'ANCRAGE — le second chip « Post »,
-        // offert par `offeredFormats == [.status, .post]` — n'atteint AUCUN
-        // écran : `ComposerFormatFan` n'est monté que par `plateauTools`, que
-        // seule la SCÈNE porte. Une republication repart donc forcément
-        // éphémère, détruite une heure plus tard par le balayage d'expiration.
-        // Dette NOMMÉE, tenue par `ComposerDocumentSurfaceTests`
-        // `.test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint`, et sa
-        // condition de levée est app-side : que le socle du document cesse de
-        // peindre une audience inerte et un œil sans canvas. Ne pas lire ce site
-        // comme « la loi 5 est câblée » : sa moitié coûteuse ne l'est pas.
+        // CE QUE CE SITE LIVRE. La loi 5 est câblée des DEUX côtés depuis le
+        // 2026-08-25. Le MIROIR repart en `STATUS`, avec son emoji, sa phrase
+        // et son attribution ; l'ANCRAGE — le second chip « Post », offert par
+        // `offeredFormats == [.status, .post]` — atteint un écran : le plateau
+        // est monté par le `body` du meuble sous `ComposerFormatFanPlacement`,
+        // et la porte du mood aiguille sur le format vers
+        // `StatusViewModel.anchorStatusAsPost` (`POST /posts/:id/repost`).
+        // Gardes : `ComposerDocumentSurfaceTests`
+        // `.test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint` et
+        // `ComposerMoodSurfaceTests`
+        // `.test_laPorteDuMood_aiguilleSurLeFORMAT_etRefuseLesDeuxQuElleNeSaitPasPublier`.
+        //
+        // CE QU'IL NE LIVRE TOUJOURS PAS : le plafond d'ÉLARGISSEMENT de la loi
+        // 10. Ce site ne sème pas `visibility:` dans sa graine, et c'est
+        // DÉLIBÉRÉ — `APIPost.toStatusEntry()` ne transmet pas l'audience de
+        // l'original, si bien qu'un semis ne sèmerait qu'un `nil` et que
+        // `StoryRepostAudience.allowed(fromRawValue: nil)` ne concéderait que
+        // `[.private]` : un sélecteur à UN chip. Le trou pèse identiquement sur
+        // le ruban du mood, peint ici depuis le lot 4.6 ; l'ancrage n'en ajoute
+        // aucun. Levée : la ligne de `StoryModels.swift`, PUIS le semis.
         .sheet(item: $republishStatusEntry) { entry in
             MoodComposerDoor(
                 intent: ComposerIntent(origin: .repost(ofPostId: entry.id, sourceFormat: .status)),

@@ -610,11 +610,11 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// premier assouplissement.
     func test_leGate_refuseUnMoodSansEmoji_etAccepteAvec() {
         XCTAssertFalse(
-            ComposerDocumentPublishGate.canPublish(surface: .mood, emoji: nil, text: "ça va", visibility: .public, visibilityUserIds: [], isPublishing: false),
+            ComposerDocumentPublishGate.canPublish(surface: .mood, emoji: nil, text: "ça va", visibility: .public, visibilityUserIds: [], isPublishing: false, repostOfId: nil),
             "Sans emoji, rien ne part — c'était déjà le gate de l'écran historique."
         )
         XCTAssertTrue(
-            ComposerDocumentPublishGate.canPublish(surface: .mood, emoji: "🔥", text: "", visibility: .public, visibilityUserIds: [], isPublishing: false),
+            ComposerDocumentPublishGate.canPublish(surface: .mood, emoji: "🔥", text: "", visibility: .public, visibilityUserIds: [], isPublishing: false, repostOfId: nil),
             "Un mood SANS texte part très bien : c'est l'emoji qui fait la matière, pas la phrase."
         )
     }
@@ -623,16 +623,65 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// une matière. L'écran n'existe pas encore en production ; la règle, si.
     func test_leGate_refuseUnDocumentVideOuBlanc() {
         XCTAssertFalse(
-            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "", visibility: .public, visibilityUserIds: [], isPublishing: false),
+            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "", visibility: .public, visibilityUserIds: [], isPublishing: false, repostOfId: nil),
             "Une page blanche ne part pas."
         )
         XCTAssertFalse(
-            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "   \n ", visibility: .public, visibilityUserIds: [], isPublishing: false),
+            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "   \n ", visibility: .public, visibilityUserIds: [], isPublishing: false, repostOfId: nil),
             "Trois espaces et un retour à la ligne ne sont pas un post."
         )
         XCTAssertTrue(
-            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "bonjour", visibility: .public, visibilityUserIds: [], isPublishing: false),
+            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "bonjour", visibility: .public, visibilityUserIds: [], isPublishing: false, repostOfId: nil),
             "… et une phrase, oui — sans quoi la garde précédente serait verte sur un gate toujours fermé."
+        )
+    }
+
+    /// **Un ancrage a sa matière : c'est sa SOURCE** — le gate ne lui demande
+    /// donc aucun texte (lot 4.7).
+    ///
+    /// Le cas NOMINAL d'une republication de mood est le mood SANS phrase :
+    /// `StatusEntry.content` est optionnel, et republier sans un mot est un
+    /// repost SIMPLE, exactement ce que `FeedViewModel.repostPost` envoie déjà
+    /// (`content: nil, isQuote: false`). Exiger un texte y aurait laissé la
+    /// flèche grise **sans un mot d'explication** :
+    /// `ComposerSocleCopy.publishBlockedHint(surface: .document)` rend `nil`,
+    /// faute d'une phrase juste déjà traduite. C'eût été la loi 4 défaite à
+    /// l'endroit même que ce lot livre.
+    ///
+    /// **Le quatrième cas mesure l'ORDRE, pas seulement la règle.** La source ne
+    /// dispense de rien : un `ONLY` sans personne retient AUSSI un ancrage (400
+    /// `VALIDATION_ERROR` de `CreatePostSchema`). Remonter `repostOfId != nil`
+    /// au-dessus d'`audienceIsComplete` armerait la flèche sur ce refus certain.
+    func test_leGate_armeLAncrage_memeSansUnMot_carSaMatiereEstSaSource() {
+        XCTAssertTrue(
+            ComposerDocumentPublishGate.canPublish(
+                surface: .document, emoji: nil, text: "",
+                visibility: .public, visibilityUserIds: [], isPublishing: false, repostOfId: "mood-source"
+            ),
+            "Une republication SANS commentaire est le cas nominal : sa matière est la source, pas la phrase."
+        )
+        XCTAssertFalse(
+            ComposerDocumentPublishGate.canPublish(
+                surface: .document, emoji: nil, text: "",
+                visibility: .public, visibilityUserIds: [], isPublishing: false, repostOfId: nil
+            ),
+            "Une page blanche SANS source ne part toujours pas — sans quoi la garde ci-dessus serait verte "
+                + "sur un gate devenu toujours ouvert."
+        )
+        XCTAssertTrue(
+            ComposerDocumentPublishGate.canPublish(
+                surface: .document, emoji: nil, text: "bonjour",
+                visibility: .public, visibilityUserIds: [], isPublishing: false, repostOfId: nil
+            ),
+            "… et un post ordinaire se juge toujours sur son texte (non-régression)."
+        )
+        XCTAssertFalse(
+            ComposerDocumentPublishGate.canPublish(
+                surface: .document, emoji: nil, text: "",
+                visibility: .only, visibilityUserIds: [], isPublishing: false, repostOfId: "mood-source"
+            ),
+            "Un `ONLY` sans personne retient AUSSI un ancrage : la source ne dispense pas de l'audience, et "
+                + "la garde d'audience se lit AVANT le `switch` — pas après."
         )
     }
 
@@ -641,11 +690,11 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// la même règle par le même drapeau.
     func test_leGate_refuseTantQuUnEnvoiEstEnVol() {
         XCTAssertFalse(
-            ComposerDocumentPublishGate.canPublish(surface: .mood, emoji: "🔥", text: "ça va", visibility: .public, visibilityUserIds: [], isPublishing: true),
+            ComposerDocumentPublishGate.canPublish(surface: .mood, emoji: "🔥", text: "ça va", visibility: .public, visibilityUserIds: [], isPublishing: true, repostOfId: nil),
             "Un envoi en vol ferme le gate — deux taps ne font pas deux moods."
         )
         XCTAssertFalse(
-            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "bonjour", visibility: .public, visibilityUserIds: [], isPublishing: true),
+            ComposerDocumentPublishGate.canPublish(surface: .document, emoji: nil, text: "bonjour", visibility: .public, visibilityUserIds: [], isPublishing: true, repostOfId: nil),
             "… et le document ne fait pas exception."
         )
     }
@@ -657,7 +706,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// refuse au lieu d'inventer une réponse qu'il n'a pas.
     func test_leGate_neDeclencheJamaisSousLaScene() {
         XCTAssertFalse(
-            ComposerDocumentPublishGate.canPublish(surface: .scene, emoji: "🔥", text: "une phrase", visibility: .public, visibilityUserIds: [], isPublishing: false),
+            ComposerDocumentPublishGate.canPublish(surface: .scene, emoji: "🔥", text: "une phrase", visibility: .public, visibilityUserIds: [], isPublishing: false, repostOfId: nil),
             "Le gate du document ne sait rien d'une composition de scène : il ne prétend pas la juger."
         )
     }
@@ -682,7 +731,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             XCTAssertFalse(
                 ComposerDocumentPublishGate.canPublish(
                     surface: .mood, emoji: "🔥", text: "ça va",
-                    visibility: nominative, visibilityUserIds: [], isPublishing: false
+                    visibility: nominative, visibilityUserIds: [], isPublishing: false, repostOfId: nil
                 ),
                 "Un mood « \(nominative.rawValue) » sans personne arme la flèche : le gateway le refuse, et "
                     + "l'auteur perd sa composition sur un refus que rien n'annonçait."
@@ -690,14 +739,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             XCTAssertFalse(
                 ComposerDocumentPublishGate.canPublish(
                     surface: .document, emoji: nil, text: "bonjour",
-                    visibility: nominative, visibilityUserIds: [], isPublishing: false
+                    visibility: nominative, visibilityUserIds: [], isPublishing: false, repostOfId: nil
                 ),
                 "… et le document ne fait pas exception : son socle sait choisir « \(nominative.rawValue) »."
             )
             XCTAssertTrue(
                 ComposerDocumentPublishGate.canPublish(
                     surface: .mood, emoji: "🔥", text: "ça va",
-                    visibility: nominative, visibilityUserIds: ["u1"], isPublishing: false
+                    visibility: nominative, visibilityUserIds: ["u1"], isPublishing: false, repostOfId: nil
                 ),
                 "… et une seule personne suffit — sans quoi la garde ci-dessus serait verte sur un gate "
                     + "toujours fermé."
@@ -805,13 +854,59 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         XCTAssertEqual(muet.format, .status, "Un brouillon de mood porte son format, il ne le laisse pas deviner.")
     }
 
+    /// **Le PLAFOND du mood est tenu par la FABRIQUE, et pas seulement par la
+    /// frappe** (lot 4.7).
+    ///
+    /// Il vivait dans le seul `adaptiveOnChange` de `ComposerMoodSurface`, ce
+    /// qui suffisait tant que la frappe était l'unique entrée de `documentText`.
+    /// Depuis que l'éventail descend, le texte est AUSSI écrit par le
+    /// `TextEditor` de la surface document — qui n'a aucun plafond, un post n'en
+    /// ayant pas — puis rapporté sous le mood par une bascule : cinq gestes
+    /// (republier → « Post » → coller 300 caractères → « Mood » → flèche) et le
+    /// `STATUS` partait avec 300 caractères. Rien en aval ne rattrapait :
+    /// `ComposerMoodPolicy.canPublish` ne regarde que l'emoji, et
+    /// `CreatePostSchema` plafonne à 5000.
+    ///
+    /// La fabrique est le SEUL site que tous les chemins d'envoi traversent. La
+    /// surface tronque toujours, elle — pour que l'auteur le VOIE, doctrine du
+    /// mood : troncature, jamais refus de frappe.
+    func test_leBrouillonDuMood_plafonneLeTexte_dOuQuIlVienne() {
+        let colle = String(repeating: "a", count: 300)
+        let brouillon = ComposerDocumentDraft.mood(
+            emoji: "🔥", text: colle, visibility: .public, visibilityUserIds: [], references: []
+        )
+
+        XCTAssertEqual(
+            brouillon.text?.count, ComposerMoodPolicy.contentLimit,
+            "Un texte composé sous la surface document, puis rapporté sous le mood par l'éventail, partirait "
+                + "sinon en `STATUS` sans plafond — le compteur affichant son alerte à côté d'une flèche armée."
+        )
+        XCTAssertEqual(
+            brouillon.text, ComposerMoodPolicy.truncate(colle),
+            "Le plafond passe par la RÈGLE : réécrit ici, il divergerait de celui que la surface applique."
+        )
+    }
+
+    /// … et le brouillon du DOCUMENT ne plafonne pas : un post n'a pas de
+    /// plafond, et en poser un ici rognerait la saisie de `.feedComposer` le
+    /// jour de son recâblage. Sans ce témoin, la garde ci-dessus resterait verte
+    /// sur une fabrique qui tronquerait les deux.
+    func test_leBrouillonDuDocument_nePlafonnePasLeTexte_carUnPostNaPasDePlafond() {
+        let long = String(repeating: "a", count: 300)
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil
+        )
+
+        XCTAssertEqual(brouillon.text?.count, 300)
+    }
+
     /// Le brouillon du document ne fabrique NI emoji NI mention : sa surface n'a
     /// ni grille d'emojis ni barre de références. Lui inventer des champs
     /// qu'aucune vue ne remplit aurait fabriqué une capacité que le premier
     /// lecteur aurait crue tenue.
     func test_leBrouillonDuDocument_neFabriqueNiEmojiNiMention() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .friends, visibilityUserIds: []
+            format: .post, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil
         )
         XCTAssertNil(brouillon.emoji)
         XCTAssertNil(brouillon.mentions)
@@ -1425,6 +1520,20 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// n'exige rien tant que personne ne monte la porte, et c'est délibéré —
     /// la dette du lot 2 reste une dette CONSIGNÉE, que le lot 7 lèvera ; cette
     /// garde interdit seulement de la découvrir par un écran sans issue.
+    ///
+    /// **Et elle ne couvre PAS le chemin de l'ÉVENTAIL — à savoir, à ne pas
+    /// redécouvrir.** Elle filtre sur `portesDocumentDuMeuble`, c'est-à-dire sur
+    /// des portes dont le `initialFormat` OUVRE un document. Depuis le lot 4.7,
+    /// la republication d'un mood atteint la surface document par une BASCULE de
+    /// format, sans jamais passer par ce filtre : un écran de production y monte
+    /// donc une rangée incomplète, et cette garde ne bronche pas. Ce n'est pas
+    /// un trou à combler ici — le préjudice y est nul, on ancre une humeur, pas
+    /// une composition média — mais une phrase à garder : le fait de l'ancrage
+    /// est tenu par
+    /// `ComposerDocumentSurfaceTests.test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint`,
+    /// et par lui SEUL. Croire cette garde-ci universelle est l'erreur qu'elle
+    /// invite, et elle l'a déjà invitée une fois : la phrase avait été écrite,
+    /// puis perdue dans une réécriture du doc-comment voisin.
     func test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse() throws {
         let portesDocument = portesDocumentServiesParLeMeuble()
         XCTAssertFalse(
@@ -1733,10 +1842,16 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         )
     }
 
-    /// L'éventail est un outil du PLATEAU, pas du socle — et le plateau ne
-    /// coiffe que la scène. Garde ancrée sur le BLOC : `ComposerFormatFan`
-    /// apparaît aussi dans les doc-comments de la source, et le socle est
-    /// verrouillé par ailleurs sur ses trois zones.
+    /// L'éventail est un outil du PLATEAU, pas du socle — et le plateau coiffe
+    /// les TROIS surfaces depuis le lot 4.7, sous
+    /// `ComposerFormatFanPlacement.mounts`. La phrase précédente disait « le
+    /// plateau ne coiffe que la scène » : c'était l'état d'avant la descente de
+    /// l'éventail, et la laisser aurait fait de ce fichier la source qui nie le
+    /// produit qu'il garde.
+    ///
+    /// Garde ancrée sur le BLOC : `ComposerFormatFan` apparaît aussi dans les
+    /// doc-comments de la source, et le socle est verrouillé par ailleurs sur
+    /// ses trois zones.
     func test_host_lEventail_vitDansLePlateau_pasDansLeSocle() throws {
         guard let corps = declarationBody(startingAt: "private var plateauTools", in: try hostCode()) else {
             return XCTFail("Le plateau doit être une propriété nommée `plateauTools` — la garde s'ancre dessus")
@@ -1867,12 +1982,26 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         )
     }
 
-    /// La surface document ne porte PAS le plateau. Ce que le plateau tient
-    /// depuis le 2026-08-24 est l'éventail des formats, et le mettre ici
-    /// offrirait de basculer vers un format que cette surface ne monte pas.
-    /// Garde ancrée sur le BLOC, pas sur le fichier — le plateau vit toujours
-    /// dans la source, sous l'autre surface.
-    func test_host_lePlateauDOutils_neCoiffePasLeDocument() throws {
+    /// La surface document ne monte pas le plateau **ELLE-MÊME** — un seul site
+    /// de montage, et il est dans le `body`.
+    ///
+    /// **Le NOM et la raison de cette garde ont changé le 2026-08-25, son
+    /// assertion non.** Elle s'appelait `…_neCoiffePasLeDocument` et disait « le
+    /// plateau outille la scène » : depuis que l'éventail descend (lot 4.7), le
+    /// plateau COIFFE les trois surfaces, document compris, sous
+    /// `ComposerFormatFanPlacement.mounts`. Le test restait vert parce qu'il est
+    /// ancré sur le BLOC `documentSurface`, qui n'a jamais monté le plateau —
+    /// c'est-à-dire qu'il gardait toujours son objet en ayant perdu sa phrase.
+    /// Une garde dont le nom affirme l'inverse du produit est la loi que lira la
+    /// session suivante, et celle-ci lui aurait fait croire que le chip « Post »
+    /// n'atteint aucun écran.
+    ///
+    /// Ce qu'elle mesure, et qui vaut toujours : le montage du plateau reste
+    /// UNIQUE. Un second, posé dans une surface, échapperait à la règle de
+    /// placement et peindrait deux sélecteurs sur le même écran. Le compte
+    /// d'occurrences (`plateauTools == 2`, dans `ComposerDocumentSurfaceTests`)
+    /// en est le verrou ; celle-ci nomme le site interdit le plus tentant.
+    func test_host_laSurfaceDocument_neMontePasELLE_MEME_lePlateau() throws {
         guard let corps = declarationBody(startingAt: "private var documentSurface", in: try hostCode()) else {
             return XCTFail("La surface document doit être une propriété nommée `documentSurface` — la garde s'ancre dessus")
         }
@@ -1880,7 +2009,8 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         XCTAssertTrue(corps.contains("ComposerDocumentSurface("), "Le bloc lu n'est pas celui de la surface document.")
         XCTAssertFalse(
             corps.contains("plateauTools"),
-            "Le plateau outille la scène ; le poser sur un document promettrait des pages qu'il n'a pas."
+            "La surface document monte le plateau elle-même : un SECOND site de montage, qui échapperait à "
+                + "`ComposerFormatFanPlacement` et peindrait deux sélecteurs sur le même écran."
         )
     }
 

@@ -214,6 +214,50 @@ nonisolated enum ComposerMoodSeeding {
     }
 }
 
+/// **Ce que l'auteur a AJOUTÉ à une republication** — l'exacte inverse de
+/// `ComposerMoodSeeding.adopt`, et elle vit à côté d'elle pour cette raison.
+///
+/// La question qu'elle tranche n'a pas de réponse dans le brouillon : `text` y
+/// est une chaîne, et une chaîne ne dit pas d'où elle vient. Or l'ANCRAGE en a
+/// besoin, parce que le commentaire qu'il transmet DÉCLARE une citation
+/// (`isQuote`) — et une citation dont le texte est celui de la source n'est pas
+/// une citation, c'est un écho.
+///
+/// **Le défaut qu'elle referme, mesuré bout en bout.** Les deux sites de
+/// republication sèment `text: entry.content` (la phrase de l'humeur) ;
+/// `adopt` la pose dans `documentText`, que les surfaces mood et document
+/// PARTAGENT (loi 9) ; le socle la rend telle quelle dans le brouillon. Publier
+/// sans y toucher — le geste le plus probable — déclarait donc une citation que
+/// personne n'avait écrite, et le post affichait deux fois le même texte : une
+/// fois en commentaire, une fois dans la carte citée. Le gateway est écrit pour
+/// l'autre chemin : `POST /posts/:id/repost` SANS `content` fait hériter le
+/// corps de la source à un reshare de `STATUS` (`inheritStatusBody`), et hériter
+/// AUSSI son `originalLanguage` déclaré — là où un `content` fourni le fait
+/// re-détecter sur trois mots, et mal étiqueter le Prisme.
+///
+/// **Elle compare ce qui a été ADOPTÉ, pas ce qui a été semé.** `adopt` fait
+/// passer la graine par `ComposerMoodPolicy.truncate` ; comparer au texte brut
+/// rendrait « différent » toute source de plus de 122 caractères, et le défaut
+/// reviendrait exactement là où il fait le plus de bruit. La troncature est donc
+/// rejouée ici, par la MÊME règle — jamais réécrite.
+///
+/// Les espaces de bord ne comptent ni d'un côté ni de l'autre : ajouter un
+/// retour à la ligne à la phrase de la source n'est pas un commentaire.
+nonisolated enum ComposerAnchorComment {
+
+    /// - Parameter draftText: le texte du brouillon (`ComposerDocumentDraft.text`).
+    /// - Parameter seededText: le texte que la PORTE a semé, `nil` hors graine.
+    /// - Returns: le commentaire à transmettre, ou `nil` pour un repost SIMPLE.
+    static func authored(draftText: String?, seededText: String?) -> String? {
+        let saisie = (draftText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !saisie.isEmpty else { return nil }
+        let semee = ComposerMoodPolicy
+            .truncate(seededText ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return saisie == semee ? nil : saisie
+    }
+}
+
 /// Libellés du mood, résolus par le catalogue `.main` — même idiome que
 /// `ComposerDocumentCopy`. Un libellé posé en littéral dans la vue échappe au
 /// cliquet de complétude et n'est jamais traduit.
@@ -366,6 +410,10 @@ struct ComposerMoodSurface: View {
     /// et l'`init` du meuble relit celle du format d'ouverture. Deux
     /// orthographes d'une clé, c'est deux mémoires — le meuble sèmerait depuis
     /// l'une pendant que cette vue écrirait dans l'autre.
+    ///
+    /// **Cette vue l'ÉCRIT et ne la relit plus** (lot 4.7) : la relecture vivait
+    /// dans un `.onAppear`, que la descente de l'éventail a rendu réentrant.
+    /// Voir le bloc « LA RELECTURE DE LA MÉMOIRE A ÉTÉ RETIRÉE » plus bas.
     @AppStorage(ComposerAudienceMemory.statusKey)
     private var lastVisibility: String = PostVisibility.public.rawValue
 
@@ -396,7 +444,6 @@ struct ComposerMoodSurface: View {
                 visibilityUserIds = ids
             }
         }
-        .onAppear { applyRememberedAudience() }
     }
 
     // MARK: - L'issue et le titre
@@ -570,52 +617,43 @@ struct ComposerMoodSurface: View {
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    /// La mémoire s'applique à l'APPARITION — loi 10 : l'audience se souvient
-    /// par FORMAT, sous la même clé que l'écran historique.
-    ///
-    /// **Elle ne PRIME sur rien, et c'est mesuré.** Des deux graines que le
-    /// meuble reçoit, une seule porte une audience :
-    ///
-    /// - la **republication** (`RootView`, `iPadRootView`) est MUETTE sur
-    ///   l'audience — elle ne sème qu'emoji, texte, `viaUsername` et `audioUrl`.
-    ///   Il n'y a donc rien sur quoi primer ;
-    /// - la **reprise hors-ligne** en porte une, et elle arrive APRÈS ce
-    ///   `.onAppear` : elle est produite par un `await` dans le `.task` de
-    ///   `MoodComposerDoor`. `ComposerMoodSeeding.adopt` l'adopte alors
-    ///   par-dessus la mémoire, délibérément (voir son invariant par champ).
-    ///
-    /// C'est la même loi que celle écrite sur `MeeshyComposerHost.adoptMoodSeed`
-    /// — « l'état COURANT est relu au moment de l'adoption » —, et les deux
-    /// textes doivent le rester : deux commentaires contraires à trois fichiers
-    /// d'écart, c'est une session sur deux qui « corrige » dans le mauvais sens.
-    ///
-    /// **Dette nommée, à moitié soldée — lire la moitié qui reste.** Republier
-    /// une humeur n'HÉRITE toujours pas de l'audience de sa source : la mémoire
-    /// du format s'applique ici comme ailleurs. Ce qui a changé est l'OFFRE, pas
-    /// l'héritage — `ComposerAudienceOffer` retire d'une republication les deux
-    /// audiences dont la portée appartient à la source (`ONLY`/`EXCEPT`), parce
-    /// que le serveur y écrase la liste et que le sélecteur ne gouvernait rien.
-    ///
-    /// Ce qui n'est PAS fermé est l'ÉLARGISSEMENT : une humeur `FRIENDS`
-    /// republiée en `PUBLIC` part encore vers un 403 `REPOST_AUDIENCE_WIDENING`
-    /// que ce ruban n'annonce pas. Le plafond existe
-    /// (`StoryRepostAudience.allowed(from:)`) et il lui manque son entrée —
-    /// l'audience de l'original, qu'`APIPost.toStatusEntry()` ne transmet pas.
-    /// C'est là, et non ici, que commence la levée.
-    ///
-    /// Un mot sur l'écriture précédente, qui disait « aucun héritage, donc pas
-    /// une régression, une capacité absente des deux côtés » : la seconde moitié
-    /// était vraie, la CONCLUSION ne l'était pas. L'écran historique n'offrait
-    /// pas d'héritage, mais il n'offrait pas non plus une republication à six
-    /// audiences dont quatre partaient vers un refus.
-    /// **La relecture est celle de `ComposerAudienceMemory`, pas une seconde
-    /// écriture de la même règle.** Elle vivait ici en toutes lettres ; le socle
-    /// du document en avait besoin à son tour, et deux `guard` jumeaux à deux
-    /// fichiers d'écart sont deux occasions de corriger un repli à moitié —
-    /// celui de la valeur HORS OFFRE, le moins visible des deux.
-    private func applyRememberedAudience() {
-        visibility = ComposerAudienceMemory.remembered(lastVisibility)
-    }
+    // LA RELECTURE DE LA MÉMOIRE A ÉTÉ RETIRÉE D'ICI le 2026-08-25 (lot 4.7,
+    // fin), avec le `.onAppear` qui la déclenchait. Elle est écrite en toutes
+    // lettres parce qu'une session la rebrancherait sinon en croyant réparer un
+    // oubli — le ruban n'écrit plus que la mémoire, il ne la relit plus.
+    //
+    // CE QU'ELLE FAISAIT : `visibility = ComposerAudienceMemory.remembered(
+    // lastVisibility)` à chaque APPARITION de cette surface.
+    //
+    // POURQUOI ELLE PART. Tant qu'aucun écran ne peignait l'éventail sous le
+    // mood, cette surface apparaissait UNE fois par présentation et la relecture
+    // était seulement redondante : `MeeshyComposerHost.init` applique déjà la
+    // mémoire du format d'OUVERTURE, et les deux portes qui montent le mood
+    // ouvrent sur `.status` — donc sur `ComposerAudienceMemory.statusKey`, la
+    // même clé, la même valeur. Le lot 4.7 fait descendre l'éventail : `surface`
+    // est un `switch` sous `@ViewBuilder`, changer de branche DÉTRUIT la vue et
+    // la recrée, et le `.onAppear` refire. La relecture devenait alors ce que
+    // l'`init` du meuble interdit dans son propre commentaire : « au premier
+    // changement de format, elle aurait écrasé l'audience que l'auteur venait de
+    // choisir sur l'autre surface (loi 9) ». Mesuré : republication ouverte sur
+    // Mood → chip « Post » → l'auteur choisit « Privé » dans le socle → chip
+    // « Mood » → l'audience repartait en PUBLIC. Un ÉLARGISSEMENT silencieux, et
+    // sur le lot dont tout le sujet est l'audience.
+    //
+    // CE QUI NE CHANGE PAS : le geste de CHOISIR écrit toujours la mémoire
+    // (`audienceChip` ci-dessus, `lastVisibility = candidate.rawValue`), et
+    // l'`init` du meuble la relit à la construction. Loi 10 intacte — une
+    // mémoire par format, appliquée à l'OUVERTURE et jamais à une bascule.
+    //
+    // DETTE INCHANGÉE, et elle n'est pas ici : republier une humeur n'HÉRITE
+    // toujours pas de l'audience de sa source. `ComposerAudienceOffer` retire
+    // d'une republication les deux audiences dont la portée appartient à la
+    // source (`ONLY`/`EXCEPT`) ; ce qui reste ouvert est l'ÉLARGISSEMENT — une
+    // humeur `FRIENDS` republiée en `PUBLIC` part encore vers un 403
+    // `REPOST_AUDIENCE_WIDENING` que ce ruban n'annonce pas. Le plafond existe
+    // (`StoryRepostAudience.allowed(from:)`) et il lui manque son entrée :
+    // l'audience de l'original, qu'`APIPost.toStatusEntry()` ne transmet pas.
+    // C'est là, et non ici, que commence la levée.
 
     // MARK: - Bloc 4 — la saisie plafonnée et son compteur
 
@@ -650,7 +688,22 @@ struct ComposerMoodSurface: View {
                         .stroke(MeeshyColors.indigo400.opacity(0.35), lineWidth: 1)
                 )
         )
-        .adaptiveOnChange(of: text) { _, newValue in
+        // `initial: true` depuis le lot 4.7, et ce n'est pas un zèle : le texte
+        // est l'état du MEUBLE, partagé avec la surface document, dont le
+        // `TextEditor` n'a AUCUN plafond — un post n'en a pas. Depuis que
+        // l'éventail descend, l'auteur peut écrire 300 caractères sous « Post »
+        // puis revenir sous « Mood » : le texte a grandi pendant que cette
+        // surface était hors de l'arbre, et un `onChange` sans `initial:` ne se
+        // déclenche jamais au (re)montage. Le compteur affichait alors son état
+        // d'alerte à côté d'une flèche ARMÉE — `ComposerMoodPolicy.canPublish`
+        // ne regarde que l'emoji.
+        //
+        // La troncature est ici pour que l'auteur la VOIE au moment où il
+        // revient (doctrine du mood : TRONCATURE, jamais refus de frappe) ; le
+        // plafond de ce qui PART est tenu par `ComposerDocumentDraft.mood`, avec
+        // les autres normalisations de la loi 3. Deux sites, deux questions —
+        // pas deux écritures de la même règle : les deux appellent `truncate`.
+        .adaptiveOnChange(of: text, initial: true) { _, newValue in
             let capped = ComposerMoodPolicy.truncate(newValue)
             if capped != newValue { text = capped }
         }
@@ -707,10 +760,13 @@ struct ComposerMoodSurface: View {
 ///    ligne bloquée au lieu de la doubler. L'outbox et le `StatusViewModel` sont
 ///    des choses qu'une PRÉSENTATION ne connaît pas : les écrire dans la surface
 ///    en ferait un second chemin de publication ;
-/// 2. **l'envoi** — `setStatus(...)`, le chemin 2 de la republication, celui que
-///    le mood emprunte depuis toujours (`POST /posts` type `STATUS` +
-///    `repostOfId`). Le meuble ne publie pas : il tend un `ComposerDocumentDraft`
-///    à la fermeture que ce site lui donne ;
+/// 2. **l'envoi**, et il est DOUBLE depuis le lot 4.7 — `setStatus(...)` pour le
+///    MIROIR (chemin 2, `POST /posts` type `STATUS` + `repostOfId`, celui que le
+///    mood emprunte depuis toujours) et `anchorStatusAsPost(...)` pour l'ANCRAGE
+///    (chemin 1, `POST /posts/:id/repost`, le seul qui instantanie les octets
+///    d'une source éphémère). La porte AIGUILLE sur le format du brouillon ;
+///    elle ne devine pas. Le meuble ne publie pas davantage qu'avant : il tend un
+///    `ComposerDocumentDraft` à la fermeture que ce site lui donne ;
 /// 3. **les douze arguments du canal de SCÈNE**, qui n'ont aucun objet ici.
 ///
 /// **Écrite UNE fois, et c'est le fond de l'affaire.** Les quatre feuilles
@@ -725,26 +781,30 @@ struct ComposerMoodSurface: View {
 /// l'auteur vient d'écrire est le seul geste qu'aucune garde de source ne
 /// pourrait rattraper.
 ///
-/// **Le seul `false` qu'elle rende aujourd'hui est sa garde de FORMAT**, et il
-/// faut le dire au mot près pour que la session suivante ne croie pas l'échec
-/// d'envoi déjà couvert : `publish` rend `true` inconditionnellement une fois
-/// `setStatus` revenue, parce que `StatusViewModel.setStatus` ne rend rien —
-/// elle avale l'erreur réseau dans un `catch` qui se contente d'un toast. Un
-/// gateway qui répond 500 referme donc ce composer et perd l'emoji, la phrase,
-/// l'audience et les mentions, exactement comme l'écran historique le faisait.
-/// **DETTE consignée, non refermée par ce lot** : la remontée d'échec commence
-/// par faire rendre un résultat à `setStatus`, et elle n'est écrite nulle part.
+/// **Ses DEUX branches ne disent PAS leurs échecs de la même façon, et
+/// l'asymétrie est assumée** — il faut la lire au mot près pour que la session
+/// suivante ne croie pas la dette refermée des deux côtés :
 ///
-/// **Le lot 4.10 l'a laissée intacte, et il faut dire pourquoi plutôt que de
-/// laisser croire qu'elle est tombée.** `DocumentComposerDoor` — la porte
-/// jumelle, écrite le même jour — émet de vrais refus : son publieur,
-/// `FeedViewModel.createPost`, pose `publishSuccess` / `publishError`, et sa
-/// branche texte enfile la ligne SANS consulter la connectivité. Les deux
-/// portes ne diffèrent donc ni par leur forme ni par leur soin, mais par ce que
-/// leur modèle rend : `createPost` répond, `setStatus` se tait. Une porte ne
-/// peut pas remonter un échec que son publieur ne lui dit pas, et le contourner
-/// ici — lire l'outbox, appeler le service — serait le second chemin d'envoi
-/// que `test_laPorte_neTouchePasLesServicesDirectement` interdit.
+/// - **l'ANCRAGE parle.** `StatusViewModel.anchorStatusAsPost` rend un `Bool` et
+///   affiche `feed.repost.error` ; un 403 `REPOST_AUDIENCE_WIDENING`, une
+///   coupure réseau ou un HORS-LIGNE laisse donc le composer OUVERT, avec sa
+///   saisie, son emoji, son audience et ses mentions. Le hors-ligne est refusé
+///   d'entrée, sans attendre le délai d'expiration d'`URLSession` — cet envoi
+///   n'a aucune file où retomber, et faire patienter l'auteur pour le même
+///   refus n'aurait rien gardé de plus ;
+/// - **le MIROIR se tait.** `publishMood` rend `true` une fois `setStatus`
+///   revenue, parce que `setStatus` ne rend rien — elle avale l'erreur réseau
+///   dans un `catch` qui se contente d'un toast. Un gateway qui répond 500
+///   referme ce chemin-là et perd la composition, exactement comme l'écran
+///   historique le faisait. **DETTE consignée, non refermée par ce lot** : sa
+///   levée commence par faire rendre un résultat à `setStatus`.
+///
+/// Le contraste avec `DocumentComposerDoor` — la porte jumelle — dit la règle
+/// générale : une porte ne peut pas remonter un échec que son publieur ne lui
+/// dit pas. `createPost` répond (`publishSuccess` / `publishError`),
+/// `anchorStatusAsPost` répond, `setStatus` se tait. Contourner ce silence ici —
+/// lire l'outbox, appeler le service — serait le second chemin d'envoi que
+/// `test_laPorte_neTouchePasLesServicesDirectement` interdit.
 struct MoodComposerDoor: View {
 
     /// La porte au sens de la table : `.moodChip` pour une création,
@@ -783,6 +843,20 @@ struct MoodComposerDoor: View {
     /// bloqué le publierait DEUX fois à la reconnexion.
     @State private var recoveredCmid: String?
 
+    /// **La graine EFFECTIVE** — celle que le meuble adopte, et rien d'autre.
+    ///
+    /// Elle est NOMMÉE plutôt qu'écrite deux fois, parce qu'elle a deux
+    /// lecteurs depuis le lot 4.7 : le montage du meuble, et l'ANCRAGE, qui
+    /// mesure contre elle ce que l'auteur a AJOUTÉ. Deux écritures de
+    /// `seed ?? recoveredSeed` seraient deux occasions d'en corriger une seule —
+    /// et le défaut serait muet : l'ancrage déclarerait une citation dont le
+    /// texte est celui de la source.
+    ///
+    /// L'ordre du `??` n'est pas commutatif : la graine de la PORTE prime, et la
+    /// reprise hors-ligne ne peut de toute façon pas coexister avec elle
+    /// (`recoverStuckMoodIfComposingFresh` s'ouvre sur `guard seed == nil`).
+    private var graine: ComposerMoodSeed? { seed ?? recoveredSeed }
+
     var body: some View {
         MeeshyComposerHost(
             intent: intent,
@@ -808,7 +882,7 @@ struct MoodComposerDoor: View {
             // `test_chaqueSiteDeMontage_presenteSesLibellesDansLOrdreDeLInit`
             // tient désormais l'ordre, pour le jour où un paramètre s'insérera
             // au milieu de cet `init` (lot 5.5, collision déclarée).
-            moodSeed: seed ?? recoveredSeed,
+            moodSeed: graine,
             onPreview: { _, _, _, _, _ in },
             onDismiss: { dismiss() }
         )
@@ -832,19 +906,39 @@ struct MoodComposerDoor: View {
         recoveredCmid = draft.clientMutationId
     }
 
-    /// **L'ENVOI** — et le premier `guard` est la garde négative du format
-    /// sortant.
+    /// **L'ENVOI — un AIGUILLAGE sur le format, depuis le lot 4.7.**
     ///
-    /// Un brouillon qui n'est pas un `.status` n'a rien à faire sur ce chemin :
-    /// l'ANCRAGE en post (loi 5) part par `POST /posts/:id/repost`, le seul qui
-    /// instantanie les octets d'une source éphémère. Refuser plutôt que
-    /// supposer — l'éventail offrirait sinon un choix que la publication
-    /// ignore, « le pire des deux mondes, puisqu'il aurait eu l'air de
-    /// marcher ». Aujourd'hui ce refus est inatteignable : aucun écran ne peint
-    /// l'éventail sous le mood (dette nommée en `ComposerIntent`, porte
-    /// `.repost`). Il est écrit pour le jour où il le sera.
+    /// Il fut un refus : `guard draft.format == .status`. Ce refus était juste
+    /// tant qu'aucun écran ne peignait l'éventail sous le mood — l'ANCRAGE en
+    /// post part par `POST /posts/:id/repost`, un chemin que cette porte ne
+    /// possédait pas, et supposer plutôt que refuser aurait publié un ancrage
+    /// sous le type STATUS, c'est-à-dire un post qui expire en une heure.
+    ///
+    /// L'éventail descend désormais sous les deux surfaces sans atelier
+    /// (`ComposerFormatFanPlacement`), et la porte a gagné son second chemin.
+    /// **L'ordre n'était pas négociable** : livrer l'éventail avant le publieur
+    /// aurait armé une flèche qui, pressée, n'aurait RIEN fait — « le pire des
+    /// deux mondes, puisqu'il aurait eu l'air de marcher ».
+    ///
+    /// Les DEUX formats que cette porte ne sait pas publier restent REFUSÉS, et
+    /// le `switch` est exhaustif : un cinquième format casse la compilation ici
+    /// avant de pouvoir être avalé par un `default`.
     private func publish(_ draft: ComposerDocumentDraft) async -> Bool {
-        guard draft.format == .status, let emoji = draft.emoji else { return false }
+        switch draft.format {
+        case .status: return await publishMood(draft)
+        case .post: return await anchor(draft)
+        case .story, .reel: return false
+        }
+    }
+
+    /// **Le MIROIR** — republier un mood en mood. Corps inchangé depuis le lot
+    /// 4.6, y compris son avalement d'échec : `setStatus` ne rend rien, donc
+    /// cette branche rend `true` même quand le gateway a répondu 500. Dette
+    /// CONSIGNÉE du lot 4.5, dont la levée commence par faire rendre un résultat
+    /// à `setStatus` — l'asymétrie avec `anchor` ci-dessous est assumée, pas
+    /// oubliée.
+    private func publishMood(_ draft: ComposerDocumentDraft) async -> Bool {
+        guard let emoji = draft.emoji else { return false }
 
         HapticFeedback.success()
 
@@ -864,6 +958,90 @@ struct MoodComposerDoor: View {
             repostOfId: draft.repostOfId,
             mentions: draft.mentions
         )
+        return true
+    }
+
+    /// **L'ANCRAGE** — sortir une humeur de l'éphémère (loi 5).
+    ///
+    /// Trois choses qu'il ne fait PAS, et chacune serait une régression :
+    ///
+    /// 1. **il ne SUPPLANTE aucune ligne de file.** `supersedeRecoveredStatus`
+    ///    annule une ligne d'outbox de type STATUS ; un ancrage n'en enfile
+    ///    aucune, et l'appeler ici détruirait un mood bloqué que l'auteur n'a
+    ///    pas renvoyé. Preuve structurelle, en plus de la règle :
+    ///    `recoverStuckMoodIfComposingFresh` s'ouvre sur `guard seed == nil`, et
+    ///    les deux sites de republication passent une graine non nulle —
+    ///    `recoveredCmid` est donc TOUJOURS `nil` sous une republication ;
+    /// 2. **il ne FERME pas.** La sortie appartient au meuble, qui la
+    ///    conditionne à l'acceptation. Un `dismiss()` posé ici court-circuiterait
+    ///    ce gate et jetterait la saisie sur un 403
+    ///    `REPOST_AUDIENCE_WIDENING` ;
+    /// 3. **il ne DIT pas l'échec une seconde fois.** `anchorStatusAsPost`
+    ///    affiche déjà `feed.repost.error` ; un toast de plus ici en ferait deux
+    ///    pour un seul refus.
+    ///
+    /// **Il n'est pas DURABLE hors ligne**, et ce n'est pas un oubli : cet
+    /// ancrage n'ENFILE rien — il appelle le modèle, qui appelle le réseau —,
+    /// ce que `ComposerDocumentSendPath.quotedRepost.isDurable` déclare déjà. Le
+    /// refus est alors DIT et la saisie gardée, jamais un envoi silencieusement
+    /// perdu ; `StatusViewModel.anchorStatusAsPost` le rend immédiatement sur un
+    /// `isOffline()`, sans attendre le délai d'expiration d'`URLSession`.
+    ///
+    /// **Ne pas lire cette phrase comme « la file ne saurait pas le porter ».**
+    /// Elle l'a dit deux lots durant, en nommant `OutboxKind`, et le fil rouge
+    /// du repost (lot 7) y a depuis posé sa ligne. Ce qui manque n'est pas le
+    /// KIND mais un ÉCRIVAIN — et l'y brancher apporterait en prime
+    /// l'idempotence (`X-Client-Mutation-Id`), que cet appel direct n'a pas :
+    /// laisser le composer OUVERT sur un échec rend le geste normal « retaper la
+    /// flèche », et deux taps après un délai d'expiration font deux posts. DETTE
+    /// nommée, non refermée ici : elle traverse la file, pas le composer.
+    ///
+    /// Le `guard` sur la source n'est pas une redite du gate de la flèche : le
+    /// gate garde l'ARMEMENT, celui-ci garde l'ENVOI, et un ancrage sans source
+    /// appellerait `POST /posts//repost`.
+    ///
+    /// **Le commentaire transmis est ce que l'auteur a AJOUTÉ**, jamais ce que
+    /// la porte a semé : `ComposerAnchorComment.authored` tient la règle et son
+    /// doc-comment dit ce qu'un écho coûterait. Passer `draft.text` tel quel —
+    /// l'écriture évidente, et celle qui fut livrée — déclarait une citation que
+    /// personne n'avait écrite sur le cas NOMINAL, une humeur ayant une phrase.
+    ///
+    /// **TROIS choses composées sous le mood ne SURVIVENT pas à la bascule vers
+    /// l'ancrage**, et c'est structurel à l'endpoint, pas un oubli de ce site :
+    ///
+    /// 1. **l'emoji.** `PostService.repostPost` recopie INCONDITIONNELLEMENT le
+    ///    `moodEmoji` de l'ORIGINAL dans son instantané. Changer d'emoji dans la
+    ///    grille puis publier sous « Post » ne change donc rien au post produit ;
+    /// 2. **les références.** `ComposerDocumentDraft.document` pose
+    ///    `mentions: nil`, et `PostService.repost` n'a aucun paramètre de
+    ///    mentions — une mention composée sous le mood disparaît sans un mot ;
+    /// 3. **l'attribution à l'écran.** Le bandeau « Status de @X » et le titre
+    ///    de republication vivent dans `ComposerMoodSurface` ; la surface
+    ///    document n'en peint aucun. L'ancrage reste EXPLICITE — l'auteur a
+    ///    touché le chip « Post », qui est marqué — mais sa SOURCE n'est plus
+    ///    rappelée à l'écran une fois la bascule faite.
+    ///
+    /// Les deux premières se lèvent en changeant de chemin (`POST /posts` avec
+    /// `repostOfId`, qui accepte `moodEmoji` et `mentions`) — au prix de
+    /// l'instantané des octets, ce qui est un arbitrage produit et non une
+    /// correction. La troisième se lève en portant `viaUsername` jusqu'à la
+    /// surface document ; elle n'exige AUCUNE clé neuve
+    /// (`ComposerMoodCopy.repostVia` et `status.composer.title.repost` sont
+    /// traduites), seulement une mesure de contraste de plus.
+    private func anchor(_ draft: ComposerDocumentDraft) async -> Bool {
+        guard let source = draft.repostOfId else { return false }
+
+        let accepte = await viewModel.anchorStatusAsPost(
+            sourceStatusId: source,
+            content: ComposerAnchorComment.authored(
+                draftText: draft.text,
+                seededText: graine?.text
+            ),
+            visibility: draft.visibility.rawValue
+        )
+        guard accepte else { return false }
+
+        HapticFeedback.success()
         return true
     }
 }

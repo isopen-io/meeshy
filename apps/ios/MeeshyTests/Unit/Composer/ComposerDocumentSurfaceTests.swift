@@ -374,39 +374,31 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         }
     }
 
-    /// **La loi 5 est dans la TABLE, et elle n'atteint aucun écran** — dit ici
-    /// plutôt que découvert par un auteur.
+    /// **La loi 5 atteint un ÉCRAN** — la table l'offrait, et rien ne la
+    /// peignait.
     ///
-    /// Le lot 4.7 fait miroiter la republication d'un mood : `offeredFormats`
-    /// rend `[.status, .post]`, l'ANCRAGE est donc offert. Mais l'éventail
-    /// (`ComposerFormatFan`) vit dans `plateauTools`, et `plateauTools` n'est
-    /// monté que par `composerSurface` — la SCÈNE. Ni la surface du mood ni la
-    /// surface document ne le portent : le chip « Post » n'existe sur aucun
-    /// écran, et `currentFormat` reste sur `.status`.
+    /// **Garde RETOURNÉE le 2026-08-25 (lot 4.7, fin).** Elle affirmait que
+    /// l'ANCRAGE était offert par la table et peint par AUCUN écran ; elle
+    /// affirme désormais l'invariant neuf — un écran le peint, et il le peint à
+    /// UN seul endroit.
     ///
-    /// **Ce n'était pas un oubli, et sa raison a CHANGÉ au lot 4.9.**
+    /// **L'ordre de la levée n'était pas négociable, et c'est tout le sujet.**
+    /// Faire descendre l'éventail AVANT que la porte ne sache publier un
+    /// ancrage aurait donné une flèche ARMÉE (le gate ne demande qu'une source)
+    /// qui, pressée, n'aurait RIEN fait : `publish` rendait `false`, le composer
+    /// restait ouvert, muet. C'est mot pour mot « le pire des deux mondes,
+    /// puisqu'il aurait eu l'air de marcher ». Le publieur
+    /// (`StatusViewModel.anchorStatusAsPost`) est donc venu d'abord, la source
+    /// sur le brouillon ensuite, l'éventail en dernier.
     ///
-    /// Le refus du lot 4.5 tenait au SOCLE : sous le document il peignait deux
-    /// affordances sans objet — un témoin d'audience inerte et un œil sans
-    /// canvas. Les deux sont tombées. L'audience est un vrai sélecteur avec sa
-    /// mémoire, l'œil est parti par retrait (loi 4), et
-    /// `test_leSocleDuDocument_nePeintAucunOeil_fauteDeCanvasALire` est la
-    /// condition de levée que ce test nommait mot pour mot.
-    ///
-    /// **Ce qui retient l'éventail aujourd'hui est d'un autre ordre : l'ENVOI.**
-    /// `MoodComposerDoor.publish` refuse tout brouillon qui n'est pas un
-    /// `.status` — l'ANCRAGE en post part par `POST /posts/:id/repost`, un
-    /// chemin que la porte du mood ne possède pas. Peindre le chip « Post »
-    /// aujourd'hui donnerait une flèche ARMÉE (le gate du document ne demande
-    /// qu'un texte non vide) qui, pressée, ne ferait RIEN : `publish` rend
-    /// `false`, le composer reste ouvert, muet. C'est mot pour mot « le pire des
-    /// deux mondes, puisqu'il aurait eu l'air de marcher ».
-    ///
-    /// **Condition de levée NOMMÉE** : que la porte du mood sache publier un
-    /// ancrage — et que le brouillon du document porte `repostOfId`, sans quoi
-    /// l'ancrage perdrait sa source. Ce test se RETOURNE alors ; il ne se
-    /// supprime pas.
-    func test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint() throws {
+    /// **Ce qui n'a PAS changé** : ni la surface du mood ni la surface document
+    /// ne portent l'éventail. Il vit dans le plateau, et le plateau est monté
+    /// par le `body`, sous `ComposerFormatFanPlacement` — une RÈGLE, et non un
+    /// accident de montage. C'était l'angle mort que l'ancienne rédaction de
+    /// cette garde nommait elle-même : « un éventail monté dans le `body` … ne
+    /// toucherait aucun des trois ». Ce site est désormais DÉLIBÉRÉ, et le
+    /// compte d'occurrences en reste le verrou.
+    func test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint() throws {
         let profil = ComposerProfile.profile(for: .repost(ofPostId: "mood-source", sourceFormat: .status))
 
         XCTAssertEqual(
@@ -415,8 +407,26 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
         XCTAssertEqual(
             ComposerSurfaceRouting.surface(opening: profil.opensWith, format: .post), .document,
-            "Le chip d'ancrage mènerait à la surface document — c'est là qu'est le blocage."
+            "Le chip d'ancrage mène à la surface document — c'est là qu'atterrit la bascule."
         )
+        XCTAssertTrue(
+            ComposerFormatFanPlacement.paints(
+                surface: .mood,
+                opening: profil.opensWith,
+                offeredFormats: profil.offeredFormats
+            ),
+            "Sans placement sous le MOOD, le chip « Post » n'existerait sur aucun écran — l'état d'avant 4.7."
+        )
+        XCTAssertTrue(
+            ComposerFormatFanPlacement.paints(
+                surface: .document,
+                opening: profil.opensWith,
+                offeredFormats: profil.offeredFormats
+            ),
+            "… et sans placement sous le DOCUMENT, l'ancrage serait une porte à SENS UNIQUE : on y entrerait "
+                + "sans pouvoir revenir au mood."
+        )
+
         let envoi = try corpsDeDeclaration(
             commencantPar: "private func publish(_ draft: ComposerDocumentDraft)",
             dans: sourceDeLaPorteDuMood()
@@ -425,102 +435,282 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             return XCTFail("L'envoi de la porte du mood est introuvable — la garde ne mesurerait RIEN.")
         }
         XCTAssertTrue(
-            envoi.contains("draft.format == .status"),
-            "La porte du mood refuse encore tout format autre que le status. C'est LA raison pour laquelle "
-                + "l'éventail ne descend pas : le chip « Post » armerait une flèche que la publication ignore."
+            envoi.contains("switch draft.format"),
+            "La porte du mood doit AIGUILLER sur le format : un `guard draft.format == .status` y refuserait "
+                + "l'ancrage, et le chip « Post » armerait une flèche que la publication ignore."
         )
 
         let source = try sourceDuMeuble()
         guard let plateau = corpsDeDeclaration(commencantPar: "private var plateauTools", dans: source),
-              let scene = corpsDeDeclaration(commencantPar: "private var composerSurface", dans: source),
+              let corpsDuMeuble = corpsDeDeclaration(commencantPar: "var body: some View", dans: source),
               let mood = corpsDeDeclaration(commencantPar: "private var moodSurface", dans: source),
               let document = corpsDeDeclaration(commencantPar: "private var documentSurface", dans: source) else {
             return XCTFail("Les quatre blocs du meuble sont introuvables — la garde ne mesurerait RIEN.")
         }
 
         XCTAssertTrue(plateau.contains("ComposerFormatFan("), "Le bloc lu n'est pas celui du plateau.")
-        XCTAssertTrue(scene.contains("plateauTools"), "Le bloc lu n'est pas celui de la scène.")
+        XCTAssertTrue(
+            corpsDuMeuble.contains("plateauTools"),
+            "Le `body` du meuble ne monte plus le plateau : l'éventail cesserait de se peindre PARTOUT, y "
+                + "compris sous la scène qui le portait déjà."
+        )
+        XCTAssertTrue(
+            corpsDuMeuble.contains("paintsFormatFan"),
+            "Le plateau est monté SANS condition : le chip « Story » du composer du fil apparaîtrait sous le "
+                + "document, et le choisir y monterait l'atelier en laissant `documentText` derrière."
+        )
         XCTAssertFalse(
             mood.contains("plateauTools") || mood.contains("ComposerFormatFan("),
-            "La surface du mood peint l'éventail : le chip « Post » devient atteignable, et il mène à un "
-                + "brouillon de format `.post` que `MoodComposerDoor.publish` REFUSE — une flèche armée qui "
-                + "ne publie rien."
+            "La surface du mood peint l'éventail elle-même : deux montages pour un seul sélecteur, et la "
+                + "règle de placement cesserait de gouverner l'un des deux."
         )
         XCTAssertFalse(
             document.contains("plateauTools") || document.contains("ComposerFormatFan("),
-            "La surface document peint l'éventail : basculer vers `.story` y monterait l'atelier, et "
-                + "`documentText` n'a aucun chemin pour l'y suivre — la saisie disparaîtrait sans un mot."
+            "La surface document peint l'éventail elle-même : même défaut, et il contournerait la règle qui "
+                + "tient `.feedComposer` hors de l'éventail."
         )
 
-        // Les trois assertions ci-dessus sont ancrées sur des BLOCS, et c'est
-        // leur angle mort : un éventail monté dans le `body` du meuble — entre
-        // la surface et le socle, l'endroit le plus naturel pour le poser — ne
-        // toucherait aucun des trois et les laisserait toutes vertes. La
-        // question n'est pas « quel bloc le peint » mais « combien de fois le
-        // meuble le peint », et la réponse doit rester UNE, dans le plateau.
+        // La question n'est pas « quel bloc le peint » mais « combien de fois le
+        // meuble le peint », et la réponse doit rester UNE. Le site a changé au
+        // lot 4.7 — du bloc de la scène au `body` — et le compte, lui, n'a pas
+        // bougé : c'est lui qui interdit qu'un second montage naisse ailleurs.
         XCTAssertEqual(
             occurrences(of: "ComposerFormatFan(", in: source), 1,
-            "Le meuble monte l'éventail à un second endroit. S'il descend sous une surface sans scène, "
-                + "c'est la levée de 4.7 — et elle exige d'abord le plafond d'audience mesuré par "
-                + "`test_lAncrageDUnMood_nAAucunPlafondDAudience_etCEstCE_quiRetientLeventail`."
+            "Le meuble monte l'éventail à un second endroit : deux sélecteurs pour un seul format courant, "
+                + "dont un seul gouverné par `ComposerFormatFanPlacement`."
+        )
+        XCTAssertEqual(
+            occurrences(of: "plateauTools", in: source), 2,
+            "Le plateau doit avoir exactement DEUX mentions — sa déclaration et son unique montage. Un "
+                + "troisième site le peindrait deux fois sur le même écran."
         )
     }
 
-    /// **Le blocage RÉELLEMENT contraignant de 4.7 — et ce n'est pas celui que
-    /// la garde ci-dessus nomme.**
+    // MARK: - Lot 4.7 — OÙ l'éventail se peint, et pourquoi
+
+    /// **La règle de PLACEMENT — écrite pour la première fois au lot 4.7.**
     ///
-    /// Le refus de format de `MoodComposerDoor.publish` est vrai, mesurable, et
-    /// se lève en une vingtaine de lignes : `PostService.repost(postId:
-    /// targetType:content:isQuote:visibility:)` est `public`, porte
-    /// `targetType`, et tourne déjà sur deux sites de production. Une session
-    /// qui ne lirait que la garde précédente conclurait donc « il ne reste que
-    /// ça », lèverait le refus, ferait descendre l'éventail — et livrerait le
-    /// défaut ci-dessous, qu'aucune des deux n'aurait vu.
+    /// Elle existait déjà, en prose, dans le doc-comment de
+    /// `MeeshyComposerHost.documentSurface` : « ce raisonnement vaut pour
+    /// `.feedComposer`, et pour lui SEUL ». Une phrase de doc-comment ne
+    /// gouverne rien ; celle-ci est désormais une fonction pure, et les cinq cas
+    /// ci-dessous sont ses porteurs.
     ///
-    /// Ce défaut est la **loi 10 d'audience de la republication** : même
-    /// audience, ou plus restreinte, JAMAIS plus large. Elle est appliquée
-    /// SERVEUR sur les deux portes — `POST /posts/:id/repost` ET `POST /posts`
-    /// portant `repostOfId` — par `isRepostVisibilityAllowed`, avec un 403
-    /// `REPOST_AUDIENCE_WIDENING`. Son miroir client, `StoryRepostAudience`,
-    /// existe pour PLAFONNER le sélecteur d'audience « pour que l'utilisateur
-    /// ne se voie jamais proposer un choix que le serveur refusera ».
+    /// *L'éventail se peint là où TOUS les formats offerts atterrissent du MÊME
+    /// côté de la frontière « scène / pas de scène » que la surface montée.*
+    /// C'est cette frontière-là qui sépare deux ÉTATS : `documentText` et
+    /// `moodEmoji` sont l'état du MEUBLE et suivent toute bascule entre document
+    /// et mood, mais rien ne les fait entrer dans un canvas.
     ///
-    /// Le meuble n'a pas de quoi l'appliquer : plafonner exige la visibilité de
-    /// l'ORIGINAL, et rien ne la lui donne. `ComposerIntent.repost` ne porte
-    /// qu'un identifiant ; le canal existe bien sur la graine
-    /// (`ComposerMoodSeed.visibility`) et AUCUN site de republication ne
-    /// l'alimente. Sans cette entrée, le seul plafond que la loi autorise est
-    /// `[.private]` — la réponse documentée du SDK à « je ne sais pas » — et un
-    /// éventail dont l'unique ancrage possible serait PRIVÉ n'est pas un
-    /// sélecteur (loi 4).
+    /// Le cas `.feedComposer` est celui qui rend la règle nécessaire dans un
+    /// sens : son offre contient `.story`, que le routage envoie à la SCÈNE, et
+    /// un auteur qui y taperait son post puis choisirait « Story » verrait sa
+    /// saisie disparaître sans un mot — sur la porte la plus fréquentée de
+    /// l'app.
     ///
-    /// **Condition de levée, en TROIS parties et dans cet ordre** :
-    /// 1. les deux sites de republication sèment `visibility:` (et
-    ///    `visibilityUserIds:`) dans leur `ComposerMoodSeed` — hors du dossier
-    ///    Composer, dans les racines de fenêtre ;
-    /// 2. le sélecteur d'audience du socle se plafonne par
-    ///    `StoryRepostAudience.allowed(from:)` dès que l'intention est un
-    ///    repost, et n'offre plus `composerSelectableCases` en bloc ;
-    /// 3. `MoodComposerDoor.publish` gagne sa branche d'ancrage.
+    /// **`.conversationMedia` est celui qui la rend nécessaire dans l'AUTRE
+    /// sens, et il est arrivé dans cette table le 2026-08-25.** Son profil
+    /// (`initialFormat: .story`, offre `[.story, .post]`, ouverture
+    /// `.keyboardOnContent`) monte la SCÈNE à l'ouverture — et la branche
+    /// `.scene` de la règle rendait alors `true` SANS CONDITION, au motif que
+    /// les trois ouvertures de capture / reprise collent à la scène quel que
+    /// soit le format. Vrai de ces trois ouvertures, faux de la branche :
+    /// l'éventail s'y peignait, puis DISPARAISSAIT au premier tap sur « Post ».
+    /// Une porte à sens unique — le message d'échec ci-dessous le nommait déjà,
+    /// et la règle l'autorisait.
+    ///
+    /// Le profil n'est câblé par aucun site de production (« câblage lot G »),
+    /// donc ces deux cas ne décrivent aucun écran. Ils sont ici pour la raison
+    /// inverse : le jour où le lot G le câblera, la règle aura déjà tranché.
+    func test_lePlacementDeLEventail_suitLaSurfaceOuAtterrissentSesFormats() {
+        let repostDeMood = ComposerOrigin.repost(ofPostId: "mood-source", sourceFormat: .status)
+        let mediaRecu = ComposerOrigin.conversationMedia(messageId: "msg-1", attachmentId: "att-1")
+        let cas: [(String, ComposerOrigin, ComposerFormat, Bool)] = [
+            ("tray de story · Story", .storyTray, .story, true),
+            ("tray de story · Post", .storyTray, .post, true),
+            ("puce de mood · Mood", .moodChip, .status, true),
+            ("repost d'un mood · Mood", repostDeMood, .status, true),
+            ("repost d'un mood · Post", repostDeMood, .post, true),
+            ("composer du fil · Post", .feedComposer, .post, false),
+            ("média de conversation · Story", mediaRecu, .story, false),
+            ("média de conversation · Post", mediaRecu, .post, false)
+        ]
+
+        for (nom, origine, format, attendu) in cas {
+            let profil = ComposerProfile.profile(for: origine)
+            XCTAssertTrue(
+                profil.offeredFormats.contains(format),
+                "\(nom) : le format mesuré n'est plus offert par cette porte — le cas ne mesurerait RIEN."
+            )
+            let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: format)
+            XCTAssertEqual(
+                ComposerFormatFanPlacement.paints(
+                    surface: surface,
+                    opening: profil.opensWith,
+                    offeredFormats: profil.offeredFormats
+                ),
+                attendu,
+                "\(nom) : le placement de l'éventail a changé. Attendu \(attendu) — un `true` de trop livre "
+                    + "une saisie qui disparaît, un `false` de trop livre une porte à sens unique."
+            )
+        }
+    }
+
+    /// **Les DEUX règles de l'éventail se lisent ENSEMBLE — et leur CONJONCTION
+    /// est elle-même une règle.**
+    ///
+    /// Le placement dit OÙ il a le droit de se peindre ; la visibilité dit s'il
+    /// a quelque chose à offrir. La puce de mood les sépare : son placement est
+    /// autorisé (`.mood` ne renvoie à aucune scène) et pourtant rien ne se
+    /// peint, parce qu'elle n'offre qu'UN format — et un chip unique est une
+    /// affordance sans choix, ce que la loi 4 nomme.
+    ///
+    /// Sans ce test, une session lirait « le mood a un éventail » dans le seul
+    /// placement, et retirerait le `count > 1` en croyant réparer un oubli.
+    ///
+    /// **Ce test a changé d'objet le 2026-08-25, et il faut savoir pourquoi.**
+    /// Il n'assertait que les deux règles SÉPARÉMENT, pendant que le `&&` qui
+    /// les joint vivait dans une propriété privée du meuble. Mutation mesurée :
+    /// remplacer ce `&&` par un `||` laissait passer ce test ET les trois gardes
+    /// de source voisines — toutes cherchaient la PRÉSENCE des deux symboles,
+    /// aucune leur conjonction — et repeignait l'éventail sous le document de
+    /// `.feedComposer`. La composition est descendue dans
+    /// `ComposerFormatFanPlacement.mounts` ; la table ci-dessous est ce qui
+    /// l'exerce, et chacune de ses lignes tombe sous une mutation différente.
+    func test_lesDeuxReglesDeLEventail_seLisentENSEMBLE_dansUneSeuleRegle() {
+        let profilDuMood = ComposerProfile.profile(for: .moodChip)
+        XCTAssertEqual(
+            profilDuMood.offeredFormats, [.status],
+            "La prémisse de ce test est l'offre UNIQUE de la création de mood : si elle s'élargissait, le "
+                + "test cesserait de mesurer la séparation des deux règles."
+        )
+        XCTAssertTrue(
+            ComposerFormatFanPlacement.paints(
+                surface: .mood,
+                opening: profilDuMood.opensWith,
+                offeredFormats: profilDuMood.offeredFormats
+            ),
+            "Le placement AUTORISE le mood : aucun de ses formats offerts ne renvoie à une scène. C'est CE "
+                + "cas qui prouve que le montage ne peut pas se réduire au seul placement."
+        )
+
+        let repostDeMood = ComposerOrigin.repost(ofPostId: "mood-source", sourceFormat: .status)
+        let mediaRecu = ComposerOrigin.conversationMedia(messageId: "msg-1", attachmentId: "att-1")
+        let cas: [(String, ComposerOrigin, ComposerSurfaceKind, Bool)] = [
+            ("tray de story · scène", .storyTray, .scene, true),
+            ("puce de mood · mood", .moodChip, .mood, false),
+            ("repost d'un mood · mood", repostDeMood, .mood, true),
+            ("repost d'un mood · document", repostDeMood, .document, true),
+            ("composer du fil · document", .feedComposer, .document, false),
+            ("média de conversation · scène", mediaRecu, .scene, false)
+        ]
+
+        for (nom, origine, surface, attendu) in cas {
+            let profil = ComposerProfile.profile(for: origine)
+            XCTAssertEqual(
+                ComposerFormatFanPlacement.mounts(
+                    surface: surface,
+                    opening: profil.opensWith,
+                    offeredFormats: profil.offeredFormats
+                ),
+                attendu,
+                "\(nom) : le MONTAGE de l'éventail a changé. Attendu \(attendu) — la puce de mood tombe si "
+                    + "la visibilité cesse de compter (rangée VIDE), le composer du fil et le média de "
+                    + "conversation tombent si le placement cesse de compter (saisie perdue, porte à sens "
+                    + "unique), et le tray tombe si la conjonction est niée."
+            )
+        }
+    }
+
+    /// L'éventail est monté UNE fois, dans le `body`, sous la règle — et la
+    /// condition passe par une PROPRIÉTÉ NOMMÉE qui ne fait que la LIRE.
+    ///
+    /// Une règle écrite en ligne dans un `body` est invisible aux tests, et
+    /// c'est ainsi qu'une règle produit se met à exister en deux exemplaires.
+    /// La loi 5 impose de surcroît que rien n'y conditionne l'affichage sur la
+    /// PORTE : `test_theSocleYieldsToTheAtelier_andNeverToTheDoor` interdit déjà
+    /// `if profile` / `if origin` dans ce même bloc.
+    ///
+    /// **Les deux dernières assertions sont NÉGATIVES depuis le 2026-08-25, et
+    /// c'est le fond de l'affaire.** Elles exigeaient la PRÉSENCE de
+    /// `ComposerFormatFanPlacement.paints(` et de
+    /// `ComposerFormatFanPolicy.isVisible(` dans le meuble — deux symboles que
+    /// le meuble joignait lui-même par un `&&`. Cette écriture-là passait la
+    /// garde en laissant la CONJONCTION hors de toute assertion : la remplacer
+    /// par un `||` gardait les deux symboles, gardait ce test vert, et
+    /// repeignait l'éventail sous le document de `.feedComposer`. La conjonction
+    /// est descendue dans `ComposerFormatFanPlacement.mounts` (exercée par
+    /// `test_lesDeuxReglesDeLEventail_seLisentENSEMBLE_dansUneSeuleRegle`), et
+    /// ce que le meuble ne doit plus contenir est justement de quoi la
+    /// réécrire.
+    func test_host_monteLEventail_dansLeBody_sousLaRegleDePlacement() throws {
+        let source = try sourceDuMeuble()
+        guard let corpsDuMeuble = corpsDeDeclaration(commencantPar: "var body: some View", dans: source) else {
+            return XCTFail("Le `body` du meuble est introuvable — la garde ne mesurerait RIEN.")
+        }
+        let compacte = corpsDuMeuble.components(separatedBy: .whitespacesAndNewlines).joined()
+
+        XCTAssertTrue(compacte.contains("surface"), "Le bloc lu n'est pas celui du `body`.")
+        XCTAssertTrue(
+            compacte.contains("ifpaintsFormatFan{plateauTools}"),
+            "Le plateau doit être monté sous la propriété nommée `paintsFormatFan` : une expression écrite "
+                + "en ligne ici serait une seconde écriture de la règle, invisible aux tests."
+        )
+        XCTAssertTrue(
+            source.contains("ComposerFormatFanPlacement.mounts("),
+            "`paintsFormatFan` doit LIRE la règle COMPOSÉE — placement ET visibilité, jointes une seule fois, "
+                + "à l'endroit où une assertion peut les joindre aussi."
+        )
+        for reecriture in ["ComposerFormatFanPlacement.paints(", "ComposerFormatFanPolicy.isVisible("] {
+            XCTAssertFalse(
+                source.contains(reecriture),
+                "Le meuble lit « \(reecriture) » : il rejoint donc les deux règles lui-même, dans une "
+                    + "propriété privée qu'aucune assertion n'évalue. C'est là que le `&&` a vécu, et un `||` "
+                    + "y passait quatre gardes au vert en repeignant l'éventail sous `.feedComposer`."
+            )
+        }
+    }
+
+    /// **Garde RE-VISÉE le 2026-08-25 (lot 4.7, fin) — le plafond ne retient
+    /// plus rien, et il n'a pas disparu pour autant.**
+    ///
+    /// Elle affirmait deux choses : (a) l'ancrage n'a aucun plafond d'audience,
+    /// et (b) c'est CE défaut qui retient l'éventail. La première reste vraie et
+    /// se mesure ci-dessous, mot pour mot. La seconde ne l'est plus, et la
+    /// garder aurait fait de ce fichier une source qui ment.
+    ///
+    /// **Pourquoi la conclusion tombe.** Ce que la loi 10 pouvait fermer sans
+    /// connaître la source l'a été au lot 4.9 : `ComposerAudienceOffer` retire
+    /// d'une republication les deux audiences dont la PORTÉE appartient à la
+    /// source (`ONLY`/`EXCEPT`), et le socle comme le ruban lisent cette offre.
+    /// Reste l'ÉLARGISSEMENT, le seul morceau qui exige vraiment la visibilité
+    /// de l'original — et il pèse **exactement autant sur les deux chips**. Le
+    /// ruban du mood le porte DÉJÀ, sur un écran réel, depuis le lot 4.6 :
+    /// l'éventail n'ajoute donc aucun trou, il fait hériter l'ancrage d'un trou
+    /// déjà nommé et déjà gardé. Retenir l'éventail pour un défaut que la
+    /// surface qu'il sert porte déjà aurait été un plafond raisonné pour un
+    /// contrôle FUTUR au prix du contrôle PRÉSENT — l'erreur que l'ancienne
+    /// rédaction de cette garde s'était elle-même reprochée.
+    ///
+    /// **Ce que l'ancrage apporte, et que le miroir n'a pas** : un refus qui SE
+    /// DIT. Un 403 `REPOST_AUDIENCE_WIDENING` fait rendre `false` à
+    /// `StatusViewModel.anchorStatusAsPost`, qui affiche `feed.repost.error`, et
+    /// le meuble ne referme pas — saisie, emoji, audience et mentions restent.
+    /// `setStatus` avale. Asymétrie assumée, dette du lot 4.5 inchangée.
+    ///
+    /// **Condition de levée, en DEUX parties et dans cet ordre** — la troisième
+    /// est soldée :
+    /// 1. `APIPost.toStatusEntry()` transmet `visibility` — une ligne,
+    ///    `StoryModels.swift`, HORS du dossier Composer et hors du périmètre de
+    ///    ce lot ; PUIS les deux sites de republication le sèment dans leur
+    ///    `ComposerMoodSeed`. Semer sans cette ligne ne sème qu'un `nil`, et
+    ///    `allowed(fromRawValue: nil)` ne concède que `[.private]` : un ruban à
+    ///    UN chip, la loi 4 défaite dans l'autre sens ;
+    /// 2. `ComposerAudienceOffer` intersecte son offre avec
+    ///    `StoryRepostAudience.allowed(from:)`.
     ///
     /// Ce test se RETOURNE ce jour-là ; il ne se supprime pas.
-    ///
-    /// **AVERTISSEMENT, payé une fois.** Cette garde a conclu « on ne descend
-    /// pas l'éventail parce que l'ancrage n'a aucun plafond » en laissant
-    /// intact, sur un écran RÉEL, le sélecteur d'audience que la republication
-    /// peint DÉJÀ — dix lignes plus loin, avec le même défaut. Un plafond
-    /// raisonné pour un contrôle FUTUR ne dispense pas de regarder le contrôle
-    /// PRÉSENT.
-    ///
-    /// La moitié qui pouvait se fermer sans connaître la source l'a été :
-    /// `ComposerAudienceOffer` retire d'une republication les deux audiences
-    /// dont la portée appartient à la source (`ONLY`/`EXCEPT`). Ce qui reste
-    /// mesuré ici est l'ÉLARGISSEMENT seul, et la première partie de sa levée
-    /// n'est PAS le semis mais la ligne qui le rend utile — voir
-    /// `test_lOffre_dUneRepublication_nePlafonnePasLElargissement_fauteDeConnaitreLaSource`,
-    /// qui mesure `toStatusEntry()`. Les deux gardes se lisent ensemble : semer
-    /// `visibility:` sans cette ligne ne sème qu'un `nil`.
-    func test_lAncrageDUnMood_nAAucunPlafondDAudience_etCEstCE_quiRetientLeventail() throws {
+    func test_lAncrageDUnMood_nAToujoursAucunPlafondDAudience_etLEventailDescendQuandMeme() throws {
         XCTAssertEqual(
             StoryRepostAudience.allowed(fromRawValue: nil), [.private],
             "Sans la visibilité de l'original, la loi 10 ne concède que PRIVÉ. Si cette réponse changeait, "
@@ -991,7 +1181,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// document ne portait pas le champ du tout.
     func test_leBrouillonDuDocument_porteSaListeNominative_quandLAudienceLExige() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .only, visibilityUserIds: ["u1", "u2"]
+            format: .post, text: "bonjour", visibility: .only, visibilityUserIds: ["u1", "u2"], repostOfId: nil
         )
         XCTAssertEqual(
             brouillon.visibilityUserIds, ["u1", "u2"],
@@ -1004,11 +1194,70 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// n'en veut pas la ferait persister pour rien.
     func test_leBrouillonDuDocument_ecarteLaListe_quandLAudienceNeLExigePas() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: ["u1"]
+            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: ["u1"], repostOfId: nil
         )
         XCTAssertNil(
             brouillon.visibilityUserIds,
             "L'audience n'exige aucune liste : la porter la ferait persister pour rien."
+        )
+    }
+
+    // MARK: - Lot 4.7 — le brouillon du document porte SA SOURCE
+
+    /// **Sans `repostOfId`, l'ancrage perd son origine — et devient un post
+    /// ordinaire, en silence.**
+    ///
+    /// C'est le trou jumeau du refus de format de la porte : lever l'un sans
+    /// l'autre aurait fait partir la bascule Mood → Post par
+    /// `POST /posts/:id/repost` avec un identifiant… absent. Le champ existe sur
+    /// le type depuis le lot 4.5 ; la fabrique du document le posait à `nil` en
+    /// dur, et aucun appelant ne pouvait donc le remplir.
+    func test_leBrouillonDuDocument_porteSaSource_sansQuoiLAncragePerdSonOrigine() {
+        let ancrage = ComposerDocumentDraft.document(
+            format: .post, text: "je garde", visibility: .public, visibilityUserIds: [], repostOfId: "mood-source"
+        )
+        XCTAssertEqual(
+            ancrage.repostOfId, "mood-source",
+            "La fabrique jette la source : l'ancrage partirait comme un post ordinaire, sans octets "
+                + "instanciés et sans que rien ne le dise."
+        )
+        XCTAssertEqual(ancrage.format, .post, "Un ancrage est un POST — c'est tout son objet (loi 5).")
+    }
+
+    /// **La source vient de la PORTE, pas de la graine** — la même règle que la
+    /// branche `.mood`, écrite juste au-dessus dans le même `switch`.
+    ///
+    /// La porte seule sait quelle publication elle repartage
+    /// (`ComposerOrigin.repostedPostId`) ; la lire ailleurs en ferait une
+    /// SECONDE source pour un même fait. Garde ancrée sur la BRANCHE et non sur
+    /// le bloc : les deux branches posent le même littéral, et un `.contains`
+    /// posé sur le bloc entier serait vert grâce au mood seul.
+    func test_leMeuble_semeLaSourceDeLaPORTE_dansLeBrouillonDuDocument() throws {
+        guard let bloc = corpsDeDeclaration(
+            commencantPar: "private var documentDraft",
+            dans: try sourceDuMeuble()
+        ) else {
+            return XCTFail("Le brouillon doit être une propriété nommée `documentDraft` — la garde s'ancre dessus.")
+        }
+        let branches = bloc.components(separatedBy: "case .document:")
+        guard branches.count == 2 else {
+            return XCTFail("La branche `.document` du brouillon est introuvable — la garde ne mesurerait RIEN.")
+        }
+        let branche = branches[1].components(separatedBy: .whitespacesAndNewlines).joined()
+
+        XCTAssertTrue(
+            branche.contains("ComposerDocumentDraft.document("),
+            "Le fragment lu n'est pas celui de la branche document — la garde ne mesurerait RIEN."
+        )
+        XCTAssertTrue(
+            branche.contains("repostOfId:intent.origin.repostedPostId"),
+            "La branche document ne sème plus la source de la PORTE : basculer Mood → Post produirait un "
+                + "post ordinaire au lieu d'un ancrage, sans qu'aucun écran ne le dise."
+        )
+        XCTAssertFalse(
+            branche.contains("moodSeed"),
+            "La source est lue sur la GRAINE : deux sources pour « quelle publication republie-t-on », et "
+                + "c'est exactement ce que la branche `.mood` documente comme à ne pas faire."
         )
     }
 
@@ -1545,7 +1794,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUnBrouillonQuiNestPasUnPost() {
         for format in [ComposerFormat.status, .story, .reel] {
             let brouillon = ComposerDocumentDraft.document(
-                format: format, text: "bonjour", visibility: .public, visibilityUserIds: []
+                format: format, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -1567,7 +1816,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUnBrouillonSansMatiere() {
         for texte in ["", "   ", "\n"] {
             let brouillon = ComposerDocumentDraft.document(
-                format: .post, text: texte, visibility: .public, visibilityUserIds: []
+                format: .post, text: texte, visibility: .public, visibilityUserIds: [], repostOfId: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -1593,7 +1842,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUneAudienceNominativeSansPersonne() {
         for nominative in PostVisibility.composerSelectableCases where nominative.requiresUserSelection {
             let brouillon = ComposerDocumentDraft.document(
-                format: .post, text: "bonjour", visibility: nominative, visibilityUserIds: []
+                format: .post, text: "bonjour", visibility: nominative, visibilityUserIds: [], repostOfId: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -1603,7 +1852,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             )
 
             let complet = ComposerDocumentDraft.document(
-                format: .post, text: "bonjour", visibility: nominative, visibilityUserIds: ["u1"]
+                format: .post, text: "bonjour", visibility: nominative, visibilityUserIds: ["u1"], repostOfId: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: complet, isOffline: false),
@@ -1624,7 +1873,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// `isOffline()` répond oui.
     func test_lePlan_dUnPostTexte_prendLeCheminDejaDurable_desDeuxCotesDuReseau() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: []
+            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil
         )
         for horsLigne in [true, false] {
             XCTAssertEqual(
@@ -1636,18 +1885,32 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         }
     }
 
-    /// **Le refus qui protège l'ANCRAGE — et il est déjà atteignable.**
+    /// **Le refus qui protège l'ANCRAGE — et il est VIVANT depuis le lot 4.7.**
     ///
-    /// La fabrique du document pose `repostOfId` à `nil` aujourd'hui ; le champ,
-    /// lui, EXISTE sur le type, et la tâche 4.7 le remplira. Le jour où elle le
-    /// fera, le plan doit REFUSER : une citation part par
-    /// `POST /posts/:id/repost`, qui n'a aucune file durable, et la laisser
-    /// filer par le chemin texte publierait un post ORDINAIRE à la place d'un
-    /// ancrage — sans source, sans octets instanciés, sans que rien ne le dise.
+    /// La fabrique du document porte désormais `repostOfId`, et le meuble l'y
+    /// sème depuis la porte : un brouillon d'ancrage EXISTE. Le plan doit donc
+    /// refuser — une citation part par `POST /posts/:id/repost`, et AUCUN
+    /// publieur du composer ne l'enfile : la laisser filer par le chemin texte
+    /// publierait un post ORDINAIRE à la place d'un ancrage — sans source, sans
+    /// octets instanciés, sans que rien ne le dise.
+    ///
+    /// La rédaction précédente disait « `OutboxKind` n'a pas de ligne pour cet
+    /// endpoint ». C'était vrai, et le fil rouge du repost (lot 7) y a depuis
+    /// posé la sienne : ce qui manque est un ÉCRIVAIN, pas un kind. Le refus, ce
+    /// faisant, n'a pas bougé — `ComposerDocumentSendPath.quotedRepost` décrit
+    /// ce que le COMPOSER fait, pas ce que la file saurait porter.
+    ///
+    /// **Ce refus n'est PAS le chemin de l'ancrage livré au lot 4.7.** Un
+    /// ancrage de mood part par `MoodComposerDoor`, qui aiguille sur le FORMAT
+    /// et appelle `StatusViewModel.anchorStatusAsPost` ; ce plan-ci garde
+    /// `DocumentComposerDoor`, l'ENVOI DURABLE du fil, qu'aucun site de
+    /// production ne monte encore. Les deux portes remettent le même type de
+    /// brouillon et ne partagent aucun chemin d'envoi — c'est pourquoi il
+    /// existe deux gardes et non une.
     ///
     /// Écrit sur l'initialiseur mémberwise plutôt que sur la fabrique, et c'est
-    /// délibéré : un témoin de refus qui attendrait la tâche 4.7 pour devenir
-    /// exécutable serait un témoin que la tâche 4.7 écrirait elle-même.
+    /// resté délibéré : le refus se mesure sur la FORME du brouillon, sans
+    /// dépendre de qui, ce mois-ci, sait la produire.
     func test_lePlan_refuseUneCitation_carSonCheminNestPasDurable() {
         let citation = ComposerDocumentDraft(
             format: .post,

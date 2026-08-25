@@ -361,6 +361,25 @@ final class ComposerMoodSurfaceTests: XCTestCase {
             "La vue décide encore de son offre : le plafond d'une republication vaudrait pour le socle et "
                 + "pas pour le ruban, sur le seul écran d'où l'on republie."
         )
+        XCTAssertEqual(
+            occurrences(of: "ComposerAudienceMemory.remembered(", in: bloc), 0,
+            "La surface RELIT la mémoire : depuis que l'éventail descend (lot 4.7), `surface` est un `switch` "
+                + "sous `@ViewBuilder` — changer de format DÉTRUIT cette vue et la recrée —, si bien qu'une "
+                + "relecture à l'apparition écrase l'audience que l'auteur vient de choisir sur l'autre "
+                + "surface. Un ÉLARGISSEMENT silencieux (Privé choisi sous « Post » → PUBLIC au retour sous "
+                + "« Mood »), sur le lot dont tout le sujet est l'audience. La relecture appartient à "
+                + "`MeeshyComposerHost.init`, qui l'applique UNE fois, au format d'ouverture."
+        )
+        XCTAssertEqual(
+            occurrences(of: ".onAppear", in: bloc), 0,
+            "La surface a repris un `.onAppear` : c'est la forme même que l'`init` du meuble proscrit dans "
+                + "son commentaire — « le moment de son application dépendrait de la surface montée »."
+        )
+        XCTAssertTrue(
+            bloc.contains("lastVisibility = candidate.rawValue"),
+            "Le geste de CHOISIR doit toujours ÉCRIRE la mémoire : sans lui, la loi 10 n'aurait plus aucun "
+                + "écrivain pour le format status, et retirer la relecture aurait retiré la mémoire entière."
+        )
         XCTAssertTrue(
             bloc.contains("AudienceUserPickerView("),
             "ONLY/EXCEPT ouvrent le sélecteur nominatif — sans lui, le gateway rejette la publication."
@@ -383,6 +402,15 @@ final class ComposerMoodSurfaceTests: XCTestCase {
         XCTAssertTrue(
             bloc.contains("ComposerMoodPolicy.truncate"),
             "Le plafond est TRONCATURE, et il passe par la règle éprouvée."
+        )
+        XCTAssertTrue(
+            bloc.components(separatedBy: .whitespacesAndNewlines).joined()
+                .contains("adaptiveOnChange(of:text,initial:true)"),
+            "La troncature doit se déclencher AU (RE)MONTAGE, pas seulement à la frappe. Depuis que "
+                + "l'éventail descend (lot 4.7), le texte est l'état du MEUBLE et peut avoir grandi sous la "
+                + "surface document — dont le `TextEditor` n'a aucun plafond — pendant que cette vue était "
+                + "hors de l'arbre. Sans `initial:`, le compteur revenait en alerte à côté d'une flèche "
+                + "ARMÉE, `ComposerMoodPolicy.canPublish` ne regardant que l'emoji."
         )
         XCTAssertTrue(bloc.contains("CharacterCountLabel("), "Le compteur est le composant partagé, pas un `Text` refait.")
         XCTAssertTrue(
@@ -751,6 +779,79 @@ final class ComposerMoodSurfaceTests: XCTestCase {
         )
     }
 
+    // MARK: - Lot 4.7 — ce que l'auteur a AJOUTÉ à une republication
+
+    /// **Le cas NOMINAL de l'ancrage : republier une humeur sans y toucher.**
+    ///
+    /// Les deux sites de republication sèment `text: entry.content` — la phrase
+    /// de l'humeur —, `adopt` la pose dans `documentText`, et les deux surfaces
+    /// du meuble PARTAGENT ce texte (loi 9). Presser la flèche sous « Post »
+    /// sans avoir rien tapé transmettait donc ce texte comme COMMENTAIRE, ce qui
+    /// déclare une citation (`isQuote`) que personne n'a écrite : le post
+    /// affichait deux fois la même phrase — une en commentaire, une dans la
+    /// carte citée — et sa langue était re-détectée au lieu d'être héritée de la
+    /// déclaration de la source (`inheritStatusBody`, `PostService.repostPost`).
+    ///
+    /// C'est bien le cas NOMINAL et non un cas limite : `StatusEntry.content`
+    /// est optionnel, mais les humeurs en portent une dans la grande majorité.
+    func test_lAncrage_dUnTexteQueLAuteurNaPasTOUCHE_neDeclareAucuneCitation() {
+        XCTAssertNil(
+            ComposerAnchorComment.authored(draftText: "Coffee time", seededText: "Coffee time"),
+            "Le texte SEMÉ n'est pas un commentaire d'auteur : le transmettre déclarerait une citation que "
+                + "personne n'a écrite, et le post afficherait deux fois la même phrase."
+        )
+    }
+
+    /// … et un texte ÉDITÉ en est un, sans quoi la garde ci-dessus resterait
+    /// verte sur une règle qui ne citerait plus jamais.
+    func test_lAncrage_dUnTexteEDITE_estBienUnCommentaire() {
+        XCTAssertEqual(
+            ComposerAnchorComment.authored(draftText: "Coffee time !!", seededText: "Coffee time"),
+            "Coffee time !!"
+        )
+        XCTAssertEqual(
+            ComposerAnchorComment.authored(draftText: "je garde", seededText: nil),
+            "je garde",
+            "Sans graine, tout ce qui est tapé est de l'auteur."
+        )
+    }
+
+    /// **La comparaison porte sur ce qui a été ADOPTÉ, pas sur ce qui a été
+    /// semé** — et la nuance mord exactement là où le défaut faisait le plus de
+    /// bruit.
+    ///
+    /// `ComposerMoodSeeding.adopt` fait passer la graine par
+    /// `ComposerMoodPolicy.truncate` : sous une source de plus de 122
+    /// caractères, `documentText` porte les 122 premiers. Comparer au texte BRUT
+    /// rendrait « différent » et rétablirait la citation fantôme.
+    func test_lAncrage_dUneSourceTropLONGUE_compareCeQuiAEteADOPTE() {
+        let source = String(repeating: "a", count: 300)
+        let adopte = ComposerMoodSeeding.adopt(
+            ComposerMoodSeed(text: source),
+            into: ComposerMoodComposition(emoji: nil, text: "", visibility: .public, visibilityUserIds: [])
+        ).text
+
+        XCTAssertEqual(adopte.count, ComposerMoodPolicy.contentLimit, "Prémisse : la graine est plafonnée à l'adoption.")
+        XCTAssertNil(
+            ComposerAnchorComment.authored(draftText: adopte, seededText: source),
+            "Comparer au texte BRUT de la graine ferait passer toute source de plus de 122 caractères pour "
+                + "une édition de l'auteur."
+        )
+    }
+
+    /// Le blanc n'est pas un commentaire — ni du côté du brouillon, ni du côté
+    /// de la graine. Un retour à la ligne ajouté à la phrase de la source ne
+    /// fait pas d'elle une citation.
+    func test_lAncrage_leBLANC_nEstJamaisUnCommentaire() {
+        XCTAssertNil(ComposerAnchorComment.authored(draftText: nil, seededText: "Coffee time"))
+        XCTAssertNil(ComposerAnchorComment.authored(draftText: "", seededText: nil))
+        XCTAssertNil(ComposerAnchorComment.authored(draftText: "   \n ", seededText: nil))
+        XCTAssertNil(
+            ComposerAnchorComment.authored(draftText: " Coffee time\n", seededText: "Coffee time "),
+            "Les espaces de bord ne comptent d'aucun côté."
+        )
+    }
+
     // MARK: - Lot 4.6 — LA PORTE, et ce qui lui appartient
 
     private func doorBlock() throws -> String {
@@ -823,18 +924,176 @@ final class ComposerMoodSurfaceTests: XCTestCase {
         )
     }
 
-    /// **La garde négative du format SORTANT.** Un brouillon qui n'est pas un
-    /// `.status` n'a rien à faire sur ce chemin : l'ANCRAGE en post (loi 5) part
-    /// par `POST /posts/:id/repost`, le seul qui instantanie les octets d'une
-    /// source éphémère. Refuser plutôt que supposer — sinon l'éventail offrirait
-    /// un choix que la publication ignore.
-    func test_laPorte_refuseUnBrouillonQuiNestPasUnStatut() throws {
+    /// **Garde RETOURNÉE le 2026-08-25 (lot 4.7, fin).** Elle exigeait un REFUS
+    /// (`guard draft.format == .status`) ; elle exige désormais un AIGUILLAGE.
+    ///
+    /// Le refus était juste tant qu'aucun écran ne peignait l'éventail sous le
+    /// mood — supposer plutôt que refuser aurait publié un ANCRAGE sous le type
+    /// STATUS, c'est-à-dire un post qui expire en une heure. L'éventail descend
+    /// désormais, et la porte a son second chemin.
+    ///
+    /// **Les DEUX formats qu'elle ne sait pas publier restent refusés**, et
+    /// c'est la moitié de cette garde qui ne doit jamais se perdre : router
+    /// `.story` ou `.reel` vers `anchor` ancrerait une story en post depuis une
+    /// porte qui n'en reçoit jamais.
+    func test_laPorteDuMood_aiguilleSurLeFORMAT_etRefuseLesDeuxQuElleNeSaitPasPublier() throws {
+        let bloc = try doorBlock()
+        let compacte = bloc.components(separatedBy: .whitespacesAndNewlines).joined()
+
+        XCTAssertTrue(
+            compacte.contains("switchdraft.format"),
+            "L'envoi doit AIGUILLER sur le format du brouillon : un chemin unique publierait l'un des deux "
+                + "sous le type de l'autre."
+        )
+        XCTAssertTrue(
+            compacte.contains("case.status:returnawaitpublishMood(draft)"),
+            "Le MIROIR doit rester sur `setStatus` — c'est ce qui garde une republication de mood éphémère."
+        )
+        XCTAssertTrue(
+            compacte.contains("case.post:returnawaitanchor(draft)"),
+            "L'ANCRAGE doit avoir son chemin propre — sans lui, le chip « Post » arme une flèche qui ne "
+                + "publie rien."
+        )
+        XCTAssertTrue(
+            compacte.contains("case.story,.reel:returnfalse"),
+            "Les deux formats que cette porte ne sait pas publier doivent être REFUSÉS, jamais avalés par un "
+                + "`default` : ancrer une story en post depuis la porte du mood serait un contenu d'un AUTRE "
+                + "type que celui que l'auteur a composé."
+        )
+    }
+
+    /// **L'ancrage passe par le MODÈLE, jamais par un service.**
+    ///
+    /// C'est le raccourci évident — `PostService.repost` est `public` et tourne
+    /// déjà sur huit sites — et c'est celui qui contournerait le cache, la
+    /// réconciliation et la file. `test_laPorte_neTouchePasLesServicesDirectement`
+    /// l'interdit déjà en NÉGATIF ; celle-ci nomme le positif, sans quoi la
+    /// négative resterait verte sur une porte qui ne publierait plus rien.
+    func test_laPorteDuMood_ancre_enPassantParLeMODELE_jamaisParUnService() throws {
         let bloc = try doorBlock()
         XCTAssertTrue(
-            bloc.contains("draft.format == .status"),
-            "L'envoi doit vérifier le format du brouillon : `setStatus` publierait sinon un ANCRAGE en post "
-                + "sous le type STATUS, c'est-à-dire un post qui expire en une heure."
+            bloc.contains("viewModel.anchorStatusAsPost("),
+            "L'ancrage doit passer par `StatusViewModel` : le modèle possède déjà `PostServiceProviding`, son "
+                + "double de test et le seul étage où cette règle est éprouvable."
         )
+    }
+
+    /// **Ce que l'ancrage transmet est ce que l'auteur a AJOUTÉ, jamais le
+    /// brouillon nu.**
+    ///
+    /// `content: draft.text` est l'écriture évidente — et c'est celle qui fut
+    /// livrée. Elle renvoyait au serveur la phrase que la PORTE venait de semer,
+    /// déclarant ainsi une citation que personne n'avait écrite sur le cas
+    /// nominal. La règle est
+    /// `ComposerAnchorComment.authored(draftText:seededText:)`, éprouvée plus
+    /// haut sans monter la moindre vue ; cette garde tient le fait qu'elle est
+    /// APPELÉE — une règle juste que le site d'envoi contourne ne corrige
+    /// personne.
+    ///
+    /// Le second terme est NÉGATIF, et il n'est pas un doublon du premier : on
+    /// pourrait appeler la règle pour un champ et passer `draft.text` pour
+    /// l'autre. C'est le libellé `content:` qui compte.
+    func test_lAncrage_neTransmetPasLeBrouillonNU_maisCeQueLAuteurAAjoute() throws {
+        guard let ancrage = blockBody(startingAt: "private func anchor(_ draft: ComposerDocumentDraft)", in: try surfaceSource()) else {
+            throw AncreIntrouvable(quoi: "private func anchor(_ draft: ComposerDocumentDraft)")
+        }
+        XCTAssertTrue(
+            ancrage.contains("anchorStatusAsPost("),
+            "Le bloc lu n'est pas celui de l'ancrage — la garde ne mesurerait RIEN."
+        )
+        XCTAssertTrue(
+            ancrage.contains("ComposerAnchorComment.authored("),
+            "L'ancrage doit demander à la règle ce que l'auteur a ajouté : sans elle, republier sans un mot "
+                + "déclare une CITATION dont le texte est celui de la source."
+        )
+        let compacte = ancrage.components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertFalse(
+            compacte.contains("content:draft.text"),
+            "L'ancrage transmet le brouillon NU : le texte semé par la porte repartirait en commentaire, et "
+                + "le post afficherait deux fois la même phrase."
+        )
+    }
+
+    /// La graine EFFECTIVE est nommée UNE fois — le montage du meuble et
+    /// l'ancrage la lisent tous deux.
+    ///
+    /// Deux écritures de `seed ?? recoveredSeed` seraient deux occasions d'en
+    /// corriger une seule, et le défaut serait MUET : l'ancrage comparerait
+    /// contre une graine que le meuble n'a pas adoptée, donc citerait un texte
+    /// que l'auteur n'a pas écrit. Le compte est de TROIS mentions — la
+    /// déclaration et ses deux lecteurs.
+    func test_laGraineEffective_estNommeeUneFois_etLueParSesDeuxLecteurs() throws {
+        let bloc = try doorBlock()
+        XCTAssertEqual(
+            occurrences(of: "seed ?? recoveredSeed", in: bloc), 1,
+            "La graine effective doit être calculée à UN seul endroit : le montage du meuble et l'ancrage "
+                + "mesurent tous deux contre elle, et deux écritures s'en corrigeraient une seule."
+        )
+        XCTAssertTrue(
+            bloc.contains("moodSeed: graine"),
+            "Premier lecteur : le meuble adopte la graine EFFECTIVE — celle de la porte, ou la ligne reprise."
+        )
+        let compacte = bloc.components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(
+            compacte.contains("seededText:graine?.text"),
+            "Second lecteur : l'ancrage mesure contre la MÊME graine. Contre une autre — la seule de la "
+                + "porte, par exemple — il citerait un texte que l'auteur n'a pas écrit."
+        )
+    }
+
+    /// **Un refus d'ancrage ne FERME pas et ne jette pas la saisie.**
+    ///
+    /// La sortie appartient au meuble, qui la conditionne à l'acceptation
+    /// (`publishDocument` ne referme que sur `accepted`). Un `dismiss()` posé
+    /// dans la branche d'ancrage court-circuiterait ce gate — et un composer
+    /// refermé sur un envoi perdu reste PLAUSIBLE : il se ferme exactement
+    /// comme quand tout va bien.
+    func test_lAncrage_neFermePas_surUnRefus_etNeJettePasLaSaisie() throws {
+        guard let ancrage = blockBody(startingAt: "private func anchor(_ draft: ComposerDocumentDraft)", in: try surfaceSource()) else {
+            throw AncreIntrouvable(quoi: "private func anchor(_ draft: ComposerDocumentDraft)")
+        }
+        XCTAssertTrue(
+            ancrage.contains("anchorStatusAsPost("),
+            "Le bloc lu n'est pas celui de l'ancrage — la garde ne mesurerait RIEN."
+        )
+        XCTAssertFalse(
+            ancrage.contains("dismiss("),
+            "L'ancrage referme lui-même la porte : un 403 `REPOST_AUDIENCE_WIDENING` jetterait alors la "
+                + "saisie, l'emoji, l'audience et les mentions."
+        )
+    }
+
+    /// **Un ancrage ne SUPPLANTE aucune ligne de file.**
+    ///
+    /// `supersedeRecoveredStatus` annule une ligne d'outbox de type STATUS ; un
+    /// ancrage n'enfile RIEN — il appelle le modèle, qui appelle le réseau.
+    /// L'appeler ici détruirait un mood bloqué que l'auteur n'a pas renvoyé.
+    ///
+    /// La rédaction précédente motivait cela par « `OutboxKind` n'a pas de ligne
+    /// pour `POST /posts/:id/repost` ». C'était vrai le 2026-08-24 et le fil
+    /// rouge du repost (lot 7) y a depuis posé sa ligne : le fait qui porte
+    /// cette garde n'est PAS l'absence d'un kind — c'est que cet envoi-ci
+    /// n'enfile pas, quel que soit ce que la file sait porter.
+    ///
+    /// Preuve structurelle, en plus de la règle :
+    /// `recoverStuckMoodIfComposingFresh` s'ouvre sur `guard seed == nil`, et
+    /// les deux sites de republication passent une graine non nulle —
+    /// `recoveredCmid` est donc toujours `nil` sous une republication.
+    func test_lAncrage_neSupplantePasLaLigneBLOQUEE_carUneRepublicationNaJamaisDeReprise() throws {
+        guard let ancrage = blockBody(startingAt: "private func anchor(_ draft: ComposerDocumentDraft)", in: try surfaceSource()) else {
+            throw AncreIntrouvable(quoi: "private func anchor(_ draft: ComposerDocumentDraft)")
+        }
+        XCTAssertTrue(
+            ancrage.contains("anchorStatusAsPost("),
+            "Le bloc lu n'est pas celui de l'ancrage — la garde ne mesurerait RIEN."
+        )
+        for interdit in ["supersedeRecoveredStatus", "recoveredCmid", "setStatus("] {
+            XCTAssertFalse(
+                ancrage.contains(interdit),
+                "L'ancrage touche « \(interdit) » : il annulerait une ligne d'outbox STATUS qu'il n'envoie "
+                    + "pas, ou publierait le mood en plus du post."
+            )
+        }
     }
 
     /// La porte n'OBSERVE pas son modèle : elle n'affiche rien qui en dépende.

@@ -718,13 +718,29 @@ nonisolated enum ComposerDocumentPublishGate {
     ///     valeur par défaut : un défaut les aurait fait disparaître d'un site
     ///     d'appel sans casser la moindre compilation, et le gate serait
     ///     redevenu celui qui arme une flèche sur un refus certain.
+    ///   - repostOfId: la publication que le meuble REPARTAGE, quand il en
+    ///     repartage une. **Un ancrage a sa matière : c'est sa SOURCE.**
+    ///     Republier sans un mot est un repost SIMPLE, exactement ce que
+    ///     `FeedViewModel.repostPost` envoie déjà (`content: nil, isQuote:
+    ///     false`) — exiger un texte y aurait laissé la flèche grise sur le cas
+    ///     NOMINAL (`StatusEntry.content` est optionnel), et sans un mot
+    ///     d'explication : `ComposerSocleCopy.publishBlockedHint(surface:
+    ///     .document)` rend `nil`, faute d'une phrase juste déjà traduite. Sans
+    ///     valeur par défaut, pour la raison de la ligne au-dessus.
+    ///
+    /// **L'ORDRE des gardes est la règle, pas seulement leur contenu.** La
+    /// source ne dispense de rien : un `ONLY` sans personne retient AUSSI un
+    /// ancrage — le gateway le rejette par un 400 `VALIDATION_ERROR`
+    /// (`CreatePostSchema`) — et remonter `repostOfId != nil` au-dessus
+    /// d'`audienceIsComplete` armerait la flèche sur ce refus certain.
     static func canPublish(
         surface: ComposerSurfaceKind,
         emoji: String?,
         text: String,
         visibility: PostVisibility,
         visibilityUserIds: [String],
-        isPublishing: Bool
+        isPublishing: Bool,
+        repostOfId: String?
     ) -> Bool {
         guard !isPublishing else { return false }
         guard audienceIsComplete(visibility, userIds: visibilityUserIds) else { return false }
@@ -734,7 +750,8 @@ nonisolated enum ComposerDocumentPublishGate {
         case .mood:
             return ComposerMoodPolicy.canPublish(emoji: emoji, isPublishing: isPublishing)
         case .document:
-            return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return repostOfId != nil
+                || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 }
@@ -790,6 +807,17 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// 4.7). Elles ont un défaut ici, contrairement au reste, parce que leur
     /// absence EST le cas normal — un mood créé n'en a pas — et qu'aucun site ne
     /// peut donc les perdre en silence.
+    ///
+    /// **Le PLAFOND du mood s'applique ICI, et c'est une troisième
+    /// normalisation** (lot 4.7). Il était tenu par le seul `adaptiveOnChange`
+    /// de la surface, ce qui suffisait tant que la frappe était l'unique entrée
+    /// de `documentText`. Depuis que l'éventail descend, le texte est aussi
+    /// écrit par le `TextEditor` SANS plafond de la surface document — un post
+    /// n'en a pas — puis rapporté sous le mood par une bascule : 300 caractères
+    /// composés sous « Post » repartaient en `STATUS` tels quels, le serveur ne
+    /// plafonnant qu'à 5000 (`CreatePostSchema`). La fabrique est le seul site
+    /// que TOUS les chemins d'envoi traversent ; la surface, elle, tronque pour
+    /// que l'auteur le VOIE.
     static func mood(
         emoji: String?,
         text: String,
@@ -799,9 +827,10 @@ nonisolated struct ComposerDocumentDraft: Equatable {
         repostOfId: String? = nil,
         audioUrl: String? = nil
     ) -> ComposerDocumentDraft {
-        ComposerDocumentDraft(
+        let plafonne = ComposerMoodPolicy.truncate(text)
+        return ComposerDocumentDraft(
             format: .status,
-            text: text.isEmpty ? nil : text,
+            text: plafonne.isEmpty ? nil : plafonne,
             emoji: emoji,
             visibility: visibility,
             visibilityUserIds: visibility.requiresUserSelection ? visibilityUserIds : nil,
@@ -813,9 +842,8 @@ nonisolated struct ComposerDocumentDraft: Equatable {
 
     /// Le brouillon d'un DOCUMENT.
     ///
-    /// Il ne porte ni emoji, ni mentions, ni graine de repost — et ce n'est pas
-    /// un oubli : la surface document n'a ni grille d'emojis ni barre de
-    /// références, et aucune porte de production ne la monte. Lui inventer des
+    /// Il ne porte ni emoji ni mentions — et ce n'est pas un oubli : la surface
+    /// document n'a ni grille d'emojis ni barre de références. Lui inventer des
     /// champs qu'aucune vue ne remplit aurait fabriqué une capacité que le
     /// premier lecteur aurait crue tenue.
     ///
@@ -826,6 +854,14 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// n'aurait annoncé. Un défaut ici l'aurait fait disparaître d'un site
     /// d'appel sans casser la moindre compilation.
     ///
+    /// **`repostOfId` est arrivé au lot 4.7, avec l'ANCRAGE**, et il n'a pas
+    /// davantage de valeur par défaut — pour la MÊME raison, qui mord ici avec
+    /// plus de force : perdre la source ne casse rien, ne dit rien, et
+    /// transforme silencieusement un ancrage en post ordinaire. Il vient de la
+    /// PORTE (`ComposerOrigin.repostedPostId`), jamais d'une graine : la porte
+    /// seule sait quelle publication elle repartage, et le poser deux fois en
+    /// ferait deux sources à faire diverger.
+    ///
     /// La normalisation de la loi 3 est la MÊME que celle du mood, et à la même
     /// place — dans la fabrique, jamais chez l'appelant : porter une liste sous
     /// une audience qui n'en veut pas la ferait persister pour rien.
@@ -833,7 +869,8 @@ nonisolated struct ComposerDocumentDraft: Equatable {
         format: ComposerFormat,
         text: String,
         visibility: PostVisibility,
-        visibilityUserIds: [String]
+        visibilityUserIds: [String],
+        repostOfId: String?
     ) -> ComposerDocumentDraft {
         ComposerDocumentDraft(
             format: format,
@@ -842,7 +879,7 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             visibility: visibility,
             visibilityUserIds: visibility.requiresUserSelection ? visibilityUserIds : nil,
             mentions: nil,
-            repostOfId: nil,
+            repostOfId: repostOfId,
             audioUrl: nil
         )
     }

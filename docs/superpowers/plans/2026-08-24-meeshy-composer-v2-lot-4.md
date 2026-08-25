@@ -430,33 +430,53 @@ case .repost(_, let sourceFormat):
 
 **DoD :** republier un mood depuis la bulle ouvre le meuble sur la surface mood, l'éventail offre Mood · Post, et les deux chips produisent réellement deux formats différents. Les trois autres formats de repost **n'ont pas bougé d'une ligne** — `UnifiedPostComposer` et le chemin 3 sont intacts.
 
-> **ÉTAT AU 2026-08-24 — 4.7 est livrée À MOITIÉ, et ne se compte PAS comme faite.**
-> Mesuré à l'exécution, puis confirmé par la revue adversariale : le **MIROIR** part
-> (republier un mood ouvre le meuble sur la surface mood, et la republication repart
-> en STATUS), mais l'**ANCRAGE n'atteint aucun écran**. `ComposerFormatFan` n'est
-> monté que par `plateauTools`, lui-même monté par la SCÈNE seule — l'éventail ne
-> descend donc pas sous la surface mood, et le chip « Post » n'existe nulle part.
-> `.repost(.status)` rend pourtant bien `offeredFormats == [.status, .post]` : l'offre
-> est dans la table, pas à l'écran.
+> **ÉTAT AU 2026-08-25 — 4.7 est SOLDÉE.** La loi 5 est câblée des deux côtés :
+> le MIROIR repart en `STATUS`, l'ANCRAGE atteint un écran.
 >
-> **Ce que la dette N'EST PAS** : la table ne ment pas. `ComposerIntent.swift`
-> consigne l'écart en toutes lettres, et
-> `ComposerDocumentSurfaceTests.test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint`
-> le tient bloc par bloc — elle rougira le jour où l'éventail descendra.
+> **L'ordre de la levée n'était pas négociable**, et c'est le seul enseignement
+> que ce bloc doit léguer. Faire descendre l'éventail d'abord aurait armé une
+> flèche qui, pressée, n'aurait RIEN fait : `MoodComposerDoor.publish` s'ouvrait
+> sur `guard draft.format == .status`, rendait `false`, et le composer restait
+> ouvert, muet — « le pire des deux mondes, puisqu'il aurait eu l'air de
+> marcher ». Livré dans l'ordre : (1) le PUBLIEUR
+> (`StatusViewModel.anchorStatusAsPost`, `POST /posts/:id/repost`), (2) la SOURCE
+> sur le brouillon (`ComposerDocumentDraft.document(…, repostOfId:)` et le gate
+> qui arme dessus), (3) l'ÉVENTAIL (`ComposerFormatFanPlacement`, le plateau
+> monté par le `body` du meuble), (4) l'AIGUILLAGE de la porte sur le format.
 >
-> **Les deux raccourcis ont été mesurés puis ÉCARTÉS**, et il faut savoir pourquoi
-> avant de les reproposer : (a) descendre l'éventail livrerait le chip « Post » sur
-> une surface dont le socle peint encore un `audienceChip` inerte et un œil ouvrant
-> une scène VIDE — de l'UI morte, que la loi 4 interdit ; (b) ramener
-> `routesToLegacy` à `.repostComposer` ferait désigner par la table un composer
-> historique qu'**aucun** site ne monte pour un repost de statut, pendant que
-> `RootView` et `iPadRootView` montent le meuble : la table mentirait dans l'autre
-> sens et quatre gardes livrées tomberaient.
+> **Les deux raccourcis écartés le 2026-08-24 le restent**, et pour des raisons
+> qui n'ont pas bougé : (a) descendre l'éventail EN BLOC aurait livré le chip
+> « Story » sous le document de `.feedComposer`, où le choisir monte l'atelier en
+> laissant la saisie derrière — c'est la règle de PLACEMENT qui sépare les deux
+> cas, pas un second montage ; (b) ramener `routesToLegacy` à `.repostComposer`
+> ferait désigner par la table un composer historique qu'**aucun** site ne monte
+> pour un repost de statut.
 >
-> **Condition de levée** : le socle sait choisir une audience et l'œil sait ce qu'il
-> montre sous une surface sans scène. Tant que ces deux-là manquent, 4.7 reste à
-> moitié, et la planche P0 ne la compte pas.
-
+> **Les DEUX conditions de levée ont été remplies avant, pas contournées** : le
+> socle sait choisir une audience (lot 4.9) et l'œil a été RETIRÉ sous les deux
+> surfaces sans scène plutôt que laissé ouvrir un canvas vide (lot 4.9 aussi).
+>
+> **Gardes** : `ComposerDocumentSurfaceTests`
+> `.test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint`,
+> `.test_lePlacementDeLEventail_suitLaSurfaceOuAtterrissentSesFormats`,
+> `.test_lesDeuxReglesDeLEventail_seLisentENSEMBLE_dansUneSeuleRegle` ;
+> `ComposerMoodSurfaceTests`
+> `.test_laPorteDuMood_aiguilleSurLeFORMAT_etRefuseLesDeuxQuElleNeSaitPasPublier`
+> et les quatre témoins de `ComposerAnchorComment` ; `StatusViewModelTests`, les
+> sept témoins de l'ancrage.
+>
+> **DETTES nommées, non refermées par 4.7** — les lire avant de les redécouvrir :
+> le plafond d'ÉLARGISSEMENT de la loi 10 (`APIPost.toStatusEntry()` ne transmet
+> pas l'audience de l'original, donc `StoryRepostAudience` n'a pas son entrée — le
+> trou pèse identiquement sur les deux chips) ; l'ancrage n'est pas DURABLE hors
+> ligne ni idempotent (le fil rouge du repost a posé `OutboxKind.repostPost`, il
+> lui manque un ÉCRIVAIN — l'y brancher apporterait `X-Client-Mutation-Id` avec) ;
+> la surface document ne peint AUCUN bandeau d'attribution sous un ancrage, qui
+> reste donc explicite par la seule mémoire du geste ; l'emoji de la grille et les
+> références composées sous le mood ne survivent pas à la bascule vers l'ancrage
+> (`PostService.repostPost` recopie le `moodEmoji` de l'ORIGINAL et n'a pas de
+> paramètre de mentions) ; `setStatus` ne rend toujours rien, si bien que le
+> MIROIR referme le composer sur un 500.
 ---
 
 ### Task 4.8: Le RETRAIT — conditionnel, en dernier, avec un STOP

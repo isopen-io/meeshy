@@ -160,9 +160,21 @@ nonisolated enum ComposerSocleCopy {
     /// `nil` hors du mood, et c'est une lacune ASSUMÉE, pas un oubli : la seule
     /// phrase déjà traduite dit « choisissez un emoji », ce qui est faux d'un
     /// document, dont le gate porte sur le texte. Le lot 4 n'ajoute AUCUNE clé
-    /// au catalogue (sept locales, cliquet français à zéro tolérance), et aucune
-    /// porte de production ne monte le document. Une phrase juste pour lui
-    /// s'écrira le jour où une porte l'atteindra.
+    /// au catalogue (sept locales, cliquet français à zéro tolérance).
+    ///
+    /// **Une porte de production ATTEINT le document depuis le lot 4.7** — la
+    /// republication d'un mood, dont l'éventail offre le chip « Post ». La
+    /// lacune n'y mord pourtant pas, et c'est ce qui a rendu la descente de
+    /// l'éventail possible sans clé neuve : sous un ancrage, le gate arme sur la
+    /// SOURCE (`repostOfId`), jamais sur le texte, si bien que la flèche n'y est
+    /// jamais grise faute d'une phrase. Le seul refus qui reste atteignable sous
+    /// cette surface est l'audience nominative vide, et `publishBlockedHint`
+    /// rend déjà `""` dans ce cas — un indice FAUX coûtant plus qu'un indice
+    /// absent.
+    ///
+    /// Une phrase pour le document s'écrira le jour où une porte l'atteindra
+    /// avec un gate qui porte sur le TEXTE — c'est-à-dire `.feedComposer`, dans
+    /// le lot qui possède le catalogue.
     static func publishBlockedHint(surface: ComposerSurfaceKind) -> String? {
         switch surface {
         case .mood:
@@ -208,19 +220,28 @@ struct MeeshyComposerHost: View {
     /// lui a donnée. Le rendu `Bool` est l'ACCEPTATION, et le socle n'obéit
     /// qu'à elle : il ne referme le composer que sur un `true`.
     ///
-    /// **Ce que ce canal NE tient PAS aujourd'hui, et il faut le lire au mot
-    /// près.** Le MÉCANISME du refus existe ; l'ÉCHEC D'ENVOI ne l'emprunte
-    /// pas. Aucun écrivain ne rend `false` sur une erreur réseau :
-    /// `MoodComposerDoor.publish` rend `true` inconditionnellement après son
-    /// `await`, parce que `StatusViewModel.setStatus` ne rend rien — elle avale
-    /// l'erreur dans un `catch` qui se contente d'un toast. Un gateway qui
-    /// répond 500 referme donc le composer et perd l'emoji, la phrase,
-    /// l'audience et les mentions. **Dette IDENTIQUE à celle de l'écran
-    /// historique** (`StatusComposerView` dismisse aussi après un `setStatus`
-    /// muet) et **non refermée par ce lot** : la remontée d'échec reste à
-    /// écrire, et elle commence par faire rendre un résultat à `setStatus`.
-    /// Le seul `false` atteignable depuis la porte du mood est sa garde de
-    /// format, jamais un échec de transport.
+    /// **Ce que ce canal tient, et ce qu'il ne tient PAS — à lire au mot près,
+    /// car la réponse a changé de moitié le 2026-08-25.** Le MÉCANISME du refus
+    /// existe, et l'ÉCHEC D'ENVOI l'emprunte désormais sur DEUX des trois
+    /// branches de production :
+    ///
+    /// - `DocumentComposerDoor.publish` rend `false` sur trois refus (plan,
+    ///   matière, publieur muet) — lot 4.10 ;
+    /// - `MoodComposerDoor.anchor` rend `false` dès que
+    ///   `StatusViewModel.anchorStatusAsPost` refuse : un 403
+    ///   `REPOST_AUDIENCE_WIDENING`, une coupure réseau, un hors-ligne — lot
+    ///   4.7 ;
+    /// - `MoodComposerDoor.publishMood`, LUI, rend toujours `true` après son
+    ///   `await`, parce que `StatusViewModel.setStatus` ne rend rien — elle
+    ///   avale l'erreur dans un `catch` qui se contente d'un toast. Un gateway
+    ///   qui répond 500 referme donc ce composer-là et perd l'emoji, la phrase,
+    ///   l'audience et les mentions.
+    ///
+    /// La dernière est la **dette IDENTIQUE à celle de l'écran historique**
+    /// (`StatusComposerView` dismisse aussi après un `setStatus` muet) et **non
+    /// refermée par ce lot** : sa levée commence par faire rendre un résultat à
+    /// `setStatus`. Ne pas lire l'asymétrie comme un oubli de l'ancrage — c'est
+    /// le miroir qui est en retard, et il est le seul.
     ///
     /// **Ce canal appartient au lot 4 et y RESTE.** Il n'est pas confié à un lot
     /// ultérieur : le plan du lot 7 déclare le dossier `Composer` interdit et
@@ -494,6 +515,52 @@ struct MeeshyComposerHost: View {
         ComposerChromeOwnership.socleZones(for: mountedSurface)
     }
 
+    /// **OÙ le plateau — donc l'éventail — a le droit de se peindre.**
+    ///
+    /// Une RÈGLE nommée, jamais une expression écrite dans le `body` : une
+    /// condition posée là est invisible aux tests, et c'est ainsi qu'une règle
+    /// produit se met à exister en deux exemplaires.
+    ///
+    /// **La loi 5 impose de surcroît que rien dans le `body` ne conditionne
+    /// l'affichage sur la PORTE, et il faut lire ce que cela interdit
+    /// exactement.** Ce n'est pas « ne rien lire qui vienne de la porte » : le
+    /// PROFIL vient d'elle, et `mountedSurface` comme `offeredAudiences` le
+    /// remontent aussi. Ce qui est interdit est de tester son IDENTITÉ — un
+    /// `if profile` / `if origin` écrit ici, ce que
+    /// `test_theSocleYieldsToTheAtelier_andNeverToTheDoor` refuse en toutes
+    /// lettres. Cette propriété ne lit que des CAPACITÉS — la surface montée,
+    /// l'ouverture, l'offre —, si bien que deux portes aux mêmes capacités y
+    /// obtiennent la même réponse. C'est cela, la loi 5.
+    ///
+    /// Jusqu'au lot 4.7, le plateau était monté par `composerSurface` : la SCÈNE
+    /// seule le portait, et le chip « Post » d'une republication de mood
+    /// n'existait sur aucun écran. Le descendre en bloc aurait livré le défaut
+    /// symétrique sous `.feedComposer`. `ComposerFormatFanPlacement` est ce qui
+    /// sépare les deux cas — et c'est une règle, non un accident de montage.
+    ///
+    /// **Elle lit les DEUX règles de l'éventail, et leur CONJONCTION n'est pas
+    /// écrite ici.** Le plateau ne porte plus qu'une chose ; sans le test de
+    /// VISIBILITÉ, une création de mood (`.moodChip`, qui n'offre qu'un format)
+    /// monterait une rangée VIDE — un `HStack` réduit à ses 16 points de
+    /// remplissage vertical, en haut d'un écran livré. Loi 4 : ce qui n'a rien à
+    /// montrer est absent, pas transparent. La scène, elle, n'en change pas :
+    /// sa seule porte de production (`.storyTray`) offre toujours au moins deux
+    /// formats.
+    ///
+    /// Le `&&` a d'abord été écrit ICI, et c'était la même faute d'un cran plus
+    /// haut : la composition EST la règle, et posée dans une propriété privée
+    /// elle n'était exercée par aucune assertion. Mutation mesurée — remplacer
+    /// ce `&&` par un `||` laissait passer les quatre gardes de source qui
+    /// l'entouraient. `ComposerFormatFanPlacement.mounts` la porte désormais, et
+    /// cette propriété n'est plus que sa LECTURE.
+    private var paintsFormatFan: Bool {
+        ComposerFormatFanPlacement.mounts(
+            surface: mountedSurface,
+            opening: profile.opensWith,
+            offeredFormats: profile.offeredFormats
+        )
+    }
+
     /// **Les audiences que le meuble a le droit de proposer**, lues UNE fois et
     /// remises telles quelles à ses deux formes de sélecteur — le menu du socle
     /// et le ruban du mood.
@@ -513,6 +580,13 @@ struct MeeshyComposerHost: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Le plateau coiffe les TROIS surfaces depuis le lot 4.7, sous la
+            // règle de placement. Il vivait dans `composerSurface`, ce qui le
+            // réservait de fait à la scène : le chip « Post » d'une
+            // republication de mood n'existait alors sur aucun écran. La
+            // disposition de la scène est inchangée — un `VStack` qui empile le
+            // plateau puis l'atelier —, et ce montage-ci est le SEUL.
+            if paintsFormatFan { plateauTools }
             surface
             // `assembles(.publish)` dit que l'ATELIER peint la flèche. Le socle
             // peint donc les MÊMES trois zones seulement quand l'atelier les a
@@ -589,29 +663,33 @@ struct MeeshyComposerHost: View {
     ///
     /// Périmètre CONSIGNÉ de C2 : la zone contextuelle reste celle de l'atelier
     /// existant. Le host ne lui impose pas ses capacités par une API neuve ; il
-    /// gouverne ce que LUI monte autour (`plateauTools` ci-dessous). Passer des
-    /// capacités à l'atelier appartient à l'écriture v3 native, hors de ce lot.
+    /// gouverne ce que LUI monte autour. Passer des capacités à l'atelier
+    /// appartient à l'écriture v3 native, hors de ce lot.
+    ///
+    /// **Le plateau n'est plus monté ICI depuis le lot 4.7.** Il coiffe les
+    /// trois surfaces depuis le `body`, sous `paintsFormatFan` : le tenir dans
+    /// ce bloc le réservait de fait à la scène, et le chip « Post » d'une
+    /// republication de mood n'existait alors sur aucun écran. La disposition
+    /// visuelle de la scène n'a pas changé pour autant — le `body` empile déjà
+    /// le plateau au-dessus de la surface.
     ///
     /// Les cinq fournisseurs sont posés SUR l'atelier, au plus près de son
     /// montage : c'est la forme que `AppInitWireupTests` compte, site par site.
     private var composerSurface: some View {
-        VStack(spacing: 0) {
-            plateauTools
-            StoryComposerView(
-                viewModel: viewModel,
-                initialVisibility: initialVisibility,
-                chromeOwner: chromeOwner,
-                publishTargetType: selectedFormat.postType,
-                onPublishAllInBackground: onPublishAllInBackground,
-                onPreview: onPreview,
-                onDismiss: onDismiss
-            )
-            .storyLocationPickerProvided()
-            .storyCameraCaptureProvided()
-            .storyRecentCameraRollProvided()
-            .storyPasteProvided()
-            .storyStickerLibraryProvided()
-        }
+        StoryComposerView(
+            viewModel: viewModel,
+            initialVisibility: initialVisibility,
+            chromeOwner: chromeOwner,
+            publishTargetType: selectedFormat.postType,
+            onPublishAllInBackground: onPublishAllInBackground,
+            onPreview: onPreview,
+            onDismiss: onDismiss
+        )
+        .storyLocationPickerProvided()
+        .storyCameraCaptureProvided()
+        .storyRecentCameraRollProvided()
+        .storyPasteProvided()
+        .storyStickerLibraryProvided()
     }
 
     /// La surface « document sans scène » (V2).
@@ -640,29 +718,47 @@ struct MeeshyComposerHost: View {
     /// L'emoji, lui, n'ingère rien : il écrit dans `documentText`, que le
     /// brouillon emporte déjà. Sa chaîne est complète, donc il se peint.
     ///
-    /// **Elle ne porte pas non plus l'ÉVENTAIL**, qui vit dans le plateau. Ce
-    /// n'est pas une impasse aujourd'hui — mais la raison a changé au lot 4.6,
-    /// et l'ancienne (« le seul appelant de production ouvre sur
-    /// `.cameraReady` ») est devenue FAUSSE dans le même arbre. Il y a désormais
-    /// DEUX appelants de production du meuble, et le second n'ouvre pas sur une
-    /// capture :
+    /// **Elle ne porte pas non plus l'ÉVENTAIL**, qui vit dans le plateau — et
+    /// depuis le lot 4.7 le plateau est monté par le `body`, sous une RÈGLE.
     ///
-    /// - `StoryTrayActions` — `.storyTray`, ouverture `.cameraReady`, que
-    ///   `ComposerSurfaceRouting` route TOUJOURS vers la scène ;
-    /// - `MoodComposerDoor` — `.moodChip` (`.moodGrid`) et
-    ///   `.repost(sourceFormat: .status)` (`.keyboardOnContent`). Les deux
-    ///   routent vers le MOOD tant que le format vaut `.status` — et le second
-    ///   offre `[.status, .post]`, donc une bascule vers `.post` y monterait
-    ///   cette surface-ci.
+    /// Jusque-là, le plateau était monté par `composerSurface` : la scène seule
+    /// le portait, et l'impasse était tenue par un ACCIDENT DE MONTAGE plutôt
+    /// que par un raisonnement. Elle l'est désormais par
+    /// `ComposerFormatFanPlacement`, qui répond à la seule question qui compte :
+    /// *tous les formats offerts atterrissent-ils sur une surface qui partage
+    /// l'état du meuble ?*
     ///
-    /// Ce qui tient l'impasse fermée n'est donc pas l'ouverture, c'est que
-    /// **l'éventail n'est monté que par `composerSurface`** : ni le mood ni le
-    /// document ne le portent, et sans lui aucun auteur ne peut choisir `.post`.
-    /// Le fait est tenu par `ComposerDocumentSurfaceTests`
-    /// `.test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint`, et NON par
-    /// la garde du lot 3 (`portesDocumentDuMeuble` ne contient que
-    /// `.feedComposer` et filtre sur `profil.initialFormat`, jamais sur le
-    /// format qu'un éventail aurait choisi).
+    /// Ce qui SÉPARE les deux portes qui atteignent cette surface :
+    ///
+    /// - **`.repost(sourceFormat: .status)`** offre `[.status, .post]`, deux
+    ///   formats qui restent sur des surfaces sans atelier. `documentText`,
+    ///   `moodEmoji` et l'audience sont l'état du MEUBLE et suivent la bascule.
+    ///   L'éventail s'y peint donc, des DEUX côtés — sans quoi l'ancrage serait
+    ///   une porte à sens unique.
+    /// - **`.feedComposer`** offre `.story`, que `ComposerSurfaceRouting` envoie
+    ///   à la SCÈNE. Un auteur qui taperait son post ici puis choisirait
+    ///   « Story » verrait le routage lui monter l'atelier, et `documentText`
+    ///   n'aurait aucun chemin pour l'y suivre — la saisie disparaîtrait sans un
+    ///   mot, sur la surface de création la plus fréquentée de l'app.
+    ///
+    /// Mesuré le 2026-08-24 sur les 14 fichiers `StoryComposerViewModel*.swift`,
+    /// et le fait n'a pas bougé : ses écrivains publics sont l'adoption de
+    /// brouillon (`adoptDraft(id:)`, `detachFromAdoptedDraft()`,
+    /// `adoptDeclaredReferences(_:)`), la timeline
+    /// (`loadCurrentSlideIntoTimeline()`, `commitTimelineToCurrentSlide()`,
+    /// `applyPersistedCommandHistory(_:)`, `shutdownTimelineIfNeeded()`, et
+    /// `timelineViewModel` qui rend une référence écrivant à son tour) et deux
+    /// inits de reprise (`init(editing:)`, `init(reposting:authorHandle:)`) —
+    /// **aucun n'écrit du TEXTE** : `currentEffects` est `public internal(set)`,
+    /// et rien dans `+Elements.swift` n'expose publiquement la création d'un
+    /// élément de texte. La liste est plus large que le blocage, et c'est le
+    /// blocage qui compte : un `grep` de contrôle doit CONFIRMER cette phrase,
+    /// jamais la démentir.
+    ///
+    /// **Condition de levée pour `.feedComposer`, côté SDK** : un écrivain
+    /// public de texte atteignable par le meuble. L'éventail y descend alors
+    /// AVEC le transfert de la saisie, jamais avant lui — et la règle de
+    /// placement le dira d'elle-même, sans qu'on ait à toucher ce fichier.
     ///
     /// La TABLE de C1 désigne par ailleurs le meuble pour `.feedComposer`
     /// (`routesToLegacy: nil`) depuis le lot 3, mais aucun site de présentation
@@ -670,48 +766,18 @@ struct MeeshyComposerHost: View {
     /// depuis ses propres booléens. La porte la plus utilisée ne passe donc pas
     /// encore ici.
     ///
-    /// Le jour où elle passera, il faudra y porter le sélecteur — sans lui,
-    /// basculer vers le document serait une porte à sens unique. **Et ce jour
-    /// ne se décrète pas depuis ce fichier** : le porter AUJOURD'HUI serait
-    /// pire que ne pas le porter. Mesuré le 2026-08-24 sur les 14 fichiers
-    /// `StoryComposerViewModel*.swift` : ses écrivains publics sont l'adoption
-    /// de brouillon (`adoptDraft(id:)`, `detachFromAdoptedDraft()`,
-    /// `adoptDeclaredReferences(_:)`), la timeline (`loadCurrentSlideIntoTimeline()`,
-    /// `commitTimelineToCurrentSlide()`, `applyPersistedCommandHistory(_:)`,
-    /// `shutdownTimelineIfNeeded()`, et `timelineViewModel` qui rend une
-    /// référence écrivant à son tour) et deux inits de reprise
-    /// (`init(editing:)`, `init(reposting:authorHandle:)`) — **aucun n'écrit du
-    /// TEXTE** : `currentEffects` est `public internal(set)`, et rien dans
-    /// `+Elements.swift` n'expose publiquement la création d'un élément de
-    /// texte. La liste est plus large que le blocage, et c'est le blocage qui
-    /// compte : un `grep` de contrôle doit CONFIRMER cette phrase, jamais la
-    /// démentir — un inventaire faux présenté comme « déjà vérifié » coûte plus
-    /// cher que pas d'inventaire du tout. Un
-    /// auteur qui taperait son post ici puis choisirait « Story » verrait le
-    /// routage lui monter l'atelier, et `documentText` n'aurait aucun chemin
-    /// pour l'y suivre — la saisie disparaîtrait sans un mot, sur la surface de
-    /// création la plus fréquentée de l'app.
-    ///
-    /// Les deux branches sont donc des régressions — sans éventail une porte à
-    /// sens unique, avec éventail une perte de texte — et c'est ce couple qui
-    /// fait que recâbler `.feedComposer` demande plus qu'une ligne de table.
-    /// **Condition de levée, côté SDK** : un écrivain public de texte
-    /// atteignable par le meuble. L'éventail descend alors ici AVEC le
-    /// transfert de la saisie, jamais avant lui.
-    ///
-    /// **Ce raisonnement vaut pour `.feedComposer`, et pour lui SEUL — ne pas
-    /// le généraliser.** Il tient parce que cette porte offre `.story`, que le
-    /// routage envoie à la scène. La porte de REPUBLICATION D'UN MOOD n'offre
-    /// que `[.status, .post]`, deux formats qui restent sur les surfaces sans
-    /// atelier : la perte de texte n'y est pas même possible, `documentText`
-    /// étant l'ÉTAT du meuble et les deux surfaces s'y liant. Conclure de ce
-    /// paragraphe que « l'éventail attend le SDK » serait donc faux pour 4.7, et
-    /// coûteux : la vraie raison y est app-side, c'est le plafond d'audience de
-    /// la loi 10, dont le meuble n'a aucune entrée (`ComposerIntent.swift`,
-    /// branche `.repost`, et la garde
-    /// `test_lAncrageDUnMood_nAAucunPlafondDAudience_etCEstCE_quiRetientLeventail`).
-    /// Deux portes, deux blocages distincts, un seul éventail immobile — et
-    /// lever l'un ne lève pas l'autre.
+    /// **Ne pas confondre les deux blocages, ils n'ont ni la même cause ni la
+    /// même levée.** Celui de `.feedComposer` est côté SDK (le transfert de la
+    /// saisie). Celui que la republication portait était app-side — le plafond
+    /// d'audience de la loi 10 — et il ne RETIENT plus l'éventail : ce que la
+    /// loi 10 pouvait fermer sans connaître la source l'a été au lot 4.9
+    /// (`ComposerAudienceOffer` retire `ONLY`/`EXCEPT` d'une republication), et
+    /// l'ÉLARGISSEMENT qui reste pèse EXACTEMENT autant sur le ruban du mood,
+    /// peint sur un écran réel depuis le lot 4.6. L'ancrage hérite d'un trou
+    /// déjà nommé et déjà gardé ; il n'en ajoute aucun. Gardes :
+    /// `ComposerDocumentSurfaceTests`
+    /// `.test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint` et
+    /// `.test_lAncrageDUnMood_nAToujoursAucunPlafondDAudience_etLEventailDescendQuandMeme`.
     ///
     /// **Sa SORTIE est celle du meuble.** `onDismiss` n'était atteignable que
     /// sous la scène, où l'atelier du SDK peint la croix ; le document n'a pas
@@ -825,6 +891,13 @@ struct MeeshyComposerHost: View {
 
     /// Le plateau ne porte plus qu'UNE chose : l'éventail, le seul endroit du
     /// meuble où l'auteur choisit ce qu'il PUBLIE.
+    ///
+    /// **Il est monté par le `body`, une seule fois, sous `paintsFormatFan`**
+    /// (lot 4.7). Il l'était par `composerSurface`, ce qui le réservait de fait
+    /// à la scène : le chip « Post » d'une republication de mood n'existait
+    /// alors sur aucun écran. Le descendre en bloc aurait livré le défaut
+    /// symétrique sous `.feedComposer` — d'où la règle, et non un second
+    /// montage.
     ///
     /// **Trois pictogrammes en sont partis le 2026-08-24** — caméra,
     /// diapositives, timeline. Ils n'étaient pas des `Button` : le tap ne
@@ -1078,7 +1151,8 @@ struct MeeshyComposerHost: View {
             text: documentText,
             visibility: composerVisibility,
             visibilityUserIds: composerVisibilityUserIds,
-            isPublishing: isPublishingDocument
+            isPublishing: isPublishingDocument,
+            repostOfId: intent.origin.repostedPostId
         )
     }
 
@@ -1136,11 +1210,18 @@ struct MeeshyComposerHost: View {
             // témoin ; le lire encore ferait publier sous un réglage que
             // l'auteur vient de changer, en silence. Il ne reste qu'un lecteur :
             // l'atelier, à qui le SDK l'imposerait par défaut sans lui.
+            //
+            // `repostOfId` vient de la PORTE, exactement comme sous le mood —
+            // et c'est ce qui fait de la bascule Mood → Post un ANCRAGE plutôt
+            // qu'un post ordinaire. Le lire ailleurs (la graine, un drapeau du
+            // site de montage) en ferait une seconde source pour « quelle
+            // publication republie-t-on », alors que la porte le sait.
             return ComposerDocumentDraft.document(
                 format: selectedFormat,
                 text: documentText,
                 visibility: composerVisibility,
-                visibilityUserIds: composerVisibilityUserIds
+                visibilityUserIds: composerVisibilityUserIds,
+                repostOfId: intent.origin.repostedPostId
             )
         }
     }
@@ -1164,14 +1245,16 @@ struct MeeshyComposerHost: View {
     /// atteignable, et `test_lEnvoiDuSocle_neFermeQueSurUneAcceptation_etNeJettePasLaSaisie`
     /// la garde.
     ///
-    /// **`MoodComposerDoor`, lui, n'en émet toujours pas sur un échec d'ENVOI**,
-    /// et c'est une dette CONSIGNÉE plutôt qu'un acquis : `StatusViewModel.setStatus`
-    /// ne rend rien — elle avale l'erreur réseau dans un `catch` qui se contente
-    /// d'un toast —, et sa file durable n'est atteinte que si `isOffline()`
-    /// répond oui. Un gateway qui répond 500 referme donc ce composer-là et perd
-    /// l'emoji, la phrase, l'audience et les mentions. **Condition de levée
-    /// nommée** : que `setStatus` rende un résultat, comme `createPost` le fait
-    /// déjà par `publishSuccess` / `publishError`.
+    /// **`MoodComposerDoor` en émet sur UNE de ses deux branches**, et il faut
+    /// lire laquelle : son ANCRAGE remonte le refus (`anchorStatusAsPost` rend
+    /// un `Bool` — 403 `REPOST_AUDIENCE_WIDENING`, coupure, hors-ligne), son
+    /// MIROIR se tait. `StatusViewModel.setStatus` ne rend rien — elle avale
+    /// l'erreur réseau dans un `catch` qui se contente d'un toast —, et sa file
+    /// durable n'est atteinte que si `isOffline()` répond oui. Un gateway qui
+    /// répond 500 referme donc le composer sur cette branche-là et perd l'emoji,
+    /// la phrase, l'audience et les mentions. **Dette CONSIGNÉE, condition de
+    /// levée nommée** : que `setStatus` rende un résultat, comme `createPost` le
+    /// fait déjà par `publishSuccess` / `publishError`.
     private func publishDocument() {
         guard canPublishDocument, let draft = documentDraft else { return }
         isPublishingDocument = true

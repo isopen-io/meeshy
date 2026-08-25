@@ -141,13 +141,15 @@ struct iPadRootView: View {
             // produits. La porte PORTE son format ; le meuble lit `repostOfId`
             // depuis elle, la graine ne le double pas.
             //
-            // Même moitié livrée qu'en fenêtre iPhone, et même dette : le
-            // MIROIR part (republication en `STATUS`), l'ANCRAGE en post
-            // n'atteint aucun écran — `ComposerFormatFan` ne vit que dans
-            // `plateauTools`, que seule la SCÈNE monte. Voir le commentaire
-            // jumeau de `RootView` et la garde
+            // Mêmes DEUX moitiés livrées qu'en fenêtre iPhone depuis le
+            // 2026-08-25 : le MIROIR repart en `STATUS`, et l'ANCRAGE en post
+            // atteint un écran — le plateau est monté par le `body` du meuble
+            // sous `ComposerFormatFanPlacement`, et la porte du mood aiguille
+            // sur le format. Même dette résiduelle, aussi : ce site ne sème pas
+            // `visibility:`, faute que `APIPost.toStatusEntry()` la transmette.
+            // Voir le commentaire jumeau de `RootView` et la garde
             // `ComposerDocumentSurfaceTests`
-            // `.test_leRepostDUnMood_offreLAncrage_maisAucunEcranNeLePeint`.
+            // `.test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint`.
             .sheet(item: $republishStatusEntry) { entry in
                 MoodComposerDoor(
                     intent: ComposerIntent(origin: .repost(ofPostId: entry.id, sourceFormat: .status)),
