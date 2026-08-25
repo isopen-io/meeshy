@@ -300,19 +300,52 @@ function formatLocation(city: string | null, country: string | null): string | n
 }
 
 /**
- * Check if IP is private/localhost
+ * Check if IP is private/localhost.
+ *
+ * This is the gate that keeps an internal address from being sent to the
+ * third-party geo API (ip-api.com). It must recognise BOTH families: a private
+ * IPv6 address that slips through would leak internal network topology to an
+ * external service AND burn the 45/min rate-limit budget on a lookup that can
+ * only fail.
  */
 function isPrivateIp(ip: string): boolean {
+  // IPv4-mapped IPv6 (`::ffff:a.b.c.d`) — re-check on the embedded IPv4.
+  const mapped = ip.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
+  if (mapped) return isPrivateIp(mapped[1]);
+
+  if (isPrivateIpv4(ip)) return true;
+  if (isPrivateIpv6(ip)) return true;
+
+  return false;
+}
+
+function isPrivateIpv4(ip: string): boolean {
   // Localhost
   if (ip === '127.0.0.1' || ip === 'localhost') return true;
 
   // Private IPv4 ranges
   if (ip.startsWith('10.')) return true;
-  if (ip.startsWith('172.') && parseInt(ip.split('.')[1]) >= 16 && parseInt(ip.split('.')[1]) <= 31) return true;
+  const secondOctet = parseInt(ip.split('.')[1], 10);
+  if (ip.startsWith('172.') && secondOctet >= 16 && secondOctet <= 31) return true;
   if (ip.startsWith('192.168.')) return true;
 
   // Link-local
   if (ip.startsWith('169.254.')) return true;
+
+  return false;
+}
+
+function isPrivateIpv6(ip: string): boolean {
+  const lower = ip.toLowerCase();
+
+  // Loopback (`::1`) and unspecified (`::`)
+  if (lower === '::1' || lower === '::') return true;
+
+  // Unique local addresses — fc00::/7 (first byte 1111110x ⇒ `fc`/`fd`)
+  if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
+
+  // Link-local — fe80::/10 (`fe80`–`febf` ⇒ `fe8`/`fe9`/`fea`/`feb`)
+  if (/^fe[89ab]/.test(lower)) return true;
 
   return false;
 }
