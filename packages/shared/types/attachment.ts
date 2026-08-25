@@ -561,49 +561,60 @@ export const ACCEPTED_MIME_TYPES = {
 export type AcceptedMimeTypes = typeof ACCEPTED_MIME_TYPES;
 
 /**
+ * Retire les paramètres d'un type MIME avant comparaison — `audio/webm;codecs=opus`
+ * → `audio/webm`, `text/plain; charset=utf-8` → `text/plain`. Site UNIQUE
+ * partagé par les six type-guards : le nettoyage doit être identique sur toutes
+ * les familles média, sans quoi une même entrée paramétrée est classée
+ * différemment selon sa seule famille (défaut It. 267 — seuls audio/vidéo
+ * nettoyaient, image/text/document/code non).
+ *
+ * Repli sur l'original quand `split(';')[0]` est vide (entrée commençant par
+ * `;`) : la chaîne intacte ne matchera aucune liste, jamais un faux positif.
+ */
+function stripMimeParameters(mimeType: string): string {
+  return (mimeType.split(';')[0] || mimeType).trim();
+}
+
+/**
  * Type guard pour vérifier si un MIME type est une image
  */
 export function isImageMimeType(mimeType: string): mimeType is ImageMimeType {
-  return (ACCEPTED_MIME_TYPES.IMAGE as unknown as string[]).includes(mimeType);
+  return (ACCEPTED_MIME_TYPES.IMAGE as unknown as string[]).includes(stripMimeParameters(mimeType));
 }
 
 /**
  * Type guard pour vérifier si un MIME type est audio
  */
 export function isAudioMimeType(mimeType: string): mimeType is AudioMimeType {
-  // Nettoyer le MIME type en enlevant les paramètres (ex: audio/webm;codecs=opus -> audio/webm)
-  const cleanMimeType = (mimeType.split(';')[0] || mimeType).trim();
-  return (ACCEPTED_MIME_TYPES.AUDIO as unknown as string[]).includes(cleanMimeType);
+  return (ACCEPTED_MIME_TYPES.AUDIO as unknown as string[]).includes(stripMimeParameters(mimeType));
 }
 
 /**
  * Type guard pour vérifier si un MIME type est vidéo
  */
 export function isVideoMimeType(mimeType: string): mimeType is VideoMimeType {
-  // Nettoyer le MIME type en enlevant les paramètres (ex: video/webm;codecs=vp8 -> video/webm)
-  const cleanMimeType = (mimeType.split(';')[0] || mimeType).trim();
-  return (ACCEPTED_MIME_TYPES.VIDEO as unknown as string[]).includes(cleanMimeType);
+  return (ACCEPTED_MIME_TYPES.VIDEO as unknown as string[]).includes(stripMimeParameters(mimeType));
 }
 
 /**
  * Type guard pour vérifier si un MIME type est texte
  */
 export function isTextMimeType(mimeType: string): mimeType is TextMimeType {
-  return (ACCEPTED_MIME_TYPES.TEXT as unknown as string[]).includes(mimeType);
+  return (ACCEPTED_MIME_TYPES.TEXT as unknown as string[]).includes(stripMimeParameters(mimeType));
 }
 
 /**
  * Type guard pour vérifier si un MIME type est document
  */
 export function isDocumentMimeType(mimeType: string): mimeType is DocumentMimeType {
-  return (ACCEPTED_MIME_TYPES.DOCUMENT as unknown as string[]).includes(mimeType);
+  return (ACCEPTED_MIME_TYPES.DOCUMENT as unknown as string[]).includes(stripMimeParameters(mimeType));
 }
 
 /**
  * Type guard pour vérifier si un MIME type est code
  */
 export function isCodeMimeType(mimeType: string): mimeType is CodeMimeType {
-  return (ACCEPTED_MIME_TYPES.CODE as unknown as string[]).includes(mimeType);
+  return (ACCEPTED_MIME_TYPES.CODE as unknown as string[]).includes(stripMimeParameters(mimeType));
 }
 
 /**
