@@ -395,10 +395,12 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     // `invalidatePersistedFriendCaches()` marks the three friendship-derived
     // GRDB entries as expired so the next `loadFriends()` / `loadReceived()`
     // / `loadSent()` is forced to round-trip the gateway and refresh the
-    // persistent store. Called automatically from `notifyChange()` so every
-    // mutation cascades; also exposed `public` so call sites can await it
-    // explicitly when they need the invalidation to complete before
-    // continuing (e.g. before reading the cache again).
+    // persistent store. It is NEVER called automatically: `notifyChange()`
+    // only bumps `version` (see its doc comment for why the invalidation is
+    // deliberately not grafted there). EVERY mutation site must call — and
+    // await — it itself, socket listeners included
+    // (`friend-request:cancelled` / `friend-request:rejected`), otherwise the
+    // Requests screen keeps serving the removed row from GRDB.
 
     /// Cache keys for the friendship-derived persistent stores.
     /// Kept here so RequestsViewModel and ContactsListViewModel use a single

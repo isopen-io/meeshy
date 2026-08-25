@@ -457,6 +457,20 @@ public final class NotificationToastManager: ObservableObject {
             }
             .store(in: &cancellables)
 
+        socket.notificationReadBulk
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.handleNotificationReadBulk(event)
+            }
+            .store(in: &cancellables)
+
+        socket.notificationDeletedBulk
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.handleNotificationDeletedBulk(event)
+            }
+            .store(in: &cancellables)
+
         // `notification:counts` is handled by NotificationCoordinator directly —
         // we used to duplicate the subscription here, but that race was the
         // source of the drift between the bell and the badge.
@@ -593,6 +607,86 @@ public final class NotificationToastManager: ObservableObject {
     private func handleNotificationDeleted(_ event: NotificationDeletedEvent) {
         applyDeletionToCache(event.notificationId)
         notificationWasDeleted.send(event.notificationId)
+    }
+
+    /// Un AUTRE appareil du même compte vient de marquer un LOT lu. Les chemins
+    /// bulk du gateway ne rendent AUCUN id : ils annoncent le PRÉDICAT qu'ils
+    /// viennent d'appliquer, que chaque client rejoue sur son propre cache.
+    ///
+    /// Une portée qu'on ne sait pas traduire n'est PAS appliquée : rejouer un
+    /// prédicat approximatif marquerait lues des lignes qui ne le sont pas —
+    /// pire que de ne rien faire, le refresh REST suivant rétablissant la
+    /// vérité. Aucun refetch n'est déclenché ici : le compteur autoritatif
+    /// arrive par `notification:counts`, déjà traité par
+    /// `NotificationCoordinator`.
+    ///
+    /// Interne (pas `private`) : point d'entrée des tests, faute de mock
+    /// Socket.IO.
+    func handleNotificationReadBulk(_ event: NotificationReadBulkEvent) {
+        guard let scope = NotificationBulkScopeMapping.readScope(from: event.scope) else {
+            logger.error("notification:read-bulk ignoré — portée non traduisible (kind: \(event.scope.kind))")
+            return
+        }
+        applyReadToCache(scope)
+        republishRead(scope)
+    }
+
+    /// Republication vers les vues MONTÉES : le patch cache ci-dessus est
+    /// durable mais muet, et `NotificationListView` sert son tableau depuis sa
+    /// propre copie mémoire. On réutilise les subjects par lesquels le geste
+    /// LOCAL équivalent passe déjà — aucun canal neuf, donc aucun abonné à
+    /// câbler.
+    ///
+    /// `.all` n'a AUCUN canal partiel : `NotificationReadScope.all` ne
+    /// correspond à aucun subject existant, et en créer un exigerait son
+    /// abonné dans `MeeshyUI/Notifications/NotificationListView.swift` (hors
+    /// de ce lot). Conséquence assumée : une cloche DÉJÀ montée n'est pas
+    /// repeinte sur ce chemin — contrairement au geste LOCAL, où
+    /// `NotificationListView.markAllRead()` patche lui-même son tableau ;
+    /// seul le cache est patché, la liste se recale à sa prochaine lecture.
+    /// Ne PAS fabriquer une portée de repli pour emprunter un autre canal —
+    /// ce serait marquer lues des lignes hors portée.
+    private func republishRead(_ scope: NotificationReadScope) {
+        switch scope {
+        case .notification(let id):
+            notificationMarkedRead.send(id)
+        case .conversation(let id):
+            conversationNotificationsRead.send(id)
+        case .post(let id):
+            postNotificationsRead.send(id)
+        case .types(let types):
+            typeNotificationsRead.send(types)
+        case .all:
+            break
+        }
+    }
+
+    /// Jumeau côté PURGE. Cas plus fort que le précédent : `notification:counts`
+    /// est MUET sur une purge des lues (`unread` est inchangé par
+    /// construction), donc sans ce prédicat rien n'annoncerait la purge à cet
+    /// appareil — les lignes purgées ressusciteraient à la prochaine lecture du
+    /// cache.
+    ///
+    /// Les ids sont relevés AVANT l'écriture pour republier ligne à ligne par
+    /// `notificationWasDeleted`, le canal que la liste montée écoute déjà :
+    /// patcher le seul cache laisserait les lignes purgées à l'écran jusqu'au
+    /// prochain chargement.
+    ///
+    /// Interne (pas `private`) : point d'entrée des tests.
+    func handleNotificationDeletedBulk(_ event: NotificationDeletedBulkEvent) {
+        guard NotificationBulkScopeMapping.purgesReadRows(event.scope) else {
+            logger.error("notification:deleted-bulk ignoré — portée inconnue (kind: \(event.scope.kind))")
+            return
+        }
+        Task { [weak self] in
+            let cached = await CacheCoordinator.shared.notifications.loadIgnoringExpiry(for: "all")
+            let purgedIds = (cached?.items ?? []).filter { $0.isRead }.map(\.id)
+            guard !purgedIds.isEmpty else { return }
+            await CacheCoordinator.shared.notifications.update(for: "all") { items in
+                NotificationBulkScopeMapping.removingRead(items)
+            }
+            purgedIds.forEach { self?.notificationWasDeleted.send($0) }
+        }
     }
 
     // MARK: - Toast
