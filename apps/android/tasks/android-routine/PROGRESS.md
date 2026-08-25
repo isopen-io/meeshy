@@ -2,6 +2,115 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-25 **the story viewer honours per-slide duration** (slice `story-viewer-slide-duration`,
+> feature-parity E. Stories — "Timed auto-advance" + "Per-element + per-slide duration"). The viewer's
+> auto-advance ran a HARDCODED 5s (`SLIDE_DURATION_MS`) for every slide; iOS has a single source of truth
+> (`StorySlide.computedTotalDuration()`, StoryModels.swift) that is content-aware and defaults to **6s**,
+> not 5s — so Android was both wrong on the default and blind to per-slide timing.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3502/#3500/#3498/#3497, all
+> gateway/ios/shared branches (`claude/brave-archimedes-*`, `claude/intelligent-noether-*`), none a
+> `claude/apps/android/*` slice from THIS routine. Prior slice (`story-updated-realtime-tray`) already merged
+> into main (`c4a3d517`). Branched off freshly-fetched `origin/main` (`c4a3d517`).
+>
+> **The fix — a pure SSOT + a projection + a screen consumer.** (1) `StorySlideDuration` (`:core:model`,
+> pure, no clock/IO) ports iOS's rule EXACTLY: priority-0 `effects.timelineDuration` (> 0, author-pinned via
+> the timeline editor) wins over content; otherwise content-derived — background video/audio looped up to ≥
+> the target (`period < target → ceil(target/period)*period`), long caption text (> 30 cumulative words)
+> extends 1s per 6 words past 30, 6s static default. The legacy `effects.slideDuration` is DELIBERATELY
+> ignored (old backend stories carry arbitrary 12s values the composer wrote per publish, bypassing the
+> rule) — same reasoning as iOS. `computeMillis` rounds to whole ms. (2) `StorySlideView.autoAdvanceMillis`
+> is resolved ONCE at projection (`StoryViewerViewModel.toSlideView`) from the slide's `storyEffects`.
+> (3) `StoryViewerScreen` drops the `SLIDE_DURATION_MS` constant and drives BOTH the countdown tween and the
+> keyframe playhead (`playheadSeconds`) from `slideDurationMs`, keyed into the auto-advance `LaunchedEffect`
+> so a realtime slide-replace re-times. (4) Latent v3 gap fixed: `SceneV3.timelineDuration` was silently
+> dropped by `StoryEffects.rendering` — now mapped, so a timeline-pinned v3 story honours its author duration.
+>
+> **Tests: +20** — 17 `StorySlideDurationTest` (pure, every branch: null/empty → 6s; short vs long text +
+> multi-object cumul + multi-space split parity with Swift `split(separator:)`; bg video ≥/< target loop; bg
+> audio loop; non-bg media/audio data windows; near-zero period ignored; image-bg no-loop; timelineDuration
+> positive override vs 0/negative fallthrough; legacy slideDuration ignored; millis conversion), 1
+> `CanvasV3ProjectionTest` (v3 `timelineDuration` traverses the bridge), 2 `StoryViewerViewModelTest` (no
+> effects → 6s default; author-pinned 3s → 3000ms through the public state). **RED-proof isolated**: neutering
+> the priority-0 branch reddened EXACTLY `un timelineDuration positif l'emporte sur le contenu` (17 tests, 1
+> failed) while the other 16 stayed green; neutering the VM projection reddened EXACTLY the author-pinned VM
+> test (75 tests, 1 failed) — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + both dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch
+> (`source.properties` ApiLevel 37.0→37, `package.xml` `<api-level>` + `path=`, BOTH `build.prop` `sdk_full`
+> fields) keeping android-37.0 ALONGSIDE resolved it.
+>
+> **Verified**: targeted `:core:model` + `:feature:stories` suites green, then full `./apps/android/meeshy.sh
+> check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any
+> push. Reviewer PASS. Diff is `apps/android` only (2 prod + 1 new prod in :core:model, 2 prod in
+> :feature:stories, +3 test files, tracking docs). Verdict: **PASS** — a pure SSOT mirroring iOS's authority
+> function, a projection, a screen consumer, and a v3-bridge fix; behavioural tests through the public API;
+> no production logic outside `apps/android`.
+>
+> **Next**: the composer-side AUTHORING of per-slide duration — a control that writes
+> `effects.timelineDuration` (the timeline editor "pin duration"), so the reader-side SSOT this slice built
+> gets fed by Android's own composer (today only iOS-authored/back-end stories carry it). Adjacent backlog:
+> per-ELEMENT duration + the background-designation toggle (1 visual + 1 audio/slide, feature-parity E), or
+> the V2 timeline editor foundation. Scout `feature-parity.md` read-only before branching.
+
+> On 2026-08-25 **the story TRAY folds a realtime `story:updated`** (slice `story-updated-realtime-tray`,
+> feature-parity Story realtime) — the viewed-monotonicity MERGE, and the LAST STORY-realtime gap. STORY realtime
+> is now fully at parity (viewer: reactions/overlay-tx/delete/update; tray: delete/update).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3500/#3498/#3497, all gateway/ios
+> production-logic branches (`claude/brave-archimedes-*`, `claude/intelligent-noether-*`), none a
+> `claude/apps/android/*` slice from THIS routine. Prior slice (`story-deleted-realtime-tray`) already merged into
+> main. Branched off freshly-fetched `origin/main` (`36b9921b`).
+>
+> **The gap — the tray kept a stale ring after an edit made elsewhere.** The `story:updated` viewer fold (prior
+> run) swapped the slide only in the OPEN viewer; the TRAY (`StoriesViewModel`) is driven entirely by
+> `StoryRepository.storiesStream()` (Room-backed, cache-first), so an edit — a content change, or a content edit
+> that RESET engagement (views/reactions wiped, ring should revert to unseen) — left the old ring painted until the
+> next background revalidation. iOS folds it in `StoryViewModel.storyUpdated` with a `shouldKeepLocalViewed`
+> viewed-monotonicity guard + the `engagementReset` flag; the `SocketStoryUpdatedData` DTO + `storyUpdated` flow
+> already existed (viewer slice) — this slice needed the Room-cache MERGE seam.
+>
+> **The fix — a pure merge + a read-merge-write cache seam + a repository fold + a tray VM subscription.**
+> (1) `StoryUpdateMerge.merge(previous, updated, engagementReset, isOwnStory)` in `:core:model`: `engagementReset
+> && !isOwnStory` → adopt the fresh (unseen) story wholesale (server wiped engagement); otherwise delegate to
+> `PostUpdateMerge` (monotone seen — one source of truth for reader-personal-field preservation). The AUTHOR is
+> the exception to the reset (their own seen is client-only, the server never records it), mirroring iOS
+> `isOwnGroup ||`. Android reads the explicit `engagementReset` flag, not iOS's `contentEditedAt` timestamp (absent
+> from the wire model). (2) `StoryDao.getById(id)` + `StoryCacheSource.findLocal`/`upsertLocal` (single-writer seam,
+> re-deriving the `createdAt` ordering column; no `sync_meta` touch — a realtime fold is not a revalidation).
+> (3) `StoryRepository.applyStoryUpdate(updated, engagementReset, currentUserId)` reads the cached copy, computes
+> `isOwnStory = updated.author?.id == currentUserId`, merges, upserts; inert (`false`) for an unknown id
+> (over-broadcast) or a no-op merge. (4) `StoriesViewModel.observeStoryUpdates` forwards every `story:updated`,
+> resolving the reset flag (`?: false`) and `sessionRepository.currentUserId`.
+>
+> **Tests: +14** — 6 `StoryUpdateMergeTest` (pure, every branch: non-owner reset reverts to unseen; author keeps
+> seen through a reset; metadata edit keeps monotone seen; metadata adopts an authoritative reaction summary; inert
+> on the reset path; inert on the metadata path), 2 `StoryDaoTest` (real Room: `getById` returns the row / null for
+> an absent id), 3 `StoryRepositoryTest` (real Room folds: an edit repaints; a non-owner reset reverts to unseen;
+> a metadata edit keeps seen; author keeps seen; inert unknown id; inert no-op — 6 cases across the block), 3
+> `StoriesViewModelTest` (the VM forwards the flag + current user; an absent flag folds as `false`; a behavioural
+> repaint reverts an author's ring `hasUnviewed` false→true via a fake stream mirroring Room re-emitting).
+> **RED-proof isolated**: neutering the reset branch (`return PostUpdateMerge.merge(...)` unconditionally) reddened
+> EXACTLY `a non-owner content edit reverts the ring to unseen on an engagement reset` (6 tests, 1 failed) while
+> the other 5 preserve-path cases stayed green — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200); pristine `android-37.0` alone worked** (no copy→patch, no
+> both-dirs; AGP mapped compileSdk 37 → android-37.0 on the first `./gradlew`). The recipe still flips per
+> container (per NOTES) — this one was the pristine mode.
+>
+> **Verified**: targeted `:core:model`/`:core:database`/`:sdk-core`/`:feature:stories` unit suites **BUILD
+> SUCCESSFUL** (all four touched suites green), then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, the CI-mirror gate) — see run log for the result. Reviewer PASS. Diff is `apps/android` only
+> (1 new prod file + 3 prod files across :core:model/:core:database/:sdk-core/:feature:stories, +2 test files,
+> tracking docs). Verdict: **PASS** — a pure merge reusing the established `PostUpdateMerge` law, a read-merge-write
+> Room seam mirroring the delete seam, a repository fold, and a tray VM subscription mirroring the delete
+> subscription; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: STORY realtime is complete. Move to the next feature-parity area in build order — candidates from the
+> Story/editor backlog (per-clip inspector, timeline transport) or advancing the CALLS area. Scout `feature-parity.md`
+> for the highest-value unchecked box before committing, and read-only before branching.
+
 > On 2026-08-25 **the story TRAY folds a realtime `story:deleted`** (slice `story-deleted-realtime-tray`,
 > feature-parity Story realtime) — the TRAY sibling of the viewer-scoped `story:deleted` fold (cycle before last),
 > and the first of the two remaining TRAY realtime folds the prior "Next" pointer flagged.

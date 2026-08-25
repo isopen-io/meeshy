@@ -89,6 +89,7 @@ import coil.request.ImageRequest
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.EmojiQuickStrip
@@ -100,7 +101,6 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
-private const val SLIDE_DURATION_MS = 5000
 private val SWIPE_HORIZONTAL_THRESHOLD = 64.dp
 private val SWIPE_VERTICAL_THRESHOLD = 120.dp
 
@@ -123,6 +123,10 @@ fun StoryViewerScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val slide = state.current
+    // Per-slide auto-advance timing (author-pinned → content-derived → 6s), resolved
+    // by the shared StorySlideDuration rule at projection time. Drives both the
+    // countdown tween and the keyframe playhead so animations stay aligned.
+    val slideDurationMs = slide?.autoAdvanceMillis ?: StorySlideDuration.DEFAULT_STATIC_MS
     val accent = remember(slide?.accentHex) { slide?.accentHex ?: "1A1A2E" }
 
     var showViewers by remember { mutableStateOf(false) }
@@ -309,6 +313,7 @@ fun StoryViewerScreen(
         state.index,
         state.slides.size,
         state.canAutoAdvance,
+        slideDurationMs,
         showViewers,
         showComments,
         railOverlayActive,
@@ -320,7 +325,7 @@ fun StoryViewerScreen(
         // painted (text-only slides are ready at once). When the gate flips the
         // effect re-runs and the timer starts.
         if (!state.canAutoAdvance) return@LaunchedEffect
-        progress.animateTo(1f, tween(durationMillis = SLIDE_DURATION_MS, easing = LinearEasing))
+        progress.animateTo(1f, tween(durationMillis = slideDurationMs, easing = LinearEasing))
         viewModel.advance()
     }
 
@@ -408,7 +413,7 @@ fun StoryViewerScreen(
             key(foreground.url) {
                 StoryForegroundLayer(
                     media = foreground,
-                    playheadSeconds = progress.value * SLIDE_DURATION_MS / 1000f,
+                    playheadSeconds = progress.value * slideDurationMs / 1000f,
                 )
             }
         }
@@ -417,7 +422,7 @@ fun StoryViewerScreen(
             key(textObject.id) {
                 StoryTextObjectLayer(
                     textObject = textObject,
-                    playheadSeconds = progress.value * SLIDE_DURATION_MS / 1000f,
+                    playheadSeconds = progress.value * slideDurationMs / 1000f,
                 )
             }
         }

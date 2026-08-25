@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.model.SocketStoryDeletedData
+import me.meeshy.sdk.model.SocketStoryUpdatedData
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.FailedStoryPublish
@@ -52,12 +53,13 @@ class StoriesViewModelTest {
 
     // A freshly-created story: live for the 21h fallback window, so the tray
     // builder (which drops fully-expired groups against the wall clock) keeps it.
-    private fun story(id: String, authorId: String, name: String) =
+    private fun story(id: String, authorId: String, name: String, viewed: Boolean = false) =
         ApiPost(
             id = id,
             type = "STORY",
             createdAt = java.time.Instant.now().toString(),
             author = ApiAuthor(id = authorId, username = name),
+            isViewedByMe = viewed,
         )
 
     // A freshly-enqueued publish: stamped now so its synthetic story stays live.
@@ -92,10 +94,12 @@ class StoriesViewModelTest {
     private val workManager: WorkManager = mockk(relaxed = true)
 
     private val storyDeletedFlow = MutableSharedFlow<SocketStoryDeletedData>(extraBufferCapacity = 8)
+    private val storyUpdatedFlow = MutableSharedFlow<SocketStoryUpdatedData>(extraBufferCapacity = 8)
 
     private fun socialSocket(): SocialSocketManager =
         mockk<SocialSocketManager>(relaxed = true).also {
             every { it.storyDeleted } returns storyDeletedFlow
+            every { it.storyUpdated } returns storyUpdatedFlow
         }
 
     private fun queueOf(
@@ -379,5 +383,63 @@ class StoriesViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { repo.removeCachedStory("s1") }
+    }
+
+    @Test
+    fun `a realtime story update folds the edit with the flag and current user`() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(story("s1", "u1", "alice")), ageMillis = 0)),
+        )
+        val vm = viewModel(repo, session = session(userId = "me"))
+        advanceUntilIdle()
+
+        val edited = story("s1", "u1", "alice").copy(content = "edited")
+        storyUpdatedFlow.emit(SocketStoryUpdatedData(story = edited, engagementReset = true))
+        advanceUntilIdle()
+
+        // The VM resolves the reset flag and the current user (the author-seen exception)
+        // and forwards the merge to the repository — the merge law lives in the SDK.
+        coVerify(exactly = 1) { repo.applyStoryUpdate(edited, true, "me") }
+    }
+
+    @Test
+    fun `a story update with an absent reset flag folds as a metadata edit`() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(story("s1", "u1", "alice")), ageMillis = 0)),
+        )
+        val vm = viewModel(repo, session = session(userId = "me"))
+        advanceUntilIdle()
+
+        val edited = story("s1", "u1", "alice").copy(content = "edited")
+        // engagementReset absent (null on the wire) → the fold treats it as false.
+        storyUpdatedFlow.emit(SocketStoryUpdatedData(story = edited))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.applyStoryUpdate(edited, false, "me") }
+    }
+
+    @Test
+    fun `a realtime engagement reset repaints an author's ring back to unviewed`() = runTest(dispatcher) {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Fresh(listOf(story("s1", "u1", "alice", viewed = true)), ageMillis = 0),
+        )
+        val repo = mockk<StoryRepository>(relaxed = true)
+        every { repo.storiesStream(any(), any()) } returns stream
+        every { repo.publishQueue() } returns flowOf(queueOf())
+        // The authoritative cache merge: the Room-backed stream re-emits the reset story.
+        coEvery { repo.applyStoryUpdate(any(), true, any()) } answers {
+            stream.value = CacheResult.Fresh(listOf(story("s1", "u1", "alice", viewed = false)), ageMillis = 0)
+            true
+        }
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+        assertThat(vm.state.value.tray.others.single().hasUnviewed).isFalse()
+
+        val edited = story("s1", "u1", "alice", viewed = false).copy(content = "edited")
+        storyUpdatedFlow.emit(SocketStoryUpdatedData(story = edited, engagementReset = true))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.tray.others.single().hasUnviewed).isTrue()
+        assertThat(vm.state.value.tray.others.single().unviewedCount).isEqualTo(1)
     }
 }

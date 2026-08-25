@@ -97,16 +97,34 @@ internal class StoryCacheSource(
         storyDao.deleteById(storyId)
     }
 
+    /**
+     * Reads a single cached story by id (decoded), or `null` if it is not cached. The
+     * read seam behind the realtime `story:updated` merge — the caller folds the edit
+     * onto this copy and writes the result back via [upsertLocal].
+     */
+    suspend fun findLocal(storyId: String): ApiPost? =
+        storyDao.getById(storyId)?.let { MeeshyApi.json.decodeFromString<ApiPost>(it.payload) }
+
+    /**
+     * Upserts a single merged story, re-deriving the tray-ordering (`createdAt`) column
+     * from it so the Room-backed [observe] stream re-emits with the edit in place. Does
+     * not touch `sync_meta`: a realtime fold is not a full revalidation.
+     */
+    suspend fun upsertLocal(story: ApiPost) {
+        storyDao.upsertAll(listOf(story.toEntity(clock.nowMillis())))
+    }
+
+    private fun ApiPost.toEntity(cachedAt: Long): StoryEntity =
+        StoryEntity(
+            id = id,
+            payload = MeeshyApi.json.encodeToString(this),
+            createdAt = isoToEpochMillis(createdAt),
+            cachedAt = cachedAt,
+        )
+
     private suspend fun persist(stories: List<ApiPost>, prune: Boolean) {
         val now = clock.nowMillis()
-        val rows = stories.map { story ->
-            StoryEntity(
-                id = story.id,
-                payload = MeeshyApi.json.encodeToString(story),
-                createdAt = isoToEpochMillis(story.createdAt),
-                cachedAt = now,
-            )
-        }
+        val rows = stories.map { it.toEntity(now) }
         database.withTransaction {
             storyDao.upsertAll(rows)
             if (prune) storyDao.deleteNotIn(rows.map { it.id })

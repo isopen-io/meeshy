@@ -5,6 +5,53 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-25 — a duration/timing constant is a PARITY CLAIM; port the SSOT, don't reuse the magic number (slice `story-viewer-slide-duration`)
+The story viewer auto-advanced on a hardcoded `SLIDE_DURATION_MS = 5000`. iOS has ONE authority for slide
+duration (`StorySlide.computedTotalDuration()`, StoryModels.swift) that is content-aware and defaults to **6s**.
+The Android constant was therefore wrong twice: wrong DEFAULT (5s vs 6s) and blind to per-slide timing. Lesson:
+a bare timing/size constant that "mirrors iOS" is a claim to verify against the iOS SOURCE, not a value to copy.
+- **Port the authority function, make it the SSOT.** `StorySlideDuration` (`:core:model`, pure) now owns the
+  whole rule; the screen no longer holds a duration constant — it reads `StorySlideView.autoAdvanceMillis`,
+  resolved once at projection. Priority-0 `effects.timelineDuration` (author-pinned) wins over content; the
+  legacy `effects.slideDuration` is IGNORED (arbitrary backend values), exactly as iOS documents.
+- **`split(" ")` ≠ Swift `split(separator:)`.** Swift omits empty subsequences by default; Kotlin's `split(" ")`
+  keeps them, so `"a  b"` counts 3 not 2. Match iOS with `.split(" ").count { it.isNotEmpty() }` — it changes the
+  long-text threshold branch.
+- **One consumer, TWO reads.** The per-slide duration feeds BOTH the countdown tween AND the keyframe
+  `playheadSeconds` — miss the second and animations desync from the (now different) slide length. Grep every use
+  of the constant you're replacing, not just the obvious one.
+- **A resolver that DROPS a field is a silent parity gap.** `StoryEffects.rendering` (v3→v1 bridge) never mapped
+  `SceneV3.timelineDuration`, so a timeline-pinned v3 story lost its author duration on decode. Found only by
+  tracing what the new SSOT reads back to every producer of that field.
+- **SDK bootstrap this run: `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+  auto-installed but the first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch
+  (`source.properties` ApiLevel 37.0→37, `package.xml` `<api-level>` + `path=`, BOTH `build.prop` `sdk_full`)
+  keeping android-37.0 ALONGSIDE resolved it. (Flipped from the previous entry's pristine-alone — recipe still
+  varies per container; try pristine first, then copy→patch, then both-dirs.)
+
+## 2026-08-25 — a realtime EDIT into a Room-cache surface is READ-MERGE-WRITE; reuse the existing merge law (slice `story-updated-realtime-tray`)
+A realtime `story:updated` into the Room-cache-driven tray is folded by READING the cached copy
+(`StoryCacheSource.findLocal` ← `StoryDao.getById`), MERGING the edit onto it, and WRITING it back
+(`upsertLocal`) — the cache-first stream then repaints. This is the EDIT twin of the delete seam (`deleteLocal`),
+and the same principle: the Room cache is the single source of truth; no in-memory overlay.
+- **Reuse the merge law, don't re-implement it.** The tray-edit merge (`StoryUpdateMerge`) delegates its
+  preserve-path to the already-tested `PostUpdateMerge.merge` (the feed's `post:updated` fold) — same
+  reader-personal-field preservation, one source of truth. The story merge only ADDS the `engagementReset`
+  branch on top.
+- **A broadcast can't be personalized, so viewer-owned fields are MONOTONE with one escape.** `isViewedByMe` in a
+  `story:updated` reflects the broadcaster's/default view, not the reader's — preserving the reader's seen state is
+  the default (monotone: once seen, stays seen). The ONE escape is `engagementReset` (a content edit wiped
+  views/reactions server-side → the ring legitimately reverts to unseen), and the exception to THAT is the AUTHOR
+  (`isOwnStory`): the server never records the author's own view of their own story, so it survives a reset. Mirror
+  of iOS `isOwnGroup || (!engagementReset && shouldKeepLocalViewed(...))`.
+- **Android reads the flag; iOS reads a timestamp.** iOS's `shouldKeepLocalViewed(localViewedAt, contentEditedAt)`
+  compares timestamps because its REST path lacks the flag; Android's wire model exposes no `contentEditedAt`, and
+  the socket event carries `engagementReset` explicitly — so the Android merge reads the flag directly. Same rule,
+  simpler signal.
+- **SDK bootstrap this run: `dl.google.com` 200; pristine `android-37.0` alone worked** (no copy→patch, no
+  both-dirs). First `./gradlew` mapped compileSdk 37 → android-37.0 with no hash error. Recipe still flips per
+  container.
+
 ## 2026-08-25 — fold a realtime removal into the AUTHORITATIVE cache, not an in-memory overlay (slice `story-deleted-realtime-tray`)
 A Room-cache-driven surface (the story tray, `StoriesViewModel` ← `StoryRepository.storiesStream()`) folds a
 realtime `story:deleted` by DELETING the row from the cache — `StoryDao.deleteById` → `StoryCacheSource.deleteLocal`

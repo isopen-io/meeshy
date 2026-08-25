@@ -311,6 +311,14 @@ data class StoryEffects(
     val thumbHash: String? = null,
     val backgroundTransform: StoryBackgroundTransform? = null,
     val slideDuration: Float? = null,
+    /**
+     * Author-pinned slide duration (seconds) set via the timeline editor — the
+     * priority-0 override in [StorySlideDuration]. Distinct from the legacy
+     * [slideDuration], which carries arbitrary backend values and is ignored.
+     * `null` for everything published before the timeline editor existed, so the
+     * duration falls back to the content-derived rule with zero regression.
+     */
+    val timelineDuration: Double? = null,
     val clipTransitions: List<StoryClipTransition>? = null,
     val musicTrackId: String? = null,
     val musicStartTime: Double? = null,

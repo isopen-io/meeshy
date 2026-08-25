@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.StoryTranslationMerge
+import me.meeshy.sdk.model.StoryUpdateMerge
 import me.meeshy.sdk.model.StoryViewer
 import me.meeshy.sdk.model.toStoryViewer
 import me.meeshy.sdk.net.MeeshyApi
@@ -82,6 +83,27 @@ class StoryRepository @Inject constructor(
      */
     suspend fun removeCachedStory(storyId: String) {
         cacheSource.deleteLocal(storyId)
+    }
+
+    /**
+     * Folds a realtime `story:updated` into the authoritative Room cache so the tray stream
+     * repaints with the edit. [engagementReset] `true` marks a content edit that wiped
+     * views/reactions server-side (the ring reverts to unseen); `false` / metadata-only keeps
+     * the reader's monotone seen state. [currentUserId] identifies the author exception (an
+     * author's own seen state is client-only and survives a reset). Inert — nothing persisted,
+     * returns `false` — for an unknown id (over-broadcast) or a no-op merge (a re-broadcast).
+     * Port of iOS `StoryViewModel.storyUpdated`.
+     */
+    suspend fun applyStoryUpdate(
+        updated: ApiPost,
+        engagementReset: Boolean,
+        currentUserId: String?,
+    ): Boolean {
+        val previous = cacheSource.findLocal(updated.id) ?: return false
+        val isOwnStory = currentUserId != null && updated.author?.id == currentUserId
+        val merged = StoryUpdateMerge.merge(previous, updated, engagementReset, isOwnStory) ?: return false
+        cacheSource.upsertLocal(merged)
+        return true
     }
 
     suspend fun list(cursor: String? = null, limit: Int = 50): NetworkResult<List<ApiPost>> =
