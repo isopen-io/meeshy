@@ -20,6 +20,11 @@ import MeeshySDK
 ///   (e.g. inside a `DispatchQueue.main.sync` block) — that would deadlock when
 ///   the worker thread tries to bridge back to main. Always call from a `Task`.
 public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private nonisolated let contextQueue = DispatchQueue(label: "me.meeshy.story.compositor.context")
     private nonisolated(unsafe) var _renderContext: AVVideoCompositionRenderContext?
@@ -694,6 +699,11 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
 public final class StoryCompositionInstruction: NSObject,
                                                  AVVideoCompositionInstructionProtocol,
                                                  @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public let slide: StorySlide
     public let languages: [String]
     public let timeRange: CMTimeRange

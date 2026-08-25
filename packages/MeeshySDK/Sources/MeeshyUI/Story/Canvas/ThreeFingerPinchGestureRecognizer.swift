@@ -21,6 +21,11 @@ import UIKit
 /// - `.failed` → 4ᵉ doigt posé avant `.began` (on n'accepte que 3 doigts)
 /// - `.cancelled` → touchesCancelled (interruption système)
 final class ThreeFingerPinchGestureRecognizer: UIGestureRecognizer {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     /// Échelle cumulée depuis `.began`. Reset à 1.0 dans `reset()`.
     /// Calculée uniquement en interne (touchesMoved / reset), lue par les
     /// consommateurs (`recognizer.scale`) → `private(set)`.

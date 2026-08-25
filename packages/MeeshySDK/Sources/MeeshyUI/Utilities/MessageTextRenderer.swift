@@ -229,6 +229,11 @@ public enum MessageTextRenderer {
     /// subsequent message/render. Lock-guarded: the renderer also runs off the
     /// main thread (UIKit cell-diffing path).
     private final class DisplayNameRulesCache: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         private let lock = NSLock()
         private var cache: [[String: String]: [(regex: NSRegularExpression, kind: RuleKind)]] = [:]
         func rules(

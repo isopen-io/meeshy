@@ -31,6 +31,11 @@ import MeeshySDK
 /// settled, so the first frame is one CATransaction away instead of a full
 /// lazy bootstrap.
 public final class StoryReaderPrefetcher {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     // MARK: - State
 

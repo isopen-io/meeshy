@@ -100,6 +100,11 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// `nonisolated(unsafe)` because the contained operations are themselves
     /// thread-safe and we only ever cancel/invalidate from deinit.
     private final class CleanupHandle {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         nonisolated(unsafe) var timer: Timer?
         nonisolated(unsafe) var loadTask: Task<Void, Never>?
         nonisolated(unsafe) var sessionRequested = false

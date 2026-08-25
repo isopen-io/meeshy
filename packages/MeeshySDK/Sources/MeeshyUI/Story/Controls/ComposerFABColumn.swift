@@ -173,6 +173,11 @@ struct ComposerFABColumn: View, Equatable {
 // (`isCallerAndCalleeLayoutConstraintsCompatible`) when compiling its deinit
 // under `-O`. See Xcode Cloud build #389.
 final class FABPanGestureCoordinator: NSObject, UIGestureRecognizerDelegate {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     var onSwipeUp: () -> Void
     var onSwipeDown: () -> Void
     var hostingController: UIViewController?

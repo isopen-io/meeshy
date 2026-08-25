@@ -11,6 +11,11 @@ import MeeshySDK
 /// and async video thumbnail extraction. All heavy work runs off main thread.
 @MainActor
 public final class StoryMediaLoader {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = StoryMediaLoader()
 
     private init() {
@@ -176,6 +181,11 @@ public final class StoryMediaLoader {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 // Use a class wrapper for shared mutable state to satisfy Sendable
                 final class ResumeState: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
                     var resumed = false
                     var observation: NSKeyValueObservation?
                 }
