@@ -81,6 +81,16 @@ data class StoryForegroundMediaView(
      * (`end == start`) would hide the clip at almost every instant. Pure — the
      * Compose canvas ticks a clock in and renders the result.
      */
+    /**
+     * Whether this foreground layer is drawn at [atSeconds] (absolute playhead) —
+     * the sharp play-mode timing-window gate the Compose canvas consults before
+     * compositing the layer. Delegates to [StoryElementVisibility]: an untimed clip
+     * (duration `0`) is always visible; a timed one only inside
+     * `[startTime, startTime + duration)`. Pure.
+     */
+    fun isVisible(atSeconds: Float): Boolean =
+        StoryElementVisibility.isVisible(startTime, duration, atSeconds.toDouble())
+
     fun animated(atSeconds: Float): StoryForegroundMediaView {
         val resolved = StoryKeyframeResolver.resolve(
             keyframes = keyframes,

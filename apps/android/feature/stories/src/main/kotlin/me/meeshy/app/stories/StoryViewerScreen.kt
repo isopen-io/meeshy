@@ -407,21 +407,27 @@ fun StoryViewerScreen(
             }
         }
 
+        val playheadSeconds = progress.value * slideDurationMs / 1000f
+
         slide?.foregroundMedia?.forEach { foreground ->
-            key(foreground.url) {
-                StoryForegroundLayer(
-                    media = foreground,
-                    playheadSeconds = progress.value * slideDurationMs / 1000f,
-                )
+            if (foreground.isVisible(playheadSeconds)) {
+                key(foreground.url) {
+                    StoryForegroundLayer(
+                        media = foreground,
+                        playheadSeconds = playheadSeconds,
+                    )
+                }
             }
         }
 
         slide?.textObjects?.forEach { textObject ->
-            key(textObject.id) {
-                StoryTextObjectLayer(
-                    textObject = textObject,
-                    playheadSeconds = progress.value * slideDurationMs / 1000f,
-                )
+            if (textObject.isVisible(playheadSeconds)) {
+                key(textObject.id) {
+                    StoryTextObjectLayer(
+                        textObject = textObject,
+                        playheadSeconds = playheadSeconds,
+                    )
+                }
             }
         }
 

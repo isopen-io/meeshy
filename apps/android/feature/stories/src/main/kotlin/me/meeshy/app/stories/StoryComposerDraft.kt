@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.net.api.CreateStoryRequest
@@ -33,6 +34,7 @@ data class StoryComposerDraft(
     val filter: StoryFilter? = null,
     val filterIntensity: Float = StoryFilterMatrix.DEFAULT_INTENSITY,
     val durationSecondsPin: Double? = null,
+    val background: StoryBackgroundValue? = null,
 ) {
     /** The content actually sent — surrounding whitespace is never published. */
     val trimmedText: String get() = text.trim()
@@ -110,8 +112,11 @@ data class StoryComposerDraft(
     private fun storyEffects(originalLanguage: String): StoryEffects? {
         val textObjects = publishableTextElements.map { it.toTextObject(originalLanguage) }
         val stickerObjects = publishableStickers.map { it.toSticker() }
-        if (textObjects.isEmpty() && stickerObjects.isEmpty() && filter == null && durationSecondsPin == null) return null
+        val hasNothing = textObjects.isEmpty() && stickerObjects.isEmpty() &&
+            filter == null && durationSecondsPin == null && background == null
+        if (hasNothing) return null
         return StoryEffects(
+            background = background?.serialized(),
             textObjects = textObjects,
             stickerObjects = stickerObjects.takeIf { it.isNotEmpty() },
             filter = filter?.wireValue(),

@@ -3766,9 +3766,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tests (14 `StoryBackgroundValueTest` covering every parse branch + serialise round-trips, 4 VM
       projection: gradient/solid/absent/blank). Mutation-RED-proven twice (neutering the gradient branch
       reddens exactly the 4 gradient tests; dropping the empty-filter reddens exactly the parity test;
-      neutering the projection reddens exactly the 2 positive VM tests). Pending: composer AUTHORING of a
-      colour/gradient/random-pastel backdrop (writes `effects.background`), background IMAGE with
-      transform, and looping/non-looping background video designation.
+      neutering the projection reddens exactly the 2 positive VM tests). **Composer AUTHORING of a
+      colour/gradient/random-pastel backdrop done** (`story-composer-slide-background`): a pure
+      `StoryBackgroundPalette` (`:core:model`) ports the iOS SSOT
+      (`packages/MeeshySDK/.../MeeshyUI/Story/StoryComposerSupportTypes.swift`) — the 17 preset solids, the
+      6 gradient pairs, and `randomPastelHex(Random)` (injectable RNG, pure HSB→hex, low-saturation
+      high-brightness pastel that never collides with a preset). `StorySlide`/`StoryComposerDraft` carry a
+      `StoryBackgroundValue?`; `StorySlideDeck.setSelectedBackground` writes it per-slide (inert on equal,
+      clears on null); the draft serialises it to `effects.background` via `StoryBackgroundValue.serialized`;
+      the Effets band renders a swatch picker (presets + random pastel + None) reusing the reader's
+      `hexColor` SSOT so swatch = publish. +23 tests (10 palette incl. primary-hue/grey-ramp conversion +
+      pastel brightness/saturation bands + preset-avoidance; 7 deck set/clear/inert/selection; 4 draft
+      serialise incl. gradient wire form + effects-materialisation; 3 VM intent/publish). Mutation-RED-proven
+      (neutering `hsbToHex` reddens exactly the 4 conversion tests; neutering the inert guard reddens exactly
+      the 2 inert tests). Pending: background IMAGE with transform, and looping/non-looping background video
+      designation.
 - [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
       (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —
       `StoryFilterMatrix.baseMatrix(StoryFilter)` → a `StoryColorMatrix` (4×5 `List<Float>`, value
@@ -3830,8 +3842,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`[2, 600]`s, iOS `currentSlideDuration` parity) bounds it, `StorySlideDeck.setSelectedDuration`
       writes the per-slide pin, and it serialises to `effects.timelineDuration` on publish — the very
       field the viewer SSOT already honours over content. The slider's live value falls back to the
-      content-derived `StorySlideDuration` when unpinned. **Pending**: per-ELEMENT duration, and the
-      background-designation toggle.
+      content-derived `StorySlideDuration` when unpinned. **Per-element timing-window RESOLUTION done**
+      (slice `story-element-timing-window-gate`, 2026-08-25): the viewer now honours a timed element's own
+      `[startTime, startTime + duration)` visibility window — the pure `StoryElementVisibility.isVisible`
+      ports iOS `StoryRenderer.shouldRender(item:at:mode:)`, a **sharp** play-mode on/off gate (inclusive
+      start, exclusive end; the smooth ramp stays in `StoryMediaFadeResolver`). Both `StoryTextObjectView`
+      and `StoryForegroundMediaView` expose `isVisible(atSeconds)` delegating to it, and the canvas render
+      loop skips an element outside its window (before this, a timed text/foreground clip stayed on screen
+      the whole slide — a real reader-side gap). Convention: a non-positive/absent duration = open-ended
+      (Android's wire projection collapses an absent duration to `0.0`, matching how `StoryMediaFadeResolver`
+      and the clip-transition path already read it); a non-finite playhead fails open. +16 tests (12
+      resolver covering every window branch + boundary/inclusive-exclusive + open-ended + non-finite
+      fail-open + non-finite start→0; 2 text-view + 2 foreground-view delegation). Mutation-RED-proven
+      (neutering the gate to always-visible reddens exactly the 6 hiding assertions, the always-visible
+      ones stay green). **Pending**: per-ELEMENT duration AUTHORING (a composer control writing an
+      element's `startTime`/`duration`), and the background-designation toggle.
 - [ ] Repost flow: clone source story + locked attribution badge
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on

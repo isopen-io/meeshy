@@ -88,6 +88,9 @@
     <string name="stories_composer_filter_intensity">Intensidad del filtro</string>
     <string name="stories_composer_slide_duration">Duración de la diapositiva</string>
     <string name="stories_composer_slide_duration_value">%1$ds</string>
+    <string name="stories_composer_background">Fondo</string>
+    <string name="stories_composer_background_none">Ninguno</string>
+    <string name="stories_composer_background_random">Aleatorio</string>
     <string name="stories_composer_filter_none">Ninguno</string>
     <string name="stories_composer_filter_vintage">Vintage</string>
     <string name="stories_composer_filter_bw">B&amp;N</string>
