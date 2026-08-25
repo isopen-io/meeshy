@@ -3842,8 +3842,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`[2, 600]`s, iOS `currentSlideDuration` parity) bounds it, `StorySlideDeck.setSelectedDuration`
       writes the per-slide pin, and it serialises to `effects.timelineDuration` on publish — the very
       field the viewer SSOT already honours over content. The slider's live value falls back to the
-      content-derived `StorySlideDuration` when unpinned. **Pending**: per-ELEMENT duration, and the
-      background-designation toggle.
+      content-derived `StorySlideDuration` when unpinned. **Per-element timing-window RESOLUTION done**
+      (slice `story-element-timing-window-gate`, 2026-08-25): the viewer now honours a timed element's own
+      `[startTime, startTime + duration)` visibility window — the pure `StoryElementVisibility.isVisible`
+      ports iOS `StoryRenderer.shouldRender(item:at:mode:)`, a **sharp** play-mode on/off gate (inclusive
+      start, exclusive end; the smooth ramp stays in `StoryMediaFadeResolver`). Both `StoryTextObjectView`
+      and `StoryForegroundMediaView` expose `isVisible(atSeconds)` delegating to it, and the canvas render
+      loop skips an element outside its window (before this, a timed text/foreground clip stayed on screen
+      the whole slide — a real reader-side gap). Convention: a non-positive/absent duration = open-ended
+      (Android's wire projection collapses an absent duration to `0.0`, matching how `StoryMediaFadeResolver`
+      and the clip-transition path already read it); a non-finite playhead fails open. +16 tests (12
+      resolver covering every window branch + boundary/inclusive-exclusive + open-ended + non-finite
+      fail-open + non-finite start→0; 2 text-view + 2 foreground-view delegation). Mutation-RED-proven
+      (neutering the gate to always-visible reddens exactly the 6 hiding assertions, the always-visible
+      ones stay green). **Pending**: per-ELEMENT duration AUTHORING (a composer control writing an
+      element's `startTime`/`duration`), and the background-designation toggle.
 - [ ] Repost flow: clone source story + locked attribution badge
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on

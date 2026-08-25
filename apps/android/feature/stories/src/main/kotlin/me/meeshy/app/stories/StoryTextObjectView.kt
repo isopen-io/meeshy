@@ -48,6 +48,16 @@ data class StoryTextObjectView(
      * opacity. Keyframe and fade times are offsets from [startTime], per the
      * timeline spec. Pure — the Compose canvas ticks a clock in and renders the result.
      */
+    /**
+     * Whether this text overlay is drawn at [atSeconds] (absolute playhead) — the
+     * sharp play-mode timing-window gate the Compose canvas consults before laying
+     * out the layer. Delegates to [StoryElementVisibility]: an untimed object
+     * (duration `0`) is always visible; a timed one only inside
+     * `[startTime, startTime + duration)`. Pure.
+     */
+    fun isVisible(atSeconds: Float): Boolean =
+        StoryElementVisibility.isVisible(startTime, duration, atSeconds.toDouble())
+
     fun animated(atSeconds: Float): StoryTextObjectView {
         val resolved = StoryKeyframeResolver.resolve(
             keyframes = keyframes,
