@@ -56,6 +56,7 @@ import androidx.compose.material.icons.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.FormatColorReset
 import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Timelapse
@@ -317,8 +318,11 @@ fun StoryComposerScreen(
                     attachments = state.selectedSlideAttachments,
                     pending = state.selectedSlidePending,
                     backgroundMediaId = state.deck.selectedSlideBackgroundMediaId,
+                    backgroundIsVideo = state.selectedSlideBackgroundIsVideo,
+                    backgroundLoop = state.selectedSlideBackgroundLoop,
                     onRemove = viewModel::onRemoveMedia,
                     onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
+                    onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
                 )
             }
 
@@ -1460,20 +1464,28 @@ private fun MediaPreviewRow(
     attachments: List<UploadedMedia>,
     pending: List<PendingMediaUpload>,
     backgroundMediaId: String?,
+    backgroundIsVideo: Boolean,
+    backgroundLoop: Boolean,
     onRemove: (String) -> Unit,
     onToggleBackground: (String) -> Unit,
+    onToggleBackgroundLoop: () -> Unit,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(attachments, key = { it.id }) { media ->
+            val isBackground = media.id == backgroundMediaId
             MediaThumbnail(
                 model = media.thumbnailUrl ?: media.url,
                 isPending = false,
-                isBackground = media.id == backgroundMediaId,
+                isBackground = isBackground,
                 onRemove = { onRemove(media.id) },
                 onToggleBackground = { onToggleBackground(media.id) },
+                // The loop toggle appears only on the designated background VIDEO — the
+                // one media whose looping is authorable — so the control is never a no-op.
+                backgroundLoop = if (isBackground && backgroundIsVideo) backgroundLoop else null,
+                onToggleBackgroundLoop = onToggleBackgroundLoop,
             )
         }
         items(pending, key = { it.cmid }) { upload ->
@@ -1494,6 +1506,8 @@ private fun MediaThumbnail(
     onRemove: () -> Unit,
     isBackground: Boolean = false,
     onToggleBackground: (() -> Unit)? = null,
+    backgroundLoop: Boolean? = null,
+    onToggleBackgroundLoop: (() -> Unit)? = null,
 ) {
     Box {
         AsyncImage(
@@ -1528,6 +1542,34 @@ private fun MediaThumbnail(
                         },
                     ),
                     tint = if (isBackground) MaterialTheme.colorScheme.onPrimary else Color.White,
+                    modifier = Modifier.padding(3.dp),
+                )
+            }
+        }
+        if (backgroundLoop != null && onToggleBackgroundLoop != null) {
+            Surface(
+                onClick = onToggleBackgroundLoop,
+                shape = RoundedCornerShape(50),
+                color = if (backgroundLoop) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    Color.Black.copy(alpha = 0.55f)
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(2.dp)
+                    .size(22.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Loop,
+                    contentDescription = stringResource(
+                        if (backgroundLoop) {
+                            R.string.stories_composer_background_loop_on
+                        } else {
+                            R.string.stories_composer_background_loop_off
+                        },
+                    ),
+                    tint = if (backgroundLoop) MaterialTheme.colorScheme.onPrimary else Color.White,
                     modifier = Modifier.padding(3.dp),
                 )
             }

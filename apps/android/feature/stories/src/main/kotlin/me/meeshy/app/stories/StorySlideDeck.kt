@@ -34,6 +34,7 @@ data class StorySlide(
     val durationSecondsPin: Double? = null,
     val background: StoryBackgroundValue? = null,
     val backgroundMediaId: String? = null,
+    val backgroundLoop: Boolean = true,
 )
 
 /**
@@ -156,9 +157,11 @@ data class StorySlideDeck(
         if (slides.none { mediaId in it.mediaIds }) return this
         val next = slides.map { slide ->
             if (mediaId in slide.mediaIds) {
+                val clearsBackground = slide.backgroundMediaId == mediaId
                 slide.copy(
                     mediaIds = slide.mediaIds - mediaId,
-                    backgroundMediaId = slide.backgroundMediaId.takeIf { it != mediaId },
+                    backgroundMediaId = slide.backgroundMediaId.takeIf { !clearsBackground },
+                    backgroundLoop = if (clearsBackground) true else slide.backgroundLoop,
                 )
             } else {
                 slide
@@ -465,6 +468,13 @@ data class StorySlideDeck(
     fun isSelectedBackgroundMedia(mediaId: String): Boolean = selectedSlide.backgroundMediaId == mediaId
 
     /**
+     * Whether the **selected** slide's designated background loops. Meaningful only for a
+     * VIDEO background (an image always loops on the reader); `true` by default so a fresh
+     * designation starts looping, matching the reader's `loop ?: true`.
+     */
+    val selectedSlideBackgroundLoop: Boolean get() = selectedSlide.backgroundLoop
+
+    /**
      * Toggles which of the **selected** slide's media is its single looping background —
      * the authoring counterpart of the reader's `isBackground` [me.meeshy.sdk.model.StoryMediaObject]
      * selection. **At most one** media per slide may be the background: designating [mediaId]
@@ -479,7 +489,27 @@ data class StorySlideDeck(
         val next = if (selected.backgroundMediaId == mediaId) null else mediaId
         val index = selectedIndex
         val slidesNext = slides.mapIndexed { i, slide ->
-            if (i == index) slide.copy(backgroundMediaId = next) else slide
+            // A fresh designation always starts looping (the default); a stale
+            // author-chosen `loop = false` must never carry over to a new background.
+            if (i == index) slide.copy(backgroundMediaId = next, backgroundLoop = true) else slide
+        }
+        return copy(slides = slidesNext)
+    }
+
+    /**
+     * Sets whether the **selected** slide's designated background loops (the authoring
+     * counterpart of the reader's `loop` on the `isBackground`
+     * [me.meeshy.sdk.model.StoryMediaObject]). Inert (same instance) when the selected slide
+     * has **no** designated background media — a loop preference without a background is a
+     * control with no effect — or when [loop] already equals the slide's value. Every other
+     * slide and the selection are left untouched.
+     */
+    fun setSelectedBackgroundLoop(loop: Boolean): StorySlideDeck {
+        val selected = selectedSlide
+        if (selected.backgroundMediaId == null || selected.backgroundLoop == loop) return this
+        val index = selectedIndex
+        val slidesNext = slides.mapIndexed { i, slide ->
+            if (i == index) slide.copy(backgroundLoop = loop) else slide
         }
         return copy(slides = slidesNext)
     }

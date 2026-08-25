@@ -375,6 +375,53 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onSetSlideBackgroundLoop turns off looping for a designated video background`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
+        vm.onMediaPicked(listOf(item("clip.mp4")))
+        vm.onToggleSlideBackgroundMedia("v1")
+
+        vm.onSetSlideBackgroundLoop(false)
+
+        assertThat(vm.state.value.selectedSlideBackgroundLoop).isFalse()
+    }
+
+    @Test
+    fun `publishing a non-looping video background emits loop false on the media object`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
+        vm.onMediaPicked(listOf(item("clip.mp4")))
+        vm.onToggleSlideBackgroundMedia("v1")
+        vm.onSetSlideBackgroundLoop(false)
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.isBackground).isTrue()
+        assertThat(obj?.mediaType).isEqualTo("video")
+        assertThat(obj?.loop).isFalse()
+    }
+
+    @Test
+    fun `selectedSlideBackgroundIsVideo is true only when a designated background is a video`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(
+            listOf(uploaded("m1"), uploadedVideo("v1", durationMs = 5000)),
+        )
+        vm.onMediaPicked(listOf(item()))
+
+        assertThat(vm.state.value.selectedSlideBackgroundIsVideo).isFalse() // none designated
+
+        vm.onToggleSlideBackgroundMedia("m1")
+        assertThat(vm.state.value.selectedSlideBackgroundIsVideo).isFalse() // image designated
+
+        vm.onToggleSlideBackgroundMedia("v1")
+        assertThat(vm.state.value.selectedSlideBackgroundIsVideo).isTrue() // video designated
+    }
+
+    @Test
     fun `publishing with no designated background emits no media objects`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))

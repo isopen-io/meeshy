@@ -2,6 +2,60 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-25 **the composer AUTHORS whether a background VIDEO loops** (slice
+> `story-composer-background-video-loop`, feature-parity E. Stories — "Backgrounds: … looping/non-looping
+> video", the pending half of that item). Before this, `StoryBackgroundMedia.toMediaObject()` hard-coded
+> `loop = true` on EVERY designated background: an Android author could not publish a background video that
+> plays ONCE. iOS distinguishes them — `ClipInspector.supportsLoop(kind:isBackground:)` returns true only for a
+> **video/audio background** (never image/text/sticker); this ports the video half (audio-track authoring still
+> absent, as in the prior slice).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3520 (gateway `normalizeDisplayName`),
+> #3519 (docs), #3517 (`claude/brave-archimedes-*`, Android `core:model` legacy-ISO — a *different* routine's
+> PR, not a `claude/apps/android/<slice-id>` slice), #3515 (iOS). None a slice from THIS routine. Prior slice
+> (`story-composer-background-media`, #3518) already merged. Branched off freshly-fetched `origin/main`
+> (`f4b43ad6`).
+>
+> **The fix — one wire-mapping field + one slide field/reducer + one VM intent/derivation + one screen toggle.**
+> (1) `StoryBackgroundMedia.loop: Boolean = true`; `toMediaObject()` emits `loop = if (isVideo) loop else true`
+> — the author's choice reaches the wire ONLY for a video, so a stale `loop = false` never rides onto an image
+> object (the reader's image branch is unconditionally looping; its video branch reads
+> `backgroundObject?.loop ?: true`). (2) `StorySlide.backgroundLoop: Boolean = true`;
+> `StorySlideDeck.setSelectedBackgroundLoop(loop)` (inert when the selected slide has NO designated background —
+> a loop pref without a background is a no-op control — or on an equal value) + `selectedSlideBackgroundLoop`;
+> a FRESH designation (`toggleSelectedBackgroundMedia`) and a background-clearing `removeMedia` both RESET
+> `backgroundLoop` to the default, so an off-state never leaks to a newly-designated background. (3) VM
+> `onSetSlideBackgroundLoop`, derived `selectedSlideBackgroundLoop` + `selectedSlideBackgroundIsVideo` (resolves
+> the designated id against the uploaded attachments' MIME), and the publish resolver now carries `slide.backgroundLoop`.
+> (4) A `Loop` toggle badge on the designated-background thumbnail, shown **only when it is a video** (tinted
+> `primary` when looping), localised en/fr/es/pt.
+>
+> **Tests: +13** — 7 `StorySlideDeckTest` (default-loops; set-off on designated slide; inert with no bg; inert
+> on equal; only-selected-slide; redesignating a different media resets loop; removeMedia of the bg resets
+> loop), 2 `StoryComposerDraftTest` (non-looping video → `loop = false`; image with loop off → `loop = true`),
+> 4 `StoryComposerViewModelTest` (`onSetSlideBackgroundLoop` turns it off; publishing a non-looping video emits
+> `loop = false`; `selectedSlideBackgroundIsVideo` true only for a designated video, false for none/image).
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** AGP auto-installed pristine
+> `android-37.0`; the first `./gradlew` failed `Failed to find target with hash string 'android-37'`. The
+> copy→patch (`cp -r android-37.0 android-37`, `source.properties` ApiLevel 37.0→37) keeping android-37.0
+> ALONGSIDE android-37 resolved it — the documented THIRD mode.
+>
+> **Verified**: targeted `:feature:stories` suites (`StorySlideDeckTest`/`StoryComposerDraftTest`/
+> `StoryComposerViewModelTest`) green, then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL in 5m 46s** before any push.
+> Mutation-RED proven: forcing `loop = true` in `toMediaObject()` reddened EXACTLY the 2 loop-false tests
+> (video serialises loop-false / VM publish loop-false) while image-always-loops stayed green — genuine
+> discrimination, not an assertion echo. Reviewer PASS. Diff is `apps/android` only (4 amended prod files in
+> :feature:stories + 4 strings.xml, +3 amended test files, tracking docs). Verdict: **PASS** — a pure wire-map
+> field + a pure loop reducer + a VM intent/derivation + a screen toggle; behavioural tests through the public
+> API; no production logic outside `apps/android`.
+>
+> **Next**: background IMAGE with per-slide transform (the remaining pending piece of §E "Backgrounds"), OR the
+> AUDIO half of the background-designation item — still blocked until the composer gains an audio-track
+> authoring surface (borrowed sound / voice-over), so scout that first. Scout `feature-parity.md` read-only
+> before branching.
+
 > On 2026-08-25 **the composer AUTHORS which media is a slide's looping background** (slice
 > `story-composer-background-media`, feature-parity E. Stories — "background designation toggle (1 visual +
 > 1 audio/slide)"). Before this, an Android-composed multi-media slide had **no way to say which media is the

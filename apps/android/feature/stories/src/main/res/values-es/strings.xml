@@ -39,6 +39,8 @@
     <string name="stories_composer_remove_media">Quitar</string>
     <string name="stories_composer_background_media_set">Definir como fondo</string>
     <string name="stories_composer_background_media_clear">Quitar fondo</string>
+    <string name="stories_composer_background_loop_on">El fondo se repite — toca para reproducir una vez</string>
+    <string name="stories_composer_background_loop_off">El fondo se reproduce una vez — toca para repetir</string>
     <string name="stories_composer_media_pending">Sin conexión</string>
     <string name="stories_composer_canvas">Lienzo de la historia: pellizca para acercar, arrastra para mover</string>
     <string name="stories_composer_slide_label">Diapositiva %1$d</string>

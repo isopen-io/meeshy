@@ -467,6 +467,42 @@ class StoryComposerDraftTest {
     }
 
     @Test
+    fun `a non-looping video background serialises loop false`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("v1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "v1",
+                url = "https://cdn/v1.mp4",
+                mimeType = "video/mp4",
+                durationSeconds = 4.0,
+                loop = false,
+            ),
+        ).toCreateStoryRequest("en")
+
+        val obj = request.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.mediaType).isEqualTo("video")
+        assertThat(obj?.loop).isFalse()
+    }
+
+    @Test
+    fun `an image background always loops even when loop is off`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("m1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "m1",
+                url = "https://cdn/m1.jpg",
+                mimeType = "image/jpeg",
+                durationSeconds = null,
+                loop = false,
+            ),
+        ).toCreateStoryRequest("en")
+
+        assertThat(request.storyEffects?.mediaObjects?.single()?.loop).isTrue()
+    }
+
+    @Test
     fun `a background media alone materialises effects`() {
         val request = StoryComposerDraft(
             mediaIds = listOf("m1"),
