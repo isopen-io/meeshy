@@ -1590,3 +1590,97 @@ describe('POST /posts/:id/repost — un corps invalide est REFUSÉ, jamais dépr
     await app.close();
   });
 });
+
+// ─── DELETE /posts/:id/like — QUELLE réaction part ───────────────────────────
+//
+// Règle produit (2026-08-25) : re-toucher le cœur retire la DERNIÈRE réaction
+// posée, une par une. Le client connaît sa propre pile — la route doit donc
+// pouvoir recevoir l'emoji à retirer, et le transmettre TEL QUEL au service.
+// Elle n'avait aucun `Body` : le geste partait à l'aveugle et le service
+// tirait un élément d'un ensemble non ordonné, dont l'emoji alimentait ensuite
+// la diffusion. Un client optimiste qui retirait un pouce s'entendait annoncer
+// le départ d'un cœur, et se désynchronisait sur un geste RÉUSSI.
+
+describe('DELETE /posts/:id/like — emoji désigné', () => {
+  it('transmet l\'emoji du corps au service et diffuse CET emoji', async () => {
+    mockUnlikePost.mockClear();
+    mockUnlikePost.mockResolvedValueOnce({
+      id: 'post-001', removedEmoji: '👍',
+      post: { id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 1, reactionSummary: { '❤️': 1 }, visibility: 'PUBLIC', visibilityUserIds: [] },
+    });
+    const app = await buildApp({ withSocialEvents: true });
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like`, payload: { emoji: '👍' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockUnlikePost.mock.calls.at(-1)?.[2]).toBe('👍');
+    expect((app as any).socialEvents.broadcastPostUnliked).toHaveBeenCalledWith(
+      expect.objectContaining({ emoji: '👍' }),
+      'author-1', 'PUBLIC', [],
+    );
+    await app.close();
+  });
+
+  it('corps absent ⇒ aucun emoji fabriqué : le service choisit la plus récente', async () => {
+    mockUnlikePost.mockClear();
+    mockUnlikePost.mockResolvedValueOnce({
+      id: 'post-001', removedEmoji: '😂',
+      post: { id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: {}, visibility: 'PUBLIC', visibilityUserIds: [] },
+    });
+    const app = await buildApp({ withSocialEvents: true });
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
+
+    expect(res.statusCode).toBe(200);
+    // Surtout PAS '❤️' : un défaut fabriqué ici rendrait le repli « la plus
+    // récente » inatteignable pour tout client déjà déployé.
+    expect(mockUnlikePost.mock.calls.at(-1)?.[2]).toBeUndefined();
+    expect((app as any).socialEvents.broadcastPostUnliked).toHaveBeenCalledWith(
+      expect.objectContaining({ emoji: '😂' }),
+      'author-1', 'PUBLIC', [],
+    );
+    await app.close();
+  });
+
+  it('emoji hors format ⇒ 400, jamais un retrait à l\'aveugle', async () => {
+    mockUnlikePost.mockClear();
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'DELETE', url: `/posts/${POST_ID}/like`,
+      payload: { emoji: 'pas-un-emoji-mais-une-phrase-entiere' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('VALIDATION_ERROR');
+    expect(mockUnlikePost).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('désignation VIDE ⇒ 400 : seule la clé ABSENTE vaut « pas de désignation »', async () => {
+    mockUnlikePost.mockClear();
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'DELETE', url: `/posts/${POST_ID}/like`,
+      payload: { emoji: '   ' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(mockUnlikePost).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('les blancs autour de l\'emoji ne changent pas ce qui est désigné', async () => {
+    mockUnlikePost.mockClear();
+    const app = await buildApp();
+
+    await app.inject({
+      method: 'DELETE', url: `/posts/${POST_ID}/like`,
+      payload: { emoji: ' 👍 ' },
+    });
+
+    expect(mockUnlikePost.mock.calls.at(-1)?.[2]).toBe('👍');
+    await app.close();
+  });
+});

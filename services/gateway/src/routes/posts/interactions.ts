@@ -7,7 +7,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
-import { LikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema } from './types';
+import { LikeSchema, UnlikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema } from './types';
 import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
@@ -209,6 +209,21 @@ export function registerInteractionRoutes(
 
       const { postId } = request.params;
 
+      // QUELLE réaction part. Le corps est optionnel — aucun client déployé
+      // n'en envoie — mais quand il en envoie un, c'est une DÉSIGNATION, pas
+      // une suggestion : un emoji hors format se refuse (400) au lieu d'être
+      // silencieusement remplacé par un autre retrait. Le jumeau `POST` peut
+      // se permettre un défaut ('❤️') parce qu'il CRÉE ; ici un défaut
+      // rendrait le repli « la plus récente » inatteignable (cf.
+      // `UnlikeSchema`). Pas de `schema.response` ajouté au passage : cette
+      // route n'en a jamais eu, et `fast-json-stringify` retirerait en SILENCE
+      // tout champ non déclaré.
+      const parsed = UnlikeSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid emoji', { code: 'VALIDATION_ERROR' });
+      }
+      const requestedEmoji = parsed.data.emoji;
+
       // Retirer reste une interaction avec le post — même garde et même
       // redirection repost simple → racine que la pose (`resolveInteractionTarget`),
       // pour que ni l'ACL ni la cible ne dépendent du sens du geste.
@@ -237,7 +252,7 @@ export function registerInteractionRoutes(
         // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
         replayCost: 'converges',
         op: async () => {
-          const res = await postService.unlikePost(targetPostId, authContext.registeredUser.id);
+          const res = await postService.unlikePost(targetPostId, authContext.registeredUser.id, requestedEmoji);
           if (!res) throw new Error('POST_NOT_FOUND');
           return { ...res, post: withMentions(res.post, wireReaderFromRequest(request as UnifiedAuthRequest)) };
         },

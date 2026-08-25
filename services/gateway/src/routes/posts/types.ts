@@ -503,6 +503,34 @@ export const LikeSchema = z.object({
   emoji: z.string().max(10).default('❤️'),
 });
 
+/**
+ * RETIRER une réaction. L'emoji y est optionnel et SANS défaut — les deux
+ * moitiés comptent, et c'est pour cela que ce schéma ne réutilise pas son
+ * jumeau `LikeSchema`.
+ *
+ * FOURNI ⇒ c'est celui-là qui part, exactement. C'est le chemin NOMINAL de la
+ * règle produit (« re-toucher retire la DERNIÈRE réaction posée, une par une,
+ * jusqu'à n'en plus avoir ») : la pile vit chez le client, qui sait donc ce
+ * qu'il enlève. Sans ce champ, le serveur choisissait à sa place — et
+ * annonçait son choix dans `post:unliked`, désynchronisant un client optimiste
+ * sur un geste RÉUSSI.
+ *
+ * ABSENT ⇒ le serveur retire la PLUS RÉCENTE (`PostService.unlikePost`). Repli
+ * pour les clients DÉJÀ DÉPLOYÉS, qui n'envoient aucun corps — et qui sert
+ * exactement la même règle.
+ *
+ * Un défaut '❤️' rendrait ce repli INATTEIGNABLE : « rien demandé » deviendrait
+ * « retire le cœur », et une pile sans cœur ne se pèlerait jamais.
+ *
+ * `min(1)` après `trim()` : SEULE l'absence de clé vaut « pas de désignation ».
+ * Une chaîne vide ou blanche est une désignation MALFORMÉE, et la traiter comme
+ * une absence retirerait une réaction que personne n'a nommée — exactement le
+ * geste à l'aveugle que cette route existe pour supprimer.
+ */
+export const UnlikeSchema = z.object({
+  emoji: z.string().trim().min(1).max(10).optional(),
+});
+
 // ============================================
 // RESPONSE TYPES
 // ============================================

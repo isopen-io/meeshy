@@ -1463,11 +1463,26 @@ export class PostService {
   }
 
   /**
-   * Retire la réaction du lecteur sur un post.
+   * Retire UNE réaction du lecteur sur un post.
+   *
+   * `emoji` FOURNI ⇒ c'est celui-là qui part, exactement — le client connaît
+   * sa propre pile. ABSENT ⇒ la PLUS RÉCENTE part, ce que la règle produit
+   * appelle « la dernière posée » : re-toucher pèle la pile une par une,
+   * jusqu'à n'en plus avoir.
+   *
+   * Le tri n'est donc pas cosmétique, c'est la règle elle-même. Sans lui,
+   * `userReactions[0]` prenait un élément d'un ensemble NON ORDONNÉ — en
+   * pratique l'ordre naturel de la collection, donc la PLUS ANCIENNE — et cet
+   * emoji alimente ensuite `post:unliked` / `story:unreacted` /
+   * `status:unreacted` : un client optimiste qui retirait un pouce s'entendait
+   * annoncer le départ d'un cœur, et se désynchronisait sur un geste RÉUSSI.
+   * Le `findMany` SUIVANT de cette même fonction portait déjà son `orderBy` :
+   * l'omission était ISOLÉE.
    *
    * Rend `null` si le post n'existe pas ; sinon une enveloppe
    * `{ id, post, removedEmoji }` où `removedEmoji` est la réaction RÉELLEMENT
-   * retirée, ou `null` quand il n'y en avait aucune (le geste est idempotent).
+   * retirée, ou `null` quand il n'y en avait aucune à retirer — pile vide, ou
+   * emoji désigné que le lecteur n'a pas posé. Le geste reste idempotent.
    *
    * L'enveloppe existe pour ce seul champ : `foundEmoji` ne se lit qu'ICI,
    * avant la suppression de la ligne `PostReaction`, et il n'est reconstructible
@@ -1475,16 +1490,21 @@ export class PostService {
    * elle en fabriquait un ('❤️') faute de l'avoir. `id` est repris du post :
    * c'est l'identité que `withMutationLog` journalise (`T & { id: string }`).
    */
-  async unlikePost(postId: string, userId: string) {
+  async unlikePost(postId: string, userId: string, emoji?: string) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
       include: postInclude,
     });
     if (!post) return null;
 
+    // L'emoji demandé restreint la pile ; son absence la laisse entière. Dans
+    // les deux cas le tri décroissant fait de la tête la réaction à retirer :
+    // la désignée, ou la plus récente.
+    const requestedEmoji = emoji?.trim();
     const userReactions = await this.prisma.postReaction.findMany({
-      where: { postId, userId },
+      where: { postId, userId, ...(requestedEmoji ? { emoji: requestedEmoji } : {}) },
       select: { userId: true, emoji: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
     });
 
     if (userReactions.length === 0) return { id: post.id, post, removedEmoji: null };

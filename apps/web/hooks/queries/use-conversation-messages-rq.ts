@@ -156,6 +156,9 @@ export function mergePendingLocalMessages(
   return preserved.length > 0 ? [...preserved, ...serverMessages] : serverMessages;
 }
 
+/** Un identifiant de conversation RÉSOLU — 24 hex. Un slug (« meeshy ») n'en est pas un. */
+const OBJECT_ID_RE = /^[a-f\d]{24}$/i;
+
 export function useConversationMessagesRQ(
   conversationId: string | null,
   currentUser: User | null,
@@ -188,6 +191,7 @@ export function useConversationMessagesRQ(
   const {
     data,
     isLoading,
+    isFetching,
     isFetchingNextPage,
     error,
     hasNextPage,
@@ -211,6 +215,9 @@ export function useConversationMessagesRQ(
       // index de page. Renvoyer un ID de message (string) ici le ferait retomber sur la
       // page 1 (offset 0) dans fetchMessagesFromService (`typeof pageParam === 'number' ? … : 1`),
       // re-chargeant la première page en boucle — doublons + historique ancien inaccessible.
+      // Ce rang est POSITIONNEL : il ne regarde pas le contenu des pages. C'est
+      // pourquoi `addMessage` refuse de semer une page locale sur ce chemin —
+      // elle prendrait le rang 1 et ferait sauter la vraie première page.
       if (linkId) return allPages.length + 1;
       // Chemin authentifié : préférer le cursor renvoyé par le serveur…
       if (lastPage.nextCursor) return lastPage.nextCursor;
@@ -357,15 +364,134 @@ export function useConversationMessagesRQ(
   }, [queryClient, conversationId]);
 
   // Add message to cache
+  //
+  // UN CACHE ABSENT N'EST PAS UN CACHE À JOUR.
+  //
+  // `addMessage` est l'UNIQUE écrivain socket des écrans servis par
+  // `BubbleStreamPage` (`/`, `/chat/:linkId`). Il sortait sur `if (!old) return
+  // old;` — c'est-à-dire qu'un `message:new` arrivé PENDANT la lecture initiale
+  // (requête REST en vol, cache encore vide) était jeté, silencieusement et pour
+  // toute la session : la couche socket a déjà marqué l'id « vu » pendant 5
+  // minutes, donc aucune re-livraison ne répare le trou, et `staleTime: Infinity`
+  // n'ira jamais relire le serveur de lui-même.
+  //
+  // POURQUOI SEMER (option a) PLUTÔT QUE SEULEMENT REVALIDER (option b) —
+  // la question a été tranchée par ce que le serveur SAIT, pas par le confort :
+  // à l'instant où ce message arrive par socket, la lecture REST en vol ne le
+  // contient pas (c'est précisément pourquoi il est arrivé par socket ; le
+  // read-after-write d'un réplica ne le rend pas non plus). Revalider, c'est
+  // redemander au serveur une chose qu'il ne peut pas encore rendre : la requête
+  // repart, revient sans le message, et le message est perdu exactement comme
+  // avant. Seule une écriture LOCALE le préserve.
+  //
+  // POURQUOI LA PAGE SEMÉE NE CREUSE PAS DE TROU DANS L'HISTORIQUE — le risque
+  // de l'option (a) est de fabriquer une page que la pagination croirait
+  // COMPLÈTE. La page semée porte donc `hasMore: true` : elle ne prétend rien.
+  // Et quand la lecture initiale réussit, `mergePendingLocalMessages` — écrit
+  // dans ce fichier pour EXACTEMENT cette classe de message (« delivered by
+  // Socket.IO that the REST read cannot see yet ») — préserve le message semé
+  // au moment où la page serveur remplace la graine.
+  //
+  // CE QUI PRÉCÈDE NE VAUT QUE SUR LE CHEMIN AUTHENTIFIÉ, et le dire vaguement
+  // a coûté un trou d'historique. `getNextPageParam` a DEUX branches, pas une :
+  //   • authentifié — pagination par CURSEUR : le rang suivant se dérive du
+  //     DERNIER message de la page (« before <id> »). Une page semée d'un seul
+  //     message rend le curseur `<id du message semé>` ; le serveur sert alors
+  //     tout ce qui le précède. Rien n'est sauté, et c'est ce qui rend la
+  //     graine sûre ici.
+  //   • anonyme (`/chat/:linkId`) — pagination par NUMÉRO de page
+  //     (`AnonymousChatService.loadMessages(limit, offset)`) : le rang suivant
+  //     est `allPages.length + 1`, une POSITION, qui ignore le contenu des
+  //     pages. Une graine y occuperait le rang 1 et la suite partirait à
+  //     l'offset `limit` : la vraie première page du serveur ne serait JAMAIS
+  //     demandée. On ne sème donc pas sur ce chemin — voir la garde dans
+  //     `addMessage`.
+  //
+  // L'option (b) reste, en second rideau et bornée : si AUCUNE lecture n'est en
+  // vol (la lecture initiale a échoué, ou s'est terminée sans jamais peupler le
+  // cache), on redemande l'historique au serveur, faute de quoi la graine
+  // resterait seule à l'écran. Quand une lecture EST en vol, on ne la dérange
+  // pas : elle va atterrir et fusionner la graine.
+  //
+  // Sur le chemin anonyme, (b) n'est pas un second rideau : c'est le SEUL. Rien
+  // n'y étant semé, la relecture — lancée tout de suite au repos, notée en
+  // DETTE et soldée à l'atterrissage quand une lecture est en vol — est ce qui
+  // rattrape le message. Elle repart vers un serveur qui a persisté le message
+  // AVANT de le diffuser : c'est ce qui la rend suffisante ici, là où sur le
+  // chemin authentifié seule l'écriture locale l'était.
+  /** Une relecture DUE, notée pendant qu'une lecture était en vol. */
+  const relectureDueRef = useRef(false);
+
+  useEffect(() => {
+    if (isFetching || !relectureDueRef.current) return;
+    relectureDueRef.current = false;
+    void queryClient.invalidateQueries({ queryKey });
+  }, [isFetching, queryClient, queryKey]);
+
   const addMessage = useCallback((message: Message): boolean => {
     if (!conversationId) return false;
 
     let wasAdded = false;
+    let wasSeeded = false;
+    let besoinDeRevalider = false;
 
-    queryClient.setQueryData(
+    queryClient.setQueryData<InfiniteMessagesData>(
       queryKey,
-      (old: typeof data) => {
-        if (!old) return old;
+      (old) => {
+        if (!old) {
+          // PAGINATION PAR NUMÉRO : semer y COÛTE UN RANG DE PAGE.
+          //
+          // Sur le chemin anonyme, `getNextPageParam` rend `allPages.length + 1`
+          // — une POSITION, pas un curseur. La graine prendrait le rang 1 alors
+          // qu'elle ne porte qu'un message venu du socket, et la lecture
+          // suivante partirait à l'offset `limit` : les `limit` premières lignes
+          // du serveur deviendraient inatteignables (`staleTime: Infinity` ne
+          // les redemande jamais de lui-même).
+          //
+          // « Semer sans consommer de rang » n'existe pas ici : la seule façon
+          // de ne pas sauter la première page serait de la REdemander à
+          // l'offset 0 — et le message semé y apparaîtrait alors DEUX fois,
+          // rien ne dédupliquant entre pages (`select` fait un `flatMap` nu).
+          // Un rang de page est positionnel ; une graine n'a pas de position.
+          //
+          // Faute de curseur, on ne sème pas — on REVALIDE, exactement comme
+          // sur un écran clé-é par slug juste en dessous. Le message est alors
+          // rattrapé par la relecture, qui interroge un serveur ayant, lui,
+          // déjà persisté le message avant de le diffuser.
+          if (linkId) {
+            besoinDeRevalider = true;
+            return old;
+          }
+
+          // ATTRIBUTION VÉRIFIABLE, ou pas de graine.
+          //
+          // La graine ne peut être filtrée par PERSONNE en aval : le seul filtre
+          // du produit (`bubble-stream-page`, « different conversation ») est
+          // gardé par `currentConversationObjectId`, encore null tant que la
+          // lecture initiale n'a pas atterri — c'est EXACTEMENT la fenêtre que
+          // la graine vise. Semer sans vérifier afficherait sur l'accueil le
+          // message d'une AUTRE conversation.
+          //
+          // Une clé d'écran peut être un SLUG (`/` est monté sur « meeshy »)
+          // tandis que le fil porte des ObjectId : sur un cache vide il n'y a
+          // aucun message d'où tirer la résolution (le motif l'est déjà plus
+          // haut, « Use ObjectId from loaded messages, not the raw slug »).
+          // Faute de pouvoir attribuer, on ne sème pas — on REVALIDE une fois
+          // la lecture en vol retombée : elle repart alors vers un serveur qui
+          // a, lui, déjà persisté le message.
+          const attribuable =
+            OBJECT_ID_RE.test(conversationId) && message.conversationId === conversationId;
+          if (!attribuable) {
+            besoinDeRevalider = true;
+            return old;
+          }
+          wasAdded = true;
+          wasSeeded = true;
+          return {
+            pages: [{ messages: [message], hasMore: true, total: 0 }],
+            pageParams: [1],
+          };
+        }
 
         // ID-only dedup — no content-based matching
         for (const page of old.pages) {
@@ -387,8 +513,22 @@ export function useConversationMessagesRQ(
       }
     );
 
+    // Une lecture EN VOL n'est pas dérangée : au repos on relance tout de suite,
+    // sinon on note la DETTE et l'effet ci-dessous la solde dès que la lecture
+    // retombe. Sans ce report, un message non attribuable arrivé pendant la
+    // lecture initiale — le cas le plus fréquent, puisque c'est justement
+    // pourquoi il est arrivé par socket — n'était JAMAIS rattrapé : la garde
+    // seule aurait été une perte sèche.
+    if (wasSeeded || besoinDeRevalider) {
+      if (queryClient.getQueryState(queryKey)?.fetchStatus === 'idle') {
+        queryClient.invalidateQueries({ queryKey });
+      } else {
+        relectureDueRef.current = true;
+      }
+    }
+
     return wasAdded;
-  }, [queryClient, conversationId, queryKey]);
+  }, [queryClient, conversationId, queryKey, linkId]);
 
   // Update message in cache
   const updateMessage = useCallback((

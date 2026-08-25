@@ -5,7 +5,7 @@ import { PostCommentService } from '../../services/PostCommentService';
 import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
-import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
+import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, UnlikeSchema } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
@@ -645,8 +645,13 @@ export function registerCommentRoutes(
       }
 
       const { commentId } = request.params;
-      const parsed = LikeSchema.safeParse(request.body ?? {});
-      const emoji = parsed.success ? parsed.data.emoji : '❤️';
+      // `UnlikeSchema` et NON `LikeSchema` : son jumeau porte un défaut '❤️'
+      // qui rendrait le repli inatteignable — « rien demandé » deviendrait
+      // « retire le cœur », et une pile sans cœur ne se pèlerait jamais.
+      // Emoji absent ⇒ `unlikeComment` retire la PLUS RÉCENTE, ce que la règle
+      // produit appelle « la dernière posée ».
+      const parsed = UnlikeSchema.safeParse(request.body ?? {});
+      const emoji = parsed.success ? parsed.data.emoji : undefined;
 
       // Retirer une réaction reste une interaction avec le fil — même garde
       // que la pose, pour que l'ACL ne dépende pas du sens du geste.
@@ -688,7 +693,7 @@ export function registerCommentRoutes(
         {
           subject: { kind: 'comment', id: commentId },
           actorId: authContext.registeredUser.id,
-          emoji,
+          emoji: result.removedEmoji ?? emoji ?? '',
         },
         notifService
       ).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId/comments/:commentId/like]: retract comment like notification failed'));

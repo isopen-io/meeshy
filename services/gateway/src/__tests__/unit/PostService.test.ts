@@ -50,6 +50,11 @@ function createMockPrisma() {
       upsert: jest.fn(),
       deleteMany: jest.fn(),
       groupBy: jest.fn(),
+      // `unlikeComment` lit la pile TRIÉE avant de retirer (2026-08-25) :
+      // l'emoji demandé la restreint, son absence la laisse entière, et la tête
+      // est la cible — c'est ce qui rend « retirer la DERNIÈRE posée » possible.
+      // Défaut vide : sans cible, le retrait est un no-op idempotent.
+      findMany: jest.fn().mockResolvedValue([]),
       // Plafond des cinq réactions (2026-08-20) : `PostCommentService.likeComment`
       // consulte `findFirst` (l'émoji est-il déjà posé ?) puis, si non, `count`
       // (place encore disponible ?) AVANT toute purge/upsert. Défauts « personne
@@ -2512,6 +2517,10 @@ describe('PostCommentService', () => {
 
     it('deletes the reaction row and syncs counters from the table', async () => {
       prisma.postComment.findFirst.mockResolvedValue(makeComment());
+      // `unlikeComment` lit d'abord la pile TRIÉE : l'emoji demandé la restreint,
+      // son absence la laisse entière, et la tête est la cible. Sans ce double,
+      // aucune cible n'est trouvée et rien n'est supprimé.
+      prisma.commentReaction.findMany.mockResolvedValue([{ emoji: '❤️' }]);
       prisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
       prisma.commentReaction.groupBy.mockResolvedValue([{ emoji: '❤️', _count: { emoji: 1 } }]);
       const updatedComment = makeComment({ likeCount: 1, reactionCount: 1, reactionSummary: { '❤️': 1 } });
@@ -2528,11 +2537,14 @@ describe('PostCommentService', () => {
           data: { likeCount: 1, reactionCount: 1, reactionSummary: { '❤️': 1 } },
         }),
       );
-      expect(result).toEqual(updatedComment);
+      // `removedEmoji` voyage AVEC le commentaire : la route diffuse ce que le
+      // serveur a FAIT, jamais ce que le client a demandé.
+      expect(result).toEqual({ ...updatedComment, removedEmoji: '❤️' });
     });
 
     it('drops the emoji key (and zeroes counters) when the table is empty', async () => {
       prisma.postComment.findFirst.mockResolvedValue(makeComment());
+      prisma.commentReaction.findMany.mockResolvedValue([{ emoji: '❤️' }]);
       prisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
       prisma.commentReaction.groupBy.mockResolvedValue([]);
       prisma.postComment.update.mockResolvedValue(makeComment());
