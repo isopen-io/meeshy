@@ -2,6 +2,62 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-25 **the composer AUTHORS a text element's per-element visibility timing** (slice
+> `story-composer-element-timing`, feature-parity E. Stories — "Per-element + per-slide duration"). The prior
+> slice (`story-element-timing-window-gate`, #3512) gave the *reader* a per-element `[start, start+duration)`
+> window gate; this one gives Android's own composer the controls that *write* `startTime`/`duration`, closing
+> the author→reader loop. Before this, an Android-authored text element could never carry a per-element window:
+> `StoryTextElement.toTextObject` set `fadeIn`/`fadeOut` but never `startTime`/`duration`, so the reader gate had
+> nothing local to honour. Ports iOS's `StoryTextEditorView` start/duration fields (`0…30 s`, a `0` folded back
+> to `nil`) into the same tap-cycle shape the fade authoring already ships.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3515 (`feat/ios-alignment-*`, iOS),
+> #3514 (`claude/intelligent-noether-*`, docs/shared) — neither a `claude/apps/android/*` slice from THIS
+> routine. Prior slice (`story-element-timing-window-gate`, #3512) already merged into main. Branched off
+> freshly-fetched `origin/main` (`d4401986`).
+>
+> **The fix — one pure value type + one element field/serialiser + two VM intents + two screen controls.**
+> (1) `StoryElementTiming` (`:feature:stories`, pure `data class`) mirrors `StoryTextFade` exactly:
+> `(startSeconds, durationSeconds)` flat pair (two independent ends, iOS binds each to its own control),
+> `NONE_SECONDS = 0f`, `hasStart`/`isTimed`/`isActive` predicates, `cycledStart()`/`cycledDuration()` delegating
+> to `StoryElementTimingCycle.advance` (discrete ladder `[1,2,3,5,10,15,30]`, all within iOS's `0…30 s` range,
+> `firstOrNull { it > current } ?: NONE_SECONDS` wrap). (2) `StoryTextElement.timing` field; `toTextObject`
+> serialises `startTime = timing.startSeconds.takeIf { it > NONE_SECONDS }?.toDouble()` and `duration` likewise
+> — matching iOS's `$0 > 0 ? Double($0) : nil` and the `fadeIn`/`fadeOut` omit-a-zero convention beside it.
+> (3) `onTextElementCycleStart(id)`/`onTextElementCycleDuration(id)` advance each end independently through
+> `updateTextElement` (inert on unknown id). (4) Two toolbar `IconButton`s in `TextStyleToolbar` (clock =
+> `Schedule` for start, `Timelapse` for duration; tinted `primary` when `hasStart`/`isTimed`), wired to the VM,
+> localised in 4 locales (en/fr/es/pt).
+>
+> **Tests: +18** — 10 `StoryElementTimingTest` (fresh=inactive; positive start active; positive duration active;
+> cycledStart/cycledDuration touch only their end; advance visits every step then wraps; between-steps jumps
+> higher; past/beyond longest wraps to none; the offered steps within 30 s), 4 added to `StoryTextElementTest`
+> (fresh no-timing; `toTextObject` omits both when unset; start-only onto `startTime`; duration-only onto
+> `duration`; both ends), 4 added to `StoryComposerViewModelTest` (start/duration advance the edited element;
+> wrap; unknown-id inert on each). **Mutation-RED-proven isolated**: neutering `StoryElementTimingCycle.advance`
+> to a constant reddened EXACTLY the 9 advance/cycle/VM-advance assertions while the model-shape
+> (fresh/positive-start/positive-duration/steps-list) and inert-id tests stayed green — genuine discrimination,
+> not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the copy→patch
+> (`source.properties` ApiLevel 37.0→37, `build.prop` `sdk_full`/`sdk` fields) keeping android-37.0 ALONGSIDE
+> android-37 resolved it — same THIRD mode as prior runs.
+>
+> **Verified**: targeted `:feature:stories` suites (`StoryElementTimingTest`/`StoryTextElementTest`/
+> `StoryComposerViewModelTest`) green, then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any push. Reviewer PASS. Diff is
+> `apps/android` only (1 new prod file + 3 amended prod files + 4 strings.xml in :feature:stories, +1 new test
+> file + 2 amended, tracking docs). Verdict: **PASS** — a pure timing SSOT mirroring `StoryTextFade`, an element
+> serialiser, two VM intents, and two screen controls; behavioural tests through the public API; no production
+> logic outside `apps/android`.
+>
+> **Next**: the background-designation toggle (mark one visual + one audio per slide as the looping background,
+> feeding the content-derived `bgVideoDur` branch the reader duration SSOT already reads) — the last unchecked
+> piece of feature-parity E's "Per-element + per-slide duration; background designation toggle" item. It shares
+> the media-OBJECT authoring foundation the composer still lacks (`mediaObjects` with `isBackground`). Adjacent
+> §E backlog: background IMAGE with per-slide transform. Scout `feature-parity.md` read-only before branching.
+
 > On 2026-08-25 **the viewer honours a timed element's own visibility WINDOW** (slice
 > `story-element-timing-window-gate`, feature-parity E. Stories — "Per-element + per-slide duration"). The prior
 > slices gave the composer per-SLIDE duration authoring; this one closes a distinct, foundational reader gap: a

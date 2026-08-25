@@ -56,7 +56,9 @@ import androidx.compose.material.icons.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.FormatColorReset
 import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.material.icons.filled.VerticalAlignTop
@@ -269,6 +271,8 @@ fun StoryComposerScreen(
                             onCycleOutline = { viewModel.onTextElementCycleOutline(element.id) },
                             onCycleFadeIn = { viewModel.onTextElementCycleFadeIn(element.id) },
                             onCycleFadeOut = { viewModel.onTextElementCycleFadeOut(element.id) },
+                            onCycleStart = { viewModel.onTextElementCycleStart(element.id) },
+                            onCycleDuration = { viewModel.onTextElementCycleDuration(element.id) },
                             onDuplicate = { viewModel.onDuplicateTextElement(element.id) },
                             onReorder = { op -> viewModel.onReorderTextElement(element.id, op) },
                         )
@@ -1094,6 +1098,8 @@ private fun TextStyleToolbar(
     onCycleOutline: () -> Unit,
     onCycleFadeIn: () -> Unit,
     onCycleFadeOut: () -> Unit,
+    onCycleStart: () -> Unit,
+    onCycleDuration: () -> Unit,
     onDuplicate: () -> Unit,
     onReorder: (StoryZOrder) -> Unit,
     modifier: Modifier = Modifier,
@@ -1154,6 +1160,28 @@ private fun TextStyleToolbar(
                     Icons.AutoMirrored.Filled.Logout,
                     contentDescription = stringResource(R.string.stories_composer_fade_out),
                     tint = if (element.fade.hasFadeOut) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            IconButton(onClick = onCycleStart) {
+                Icon(
+                    Icons.Filled.Schedule,
+                    contentDescription = stringResource(R.string.stories_composer_timing_start),
+                    tint = if (element.timing.hasStart) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            IconButton(onClick = onCycleDuration) {
+                Icon(
+                    Icons.Filled.Timelapse,
+                    contentDescription = stringResource(R.string.stories_composer_timing_duration),
+                    tint = if (element.timing.isTimed) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant

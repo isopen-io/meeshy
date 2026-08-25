@@ -120,6 +120,7 @@ data class StoryTextElement(
     val background: StoryTextBackground = StoryTextBackground.None,
     val outline: StoryTextOutline = StoryTextOutline(),
     val fade: StoryTextFade = StoryTextFade(),
+    val timing: StoryElementTiming = StoryElementTiming(),
     val x: Float = CENTER,
     val y: Float = CENTER,
     val scale: Float = DEFAULT_SCALE,
@@ -197,6 +198,8 @@ data class StoryTextElement(
         borderWidth = outline.width.takeIf { it > StoryTextOutline.NONE_WIDTH }?.toDouble(),
         fadeIn = fade.inSeconds.takeIf { it > StoryTextFade.NONE_SECONDS }?.toDouble(),
         fadeOut = fade.outSeconds.takeIf { it > StoryTextFade.NONE_SECONDS }?.toDouble(),
+        startTime = timing.startSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
+        duration = timing.durationSeconds.takeIf { it > StoryElementTiming.NONE_SECONDS }?.toDouble(),
         sourceLanguage = sourceLanguage,
     )
 

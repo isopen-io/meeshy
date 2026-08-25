@@ -1601,6 +1601,67 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onTextElementCycleStart advances only the start of the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementCycleStart(id)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.timing.startSeconds).isEqualTo(1f)
+        assertThat(element.timing.durationSeconds).isEqualTo(StoryElementTiming.NONE_SECONDS)
+        assertThat(element.style).isEqualTo(StoryTextStyle.BOLD)
+    }
+
+    @Test
+    fun `onTextElementCycleDuration advances only the duration of the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementCycleDuration(id)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.timing.durationSeconds).isEqualTo(1f)
+        assertThat(element.timing.startSeconds).isEqualTo(StoryElementTiming.NONE_SECONDS)
+    }
+
+    @Test
+    fun `onTextElementCycleStart wraps past the longest step back to none`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        repeat(8) { vm.onTextElementCycleStart(id) }
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().timing.startSeconds)
+            .isEqualTo(StoryElementTiming.NONE_SECONDS)
+    }
+
+    @Test
+    fun `onTextElementCycleStart on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementCycleStart("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().timing.startSeconds)
+            .isEqualTo(StoryElementTiming.NONE_SECONDS)
+    }
+
+    @Test
+    fun `onTextElementCycleDuration on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementCycleDuration("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().timing.durationSeconds)
+            .isEqualTo(StoryElementTiming.NONE_SECONDS)
+    }
+
+    @Test
     fun `onTextElementTransform pinch-scales and rotates the edited element`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
