@@ -85,15 +85,18 @@ final class TusUploadManagerSourceGuardTests: XCTestCase {
         return result
     }
 
-    /// Toutes les fenêtres suivant chaque `URLRequest(` du fichier — assez
-    /// larges (400 caractères) pour couvrir les 2-3 lignes qui séparent la
-    /// construction de la requête de la pose des en-têtes dans les 3 sites
-    /// réels, sans déborder sur le site suivant.
+    /// Toutes les fenêtres suivant chaque `URLRequest(` du fichier — bornées
+    /// au prochain `URLRequest(` (ou à la fin du fichier), jamais à un
+    /// offset fixe : un offset fixe de 400 caractères déborde sur le site
+    /// suivant dès qu'un `URLRequest(` non conforme est inséré moins de 400
+    /// caractères avant un site conforme, et la garde ne rougit plus jamais
+    /// (constat de revue R1-garde-A4-vacuous, 2026-08-25).
     private func windowsAfterEachURLRequest(in code: String) -> [String] {
         var windows: [String] = []
         var searchStart = code.startIndex
         while let range = code.range(of: "URLRequest(", range: searchStart..<code.endIndex) {
-            let windowEnd = code.index(range.upperBound, offsetBy: 400, limitedBy: code.endIndex) ?? code.endIndex
+            let nextRange = code.range(of: "URLRequest(", range: range.upperBound..<code.endIndex)
+            let windowEnd = nextRange?.lowerBound ?? code.endIndex
             windows.append(String(code[range.upperBound..<windowEnd]))
             searchStart = range.upperBound
         }
