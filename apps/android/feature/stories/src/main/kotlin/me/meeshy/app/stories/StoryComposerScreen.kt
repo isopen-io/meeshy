@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.material.icons.filled.VerticalAlignTop
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
@@ -315,7 +316,9 @@ fun StoryComposerScreen(
                 MediaPreviewRow(
                     attachments = state.selectedSlideAttachments,
                     pending = state.selectedSlidePending,
+                    backgroundMediaId = state.deck.selectedSlideBackgroundMediaId,
                     onRemove = viewModel::onRemoveMedia,
+                    onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
                 )
             }
 
@@ -1456,7 +1459,9 @@ private fun SlideStrip(
 private fun MediaPreviewRow(
     attachments: List<UploadedMedia>,
     pending: List<PendingMediaUpload>,
+    backgroundMediaId: String?,
     onRemove: (String) -> Unit,
+    onToggleBackground: (String) -> Unit,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
@@ -1466,7 +1471,9 @@ private fun MediaPreviewRow(
             MediaThumbnail(
                 model = media.thumbnailUrl ?: media.url,
                 isPending = false,
+                isBackground = media.id == backgroundMediaId,
                 onRemove = { onRemove(media.id) },
+                onToggleBackground = { onToggleBackground(media.id) },
             )
         }
         items(pending, key = { it.cmid }) { upload ->
@@ -1485,6 +1492,8 @@ private fun MediaThumbnail(
     model: Any?,
     isPending: Boolean,
     onRemove: () -> Unit,
+    isBackground: Boolean = false,
+    onToggleBackground: (() -> Unit)? = null,
 ) {
     Box {
         AsyncImage(
@@ -1495,6 +1504,34 @@ private fun MediaThumbnail(
                 .size(72.dp)
                 .clip(RoundedCornerShape(8.dp)),
         )
+        if (onToggleBackground != null) {
+            Surface(
+                onClick = onToggleBackground,
+                shape = RoundedCornerShape(50),
+                color = if (isBackground) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    Color.Black.copy(alpha = 0.55f)
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(2.dp)
+                    .size(22.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Wallpaper,
+                    contentDescription = stringResource(
+                        if (isBackground) {
+                            R.string.stories_composer_background_media_clear
+                        } else {
+                            R.string.stories_composer_background_media_set
+                        },
+                    ),
+                    tint = if (isBackground) MaterialTheme.colorScheme.onPrimary else Color.White,
+                    modifier = Modifier.padding(3.dp),
+                )
+            }
+        }
         if (isPending) {
             Surface(
                 color = Color.Black.copy(alpha = 0.55f),

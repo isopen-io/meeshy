@@ -5,6 +5,22 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-25 — an authoring designation must produce the exact wire object the reader ALREADY reads (slice `story-composer-background-media`)
+The Android composer published slide media as a flat `mediaIds` list and emitted **no** `effects.mediaObjects` — so
+the reader's rich background path (`resolveBackgroundMedia` → `firstOrNull { it.isBackground }`, and the
+`StorySlideDuration` `bgVideoDur`/`bgAudioDur` loop-extend) was only ever exercised by RAW-publish/legacy wire
+shapes, never by an Android-composed story, which fell back to "first video else first image". Letting the author
+DESIGNATE the background is therefore not just a bit of state — it only becomes real by producing the one
+`StoryMediaObject { isBackground = true }` the reader already consumes. Two things that make the wire correct rather
+than merely present: (1) the composer holds only a media **id**, but the reader needs a **URL + kind + duration** —
+resolve the id against the uploaded-media the VM already tracks (`resolveBackgroundMedia`), keeping the pure mapping
+(`StoryBackgroundMedia.toMediaObject`) unit-testable and off the upload state; (2) only a **video** background feeds
+the duration branch, so carry duration onto `duration`/`intrinsicDuration` for video and OMIT it for an image —
+otherwise an image would spuriously stretch the slide. Corollary invariant: a "designate one" reducer must also
+**clear the pointer when the pointed-at media is removed** (`removeMedia`), or a stale id survives its media.
+Deferred the AUDIO half honestly — the composer has no audio-track surface yet, so `audioPlayerObjects[].isBackground`
+has nothing to designate; a half-slice that shipped a dead audio toggle would be worse than a scoped one.
+
 ## 2026-08-25 — a reader gate is only half a feature: the author→reader loop, and the `toTextObject` field census (slice `story-composer-element-timing`)
 The prior slice made the reader HONOUR a text element's `startTime`/`duration` window, but nothing on Android could
 WRITE those fields: `StoryTextElement.toTextObject` set `fadeIn`/`fadeOut` yet omitted `startTime`/`duration`, so the
