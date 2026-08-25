@@ -357,27 +357,6 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
       const updatedUser = await fastify.prisma.user.update({
         where: { id: userId },
         data: { avatar: body.avatar },
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          phoneNumber: true,
-          displayName: true,
-          avatar: true,
-          banner: true,
-          bio: true,
-          isOnline: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          lastActiveAt: true,
-          createdAt: true,
-          updatedAt: true
-        }
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
@@ -387,8 +366,21 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
 
       fastify.log.info(`[AVATAR_UPDATE] Avatar updated successfully for user ${userId}`);
 
+      const isAdmin = updatedUser.role === 'ADMIN' || updatedUser.role === 'BIGBOSS';
+      const permissions = {
+        canAccessAdmin: isAdmin,
+        canManageUsers: isAdmin,
+        canManageGroups: isAdmin,
+        canManageConversations: isAdmin,
+        canViewAnalytics: isAdmin,
+        canModerateContent: isAdmin || updatedUser.role === 'MODERATOR',
+        canViewAuditLogs: isAdmin || updatedUser.role === 'AUDIT',
+        canManageNotifications: isAdmin,
+        canManageTranslations: isAdmin,
+      };
+
       return sendSuccess(reply, {
-        user: updatedUser,
+        user: formatUserResponse(updatedUser, permissions),
         message: 'Avatar updated successfully'
       });
 
@@ -456,27 +448,6 @@ export async function updateUserBanner(fastify: FastifyInstance) {
       const updatedUser = await fastify.prisma.user.update({
         where: { id: userId },
         data: { banner: body.banner },
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          phoneNumber: true,
-          displayName: true,
-          avatar: true,
-          banner: true,
-          bio: true,
-          isOnline: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          lastActiveAt: true,
-          createdAt: true,
-          updatedAt: true
-        }
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
@@ -486,8 +457,21 @@ export async function updateUserBanner(fastify: FastifyInstance) {
 
       fastify.log.info(`[BANNER_UPDATE] Banner updated successfully for user ${userId}`);
 
+      const isAdmin = updatedUser.role === 'ADMIN' || updatedUser.role === 'BIGBOSS';
+      const permissions = {
+        canAccessAdmin: isAdmin,
+        canManageUsers: isAdmin,
+        canManageGroups: isAdmin,
+        canManageConversations: isAdmin,
+        canViewAnalytics: isAdmin,
+        canModerateContent: isAdmin || updatedUser.role === 'MODERATOR',
+        canViewAuditLogs: isAdmin || updatedUser.role === 'AUDIT',
+        canManageNotifications: isAdmin,
+        canManageTranslations: isAdmin,
+      };
+
       return sendSuccess(reply, {
-        user: updatedUser,
+        user: formatUserResponse(updatedUser, permissions),
         message: 'Banner updated successfully'
       });
 
