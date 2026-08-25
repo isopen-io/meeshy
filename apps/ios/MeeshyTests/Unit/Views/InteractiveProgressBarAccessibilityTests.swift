@@ -28,13 +28,26 @@ final class InteractiveProgressBarAccessibilityTests: XCTestCase {
     /// Le doc-comment de `PostStatAccessibility` énonce précisément ce piège, et
     /// celui d'`InteractiveProgressBar` le CITE. **Le connaître ne suffit pas :
     /// il faut l'appliquer au banc de test, pas seulement au code testé.**
+    ///
+    /// **Et le catalogue s'indexe par LANGUE quand la locale, elle, veut sa
+    /// RÉGION.** `ar.lproj` porte la table ; mais `Locale(identifier: "ar")` —
+    /// sans région — se fait compléter par celle de l'APPAREIL, et rend donc
+    /// « ١ » sur un simulateur saoudien, « 1 » sur un simulateur américain.
+    /// Le système de chiffres arabo-indiens ne s'obtient d'aucune locale nue :
+    /// mesuré, `ar` et `ar_US` rendent des chiffres LATINS quand `ar_SA` et
+    /// `ar_EG` rendent les leurs. Les deux suites qui jugeaient déjà l'arabe
+    /// (`LocalizedNumberTests`, `ReachMetricLabelTests`) portent `ar_SA` pour
+    /// cette raison exacte : ce banc les rejoint, en cherchant la table sur la
+    /// seule LANGUE.
     private func inLocale(_ code: String,
                           _ make: (Bundle, Locale) -> String) throws -> String {
+        let locale = Locale(identifier: code)
+        let language = locale.language.languageCode?.identifier ?? code
         let path = try XCTUnwrap(
-            Bundle.main.path(forResource: code, ofType: "lproj"),
-            "localisation « \(code) » absente du bundle — régression de packaging"
+            Bundle.main.path(forResource: language, ofType: "lproj"),
+            "localisation « \(language) » absente du bundle — régression de packaging"
         )
-        return make(try XCTUnwrap(Bundle(path: path)), Locale(identifier: code))
+        return make(try XCTUnwrap(Bundle(path: path)), locale)
     }
 
     private func position(_ step: RegistrationStep, in code: String) throws -> String {
@@ -184,11 +197,29 @@ final class InteractiveProgressBarAccessibilityTests: XCTestCase {
     /// L'arabe s'écrit en chiffres arabo-indiens (règle de 241i) : la position
     /// d'une étape n'y fait pas exception. Le gabarit ARABE est exigé en même
     /// temps — c'est précisément ce que la 1ʳᵉ version de ce test ratait.
+    ///
+    /// `ar_SA` et non `ar` : le système de chiffres est une propriété de la
+    /// RÉGION, et une locale nue emprunte celle de l'appareil (cf. le banc
+    /// d'essai). La 2ᵉ version de ce test l'a appris en CI, sur un simulateur
+    /// américain : gabarit arabe correct, « الخطوة ⁨1⁩ من ⁨8⁩ », chiffres latins.
+    ///
+    /// **Et `contains(_:)` ne peut pas porter un témoin de GRAPHIE.** La
+    /// recherche Foundation compare par COLLATION quand aucune option ne le lui
+    /// interdit, et « ١ » (U+0661) y vaut « 1 » (U+0031) au niveau primaire.
+    /// Mesuré sur iOS 18.2 : le label rendu est
+    /// `U+0627 U+0644 U+062E U+0637 U+0648 U+0629 U+2068 U+0661 U+2069 …` — pas
+    /// un seul U+0031 — et `label.contains("1")` rend pourtant `true`, ce qui a
+    /// fait rougir la 3ᵉ version sur du code JUSTE. Un témoin qui parle de
+    /// caractères se pose donc en `.literal`.
     func test_positionLabel_arabicUsesItsOwnDigits() throws {
-        let label = try position(.pseudo, in: "ar")
-        XCTAssertFalse(
-            label.contains("1"),
+        let label = try position(.pseudo, in: "ar_SA")
+        XCTAssertNil(
+            label.range(of: "1", options: .literal),
             "En arabe, la position ne doit pas s'écrire en chiffres latins — obtenu « \(label) »."
+        )
+        XCTAssertNotNil(
+            label.range(of: number(1, in: "ar_SA"), options: .literal),
+            "Le rang doit s'écrire « \(number(1, in: "ar_SA")) » — obtenu « \(label) »."
         )
         XCTAssertNotEqual(
             label, try position(.pseudo, in: "en"),
