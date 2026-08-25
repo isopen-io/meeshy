@@ -240,8 +240,9 @@ export const CreatePostSchema = z.object({
   moodEmoji: z.string().max(10).optional(),
   audioUrl: z.url().optional(),
   audioDuration: z.number().int().positive().optional(),
-  // Original language override (ISO 639-1, e.g. "fr", "en")
-  originalLanguage: z.string().min(2).max(5).optional(),
+  // Original language override (ISO 639-1/639-3, optional BCP-47 region, e.g. "fr", "bas-CM").
+  // `.max(6)` : parité avec la SSOT `CommonSchemas.language`.
+  originalLanguage: z.string().min(2).max(6).optional(),
   // Media IDs (already uploaded)
   mediaIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
   // Texte alternatif par média (accessibilité, `PostMedia.alt`) — clé = un id
@@ -437,7 +438,8 @@ export const RepostSchema = z.object({
 });
 
 export const TranslatePostSchema = z.object({
-  targetLanguage: z.string().min(2).max(5),
+  // `.max(6)` : parité avec la SSOT `CommonSchemas.language` (code 639-3 régionalisé).
+  targetLanguage: z.string().min(2).max(6),
   // Rejouer une langue DÉJÀ traduite — ce que demande le bouton « Retraduire »
   // de la feuille des langues du lecteur. Sans ce drapeau il appelait la même
   // route que « Traduire » et sortait aussitôt sur les gardes de cache : le
