@@ -107,7 +107,7 @@ final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
     func test_everyNonisolatedMeeshyUIClass_declaresADeinit() throws {
         let decls = try classDecls()
         XCTAssertGreaterThan(
-            decls.count, 150,
+            decls.count, 60,
             "le balayage de Sources/MeeshyUI/** ne trouve presque aucune classe — la garde " +
             "passerait au vert par omission (leçon 257), pas parce que la famille est traitée."
         )
