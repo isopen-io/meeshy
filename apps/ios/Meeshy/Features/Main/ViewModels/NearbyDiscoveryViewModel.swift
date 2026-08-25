@@ -361,8 +361,18 @@ final class NearbyDiscoveryViewModel: ObservableObject {
     /// le retour du réseau ne relançait RIEN, et les surfaces carte n'offrent
     /// aucun tirer-pour-rafraîchir. L'écran restait sur ses dernières données
     /// et sur son bandeau hors ligne jusqu'à ce qu'on le quitte.
+    ///
+    /// **Le saut sur le main n'est pas décoratif.** `isOfflinePublisher`
+    /// débounce sur `DispatchQueue.global(qos: .utility)` et LIVRE sur cette
+    /// file ; la fermeture du `sink` appartient à une classe `@MainActor`, et
+    /// le runtime vérifie l'exécuteur à son entrée. Sans `receive(on:)`, la
+    /// première transition réseau après l'ouverture de l'écran trappait
+    /// (`SIGTRAP`, `_dispatch_assert_queue_fail`) — le crash « Find nearby »
+    /// du 2026-08-25, quelques secondes après le tap. Même forme que
+    /// `SyncPillViewModel`, l'autre abonné de ce publisher.
     private func observeNetwork() {
         network.isOfflinePublisher
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] offline in
                 Task { @MainActor in
                     guard let self else { return }
