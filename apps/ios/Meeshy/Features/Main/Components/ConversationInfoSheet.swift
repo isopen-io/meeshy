@@ -12,6 +12,11 @@ struct ConversationInfoSheet: View {
     let conversation: Conversation
     let accentColor: String
     let messages: [Message]
+    /// Remonte à l'hôte la conversation FUSIONNÉE que `ConversationSettingsView`
+    /// vient de recevoir du serveur. Sans ce relais, l'écran déjà ouvert reste
+    /// sur la valeur figée capturée à la navigation : le titre et l'avatar
+    /// d'AVANT l'édition, alors que le serveur a confirmé les nouveaux.
+    var onConversationUpdated: ((Conversation) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -113,7 +118,10 @@ struct ConversationInfoSheet: View {
                     ConversationSettingsView(
                         conversation: conversation,
                         currentUserRole: resolvedUserRole,
-                        onUpdated: { _ in dismiss() },
+                        onUpdated: { updated in
+                            onConversationUpdated?(updated)
+                            dismiss()
+                        },
                         onLeft: { dismiss() }
                     )
                 }

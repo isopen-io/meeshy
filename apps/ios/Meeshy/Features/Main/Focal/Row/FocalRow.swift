@@ -529,7 +529,12 @@ struct FocalRow: View {
                 trackedLinks: content.text?.trackedLinks ?? [:],
                 fontSize: textSize,
                 expandLabel: String(localized: "focal.readmore", defaultValue: "Lire plus", bundle: .main),
-                truncateLimit: input.isFocused ? FocalMetrics.Focus.maxCharacters : BubbleExpandableText.truncateLimit,
+                // Aucune entrée gouvernant la HAUTEUR ne dépend de
+                // `isFocused` (decisions.md 2026-08-22 bis) : le tick
+                // d'élection reconfigure la rangée élue en plein geste, un
+                // plafond de texte variable y ferait sauter le fil. Plafond
+                // constant, comme `indent` et `textSize` avant lui.
+                truncateLimit: BubbleExpandableText.truncateLimit,
                 onExpandOverride: { actions.onReadMore?(readMorePayload) }
             )
             .equatable()

@@ -212,6 +212,45 @@ final class FocalScrollPerspectiveTests: XCTestCase {
                       "Scène inactive ⇒ la passe est un no-op : les cellules arrivent à plat, comme en Script.")
     }
 
+    /// **La sur-réserve appartient à la COMPACTION** (audit 2026-08-25).
+    ///
+    /// `focalOverscan` pré-réalisait 0,3 hauteur d'écran de cellules parce que
+    /// la compaction « tire les rangées vers la ligne de focus d'autant que
+    /// les rangées rétrécies ont perdu » : des cellules encore hors écran pour
+    /// UIKit devaient déjà exister pour occuper la place libérée. Or `poses`
+    /// n'est plus APPLIQUÉE — la loi reste écrite et testée, la planche est
+    /// fixe. Tant qu'il en est ainsi, Focal payait ces cellules par frame pour
+    /// rien. Cette garde LIE les deux : si la compaction revient, la
+    /// sur-réserve doit revenir avec elle.
+    func test_focalOverscan_isZero_whileTheCompactionIsNotApplied() throws {
+        let host = try normalizedSource("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        if host.contains("FocalScrollPerspective.poses(") {
+            XCTAssertTrue(
+                host.contains("layout.focalOverscan = readingMode == .focal"),
+                "la compaction est de retour : la sur-réserve doit être rebranchée sur le mode"
+            )
+        } else {
+            XCTAssertTrue(host.contains("layout.focalOverscan = 0"), "aucune compaction appliquée ⇒ aucune sur-réserve")
+            XCTAssertFalse(
+                host.contains("layout.focalOverscan = readingMode == .focal"),
+                "sur-réserve conditionnée au mode alors que rien ne la consomme"
+            )
+        }
+        // La machinerie RESTE en place : c'est le point de rebranchement.
+        let perspective = try normalizedSource("Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift")
+        XCTAssertTrue(perspective.contains("static let overscanFraction"), "la fraction reste nommée")
+        let layout = try normalizedSource("Meeshy/Features/Main/Views/MessageListLayout.swift")
+        XCTAssertTrue(layout.contains("let extended = rect.insetBy(dx: 0, dy: -focalOverscan)"), "le layout garde son extension de rect")
+    }
+
+    private func normalizedSource(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
     func test_focusedId_isTheNearestMessage_withHysteresis() {
         let cells = [cell("near", midY: 690), cell("far", midY: 400), cell("pill", midY: 705, isMessage: false)]
         XCTAssertEqual(FocalScrollPerspective.focusedId(cells: cells, focusY: 700, currentId: nil), "near")

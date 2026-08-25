@@ -297,6 +297,14 @@ final class MessageListViewController: UIViewController {
             // sur-réserve de cellules du layout suit le mode.
             syncFocalOverscan()
             resetFocalPerspectiveOnVisibleCells()
+            // Retour d'un pane OPAQUE (Rivière/Résumé) vers un mode RENDU :
+            // les cellules déjà à l'écran ne repasseront jamais par
+            // `willDisplay`, donc sans cette re-notation elles resteraient
+            // éternellement non lues — le trou INVERSE de celui que le gate
+            // du suivi de lecture ferme.
+            if Self.rendersThread(readingMode), !Self.rendersThread(oldValue) {
+                reNoteVisibleCellsAsSeen()
+            }
         }
     }
     /// États non encore accusés par le gateway — « message en vol ». Rendu
@@ -538,9 +546,24 @@ final class MessageListViewController: UIViewController {
     private func syncFocalOverscan() {
         guard isViewLoaded, let layout = collectionView.collectionViewLayout as? MessageListLayout else { return }
         focalOverscanBoundsHeight = collectionView.bounds.height
-        layout.focalOverscan = readingMode == .focal
-            ? collectionView.bounds.height * FocalScrollPerspective.overscanFraction
-            : 0
+        // 2026-08-25 : sur-réserve NULLE, tous modes. Elle n'a jamais servi
+        // qu'à la COMPACTION (`FocalScrollPerspective.poses` — « des cellules
+        // encore hors écran pour UIKit doivent déjà exister pour occuper la
+        // place libérée »), qui n'est plus APPLIQUÉE : la loi reste écrite et
+        // testée, la passe ne la joue pas. Tant qu'il en est ainsi, Focal
+        // pré-réalisait 0,3 hauteur d'écran de cellules par frame pour rien.
+        // `overscanFraction` et la machinerie de `MessageListLayout` restent
+        // en place : c'est ici que la compaction se rebranche avec elles.
+        //
+        // Corollaire (F8, revue adversariale 2026-08-25) : `layout.focalOverscan`
+        // valant désormais TOUJOURS 0, la comptabilité ci-dessus
+        // (`focalOverscanBoundsHeight`, le tracking de `bounds.height`, et le
+        // guard de `viewDidLayoutSubviews` en dessous) ne prévient plus
+        // aucune invalidation parasite — `MessageListLayout.focalOverscan`
+        // déduplique déjà via son `didSet` (`if oldValue != focalOverscan`).
+        // C'est de la cérémonie inoffensive, gardée intacte comme point de
+        // rebranchement pour quand la compaction reviendra.
+        layout.focalOverscan = 0
     }
 
     override func viewDidLayoutSubviews() {
@@ -750,13 +773,16 @@ final class MessageListViewController: UIViewController {
     /// haute visuellement. Liste inversée : « plus haute » = plus grand index
     /// dans le snapshot diffable. Si le séparateur natif de ce même jour est
     /// déjà visible, on cache la sticky pour éviter le doublon visuel.
-    private func updateStickyDayLabel() {
+    /// `visibleIndexPaths` : l'inventaire déjà lu par l'appelant du tour de
+    /// frame (`scrollViewDidScroll`) — `nil` ⇒ lecture interne, pour les
+    /// appels hors défilement.
+    private func updateStickyDayLabel(visibleIndexPaths: [IndexPath]? = nil) {
         guard let dataSource else { return }
         // O(1) : l'item du haut visible = plus grand IndexPath visible, résolu
         // par `itemIdentifier(for:)`. AVANT : `dataSource.snapshot()` copiait
         // TOUT le snapshot (O(n) item identifiers) à CHAQUE frame de scroll —
         // coûteux sur les grandes conversations (jusqu'à 120 fps en ProMotion).
-        guard let topIndexPath = collectionView.indexPathsForVisibleItems.max(),
+        guard let topIndexPath = (visibleIndexPaths ?? collectionView.indexPathsForVisibleItems).max(),
               let topItem = dataSource.itemIdentifier(for: topIndexPath) else {
             lastStickyTopItem = nil
             stickyDayState.label = nil
@@ -1754,7 +1780,13 @@ final class MessageListViewController: UIViewController {
             }
             itemsToReconfigure = changed
         }
-        // §4.7ter — en Focal, AUCUN reconfigure global pendant le geste.
+        // §4.7ter — AUCUN reconfigure global pendant le geste, TOUS MODES.
+        //
+        // L'exclusion de `.bubbles` est tombée le 2026-08-25 : le report est
+        // une règle de FLUIDITÉ, pas une règle de mode — `reconfigureVisibleCells`
+        // ne l'a d'ailleurs jamais faite. En bulles aussi, une coche, une
+        // réaction ou une traduction arrivée sous le doigt attend donc la
+        // pose ; les INSERTIONS, elles, restent immédiates.
         //
         // Reconfigurer une cellule VISIBLE en plein défilement la fait
         // re-mesurer (UIHostingConfiguration neuve) : un texte traduit qui
@@ -1768,8 +1800,7 @@ final class MessageListViewController: UIViewController {
         // attend la pose : `flushDeferredReconfigureAtSettle`. La BASE du
         // diff n'est PAS avancée pendant le report — le flush retrouve tout
         // le delta — et la portée demandée est retenue (`.allItems` domine).
-        let isDeferringReconfigure = readingMode != .bubbles
-            && !itemsToReconfigure.isEmpty
+        let isDeferringReconfigure = !itemsToReconfigure.isEmpty
             && (collectionView.isDragging || collectionView.isDecelerating)
         if isDeferringReconfigure {
             hasDeferredGlobalReconfigure = true
@@ -1925,13 +1956,16 @@ final class MessageListViewController: UIViewController {
     /// citation, slow-scroll de recherche) — le verrou laisse faire.
     private var isIntentionalProgrammaticScroll = false
 
-    private func captureSceneLockAnchor() {
+    /// `visibleIndexPaths` : l'inventaire déjà lu par l'appelant du tour de
+    /// frame (`scrollViewDidScroll`) — `nil` ⇒ lecture interne, pour les
+    /// appels hors défilement (`scrollToBottom`, `settleAtRest`).
+    private func captureSceneLockAnchor(visibleIndexPaths: [IndexPath]? = nil) {
         // Appelé à CHAQUE frame de défilement : une seule lecture d'attributs
         // par cellule visible (le `max(by:)` en relisait deux par comparaison,
         // soit ~2·n·log n par frame — audit fluidité 2026-08-21).
         var topIndexPath: IndexPath?
         var topAttributes: UICollectionViewLayoutAttributes?
-        for indexPath in collectionView.indexPathsForVisibleItems {
+        for indexPath in visibleIndexPaths ?? collectionView.indexPathsForVisibleItems {
             guard let attributes = collectionView.layoutAttributesForItem(at: indexPath) else { continue }
             if let current = topAttributes, attributes.frame.minY <= current.frame.minY { continue }
             topIndexPath = indexPath
@@ -2148,12 +2182,14 @@ final class MessageListViewController: UIViewController {
     private func reconfigureMessages(serverIds: Set<String>) {
         guard let dataSource = dataSource, !serverIds.isEmpty else { return }
 
-        // §4.7ter (volet ciblé) : pendant un geste en rangée plate, différer —
-        // re-mesurer une cellule visible en plein défilement fait sauter le
-        // champ visuel ET la perspective (visualMidY = f(center.y − offset)).
-        // Bulles : comportement historique conservé (reconfigure immédiat).
-        if readingMode != .bubbles,
-           store.isUserScrolling {
+        // §4.7ter (volet ciblé) : pendant un geste, différer — re-mesurer une
+        // cellule visible en plein défilement fait sauter le champ visuel ET
+        // la perspective (visualMidY = f(center.y − offset)). Vaut dans TOUS
+        // les modes depuis le 2026-08-25 : l'exception `.bubbles` faisait du
+        // mode NOMINAL le seul où une traduction tardive sautait sous le
+        // doigt. Le flush à la pose (`flushDeferredReconfigureAtSettle`) est
+        // mode-agnostique — rien ne peut rester périmé.
+        if store.isUserScrolling {
             deferredTargetedReconfigureIds.formUnion(serverIds)
             return
         }
@@ -2520,10 +2556,55 @@ extension MessageListViewController {
         return store.message(for: localId)?.serverId
     }
 
+    /// Le mode courant REND-il le fil ?
+    ///
+    /// Rivière et Résumé sont des panes OPAQUES montés SUR la liste dans le
+    /// même `ZStack` (`ConversationView`), qui reste montée DESSOUS : ses
+    /// cellules continuent de paraître, de disparaître et de nourrir le suivi
+    /// de lecture pour des messages que PERSONNE n'a vus. Le suivi ne compte
+    /// que ce qu'un mode rendu affiche.
+    ///
+    /// Le gate se pose au point d'USAGE et non dans le `didSet` de
+    /// `readingMode` : celui-ci sort sur `isViewLoaded`, or le mode arrive
+    /// AVANT le chargement de la vue — et l'ouverture DIRECTE en `.summary`
+    /// (décision auto au-delà de 25 non-lus) ou en `.river` est justement le
+    /// scénario où les accusés partaient en masse.
+    ///
+    /// **Ce prédicat garde l'ENTRÉE (`willDisplay`/`didEndDisplaying`),
+    /// JAMAIS le drain** (`flushSeenMessages`, `drainSeenNow`) — retiré de
+    /// ces deux-là le 2026-08-25 (F1, revue adversariale) : l'entrée suffit
+    /// déjà à garantir que l'accumulateur ne contient que des messages
+    /// réellement affichés, et garder le drain jetait silencieusement une
+    /// lecture RÉELLEMENT acquise en Bulles/Script/Focal si le lecteur
+    /// passait par la Rivière ou le Résumé avant de fermer la conversation —
+    /// `flushSeenMessages` est le SEUL site de vidange au démontage.
+    static func rendersThread(_ mode: ConversationReadingMode) -> Bool {
+        mode != .river && mode != .summary
+    }
+
+    var rendersThread: Bool { Self.rendersThread(readingMode) }
+
+    /// Re-note comme APPARUES les cellules déjà à l'écran — appelée au RETOUR
+    /// vers un mode rendu, où `willDisplay` ne repassera pas.
+    func reNoteVisibleCellsAsSeen() {
+        guard isViewLoaded, dataSource != nil, rendersThread else { return }
+        let now = Self.nowMs()
+        lastSeenActivityMs = now
+        for indexPath in collectionView.indexPathsForVisibleItems {
+            guard let serverId = serverMessageId(at: indexPath) else { continue }
+            seenAccumulator.appeared(serverId, at: now)
+        }
+    }
+
     /// Vide l'accumulateur et signale ce qui a été acquis.
     ///
     /// Appelé au démontage : fermer une conversation ne doit pas perdre une
-    /// lecture déjà acquise.
+    /// lecture déjà acquise. **Jamais gardé sur `rendersThread`** (F1,
+    /// revue adversariale 2026-08-25) : l'accumulateur ne peut contenir que
+    /// des lectures acquises pendant que le gate d'ENTRÉE était ouvert
+    /// (`willDisplay`/`didEndDisplaying`) — les garder ici jetait ces
+    /// lectures si le lecteur avait depuis basculé vers la Rivière ou le
+    /// Résumé, exactement l'instant où ce site est appelé au démontage.
     func flushSeenMessages() {
         let seen = seenAccumulator.drain(at: Self.nowMs())
         guard !seen.isEmpty else { return }
@@ -2547,6 +2628,10 @@ extension MessageListViewController {
         wantsImmediateSeenFlush = true
     }
 
+    /// **Jamais gardé sur `rendersThread`** — même raison que
+    /// `flushSeenMessages` (F1, revue adversariale 2026-08-25) : le gate
+    /// d'ENTRÉE suffit déjà, le garder ici aussi ne fait que retarder ou
+    /// perdre un drain légitime sans rien acquérir de plus.
     private func drainSeenNow() -> Bool {
         let now = Self.nowMs()
         lastSeenActivityMs = now
@@ -2612,7 +2697,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         forItemAt indexPath: IndexPath
     ) {
         applyFocalPerspective(to: cell)
-        guard let serverId = serverMessageId(at: indexPath) else { return }
+        guard rendersThread, let serverId = serverMessageId(at: indexPath) else { return }
         let now = Self.nowMs()
         lastSeenActivityMs = now
         seenAccumulator.appeared(serverId, at: now)
@@ -2623,7 +2708,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         didEndDisplaying cell: UICollectionViewCell,
         forItemAt indexPath: IndexPath
     ) {
-        guard let serverId = serverMessageId(at: indexPath) else { return }
+        guard rendersThread, let serverId = serverMessageId(at: indexPath) else { return }
         let now = Self.nowMs()
         lastSeenActivityMs = now
         seenAccumulator.disappeared(serverId, at: now)
@@ -2648,9 +2733,19 @@ extension MessageListViewController: UICollectionViewDelegate {
 
         // Verrou de scène (rouleau) : le doigt/momentum RE-CAPTURE l'ancre à
         // chaque frame ; sans pilote et loin du bas, tout écart est annulé.
+        //
+        // UN SEUL inventaire de cellules visibles pour le tour de frame : le
+        // verrou et la pilule de jour le reconstruisaient chacun le sien
+        // (audit fluidité 2026-08-25), soit deux balayages UIKit par frame
+        // pour la même réponse. Il n'est PARTAGÉ que sur la branche qui laisse
+        // l'offset en place : `enforceSceneLock` appelle `setContentOffset`,
+        // donc l'inventaire d'AVANT n'y décrit plus l'écran — la pilule y
+        // reprend sa lecture interne (`nil`), comme avant.
         let isUserDriven = scrollView.isDragging || scrollView.isTracking || scrollView.isDecelerating
-        if isUserDriven || isIntentionalProgrammaticScroll || isCurrentlyNearBottom {
-            captureSceneLockAnchor()
+        let keepsOffset = isUserDriven || isIntentionalProgrammaticScroll || isCurrentlyNearBottom
+        let visibleIndexPaths: [IndexPath]? = keepsOffset ? collectionView.indexPathsForVisibleItems : nil
+        if let visibleIndexPaths {
+            captureSceneLockAnchor(visibleIndexPaths: visibleIndexPaths)
         } else {
             enforceSceneLock()
         }
@@ -2668,7 +2763,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         // Met à jour le label de la pill flottante en fonction du message
         // en haut visible. Léger : un lookup de l'item à l'index max + une
         // string formatée. Aucune allocation inutile si le label ne change pas.
-        updateStickyDayLabel()
+        updateStickyDayLabel(visibleIndexPaths: visibleIndexPaths)
 
         // Near-bottom detection for the floating "scroll to latest" button.
         // In the inverted layout, contentOffset.y ≈ 0 means the user is at
@@ -2782,7 +2877,14 @@ extension MessageListViewController: UICollectionViewDelegate {
 /// Bulle « X écrit… » rendue comme dernière cellule du flux de messages
 /// (bas visuel de la liste inversée). Alignée côté expéditeur ; les points
 /// s'animent en autonomie via `@State` (pas de timer externe).
-private struct TypingIndicatorBubble: View {
+///
+/// **`internal`, pas `private` (2026-08-25, constat L2b/2b-7).** La Rivière
+/// monte la MÊME vue en tenue plate (la peau de `Riviere/View/`) : `private` étant à
+/// portée de FICHIER, elle était invisible depuis `Riviere/View/` et la seule
+/// façon d'y rendre la frappe aurait été d'en déclarer une SECONDE — deux
+/// vues qui divergeraient sur les timings, le libellé et l'accessibilité, et
+/// la frappe n'aurait pas le même visage selon le mode de lecture.
+struct TypingIndicatorBubble: View {
     let names: [String]
     let accentHex: String
     let isDark: Bool
@@ -2990,12 +3092,6 @@ extension MessageListViewController {
         guard readingMode == .focal, isViewLoaded, focalSceneActive else { return }
         let focusY = focalFocusY
         let cells = collectionView.visibleCells
-        var geometries: [FocalScrollPerspective.CellGeometry] = []
-        geometries.reserveCapacity(cells.count)
-        for cell in cells {
-            guard let geometry = focalGeometry(of: cell) else { continue }
-            geometries.append(geometry)
-        }
         // **Tant que la magnificence n'est pas armée, le fil défile comme en
         // Script** (directive 2026-08-24 : « si la magnificence n'est pas
         // activée, la réduction et l'effet loop non plus ; le scroll se fait
@@ -3011,6 +3107,17 @@ extension MessageListViewController {
                 syncFocalFocusDetails()
             }
             return
+        }
+        // Les géométries ne servent QU'à l'élection, donc qu'une fois armé :
+        // les construire avant la garde, c'était une résolution d'indexPath,
+        // d'identifiant et de conversion de repère PAR CELLULE ET PAR FRAME
+        // jetée pendant les quatre secondes de défilement soutenu qui
+        // précèdent l'armement (`FocalMagnificationLaw.sustainedScrollMs`).
+        var geometries: [FocalScrollPerspective.CellGeometry] = []
+        geometries.reserveCapacity(cells.count)
+        for cell in cells {
+            guard let geometry = focalGeometry(of: cell) else { continue }
+            geometries.append(geometry)
         }
         // **Aucune animation ENTRE les messages** (directive 2026-08-24 :
         // « les messages font comme des ressorts pour entrer et ressortir de
@@ -3037,9 +3144,12 @@ extension MessageListViewController {
         if electionChanged { syncFocalFocusDetails() }  // différé + coalescé, jamais réentrant
         // La carte du focus est le FOND SwiftUI de la rangée
         // (`FocalRow.focusCardBackground`, posée à la reconfiguration du tick
-        // d'élection) : la carte UIKit résiduelle est démontée si un recyclage
-        // en a laissé une. Aucune animation ici — la planche est fixe.
-        for cell in cells { FocalScrollPerspective.hideFocusCard(in: cell.contentView) }
+        // d'élection) : plus AUCUNE carte UIKit n'est posée par cette passe,
+        // donc plus rien à démonter ici. Le balayage des sous-vues qui s'y
+        // trouvait tournait par cellule et par frame pour retirer une vue
+        // qui n'existe plus. Le démontage d'une carte héritée d'un recyclage
+        // reste assuré aux deux seuls points qui en produisent l'occasion :
+        // la registration (cellule (re)configurée) et `flattenFocalScene`.
     }
 
     /// Les détails du message en focus (identité, jour + heure, texte

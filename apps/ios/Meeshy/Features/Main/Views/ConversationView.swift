@@ -316,6 +316,22 @@ struct ConversationView: View {
     /// docstring de `ReadingModeController.forcedMode`.
     var forcedReadingMode: ReadingModeOrchestrator.ConversationReadingMode? = nil
 
+    /// Conversation CONFIRMÉE par le serveur après un enregistrement dans
+    /// `ConversationSettingsView` (titre, description, avatar, bannière,
+    /// réglages), remontée par `ConversationInfoSheet.onConversationUpdated`.
+    ///
+    /// `conversation` ci-dessus est une valeur FIGÉE, capturée au moment de la
+    /// navigation : `MeeshyConversation.==`/`.hash` ne comparent que `id`, donc
+    /// aucune recomposition du `NavigationStack` ne la rafraîchit quand seuls
+    /// ses champs internes changent. L'override est la seule source vivante.
+    @State private var conversationOverride: Conversation?
+
+    /// La conversation à AFFICHER : l'override serveur s'il existe, sinon la
+    /// valeur figée. `internal` (pas `private`) : lue par l'extension
+    /// `ConversationView+Header`, qui vit dans un autre fichier — `private` est
+    /// à portée de fichier.
+    var liveConversation: Conversation? { conversationOverride ?? conversation }
+
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
 
@@ -810,7 +826,14 @@ struct ConversationView: View {
                 .zoomTransitionDestination(sourceID: overlayState.storyViewerUserId ?? "", in: zoomNamespace)
             }
             .sheet(isPresented: $composerState.showConversationInfo) {
-                if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages) }
+                if let conv = liveConversation {
+                    ConversationInfoSheet(
+                        conversation: conv,
+                        accentColor: accentColor,
+                        messages: viewModel.messages,
+                        onConversationUpdated: { conversationOverride = $0 }
+                    )
+                }
             }
             .alert(String(localized: "conversation.view.action_selected", bundle: .main), isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
                 Button(String(localized: "common.ok", bundle: .main)) { composerState.actionAlert = nil }
@@ -1449,6 +1472,16 @@ struct ConversationView: View {
                     // R-7 : la même réserve basse que le fil — le composeur
                     // n'est jamais une zone où une bulle reste prise.
                     bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
+                    // L2b/2b-7 : la frappe atteint le lecteur quel que soit
+                    // son mode — le pane Rivière est OPAQUE et couvrait la
+                    // cellule de frappe du Fil. Même source que le Fil
+                    // (`typingUsernames`), même vue (`TypingIndicatorBubble`).
+                    //
+                    // La lecture est VIVANTE sans rien ajouter : le roster est
+                    // porté par `ConversationStateStore`, que cette vue observe
+                    // déjà (`typingObserver`, câblé dans l'init) — c'est ce qui
+                    // fait repasser le body à chaque `typing:start`/`stop`.
+                    typingNames: viewModel.typingUsernames,
                     // R-5 : identité vivante — les MÊMES sources que le Fil
                     // (`MessageListViewController` : présence par expéditeur,
                     // anneau de story sauf pour soi, fiche par le routeur).
@@ -1533,6 +1566,30 @@ struct ConversationView: View {
                         }
                     }
                 ))
+                // 2b-2 — le Résumé Vivant naissait VIDE quand il était le mode
+                // d'OUVERTURE. `LivingSummaryHost` construit son ViewModel dans
+                // l'autoclosure d'un `@StateObject` : elle n'est évaluée qu'à la
+                // CRÉATION de l'identité de vue, et le VM ne recompose jamais
+                // son digest. Or le fil s'ouvre souvent AVANT ses messages
+                // (cache puis réseau) — même moment d'ouverture que la Rivière,
+                // qui le traite par son empreinte.
+                //
+                // L'identité bascule EXACTEMENT une fois, au passage vide →
+                // peuplé : l'autoclosure se réévalue avec les messages, et rien
+                // d'autre ne bouge. En pratique une conversation ne redevient
+                // pas vide ; rien dans `viewModel.messages`
+                // (`@Published var messages: [Message] = []`) ne l'interdit
+                // formellement (F12, revue adversariale 2026-08-25) — si le
+                // fil redevenait vide (purge, rechargement raté, réouverture
+                // sur une fenêtre froide), l'hôte serait simplement RECONSTRUIT :
+                // coût borné, jamais un digest périmé affiché. Coût assumé
+                // par ailleurs : le `.task` d'enrichissement agent se rejoue
+                // une fois (no-op pour un invité).
+                //
+                // Ce n'est PAS `showsSkeleton` qui peut garder ce basculement :
+                // il tombe à `false` dès que la réponse agent arrive, donc avant
+                // la première population sur base froide.
+                .id(viewModel.messages.isEmpty)
                 .zIndex(80)
                 .transition(.opacity)
             }
@@ -2156,9 +2213,9 @@ struct ConversationView: View {
             ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
             Spacer()
             ThemedAvatarButton(
-                name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
+                name: liveConversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
                 isExpanded: false, storyState: headerStoryRingState,
-                avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
+                avatarURL: liveConversation?.type == .direct ? liveConversation?.participantAvatarURL : liveConversation?.avatar,
                 presenceState: headerPresenceState,
                 moodEmoji: headerMoodEmoji
             ) {
@@ -2383,7 +2440,14 @@ struct ConversationView: View {
             expandedHeaderTitleLabel
                 .meeshyTapTarget()
         }
-        .accessibilityLabel(conversation?.name ?? "Conversation")
+        // F11 (revue adversariale 2026-08-25) : `liveConversation` — visible
+        // sur la même surface que `headerTagsRow` juste en dessous (déjà
+        // basculée). Le TITRE rendu par ce même bouton
+        // (`expandedHeaderTitleLabel` → `conversation?.displayName`) reste
+        // délibérément sur la valeur figée — hors du périmètre minimal de ce
+        // correctif, suivi nommé séparément — seul le libellé d'accessibilité
+        // change ici.
+        .accessibilityLabel(liveConversation?.name ?? "Conversation")
         .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
 
         if conversation?.type == .direct {
