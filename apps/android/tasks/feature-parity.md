@@ -3746,7 +3746,29 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       on-canvas sticker is draggable / pinch-rotatable / removable (glue mirroring `TextElementLayer`).
       +50 tests (15 model, 21 deck, 5 draft, ~12 VM). Categorised + searchable picker shipped above
       (`story-sticker-picker-search`).
-- [ ] Backgrounds: random pastel, colour/gradient palette, image, looping/non-looping video
+- [~] Backgrounds: random pastel, colour/gradient palette, image, looping/non-looping video
+      **Reader-side colour/gradient done** (`story-slide-background-value`): the viewer honoured a
+      slide's background MEDIA (image/video) but IGNORED `StoryEffects.background` — the serialised
+      colour backdrop — so a text-only iOS/backend story published with a solid colour or a
+      `gradient:RRGGBB:RRGGBB` two-colour gradient rendered on Android as the generic accent→black
+      fallback, silently dropping the author's chosen backdrop (a real, user-visible parity gap). A pure
+      `StoryBackgroundValue` (`:core:model`, sealed `Hex(hex)` / `Gradient(start,end)`) ports the iOS
+      SSOT `StoryBackgroundValue.parse` (`packages/MeeshySDK/.../Models/StoryBackgroundValue.swift`)
+      exactly: `gradient:` prefix + exactly two six-digit hex colours → `Gradient`, everything else decays
+      TOLERANTLY to `Hex(rawWhole)` so the renderer keeps its solid-colour path (iOS's historical
+      invalid-value behaviour). Interior empty colour runs are dropped to match Swift
+      `split(separator:)` (`omittingEmptySubsequences`) — Kotlin's `split` keeps them, so the port
+      filters, and that filter is mutation-proven load-bearing. `StoryViewerViewModel.toSlideView`
+      projects `StorySlideView.background` once (null when the slide carries no/blank background string,
+      preserving the accent→black fallback); the viewer's no-media branch paints a solid colour or a
+      top-leading→bottom-trailing `linearGradient` (iOS `storyBackgroundStyle` convention), reusing the
+      `hexColor` SSOT and falling back gracefully when a degraded hex cannot resolve (never blank). +18
+      tests (14 `StoryBackgroundValueTest` covering every parse branch + serialise round-trips, 4 VM
+      projection: gradient/solid/absent/blank). Mutation-RED-proven twice (neutering the gradient branch
+      reddens exactly the 4 gradient tests; dropping the empty-filter reddens exactly the parity test;
+      neutering the projection reddens exactly the 2 positive VM tests). Pending: composer AUTHORING of a
+      colour/gradient/random-pastel backdrop (writes `effects.background`), background IMAGE with
+      transform, and looping/non-looping background video designation.
 - [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
       (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —
       `StoryFilterMatrix.baseMatrix(StoryFilter)` → a `StoryColorMatrix` (4×5 `List<Float>`, value

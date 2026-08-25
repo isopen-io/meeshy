@@ -148,6 +148,47 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `a gradient background string projects onto the slide as a parsed gradient`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(
+                storyPost("a1", "a", hoursAgo = 1, storyEffects = StoryEffects(background = "gradient:FF2E63:08D9D6")),
+            ),
+        )
+        assertThat(vm.state.value.current?.background)
+            .isEqualTo(me.meeshy.sdk.model.StoryBackgroundValue.Gradient("FF2E63", "08D9D6"))
+    }
+
+    @Test
+    fun `a solid hex background string projects onto the slide as a solid colour`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(
+                storyPost("a1", "a", hoursAgo = 1, storyEffects = StoryEffects(background = "1A1A2E")),
+            ),
+        )
+        assertThat(vm.state.value.current?.background)
+            .isEqualTo(me.meeshy.sdk.model.StoryBackgroundValue.Hex("1A1A2E"))
+    }
+
+    @Test
+    fun `a slide with no background string leaves the projected background null`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        assertThat(vm.state.value.current?.background).isNull()
+    }
+
+    @Test
+    fun `a blank background string leaves the projected background null`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(
+                storyPost("a1", "a", hoursAgo = 1, storyEffects = StoryEffects(background = "   ")),
+            ),
+        )
+        assertThat(vm.state.value.current?.background).isNull()
+    }
+
+    @Test
     fun `advance walks within a group then rolls into the next group`() = runTest {
         val vm = viewModel(startUserId = "a", posts = twoAuthors())
         assertThat(vm.state.value.authorName).isEqualTo("name-a")
