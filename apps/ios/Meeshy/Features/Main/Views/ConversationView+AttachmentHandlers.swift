@@ -644,11 +644,9 @@ extension ConversationView {
         }
     }
 
-    func formatRecordingTime(_ time: TimeInterval) -> String {
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
+    // `formatRecordingTime(_:)` a vécu ici sans site d'appel. Le compteur de
+    // l'enregistrement vivant est `UniversalComposerBar+Recording`, et son
+    // formatage `ComposerModels.swift`.
 
     // MARK: - Attachment Handlers
     func handlePhotoSelection(_ items: [PhotosPickerItem]) {
@@ -863,9 +861,9 @@ extension ConversationView {
         return nil
     }
 
-    func addCurrentLocation() {
-        composerState.showLocationPicker = true
-    }
+    // `addCurrentLocation()` a vécu ici sans site d'appel : elle ne faisait que
+    // poser `composerState.showLocationPicker = true`, ce que le composeur fait
+    // lui-même via `onLocationRequest` (`ConversationView+Composer.swift`).
 
     /// Le picker émet désormais un `SharedPlace` complet (nom + adresse +
     /// catégorie) — `MessageAttachment.location` ne portait ni l'un ni
