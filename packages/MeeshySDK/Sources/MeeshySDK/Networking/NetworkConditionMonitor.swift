@@ -20,6 +20,11 @@ public enum NetworkCondition: String, Equatable, Sendable, Codable {
 /// diverger à l'écran. Cf. `NetworkPathSource` pour l'historique.
 @MainActor
 public final class NetworkConditionMonitor: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @MainActor public static let shared = NetworkConditionMonitor()
 
     /// Amorcé depuis la photo COURANTE du chemin, jamais fabriqué.

@@ -41,6 +41,11 @@ import Combine
 /// hops to the target actor via `Task { await … }`.
 @MainActor
 public final class ConversationStoreSocketBridge {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = ConversationStoreSocketBridge()
 
     private var cancellables = Set<AnyCancellable>()
