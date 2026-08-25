@@ -158,6 +158,48 @@ describe('normalizeContacts — entry tolerance', () => {
     expect(contact.displayName).toHaveLength(200);
   });
 
+  it('never severs a surrogate pair when clamping an overlong display name', () => {
+    // The 200-code-unit boundary lands on the HIGH surrogate of a trailing emoji
+    // (`'a'×199` = indices 0-198, `😀` = `😀` at 199-200). A raw
+    // slice(0, 200) keeps the lone high surrogate → renders `�`. Back off one
+    // unit so a whole code point is never cut (same guard as
+    // SecuritySanitizer.truncate, It. 268).
+    const [contact] = normalizeContacts([
+      { displayName: 'a'.repeat(199) + '😀', emails: ['a@b.com'] },
+    ]);
+    expect(contact.displayName).toHaveLength(199);
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(contact.displayName!)).toBe(false);
+  });
+
+  it('keeps a whole surrogate pair that ends exactly on the clamp boundary', () => {
+    // Here the pair sits at indices 198-199 (fully inside the 200-unit window):
+    // the cut must NOT back off — the clean 200-unit result is unchanged.
+    const [contact] = normalizeContacts([
+      { displayName: 'a'.repeat(198) + '😀' + 'x'.repeat(20), emails: ['a@b.com'] },
+    ]);
+    expect(contact.displayName).toHaveLength(200);
+    expect(contact.displayName!.endsWith('😀')).toBe(true);
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(contact.displayName!)).toBe(false);
+  });
+
+  it('collapses every line-breaking separator to a single-line name', () => {
+    // A device contact name must render on ONE line. The former guard replaced
+    // only `\r\n\t`, letting `U+2028`/`U+2029`/`NEL`/`\v`/`\f` split the label
+    // — the exact single-line contract its exported twin (normalize.ts) closed
+    // at It. 266b. Each separator becomes a space (not removed): the parts of a
+    // multi-segment name stay readable.
+    const [para] = normalizeContacts([
+      { displayName: 'Awa\u2028Diallo', emails: ['a@b.com'] },
+    ]);
+    expect(para.displayName).toBe('Awa Diallo');
+
+    const [all] = normalizeContacts([
+      { displayName: 'A\u2028B\u2029C\u0085D\u000BE\u000CF\tG\nH\rI', emails: ['b@b.com'] },
+    ]);
+    expect(all.displayName).toBe('A B C D E F G H I');
+    expect(/[\r\n\t\v\f\u0085\u2028\u2029]/.test(all.displayName!)).toBe(false);
+  });
+
   it('normalizes a blank display name to null', () => {
     const [contact] = normalizeContacts([{ displayName: '   ', emails: ['a@b.com'] }]);
     expect(contact.displayName).toBeNull();
