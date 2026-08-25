@@ -51,6 +51,8 @@
     <string name="stories_composer_size">Tamanho do texto</string>
     <string name="stories_composer_fade_in">Fade de entrada do texto</string>
     <string name="stories_composer_fade_out">Fade de saída do texto</string>
+    <string name="stories_composer_timing_start">Início do texto</string>
+    <string name="stories_composer_timing_duration">Duração visível do texto</string>
     <string name="stories_composer_bg_glass">Vidro</string>
     <string name="stories_composer_add_sticker">Sticker</string>
     <string name="stories_composer_remove_sticker">Remover sticker</string>

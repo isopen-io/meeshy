@@ -232,6 +232,47 @@ class StoryTextElementTest {
     }
 
     @Test
+    fun `a fresh element has no visibility timing`() {
+        val timing = StoryTextElement(id = "e1").timing
+        assertThat(timing.hasStart).isFalse()
+        assertThat(timing.isTimed).isFalse()
+    }
+
+    @Test
+    fun `toTextObject omits both timing fields when the element has no timing`() {
+        val wire = StoryTextElement(id = "e1", text = "hi").toTextObject(sourceLanguage = "fr")
+        assertThat(wire.startTime).isNull()
+        assertThat(wire.duration).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries a chosen start onto the wire startTime only`() {
+        val wire = StoryTextElement(id = "e1", text = "hi", timing = StoryElementTiming(startSeconds = 2f))
+            .toTextObject(sourceLanguage = "fr")
+        assertThat(wire.startTime).isWithin(1e-9).of(2.0)
+        assertThat(wire.duration).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries a chosen duration onto the wire duration only`() {
+        val wire = StoryTextElement(id = "e1", text = "hi", timing = StoryElementTiming(durationSeconds = 5f))
+            .toTextObject(sourceLanguage = "fr")
+        assertThat(wire.duration).isWithin(1e-9).of(5.0)
+        assertThat(wire.startTime).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries both timing ends when both are set`() {
+        val wire = StoryTextElement(
+            id = "e1",
+            text = "hi",
+            timing = StoryElementTiming(startSeconds = 3f, durationSeconds = 10f),
+        ).toTextObject(sourceLanguage = "fr")
+        assertThat(wire.startTime).isWithin(1e-9).of(3.0)
+        assertThat(wire.duration).isWithin(1e-9).of(10.0)
+    }
+
+    @Test
     fun `every style and align exposes a distinct lowercase wire token`() {
         assertThat(StoryTextStyle.entries.map { it.wire })
             .containsExactly("bold", "neon", "typewriter", "handwriting", "classic")

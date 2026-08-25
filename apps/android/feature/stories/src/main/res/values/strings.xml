@@ -51,6 +51,8 @@
     <string name="stories_composer_size">Text size</string>
     <string name="stories_composer_fade_in">Text fade in</string>
     <string name="stories_composer_fade_out">Text fade out</string>
+    <string name="stories_composer_timing_start">Text start time</string>
+    <string name="stories_composer_timing_duration">Text visible duration</string>
     <string name="stories_composer_bg_glass">Glass</string>
     <string name="stories_composer_add_sticker">Sticker</string>
     <string name="stories_composer_remove_sticker">Remove sticker</string>
