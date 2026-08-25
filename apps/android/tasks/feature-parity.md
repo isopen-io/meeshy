@@ -3799,7 +3799,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       mints the id, selects the copy, and warns-without-adding at the cap; a duplicate `ContentCopy`
       handle sits in the floating `TextStyleToolbar`. Pending: a single unified long-press context menu
       consolidating these per-element actions.
-- [ ] Per-element + per-slide duration; background designation toggle (1 visual + 1 audio/slide)
+- [~] Per-element + per-slide duration; background designation toggle (1 visual + 1 audio/slide) —
+      **per-slide duration RESOLUTION done** (slice `story-viewer-slide-duration`, 2026-08-25): the
+      viewer honours the author-pinned/content-derived slide duration via the pure `StorySlideDuration`
+      SSOT (see the auto-advance item below). **Pending**: the composer-side AUTHORING control that
+      writes `effects.timelineDuration`, per-ELEMENT duration, and the background-designation toggle.
 - [ ] Repost flow: clone source story + locked attribution badge
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
@@ -3994,6 +3998,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       hangs). `StoryViewerViewModel` tracks resolved URLs from `AsyncImage` `onSuccess`/`onError`
       and exposes `canAutoAdvance`; the screen's countdown `LaunchedEffect` holds at empty until
       the gate opens. Surpasses iOS, which starts its 5s timer on appearance regardless of paint.
+      **Per-slide duration** (slice `story-viewer-slide-duration`, 2026-08-25): the countdown no
+      longer runs a flat 5s — pure `StorySlideDuration` (`:core:model`, port of iOS
+      `StorySlide.computedTotalDuration()`) is the SSOT: author-pinned `effects.timelineDuration`
+      (> 0) wins, else content-derived (background video/audio looped up to ≥ the target, long
+      caption text extends past 30 words, 6s static default); the legacy `effects.slideDuration` is
+      ignored (arbitrary backend values), matching iOS. Resolved once at projection into
+      `StorySlideView.autoAdvanceMillis`, consumed by the countdown tween AND the keyframe playhead
+      so animations stay aligned. Fixed a latent v3 gap along the way: `SceneV3.timelineDuration`
+      was silently dropped by `StoryEffects.rendering` — now mapped, so a timeline-pinned v3 story
+      honours its author duration.
 - [ ] Story content rendering: text/positioning/background/filters/media overlays
 - [~] Story reactions: emoji quick-strip + full picker, big floating animation, heart bounce, count
       — done: pure **`StoryReactionState`** reducer (optimistic local tap + idempotent

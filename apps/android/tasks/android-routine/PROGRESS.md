@@ -2,6 +2,58 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-25 **the story viewer honours per-slide duration** (slice `story-viewer-slide-duration`,
+> feature-parity E. Stories — "Timed auto-advance" + "Per-element + per-slide duration"). The viewer's
+> auto-advance ran a HARDCODED 5s (`SLIDE_DURATION_MS`) for every slide; iOS has a single source of truth
+> (`StorySlide.computedTotalDuration()`, StoryModels.swift) that is content-aware and defaults to **6s**,
+> not 5s — so Android was both wrong on the default and blind to per-slide timing.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3502/#3500/#3498/#3497, all
+> gateway/ios/shared branches (`claude/brave-archimedes-*`, `claude/intelligent-noether-*`), none a
+> `claude/apps/android/*` slice from THIS routine. Prior slice (`story-updated-realtime-tray`) already merged
+> into main (`c4a3d517`). Branched off freshly-fetched `origin/main` (`c4a3d517`).
+>
+> **The fix — a pure SSOT + a projection + a screen consumer.** (1) `StorySlideDuration` (`:core:model`,
+> pure, no clock/IO) ports iOS's rule EXACTLY: priority-0 `effects.timelineDuration` (> 0, author-pinned via
+> the timeline editor) wins over content; otherwise content-derived — background video/audio looped up to ≥
+> the target (`period < target → ceil(target/period)*period`), long caption text (> 30 cumulative words)
+> extends 1s per 6 words past 30, 6s static default. The legacy `effects.slideDuration` is DELIBERATELY
+> ignored (old backend stories carry arbitrary 12s values the composer wrote per publish, bypassing the
+> rule) — same reasoning as iOS. `computeMillis` rounds to whole ms. (2) `StorySlideView.autoAdvanceMillis`
+> is resolved ONCE at projection (`StoryViewerViewModel.toSlideView`) from the slide's `storyEffects`.
+> (3) `StoryViewerScreen` drops the `SLIDE_DURATION_MS` constant and drives BOTH the countdown tween and the
+> keyframe playhead (`playheadSeconds`) from `slideDurationMs`, keyed into the auto-advance `LaunchedEffect`
+> so a realtime slide-replace re-times. (4) Latent v3 gap fixed: `SceneV3.timelineDuration` was silently
+> dropped by `StoryEffects.rendering` — now mapped, so a timeline-pinned v3 story honours its author duration.
+>
+> **Tests: +20** — 17 `StorySlideDurationTest` (pure, every branch: null/empty → 6s; short vs long text +
+> multi-object cumul + multi-space split parity with Swift `split(separator:)`; bg video ≥/< target loop; bg
+> audio loop; non-bg media/audio data windows; near-zero period ignored; image-bg no-loop; timelineDuration
+> positive override vs 0/negative fallthrough; legacy slideDuration ignored; millis conversion), 1
+> `CanvasV3ProjectionTest` (v3 `timelineDuration` traverses the bridge), 2 `StoryViewerViewModelTest` (no
+> effects → 6s default; author-pinned 3s → 3000ms through the public state). **RED-proof isolated**: neutering
+> the priority-0 branch reddened EXACTLY `un timelineDuration positif l'emporte sur le contenu` (17 tests, 1
+> failed) while the other 16 stayed green; neutering the VM projection reddened EXACTLY the author-pinned VM
+> test (75 tests, 1 failed) — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + both dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch
+> (`source.properties` ApiLevel 37.0→37, `package.xml` `<api-level>` + `path=`, BOTH `build.prop` `sdk_full`
+> fields) keeping android-37.0 ALONGSIDE resolved it.
+>
+> **Verified**: targeted `:core:model` + `:feature:stories` suites green, then full `./apps/android/meeshy.sh
+> check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any
+> push. Reviewer PASS. Diff is `apps/android` only (2 prod + 1 new prod in :core:model, 2 prod in
+> :feature:stories, +3 test files, tracking docs). Verdict: **PASS** — a pure SSOT mirroring iOS's authority
+> function, a projection, a screen consumer, and a v3-bridge fix; behavioural tests through the public API;
+> no production logic outside `apps/android`.
+>
+> **Next**: the composer-side AUTHORING of per-slide duration — a control that writes
+> `effects.timelineDuration` (the timeline editor "pin duration"), so the reader-side SSOT this slice built
+> gets fed by Android's own composer (today only iOS-authored/back-end stories carry it). Adjacent backlog:
+> per-ELEMENT duration + the background-designation toggle (1 visual + 1 audio/slide, feature-parity E), or
+> the V2 timeline editor foundation. Scout `feature-parity.md` read-only before branching.
+
 > On 2026-08-25 **the story TRAY folds a realtime `story:updated`** (slice `story-updated-realtime-tray`,
 > feature-parity Story realtime) — the viewed-monotonicity MERGE, and the LAST STORY-realtime gap. STORY realtime
 > is now fully at parity (viewer: reactions/overlay-tx/delete/update; tray: delete/update).

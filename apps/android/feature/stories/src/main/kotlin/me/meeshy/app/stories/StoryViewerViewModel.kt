@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
 import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StoryTextObjectTranslationMerge
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -150,6 +151,14 @@ data class StorySlideView(
     val backgroundAudioUrl: String? = null,
     val foregroundAudioUrl: String? = null,
     val languageCode: String? = null,
+    /**
+     * How long this slide stays on screen before auto-advancing, in milliseconds.
+     * Resolved once at projection time from the slide's effects via the shared
+     * [StorySlideDuration] rule (author-pinned timeline duration → content-derived
+     * → 6s default), so the viewer countdown honours per-slide timing instead of a
+     * flat constant. Defaults to the 6s static baseline.
+     */
+    val autoAdvanceMillis: Int = StorySlideDuration.DEFAULT_STATIC_MS,
 )
 
 /**
@@ -658,6 +667,7 @@ class StoryViewerViewModel @Inject constructor(
             textObjects = textObjects,
             backgroundAudioUrl = resolveAudioUrl(preferBackground = true),
             foregroundAudioUrl = resolveAudioUrl(preferBackground = false),
+            autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects),
         )
     }
 

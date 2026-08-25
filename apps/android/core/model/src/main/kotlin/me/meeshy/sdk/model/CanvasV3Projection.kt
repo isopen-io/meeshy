@@ -261,6 +261,7 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
         voiceTranscriptions = sound?.transcriptions,
         backgroundAudioVariants = sound?.variants,
         thumbHash = scene.thumbHash,
+        timelineDuration = scene.timelineDuration,
         opening = transitionOf(scene.opening),
         closing = transitionOf(scene.closing),
         clipTransitions = scene.clipTransitions?.mapNotNull { decodeWire<StoryClipTransition>(it) },
