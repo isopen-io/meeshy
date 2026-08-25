@@ -3946,6 +3946,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (17 completed, 2 failed) while the other 15 stayed green. The tray fold of `story:updated`
       (viewed-monotonicity merge, iOS `shouldKeepLocalViewed`) remains the last STORY-realtime slice. No production
       logic outside `apps/android`.
+- [x] **Realtime story update — TRAY** done (slice `story-updated-realtime-tray`, 2026-08-25): the viewer fold
+      (above) folded `story:updated` only into the OPEN viewer; the story TRAY (`StoriesViewModel`) is
+      Room-cache-driven and kept the stale ring until the next background revalidation. This slice — the LAST
+      STORY-realtime gap — adds the authoritative Room-cache MERGE seam. New pure `StoryUpdateMerge.merge(previous,
+      updated, engagementReset, isOwnStory)` in `:core:model`: on `engagementReset && !isOwnStory` it adopts the
+      fresh (unseen) story wholesale (a content edit wiped views/reactions server-side → the ring legitimately
+      reverts to unseen); otherwise it preserves the reader's monotone seen state by delegating to
+      `PostUpdateMerge` (one source of truth for reader-personal-field preservation). The AUTHOR is the exception
+      to the reset (`isOwnStory`) — the server never records the author's own view of their own story, so their
+      client-only "seen" survives a reset (iOS `isOwnGroup ||` in `storyUpdated`). Android reads the explicit
+      `engagementReset` flag rather than iOS's `contentEditedAt` timestamp (the wire model exposes no such field).
+      New `StoryDao.getById(id)` + `StoryCacheSource.findLocal`/`upsertLocal` (read-merge-write seam), and
+      `StoryRepository.applyStoryUpdate(updated, engagementReset, currentUserId)` folds it (inert for an unknown id
+      or a no-op merge). `StoriesViewModel.observeStoryUpdates` subscribes to `storyUpdated`, resolving the reset
+      flag and current user id (the author exception). +14 tests (6 `StoryUpdateMergeTest` pure across every branch,
+      2 `StoryDaoTest` real-Room for `getById`, 3 `StoryRepositoryTest` real-Room folds + inert/no-op, 3
+      `StoriesViewModelTest` incl. a behavioural repaint reverting the ring to unviewed). RED-proof isolated:
+      neutering the reset branch reddened EXACTLY `a non-owner content edit reverts the ring to unseen on an
+      engagement reset` (1 of 6) while the other 5 preserve-path cases stayed green. STORY realtime is now fully at
+      parity (viewer: reactions/overlay-tx/delete/update; tray: delete/update). No production logic outside
+      `apps/android`.
 - [ ] Per-clip inspector EDITOR (volume, fade in/out, loop, background, delete)
 - [ ] Timeline transport: play/pause, scrub, zoom 0.25×–4×, mute; snap-to-grid with guides
 - [ ] Multi-track playback with sample-accurate audio mixing (foreground+background, fades, ducking)

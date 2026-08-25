@@ -232,6 +232,119 @@ class StoryRepositoryTest {
             .containsExactly("previously-synced")
     }
 
+    // --- Realtime story:updated tray fold (applyStoryUpdate) ---
+
+    private fun storyPost(
+        id: String,
+        authorId: String = "author",
+        content: String? = "Bonjour",
+        isViewedByMe: Boolean? = false,
+        createdAt: String = "2026-06-20T10:00:00Z",
+    ) = ApiPost(
+        id = id,
+        type = "STORY",
+        content = content,
+        createdAt = createdAt,
+        author = me.meeshy.sdk.model.ApiAuthor(id = authorId, username = "alice"),
+        isViewedByMe = isViewedByMe,
+    )
+
+    private suspend fun cachedStory(repo: StoryRepository, id: String): ApiPost =
+        repo.storiesStream().first().let { (it as CacheResult.Fresh).value.single { post -> post.id == id } }
+
+    @Test
+    fun `applyStoryUpdate folds an edit into the cache so the stream repaints`() = runTest {
+        stubList(storyPost("s1", content = "Bonjour"))
+        val repo = repository()
+        repo.refresh()
+
+        val changed = repo.applyStoryUpdate(
+            updated = storyPost("s1", content = "Bonjour (edited)"),
+            engagementReset = false,
+            currentUserId = "me",
+        )
+
+        assertThat(changed).isTrue()
+        assertThat(cachedStory(repo, "s1").content).isEqualTo("Bonjour (edited)")
+    }
+
+    @Test
+    fun `applyStoryUpdate reverts a non-owner ring to unseen on an engagement reset`() = runTest {
+        stubList(storyPost("s1", authorId = "author", isViewedByMe = true))
+        val repo = repository()
+        repo.refresh()
+
+        val changed = repo.applyStoryUpdate(
+            updated = storyPost("s1", authorId = "author", content = "edited", isViewedByMe = false),
+            engagementReset = true,
+            currentUserId = "me",
+        )
+
+        assertThat(changed).isTrue()
+        assertThat(cachedStory(repo, "s1").isViewedByMe).isFalse()
+    }
+
+    @Test
+    fun `applyStoryUpdate keeps the reader's seen state on a metadata-only edit`() = runTest {
+        stubList(storyPost("s1", isViewedByMe = true))
+        val repo = repository()
+        repo.refresh()
+
+        repo.applyStoryUpdate(
+            updated = storyPost("s1", content = "edited", isViewedByMe = false),
+            engagementReset = false,
+            currentUserId = "me",
+        )
+
+        assertThat(cachedStory(repo, "s1").isViewedByMe).isTrue()
+    }
+
+    @Test
+    fun `applyStoryUpdate keeps the author's own seen state through an engagement reset`() = runTest {
+        stubList(storyPost("s1", authorId = "me", isViewedByMe = true))
+        val repo = repository()
+        repo.refresh()
+
+        repo.applyStoryUpdate(
+            updated = storyPost("s1", authorId = "me", content = "edited", isViewedByMe = false),
+            engagementReset = true,
+            currentUserId = "me",
+        )
+
+        assertThat(cachedStory(repo, "s1").isViewedByMe).isTrue()
+    }
+
+    @Test
+    fun `applyStoryUpdate is inert for an unknown story id`() = runTest {
+        stubList(storyPost("s1"))
+        val repo = repository()
+        repo.refresh()
+
+        val changed = repo.applyStoryUpdate(
+            updated = storyPost("s2", content = "phantom"),
+            engagementReset = false,
+            currentUserId = "me",
+        )
+
+        assertThat(changed).isFalse()
+        assertThat(db.storyDao().observeAll().first().map { it.id }).containsExactly("s1")
+    }
+
+    @Test
+    fun `applyStoryUpdate is inert for a no-op re-broadcast`() = runTest {
+        stubList(storyPost("s1", content = "Bonjour", isViewedByMe = true))
+        val repo = repository()
+        repo.refresh()
+
+        val changed = repo.applyStoryUpdate(
+            updated = storyPost("s1", content = "Bonjour", isViewedByMe = false),
+            engagementReset = false,
+            currentUserId = "me",
+        )
+
+        assertThat(changed).isFalse()
+    }
+
     @Test
     fun `enqueuePublish persists a PUBLISH_STORY mutation on the story lane`() = runTest {
         val outbox = outbox()

@@ -2,6 +2,63 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-25 **the story TRAY folds a realtime `story:updated`** (slice `story-updated-realtime-tray`,
+> feature-parity Story realtime) — the viewed-monotonicity MERGE, and the LAST STORY-realtime gap. STORY realtime
+> is now fully at parity (viewer: reactions/overlay-tx/delete/update; tray: delete/update).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3500/#3498/#3497, all gateway/ios
+> production-logic branches (`claude/brave-archimedes-*`, `claude/intelligent-noether-*`), none a
+> `claude/apps/android/*` slice from THIS routine. Prior slice (`story-deleted-realtime-tray`) already merged into
+> main. Branched off freshly-fetched `origin/main` (`36b9921b`).
+>
+> **The gap — the tray kept a stale ring after an edit made elsewhere.** The `story:updated` viewer fold (prior
+> run) swapped the slide only in the OPEN viewer; the TRAY (`StoriesViewModel`) is driven entirely by
+> `StoryRepository.storiesStream()` (Room-backed, cache-first), so an edit — a content change, or a content edit
+> that RESET engagement (views/reactions wiped, ring should revert to unseen) — left the old ring painted until the
+> next background revalidation. iOS folds it in `StoryViewModel.storyUpdated` with a `shouldKeepLocalViewed`
+> viewed-monotonicity guard + the `engagementReset` flag; the `SocketStoryUpdatedData` DTO + `storyUpdated` flow
+> already existed (viewer slice) — this slice needed the Room-cache MERGE seam.
+>
+> **The fix — a pure merge + a read-merge-write cache seam + a repository fold + a tray VM subscription.**
+> (1) `StoryUpdateMerge.merge(previous, updated, engagementReset, isOwnStory)` in `:core:model`: `engagementReset
+> && !isOwnStory` → adopt the fresh (unseen) story wholesale (server wiped engagement); otherwise delegate to
+> `PostUpdateMerge` (monotone seen — one source of truth for reader-personal-field preservation). The AUTHOR is
+> the exception to the reset (their own seen is client-only, the server never records it), mirroring iOS
+> `isOwnGroup ||`. Android reads the explicit `engagementReset` flag, not iOS's `contentEditedAt` timestamp (absent
+> from the wire model). (2) `StoryDao.getById(id)` + `StoryCacheSource.findLocal`/`upsertLocal` (single-writer seam,
+> re-deriving the `createdAt` ordering column; no `sync_meta` touch — a realtime fold is not a revalidation).
+> (3) `StoryRepository.applyStoryUpdate(updated, engagementReset, currentUserId)` reads the cached copy, computes
+> `isOwnStory = updated.author?.id == currentUserId`, merges, upserts; inert (`false`) for an unknown id
+> (over-broadcast) or a no-op merge. (4) `StoriesViewModel.observeStoryUpdates` forwards every `story:updated`,
+> resolving the reset flag (`?: false`) and `sessionRepository.currentUserId`.
+>
+> **Tests: +14** — 6 `StoryUpdateMergeTest` (pure, every branch: non-owner reset reverts to unseen; author keeps
+> seen through a reset; metadata edit keeps monotone seen; metadata adopts an authoritative reaction summary; inert
+> on the reset path; inert on the metadata path), 2 `StoryDaoTest` (real Room: `getById` returns the row / null for
+> an absent id), 3 `StoryRepositoryTest` (real Room folds: an edit repaints; a non-owner reset reverts to unseen;
+> a metadata edit keeps seen; author keeps seen; inert unknown id; inert no-op — 6 cases across the block), 3
+> `StoriesViewModelTest` (the VM forwards the flag + current user; an absent flag folds as `false`; a behavioural
+> repaint reverts an author's ring `hasUnviewed` false→true via a fake stream mirroring Room re-emitting).
+> **RED-proof isolated**: neutering the reset branch (`return PostUpdateMerge.merge(...)` unconditionally) reddened
+> EXACTLY `a non-owner content edit reverts the ring to unseen on an engagement reset` (6 tests, 1 failed) while
+> the other 5 preserve-path cases stayed green — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200); pristine `android-37.0` alone worked** (no copy→patch, no
+> both-dirs; AGP mapped compileSdk 37 → android-37.0 on the first `./gradlew`). The recipe still flips per
+> container (per NOTES) — this one was the pristine mode.
+>
+> **Verified**: targeted `:core:model`/`:core:database`/`:sdk-core`/`:feature:stories` unit suites **BUILD
+> SUCCESSFUL** (all four touched suites green), then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, the CI-mirror gate) — see run log for the result. Reviewer PASS. Diff is `apps/android` only
+> (1 new prod file + 3 prod files across :core:model/:core:database/:sdk-core/:feature:stories, +2 test files,
+> tracking docs). Verdict: **PASS** — a pure merge reusing the established `PostUpdateMerge` law, a read-merge-write
+> Room seam mirroring the delete seam, a repository fold, and a tray VM subscription mirroring the delete
+> subscription; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: STORY realtime is complete. Move to the next feature-parity area in build order — candidates from the
+> Story/editor backlog (per-clip inspector, timeline transport) or advancing the CALLS area. Scout `feature-parity.md`
+> for the highest-value unchecked box before committing, and read-only before branching.
+
 > On 2026-08-25 **the story TRAY folds a realtime `story:deleted`** (slice `story-deleted-realtime-tray`,
 > feature-parity Story realtime) — the TRAY sibling of the viewer-scoped `story:deleted` fold (cycle before last),
 > and the first of the two remaining TRAY realtime folds the prior "Next" pointer flagged.
