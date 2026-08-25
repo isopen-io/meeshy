@@ -134,6 +134,7 @@ export default function HashtagPage() {
               <PostCard
                 key={post.id}
                 author={{ name: authorName(post), avatar: post.author?.avatar ?? undefined }}
+                authorId={post.authorId ?? post.author?.id}
                 lang={post.originalLanguage ?? 'fr'}
                 content={post.content ?? ''}
                 translations={postToTranslations(post)}
