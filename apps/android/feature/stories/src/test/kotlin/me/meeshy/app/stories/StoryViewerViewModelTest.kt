@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.SocketStoryDeletedData
 import me.meeshy.sdk.model.SocketStoryReactedData
 import me.meeshy.sdk.model.SocketStoryTranslationUpdatedData
@@ -80,6 +81,7 @@ class StoryViewerViewModelTest {
         hoursAgo: Long,
         reactionSummary: Map<String, Int>? = null,
         translations: Map<String, ApiPostTranslationEntry>? = null,
+        storyEffects: StoryEffects? = null,
     ) = ApiPost(
         id = id,
         type = "STORY",
@@ -89,6 +91,7 @@ class StoryViewerViewModelTest {
         isViewedByMe = false,
         reactionSummary = reactionSummary,
         translations = translations,
+        storyEffects = storyEffects,
     )
 
     private fun viewModel(
@@ -124,6 +127,24 @@ class StoryViewerViewModelTest {
             assertThat(s.index).isEqualTo(0)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `a slide with no effects projects the 6s static auto-advance default`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        assertThat(vm.state.value.current?.autoAdvanceMillis)
+            .isEqualTo(StorySlideDuration.DEFAULT_STATIC_MS)
+    }
+
+    @Test
+    fun `an author-pinned timelineDuration drives the slide's auto-advance timing`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(
+                storyPost("a1", "a", hoursAgo = 1, storyEffects = StoryEffects(timelineDuration = 3.0)),
+            ),
+        )
+        assertThat(vm.state.value.current?.autoAdvanceMillis).isEqualTo(3000)
     }
 
     @Test

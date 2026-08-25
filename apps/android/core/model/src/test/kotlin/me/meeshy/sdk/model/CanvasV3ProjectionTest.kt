@@ -146,6 +146,23 @@ class CanvasV3ProjectionTest {
         assertThat(sticker.hasImage).isTrue()
     }
 
+    /**
+     * La durée épinglée dans le timeline editor (`scene.timelineDuration`) doit
+     * traverser le pont v3 → v1 : sans ce mapping elle était SILENCIEUSEMENT
+     * jetée, et un slide épinglé retombait sur la durée dérivée du contenu
+     * (`StorySlideDuration` priorité 0 manquante).
+     */
+    @Test
+    fun `le timelineDuration d'une scene v3 traverse la projection`() {
+        val projected = effectsFromRaw(
+            """
+            { "v": 3, "scenes": [ { "id": "sc1", "timelineDuration": 4.5, "objects": [] } ] }
+            """.trimIndent(),
+        )
+
+        assertThat(projected.timelineDuration).isEqualTo(4.5)
+    }
+
     /** Une clé de payload inconnue au décodeur Android ne doit jamais faire échouer la scène. */
     @Test
     fun `un sticker avec des cles de payload inconnues traverse la projection`() {
