@@ -360,7 +360,7 @@ platform :ios do
       app_review_information: app_review_credentials
     )
 
-    version = get_version_number(xcodeproj: "Meeshy.xcodeproj")
+    version = get_version_number(xcodeproj: "Meeshy.xcodeproj", target: "Meeshy")
     UI.success("Version #{version} submitted to App Store!")
   end
 
@@ -372,7 +372,7 @@ platform :ios do
   lane :bump_version do |options|
     type = options[:type] || "patch"
     increment_version_number(bump_type: type)
-    version = get_version_number(xcodeproj: "Meeshy.xcodeproj")
+    version = get_version_number(xcodeproj: "Meeshy.xcodeproj", target: "Meeshy")
     UI.success("Version bumped to #{version}")
   end
 
