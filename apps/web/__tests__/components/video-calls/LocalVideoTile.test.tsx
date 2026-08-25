@@ -37,4 +37,15 @@ describe('LocalVideoTile', () => {
     render(<LocalVideoTile {...baseProps} videoEnabled={false} videoSuspended />);
     expect(screen.queryByTestId('local-video-suspended')).not.toBeInTheDocument();
   });
+
+  it('keeps the live video element visible under the banner while suspended — L6-3 freezes the encoder (2 fps), it never stops the track', () => {
+    render(<LocalVideoTile {...baseProps} videoEnabled videoSuspended />);
+    // Suspended banner is shown as a non-covering hint...
+    expect(screen.getByTestId('local-video-suspended')).toBeInTheDocument();
+    // ...but the underlying <video> element must stay visible (not the
+    // VideoStream "no video" placeholder, which only renders when
+    // isVideoEnabled is false) since the camera is still sending frames.
+    const video = screen.getByLabelText("you's video");
+    expect(video).not.toHaveClass('hidden');
+  });
 });

@@ -7,7 +7,7 @@ import XCTest
 /// edges (path lost / restored / interface handoff), the PC-state delegate,
 /// the watchdogs, and the ICE-restart failure path. Without arbitration, a
 /// single network blip fires several of them back-to-back and each advances
-/// `reconnectAttempt` — the 3-attempt budget is spent on redundant trigger
+/// `reconnectAttempt` — the `maxReconnectAttempts` budget is spent on redundant trigger
 /// *edges* instead of reconnection *cycles*, and a call that would survive a
 /// 1-2s hiccup drops with `.connectionLost`.
 @MainActor

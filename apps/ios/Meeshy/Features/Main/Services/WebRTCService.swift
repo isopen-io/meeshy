@@ -72,6 +72,13 @@ final class WebRTCService {
 
     private(set) var currentBitrate: Int = QualityThresholds.defaultBitrate
     private(set) var currentQualityLevel: VideoQualityLevel = .excellent
+    /// L6-1 — network-survival FREEZE. A STATE, not a one-shot call: the ladder
+    /// re-applies itself on every tier change (`adjustBitrate`) AND on every
+    /// thermal transition, so a floor written once by a pass-through would be
+    /// silently overwritten by the next `.critical → .poor` sample and the video
+    /// would thaw without anyone deciding it. `applyVideoQuality` therefore reads
+    /// this flag FIRST and substitutes the floor for the computed tier.
+    private(set) var survivalFloorActive = false
     // Audit P1-4 — replace Timer.scheduledTimer with cancellable Task to
     // align with PERF-011 (heartbeat / duration migrated; this monitor was
     // missed). Timers run on RunLoop.main, are App-Nap-unfriendly, and have
@@ -266,7 +273,16 @@ final class WebRTCService {
     /// track, attaches it to the reserved video transceiver and flips to
     /// sendRecv. Returns true when a renegotiation (createOffer) is required.
     func upgradeToVideo() async throws -> Bool {
-        try await client.enableLocalVideo()
+        let needsRenegotiation = try await client.enableLocalVideo()
+        // `enableLocalVideo` repose l'encodage PAR DÉFAUT (2,5 Mbps / 30 fps) :
+        // il n'a aucune connaissance du gel de survie. Repasser par le SITE qui
+        // consulte `survivalFloorActive`, sinon une ré-acquisition (unhold,
+        // rallumage caméra) lève le gel en silence — et `applyVideoQuality`
+        // n'est ré-appelé que sur un CHANGEMENT de palier ou une transition
+        // thermique, qui n'arrivent justement pas sur un lien durablement
+        // dégradé.
+        applyVideoQuality(currentQualityLevel)
+        return needsRenegotiation
     }
 
     /// §5.4 — mid-call video→audio downgrade. Returns true when a renegotiation
@@ -469,6 +485,10 @@ final class WebRTCService {
     /// — `degradationPreference = .maintainFramerate` + low caps handle severe
     /// congestion gracefully without desyncing the peer.
     private func applyVideoQuality(_ level: VideoQualityLevel) {
+        if survivalFloorActive {
+            applySurvivalFloorEncoding()
+            return
+        }
         let bitrate = level.targetVideoBitrate > 0 ? level.targetVideoBitrate : QualityThresholds.minVideoBitrate
         let fps = level.targetFPS > 0 ? level.targetFPS : QualityThresholds.criticalVideoFloorFPS
         let height = level.targetResolutionHeight > 0 ? level.targetResolutionHeight : QualityThresholds.criticalVideoFloorHeight
@@ -485,8 +505,37 @@ final class WebRTCService {
         client.applyVideoEncoding(
             maxBitrateBps: thermal.bitrateBps,
             maxFramerate: thermal.framerate,
-            scaleResolutionDownBy: thermal.scaleDownBy
+            scaleResolutionDownBy: thermal.scaleDownBy,
+            degradationPreference: .maintainFramerate
         )
+    }
+
+    /// L6-1/L6-6 — the survival floor: the encoder is pinned to the lowest rung
+    /// at 2 fps with `.maintainResolution`, so the picture reads as a STILL,
+    /// legible frame instead of fluid mush. The track, the transceiver and the
+    /// capture session are untouched — no `disableLocalVideo`, no SDP exchange,
+    /// nothing the peer can mistake for "camera off".
+    private func applySurvivalFloorEncoding() {
+        client.applyVideoEncoding(
+            maxBitrateBps: QualityThresholds.minVideoBitrate,
+            maxFramerate: QualityThresholds.survivalFrozenFPS,
+            scaleResolutionDownBy: max(1.0, 720.0 / Double(QualityThresholds.criticalVideoFloorHeight)),
+            degradationPreference: .maintainResolution
+        )
+    }
+
+    /// Enter the survival freeze (sustained poor link). Idempotent.
+    func freezeVideoForSurvival() {
+        survivalFloorActive = true
+        applySurvivalFloorEncoding()
+    }
+
+    /// Leave the survival freeze and hand the encoder back to the quality
+    /// ladder at its CURRENT tier — never at a remembered one, which could be
+    /// several rungs stale after a long degraded episode.
+    func unfreezeVideoAfterSurvival() {
+        survivalFloorActive = false
+        applyVideoQuality(currentQualityLevel)
     }
 
     /// Raccroché in-band : pousse `{type: "bye"}` au pair en P2P direct pour
@@ -550,6 +599,11 @@ final class WebRTCService {
         currentBitrate = QualityThresholds.defaultBitrate
         qualityLevelDebounceDate = nil
         lastThermalState = .nominal
+        // Same cross-call leak as the ladder state above: this service is a
+        // CallManager-owned singleton. A call hung up DURING a survival freeze
+        // would otherwise pin the next call's encoder at 2 fps for its whole
+        // duration, with nothing left to thaw it (the controller is reset too).
+        survivalFloorActive = false
         disconnectDebounceTask?.cancel()
         disconnectDebounceTask = nil
         flushCandidatesTask?.cancel()

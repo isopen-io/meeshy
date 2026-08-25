@@ -66,8 +66,8 @@ export const LocalVideoTile = memo(function LocalVideoTile({
         className="w-full h-full object-cover transform -scale-x-100"
         participantName={t('you')}
         isAudioEnabled={audioEnabled}
-        // When suspended the local track is stopped; hide the dead <video>.
-        isVideoEnabled={videoEnabled && !videoSuspended}
+        // L6-3: sous un gel la piste tourne toujours (2 fps) — on montre l'image réellement envoyée.
+        isVideoEnabled={videoEnabled}
       />
 
       {showSuspended && (
@@ -75,7 +75,7 @@ export const LocalVideoTile = memo(function LocalVideoTile({
           role="status"
           aria-live="polite"
           data-testid="local-video-suspended"
-          className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-gray-900/85 backdrop-blur-sm px-2 text-center"
+          className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-gray-900/70 px-1 py-0.5 text-center"
         >
           <div className="relative">
             <VideoOff className="w-7 h-7 text-amber-300" />

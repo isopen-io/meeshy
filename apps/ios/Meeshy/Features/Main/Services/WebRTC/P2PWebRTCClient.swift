@@ -495,19 +495,22 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // encoder run open-loop (no native cap; the SDP `x-google-max-bitrate` hint is
     // soft and non-authoritative on iOS). We set an explicit max bitrate / max
     // framerate / resolution-downscale on every encoding, mirroring the audio
-    // bitrate path (applyAudioCodecPreferences :295). `degradationPreference =
-    // .maintainFramerate` keeps talking-head motion fluid and drops resolution
-    // first under congestion (reserve .maintainResolution for screen-share).
+    // bitrate path (applyAudioCodecPreferences :295). `degradationPreference`
+    // defaults to `.maintainFramerate`, which keeps talking-head motion fluid
+    // and drops resolution first under congestion; the network-survival FREEZE
+    // floor is the one caller that asks for `.maintainResolution` — at 2 fps a
+    // still, legible image beats fluid mush.
     // Called once at capture start (720p30 / 2.5 Mbps) and again by the adaptive
     // quality loop (WebRTCService.adjustBitrate) with throttled targets.
     func applyVideoEncoding(
         maxBitrateBps: Int = 2_500_000,
         maxFramerate: Int = 30,
-        scaleResolutionDownBy: Double = 1.0
+        scaleResolutionDownBy: Double = 1.0,
+        degradationPreference: VideoDegradationPreference = .maintainFramerate
     ) {
         guard let sender = videoTransceiver?.sender else { return }
         let params = sender.parameters
-        params.degradationPreference = NSNumber(value: RTCDegradationPreference.maintainFramerate.rawValue)
+        params.degradationPreference = NSNumber(value: degradationPreference.rtcPreference.rawValue)
         for encoding in params.encodings {
             encoding.maxBitrateBps = NSNumber(value: maxBitrateBps)
             encoding.maxFramerate = NSNumber(value: maxFramerate)
@@ -520,7 +523,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let count = params.encodings.count
         if count > 0 {
             let scaleStr = String(format: "%.2f", scaleResolutionDownBy)
-            Logger.webrtc.info("[WEBRTC] video encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps fps=\(maxFramerate, privacy: .public) scale=\(scaleStr, privacy: .public) degradation=maintainFramerate priority=high encodings=\(count, privacy: .public))")
+            let degradationStr = degradationPreference.rawValue
+            Logger.webrtc.info("[WEBRTC] video encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps fps=\(maxFramerate, privacy: .public) scale=\(scaleStr, privacy: .public) degradation=\(degradationStr, privacy: .public) priority=high encodings=\(count, privacy: .public))")
         } else {
             Logger.webrtc.warning("[WEBRTC] video encoding NOT applied — encodings array empty")
         }
@@ -1783,6 +1787,17 @@ extension P2PWebRTCClient: RTCDataChannelDelegate {
     }
 }
 
+// MARK: - VideoDegradationPreference → libwebrtc
+
+private extension VideoDegradationPreference {
+    var rtcPreference: RTCDegradationPreference {
+        switch self {
+        case .maintainFramerate: return .maintainFramerate
+        case .maintainResolution: return .maintainResolution
+        }
+    }
+}
+
 #else
 
 // MARK: - Fallback (WebRTC framework not available)
@@ -1809,7 +1824,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func startLocalMedia(type: CallMediaType) async throws { throw WebRTCError.notSupported }
     func toggleAudio(_ enabled: Bool) {}
     func toggleVideo(_ enabled: Bool) {}
-    func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {}
+    func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double, degradationPreference: VideoDegradationPreference) {}
     func applyAudioEncoding(maxBitrateBps: Int) {}
     var hasLocalVideoTrack: Bool { false }
     func enableLocalVideo() async throws -> Bool { throw WebRTCError.notSupported }
