@@ -2,6 +2,67 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-25 **the story TRAY folds a realtime `story:deleted`** (slice `story-deleted-realtime-tray`,
+> feature-parity Story realtime) — the TRAY sibling of the viewer-scoped `story:deleted` fold (cycle before last),
+> and the first of the two remaining TRAY realtime folds the prior "Next" pointer flagged.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3497 (gateway/e2ee, branch
+> `claude/brave-archimedes-mu8dvk`): not a `claude/apps/android/*` slice from THIS routine, touches production logic
+> outside `apps/android`. Prior slice (`story-updated-realtime-viewer`) already merged into main. Branched off
+> freshly-fetched `origin/main` (`e91b3d19`).
+>
+> **Scout — STATUS realtime was already DONE, so the pointer's alt option was moot.** The prior "Next" offered
+> either the TRAY fold or STATUS realtime folds; scouting found `StatusesViewModel.subscribeToSocketEvents`
+> already folds all five status events (`created`/`updated`/`deleted`/`reacted`/`unreacted`), so STATUS needed
+> nothing. That left the TRAY fold as the highest-value thin slice; mirroring how the VIEWER folds were sequenced
+> (delete before update), I took the deletion half — smaller than the update half (which needs the
+> viewed-monotonicity merge).
+>
+> **The gap — the viewer fold dropped a deleted story only from the OPEN viewer.** The story TRAY
+> (`StoriesViewModel`) is driven entirely by `StoryRepository.storiesStream()` (Room-backed, cache-first), so a
+> `story:deleted` arriving while the tray was on screen left the deleted ring painted until the next background
+> revalidation pruned it. The `SocketStoryDeletedData` DTO + `SocialSocketManager.storyDeleted` flow already
+> existed (viewer slice) — this slice only needed the authoritative Room-cache removal seam + the tray VM
+> subscription.
+>
+> **The fix — a DAO delete-by-id + a cache-source passthrough + a repository fold + a tray VM subscription.**
+> (1) `StoryDao.deleteById(id)` = `DELETE FROM stories WHERE id = :id`. (2) `StoryCacheSource.deleteLocal(storyId)`
+> delegates to it (single writer of the cache). (3) `StoryRepository.removeCachedStory(storyId)` folds the delete
+> into the cache so the cache-first stream re-emits without the row — an unknown id is an inert 0-row delete, so
+> Room emits nothing and an over-broadcast delivery (a friend's feed room gets deletes for stories never cached)
+> causes no repaint. (4) `StoriesViewModel` now injects `SocialSocketManager`; `observeStoryDeletions` forwards
+> every `story:deleted` to `removeCachedStory` UNCONDITIONALLY — no own-echo guard (unlike a reaction), mirroring
+> iOS `purgeDeadStories`: a story deleted on another device must vanish for its author too. Single-source-of-truth:
+> the Room cache is authoritative, the reactive stream repaints — no in-memory overlay of deleted ids.
+>
+> **Tests: +4** — 2 `StoryDaoTest` (real in-memory Room via Robolectric: `deleteById` removes exactly the matched
+> row leaving the rest ordered; `deleteById` on an absent id leaves the table unchanged), 2 `StoriesViewModelTest`
+> (a realtime deletion drops the story from the tray — the fake `removeCachedStory` mutates a `MutableStateFlow`
+> stream to mirror Room re-emitting, and the tray drops the ring; a realtime deletion of the current user's OWN
+> story is folded too, proving no own-echo guard). **RED-proof isolated**: neutering `observeStoryDeletions` to
+> collect-but-not-remove reddened EXACTLY the 2 new VM tests (17 completed, 2 failed) while the other 15 stayed
+> green — genuine discrimination, not an assertion echo. The DAO tests are compile-RED without `deleteById`.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200).** Pristine `android-37.0` auto-installed by AGP but the first
+> `./gradlew` hash-errored on `android-37`; the four-edit copy→patch (`source.properties` ApiLevel 37.0→37 +
+> `package.xml` `<api-level>` + `path=` + BOTH `build.prop` `sdk_full` fields), keeping android-37.0 alongside,
+> resolved it ("THIRD mode", per NOTES).
+>
+> **Verified**: targeted `:core:database:StoryDaoTest` + `:feature:stories:StoriesViewModelTest` **BUILD
+> SUCCESSFUL** (both suites green), then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest,
+> all modules, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any push. Reviewer PASS. Diff is
+> `apps/android` only (3 prod files across :core:database + :sdk-core + :feature:stories, +4 tests across 2 files,
+> tracking docs). Verdict: **PASS** — a DAO delete-by-id, a cache-source passthrough, a repository fold reusing the
+> established cache-first stream, and a tray VM subscription mirroring the existing status folds; behavioural tests
+> through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the LAST STORY-realtime slice is the TRAY fold of `story:updated` — the viewed-monotonicity merge
+> (iOS `shouldKeepLocalViewed`: keep a locally-viewed ring viewed unless the story's content was edited AFTER the
+> local view, i.e. `engagementReset`). It needs a Room-cache MERGE seam (read the existing cached `ApiPost`, upsert
+> the incoming one preserving `isViewedByMe` when `!engagementReset`), a pure merge function worth TDD, and the tray
+> VM subscription to `storyUpdated`. After that, STORY realtime is fully at parity (viewer: reactions/overlay-tx/
+> delete/update; tray: delete/update). Scout read-only before committing.
+
 > On 2026-08-25 **the open story viewer folds a realtime `story:updated`** (slice
 > `story-updated-realtime-viewer`, feature-parity Story realtime) — the EDIT sibling of the `story:deleted`
 > fold shipped the prior run, and the last remaining VIEWER-scoped STORY realtime gap.

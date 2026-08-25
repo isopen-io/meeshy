@@ -87,6 +87,16 @@ internal class StoryCacheSource(
         persist(collected, prune = isComplete)
     }
 
+    /**
+     * Drops a single cached story by id (a realtime `story:deleted`). The removal is
+     * authoritative — the Room-backed [observe] stream re-emits without the row, so the
+     * tray repaints. An unknown id is an inert 0-row delete: Room emits nothing, so an
+     * over-broadcast deletion for a story the viewer never cached causes no repaint.
+     */
+    suspend fun deleteLocal(storyId: String) {
+        storyDao.deleteById(storyId)
+    }
+
     private suspend fun persist(stories: List<ApiPost>, prune: Boolean) {
         val now = clock.nowMillis()
         val rows = stories.map { story ->
