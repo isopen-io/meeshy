@@ -2800,10 +2800,23 @@ struct StoryCommentRowView: View, Equatable {
                 }
             } label: {
                 HStack(spacing: 3) {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(isLiked ? MeeshyColors.error : overlayColor.opacity(0.92))
-                        .scaleEffect(isLiked ? 1.15 : 1.0)
+                    // Le contour à l'accent de l'auteur — « c'est MOI qui ai
+                    // aimé ce commentaire ». Sans lui, un commentaire de story
+                    // que j'avais aimé ne se distinguait que par sa teinte, la
+                    // même qu'un commentaire aimé par d'autres. Le `scaleEffect`
+                    // d'origine est conservé.
+                    EngagementGlyph(
+                        outline: "heart",
+                        filled: "heart.fill",
+                        participated: isLiked,
+                        accentHex: comment.authorColor,
+                        activeTint: MeeshyColors.error,
+                        inactiveTint: overlayColor.opacity(0.92),
+                        size: 13,
+                        // Posé sur un média : l'ombre porte la lisibilité.
+                        shadowed: true
+                    )
+                    .scaleEffect(isLiked ? 1.15 : 1.0)
                     if likeCount > 0 {
                         Text("\(likeCount)")
                             .font(MeeshyFont.relative(11, weight: .semibold))

@@ -177,3 +177,78 @@ Un `catch` muet et un `async` non attendu sont deux façons de perdre la même
 exception. Ici les deux se sont superposés : `logger: false` rendait les 166
 `fastify.log.*` inertes, et les broadcasts `async` avalaient le reste. La panne
 a survécu à tout parce qu'AUCUN de ses canaux de signalement ne fonctionnait.
+
+## Renforcement « c'est moi » — état au 2026-08-25 fin de session
+
+Recensement : 92 rendus d'action (iOS + web), 18 portaient le renforcement,
+45 n'ont AUCUN état « c'est moi qui l'ai fait ».
+
+Livré :
+- `EngagementGlyph` (MeeshyUI) — le motif quitte ses 4 copies (3 inline dans
+  `FeedPostCard`, 1 `private func` dans `ReelFeedCard`).
+- La règle « le contour retrace le glyphe, jamais un cercle » devient MESURÉE
+  (`tracesARingInsteadOfTheGlyph`) — elle était en prose, et déjà violée par le
+  repost du fil.
+- `filledWhenInactive` sépare « plein » (il existe des likes) de « contouré »
+  (ce like est le mien).
+- `authorAccentColor` (shared) — la règle de graine à UN endroit, miroir d'iOS.
+- Équipés : commentaires iOS, réels iOS, `PostCard` / `PostDetail` / `ReelPlayer`
+  web.
+
+NON touché volontairement : les 3 sites de `FeedPostCard`. Leur like porte
+pulsation, anneau animé, `scaleEffect`, `rotationEffect` — le composant les
+retirerait. Le composant équipe ce qui n'a rien, il ne rabote pas ce qui est riche.
+
+Reste :
+- iOS : stories, détail de post, profil, médias de conversation.
+- web : `StoryViewer`, commentaires.
+- Le PARTAGE n'a AUCUN état « je l'ai partagé » — ni Prisma, ni gateway, ni SDK,
+  ni vue. Le renforcer suppose de créer `isSharedByMe` de bout en bout : c'est un
+  lot à part, non entamé.
+- `TextPostCell` / `MediaPostCell` sont de facto MORTES (`useUIKitList` désactivé)
+  — les équiper serait du travail sans pixel.
+
+## Stories, profil, médias, détail de post — 2026-08-25 (suite)
+
+### Ce que le recensement a tranché
+
+- **Le profil n'a AUCUN rendu propre** : il réutilise `FeedPostCard`,
+  `ReelFeedCard` et `FeedCommentsSheet`. Déjà couvert, rien à y faire.
+- **Stories / médias** : l'essentiel de leurs actions (repost, partage,
+  enregistrement de story ; enregistrement d'un média) n'a AUCUN état « je l'ai
+  fait ». Non renforçables en l'état.
+
+### Livré
+
+| Surface | Défaut |
+|---|---|
+| réactions d'une PIÈCE JOINTE | `currentUserReactions` existait sur le modèle, ce site ne lisait que `reactionSummary` — « ❤️👍 4 » sans distinguer le mien |
+| like d'un commentaire de STORY | aucun contour |
+| DÉTAIL de post | like, repost, enregistrement : trois glyphes sans contour |
+
+Pour les EMOJIS, le renfort emprunte le langage déjà en place
+(`BubbleReactionsOverlay` : fill saturé, stroke épais, ombre) et non le
+contour-sur-glyphe : un emoji n'a pas de tracé qu'on puisse retracer.
+
+### Une erreur, et ce qu'elle a appris
+
+En équipant le repost je l'ai d'abord CASSÉ : son glyphe actif
+(`arrow.2.squarepath.circle.fill`) remplacé par un symbole sans variante pleine
+— le repost actif perdait sa distinction.
+
+Ma lecture de la règle était fausse. « Le contour retrace le glyphe, jamais un
+cercle AUTOUR » interdit d'ajouter un anneau à un glyphe qui n'en a pas ; elle
+n'interdit pas `.circle` quand le glyphe EST un disque. Mon premier prédicat
+(« le symbole finit-il par `.circle` ? ») aurait condamné un cas correct tout en
+laissant passer le vrai défaut : un contour ÉTRANGER au glyphe.
+
+Deux corrections de fond :
+- le composant sépare le glyphe AU REPOS du contour SUPERPOSÉ — ils diffèrent
+  pour le repost, et les confondre changeait l'apparence du repos ;
+- `outlineTracesTheGlyph(outline:filled:)` mesure la vraie règle : le contour
+  est-il de la même forme que le glyphe qu'il borde ?
+
+> **Une règle en prose se lit vite dans le sens qui arrange.** Celle-ci disait
+> « jamais un cercle » ; j'ai entendu « jamais la famille `.circle` », ce qui
+> était plus simple à mesurer — et faux. La mesurer m'a obligé à relire ce
+> qu'elle protégeait vraiment.
