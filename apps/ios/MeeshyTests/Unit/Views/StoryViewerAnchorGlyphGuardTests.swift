@@ -15,11 +15,15 @@ import XCTest
 /// portaient `arrow.2.squarepath` avant ce correctif, un même dessin pour
 /// deux permanences différentes.
 ///
-/// `bookmark.fill` reprend le sens du tracé web (un ruban de signet —
-/// `M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z`, le path SF Symbol
-/// canonique du signet), plus proche de « garder » que `pin.fill` (épingler,
-/// geste d'organisation spatiale) ou `square.and.arrow.down.fill`
-/// (téléchargement, déjà pris par l'export de sticker dans ce même fichier).
+/// `bookmark.fill` a d'abord repris le tracé web (un ruban de signet), mais
+/// ce glyphe désigne DÉJÀ, ailleurs dans l'app, l'action produit « Publications
+/// enregistrées » (SettingsView.swift:606, PostDetailView.swift:1130/:1820,
+/// ReelsPlayerView.swift:1168, ReelFeedCard.swift:458) — collision levée DANS
+/// ce fichier, rouverte à l'échelle de l'app (constat de revue
+/// R3-bookmark-collision-produit, 2026-08-25). `pin.fill`/`archivebox.fill`
+/// portent la même collision (épinglage, archivage). `infinity` (permanence :
+/// story éphémère → post durable) reste libre de tout sens produit concurrent
+/// dans l'app, vérifié par `test_anchor_neverReusesAProductGlyphOwnedElsewhere`.
 ///
 /// **Pourquoi la fenêtre équilibrée, jamais le fichier entier.** Le fichier
 /// porte DIX appels `StoryActionButton(` et de nombreux `label: {` — chercher
@@ -117,11 +121,33 @@ final class StoryViewerAnchorGlyphGuardTests: XCTestCase {
         )
     }
 
-    func test_anchor_wearsTheBookmarkGlyph() throws {
+    func test_anchor_wearsTheInfinityGlyph() throws {
         XCTAssertTrue(
-            try anchorWindow().contains("systemImage: \"bookmark.fill\""),
-            "L'ancrage doit porter bookmark.fill — le glyphe le plus proche du signet " +
-            "(`KeepOnFeedIcon`) que web dessine pour la même action « garder sur mon fil »."
+            try anchorWindow().contains("systemImage: \"infinity\""),
+            "L'ancrage doit porter infinity — permanence (story → post durable), sans reprendre " +
+            "le dessin d'une action produit distincte."
         )
+    }
+
+    // MARK: - L'ancrage ne reprend AUCUN glyphe déjà porté par une action produit distincte
+    // ailleurs dans l'app (constat de revue R3-bookmark-collision-produit, 2026-08-25) : deux
+    // permanences différentes ne partagent pas un dessin, à l'échelle de l'APP, pas seulement
+    // du fichier — `bookmark.fill` désigne déjà « Publications enregistrées »
+    // (SettingsView.swift:606, PostDetailView.swift:1130/:1820, ReelsPlayerView.swift:1168,
+    // ReelFeedCard.swift:458) ; `pin`/`pin.fill` désigne déjà « épingler »
+    // (MessageActionsMenu.swift:103, FeedPostCard.swift:907, ConversationListView.swift:931) ;
+    // `archivebox`/`archivebox.fill` désigne déjà « archiver »
+    // (ConversationPreferencesTab.swift:358, ConversationListView.swift:971).
+
+    func test_anchor_neverReusesAProductGlyphOwnedElsewhere() throws {
+        let window = try anchorWindow()
+        for reserved in ["bookmark", "pin", "archivebox"] {
+            XCTAssertFalse(
+                window.contains("systemImage: \"\(reserved)"),
+                "L'ancrage ne doit pas porter un glyphe qui commence par « \(reserved) » — ce " +
+                "dessin désigne déjà, ailleurs dans l'app, une action produit distincte (favoris, " +
+                "épinglage ou archivage). Fenêtre :\n\(window)"
+            )
+        }
     }
 }
