@@ -683,6 +683,31 @@ extension StoryRenderer {
     /// canvas width (opening enters from +travel → 0, closing exits 0 → −travel).
     public nonisolated static let slideTransitionTravelFraction: CGFloat = 0.08
 
+    /// Model-layer `sublayerTransform` of a `.zoom` / `.slide` opening at
+    /// `progress` ∈ [0, 1] (clamped) — the ONE curve every surface samples:
+    /// `applyOpening` animates between its two ends, and
+    /// `StoryAVCompositor.applyStaticOpening` poses it frame by frame because
+    /// `layer.render(in:)` runs no animation engine. `.zoom` settles from
+    /// `zoomTransitionScale` to 1; `.slide` from `+canvasWidth ×
+    /// slideTransitionTravelFraction` (leading edge) to 0. `.fade` / `.reveal`
+    /// never touch the transform: identity. Pure arithmetic — `nonisolated`
+    /// like `closingProgress`, so tests and the export need no actor hop.
+    public nonisolated static func openingSublayerTransform(_ effect: StoryTransitionEffect,
+                                                            progress: Double,
+                                                            canvasWidth: CGFloat) -> CATransform3D {
+        let remaining = CGFloat(1 - min(1, max(0, progress)))
+        switch effect {
+        case .zoom:
+            let scale = 1 + (zoomTransitionScale - 1) * remaining
+            return CATransform3DMakeScale(scale, scale, 1)
+        case .slide:
+            let travel = canvasWidth * slideTransitionTravelFraction
+            return CATransform3DMakeTranslation(travel * remaining, 0, 0)
+        case .fade, .reveal:
+            return CATransform3DIdentity
+        }
+    }
+
     /// Applies a slide-opening animation to `rootLayer` at playback position `elapsed`.
     ///
     /// - `.reveal`: attaches a circular `CAShapeLayer` mask and animates its `path`
@@ -740,19 +765,21 @@ extension StoryRenderer {
 
         case .zoom:
             let anim = CABasicAnimation(keyPath: "sublayerTransform")
-            anim.fromValue = NSValue(caTransform3D: CATransform3DMakeScale(
-                zoomTransitionScale, zoomTransitionScale, 1))
-            anim.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+            anim.fromValue = NSValue(caTransform3D: openingSublayerTransform(
+                .zoom, progress: 0, canvasWidth: rootLayer.bounds.width))
+            anim.toValue = NSValue(caTransform3D: openingSublayerTransform(
+                .zoom, progress: 1, canvasWidth: rootLayer.bounds.width))
             anim.duration = slideTransitionDuration
             anim.fillMode = .forwards
             anim.isRemovedOnCompletion = false
             rootLayer.add(anim, forKey: openingZoomAnimationKey)
 
         case .slide:
-            let travel = rootLayer.bounds.width * slideTransitionTravelFraction
             let anim = CABasicAnimation(keyPath: "sublayerTransform")
-            anim.fromValue = NSValue(caTransform3D: CATransform3DMakeTranslation(travel, 0, 0))
-            anim.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+            anim.fromValue = NSValue(caTransform3D: openingSublayerTransform(
+                .slide, progress: 0, canvasWidth: rootLayer.bounds.width))
+            anim.toValue = NSValue(caTransform3D: openingSublayerTransform(
+                .slide, progress: 1, canvasWidth: rootLayer.bounds.width))
             anim.duration = slideTransitionDuration
             anim.fillMode = .forwards
             anim.isRemovedOnCompletion = false
