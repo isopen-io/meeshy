@@ -14,6 +14,27 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 246i, 2026-08-25)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> - **243i, 244i et 245i sont MERGÉES** — PR [#3498](https://github.com/isopen-io/meeshy/pull/3498), [#3509](https://github.com/isopen-io/meeshy/pull/3509), [#3514](https://github.com/isopen-io/meeshy/pull/3514).
+>
+> ### ⛔ CORRECTION — le bloc 245i ci-dessous est FAUX sur son mécanisme principal
+>
+> 245i a conclu « 355 signalements DOMINÉS par des faux positifs structurels », et a nommé les **exigences de protocole** comme première cause, avec ce mécanisme : « chaque nom apparaît deux fois (l'exigence + l'implémentation), donc l'arithmétique `usages − déclarations` retombe à zéro **même quand le protocole est appelé** ». **C'est faux.** Si le protocole est appelé, l'appel ajoute une occurrence SANS ajouter de déclaration : le net vaut ≥ 1 et rien n'est signalé. Vérifié sur `bringForward` — prod : 3 occurrences / 3 déclarations (l'exigence + DEUX implémentations), et **aucun appel de production**. Ses seuls appelants sont dans `MeeshySDK/Tests/`.
+> - **Corollaire : le correctif spécifié en 245i — « ne pas compter comme déclaration ce qui est dans un corps de `protocol` » — NE SERT À RIEN.** Retirer l'exigence des DEUX côtés donne 2/2 : toujours zéro. **Ne pas l'implémenter.**
+>
+> ### La mesure JUSTE (246i)
+>
+> | bucket | nombre | nature |
+> |---|---|---|
+> | appelées **uniquement par les tests** | **241** (68 %) | **vrai signal**, pas du bruit — la famille de `likePost`/`bookmarkPost` |
+> | aucun appelant nulle part | **115** (32 %) | conformances framework RÉELLES (`UNUserNotificationCenterDelegate`, `CLLocationManagerDelegate`, SwiftUI `Layout.placeSubviews`) **+** candidats de code mort |
+>
+> - **⚠️ La conclusion de 245i s'INVERSE.** Le signal de la garde n'est pas noyé : **plus des deux tiers des signalements sont la découverte la plus intéressante du lot** — 241 fonctions de production, à l'échelle de l'app, dont les SEULS appelants sont des tests. C'est la généralisation du constat `likePost` de 244i, et elle est bien plus large qu'on ne le pensait.
+> - **⚠️ Le bon geste n'est donc PAS d'exclure ce bucket, mais de le CLASSER.** Une garde qui range « appelée seulement par un test » dans une catégorie nommée rend un inventaire exploitable ; une garde qui l'exclut jette son meilleur résultat. (Le corpus de la garde actuelle s'arrête aux sources de production — c'est ce qui rendait le bucket invisible en tant que tel.)
+> - **⚠️ Ce qui reste vrai de 245i** : les conformances de délégué SONT de vrais faux positifs (`dropEntered` : 1 occurrence / 1 déclaration en prod, appelée par SwiftUI) ; les sièges de test aussi. Et la leçon de méthode tient : **mesurer avant d'asserter**. C'est l'application incomplète de cette leçon — avoir arrêté la mesure à un `grep` de plausibilité au lieu de compter — qui a produit l'erreur.
+> - **Base de départ 247i+ : `main` HEAD.** **Piste 247i+** : (a) **classer le bucket « appelée seulement par un test »** dans la garde (241 entrées à l'échelle de l'app) puis attaquer les plus coûteuses ; (b) **recâbler `FeedView` sur `likePost`/`bookmarkPost`** — l'archétype de ce bucket ; (c) `isProgrammaticScroll` ; (d) les 3 copies d'`isLoadingReactions` ; (e) carry-over : `buildNativeMessageMenu`, découvrabilité du fil de réponses, les 7 `String(format: "%d:%02d", …)`, cibles tactiles 44 pt d'`InteractiveProgressBar`.
+
+
 > **POINTEUR iOS AUTORITAIRE (mis à jour 245i, 2026-08-25)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
 > - **243i ET 244i sont MERGÉES** — PR [#3498](https://github.com/isopen-io/meeshy/pull/3498) et [#3509](https://github.com/isopen-io/meeshy/pull/3509). `main` = `d4401986`.
 > - **245i — une MESURE, pas un lot de code.** La suite naturelle de 244i était « étendre la garde d'atteignabilité aux autres surfaces ». **Mesuré d'abord : elle ne se généralise PAS ainsi.** Hors des trois surfaces déjà couvertes, le balayage rend **355 fonctions sur 190 fichiers** — et ce nombre est **dominé par des faux positifs STRUCTURELS**, pas par du code mort.
