@@ -5,6 +5,26 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-26 — when a feature's model graph is too deep for one thin slice, gate the fidelity instead of faking it (slice `story-composer-draft-autosave`)
+Story-composer draft persistence looked like a single feature but its faithful form is a MULTI-slice effort: the live
+deck graph is deep (sealed `StoryBackgroundValue`/`StoryTextBackground` needing closed-polymorphic serializers, ~12
+nested value types), so annotating it all `@Serializable` — or writing a `StoryEffects`-based reverse map — is far
+past "thin". Two ways to keep the FIRST cut honest and thin:
+- **Persist only what a primitive snapshot represents faithfully** (`{slides:[{id,text,mediaIds}], selectedId,
+  visibility, repostOfId}`) — no deep graph, no polymorphic serializer, a trivially-total round-trip.
+- **Gate the rest, don't drop it silently.** A draft carrying rich on-canvas content is treated as *not yet
+  persistable*: `resolve` purges any stale stored draft and writes nothing, so a restore is NEVER lossy. A partial
+  restore that silently drops the user's stickers/filters would be worse than no restore — the CLAUDE.md "announces a
+  state it doesn't serve" trap (the StoryViewer legacy-text lesson) applies to persistence too. The `[~]` parity
+  marker + a tracked follow-up carry the deferred half; the store+resolver+VM seam the follow-up plugs into ships now.
+- **Reuse the proven SSOT split.** Chat drafts already model this exactly: model in `core:model` (`ConversationDraft`),
+  store in `sdk-core` (`ConversationDraftStore`, `TestDataStores` harness), pure resolver in the feature
+  (`DraftAutosave`). Mirroring it (snapshot/`StoryComposerDraftStore`/`StoryComposerAutosave`) meant zero new DI/test
+  infra to invent — `SdkModule` already had the DataStore+`Json` provider pattern, sdk-core already had `TestDataStores`.
+- **Restore must be pristine-only.** The load is async and can resolve after the first keystroke; gate restore on
+  `deckIsPristine` (single blank slide) so it can never clobber work already begun — iOS `DraftAutosave.restore`'s
+  `!isEditing && currentDraft.isBlank()` rule, ported.
+
 ## 2026-08-26 — the repost AUTHOR half is a pure LINK on Android, and a "lost-media" slice is currently unreachable (slice `story-composer-repost-link`)
 Two findings from carving the repost author half:
 - **The author side needs no composer-side badge.** iOS clones a `isLocked` text-object badge into the composer and then

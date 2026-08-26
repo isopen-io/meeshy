@@ -38,6 +38,8 @@ import me.meeshy.sdk.notification.DataStoreNotificationPreferencesStore
 import me.meeshy.sdk.notification.NotificationPreferencesStore
 import me.meeshy.sdk.privacy.DataStorePrivacyPreferencesStore
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
+import me.meeshy.sdk.story.DataStoreStoryComposerDraftStore
+import me.meeshy.sdk.story.StoryComposerDraftStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.SharedPrefsEmojiUsageStore
 import me.meeshy.sdk.lock.ConversationLockStore
@@ -197,6 +199,19 @@ object SdkModule {
             context.preferencesDataStoreFile("meeshy_conversation_drafts")
         }
         return DataStoreConversationDraftStore(dataStore, json)
+    }
+
+    @Provides
+    @Singleton
+    fun providesStoryComposerDraftStore(
+        @ApplicationContext context: Context,
+        json: Json,
+    ): StoryComposerDraftStore {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
+            context.preferencesDataStoreFile("meeshy_story_composer_draft")
+        }
+        return DataStoreStoryComposerDraftStore(dataStore, json)
     }
 
     @Provides

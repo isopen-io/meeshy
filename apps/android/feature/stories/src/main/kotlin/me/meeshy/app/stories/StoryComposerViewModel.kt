@@ -25,7 +25,9 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.story.StoryComposerDraftStore
 import me.meeshy.sdk.story.StoryRepository
+import java.time.Instant
 import java.util.UUID
 import javax.inject.Inject
 
@@ -249,6 +251,7 @@ class StoryComposerViewModel @Inject constructor(
     private val mediaUploader: StoryMediaUploader,
     private val mediaUploadQueue: MediaUploadQueue,
     private val workManager: WorkManager,
+    private val draftStore: StoryComposerDraftStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoryComposerUiState())
@@ -257,6 +260,58 @@ class StoryComposerViewModel @Inject constructor(
     /** One-shot signal that a story was queued — the screen dismisses on it. */
     private val _published = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val published: SharedFlow<Unit> = _published.asSharedFlow()
+
+    /**
+     * Restores a persisted composer draft when the screen opens — iOS `onAppear` +
+     * `StoryDraftStore.load`. Cache-first: the load is silent and only seeds the deck
+     * while the composer is still **pristine** (a single blank slide), so it never
+     * clobbers work the user has already begun in the async gap, and a corrupt/empty
+     * stored blob is inert. The audience and repost link are re-armed alongside the
+     * slides; the draft mirror is re-pointed at the restored selection.
+     */
+    fun onEnterComposer() {
+        viewModelScope.launch {
+            val stored = draftStore.load()
+            val snapshot = StoryComposerAutosave.restore(
+                stored = stored,
+                deckIsPristine = StoryComposerAutosave.deckIsPristine(_state.value.deck),
+            ) ?: return@launch
+            val deck = snapshot.toDeck() ?: return@launch
+            _state.update {
+                it.copy(
+                    deck = deck,
+                    draft = it.draft
+                        .withVisibility(StoryVisibility.fromWire(snapshot.visibility))
+                        .withRepostOf(snapshot.repostOfId),
+                ).mirrorDraftToSelection()
+            }
+        }
+    }
+
+    /**
+     * Persists (or purges) the current composer draft — iOS's save-on-dismiss. Called
+     * when the screen leaves. The pure [StoryComposerAutosave] decides: a restorable
+     * simple draft is saved, an emptied or no-longer-persistable draft purges any stored
+     * one, and an unchanged draft writes nothing. Rich on-canvas content is not yet
+     * persistable, so a draft carrying it purges rather than restores lossily.
+     */
+    fun persistDraft() {
+        viewModelScope.launch {
+            val current = _state.value
+            val action = StoryComposerAutosave.resolve(
+                deck = current.deck,
+                visibility = current.draft.visibility,
+                repostOfId = current.draft.repostOfId,
+                nowIso = Instant.now().toString(),
+                previous = draftStore.load(),
+            )
+            when (action) {
+                is StoryDraftPersist.Save -> draftStore.save(action.snapshot)
+                StoryDraftPersist.Clear -> draftStore.clear()
+                StoryDraftPersist.None -> Unit
+            }
+        }
+    }
 
     /**
      * Routes the text field: while a text element is selected the keystrokes rewrite
@@ -957,6 +1012,7 @@ class StoryComposerViewModel @Inject constructor(
                     storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn)
                 }
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
+                draftStore.clear()
                 _state.update { StoryComposerUiState() }
                 _published.tryEmit(Unit)
             } catch (e: CancellationException) {
