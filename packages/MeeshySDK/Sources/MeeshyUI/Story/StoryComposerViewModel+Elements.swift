@@ -239,7 +239,7 @@ extension StoryComposerViewModel {
             textStyle: "classic",
             textColor: "FFFFFF",
             textAlign: "center",
-            sourceLanguage: Self.defaultSourceLanguage
+            sourceLanguage: declaredContentLanguage
         )
         var effects = currentEffects
         var texts = effects.textObjects
@@ -363,7 +363,7 @@ extension StoryComposerViewModel {
             textColor: "FFFFFF",
             textAlign: "center",
             backgroundStyle: .solid(hex: MeeshyColors.brandPrimaryHex),
-            sourceLanguage: Self.defaultSourceLanguage
+            sourceLanguage: declaredContentLanguage
         )
         obj.referenceUserId = userId
         var effects = currentEffects
@@ -387,7 +387,8 @@ extension StoryComposerViewModel {
     @discardableResult
     func addLocation(place: SharedPlace) -> StoryLocationObject {
         let offset = Double(currentEffects.locationObjects.count % 5) * 0.04
-        let badge = StoryLocationObject(place: place, x: 0.5, y: 0.8 - offset)
+        let badge = StoryLocationObject(place: place, x: 0.5, y: 0.8 - offset,
+                                        sourceLanguage: declaredContentLanguage)
         var effects = currentEffects
         effects.locationObjects.append(badge)
         currentEffects = effects
@@ -412,7 +413,9 @@ extension StoryComposerViewModel {
     func addSticker(emoji: String, provider: String? = nil) -> StorySticker {
         let count = currentEffects.stickerObjects?.count ?? 0
         let offset = Double(count % 5) * 0.04
-        let sticker = StorySticker(emoji: emoji, provider: provider, x: 0.5 + offset, y: 0.5 + offset)
+        let sticker = StorySticker(emoji: emoji, provider: provider,
+                                   sourceLanguage: declaredContentLanguage,
+                                   x: 0.5 + offset, y: 0.5 + offset)
         var effects = currentEffects
         var stickers = effects.stickerObjects ?? []
         stickers.append(sticker)
@@ -498,7 +501,7 @@ extension StoryComposerViewModel {
             // (user report 2026-05-27).
             isBackground: shouldBeBackground,
             loop: shouldBeBackground,
-            sourceLanguage: Self.defaultSourceLanguage
+            sourceLanguage: declaredContentLanguage
         )
         var medias = targetEffects.mediaObjects ?? []
         medias.append(obj)
@@ -609,7 +612,7 @@ extension StoryComposerViewModel {
             waveformSamples: sound.waveform,
             isBackground: hasExistingBackgroundAudio ? nil : true,
             duration: sound.durationSeconds.map { Float($0) },
-            sourceLanguage: Self.defaultSourceLanguage,
+            sourceLanguage: declaredContentLanguage,
             // Le titre de l'auteur, quand il existe, sert de nom de piste dans
             // la timeline. Sans titre on laisse `nil` : le libellé par défaut se
             // compose à l'affichage, dans la langue du lecteur.
@@ -646,7 +649,7 @@ extension StoryComposerViewModel {
             volume: 1.0,
             waveformSamples: [],
             isBackground: hasExistingBackgroundAudio ? nil : true,
-            sourceLanguage: Self.defaultSourceLanguage
+            sourceLanguage: declaredContentLanguage
         )
         var effects = currentEffects
         var audios = effects.audioPlayerObjects ?? []
@@ -695,6 +698,31 @@ extension StoryComposerViewModel {
         zIndexMap.removeValue(forKey: id)
     }
 
+    /// **E3 (#3888) — l'élément NON-TEXTE sélectionné supporte-t-il le choix de
+    /// langue ?** Le texte a déjà sa pastille dans l'éditeur inline ; média,
+    /// audio, sticker et lieu passent par le contrôle overlay. `nil` sélection
+    /// ⇒ `false`.
+    var selectedElementSupportsLanguage: Bool {
+        guard let id = selectedElementId else { return false }
+        let fx = currentEffects
+        if fx.mediaObjects?.contains(where: { $0.id == id }) == true { return true }
+        if fx.audioPlayerObjects?.contains(where: { $0.id == id }) == true { return true }
+        if fx.stickerObjects?.contains(where: { $0.id == id }) == true { return true }
+        if fx.locationObjects.contains(where: { $0.id == id }) { return true }
+        return false
+    }
+
+    /// La langue d'origine de l'élément non-texte sélectionné, ou `nil`.
+    var selectedElementSourceLanguage: String? {
+        guard let id = selectedElementId else { return nil }
+        let fx = currentEffects
+        if let m = fx.mediaObjects?.first(where: { $0.id == id }) { return m.sourceLanguage }
+        if let a = fx.audioPlayerObjects?.first(where: { $0.id == id }) { return a.sourceLanguage }
+        if let st = fx.stickerObjects?.first(where: { $0.id == id }) { return st.sourceLanguage }
+        if let l = fx.locationObjects.first(where: { $0.id == id }) { return l.sourceLanguage }
+        return nil
+    }
+
     func updateElementLanguage(elementId: String, language: String) {
         var effects = currentEffects
 
@@ -712,6 +740,16 @@ extension StoryComposerViewModel {
            let idx = audios.firstIndex(where: { $0.id == elementId }) {
             audios[idx].sourceLanguage = language
             effects.audioPlayerObjects = audios
+        }
+
+        if var stickers = effects.stickerObjects,
+           let idx = stickers.firstIndex(where: { $0.id == elementId }) {
+            stickers[idx].sourceLanguage = language
+            effects.stickerObjects = stickers
+        }
+
+        if let idx = effects.locationObjects.firstIndex(where: { $0.id == elementId }) {
+            effects.locationObjects[idx].sourceLanguage = language
         }
 
         currentEffects = effects

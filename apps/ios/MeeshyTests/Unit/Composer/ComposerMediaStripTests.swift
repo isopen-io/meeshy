@@ -81,7 +81,7 @@ final class ComposerMediaStripTests: XCTestCase {
     func test_leToggle_estGateSurLaQualification() throws {
         let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
         XCTAssertTrue(
-            src.contains("ifdocumentComposesReel{documentForcePlainPostToggle}"),
+            src.contains("ifdocumentComposesReel{documentDestinationSelector}"),
             "L'interrupteur POST↔RÉEL ne se peint que quand la composition QUALIFIE (loi 4) — un contrôle "
                 + "sans effet est absent, jamais grisé."
         )

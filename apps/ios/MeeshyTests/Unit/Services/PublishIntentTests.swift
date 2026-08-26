@@ -204,6 +204,25 @@ final class PublishIntentTests: XCTestCase {
         XCTAssertEqual(intentionDocument(originalLanguage: "es").originalLanguage, "es")
     }
 
+    /// **E2 (#3887) — le MÉDIA de fond porte SA propre langue, distincte du
+    /// TEXTE.** Un audio joint à un document ne SUPPLANTE plus la langue
+    /// déclarée du texte : le texte garde la sienne (déclarée), le média garde
+    /// la sienne (transcription), et le Prisme les résout séparément.
+    func test_uneLangueDeMedia_distincteDeLaLangueDuTexte() {
+        let intent = intentionDocument(
+            originalLanguage: "fr",
+            transcription: MobileTranscriptionPayload(text: "Salaam", language: "wo")
+        )
+        XCTAssertEqual(
+            intent.originalLanguage, "fr",
+            "Le TEXTE du document garde la langue DÉCLARÉE — un audio joint ne la supplante plus."
+        )
+        XCTAssertEqual(
+            intent.mobileTranscription?.language, "wo",
+            "Le MÉDIA garde SA propre langue (la transcription), distincte du texte, résolue à part."
+        )
+    }
+
     // MARK: - Lecture de la source de production
 
     private var racineApp: URL {

@@ -823,6 +823,16 @@ public extension FeedPost {
     /// Mirrors `isReel`; used by `PostDetailView` to render the inline canvas.
     var isStory: Bool { (type ?? "").uppercased() == "STORY" }
 
+    /// **Comment ce post affiche ses médias (directive 2026-08-27).** Dérivé du
+    /// TYPE via `PostMediaPresentation.default(for:)` — carousel pour un POST,
+    /// diapositives horizontales pour un RÉEL. Le poste DÉFINIT ainsi son
+    /// affichage ; aucun autre choix ni interface pour l'instant, un futur champ
+    /// stocké pourra surcharger sans changer les appelants (les renderers lisent
+    /// ce point unique).
+    var mediaPresentation: PostMediaPresentation {
+        PostMediaPresentation.default(for: PostType(rawValue: (type ?? "").uppercased()) ?? .post)
+    }
+
     /// Media surfaced first when the reel opens full-screen: the first video,
     /// else the first audio, else the first image. `nil` when the post is not a
     /// reel or carries no playable/visual media.
