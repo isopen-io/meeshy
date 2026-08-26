@@ -368,8 +368,8 @@ struct EmojiPickerSheet: View {
                 .navigationTitle(Text(title))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button(String(localized: "emoji.close", defaultValue: "Fermer")) { dismiss() }
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
                     }
                 }
         }

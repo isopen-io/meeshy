@@ -116,10 +116,11 @@ final class SheetToolbarSemanticsTests: XCTestCase {
         }
 
         let expected: Set<String> = [
-            "AudioPostComposerView.swift",
+            // AudioPostComposerView.swift + EmojiPickerSheet.swift retirés au
+            // LOT 1-A : leurs feuilles custom sont passées à `.cancellationAction`
+            // (cf. `test_customComposerSheets_carryASemanticCancel`).
             "CreateShareLinkView.swift",
             "CreateTrackingLinkView.swift",
-            "EmojiPickerSheet.swift",
             "InviteFriendsSheet.swift",
             "MagicLinkView.swift",
             "MyStoriesView.swift",
@@ -144,5 +145,49 @@ final class SheetToolbarSemanticsTests: XCTestCase {
                 "en 4.6 précisément pour que sa paire appartienne au système."
             )
         }
+    }
+
+    // MARK: - A (#3880) — chrome uniforme des feuilles de création CUSTOM
+
+    /// **Les feuilles de création CUSTOM du composer portent une SORTIE
+    /// sémantique** — un `.cancellationAction` (le Cancel), placé par le système
+    /// donc miroité en RTL et lié à Échap, jamais un côté de barre déprécié. Le
+    /// confirm reste l'affordance CONTEXTUELLE de chaque feuille : la sélection
+    /// d'une ligne pour les pickers (langue, lieu — `LocationPickerView` livre
+    /// déjà exactement ce modèle), la barre d'action du bas pour le composer
+    /// audio. C'est la doctrine que `EditPostSheet` et `LocationPickerView`
+    /// embarquent déjà. Les pickers NATIFS (photo `.photosPicker`, caméra,
+    /// fichier `.fileImporter`) sont HORS périmètre — Apple impose leur chrome.
+    ///
+    /// Garde NÉGATIVE-adjacente : les garde-fouls `struct …` empêchent qu'un
+    /// chemin faux passe au vert sur une source vide.
+    func test_customComposerSheets_carryASemanticCancel() throws {
+        // AudioPostComposerView.swift porte DEUX feuilles custom — le composer
+        // audio ET son sélecteur de langue — donc DEUX sorties sémantiques.
+        let audio = try readSource("Meeshy/Features/Main/Views/AudioPostComposerView.swift")
+        XCTAssertTrue(audio.contains("struct AudioPostComposerView"), "AudioPostComposerView introuvable ou vide")
+        XCTAssertTrue(audio.contains("struct AudioLanguagePickerView"), "AudioLanguagePickerView introuvable ou vide")
+        XCTAssertEqual(
+            audio.components(separatedBy: "placement: .cancellationAction").count - 1, 2,
+            "AudioPostComposerView.swift doit porter DEUX `.cancellationAction` — le composer audio et son " +
+            "sélecteur de langue. En retirer un rendrait une feuille sans Cancel sémantique, ou le rangerait " +
+            "sur un côté de barre déprécié (non miroité en RTL)."
+        )
+
+        let emoji = try readSource("Meeshy/Features/Main/Views/EmojiPickerSheet.swift")
+        XCTAssertTrue(emoji.contains("struct EmojiPickerSheet"), "EmojiPickerSheet introuvable ou vide")
+        XCTAssertTrue(
+            emoji.contains("placement: .cancellationAction"),
+            "EmojiPickerSheet doit porter un `.cancellationAction` — un tap sur un emoji sélectionne (le " +
+            "confirm), le Cancel ferme sans insérer."
+        )
+
+        let location = try readSource("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        XCTAssertTrue(location.contains("struct LocationPickerView"), "LocationPickerView introuvable ou vide")
+        XCTAssertTrue(
+            location.contains("placement: .cancellationAction"),
+            "LocationPickerView — la référence déjà livrée — doit garder son `.cancellationAction` : un tap " +
+            "sur un lieu confirme, le Cancel ferme sans choisir."
+        )
     }
 }

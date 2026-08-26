@@ -113,8 +113,8 @@ struct AudioPostComposerView: View {
             .navigationTitle(String(localized: "Post audio", defaultValue: "Post audio"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(String(localized: "Annuler", defaultValue: "Annuler")) {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) {
                         cancelAndDismiss()
                     }
                     .foregroundColor(theme.textSecondary)
@@ -825,8 +825,8 @@ struct AudioLanguagePickerView: View {
             .navigationTitle(Text(title))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(String(localized: "Fermer", defaultValue: "Fermer")) {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) {
                         dismiss()
                     }
                     .foregroundColor(MeeshyColors.indigo500)
