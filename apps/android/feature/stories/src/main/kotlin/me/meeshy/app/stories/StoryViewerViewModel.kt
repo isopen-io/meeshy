@@ -188,6 +188,13 @@ data class StorySlideView(
      * aspect-fill — a video background or a legacy/flat story never carries one yet.
      */
     val backgroundTransform: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform.IDENTITY,
+    /**
+     * The locked repost attribution shown after the author's name when this slide
+     * is a repost of someone else's story (repost icon + `@handle`, no "via"),
+     * resolved once at projection time via [StoryRepostAttribution]. `null` for a
+     * story that is not a repost — the header then shows only the author's name.
+     */
+    val repostAttribution: StoryRepostAttribution? = null,
 )
 
 /**
@@ -701,6 +708,7 @@ class StoryViewerViewModel @Inject constructor(
             background = storyEffects?.background
                 ?.takeIf { it.isNotBlank() }
                 ?.let { StoryBackgroundValue.parse(it) },
+            repostAttribution = StoryRepostAttribution.resolve(this),
         )
     }
 

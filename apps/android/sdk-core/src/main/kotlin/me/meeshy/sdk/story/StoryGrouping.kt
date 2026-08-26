@@ -78,6 +78,7 @@ public fun ApiPost.toStoryItem(): StoryItem {
         repostOfId = repostOf?.id,
         originalRepostOfId = originalRepostOfId,
         repostAuthorName = repostOf?.author.displayNameOrUsername().takeIf { it.isNotBlank() },
+        repostAuthorUsername = repostOf?.author?.username?.takeIf { it.isNotBlank() },
         visibility = visibility,
         audioUrl = audioUrl,
         isViewed = isViewedByMe == true,

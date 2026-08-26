@@ -358,6 +358,13 @@ data class StoryItem(
     val repostOfId: String? = null,
     val originalRepostOfId: String? = null,
     val repostAuthorName: String? = null,
+    /**
+     * `@handle` of the original author of a repost — shown after the author's name
+     * in the viewer header (repost icon + `@handle`, no "via"). Optional: older
+     * payloads decode as null and the UI falls back to [repostAuthorName]. Port of
+     * `StoryItem.repostAuthorUsername` (StoryModels.swift).
+     */
+    val repostAuthorUsername: String? = null,
     val visibility: String? = null,
     val audioUrl: String? = null,
     val isViewed: Boolean = false,

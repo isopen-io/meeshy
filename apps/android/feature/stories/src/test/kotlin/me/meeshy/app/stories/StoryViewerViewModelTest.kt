@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.SocketStoryDeletedData
@@ -157,6 +158,25 @@ class StoryViewerViewModelTest {
         )
         assertThat(vm.state.value.current?.background)
             .isEqualTo(me.meeshy.sdk.model.StoryBackgroundValue.Gradient("FF2E63", "08D9D6"))
+    }
+
+    @Test
+    fun `a reposted slide projects the locked repost attribution onto the current slide`() = runTest {
+        val reposted = storyPost("a1", "a", hoursAgo = 1).copy(
+            repostOf = ApiRepostOf(
+                id = "src-story",
+                author = ApiAuthor(id = "orig", username = "alice", displayName = "Alice W."),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(reposted))
+        assertThat(vm.state.value.current?.repostAttribution)
+            .isEqualTo(StoryRepostAttribution(handle = "alice"))
+    }
+
+    @Test
+    fun `a non-repost slide carries no repost attribution`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = listOf(storyPost("a1", "a", hoursAgo = 1)))
+        assertThat(vm.state.value.current?.repostAttribution).isNull()
     }
 
     @Test

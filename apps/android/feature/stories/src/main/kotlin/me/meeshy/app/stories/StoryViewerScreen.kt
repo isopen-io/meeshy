@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.automirrored.outlined.Comment
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
@@ -77,8 +78,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -494,15 +498,53 @@ fun StoryViewerScreen(
                     .padding(top = MeeshySpacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = state.authorName,
-                    color = MeeshyPalette.White,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
+                Row(
                     modifier = Modifier
                         .weight(1f)
                         .padding(start = MeeshySpacing.xs),
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = state.authorName,
+                        color = MeeshyPalette.White,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    slide?.repostAttribution?.let { attribution ->
+                        val handle = attribution.handle
+                        val repostLabel = handle
+                            ?.let { stringResource(R.string.stories_reposted_from, it) }
+                            ?: stringResource(R.string.stories_reposted)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .padding(start = MeeshySpacing.xs)
+                                .semantics(mergeDescendants = true) {
+                                    contentDescription = repostLabel
+                                },
+                        ) {
+                            Icon(
+                                Icons.Filled.Repeat,
+                                contentDescription = null,
+                                tint = MeeshyPalette.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(12.dp),
+                            )
+                            handle?.let {
+                                Text(
+                                    text = "@$it",
+                                    color = MeeshyPalette.White.copy(alpha = 0.65f),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(start = 2.dp),
+                                )
+                            }
+                        }
+                    }
+                }
                 if (slide?.isTranslated == true) {
                     TranslatedBadge()
                 }

@@ -5,6 +5,24 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-26 — a reader-side "locked badge" slice is a THREE-LAYER port, and each layer needs its own test (slice `story-viewer-repost-attribution`)
+Porting iOS's repost attribution badge (repost glyph + `@handle` after the author's name) looked like "add a Composable
+if-block", but a faithful port touched three layers, each with a distinct failure mode a test had to pin:
+- **Model + wire**: iOS reads `repostAuthorUsername ?? repostAuthorName`; Android's `StoryItem` had only `repostAuthorName`.
+  Added the optional `repostAuthorUsername` wire field AND populated it in the `ApiPost → StoryItem` mapper
+  (`StoryGrouping.toStoryItem`) from `repostOf.author.username` — a mapper is where a "missing" wire datum actually enters,
+  so that's where the mapping test lives (`StoryGroupingTest`: repost→username, non-repost→nulls, blank-username→name).
+- **Pure decision**: `StoryRepostAttribution.resolve` returns `null` (not a repost → no glyph) vs `StoryRepostAttribution(handle)`
+  (`handle==null` → glyph only). Chose the first NON-blank of username→name (improves on iOS's `??`, which renders a lone `@`
+  for a present-but-empty username). The gate (`repostOfId.isNullOrBlank()`) is the mutation-critical branch: `if (false)`
+  reddens EXACTLY the 4 non-repost tests, the handle-preference tests staying green.
+- **Glue projection**: the viewer VM resolves it once into `StorySlideView.repostAttribution` at projection time (per-slide,
+  because each slide is its own story and only some are reposts) — proven via the existing `StoryViewerViewModel` harness
+  (`.copy(repostOf = ApiRepostOf(...))` on a wire post → `state.current?.repostAttribution`).
+Lesson: when a "just show a badge" parity gap spans model→mapper→resolver→VM→Compose, the Compose layer is the exempt tip;
+the value is in testing the mapper (where the datum enters) and the resolver (where the decision lives) SEPARATELY — a single
+VM test would pass even if the mapper silently dropped the username.
+
 ## 2026-08-26 — the scope gate must diff against `origin/main`, not the local `main` ref (slice `story-element-context-menu`)
 Branching with `git checkout -B <slice> origin/main` bases the slice on the freshly-fetched remote, but the LOCAL `main`
 ref stays wherever it last was — here dozens of commits behind. So `git diff main...HEAD` (or `git diff --cached main`)
