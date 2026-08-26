@@ -3813,8 +3813,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       conversion incl. every decay branch; 4 VM projection: framed image / default-framed image / video / no-bg).
       Mutation-RED-proven twice (dropping the `-0.5` centre offset reddened EXACTLY the 4 offset tests while
       scale/rotation stayed green; forcing the VM projection to IDENTITY reddened EXACTLY the framed-image test).
-      Pending: composer AUTHORING carries the per-slide `StoryCanvasTransform` onto the published background
-      object's `x`/`y`/`scale` (the write half); background VIDEO framing at render (the video player path).
+      **Composer AUTHORING of a background IMAGE's framing done** (`story-composer-background-image-transform`):
+      closes the author→reader loop the reader slice opened. The composer already persisted the background's
+      pan/zoom as a per-slide `StoryCanvasTransform` (viewport **pixels**: scale + offsetX/Y px) but published the
+      background object with the bare `x`/`y`/`scale` defaults — a story framed by an Android author rendered
+      un-framed on every client (including Android's own reader). A pure `StoryBackgroundFraming` value + the
+      conversion `StoryCanvasTransform.toBackgroundFraming(w,h)` project the pixel offset onto the wire's
+      **normalised** coordinates (`x = 0.5 + offsetX / canvasWidth`), the exact inverse of the reader's
+      `StoryBackgroundObjectTransform.from` — proven by a round-trip test. Total on a degenerate input (a
+      not-yet-measured/non-finite canvas → centred axis; non-finite offset → centre; non-finite/non-positive
+      scale → 1×). The wrinkle NOTES flagged — the canvas width isn't retained in the VM — is closed by capturing
+      the measured size in `onCanvasTransform` (the sole producer of a non-identity transform, so the size that
+      made the offset is always the size that inverts it); it rides on `StoryComposerUiState.canvasWidthPx/HeightPx`.
+      `StoryBackgroundMedia.framing` is honoured **only for an image** (a video keeps IDENTITY — the reader's video
+      render path is still the scoped-out follow-up); and only when the designated background IS the media the canvas
+      frames (its first resolved attachment), so a pan applied to one image never mis-frames a differently-designated
+      background. +14 tests (11 `StoryBackgroundFramingTest` pure conversion incl. every degrade branch + isIdentity
+      + reader round-trip; 3 draft image-framed/image-default/video-ignores; 4 VM publish framed/unframed/
+      designated≠framed/video). Mutation-RED-proven ×3 (forcing `x=0.5` reddened exactly the offset+round-trip tests;
+      dropping the image-only guard reddened exactly the 2 video tests; neutering the designated-vs-framed guard
+      reddened exactly that 1 test). Pending: background VIDEO framing at render (the video player path).
 - [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
       (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —
       `StoryFilterMatrix.baseMatrix(StoryFilter)` → a `StoryColorMatrix` (4×5 `List<Float>`, value

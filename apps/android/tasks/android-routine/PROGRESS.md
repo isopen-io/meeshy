@@ -2,6 +2,61 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-26 **the composer AUTHORS a background IMAGE's framing** (slice
+> `story-composer-background-image-transform`, feature-parity E. Stories — "Backgrounds: … image", the WRITE half
+> that closes the author→reader loop the prior slice opened). Before this, the composer persisted the background's
+> pan/zoom as a per-slide `StoryCanvasTransform` (viewport **pixels**: scale + offsetX/Y px) but published the
+> background `StoryMediaObject` with the bare `x`/`y`/`scale` defaults — a story an Android author framed rendered
+> UN-framed on every client, its own reader (shipped the prior slice) included. This was the explicit "Next" from
+> the reader-slice entry below.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3525 (`claude/brave-archimedes-nu4voa`,
+> web message-grouping) and #3523 (`feat/presence-privacy`, gateway/web/iOS) — neither a `claude/apps/android/<slice-id>`
+> slice from this routine, no `apps/android` collision. Prior slice (`story-viewer-background-media-transform`, #3524)
+> already merged (it is `main`'s HEAD `4b9acd3f`). Branched off freshly-fetched `origin/main`.
+>
+> **The fix — one pure conversion + one wire-mapping field + one VM capture/projection.** (1) `StoryBackgroundFraming`
+> (`:feature:stories`, pure value `{x,y,scale}` + `IDENTITY` matching `StoryMediaObject`'s field defaults) and
+> `StoryCanvasTransform.toBackgroundFraming(w,h)` — projects the pixel offset onto the wire's NORMALISED coords
+> (`x = 0.5 + offsetX / canvasWidth`), the exact inverse of the reader's `StoryBackgroundObjectTransform.from`
+> (proven by a round-trip test). Total on degenerate input (not-yet-measured/non-finite canvas → centred axis;
+> non-finite offset → centre; non-finite/non-positive scale → 1×). Division done in DOUBLE precision (a float
+> divide-then-widen lost >1e-9, reddening the two degenerate-axis tests on the first run — fixed by
+> `offset.toDouble() / size.toDouble()`). (2) `StoryBackgroundMedia.framing` (default IDENTITY); `toMediaObject()`
+> emits `x`/`y`/`scale` from it **only for an image** (a video keeps IDENTITY — the reader's video render path is
+> still the scoped-out follow-up, so authoring framing onto a video would be a wire value no client honours). (3)
+> The NOTES wrinkle — canvas width not retained in the VM — closed by capturing the measured size in
+> `onCanvasTransform` (the SOLE producer of a non-identity transform, so the size that made the offset is always the
+> size that inverts it) onto `StoryComposerUiState.canvasWidthPx/HeightPx`; `resolveBackgroundFraming` projects it
+> only when the designated background IS the media the canvas frames (its first resolved attachment), so a pan
+> applied to one image never mis-frames a differently-designated background.
+>
+> **Tests: +14** — 11 `StoryBackgroundFramingTest` (identity; pan-right +x; pan-left/up −x/−y; zoom→scale; degenerate
+> width→centred x; degenerate height→centred y; non-finite scale→1×; non-positive scale→1×; non-finite offset→centre;
+> isIdentity component sweep; reader round-trip), 3 `StoryComposerDraftTest` (image carries framing; unframed image→
+> defaults; video ignores framing), 4 `StoryComposerViewModelTest` (publish framed image; publish unframed; designated≠
+> framed→identity; video→identity after a gesture). Mutation-RED-proven ×3: forcing `x=0.5` reddened EXACTLY the
+> offset+round-trip tests (5 failed) while scale/degenerate-scale stayed green; `framed = framing` (dropping the
+> image-only guard) reddened EXACTLY the 2 video tests; neutering the designated-vs-framed guard reddened EXACTLY
+> that 1 test.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** `sdkmanager` installed android-35;
+> AGP then auto-installed pristine `android-37.0`; the first `./gradlew` hash-errored on `android-37`; `cp -r
+> android-37.0 android-37` + `source.properties` `AndroidVersion.ApiLevel=37.0→37` (note the FULL key, not bare
+> `ApiLevel`), keeping BOTH dirs, resolved it (the documented recipe).
+>
+> **Verified**: targeted suites green (`StoryBackgroundFramingTest`/`StoryComposerDraftTest`/`StoryComposerViewModelTest`/
+> `StoryCanvasTransformTest`), then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973
+> tasks, the CI-mirror gate) **BUILD SUCCESSFUL in 5m 21s** before any push. Reviewer PASS. Diff is `apps/android`
+> only (1 new prod file +
+> 2 amended prod files + 1 amended prod VM + 2 amended test files + 1 new test file + tracking docs). Verdict:
+> **PASS** — a pure px→normalised conversion + a wire-map field + a VM capture/projection; behavioural tests through
+> the public API; no production logic outside `apps/android`.
+>
+> **Next**: background VIDEO framing at render (the video player path) — the last pending piece of §E "Backgrounds";
+> the composer already frames only images, so this is a reader-side slice (honour a video background object's
+> `x`/`y`/`scale`/`rotation` on the ExoPlayer surface). Scout `feature-parity.md` read-only before branching.
+
 > On 2026-08-26 **the viewer honours a background IMAGE's framing transform** (slice
 > `story-viewer-background-media-transform`, feature-parity E. Stories — "Backgrounds: … image", the reader half of
 > the pending "background IMAGE with transform" item). Before this, the viewer drew any background image as a plain
