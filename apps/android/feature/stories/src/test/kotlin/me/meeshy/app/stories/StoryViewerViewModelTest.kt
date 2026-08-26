@@ -603,7 +603,7 @@ class StoryViewerViewModelTest {
     }
 
     @Test
-    fun `a background VIDEO with framing is not reframed this slice (identity)`() = runTest {
+    fun `a background VIDEO with author framing projects that transform onto the slide`() = runTest {
         val post = storyPost("a1", "a", hoursAgo = 1).copy(
             media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/bg.mp4", mimeType = "video/mp4")),
             storyEffects = StoryEffects(
@@ -622,7 +622,74 @@ class StoryViewerViewModelTest {
         )
         val vm = viewModel(startUserId = "a", posts = listOf(post))
 
+        val transform = vm.state.value.current?.backgroundTransform
         assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
+        assertThat(transform?.scale).isWithin(1e-6f).of(2.0f)
+        assertThat(transform?.offsetXFraction).isWithin(1e-6f).of(0.3f)
+        assertThat(transform?.offsetYFraction).isEqualTo(0f)
+        assertThat(transform?.isIdentity).isFalse()
+    }
+
+    @Test
+    fun `a background VIDEO with default framing leaves the transform at identity`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/bg.mp4", mimeType = "video/mp4")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/bg.mp4",
+                        mediaType = "video",
+                        isBackground = true,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
+    fun `a legacy video-only story carries no framing (identity), never the object's transform`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/legacy.mp4", mimeType = "video/mp4")),
+            storyEffects = null,
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/legacy.mp4")
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
+    fun `a background VIDEO object without its own url does not project framing from a fallback video`() = runTest {
+        // The framing rides only on the object's OWN mediaURL. A modern isBackground
+        // object with a null mediaURL but a matching fallback video item must NOT
+        // steal that item's pixels to reframe with an unrelated object's transform.
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/fallback.mp4", mimeType = "video/mp4")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = null,
+                        mediaType = "video",
+                        isBackground = true,
+                        x = 0.9,
+                        scale = 3.0,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/fallback.mp4")
         assertThat(vm.state.value.current?.backgroundTransform)
             .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
     }

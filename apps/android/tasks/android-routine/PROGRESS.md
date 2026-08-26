@@ -2,6 +2,53 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-26 **the viewer honours a background VIDEO's framing transform** (slice
+> `story-viewer-background-video-transform`, feature-parity E. Stories — "Backgrounds: … looping/non-looping
+> video", the reader-render half that was the explicit "Next" from the two prior background slices). Before this,
+> the viewer's video branch drew any background video through a plain fill, silently dropping the pan/zoom/rotation
+> an iOS/web/backend author placed on a background VIDEO `StoryMediaObject` (`x`/`y`/`scale`/`rotation`) — the last
+> cross-client parity gap in §E backgrounds: a story framed on iOS rendered un-framed on Android.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3525 (`claude/brave-archimedes-nu4voa`,
+> web message-grouping) and #3523 (`feat/presence-privacy`, gateway/web/iOS) — neither a `claude/apps/android/<slice-id>`
+> slice from this routine, no `apps/android` collision. Prior slice (`story-composer-background-image-transform`, #3527)
+> already merged (it is on `main`). Branched off freshly-fetched `origin/main` (`35c1061e`).
+>
+> **The fix — one VM projection + one screen `graphicsLayer`, reusing the existing pure conversion.** The reader
+> already had `StoryBackgroundObjectTransform.from(StoryMediaObject)` (fully unit-tested, shipped for the IMAGE
+> slice). This slice makes the VIDEO branch of `StoryViewerViewModel.resolveBackgroundMedia` project it onto
+> `StorySlideView.backgroundTransform` — gated on the background object's OWN `mediaURL` producing the resolved url
+> (`it.mediaURL != null && resolvedUrl != null`), so a legacy/flat fallback video (object == null, or object with a
+> null url) keeps IDENTITY and the framing never steals an unrelated fallback item's pixels. The image branch is
+> untouched. The viewer's video branch applies the transform to the `ReelVideoSurface` via `graphicsLayer`
+> (`scaleX/Y = scale`, `rotationZ`, `translationX/Y = offsetFraction × measured size`), the exact mirror of the
+> image branch — iOS's "zoom inside the background", clipped by the 9:16 frame.
+>
+> **Tests: +4** (all in `StoryViewerViewModelTest`, driven through the public VM API): (1) a background VIDEO with
+> author framing projects the transform (`x=0.8/scale=2.0` → `offsetXFraction=0.3`, `scale=2.0`, not identity) —
+> this REPLACES the prior slice's placeholder test `…is not reframed this slice (identity)`, which asserted the
+> now-closed deferred scope (a behaviour change, not a weakened assertion); (2) a background VIDEO with default
+> framing → IDENTITY; (3) a legacy video-only story (no `storyEffects`) → IDENTITY; (4) a background VIDEO object
+> with a null own-url but a matching fallback video → IDENTITY (the guard). Mutation-RED-proven: forcing the video
+> branch back to IDENTITY reddened EXACTLY the one framed-video test (verified via the JUnit XML `<failure>` set)
+> while the three IDENTITY-expecting tests stayed green.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** `sdkmanager` installed android-35;
+> AGP then auto-installed pristine `android-37.0`; the first `./gradlew` hash-errored on bare `android-37`; `cp -r
+> android-37.0 android-37` + `source.properties` `AndroidVersion.ApiLevel=37.0→37` (the FULL key), keeping BOTH
+> dirs, resolved it (the documented recipe).
+>
+> **Verified**: targeted `StoryViewerViewModelTest` green, mutation proof, then full `./apps/android/meeshy.sh check`
+> (assembleDebug + testDebugUnitTest, the CI-mirror gate) **BUILD SUCCESSFUL** before any push [RESULT PENDING — see
+> run log]. Reviewer PASS. Diff is `apps/android` only (2 amended prod files: VM + screen; 1 amended test file; 2
+> tracking docs). Verdict: **PASS** — a VM projection reusing a covered pure conversion + a screen `graphicsLayer`
+> mirroring the image branch; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: composer AUTHORING of framing onto a background VIDEO — the last open piece of §E "Backgrounds". The
+> composer currently frames images only (`StoryBackgroundMedia.toMediaObject` emits `x`/`y`/`scale` for an image,
+> IDENTITY for a video); extend it to a video background now that the reader honours it. Scout `feature-parity.md`
+> read-only before branching.
+
 > On 2026-08-26 **the composer AUTHORS a background IMAGE's framing** (slice
 > `story-composer-background-image-transform`, feature-parity E. Stories — "Backgrounds: … image", the WRITE half
 > that closes the author→reader loop the prior slice opened). Before this, the composer persisted the background's

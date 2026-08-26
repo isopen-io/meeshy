@@ -379,11 +379,24 @@ fun StoryViewerScreen(
     ) {
         when {
             slide?.backgroundVideoUrl != null -> {
+                val bg = slide.backgroundTransform
                 ReelVideoSurface(
                     mediaUrl = slide.backgroundVideoUrl,
                     isActive = true,
                     muted = false,
-                    modifier = Modifier.fillMaxSize(),
+                    // Aspect-fill base, then the author's pan/zoom framing on top — the
+                    // offset fractions scale to the measured canvas so it is resolution-
+                    // independent (mirrors the image branch and iOS's "zoom inside the
+                    // background", clipped by the 9:16 frame).
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = bg.scale
+                            scaleY = bg.scale
+                            rotationZ = bg.rotationDegrees
+                            translationX = bg.offsetXFraction * size.width
+                            translationY = bg.offsetYFraction * size.height
+                        },
                 )
             }
             slide?.imageUrl != null -> {

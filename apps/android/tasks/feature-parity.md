@@ -3832,7 +3832,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       + reader round-trip; 3 draft image-framed/image-default/video-ignores; 4 VM publish framed/unframed/
       designated≠framed/video). Mutation-RED-proven ×3 (forcing `x=0.5` reddened exactly the offset+round-trip tests;
       dropping the image-only guard reddened exactly the 2 video tests; neutering the designated-vs-framed guard
-      reddened exactly that 1 test). Pending: background VIDEO framing at render (the video player path).
+      reddened exactly that 1 test). **Reader honours a background VIDEO's framing transform done**
+      (`story-viewer-background-video-transform`): closes the scoped-out follow-up the two prior slices named — the
+      last cross-client parity gap in §E backgrounds. Before this the viewer drew any background video through a
+      plain fill, silently dropping the pan/zoom/rotation an iOS/web/backend author placed on a background VIDEO
+      `StoryMediaObject` (a video framed on iOS rendered un-framed on Android). `StoryViewerViewModel.resolveBackgroundMedia`'s
+      video branch now projects the same pure `StoryBackgroundObjectTransform.from` onto `StorySlideView.backgroundTransform`,
+      gated on the object's OWN `mediaURL` producing the resolved url (a legacy/flat fallback video keeps IDENTITY —
+      the framing never steals an unrelated fallback item's pixels); the viewer's video branch applies it to the
+      `ReelVideoSurface` via `graphicsLayer` (offset fractions × measured `size`, `rotationZ`, clipped by the 9:16
+      frame), the exact mirror of the image branch. The pure conversion is reused unchanged (already fully covered).
+      +4 tests (video framed → x=0.3/scale=2.0; video default → IDENTITY; legacy video-only → IDENTITY; background
+      video object with null own-url + fallback video → IDENTITY, guard). Mutation-RED-proven (forcing the video
+      branch back to IDENTITY reddened EXACTLY the one framed-video test while the three IDENTITY-expecting tests
+      stayed green). Pending: composer AUTHORING of framing onto a background VIDEO (the composer frames images only).
 - [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
       (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —
       `StoryFilterMatrix.baseMatrix(StoryFilter)` → a `StoryColorMatrix` (4×5 `List<Float>`, value

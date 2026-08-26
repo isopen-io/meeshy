@@ -733,10 +733,21 @@ class StoryViewerViewModel @Inject constructor(
             ?.let { resolveMediaUrl(it, config.socketUrl) }
 
         if (isVideo) {
-            // The background object's transform (framing) is authored on iOS for videos
-            // too, but Android renders a video background through a separate player path;
-            // applying the transform there is a follow-up, so a video keeps a plain fill.
-            return BackgroundMedia(imageUrl = null, videoUrl = resolvedUrl, loop = backgroundObject?.loop ?: true)
+            // The framing rides only on a modern `isBackground` object whose OWN
+            // mediaURL produced the resolved url; a legacy/flat fallback video never
+            // carries one, so it stays a plain aspect-fill (IDENTITY). The viewer
+            // applies the projection to the player surface via `graphicsLayer`, the
+            // exact mirror of the image branch (iOS's "zoom inside the background").
+            val videoTransform = backgroundObject
+                ?.takeIf { it.mediaURL != null && resolvedUrl != null }
+                ?.let { StoryBackgroundObjectTransform.from(it) }
+                ?: StoryBackgroundObjectTransform.IDENTITY
+            return BackgroundMedia(
+                imageUrl = null,
+                videoUrl = resolvedUrl,
+                loop = backgroundObject?.loop ?: true,
+                transform = videoTransform,
+            )
         }
         val imageUrl = resolvedUrl
             ?: media.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.socketUrl) }
