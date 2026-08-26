@@ -507,35 +507,11 @@ final class AttachmentDownloader: ObservableObject {
     }
 }
 
-// MARK: - Cached Play Icon (active when media is locally cached, polls until available)
-struct CachedPlayIcon: View {
-    let fileUrl: String
-    @State private var isCached = false
-
-    var body: some View {
-        Group {
-            if isCached {
-                Image(systemName: "play.circle.fill")
-                    .font(MeeshyFont.relative(36))
-                    .foregroundStyle(.white, Color.black.opacity(0.4))
-                    .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
-                    .transition(.scale(scale: 0.5).combined(with: .opacity))
-            }
-        }
-        .animation(.easeInOut(duration: 0.15), value: isCached)
-        .task {
-            let resolved = MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
-            while !Task.isCancelled && !isCached {
-                let cached = await CacheCoordinator.shared.video.isCached(resolved)
-                if cached {
-                    isCached = true
-                    break
-                }
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
-            }
-        }
-    }
-}
+// `CachedPlayIcon` a vécu ici jusqu'au 2026-08-26 : ZÉRO site d'appel, et sa
+// `.task` bouclait `FileManager.fileExists` toutes les 1,5 s SANS TERMINAISON
+// pour un média jamais mis en cache (auto-DL refusé par la policy) — une mine
+// d'E/S disque périodique qu'un futur montage aurait réarmée sans bruit.
+// Supprimé plutôt que laissé en piège (audit chauffe 2026-08-26).
 
 // MARK: - Audio Media View (shows placeholder until cached, then full player)
 struct AudioMediaView: View, Equatable {

@@ -98,13 +98,37 @@ arrêt passe par `adaptiveOnChange` (l'échelle ne se remonte pas à l'ouverture
 `onAppear` ne rejouerait pas). Garde de source :
 `RootMenuLadderGlowGuardTests`.
 
+### 4. Le balayage complet (second lot de correctifs, même journée)
+
+| # | site | défaut | correctif |
+|---|---|---|---|
+| 1 | `NotificationBadge` (`FloatingButtons.swift`) | halo `repeatForever` dans le chrome FLOTTANT du root (zIndex 100, au-dessus de la liste ET de chaque fil), permanent dès ≥ 1 notification non lue — l'état NOMINAL | halo d'ANNONCE : `task(id: count)` respire `announcementPulseDuration` (6 s) à l'apparition et à chaque changement de compteur, puis détente animée vers le repos |
+| 2 | `SyncPill.dotTimer` | `.onReceive` attaché à la RACINE (Group) : l'`autoconnect` 2 Hz réveillait le main thread en permanence, pill VIDE comprise (l'état nominal), pour un garde qui jetait le tick | abonnement déplacé DANS `pillContent` (n'existe que pill visible) ; publishers recréés à l'apparition (pas de pari sur la reconnexion d'un autoconnect annulé) |
+| 3 | `ConversationScrollControlsView.typingDotTimer` | même forme : timer 2 Hz abonné tant que la pill « retour au bas » est montée (toute lecture d'historique), frappe ou pas | abonnement déplacé sur `typingDotsView`, montée seulement sous `hasTypingIndicator` |
+| 4 | `ScrollMotionVisibility` (`.scrollMotionActive(offset:)`) | `.task(id: offset)` = une `Task` structurée créée + annulée PAR FRAME de scroll (~120/s) sur 4 écrans (liste, fil, feed, root), pour débouncer un booléen | debounce par `DispatchWorkItem` ré-armé en place (patron `focalFlattenWork`) — zéro continuation, zéro hop d'acteur |
+| 5 | `MeeshyMoodBadge` | ressort `repeatForever` sans fin ; la bande de stories étant le premier enfant NON lazy du scroll de la liste, chaque mood respirait HORS ÉCRAN pendant toute la lecture | respiration bornée `breathingDuration` (8 s) puis détente vers le repos — même arbitrage que `SyncPillRotator.maxCycles` |
+| 6 | `CachedPlayIcon` (`ConversationMediaViews.swift`) | code MORT (zéro site d'appel) dont la `.task` bouclait `FileManager.fileExists` toutes les 1,5 s sans terminaison | supprimé |
+| 7 | `RelativeTimestampText` / `LentilleRowTimestamp` | une `TimelineView(.periodic 60 s)` par rangée réalisée, y compris pour des libellés (« 3 mois ») figés pour des semaines | tick minute réservé aux rangées < 1 h ; au-delà, texte statique rafraîchi au prochain passage de body |
+
 Vérifiés SAINS au passage (gating correct, rien à faire) : fond animé de
-conversation (désactivé), pastilles de présence (`pulse` seulement online +
-ring story), badges mood (contextes liste exclus depuis 2026-08-21),
-`TypingDots` (seulement pendant la frappe), `SyncPill` (marquee 30 Hz
-seulement pill visible ; dot 2 Hz gardé), `MeeshyPullIndicator`,
-`MeeshyMoodBadge`, spinners de bulle (saving/retry/live call conditionnels),
-`PresenceManager` (recalc 30 s + bump débouncé 400 ms).
+conversation (désactivé), orbes du root (statiques, `drawingGroup`), anneau
+story (statique depuis 2026-06-21), pastilles de présence (`pulse` seulement
+online + ring story), badges mood en contextes liste (exclus depuis
+2026-08-21), `TypingDots` (seulement pendant la frappe), `SyncPill` marquee
+(30 Hz seulement pill visible), `MeeshyPullIndicator`, spinners de bulle
+(saving/retry/live call conditionnels), `PresenceManager` (recalc 30 s + bump
+débouncé 400 ms), tri/groupement de la liste (hors main actor, débouncé).
+
+Suites identifiées NON corrigées ici (re-render amplification, profil requis
+avant d'y toucher) : `Conversation.renderFingerprint` recalculé 4×/rangée/
+passe (tri de clés alloué à chaque appel — le mettre en cache demande de
+toucher tous les inits du modèle SDK) ; corps de `ConversationListView`
+ré-évalué par chaque `@Published` du `ConversationListViewModel` (la frappe en
+écrit DEUX par événement) avec ~99 ids re-alloués et la construction
+swipe-actions/`LentilleMagnification` par rangée réalisée sous drapeau OFF ;
+`GeometryReader` + `onChange(frame)` par rangée sur iOS < 26 (chemin
+contextMenu legacy) ; un `Timer` réalloué par frappe dans
+`ConversationSocketHandler.resetIdleTimer`.
 
 ## Candidats restants, identifiés mais PAS corrigés ici (à vérifier sur device)
 

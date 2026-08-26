@@ -753,12 +753,30 @@ public struct NotificationBadge: View {
                         .scaleEffect(isPulsing ? 1.55 : 1.0)
                 )
                 .offset(x: 16, y: -16)
-                .onAppear {
+                // Halo d'ANNONCE, plus jamais un pulse sans fin : ce badge vit
+                // dans le chrome FLOTTANT du root (zIndex 100), au-dessus de la
+                // liste de conversations ET de chaque fil ouvert — un
+                // `repeatForever` y tournait en continu pour tout utilisateur
+                // ayant ≥ 1 notification non lue, c'est-à-dire l'état NOMINAL
+                // (audit chauffe 2026-08-26, même famille que le glow invisible
+                // de l'échelle de menu). Le halo respire quelques cycles à
+                // l'apparition et à CHAQUE changement de compteur (`task(id:)`
+                // rejoue l'annonce quand une notification arrive), puis se pose
+                // au repos — l'intention (« du non-lu t'attend ») reste portée
+                // par la pastille elle-même, en permanence.
+                .task(id: count) {
                     // Reduce Motion (system or in-app): the halo stays static —
                     // the badge keeps its intention, it loses its movement.
                     guard !MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) else { return }
                     withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                         isPulsing = true
+                    }
+                    try? await Task.sleep(for: .seconds(Self.announcementPulseDuration))
+                    guard !Task.isCancelled else { return }
+                    // Retour au repos ANIMÉ (une respiration de sortie) — un
+                    // arrêt sec au milieu d'un cycle claquerait visuellement.
+                    withAnimation(.easeInOut(duration: 1.2)) {
+                        isPulsing = false
                     }
                 }
                 .onDisappear {
@@ -768,4 +786,8 @@ public struct NotificationBadge: View {
                 }
         }
     }
+
+    /// Durée de la fenêtre d'annonce du halo (~2,5 respirations à 1,2 s le
+    /// demi-cycle) avant le retour au repos.
+    public static let announcementPulseDuration: TimeInterval = 6
 }
