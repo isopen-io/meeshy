@@ -76,6 +76,36 @@ vol → ramassée par la queue) dans `MessageStoreTests` ; les contrats existant
 (merge protecteur, replace strict en `.around`/`.search`) inchangés et
 toujours couverts.
 
+## Chauffe device sur simple manipulation (second signalement user, même journée)
+
+### 3. Six animations d'ombre `repeatForever` INVISIBLES derrière la liste
+
+`RootView.menuLadder` est monté en PERMANENCE sur l'écran d'accueil (opacité 0
+via `menuAnimation`, `zIndex −1`, `allowsHitTesting(false)` quand le menu est
+fermé — nécessaire pour que le ressort d'ouverture anime depuis un état
+existant). Or chaque `ThemedActionButton` de l'échelle démarrait son « glow
+respirant » à `onAppear`, inconditionnellement : six boutons invisibles
+animaient chacun une **ombre** (`.shadow` radius + opacité, `repeatForever`
+2 s) — et une ombre animée en SwiftUI se re-rasterise à CHAQUE frame. Six
+rasterisations par frame, en continu, du lancement de l'app à sa fermeture,
+derrière la liste de conversations. Même famille de défaut que le fond animé
+de conversation désactivé le 2026-06-10 (`ConversationBackgroundConfig.
+animationsEnabled = false`, « hottest app symbol »), une couche plus haut.
+
+**Correctif** : `ThemedActionButton.isGlowEnabled` (défaut `true`) — glow ET
+pulse de pastille gardés dessus ; `menuLadder` passe `showMenu`. Le démarrage/
+arrêt passe par `adaptiveOnChange` (l'échelle ne se remonte pas à l'ouverture,
+`onAppear` ne rejouerait pas). Garde de source :
+`RootMenuLadderGlowGuardTests`.
+
+Vérifiés SAINS au passage (gating correct, rien à faire) : fond animé de
+conversation (désactivé), pastilles de présence (`pulse` seulement online +
+ring story), badges mood (contextes liste exclus depuis 2026-08-21),
+`TypingDots` (seulement pendant la frappe), `SyncPill` (marquee 30 Hz
+seulement pill visible ; dot 2 Hz gardé), `MeeshyPullIndicator`,
+`MeeshyMoodBadge`, spinners de bulle (saving/retry/live call conditionnels),
+`PresenceManager` (recalc 30 s + bump débouncé 400 ms).
+
 ## Candidats restants, identifiés mais PAS corrigés ici (à vérifier sur device)
 
 1. **Estimations de hauteur figées (80/150)** — chaque écart estimé/réel émet
