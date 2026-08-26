@@ -1,6 +1,8 @@
 import SwiftUI
 import MeeshySDK
 import MeeshyUI
+import UIKit
+import ImageIO
 
 /// Les TROIS surfaces du meuble (V2, élargi au mood par le lot 4).
 ///
@@ -1166,6 +1168,14 @@ nonisolated enum ComposerDocumentCopy {
                defaultValue: "Outils du document", bundle: .main)
     }
 
+    /// Le libellé du ruban de vignettes (B, #3883) — clé neuve, sur le patron
+    /// de `toolRow` : `composer.a11y.removeAttachment` sert déjà le BOUTON de
+    /// retrait de chaque vignette, mais aucune clé ne nommait le conteneur.
+    static var mediaStrip: String {
+        String(localized: "composer.document.a11y.media",
+               defaultValue: "Médias joints", bundle: .main)
+    }
+
     /// **Clé neuve (T2.2), sur le patron de `toolRow` juste au-dessus.** Ne
     /// reprend PAS le littéral `"Langue du post"` de la feuille historique :
     /// sa clé contient des espaces et échappe au cliquet français
@@ -1292,6 +1302,16 @@ struct ComposerDocumentSurface: View {
 
     var onTool: ((ComposerDocumentTool) -> Void)? = nil
 
+    /// **Le média LOCAL déjà choisi (B, #3883).** La surface le REÇOIT et le
+    /// peint — elle reste sans état ; le meuble possède `documentLocalMedia`.
+    /// Sélectionner une photo ne montrait rien jusqu'ici : la preuve visible du
+    /// choix vit désormais dans `mediaStrip`.
+    var localMedia: [ComposerDocumentMedia] = []
+
+    /// Retirer une vignette. Le meuble ôte l'élément de `documentLocalMedia`, ce
+    /// qui RE-JUGE le format (loi 4 : le toggle POST↔RÉEL suit le média).
+    var onRemoveMedia: ((ComposerDocumentMedia) -> Void)? = nil
+
     @FocusState private var isContentFocused: Bool
 
     /// Le dernier outil tapé — pilote le rebond SF (`.symbolEffect(.bounce)`)
@@ -1309,6 +1329,7 @@ struct ComposerDocumentSurface: View {
             exitAffordance
             content
             Spacer(minLength: 0)
+            mediaStrip
             toolRow
         }
         .onAppear { raiseKeyboardIfPromised() }
@@ -1390,6 +1411,29 @@ struct ComposerDocumentSurface: View {
         }
     }
 
+    /// **Les vignettes du média choisi (B, #3883)** — la preuve VISIBLE qu'une
+    /// sélection a pris. `localMedia` vide ⇒ rien de peint (aucune bande à
+    /// hauteur nulle). Chaque vignette est RETIRABLE ; retirer re-juge le format
+    /// (le toggle POST↔RÉEL suit, loi 4).
+    @ViewBuilder
+    private var mediaStrip: some View {
+        if !localMedia.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(localMedia, id: \.url) { media in
+                        ComposerMediaThumbnail(media: media) {
+                            onRemoveMedia?(media)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text(ComposerDocumentCopy.mediaStrip))
+        }
+    }
+
     private func raiseKeyboardIfPromised() {
         guard focusesOnAppear else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.focusDelay) {
@@ -1422,6 +1466,91 @@ extension View {
     /// Statique et sûr en repli iOS 16.
     func composerToolBounce(active: Bool) -> some View {
         modifier(ComposerToolBounceModifier(active: active))
+    }
+}
+
+/// **Une vignette du média choisi, retirable (B, #3883).**
+///
+/// Pour une IMAGE, la vraie miniature — chargée HORS du main thread
+/// (`ComposerThumbnailDecoder`, tâche détachée) puis posée. Pour une vidéo ou un
+/// document, un badge : « voir qu'un média est joint » sans générer de frame
+/// (une image d'AVAsset est asynchrone et lourde — « un début », cf. décision
+/// produit). La croix ôte l'élément, ce qui re-juge le format côté meuble.
+private struct ComposerMediaThumbnail: View {
+    let media: ComposerDocumentMedia
+    let onRemove: () -> Void
+
+    @State private var preview: UIImage?
+
+    private var isImage: Bool { media.mimeType.hasPrefix("image") }
+    private var isVideo: Bool { media.mimeType.hasPrefix("video") }
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            base
+                .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.body)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, .black.opacity(0.55))
+            }
+            .padding(4)
+            .accessibilityLabel(Text(String(
+                localized: "composer.a11y.removeAttachment",
+                defaultValue: "Retirer la pièce jointe", bundle: .main
+            )))
+        }
+        .task(id: media.url) {
+            guard isImage else { return }
+            let url = media.url
+            preview = await Task.detached(priority: .utility) {
+                ComposerThumbnailDecoder.thumbnail(url: url, maxPixelSize: 256)
+            }.value
+        }
+    }
+
+    @ViewBuilder
+    private var base: some View {
+        if let preview {
+            Image(uiImage: preview)
+                .resizable()
+                .scaledToFill()
+        } else {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                Image(systemName: isVideo ? "play.rectangle.fill" : (isImage ? "photo" : "doc.fill"))
+                    .font(.title3)
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+            }
+        }
+    }
+}
+
+/// **Décodage NONISOLÉ d'une vignette locale, pour tourner hors du main thread.**
+///
+/// La jumelle `AttachmentPreparationService.downsampledPreview(from:)` est
+/// `@MainActor` (elle sert la zone d'attachement du fil, sur `Data` déjà en
+/// mémoire) : inappelable depuis une tâche détachée. Ici, même passe ImageIO,
+/// mais depuis l'URL — `CGImageSourceCreateWithURL` lit paresseusement, sans
+/// jamais charger le fichier entier en mémoire, exactement ce qu'il faut pour
+/// une miniature de 256 px issue d'une photo pleine résolution.
+private nonisolated enum ComposerThumbnailDecoder {
+    static func thumbnail(url: URL, maxPixelSize: CGFloat) -> UIImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: false
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
     }
 }
 

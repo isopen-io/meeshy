@@ -916,7 +916,9 @@ struct MeeshyComposerHost: View {
             ),
             focusesOnAppear: ComposerSurfaceRouting.focusesContentOnAppear(opening: profile.opensWith),
             onClose: onDismiss,
-            onTool: { tool in handleDocumentTool(tool) }
+            onTool: { tool in handleDocumentTool(tool) },
+            localMedia: documentLocalMedia,
+            onRemoveMedia: { media in documentLocalMedia.removeAll { $0 == media } }
         )
         // La capsule se superpose plutôt que d'être peinte PAR la surface :
         // `ComposerDocumentSurface` reste une présentation sans état, et c'est
