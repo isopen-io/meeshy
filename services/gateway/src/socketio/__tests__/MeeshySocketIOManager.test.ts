@@ -440,7 +440,14 @@ function makeTranslationService() {
 function makePrisma(): any {
   const fn = () => jest.fn() as any;
   return {
-    conversation: { findUnique: fn() },
+    conversation: {
+      findUnique: fn(),
+      // Par défaut, chaque conversation demandée EXISTE (sans `lastMessageAt`).
+      // Un test qui veut une conversation disparue surcharge ce mock.
+      findMany: jest.fn(async (args: { where?: { id?: { in?: string[] } } }) =>
+        (args?.where?.id?.in ?? []).map((id) => ({ id, lastMessageAt: null }))
+      ),
+    },
     message: { findUnique: fn(), findFirst: fn() },
     messageAttachment: { findUnique: fn() },
     participant: {
@@ -3676,6 +3683,46 @@ describe('MeeshySocketIOManager', () => {
       return (manager as any).readStatusService.getUnreadCountsForUser;
     }
 
+    /** Comme le vrai service : ne répond QUE pour les conversations demandées. */
+    function unreadCountsForRequestedIds(counts: Record<string, number>) {
+      (manager as any).readStatusService.getUnreadCountsForUser = jest.fn(
+        async (_reader: string, ids: string[]) =>
+          new Map(ids.filter((id) => id in counts).map((id) => [id, counts[id]]))
+      );
+      return (manager as any).readStatusService.getUnreadCountsForUser;
+    }
+
+    /**
+     * Une ligne `Participant` dont la conversation a été supprimée (orpheline)
+     * faisait échouer TOUT l'instantané : la relation `conversation` est
+     * requise par le schéma, et Prisma lève « Inconsistent query result »
+     * dès qu'une seule ligne pointe dans le vide. Mesuré en prod le
+     * 2026-08-26 : un lecteur avec 118 conversations vivantes ne recevait
+     * aucun compteur à chaque reconnexion, à cause d'une adhésion de 2025.
+     */
+    it('skips a participation whose conversation no longer exists instead of failing the whole snapshot', async () => {
+      prisma.participant.findMany.mockResolvedValue([
+        { conversationId: 'conv-live' },
+        { conversationId: 'conv-gone' },
+      ]);
+      prisma.conversation.findMany.mockResolvedValue([{ id: 'conv-live', lastMessageAt: null }]);
+      const getUnreadCounts = unreadCountsForRequestedIds({ 'conv-live': 2, 'conv-gone': 1 });
+      const socket = socketDouble();
+
+      await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-orphan', false);
+
+      expect(getUnreadCounts).toHaveBeenCalledWith('user-orphan', ['conv-live']);
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+        conversationId: 'conv-live',
+        unreadCount: 2,
+        bridge: null,
+      });
+      expect(socket.emit).not.toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED,
+        expect.objectContaining({ conversationId: 'conv-gone' })
+      );
+    });
+
     it('emits a per-conversation count to a registered reader', async () => {
       prisma.participant.findMany.mockResolvedValue([
         { conversationId: 'conv-a' },
@@ -3850,6 +3897,20 @@ describe('MeeshySocketIOManager', () => {
      * la même que `GET /conversations` paie déjà.
      */
     describe('le pont ✦ voyage aussi sur la forme de reconnexion', () => {
+      /**
+       * N adhésions dont la conversation i a reçu son dernier message le
+       * 1+i janvier 2026 — la récence vient de la TABLE `Conversation`, lue à
+       * part (jamais par la relation requise `participant.conversation`).
+       */
+      function participationsWithRecency(count: number) {
+        const rows = Array.from({ length: count }, (_, i) => ({ conversationId: `conv-${i}` }));
+        prisma.participant.findMany.mockResolvedValue(rows);
+        prisma.conversation.findMany.mockResolvedValue(
+          rows.map((row, i) => ({ id: row.conversationId, lastMessageAt: new Date(2026, 0, 1 + i) }))
+        );
+        return rows;
+      }
+
       const bridgeOf = (conversationId: string) =>
         ({
           conversationId,
@@ -4025,11 +4086,7 @@ describe('MeeshySocketIOManager', () => {
       // pont aurait échangé un défaut d'affichage contre un défaut de charge,
       // et précisément à l'instant où le réseau est le plus fragile.
       it('caps the bridge pass at one list page, keeping the MOST RECENT conversations', async () => {
-        const many = Array.from({ length: 42 }, (_, i) => ({
-          conversationId: `conv-${i}`,
-          conversation: { lastMessageAt: new Date(2026, 0, 1 + i) },
-        }));
-        prisma.participant.findMany.mockResolvedValue(many);
+        const many = participationsWithRecency(42);
         unreadCounts(Object.fromEntries(many.map(row => [row.conversationId, 1])));
         const pass = bridgePass({});
         const socket = socketDouble();
@@ -4048,11 +4105,7 @@ describe('MeeshySocketIOManager', () => {
       // menteuse, et une pastille menteuse sur la 200e conversation ment
       // autant que sur la première.
       it('never caps the COUNTS — only the bridges', async () => {
-        const many = Array.from({ length: 42 }, (_, i) => ({
-          conversationId: `conv-${i}`,
-          conversation: { lastMessageAt: new Date(2026, 0, 1 + i) },
-        }));
-        prisma.participant.findMany.mockResolvedValue(many);
+        const many = participationsWithRecency(42);
         unreadCounts(Object.fromEntries(many.map(row => [row.conversationId, 1])));
         bridgePass({});
         const socket = socketDouble();
@@ -4078,11 +4131,7 @@ describe('MeeshySocketIOManager', () => {
        * rougi.
        */
       it('DIFFÈRE le pont des conversations hors borne au lieu de l’effacer', async () => {
-        const many = Array.from({ length: 42 }, (_, i) => ({
-          conversationId: `conv-${i}`,
-          conversation: { lastMessageAt: new Date(2026, 0, 1 + i) },
-        }));
-        prisma.participant.findMany.mockResolvedValue(many);
+        const many = participationsWithRecency(42);
         unreadCounts(Object.fromEntries(many.map(row => [row.conversationId, 1])));
         bridgePass({});
         const socket = socketDouble();

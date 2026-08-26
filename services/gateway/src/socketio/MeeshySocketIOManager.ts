@@ -1493,13 +1493,37 @@ export class MeeshySocketIOManager {
         where: isAnonymous
           ? { id: readerKey, isActive: true }
           : { userId: readerKey, isActive: true },
-        // `lastMessageAt` ne sert PAS au compteur — il sert à borner la passe
-        // de ponts ci-dessous sur les conversations que le lecteur va
-        // réellement voir. Cf. `BRIDGE_SNAPSHOT_LIMIT`.
-        select: { conversationId: true, conversation: { select: { lastMessageAt: true } } },
+        select: { conversationId: true },
       });
       if (participantRows.length === 0) return;
-      const conversationIds = participantRows.map(p => p.conversationId);
+
+      // `lastMessageAt` ne sert PAS au compteur — il sert à borner la passe
+      // de ponts ci-dessous sur les conversations que le lecteur va
+      // réellement voir (cf. `BRIDGE_SNAPSHOT_LIMIT`). Il est lu À PART, et
+      // jamais par la relation requise `participant.conversation` : une
+      // adhésion dont la conversation a été supprimée (orpheline) faisait
+      // lever Prisma (« Inconsistent query result: Field conversation is
+      // required ») et perdait l'instantané ENTIER — 118 compteurs pour une
+      // ligne de 2025, à chaque reconnexion, mesuré en prod le 2026-08-26.
+      // L'orpheline est ignorée ici et signalée, pour le balayage de
+      // maintenance qui la retirera.
+      const liveConversations = await this.prisma.conversation.findMany({
+        where: { id: { in: participantRows.map(p => p.conversationId) } },
+        select: { id: true, lastMessageAt: true },
+      });
+      const liveConversationIds = new Set(liveConversations.map(c => c.id));
+      const orphanConversationIds = participantRows
+        .map(p => p.conversationId)
+        .filter(id => !liveConversationIds.has(id));
+      if (orphanConversationIds.length > 0) {
+        logger.warn('unread snapshot: participations pointing to a missing conversation were skipped', {
+          readerKey,
+          isAnonymous,
+          orphanConversationIds,
+        });
+      }
+      const conversationIds = liveConversations.map(c => c.id);
+      if (conversationIds.length === 0) return;
       // `getUnreadCountsForUser` résout DÉJÀ les deux identités en interne
       // (`OR: [{ id: userId }, { userId }]`) — c'est la lecture de participants
       // au-dessus qui ne connaissait qu'une colonne.
@@ -1537,10 +1561,7 @@ export class MeeshySocketIOManager {
       // gardent leur compteur exact — seul leur pont attend le prochain
       // `GET /conversations`, qui le rendra en même temps que leur ligne.
       const lastMessageAtByConversation = new Map(
-        participantRows.map(row => [
-          row.conversationId,
-          (row as { conversation?: { lastMessageAt?: Date } }).conversation?.lastMessageAt ?? null,
-        ])
+        liveConversations.map(c => [c.id, c.lastMessageAt ?? null])
       );
       const bridgeCandidates = [...unreadCounts]
         .map(([conversationId, unreadCount]) => ({ conversationId, unreadCount }))
