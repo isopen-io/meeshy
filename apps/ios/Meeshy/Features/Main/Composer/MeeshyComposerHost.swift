@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
 
@@ -409,6 +411,24 @@ struct MeeshyComposerHost: View {
     /// vit dans le meuble, qui possède `documentLanguage`, jamais dans la
     /// surface.
     @State private var showsDocumentLanguagePicker = false
+
+    /// **L'ingestion de fichiers LOCAUX (T2.3).** Trois sélecteurs, un état
+    /// par famille — même patron que `showsEmojiPicker` /
+    /// `showsDocumentLanguagePicker` juste au-dessus : l'ingestion vit dans le
+    /// MEUBLE, jamais dans la surface. `ComposerDocumentSurface` reste sans
+    /// état — elle ne monte NI `photosPicker` NI `fileImporter` NI
+    /// `CameraView` (`ComposerDocumentSurfaceTests`
+    /// `.test_laSurface_neFabriquePasUnSecondPipelineDIngestion`, élargie à la
+    /// caméra par ce lot).
+    @State private var showsPhotoPicker = false
+    @State private var pickedPhotoLibraryItems: [PhotosPickerItem] = []
+    @State private var showsCamera = false
+    @State private var showsFileImporter = false
+
+    /// Les pièces jointes LOCALES composées jusqu'ici. `documentDraft` les
+    /// transmet désormais sous `.document` — `ComposerDocumentDraft.localMedia`
+    /// ne repartait qu'à `[]` avant ce lot.
+    @State private var documentLocalMedia: [ComposerDocumentMedia] = []
 
     init(
         intent: ComposerIntent,
@@ -856,6 +876,40 @@ struct MeeshyComposerHost: View {
         .overlay(alignment: .bottomTrailing) { documentLanguageCapsule }
         .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
         .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
+        // **L'ingestion de fichiers LOCAUX (T2.3)** — trois sélecteurs montés
+        // ICI, sur le meuble, jamais dans `ComposerDocumentSurface` : la
+        // surface reste une présentation sans état, l'ingestion lui appartient.
+        .sheet(isPresented: $showsCamera) { documentCameraSheet }
+        .photosPicker(
+            isPresented: $showsPhotoPicker,
+            selection: $pickedPhotoLibraryItems,
+            maxSelectionCount: 10,
+            matching: .any(of: [.images, .videos])
+        )
+        .adaptiveOnChange(of: pickedPhotoLibraryItems) { _, items in
+            guard !items.isEmpty else { return }
+            let picked = items
+            pickedPhotoLibraryItems = []
+            Task { await ingestPhotoLibraryItems(picked) }
+        }
+        .fileImporter(
+            isPresented: $showsFileImporter,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { result in
+            Task { await ingestFileImporterResult(result) }
+        }
+    }
+
+    /// La capture caméra du document (T2.3), montée ICI plutôt que sous la
+    /// scène : le document n'a pas d'atelier, donc pas d'environnement
+    /// `storyCameraCaptureProvided` à réutiliser — `CameraView` est montée
+    /// telle quelle, le même composant que la scène emprunte par
+    /// environnement.
+    private var documentCameraSheet: some View {
+        CameraView { result in
+            Task { await ingestCameraCapture(result) }
+        }
     }
 
     /// **La capsule de langue (T2.2)** — le septième contrôle que la feuille
@@ -926,18 +980,143 @@ struct MeeshyComposerHost: View {
     /// Le rappel de la rangée, aiguillé sur l'EFFET et non sur l'outil.
     ///
     /// Aiguiller sur l'outil aurait rouvert exactement ce que `effect` referme :
-    /// cinq branches muettes pour cinq outils que rien ne peint, et la dérive
-    /// silencieuse le jour où l'une d'elles cesserait de correspondre à ce que
-    /// la rangée sert. Ici, `nil` est le seul cas inatteignable, et il l'est par
-    /// construction — un outil sans effet n'arrive jamais à l'écran.
+    /// des branches muettes pour les outils que la rangée ne sert pas, et la
+    /// dérive silencieuse le jour où l'une d'elles cesserait de correspondre à
+    /// ce que la rangée sert. Ici, `nil` est le seul cas inatteignable, et il
+    /// l'est par construction — un outil sans effet n'arrive jamais à l'écran.
+    ///
+    /// **`.attachesLocalMedia` porte UNE valeur associée (T2.3)**, jamais trois
+    /// cas distincts sur `tool.effect` — `.photoLibrary`/`.camera`/`.files`
+    /// restent une question posée au SÉLECTEUR à ouvrir
+    /// (`presentMediaIntake`), jamais une seconde question posée à l'outil.
     private func handleDocumentTool(_ tool: ComposerDocumentTool) {
         switch tool.effect {
         case .insertsEmojiIntoText:
             HapticFeedback.light()
             showsEmojiPicker = true
+        case .attachesLocalMedia(let intake):
+            HapticFeedback.light()
+            presentMediaIntake(intake)
         case .none:
             break
         }
+    }
+
+    /// Quel sélecteur ouvrir pour la famille d'ingestion demandée — la seule
+    /// question que `ComposerMediaIntake` pose. `handleDocumentTool` ne la
+    /// pose jamais lui-même : il reste aiguillé sur l'EFFET, cette fonction
+    /// sur l'INTAKE.
+    private func presentMediaIntake(_ intake: ComposerMediaIntake) {
+        switch intake {
+        case .photoLibrary:
+            showsPhotoPicker = true
+        case .camera:
+            showsCamera = true
+        case .files:
+            showsFileImporter = true
+        }
+    }
+
+    /// La photothèque (T2.3). `PhotosPickerItem` ne porte ni URL ni octets
+    /// tant qu'on ne les charge pas : `loadTransferable` les matérialise, et
+    /// `supportedContentTypes` porte le type DÉCLARÉ par la photothèque.
+    ///
+    /// **Revue Opus, correctifs 1 et 3.** Le mime et la durée passent tous
+    /// deux par `ComposerMediaProbe` — jamais un repli `?? "application/octet-stream"`
+    /// recalculé ici (`.mime`, qui seul sait retomber sur la table par
+    /// EXTENSION avant ce repli terminal), jamais une vidéo sélectionnée
+    /// figée `durationMs: nil` (`.durationMs`, sans quoi `ReelComposition`
+    /// la classerait `.post` au lieu de `.reel`).
+    private func ingestPhotoLibraryItems(_ items: [PhotosPickerItem]) async {
+        for item in items {
+            guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+            let declaredType = item.supportedContentTypes.first
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+                "composer_photo_\(UUID().uuidString).\(declaredType?.preferredFilenameExtension ?? "dat")"
+            )
+            guard (try? data.write(to: url)) != nil else { continue }
+            let mime = ComposerMediaProbe.mime(forURL: url, declaredType: declaredType)
+            let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: mime)
+            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+                url: url,
+                declaredMimeType: mime,
+                durationMs: duration
+            ))
+        }
+        HapticFeedback.light()
+    }
+
+    /// La caméra (T2.3) — le mime est celui que CE SITE choisit en écrivant
+    /// le fichier, jamais dérivé après coup : JPEG pour une photo, QuickTime
+    /// pour une vidéo (le conteneur qu'`AVCaptureMovieFileOutput` écrit déjà,
+    /// `CameraModel.startSegment()`).
+    ///
+    /// **Revue Opus, correctif 1.** La branche vidéo sonde sa durée RÉELLE
+    /// (`ComposerMediaProbe.durationMs`) — sans elle, une vidéo de 10 s
+    /// captée ici partait `durationMs: nil` et `ReelComposition` la classait
+    /// `.post` au lieu de `.reel`. La branche photo n'a rien à sonder : une
+    /// image n'a pas de durée, et `ComposerMediaProbe.durationMs` la
+    /// classerait `nil` de toute façon — l'appeler ici serait un aller-retour
+    /// pour rien.
+    private func ingestCameraCapture(_ result: CameraResult) async {
+        switch result {
+        case .photo(let image):
+            guard let data = image.jpegData(compressionQuality: 0.9) else { return }
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("composer_camera_\(UUID().uuidString).jpg")
+            guard (try? data.write(to: url)) != nil else { return }
+            documentLocalMedia.append(ComposerDocumentMediaFactory.media(url: url, declaredMimeType: "image/jpeg"))
+        case .video(let url):
+            let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: "video/quicktime")
+            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+                url: url,
+                declaredMimeType: "video/quicktime",
+                durationMs: duration
+            ))
+        }
+        HapticFeedback.light()
+    }
+
+    /// L'importateur de documents (T2.3) — le mime passe par
+    /// `ComposerMediaProbe.mime`, jamais recalculé ici.
+    ///
+    /// **Revue Opus, correctif 3.** `UTType.preferredMIMEType` rend `nil`
+    /// pour des types pourtant bien identifiés (`.caf`, `.opus`) : retomber
+    /// directement sur `application/octet-stream` ici ferait perdre
+    /// EXACTEMENT le défaut que ce lot prétend fermer. `ComposerMediaProbe.mime`
+    /// retombe d'abord sur la table par EXTENSION (`MimeTypeResolver`).
+    ///
+    /// **Revue Opus, correctif 4.** `startAccessingSecurityScopedResource()`
+    /// rend `false` pour un fichier qui N'EST PAS security-scoped (conteneur
+    /// app, certains fournisseurs) — ce n'EST PAS un échec. La copie est
+    /// tentée QUEL QUE SOIT ce retour ; `stopAccessingSecurityScopedResource()`
+    /// n'est appelé QUE si `start` a rendu `true`.
+    ///
+    /// **Revue Opus, correctif 1.** La durée RÉELLE est sondée
+    /// (`ComposerMediaProbe.durationMs`) — un `.mp4`/`.caf` importé ici
+    /// portait sinon `durationMs: nil`, et `ReelComposition` le classait
+    /// `.post` au lieu de `.reel`/l'excluait à tort d'un réel à deux médias.
+    ///
+    /// `async` depuis ce lot : le `.fileImporter` du corps l'enveloppe d'un
+    /// `Task`, comme les deux autres ingestions.
+    private func ingestFileImporterResult(_ result: Result<[URL], Error>) async {
+        guard case .success(let urls) = result else { return }
+        for sourceURL in urls {
+            let scoped = sourceURL.startAccessingSecurityScopedResource()
+            defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
+            let declaredType = try? sourceURL.resourceValues(forKeys: [.contentTypeKey]).contentType
+            let destination = FileManager.default.temporaryDirectory
+                .appendingPathComponent("composer_file_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
+            guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
+            let mime = ComposerMediaProbe.mime(forURL: destination, declaredType: declaredType)
+            let duration = await ComposerMediaProbe.durationMs(forURL: destination, mime: mime)
+            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+                url: destination,
+                declaredMimeType: mime,
+                durationMs: duration
+            ))
+        }
+        HapticFeedback.light()
     }
 
     /// **Le sélecteur du dépôt, monté tel quel** — celui que le composer inline
@@ -1343,7 +1522,7 @@ struct MeeshyComposerHost: View {
                 text: documentText,
                 visibility: composerVisibility,
                 visibilityUserIds: composerVisibilityUserIds,
-                repostOfId: intent.origin.repostedPostId, localMedia: [], location: nil,
+                repostOfId: intent.origin.repostedPostId, localMedia: documentLocalMedia, location: nil,
                 originalLanguage: documentLanguage
             )
         }

@@ -335,6 +335,27 @@ nonisolated enum ComposerAudienceOffer {
     }
 }
 
+/// La FAMILLE de sélecteur qu'un outil d'attache ouvre pour poser un fichier
+/// LOCAL dans le brouillon — la valeur associée de
+/// `ComposerDocumentToolEffect.attachesLocalMedia`, jamais trois cas
+/// distincts sur l'effet lui-même : `handleDocumentTool`
+/// (`MeeshyComposerHost.swift`) reste ainsi aiguillé sur l'EFFET, pas sur
+/// l'outil qui l'a déclenché.
+///
+/// `nonisolated` au niveau du TYPE — même patron que `ComposerLanguageFlag`
+/// (`ComposerModels.swift:122-124`) : la cible app compile sous
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests non, et une
+/// valeur associée logée dans un `enum` `Equatable` nonisolated doit l'être
+/// elle aussi.
+nonisolated enum ComposerMediaIntake: Equatable {
+    /// La pellicule — `PhotosPicker`.
+    case photoLibrary
+    /// La capture en direct — `CameraView`.
+    case camera
+    /// L'importateur de documents — `fileImporter`.
+    case files
+}
+
 /// La rangée d'outils du document — **des données, pas une vue**.
 ///
 /// Elle miroite celle de `FeedComposerSheet` (`FeedView+Attachments.swift`),
@@ -359,6 +380,23 @@ nonisolated enum ComposerDocumentToolEffect: Equatable {
     /// mesuré et vivant — le composer inline du fil monte `EmojiPickerSheet` et
     /// fait exactement `composerText += emoji`.
     case insertsEmojiIntoText
+
+    /// Ouvre un sélecteur qui pose un fichier LOCAL dans le brouillon (T2.3) —
+    /// photothèque, caméra ou importateur de documents, selon
+    /// `ComposerMediaIntake`.
+    ///
+    /// **Une valeur associée, jamais trois cas distincts** sur cet `enum` :
+    /// `handleDocumentTool` reste aiguillé sur l'EFFET et non sur l'outil qui
+    /// l'a déclenché — trois cas auraient rouvert exactement ce que `effect`
+    /// referme ailleurs dans ce fichier, trois branches à tenir en phase avec
+    /// trois outils au lieu d'une seule question posée à `ComposerMediaIntake` :
+    /// « quel sélecteur ouvrir ? ».
+    ///
+    /// La destination existe désormais de bout en bout : `ComposerDocumentMedia`
+    /// porte le fichier et son mime déclaré, `ComposerDocumentDraft.localMedia`
+    /// l'emporte (T2.1), et `PublishIntent.document(localMedia:)` le poste tel
+    /// quel.
+    case attachesLocalMedia(ComposerMediaIntake)
 }
 
 nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
@@ -388,20 +426,32 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     ///
     /// **La question à poser avant d'ajouter une valeur ici n'est pas « sait-on
     /// ouvrir le sélecteur ? » mais « où va son RÉSULTAT ? »** — jusqu'au
-    /// brouillon, puis jusqu'au publieur. Les cinq `nil` ci-dessous butent tous
-    /// sur la même réponse : `ComposerDocumentDraft` ne porte ni `mediaIds`, ni
-    /// fichier, ni lieu, et le seul publieur de production que le meuble
-    /// atteigne (`StatusViewModel.setStatus`, par la porte du mood) n'en
-    /// accepte aucun. Ouvrir une photothèque au-dessus de ce trou rendrait une
-    /// image que rien ne transporterait.
+    /// brouillon, puis jusqu'au publieur. **Trois `nil` sont tombés au T2.3** :
+    /// `ComposerDocumentDraft.localMedia` (T2.1) porte désormais un fichier
+    /// LOCAL, et `PublishIntent.document(localMedia:)` le poste. Photo, caméra
+    /// et fichier ont donc une destination réelle — le même trou qui les
+    /// retenait tous les trois à la fois.
+    ///
+    /// `.place` et `.microphone` restent `nil` : le brouillon ne porte encore
+    /// ni position ni enregistrement vocal composé sur cette surface (le lieu
+    /// tri-état de la feuille absorbée, le vocal de sa propre surface mood).
+    /// C'est ce qui tient `servedRow != canonicalRow` — la garde de la porte du
+    /// document (`ComposerDocumentSurfaceTests.test_laPorteDuDocument_...`) ne
+    /// se retourne pas ce lot.
     ///
     /// Le `switch` reste exhaustif : un septième outil casse la compilation ICI
     /// plutôt que d'hériter d'un effet par défaut.
     var effect: ComposerDocumentToolEffect? {
         switch self {
+        case .photo:
+            return .attachesLocalMedia(.photoLibrary)
+        case .camera:
+            return .attachesLocalMedia(.camera)
         case .emoji:
             return .insertsEmojiIntoText
-        case .photo, .camera, .document, .place, .microphone:
+        case .document:
+            return .attachesLocalMedia(.files)
+        case .place, .microphone:
             return nil
         }
     }
@@ -789,6 +839,28 @@ nonisolated struct ComposerDocumentMedia: Equatable, Sendable {
     let url: URL
     let mimeType: String
     let durationMs: Int?
+}
+
+/// Traduit ce qu'un sélecteur (photothèque, caméra, importateur de documents)
+/// vient de rendre en pièce jointe LOCALE du brouillon — le site UNIQUE de
+/// cette conversion pour les trois familles de `ComposerMediaIntake` (T2.3).
+///
+/// **Le mime est toujours celui DÉCLARÉ à la source, jamais recalculé depuis
+/// l'extension du fichier une fois posé sur disque.** `PublishIntent` nomme le
+/// défaut mesuré (`PublishIntent.swift:64-75`) : un mime REÇU puis JETÉ,
+/// re-dérivé plus loin par `MimeTypeResolver.mimeType(forURL:)`, rendait
+/// `application/octet-stream` pour un fichier dont l'extension ne dit rien du
+/// contenu — un nom temporaire générique, une extension absente. Cette
+/// fonction ne connaît donc AUCUN chemin de repli par extension : l'appelant
+/// fournit toujours le mime que la source a déjà déclaré — le `UTType` du
+/// sélecteur de fichiers ou de la photothèque, ou le format que l'app
+/// elle-même choisit en écrivant le fichier (JPEG pour une photo caméra,
+/// QuickTime pour une vidéo caméra, le conteneur qu'`AVCaptureMovieFileOutput`
+/// écrit déjà).
+nonisolated enum ComposerDocumentMediaFactory {
+    static func media(url: URL, declaredMimeType: String, durationMs: Int? = nil) -> ComposerDocumentMedia {
+        ComposerDocumentMedia(url: url, mimeType: declaredMimeType, durationMs: durationMs)
+    }
 }
 
 /// **Ce que le socle remet au site de montage quand l'auteur presse la flèche.**
@@ -1225,9 +1297,11 @@ struct ComposerDocumentSurface: View {
 ///
 /// **Ce que la langue déclarée ne dit toujours pas : ce n'est plus une
 /// condition de levée de la porte.** La rangée d'outils, elle, en reste une —
-/// `ComposerDocumentTool.canonicalRow` ne modélise que les six boutons
-/// d'attache, et T2.3 doit encore la compléter avant qu'un site de production
-/// puisse monter cette porte.
+/// `ComposerDocumentTool.canonicalRow` modélise les six boutons d'attache, et
+/// T2.3 en a fait tomber TROIS (photo, caméra, fichier) :
+/// `ComposerDocumentTool.servedRow` sert désormais
+/// `[.photo, .camera, .emoji, .document]`. Il en reste deux — lieu et micro —
+/// et c'est encore eux, seuls, qui retiennent cette porte.
 ///
 /// **Aucun site de production ne la monte encore**, et ce n'est pas un oubli de
 /// câblage : la rangée d'outils ne couvre pas ce que la feuille remplacée

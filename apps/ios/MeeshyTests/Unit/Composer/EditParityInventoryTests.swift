@@ -147,12 +147,19 @@ final class EditParityInventoryTests: XCTestCase {
             && sansQualification.initialFormat != .reel
 
         // 5 — RETRAIT DE MEDIAS.
-        // Mesure de PRECONDITION, et c'est la bonne : on ne retire pas ce qu'on
-        // ne sait pas porter. Aucun outil d'attache du document n'a d'effet —
-        // `ComposerDocumentTool.effect` rend `nil` pour les trois — donc aucun
-        // media n'entre, donc aucun ne se retire.
-        let outilsDeMedia: [ComposerDocumentTool] = [.photo, .camera, .document]
-        let retraitDeMedias = outilsDeMedia.contains { $0.effect != nil }
+        // La PRECONDITION (l'ingestion) est tombee au lot T2.3 : les trois
+        // outils d'attache portent desormais un effet (`.attachesLocalMedia`).
+        // Continuer a mesurer `effect != nil` ferait dire au vert que le
+        // RETRAIT est tenu — le mode d'echec PROXY : la precondition et la
+        // capacite ont cesse d'etre equivalentes le jour ou l'une des deux a
+        // bouge sans l'autre. Ce que la feuille tient et que le meuble ne
+        // tient toujours pas, c'est un CANAL de retrait sur une composition
+        // REPRISE (l'equivalent de `removeMediaIds`) —
+        // `ComposerDocumentDraft.document(...)` n'en porte aucun, et la porte
+        // d'edition n'atteint de toute facon jamais cette surface
+        // (`test_lesCapacitesDeChromeSocle_leSontCoteCreation_...` : `.edit`
+        // route vers `.scene`).
+        let retraitDeMedias = sourceDuDocument.contains("removeMediaIds")
 
         // 6 — POSITION TRI-ETAT.
         // La feuille distingue TROIS etats (`PostLocationUpdate` : remplacer,
@@ -216,8 +223,9 @@ final class EditParityInventoryTests: XCTestCase {
                 chezLaFeuille: ["private func toggleRemove(_ id: String) {", "removeMediaIds: Array(removedMediaIds)"],
                 mesuree: retraitDeMedias,
                 attendue: false,
-                mesureDit: "aucun outil d'attache du document n'a d'effet — rien n'entre, donc rien ne "
-                    + "se retire"
+                mesureDit: "la precondition (ingestion) est tombee au T2.3, mais `ComposerDocumentDraft` "
+                    + "ne porte toujours aucun canal de retrait — mesuree sur le texte source, pas sur "
+                    + "`effect != nil` (qui serait devenu un mode d'echec PROXY depuis T2.3)"
             ),
             Capacite(
                 nom: "position tri-etat",

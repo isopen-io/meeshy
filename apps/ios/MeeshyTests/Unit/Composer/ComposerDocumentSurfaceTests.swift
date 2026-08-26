@@ -1618,24 +1618,29 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         }
     }
 
-    /// L'état MESURÉ du 2026-08-24, écrit en toutes lettres pour qu'un outil qui
-    /// gagne ou perd son chemin se lise dans un diff.
+    /// **L'état MESURÉ, écrit en toutes lettres pour qu'un outil qui gagne ou
+    /// perd son chemin se lise dans un diff.**
     ///
-    /// L'emoji est le seul dont la destination existe de bout en bout : il
-    /// n'INGÈRE rien, il écrit dans le texte que le meuble possède déjà
-    /// (`documentText`) et que le brouillon emporte. Le précédent est mesuré,
-    /// pas supposé — `FeedView.swift` monte `EmojiPickerSheet` et fait
-    /// exactement `composerText += emoji`.
+    /// Quatre outils ont désormais une destination de bout en bout. L'emoji
+    /// n'INGÈRE rien : il écrit dans le texte que le meuble possède déjà
+    /// (`documentText`) et que le brouillon emporte — mesuré, `FeedView.swift`
+    /// monte `EmojiPickerSheet` et fait exactement `composerText += emoji`.
+    /// Photo, caméra et document INGÈRENT (T2.3) : `ComposerDocumentDraft.localMedia`
+    /// (T2.1) les porte, et `PublishIntent.document(localMedia:)` les poste.
     ///
-    /// Les cinq autres n'ont pas de destination : `ComposerDocumentDraft` ne
-    /// porte ni `mediaIds`, ni fichier, ni lieu, et son unique publieur de
-    /// production (`StatusViewModel.setStatus`) n'en accepte aucun. Les peindre
-    /// ouvrirait des sélecteurs dont le résultat n'aurait nulle part où aller.
-    func test_seulLEmoji_aUnCheminDeBoutEnBout_lesCinqAutresSontUneDette() {
-        XCTAssertEqual(ComposerDocumentTool.servedRow, [.emoji])
+    /// Lieu et micro restent une dette : `ComposerDocumentDraft` ne porte
+    /// toujours ni lieu ni enregistrement composé sur cette surface, et son
+    /// unique publieur de production (`StatusViewModel.setStatus`, par la
+    /// porte du mood) n'accepterait aucun des deux. Les peindre ouvrirait des
+    /// sélecteurs dont le résultat n'aurait nulle part où aller.
+    func test_lEmojiEtLesTroisOutilsDeMedia_ontUnCheminDeBoutEnBout_lieuEtMicroRestentUneDette() {
+        XCTAssertEqual(ComposerDocumentTool.servedRow, [.photo, .camera, .emoji, .document])
         XCTAssertEqual(ComposerDocumentTool.emoji.effect, .insertsEmojiIntoText)
+        XCTAssertEqual(ComposerDocumentTool.photo.effect, .attachesLocalMedia(.photoLibrary))
+        XCTAssertEqual(ComposerDocumentTool.camera.effect, .attachesLocalMedia(.camera))
+        XCTAssertEqual(ComposerDocumentTool.document.effect, .attachesLocalMedia(.files))
 
-        for orpheline in [ComposerDocumentTool.photo, .camera, .document, .place, .microphone] {
+        for orpheline in [ComposerDocumentTool.place, .microphone] {
             XCTAssertNil(
                 orpheline.effect,
                 "« \(orpheline.rawValue) » déclare un effet : sa destination doit exister sur "
@@ -1664,9 +1669,11 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// La politique de capture s'applique à ce qui est SERVI, et pas seulement à
     /// la rangée canonique. Le cas qui commande : une porte de republication
     /// (`allowsCapture: false`) ne doit pas voir la caméra revenir par la
-    /// projection. Aujourd'hui la question ne se pose pas — la caméra n'a pas
-    /// d'effet — et c'est justement pourquoi le témoin est écrit maintenant :
-    /// il rougira le jour où elle en gagnera un.
+    /// projection. Jusqu'au T2.3 la question ne se posait pas — la caméra
+    /// n'avait pas d'effet, donc `servedRow` ne la contenait pas, et ce témoin
+    /// passait à VIDE. Depuis que `.camera.effect` existe, `servedRow` la
+    /// porte réellement, et ce même témoin exerce enfin le cas qu'il a été
+    /// écrit pour attraper.
     func test_laCapture_filtreLaRangeeSERVIE_pasSeulementLaCanonique() {
         let sansCapture = ComposerDocumentToolPolicy.visibleTools(
             served: ComposerDocumentTool.servedRow, allowsCapture: false
@@ -1991,9 +1998,17 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// et du sandbox. Sa condition de levée est nommée : le jour où la surface
     /// devient propriétaire de l'ingestion, ce test se retourne — il ne se
     /// supprime pas. Ancrée sur le BLOC, pour la même raison que la précédente.
+    ///
+    /// **Élargie à `CameraView` (T2.3).** Photo, caméra et document posent
+    /// désormais un fichier LOCAL dans le brouillon
+    /// (`ComposerDocumentTool.effect`), et l'ingestion — état, sélecteurs,
+    /// tuiles — vit dans le meuble (`MeeshyComposerHost.handleDocumentTool`,
+    /// `ComposerMediaIntake`), jamais ici : la surface reste une PRÉSENTATION
+    /// sans état, exactement comme avant que ces trois outils n'aient un
+    /// effet.
     func test_laSurface_neFabriquePasUnSecondPipelineDIngestion() throws {
         let bloc = try surfaceBlock()
-        for interdit in ["photosPicker(", "fileImporter(", "PhotosPickerItem", "UIImagePickerController"] {
+        for interdit in ["photosPicker(", "fileImporter(", "PhotosPickerItem", "UIImagePickerController", "CameraView("] {
             XCTAssertFalse(
                 bloc.contains(interdit),
                 "La surface monte « \(interdit) » : le pipeline d'ingestion du dépôt est ailleurs, et unique."
@@ -2413,8 +2428,11 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// (`ComposerLanguageFlag`) et son sélecteur (`AudioLanguagePickerView`),
     /// et la porte poste `draft.originalLanguage` plutôt que la CONSTANTE.
     /// `montages` reste néanmoins à ZÉRO plus bas : la PREMIÈRE condition — la
-    /// rangée — n'est pas encore tombée (`servedRow != canonicalRow`, T2.3 à
-    /// venir), et c'est elle seule qui retient encore la porte.
+    /// rangée — n'est TOUJOURS pas tombée. T2.3 l'a fait AVANCER
+    /// (`servedRow` sert désormais `[.photo, .camera, .emoji, .document]`,
+    /// contre `[.emoji]` seul avant lui) sans la faire tomber — lieu et micro
+    /// manquent encore, `servedRow != canonicalRow` reste vrai, et c'est cela
+    /// seul qui retient encore la porte.
     /// `@MainActor` : le bundle de tests est compilé en isolation `nonisolated`,
     /// et `DefaultComposerLanguage.resolve()` — dont cette garde mesure la
     /// constance — est épinglée au main actor.
