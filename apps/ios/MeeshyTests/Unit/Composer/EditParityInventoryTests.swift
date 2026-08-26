@@ -101,10 +101,10 @@ final class EditParityInventoryTests: XCTestCase {
         // d'envoi refuse un brouillon blanc, et le socle peint la fleche sous le
         // document. C'est une capacite REPRISE, la premiere des sept.
         let brouillonBlanc = ComposerDocumentDraft.document(
-            format: .post, text: "   ", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: "   ", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
         )
         let brouillonPlein = ComposerDocumentDraft.document(
-            format: .post, text: "un texte", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: "un texte", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
         )
         let refuseLeBlanc = ComposerDocumentSendPlan.plan(for: brouillonBlanc, isOffline: false)
             == .refuse(.emptyDraft)
@@ -173,7 +173,7 @@ final class EditParityInventoryTests: XCTestCase {
         // document, et le brouillon porte la liste nominative que ONLY et EXCEPT
         // exigent. Seconde des deux capacites tenues.
         let brouillonNomme = ComposerDocumentDraft.document(
-            format: .post, text: "x", visibility: .only, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: "x", visibility: .only, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
         )
         let audienceEtListe = ComposerChromeOwnership.socleZones(for: .document).contains(.audience)
             && brouillonNomme.visibilityUserIds == ["u1"]

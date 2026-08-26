@@ -430,6 +430,14 @@ struct MeeshyComposerHost: View {
     /// ne repartait qu'à `[]` avant ce lot.
     @State private var documentLocalMedia: [ComposerDocumentMedia] = []
 
+    /// **T2.4 — l'interrupteur POST ↔ RÉEL.** Depuis T2.3, une vidéo ou ≥ 2
+    /// images composées ici font élire `"REEL"` par `ReelComposition.defaultType`
+    /// sans que l'auteur puisse garder un post simple — la capacité que la
+    /// feuille absorbée portait et que le meuble avait perdue. `false` par
+    /// défaut : la composition part REEL dès qu'elle qualifie, exactement le
+    /// comportement de T2.3, jusqu'à ce que l'auteur bascule.
+    @State private var documentForcePlainPost = false
+
     init(
         intent: ComposerIntent,
         initialVisibility: String,
@@ -874,6 +882,25 @@ struct MeeshyComposerHost: View {
         // possède déjà `documentText`. `.bottomTrailing` la pose au bord de la
         // rangée d'outils, seule ligne peinte au bas de la surface.
         .overlay(alignment: .bottomTrailing) { documentLanguageCapsule }
+        // **L'interrupteur POST ↔ RÉEL (T2.4)**, gaté sur la QUALIFICATION —
+        // loi 4, un contrôle sans effet est absent. `.topTrailing` : la
+        // capsule de langue occupe déjà l'angle bas, et ce contrôle n'a rien
+        // à voir avec la langue.
+        .overlay(alignment: .topTrailing) {
+            if documentComposesReel { documentForcePlainPostToggle }
+        }
+        // Retirer un média qui dé-qualifie fait DISPARAÎTRE l'interrupteur — et
+        // doit réarmer le drapeau à `false`. Le drapeau n'est jamais invisible
+        // ET effectif (il ne pèse que quand ça qualifie, et l'interrupteur est
+        // peint exactement alors) : le risque que ce reset ferme est plus
+        // subtil — un `Post` forcé pour UNE composition survivrait à son
+        // remplacement par une AUTRE qui re-qualifie, imposant en silence un
+        // choix fait pour un contenu différent. Le reset fait repartir toute
+        // re-qualification du défaut honnête (REEL).
+        .adaptiveOnChange(of: documentLocalMedia) { _, _ in
+            guard !documentComposesReel else { return }
+            documentForcePlainPost = false
+        }
         .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
         .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
         // **L'ingestion de fichiers LOCAUX (T2.3)** — trois sélecteurs montés
@@ -910,6 +937,55 @@ struct MeeshyComposerHost: View {
         CameraView { result in
             Task { await ingestCameraCapture(result) }
         }
+    }
+
+    /// **Le gate de l'interrupteur (T2.4).** Même prédicat SDK que
+    /// `PublishIntent.document` juge en aval (`ReelComposition.defaultType`
+    /// via `qualifiesAsReel`) — jamais un seuil recopié ici. Sans lui,
+    /// l'interrupteur resterait peint sur une composition qui n'a rien à
+    /// offrir (loi 4) : une image seule ou un texte seul ne qualifient pas.
+    private var documentComposesReel: Bool {
+        ReelComposition.qualifiesAsReel(
+            mimeTypes: documentLocalMedia.map(\.mimeType),
+            durationsMs: documentLocalMedia.map(\.durationMs)
+        )
+    }
+
+    /// **L'interrupteur POST ↔ RÉEL (T2.4)** — la capacité que la feuille
+    /// absorbée portait et que le meuble avait perdue depuis T2.3 : un média
+    /// qualifiant (vidéo, audio ≥ 3 s, ≥ 2 images) fait élire `"REEL"` par
+    /// `ReelComposition.defaultType` sans offrir à l'auteur le moyen de garder
+    /// un post simple. Même modèle visuel et **mêmes clés i18n** que
+    /// `FeedView+Attachments.reelTypeToggle` (`feed.composer.type.post` /
+    /// `.reel` / `.hint`) — zéro clé neuve, deux traductions à faire diverger
+    /// sinon.
+    private var documentForcePlainPostToggle: some View {
+        Button {
+            documentForcePlainPost.toggle()
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: documentForcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
+                    .font(MeeshyFont.relative(10))
+                Text(documentForcePlainPost
+                    ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
+                    : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
+                    .font(MeeshyFont.relative(12))
+            }
+            .foregroundColor(documentForcePlainPost ? MeeshyColors.textSecondary(isDark: true) : MeeshyColors.indigo300)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(MeeshyColors.indigo100.opacity(0.15))
+                    .overlay(
+                        Capsule()
+                            .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
+                    )
+            )
+        }
+        .accessibilityHint(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
+        .padding(16)
     }
 
     /// **La capsule de langue (T2.2)** — le septième contrôle que la feuille
@@ -1517,8 +1593,14 @@ struct MeeshyComposerHost: View {
             // `originalLanguage` vient du SOCLE (`documentLanguage`, T2.2) et
             // non plus d'un littéral `nil` : c'est la capsule qui l'écrit, la
             // porte qui la poste telle quelle.
+            //
+            // `forcePlainPost` vient de l'interrupteur du SOCLE (T2.4,
+            // `documentForcePlainPost`) — jamais d'un littéral `false` : un
+            // littéral ferait toujours élire `"REEL"` sur une composition
+            // qualifiante, exactement la régression que ce lot referme.
             return ComposerDocumentDraft.document(
                 format: selectedFormat,
+                forcePlainPost: documentForcePlainPost,
                 text: documentText,
                 visibility: composerVisibility,
                 visibilityUserIds: composerVisibilityUserIds,

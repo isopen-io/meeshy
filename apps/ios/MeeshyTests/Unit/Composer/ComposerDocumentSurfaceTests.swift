@@ -1249,7 +1249,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// document ne portait pas le champ du tout.
     func test_leBrouillonDuDocument_porteSaListeNominative_quandLAudienceLExige() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .only, visibilityUserIds: ["u1", "u2"], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .only, visibilityUserIds: ["u1", "u2"], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
         )
         XCTAssertEqual(
             brouillon.visibilityUserIds, ["u1", "u2"],
@@ -1262,7 +1262,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// n'en veut pas la ferait persister pour rien.
     func test_leBrouillonDuDocument_ecarteLaListe_quandLAudienceNeLExigePas() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
         )
         XCTAssertNil(
             brouillon.visibilityUserIds,
@@ -1282,7 +1282,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// dur, et aucun appelant ne pouvait donc le remplir.
     func test_leBrouillonDuDocument_porteSaSource_sansQuoiLAncragePerdSonOrigine() {
         let ancrage = ComposerDocumentDraft.document(
-            format: .post, text: "je garde", visibility: .public, visibilityUserIds: [], repostOfId: "mood-source", localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: "je garde", visibility: .public, visibilityUserIds: [], repostOfId: "mood-source", localMedia: [], location: nil, originalLanguage: nil
         )
         XCTAssertEqual(
             ancrage.repostOfId, "mood-source",
@@ -1344,13 +1344,111 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
         let lieu = SharedPlace(latitude: 48.8583736, longitude: 2.2944813, name: "Tour Eiffel")
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil,
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil,
             localMedia: [media], location: lieu, originalLanguage: "es"
         )
 
         XCTAssertEqual(brouillon.localMedia, [media])
         XCTAssertEqual(brouillon.location, lieu)
         XCTAssertEqual(brouillon.originalLanguage, "es")
+    }
+
+    // MARK: - T2.4 — la bascule POST ↔ RÉEL
+
+    /// **`forcePlainPost` armé doit gagner sur une composition qualifiante.**
+    ///
+    /// Depuis T2.3, une vidéo ≥ 3 s fait élire `"REEL"` par
+    /// `ReelComposition.defaultType` — la loi 9 permet à l'auteur de changer
+    /// de FORMAT, jamais de lui retirer ce choix. Ce test suit la matière
+    /// jusqu'au bout de la chaîne : du brouillon (`ComposerDocumentDraft`,
+    /// où l'interrupteur du meuble sème ce drapeau) jusqu'à l'intention
+    /// publiée (`PublishIntent.document`, qui la remet à
+    /// `ReelComposition.defaultType` — le juge UNIQUE, jamais recopié). Le
+    /// second appel (`forcePlainPost: false`) n'est pas décoratif : sans lui,
+    /// ce test resterait vert même si `forcePlainPost` cessait d'avoir le
+    /// moindre effet sur `intentArme.type`.
+    func test_forcePlainPostArme_surUneVideoQualifiante_publieUnPOST() {
+        let video = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/clip.mp4"), mimeType: "video/mp4", durationMs: 10_000
+        )
+
+        let arme = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: true, text: "légende", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [video], location: nil, originalLanguage: nil
+        )
+        XCTAssertTrue(arme.forcePlainPost, "Le brouillon doit porter le drapeau tel que la fabrique l'a reçu.")
+
+        let intentArme = PublishIntent.document(
+            localMedia: arme.localMedia,
+            forcePlainPost: arme.forcePlainPost,
+            content: arme.text,
+            visibility: arme.visibility.rawValue,
+            visibilityUserIds: arme.visibilityUserIds,
+            originalLanguage: arme.originalLanguage,
+            mentions: arme.mentions,
+            location: arme.location,
+            discoverabilityPrecision: nil
+        )
+        XCTAssertEqual(
+            intentArme.type, "POST",
+            "Une vidéo de 10 s qualifie pour un REEL — `forcePlainPost` armé doit garder un POST simple."
+        )
+
+        let nonArme = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "légende", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [video], location: nil, originalLanguage: nil
+        )
+        let intentNonArme = PublishIntent.document(
+            localMedia: nonArme.localMedia,
+            forcePlainPost: nonArme.forcePlainPost,
+            content: nonArme.text,
+            visibility: nonArme.visibility.rawValue,
+            visibilityUserIds: nonArme.visibilityUserIds,
+            originalLanguage: nonArme.originalLanguage,
+            mentions: nonArme.mentions,
+            location: nonArme.location,
+            discoverabilityPrecision: nil
+        )
+        XCTAssertEqual(
+            intentNonArme.type, "REEL",
+            "Sans le forçage, la même vidéo qualifiante doit rester un REEL — sinon ce test ne prouverait rien."
+        )
+    }
+
+    /// **La PRÉSENCE de l'interrupteur suit la règle SDK, jamais un seuil
+    /// recopié (T2.4, tests 1 & 2).** L'interrupteur POST ↔ RÉEL n'existe dans
+    /// le meuble que si la composition qualifie — loi 4, un contrôle sans effet
+    /// est absent. Le prédicat qui le gate (`documentComposesReel`) est
+    /// EXACTEMENT `ReelComposition.qualifiesAsReel(mimeTypes:durationsMs:)`,
+    /// celui-là même que `PublishIntent.document` remet à `defaultType` : une
+    /// seule règle, jamais deux à faire diverger. Ce test verrouille ses
+    /// verdicts pour qu'un seuil recopié rougisse ici comme il rougirait côté
+    /// serveur.
+    func test_laQualificationReel_duMeuble_estLaRegleSDK_jamaisUnSeuilRecopie() {
+        func qualifie(_ media: [ComposerDocumentMedia]) -> Bool {
+            ReelComposition.qualifiesAsReel(
+                mimeTypes: media.map(\.mimeType), durationsMs: media.map(\.durationMs)
+            )
+        }
+        let image = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/a.jpg"), mimeType: "image/jpeg", durationMs: nil
+        )
+        let video10 = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/v.mp4"), mimeType: "video/mp4", durationMs: 10_000
+        )
+        let audio5 = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/a.m4a"), mimeType: "audio/mp4", durationMs: 5_000
+        )
+        let videoCourte = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/court.mp4"), mimeType: "video/mp4", durationMs: 1_000
+        )
+
+        XCTAssertFalse(qualifie([]), "Un texte seul, sans média, ne qualifie pas — l'interrupteur reste absent.")
+        XCTAssertFalse(qualifie([image]), "Une image seule ne qualifie pas.")
+        XCTAssertFalse(qualifie([videoCourte]), "Une vidéo de 1 s (< 3 s) ne qualifie pas.")
+        XCTAssertTrue(qualifie([video10]), "Une vidéo de 10 s qualifie — l'interrupteur apparaît.")
+        XCTAssertTrue(qualifie([image, image]), "Deux images qualifient.")
+        XCTAssertTrue(qualifie([audio5]), "Un audio de 5 s qualifie.")
     }
 
     /// **Le cas NOMINAL, média compris : la promesse « offline compris » tient
@@ -1367,7 +1465,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             url: URL(fileURLWithPath: "/tmp/photo.jpg"), mimeType: "image/jpeg", durationMs: nil
         )
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil,
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil,
             localMedia: [media], location: nil, originalLanguage: nil
         )
         for horsLigne in [true, false] {
@@ -1391,7 +1489,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             url: URL(fileURLWithPath: "/tmp/photo.jpg"), mimeType: "image/jpeg", durationMs: nil
         )
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "", visibility: .public, visibilityUserIds: [], repostOfId: nil,
+            format: .post, forcePlainPost: false, text: "", visibility: .public, visibilityUserIds: [], repostOfId: nil,
             localMedia: [media], location: nil, originalLanguage: nil
         )
         XCTAssertNotEqual(
@@ -2029,7 +2127,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUnBrouillonQuiNestPasUnPost() {
         for format in [ComposerFormat.status, .story, .reel] {
             let brouillon = ComposerDocumentDraft.document(
-                format: format, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+                format: format, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -2051,7 +2149,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUnBrouillonSansMatiere() {
         for texte in ["", "   ", "\n"] {
             let brouillon = ComposerDocumentDraft.document(
-                format: .post, text: texte, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+                format: .post, forcePlainPost: false, text: texte, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -2077,7 +2175,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUneAudienceNominativeSansPersonne() {
         for nominative in PostVisibility.composerSelectableCases where nominative.requiresUserSelection {
             let brouillon = ComposerDocumentDraft.document(
-                format: .post, text: "bonjour", visibility: nominative, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+                format: .post, forcePlainPost: false, text: "bonjour", visibility: nominative, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -2087,7 +2185,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             )
 
             let complet = ComposerDocumentDraft.document(
-                format: .post, text: "bonjour", visibility: nominative, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+                format: .post, forcePlainPost: false, text: "bonjour", visibility: nominative, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: complet, isOffline: false),
@@ -2108,7 +2206,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// `isOffline()` répond oui.
     func test_lePlan_dUnPostTexte_prendLeCheminDejaDurable_desDeuxCotesDuReseau() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
         )
         for horsLigne in [true, false] {
             XCTAssertEqual(
@@ -2157,7 +2255,8 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             visibilityUserIds: nil,
             mentions: nil,
             repostOfId: "post-source",
-            audioUrl: nil, localMedia: [], location: nil, originalLanguage: nil
+            audioUrl: nil, localMedia: [], location: nil, originalLanguage: nil,
+            forcePlainPost: false
         )
         XCTAssertEqual(
             ComposerDocumentSendPlan.plan(for: citation, isOffline: false),

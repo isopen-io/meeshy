@@ -894,7 +894,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     func test_leBrouillonDuDocument_nePlafonnePasLeTexte_carUnPostNaPasDePlafond() {
         let long = String(repeating: "a", count: 300)
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
         )
 
         XCTAssertEqual(brouillon.text?.count, 300)
@@ -906,7 +906,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// lecteur aurait crue tenue.
     func test_leBrouillonDuDocument_neFabriqueNiEmojiNiMention() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
         )
         XCTAssertNil(brouillon.emoji)
         XCTAssertNil(brouillon.mentions)
@@ -1929,6 +1929,75 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 "Loi 4 : un format non offert est ABSENT du plateau, jamais grisé ni rendu transparent."
             )
         }
+    }
+
+    // MARK: - T2.4 — l'interrupteur POST ↔ RÉEL, gaté sur la qualification
+
+    /// **L'interrupteur n'est peint QUE si la composition qualifie (T2.4,
+    /// tests 1 & 2 — loi 4).** Un contrôle sans effet est absent : le retirer
+    /// du gate ferait apparaître un bouton « Réel » sur un texte seul, qui ne
+    /// changerait rien. La garde s'ancre sur le câblage compacté de l'overlay.
+    func test_host_lInterrupteurPostReel_estGateSurLaQualification() throws {
+        let code = try hostCompact()
+        XCTAssertTrue(
+            code.contains(compact("if documentComposesReel { documentForcePlainPostToggle }")),
+            "L'interrupteur ne se monte que sous `documentComposesReel` — sinon il se peint sur une composition qui n'a rien à offrir."
+        )
+    }
+
+    /// **La qualification du meuble APPELLE la règle SDK, jamais un seuil
+    /// recopié (T2.4, test 2).** Recopier « ≥ 3 s » ou « ≥ 2 images » ici
+    /// ferait deux règles à faire diverger, dont l'une côté serveur
+    /// (`ReelComposition.defaultType` juge l'envoi). La garde lit le BLOC du
+    /// prédicat : il appelle `qualifiesAsReel` et ne contient aucune
+    /// comparaison numérique recopiée.
+    func test_host_laQualification_appelleLaRegleSDK_neRecopiePasLeSeuil() throws {
+        guard let corps = declarationBody(startingAt: "private var documentComposesReel", in: try hostCode()) else {
+            return XCTFail("`documentComposesReel` doit être une propriété calculée — la garde s'ancre sur son bloc.")
+        }
+        let compacte = compact(corps)
+        XCTAssertTrue(
+            compacte.contains(compact("ReelComposition.qualifiesAsReel(")),
+            "Le gate doit APPELER la règle SDK, jamais la recopier."
+        )
+        for recopie in [">=", ">", "count", "3000", "3_000"] {
+            XCTAssertFalse(
+                compacte.contains(compact(recopie)),
+                "Le bloc contient `\(recopie)` — un seuil recopié qui divergerait du juge serveur."
+            )
+        }
+    }
+
+    /// **Retirer un média qui dé-qualifie fait retomber le drapeau à `false`
+    /// (T2.4, test 4).** Sans ce reset, un `forcePlainPost` posé pendant qu'un
+    /// RÉEL était composé survivrait, INVISIBLE (l'interrupteur ayant disparu
+    /// avec la qualification), et gouvernerait la publication SUIVANTE. La
+    /// garde s'ancre sur le fragment compacté unique du reset.
+    func test_host_lInterrupteurPostReel_reArmeLeDrapeau_quandLeMediaDequalifie() throws {
+        let code = try hostCompact()
+        XCTAssertTrue(
+            code.contains(compact(".adaptiveOnChange(of: documentLocalMedia)")),
+            "Le reset doit s'accrocher au CHANGEMENT du média local — la seule chose qui peut dé-qualifier."
+        )
+        XCTAssertTrue(
+            code.contains(compact("guard !documentComposesReel else { return } documentForcePlainPost = false")),
+            "…et remettre le drapeau à `false` dès que la composition ne qualifie plus."
+        )
+    }
+
+    /// **L'interrupteur vit dans le SOCLE, pas dans le plateau (T2.4, test
+    /// 5).** Le plateau porte l'éventail de FORMAT (`ComposerFormatFan`, gardé
+    /// une fois ci-dessus) ; l'interrupteur POST ↔ RÉEL est un contrôle du
+    /// socle, gaté sur la composition. Le monter dans le plateau ferait deux
+    /// contrôles pour un même format. Garde NÉGATIVE sur le bloc du plateau.
+    func test_host_lInterrupteurPostReel_nEstPasDansLePlateau() throws {
+        guard let corps = declarationBody(startingAt: "private var plateauTools", in: try hostCode()) else {
+            return XCTFail("Le plateau doit être une propriété nommée `plateauTools` — la garde s'ancre dessus.")
+        }
+        XCTAssertFalse(
+            compact(corps).contains(compact("documentForcePlainPostToggle")),
+            "L'interrupteur POST ↔ RÉEL n'est pas un outil de plateau — il vit dans le socle, sous `documentComposesReel`."
+        )
     }
 
     /// Ce que l'éventail RÉSOUT doit gouverner l'envoi, pas seulement le chip

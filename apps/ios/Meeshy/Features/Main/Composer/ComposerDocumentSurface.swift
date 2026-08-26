@@ -918,6 +918,17 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// La langue DÉCLARÉE du contenu. `nil` ⇒ le serveur détecte.
     let originalLanguage: String?
 
+    /// **T2.4 — l'interrupteur POST ↔ RÉEL.** `ReelComposition.defaultType`
+    /// élit `"REEL"` dès qu'une vidéo, un audio ≥ 3 s ou ≥ 2 images qualifient
+    /// (`qualifiesAsReel`) ; ce champ, quand `true`, retient un POST simple
+    /// malgré la qualification — la capacité que la feuille absorbée portait
+    /// et que le meuble avait perdue en héritant du gate. Un mood n'a jamais
+    /// de média qualifiant : sa fabrique le pose à `false` sans exposer de
+    /// paramètre. Aucune valeur par défaut ici — même discipline que le reste
+    /// du type (T2.1) : un défaut ferait disparaître le champ d'un site
+    /// d'appel sans casser la moindre compilation.
+    let forcePlainPost: Bool
+
     /// Le brouillon d'un MOOD.
     ///
     /// `repostOfId` et `audioUrl` sont les deux graines d'une republication (lot
@@ -956,7 +967,11 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             audioUrl: audioUrl,
             localMedia: [],
             location: nil,
-            originalLanguage: nil
+            originalLanguage: nil,
+            // Un mood ne porte jamais de média local (`localMedia: []`
+            // au-dessus) : il ne peut donc jamais qualifier comme réel, et ce
+            // champ n'a pas besoin d'un paramètre pour ce geste.
+            forcePlainPost: false
         )
     }
 
@@ -985,8 +1000,17 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// La normalisation de la loi 3 est la MÊME que celle du mood, et à la même
     /// place — dans la fabrique, jamais chez l'appelant : porter une liste sous
     /// une audience qui n'en veut pas la ferait persister pour rien.
+    ///
+    /// **`forcePlainPost` est arrivé au T2.4, avec l'interrupteur POST ↔
+    /// RÉEL du meuble**, et il n'a pas davantage de valeur par défaut, pour la
+    /// MÊME raison que `repostOfId` et `visibilityUserIds` juste au-dessus :
+    /// un défaut le ferait disparaître d'un site d'appel sans casser la
+    /// moindre compilation, et un auteur qui viendrait de choisir « Post »
+    /// verrait sa composition partir en `"REEL"` sans qu'aucun écran ne le
+    /// dise.
     static func document(
         format: ComposerFormat,
+        forcePlainPost: Bool,
         text: String,
         visibility: PostVisibility,
         visibilityUserIds: [String],
@@ -1006,7 +1030,8 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             audioUrl: nil,
             localMedia: localMedia,
             location: location,
-            originalLanguage: originalLanguage
+            originalLanguage: originalLanguage,
+            forcePlainPost: forcePlainPost
         )
     }
 }
@@ -1389,9 +1414,13 @@ struct DocumentComposerDoor: View {
         // `draft.originalLanguage` porte ce que la capsule du meuble a écrit,
         // semé sur `DefaultComposerLanguage.resolve()` — qui RESTE le point de
         // DÉPART du brouillon, jamais rappelé ici.
+        // `forcePlainPost` vient du brouillon (T2.4) — l'interrupteur du
+        // meuble l'y a semé — jamais d'un littéral : un `false` en dur ferait
+        // partir en `"REEL"` la composition qu'un auteur vient de retenir en
+        // POST simple.
         await viewModel.publish(PublishIntent.document(
             localMedia: draft.localMedia,
-            forcePlainPost: false,
+            forcePlainPost: draft.forcePlainPost,
             content: draft.text,
             visibility: draft.visibility.rawValue,
             visibilityUserIds: draft.visibilityUserIds,
