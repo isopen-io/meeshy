@@ -2,6 +2,58 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-26 **the viewer honours a text element's frosted-glass / solid BACKDROP** (slice
+> `story-viewer-text-backdrop`, feature-parity E. Stories — "Frosted-glass text backdrops … " line, the
+> reader-render half whose author half the composer already shipped). Before this, the composer authored a
+> text element's backing (`StoryTextElement.background` → `toTextObject` emits the `backgroundStyle` tagged
+> union, and the composer canvas painted it live), but the VIEWER dropped it entirely: `StoryTextObjectProjection.project`
+> never resolved `backgroundStyle`/`textBg`, and `StoryTextObjectView` carried no backing field — so an
+> iOS/web/backend-authored `.solid(hex)` or `.glass(radius)` text backdrop rendered on Android as plain
+> floating glyphs. A real cross-client parity gap, the exact "reader honours X" shape of the background-media
+> slices below.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3619 (`claude/brave-archimedes-wwkr4u`,
+> a `packages/shared` + cross-platform-test Prisme-preview contract) — not a `claude/apps/android/<slice-id>`
+> routine slice, no `apps/android` collision. Prior slice (`story-composer-background-video-transform`) is on
+> `main` (HEAD `dfa05c89`). Branched off freshly-fetched `origin/main`.
+>
+> **The fix — one pure resolver + one projection field + one viewer glue.** (1) `StoryTextBackground.resolve(backgroundStyle,
+> textBg)` (`:feature:stories`) ports iOS `StoryTextObject.resolvedBackgroundStyle` exactly — priority modern
+> `backgroundStyle` > legacy `textBg`→`Solid` > `None`, the modern style winning even when it resolves to `None`
+> (an explicit `type:"none"` suppresses a stale legacy hex), making it the exact inverse of the existing
+> `toStyleWire`. Decodes TOLERANTLY (Solid with no usable hex / unknown `type` / blank legacy hex → `None`;
+> Glass with absent/non-finite/non-positive radius keeps the glass intent and clamps the sigma to
+> `DEFAULT_GLASS_RADIUS`). (2) `StoryTextObjectView.background` (default `None`), set once in `project()`. (3)
+> The viewer's `StoryTextObjectLayer` wraps the glyphs in a backing Box — rounded solid fill (honouring an
+> 8-digit alpha hex via a reader-local parser, since the shared `hexColor` is 6-digit-only) or a translucent
+> frosted scrim for glass — mirroring the composer's `storyTextBacking` so author and reader agree on the look.
+>
+> **Tests: +19** (+1 net vs the routine's counting convention; all pure/JVM). 14 `StoryTextBackgroundTest.resolve`
+> covering every priority + tolerant-decay branch (none/solid/glass/explicit-none-wins/legacy-hex/blank-legacy/
+> null-hex/blank-hex/missing-radius→default/non-positive→default/NaN→default/unknown-type + a toStyleWire
+> round-trip); 4 projection (none/glass/solid/legacy). Mutation-RED-proven ×2: forcing `project()`'s background
+> to `None` reddened EXACTLY the 3 non-None projection tests (the None test stayed green); dropping the glass
+> radius guard (`?: DEFAULT` without the finite/positive `takeIf`) reddened EXACTLY the 2 non-positive/non-finite
+> tests (missing-radius stayed green).
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** `sdkmanager` installed android-35;
+> AGP auto-installed pristine `android-37.0`; the first `./gradlew` hash-errored on bare `android-37`; `cp -r
+> android-37.0 android-37` + `source.properties` `AndroidVersion.ApiLevel=37.0→37` (the FULL key), keeping BOTH
+> dirs, resolved it (the documented recipe).
+>
+> **Verified**: targeted `StoryTextBackgroundTest` + `StoryTextObjectProjectionTest` green, both mutation proofs,
+> then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate)
+> **BUILD SUCCESSFUL in 4m 49s** [PR CI = the merge gate]. Reviewer PASS. Diff is `apps/android` only (3 amended
+> prod files: resolver + view/projection + viewer screen; 2 amended test files; tracking docs). Verdict: **PASS**
+> — a pure resolver reused by a projection + a viewer `Box` glue mirroring the composer; behavioural tests
+> through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the last open piece of the "Frosted-glass text backdrops" line is the **persistent safe-zone overlay
+> grid** (composer): a static rule-of-thirds/safe-margin overlay while dragging, distinct from the transient
+> snap-guide feedback already shipped. Alternatively advance to the next-highest unchecked §E item (e.g. the
+> "Multi-element context menu" unified long-press menu, or "Per-element + per-slide duration" remainders). Scout
+> `feature-parity.md` read-only before branching.
+
 > On 2026-08-26 **the composer AUTHORS a background VIDEO's framing** (slice
 > `story-composer-background-video-transform`, feature-parity E. Stories — "Backgrounds: … looping/non-looping
 > video", the WRITE half that closes the author→reader loop the reader-video slice opened, and the last open

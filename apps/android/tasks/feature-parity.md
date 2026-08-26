@@ -3887,8 +3887,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       draws the active guide line(s) (accent `primary`) and an `error`-coloured warning border when
       out of bounds; the drag-end signal is a non-consuming `Final`-pass `awaitEachGesture` that
       runs alongside the transform detector (glue). A natural magnetic-alignment gesture — surpasses
-      iOS, whose snapping has no per-axis guide overlay here. +25 tests (18 resolver, 7 VM). Pending:
-      frosted-glass text backdrops, persistent safe-zone overlay grid.
+      iOS, whose snapping has no per-axis guide overlay here. +25 tests (18 resolver, 7 VM).
+      **Frosted-glass / solid text backdrops READER done** (`story-viewer-text-backdrop`): the composer
+      already AUTHORED a text element's backing (`StoryTextElement.background` → `toTextObject` writes the
+      `backgroundStyle` tagged union) and painted it live on the composer canvas, but the VIEWER dropped it
+      entirely — `StoryTextObjectProjection.project` never resolved `backgroundStyle`/`textBg`, so an
+      iOS/web/backend-authored `.solid(hex)` or `.glass(radius)` text backdrop rendered on Android as plain
+      floating glyphs (a real cross-client parity gap). A pure `StoryTextBackground.resolve(backgroundStyle,
+      textBg)` ports iOS `StoryTextObject.resolvedBackgroundStyle` exactly (priority: modern `backgroundStyle`
+      > legacy `textBg`→Solid > None — the modern style wins even when it resolves to None, suppressing a
+      stale legacy hex), decoding TOLERANTLY (a Solid with no usable hex / an unknown `type` / a blank legacy
+      hex → None; a Glass with an absent/non-finite/non-positive radius keeps the glass intent and clamps the
+      sigma to `DEFAULT_GLASS_RADIUS`). `project()` resolves it once onto `StoryTextObjectView.background`;
+      the viewer's `StoryTextObjectLayer` paints the backing behind the glyphs (rounded solid fill honouring
+      an 8-digit alpha hex, translucent frosted scrim for glass), mirroring the composer's own `storyTextBacking`
+      so author and reader agree on the look. +19 tests (14 `StoryTextBackgroundTest.resolve` covering every
+      priority + tolerant-decay branch + a toStyleWire round-trip; 4 projection: none/glass/solid/legacy;
+      +1 net accounting). Mutation-RED-proven twice (dropping the projection's resolution reddened EXACTLY the
+      3 non-None projection tests while the None test stayed green; dropping the glass radius guard reddened
+      EXACTLY the 2 non-positive/non-finite tests while the missing-radius test stayed green). Pending on this
+      line: persistent safe-zone overlay grid.
 - [x] Z-order management (front/back, forward/backward) persisted for WYSIWYG playback
       (`story-text-element-zorder`): the slide's `elements` list order *is* the paint order (index 0 =
       back, last = front), so a pure `StorySlideDeck.reorderTextElement(id, StoryZOrder)` restacks the
