@@ -387,7 +387,8 @@ extension StoryComposerViewModel {
     @discardableResult
     func addLocation(place: SharedPlace) -> StoryLocationObject {
         let offset = Double(currentEffects.locationObjects.count % 5) * 0.04
-        let badge = StoryLocationObject(place: place, x: 0.5, y: 0.8 - offset)
+        let badge = StoryLocationObject(place: place, x: 0.5, y: 0.8 - offset,
+                                        sourceLanguage: declaredContentLanguage)
         var effects = currentEffects
         effects.locationObjects.append(badge)
         currentEffects = effects
@@ -412,7 +413,9 @@ extension StoryComposerViewModel {
     func addSticker(emoji: String, provider: String? = nil) -> StorySticker {
         let count = currentEffects.stickerObjects?.count ?? 0
         let offset = Double(count % 5) * 0.04
-        let sticker = StorySticker(emoji: emoji, provider: provider, x: 0.5 + offset, y: 0.5 + offset)
+        let sticker = StorySticker(emoji: emoji, provider: provider,
+                                   sourceLanguage: declaredContentLanguage,
+                                   x: 0.5 + offset, y: 0.5 + offset)
         var effects = currentEffects
         var stickers = effects.stickerObjects ?? []
         stickers.append(sticker)
@@ -712,6 +715,16 @@ extension StoryComposerViewModel {
            let idx = audios.firstIndex(where: { $0.id == elementId }) {
             audios[idx].sourceLanguage = language
             effects.audioPlayerObjects = audios
+        }
+
+        if var stickers = effects.stickerObjects,
+           let idx = stickers.firstIndex(where: { $0.id == elementId }) {
+            stickers[idx].sourceLanguage = language
+            effects.stickerObjects = stickers
+        }
+
+        if let idx = effects.locationObjects.firstIndex(where: { $0.id == elementId }) {
+            effects.locationObjects[idx].sourceLanguage = language
         }
 
         currentEffects = effects

@@ -238,6 +238,7 @@ public extension CanvasV3 {
                                     timing: timingV3(start: sticker.startTime,
                                                      end: effects.wireTimingEnd?[sticker.id],
                                                      keyframes: nil),
+                                    locale: nonEmpty(sticker.sourceLanguage),
                                     payload: Self.stickerPayload(sticker,
                                                                  anchorPoint: effects.wireAnchorPoint?[sticker.id])))
         }
@@ -282,6 +283,7 @@ public extension CanvasV3 {
                                     timing: timingV3(start: nil,
                                                      end: effects.wireTimingEnd?[location.id],
                                                      keyframes: nil),
+                                    locale: nonEmpty(location.sourceLanguage),
                                     payload: payload))
         }
 
@@ -719,6 +721,7 @@ public extension StoryEffects {
             emoji: emoji,
             postMediaId: postMediaId,
             provider: object.payload.string("provider"),
+            sourceLanguage: object.locale,
             x: position.x, y: position.y,
             scale: object.transform.scale, rotation: object.transform.rotation,
             zIndex: object.z,
@@ -745,7 +748,8 @@ public extension StoryEffects {
             x: position.x, y: position.y,
             scale: object.transform.scale, rotation: object.transform.rotation,
             zIndex: object.z,
-            anchor: pivotPoint(object.payload))
+            anchor: pivotPoint(object.payload),
+            sourceLanguage: object.locale)
     }
 
     private static func audioObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryAudioPlayerObject {
