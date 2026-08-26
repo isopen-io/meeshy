@@ -29,7 +29,8 @@ final class FeedViewModelTests: XCTestCase {
         socialSocket: MockSocialSocket? = nil,
         postService: MockPostService? = nil,
         offlineQueue: MockOfflineQueue? = nil,
-        preferredLanguages: [String] = []
+        preferredLanguages: [String] = [],
+        feedCache: (any FeedCacheStoring)? = nil
     ) -> (
         sut: FeedViewModel,
         api: MockAPIClientForApp,
@@ -45,7 +46,8 @@ final class FeedViewModelTests: XCTestCase {
             socialSocket: socket,
             postService: postService,
             languageProvider: languageProvider,
-            offlineQueue: offlineQueue ?? MockOfflineQueue()
+            offlineQueue: offlineQueue ?? MockOfflineQueue(),
+            feedCache: feedCache ?? SharedFeedCache()
         )
         return (sut, api, socket, postService)
     }
@@ -329,11 +331,14 @@ final class FeedViewModelTests: XCTestCase {
     /// infinite scroll for the rest of the session. `cursor: nil` is exactly
     /// how `loadFeed` requests page 1, so dropping that guard clause lets
     /// the first scroll-triggered call recover a real cursor.
-    func test_loadMoreIfNeeded_afterFreshCacheOnlySession_stillFetchesDespiteNilCursor() async {
+    func test_loadMoreIfNeeded_afterFreshCacheOnlySession_stillFetchesDespiteNilCursor() async throws {
         let (sut, api, _, _) = makeSUT()
         await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
         let seeded = (0..<10).map { Self.makeFeedPost(id: "cached-\($0)", content: "Post \($0)") }
-        try? await CacheCoordinator.shared.feed.save(seeded, for: "main-feed")
+        // `try`, pas `try?` : une graine qui n'entre pas dans le cache doit
+        // faire échouer le test en le DISANT — pas se lire « 0 post au lieu
+        // de 10 » deux assertions plus loin (rouge CI du 2026-08-26).
+        try await CacheCoordinator.shared.feed.save(seeded, for: "main-feed")
 
         await sut.loadFeed() // .fresh cache hit — no network call, nextCursor stays nil
         XCTAssertEqual(sut.posts.count, 10)
@@ -360,6 +365,62 @@ final class FeedViewModelTests: XCTestCase {
     /// `isLoadingMore=true` race and the others must short-circuit. Without
     /// the guard, the feed would burn N redundant GET /posts/feed per page
     /// boundary scroll.
+    /// La persistance du fil chargé par le réseau partait dans un
+    /// `Task.detached(.utility)` jamais attendu : `loadFeed()` rendait la main
+    /// AVANT que « main-feed » soit écrit. En production, une réponse lente
+    /// pouvait écraser une plus récente ; en test, la sauvegarde tardive d'un
+    /// cas précédent repeuplait le cache après le `invalidate` du suivant et
+    /// lui faisait servir un `.fresh` pollué (rouge CI du 2026-08-26 sur
+    /// `…afterFreshCacheOnlySession…`, vert en isolation 3/3). Le magasin à
+    /// barrière RETIENT la sauvegarde : `loadFeed` ne doit pas avoir fini
+    /// tant qu'elle est retenue.
+    func test_loadFeed_forceRefresh_doesNotReturnBeforeTheFetchedPageIsPersisted() async {
+        let store = GatedFeedCacheStore()
+        let (sut, api, _, _) = makeSUT(feedCache: store)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "net-0", content: "Net 0")], hasMore: false, nextCursor: nil
+        ))
+
+        let load = Task { @MainActor in await sut.loadFeed(forceRefresh: true) }
+
+        await store.waitForSaveRequest()
+        let finishedWhileSaveHeld = await Self.finishes(load, within: .seconds(2))
+        XCTAssertFalse(finishedWhileSaveHeld, "loadFeed(forceRefresh:) returned while the fetched page was still being persisted")
+
+        await store.releaseSave()
+        await load.value
+        let persisted = await store.items(for: "main-feed")
+        XCTAssertEqual(persisted?.map(\.id), ["net-0"])
+    }
+
+    /// `true` si la tâche se termine dans le délai, `false` sinon (elle
+    /// continue de tourner — l'appelant la libère ensuite).
+    ///
+    /// Pas de `withTaskGroup` ici : un groupe attend TOUS ses enfants à la
+    /// sortie de sa portée, `cancelAll()` compris — et l'enfant qui attend
+    /// `task.value` ne peut pas finir tant que la barrière n'est pas levée,
+    /// ce que l'appelant ne fait qu'APRÈS ce retour. Interblocage, puis
+    /// « Test crashed with signal kill » (observé le 2026-08-26 dès que le
+    /// correctif a rendu `loadFeed` vraiment suspendu ; invisible en RED,
+    /// où `loadFeed` rendait la main en quelques ms). Le guetteur est donc
+    /// une tâche NON structurée, et le délai se scrute sur un drapeau.
+    private static func finishes(_ task: Task<Void, Never>, within delay: Duration) async -> Bool {
+        let flag = CompletionFlag()
+        Task { await task.value; await flag.mark() }
+        let deadline = ContinuousClock.now + delay
+        while ContinuousClock.now < deadline {
+            if await flag.isDone() { return true }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return await flag.isDone()
+    }
+
+    private actor CompletionFlag {
+        private var done = false
+        func mark() { done = true }
+        func isDone() -> Bool { done }
+    }
+
     func test_loadMoreIfNeeded_concurrentCalls_makeExactlyOneAPIRequest() async {
         let (sut, api, _, _) = makeSUT()
 
@@ -2353,4 +2414,61 @@ final class FeedViewModelTests: XCTestCase {
         )
     }
 
+}
+
+// MARK: - Gated feed cache double
+
+/// Magasin de cache du fil en mémoire dont `save` se SUSPEND jusqu'à
+/// `releaseSave()` — pour prouver qu'un appelant attend (ou non) sa
+/// persistance. Privé à ce fichier : un fichier de mock neuf exigerait un
+/// passage XcodeGen (cf. tasks/lessons.md, « fichier de test neuf »).
+private actor GatedFeedCacheStore: FeedCacheStoring {
+    private var storage: [String: [FeedPost]] = [:]
+    private var saveRequested: [CheckedContinuation<Void, Never>] = []
+    private var saveRequestedOnce = false
+    private var gate: [CheckedContinuation<Void, Never>] = []
+    private var released = false
+
+    func load(for key: String) async -> CacheResult<[FeedPost]> {
+        guard let items = storage[key] else { return .empty }
+        return .fresh(items, age: 0)
+    }
+
+    func save(_ items: [FeedPost], for key: String) async throws {
+        saveRequestedOnce = true
+        saveRequested.forEach { $0.resume() }
+        saveRequested.removeAll()
+        if !released {
+            await withCheckedContinuation { gate.append($0) }
+        }
+        storage[key] = items
+    }
+
+    func savePreservingFreshness(_ items: [FeedPost], for key: String) async throws {
+        storage[key] = items
+    }
+
+    func patchEverywhere(itemId: String, mutate: @Sendable (inout FeedPost) -> Void) async {
+        for (key, items) in storage {
+            storage[key] = items.map { item in
+                guard item.id == itemId else { return item }
+                var copy = item
+                mutate(&copy)
+                return copy
+            }
+        }
+    }
+
+    func waitForSaveRequest() async {
+        if saveRequestedOnce { return }
+        await withCheckedContinuation { saveRequested.append($0) }
+    }
+
+    func releaseSave() {
+        released = true
+        gate.forEach { $0.resume() }
+        gate.removeAll()
+    }
+
+    func items(for key: String) -> [FeedPost]? { storage[key] }
 }

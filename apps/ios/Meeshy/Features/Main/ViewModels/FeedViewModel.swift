@@ -8,6 +8,42 @@ import MeeshyUI
 // `Features/Main/Services/LanguageProviding.swift` so PostDetailViewModel /
 // BookmarksViewModel can depend on them without importing FeedViewModel.
 
+/// Le magasin de cache du fil, réduit aux quatre opérations que le ViewModel
+/// lui demande. Couture d'injection (règle iOS : toute dépendance entre par
+/// l'init, `.shared` par défaut) — elle permet à un test de RETENIR une
+/// sauvegarde et de prouver que `loadFeed` l'attend, ce qu'aucun test contre
+/// `CacheCoordinator.shared` ne pouvait faire de façon déterministe.
+protocol FeedCacheStoring: Sendable {
+    func load(for key: String) async -> CacheResult<[FeedPost]>
+    func save(_ items: [FeedPost], for key: String) async throws
+    func savePreservingFreshness(_ items: [FeedPost], for key: String) async throws
+    func patchEverywhere(itemId: String, mutate: @Sendable (inout FeedPost) -> Void) async
+}
+
+extension GRDBCacheStore: FeedCacheStoring where Key == String, Value == FeedPost {}
+
+/// Le magasin partagé, atteint par saut d'acteur à chaque appel : la valeur
+/// par défaut d'un init `@MainActor` ne peut pas lire
+/// `CacheCoordinator.shared.feed` (propriété d'un acteur d'un autre module)
+/// sans `await`. Ce relais le fait au moment de chaque opération.
+struct SharedFeedCache: FeedCacheStoring {
+    func load(for key: String) async -> CacheResult<[FeedPost]> {
+        await CacheCoordinator.shared.feed.load(for: key)
+    }
+
+    func save(_ items: [FeedPost], for key: String) async throws {
+        try await CacheCoordinator.shared.feed.save(items, for: key)
+    }
+
+    func savePreservingFreshness(_ items: [FeedPost], for key: String) async throws {
+        try await CacheCoordinator.shared.feed.savePreservingFreshness(items, for: key)
+    }
+
+    func patchEverywhere(itemId: String, mutate: @Sendable (inout FeedPost) -> Void) async {
+        await CacheCoordinator.shared.feed.patchEverywhere(itemId: itemId, mutate: mutate)
+    }
+}
+
 @MainActor
 class FeedViewModel: ObservableObject {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -31,6 +67,7 @@ class FeedViewModel: ObservableObject {
     private var nextCursor: String?
     private let api: APIClientProviding
     private let offlineQueue: OfflineQueueing
+    private let feedCache: any FeedCacheStoring
     private let limit = 20
     private var cancellables = Set<AnyCancellable>()
     /// Subscriptions owned by `subscribeToSocketEvents()` only — kept
@@ -66,13 +103,15 @@ class FeedViewModel: ObservableObject {
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
         postService: PostServiceProviding = PostService.shared,
         languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
-        offlineQueue: OfflineQueueing = OfflineQueue.shared
+        offlineQueue: OfflineQueueing = OfflineQueue.shared,
+        feedCache: any FeedCacheStoring = SharedFeedCache()
     ) {
         self.api = api
         self.socialSocket = socialSocket
         self.postService = postService
         self.languageProvider = languageProvider
         self.offlineQueue = offlineQueue
+        self.feedCache = feedCache
         observePreferredLanguageChanges()
     }
 
@@ -129,7 +168,7 @@ class FeedViewModel: ObservableObject {
         error = nil
 
         if !forceRefresh {
-            let cacheResult = await CacheCoordinator.shared.feed.load(for: "main-feed")
+            let cacheResult = await feedCache.load(for: "main-feed")
 
             switch cacheResult {
             case .fresh(let cachedPosts, _):
@@ -198,9 +237,13 @@ class FeedViewModel: ObservableObject {
                 hasMore = response.pagination?.hasMore ?? false
                 prefetchMedia(around: 0)
 
-                Task.detached(priority: .utility) { [fetched] in
-                    try? await CacheCoordinator.shared.feed.save(fetched, for: "main-feed")
-                }
+                // Attendue EN LIGNE, après la publication de `posts` (l'UI est déjà
+                // servie) — plus de `Task.detached` jamais attendu : une réponse
+                // lente ne peut plus écraser une plus récente dans le cache, et
+                // « main-feed » est écrit quand `loadFeed` rend la main. Le test
+                // `…doesNotReturnBeforeTheFetchedPageIsPersisted` en est le témoin ;
+                // la CI du 2026-08-26 en était le symptôme (cache pollué entre tests).
+                try? await feedCache.save(fetched, for: "main-feed")
 
                 // Persist to GRDB alongside cache
                 if let persistence = feedPersistence {
@@ -433,8 +476,8 @@ class FeedViewModel: ObservableObject {
             // stores-09 — patch every cache key holding this post (detail key,
             // bookmarks…), not just "main-feed" via debouncedCacheSave.
             let newLikes = posts[index].likes
-            Task.detached(priority: .utility) {
-                await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+            Task.detached(priority: .utility) { [feedCache = self.feedCache] in
+                await feedCache.patchEverywhere(itemId: postId) {
                     $0.isLiked = liked
                     $0.likes = newLikes
                 }
@@ -469,8 +512,8 @@ class FeedViewModel: ObservableObject {
         revert.isLiked = isLiked
         revert.likes = likes
         posts[i] = revert
-        Task.detached(priority: .utility) {
-            await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+        Task.detached(priority: .utility) { [feedCache = self.feedCache] in
+            await feedCache.patchEverywhere(itemId: postId) {
                 $0.isLiked = isLiked
                 $0.likes = likes
             }
@@ -516,7 +559,7 @@ class FeedViewModel: ObservableObject {
         // itself is revalidated by `BookmarksViewModel` when the user opens
         // the Favoris tab, so we do NOT trigger a remote refresh here.
         let bookmarksKey = "bookmarks"
-        let result = await CacheCoordinator.shared.feed.load(for: bookmarksKey)
+        let result = await feedCache.load(for: bookmarksKey)
         let cachedBookmarks: [FeedPost]
         switch result {
         case .fresh(let v, _), .stale(let v, _):
@@ -528,7 +571,7 @@ class FeedViewModel: ObservableObject {
         if !cachedBookmarks.contains(where: { $0.id == postId }) {
             var updated = cachedBookmarks
             updated.insert(post, at: 0)
-            try? await CacheCoordinator.shared.feed.savePreservingFreshness(updated, for: bookmarksKey)
+            try? await feedCache.savePreservingFreshness(updated, for: bookmarksKey)
         }
         FeedbackToastManager.shared.showSuccess(String(localized: "feed.bookmark.success", defaultValue: "Added to bookmarks", bundle: .main))
 
@@ -539,7 +582,7 @@ class FeedViewModel: ObservableObject {
             )
         } catch {
             // Rollback the optimistic cache insertion.
-            try? await CacheCoordinator.shared.feed.savePreservingFreshness(snapshot, for: bookmarksKey)
+            try? await feedCache.savePreservingFreshness(snapshot, for: bookmarksKey)
             FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.error", defaultValue: "Error saving bookmark", bundle: .main))
         }
     }
@@ -1510,8 +1553,8 @@ class FeedViewModel: ObservableObject {
                 // « main-feed », donc la traduction n'existait que là et
                 // repartait de zéro dès qu'une autre surface servait le post.
                 let postId = data.postId
-                Task.detached(priority: .utility) {
-                    await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                Task.detached(priority: .utility) { [feedCache = self.feedCache] in
+                    await feedCache.patchEverywhere(itemId: postId) {
                         Self.applyPostTranslation(translation, language: language,
                                                   preferredLanguages: langs, to: &$0)
                     }
@@ -1538,8 +1581,8 @@ class FeedViewModel: ObservableObject {
                 guard changed else { return }
                 self.posts[postIndex] = post
                 let postId = data.postId
-                Task.detached(priority: .utility) {
-                    await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                Task.detached(priority: .utility) { [feedCache = self.feedCache] in
+                    await feedCache.patchEverywhere(itemId: postId) {
                         _ = Self.applyCommentTranslation(
                             text, commentId: commentId, language: language,
                             preferredLanguages: langs, to: &$0
@@ -1738,7 +1781,7 @@ class FeedViewModel: ObservableObject {
             // newest-first : sans ce prefix(100), au-delà de 100 posts
             // accumulés le cold start sert la tranche la plus vieille en
             // .fresh. Miroir de ProfileUserPostsList.
-            try? await CacheCoordinator.shared.feed.savePreservingFreshness(Array(snapshot.prefix(100)), for: "main-feed")
+            try? await feedCache.savePreservingFreshness(Array(snapshot.prefix(100)), for: "main-feed")
         }
     }
 }
