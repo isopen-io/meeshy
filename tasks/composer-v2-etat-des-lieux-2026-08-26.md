@@ -2,7 +2,7 @@
 
 > Mesuré sur `main == ccbd78a328` par un audit read-only de 8 agents (workflow
 > `composer-v2-etat-des-lieux`) + 1 agent de rattrapage (lot H). Réconcilié avec la
-> planche P0 (`docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`, portée
+> planche P0 (`docs/product/planche-meeshy-composer.html`, portée
 > à **rév. 25** : lot 2-3 éclaté en 12 tâches comptées, lede 104→121, ligne rattrapage soldée).
 
 ## Compte du bord de pilotage (rév. 25)

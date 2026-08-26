@@ -483,6 +483,11 @@ accent = hueShift(primary, −30°)
 - `emit()` does NOT await Promises
 - Always wrap async Socket.IO/EventEmitter listeners in try/catch
 
+## MeeshyComposer — la planche est le document maintenu
+`docs/product/planche-meeshy-composer.html` (ex-`docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`, 100+ révisions) est le **bord de pilotage vivant** du composer : matrice feature × état (`data-task` / `data-kind` / `data-state`), onze lois, inventaire, budgets, risques, et les VUES cibles (anatomie, scène 9:16, outils, timeline, étagère, viewers, 18 styles de texte, iconographie, éditeurs). C'est cette vision, validée, que MeeshyComposer / Scène / Timeline doivent reproduire à la fin.
+- Une tâche dont le gate passe bascule SA ligne (camembert ET matrice) dans le MÊME commit `docs(p0): …`, et republie la page https://claude.ai/code/artifact/95de2699-a55c-4ba8-ab00-508594c239ce depuis ce fichier — jamais une page « progress » parallèle.
+- Les rendus des vues (PNG/PDF) vivent dans `docs/product/planche-meeshy-composer/` et sont référencés par le projet GitHub « Meeshy — pilotage » ; chaque tâche de la planche y est une issue portant son identifiant dans le champ « Tâche P0 ».
+
 ## Subdirectory CLAUDE.md Files
 Each major directory has its own CLAUDE.md with domain-specific conventions:
 - `apps/web/CLAUDE.md` - Next.js frontend patterns

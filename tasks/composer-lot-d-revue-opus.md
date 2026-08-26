@@ -2,7 +2,7 @@
 
 # Revue finale — lot D (timeline plan 2D iOS), branche `feat/composer-lot-d` @ `5b16fe1ab`
 
-Périmètre relu : les 13 commits `d36869973..HEAD` (diff **35 fichiers**, +4129/−23), l'état final de `Plan2DLayout` / `Plan2DView` / `StoryTimelineHost` / `Plan2DProjectAdapter` / `Plan2DReorderResolver` / `TimelineMetrics` / `ClipInspector` / `TimelineInspectorHost` / `TimelineViewModel+Plan4Helpers`, les 12 fichiers de test du lot, le code remplacé (`git show d36869973:…/StoryTimelineView.swift`), et les trois référentiels (plan lot D, execution-spec, `2026-08-19-meeshy-composer-views.html`).
+Périmètre relu : les 13 commits `d36869973..HEAD` (diff **35 fichiers**, +4129/−23), l'état final de `Plan2DLayout` / `Plan2DView` / `StoryTimelineHost` / `Plan2DProjectAdapter` / `Plan2DReorderResolver` / `TimelineMetrics` / `ClipInspector` / `TimelineInspectorHost` / `TimelineViewModel+Plan4Helpers`, les 12 fichiers de test du lot, le code remplacé (`git show d36869973:…/StoryTimelineView.swift`), et les trois référentiels (plan lot D, execution-spec, `planche-meeshy-composer.html`).
 
 ---
 

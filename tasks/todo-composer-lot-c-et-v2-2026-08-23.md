@@ -4,14 +4,14 @@
 > chacun leur fichier de tâches (`tasks/composer-lot-{b,d,f}-revue-opus.md`),
 > **le lot C n'en avait aucun** — alors qu'il est TOUT ce qui reste du chantier.
 > Sa définition ne vivait que comme lignes de matrice dans les 351 Ko de
-> `docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`.
+> `docs/product/planche-meeshy-composer.html`.
 
 ## Sources — trois, avec des rôles distincts
 
 | Source | Rôle |
 |---|---|
 | `2026-08-20-meeshy-composer-execution-spec.md` | contrat **gelé** inter-lots, « Hors v1 » opposable |
-| `2026-08-19-meeshy-composer-views.html` | source **vivante** : doctrine (11 lois), inventaire, matrice, **tableau de bord** — rév. 10, **77 %, 50/65** |
+| `planche-meeshy-composer.html` | source **vivante** : doctrine (11 lois), inventaire, matrice, **tableau de bord** — rév. 10, **77 %, 50/65** |
 | `2026-08-23-meeshy-composer-v2-design.md` | **extension** : promotion de « Hors v1 » + lois nouvelles |
 
 **Règle de maintenance héritée, non négociable.** Chaque tâche dont le gate
