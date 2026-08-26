@@ -1,0 +1,434 @@
+<title>Avancement Meeshy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --plane: #f4f5f7; --surface: #fcfcfd; --ink: #14181d; --ink-2: #4f5761; --muted: #7f8791;
+    --grid: #e4e7eb; --axis: #c9ced5; --border: rgba(20, 24, 29, .10); --chip: #eceef1;
+    --done: #2a78d6; --done-soft: #d6e6fa; --wip: #eb6834; --todo: #dfe3e8;
+    --good: #0ca30c; --warning: #fab219; --critical: #d03b3b; --good-text: #006300;
+    --tip-bg: #14181d; --tip-ink: #f2f4f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --plane: #0f1114; --surface: #16191d; --ink: #f2f4f6; --ink-2: #b4bbc5; --muted: #858c96;
+      --grid: #272b31; --axis: #363b42; --border: rgba(255, 255, 255, .10); --chip: #22262c;
+      --done: #3987e5; --done-soft: #1c3d66; --wip: #d95926; --todo: #2f343b;
+      --good-text: #0ca30c; --tip-bg: #f2f4f6; --tip-ink: #14181d;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane: #0f1114; --surface: #16191d; --ink: #f2f4f6; --ink-2: #b4bbc5; --muted: #858c96;
+    --grid: #272b31; --axis: #363b42; --border: rgba(255, 255, 255, .10); --chip: #22262c;
+    --done: #3987e5; --done-soft: #1c3d66; --wip: #d95926; --todo: #2f343b;
+    --good-text: #0ca30c; --tip-bg: #f2f4f6; --tip-ink: #14181d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--plane); color: var(--ink); font-family: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 64px; display: grid; gap: 28px; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+  header h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -.01em; text-wrap: balance; }
+  .meta { color: var(--ink-2); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  .meta a { color: var(--done); }
+  .eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+  .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+  .seg { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+  .seg button { appearance: none; border: 0; background: transparent; color: var(--ink-2); font: inherit; font-size: 13px; padding: 5px 11px; border-radius: 6px; cursor: pointer; }
+  .seg button:hover { color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--chip); color: var(--ink); font-weight: 600; }
+  .seg button:focus-visible, select:focus-visible, .seg-lbl:focus-visible { outline: 2px solid var(--done); outline-offset: 2px; }
+  .filters label { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 13px; }
+  select { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+  .filters .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; }
+  .card h2 { margin: 0 0 2px; font-size: 16px; font-weight: 600; }
+  .card .sub { margin: 0 0 16px; color: var(--ink-2); font-size: 13px; }
+  section.card > .head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; }
+
+  .hero { display: grid; grid-template-columns: minmax(260px, 1.1fr) 2fr; gap: 24px 40px; align-items: stretch; }
+  .hero .lead .eyebrow { margin-bottom: 6px; }
+  .hero .value { font-size: 64px; font-weight: 600; line-height: 1; letter-spacing: -.02em; }
+  .hero .value small { font-size: 26px; font-weight: 500; color: var(--ink-2); margin-left: 2px; }
+  .hero .caption { color: var(--ink-2); font-size: 13px; margin-top: 8px; }
+  .meter { height: 10px; border-radius: 5px; background: var(--todo); overflow: hidden; margin-top: 14px; display: flex; gap: 2px; }
+  .meter i { display: block; height: 100%; background: var(--done); }
+  .meter i.wip { background: var(--wip); }
+  .kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-content: center; }
+  @media (max-width: 560px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .kpi { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; align-content: start; }
+  .kpi .l { color: var(--ink-2); font-size: 12px; }
+  .kpi .v { font-size: 24px; font-weight: 600; line-height: 1.15; }
+  .kpi .d { font-size: 12px; color: var(--muted); }
+  .kpi .d.up { color: var(--good-text); }
+  .kpi .d.down { color: var(--critical); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--ink-2); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .legend i.line { width: 14px; height: 2px; border-radius: 1px; }
+  .sw-done { background: var(--done); } .sw-wip { background: var(--wip); } .sw-todo { background: var(--todo); border: 1px solid var(--axis); }
+  .sw-scope { background: var(--axis); }
+
+  .hrows { display: grid; gap: 14px; margin-top: 14px; }
+  .hrow { display: grid; grid-template-columns: minmax(180px, 300px) 1fr auto; gap: 8px 16px; align-items: center; }
+  .hrow .name { font-weight: 500; }
+  .hrow .name small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+  .bar { height: 16px; border-radius: 4px; background: var(--todo); overflow: hidden; display: flex; gap: 2px; }
+  .bar i { display: block; height: 100%; background: var(--done); cursor: default; transition: filter .12s; }
+  .bar i.wip { background: var(--wip); }
+  .bar i:hover, .bar i:focus-visible { filter: brightness(1.12); outline: none; }
+  .bar i.rest { background: transparent; }
+  .pct { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 4ch; text-align: right; }
+  .pct small { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 6px; }
+  @media (max-width: 720px) { .hrow { grid-template-columns: 1fr auto; } .hrow .bar { grid-column: 1 / -1; } .hero { grid-template-columns: 1fr; } }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; white-space: nowrap; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.group td { background: var(--chip); font-weight: 600; border-bottom: 0; padding-top: 10px; padding-bottom: 10px; }
+  tr.group td small { font-weight: 400; color: var(--ink-2); margin-left: 8px; }
+  td .bar { height: 10px; min-width: 120px; }
+  td.barcell { width: 26%; }
+  .ms-title { display: grid; gap: 1px; }
+  .ms-title .n { color: var(--muted); font-size: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--ink-2); white-space: nowrap; }
+  .chip i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .chip.late i { background: var(--critical); } .chip.soon i { background: var(--warning); } .chip.closed i { background: var(--good); }
+  .chip.late { color: var(--ink); }
+  .tscroll { overflow-x: auto; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--ink-2); font-size: 12px; user-select: none; }
+  summary:hover { color: var(--ink); }
+  details table { margin-top: 8px; }
+
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 12px; }
+  @media (max-width: 900px) { .charts { grid-template-columns: 1fr; } }
+  .chart h3 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
+  .chart .sub { margin: 0 0 8px; }
+  .chart svg { width: 100%; height: auto; display: block; overflow: visible; font-family: inherit; }
+  .chart svg text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .chart svg text.val { fill: var(--ink-2); font-weight: 600; }
+  .chart svg .grid { stroke: var(--grid); stroke-width: 1; shape-rendering: crispEdges; }
+  .chart svg .axis { stroke: var(--axis); stroke-width: 1; shape-rendering: crispEdges; }
+  .chart svg .col { fill: var(--done); transition: opacity .12s; }
+  .chart svg .col.dim { opacity: .55; }
+  .chart svg .hit { fill: transparent; }
+  .chart svg .line-done { fill: none; stroke: var(--done); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart svg .line-scope { fill: none; stroke: var(--axis); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .chart svg .area-done { fill: var(--done); opacity: .10; }
+  .chart svg .dot-done { fill: var(--done); stroke: var(--surface); stroke-width: 2; }
+  .chart svg .dot-scope { fill: var(--axis); stroke: var(--surface); stroke-width: 2; }
+  .chart svg .xhair { stroke: var(--axis); stroke-width: 1; shape-rendering: crispEdges; pointer-events: none; }
+  .period-table td:first-child { font-weight: 500; }
+  .delta { font-size: 12px; color: var(--muted); }
+  .delta.up { color: var(--good-text); } .delta.down { color: var(--critical); }
+
+  #tip { position: fixed; z-index: 10; pointer-events: none; background: var(--tip-bg); color: var(--tip-ink); border-radius: 8px; padding: 8px 10px; font-size: 12px; line-height: 1.4; box-shadow: 0 4px 16px rgba(0,0,0,.18); display: none; max-width: 280px; }
+  #tip .t { font-weight: 600; margin-bottom: 4px; }
+  #tip .r { display: flex; align-items: center; gap: 8px; }
+  #tip .r b { font-weight: 600; min-width: 3ch; font-variant-numeric: tabular-nums; }
+  #tip .r i { width: 12px; height: 2px; border-radius: 1px; display: inline-block; }
+  footer { color: var(--muted); font-size: 12px; display: grid; gap: 6px; max-width: 70ch; }
+  footer p { margin: 0; }
+  .empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+  .notice { margin: -8px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--chip); color: var(--ink-2); font-size: 13px; }
+  .notice code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">Meeshy — pilotage · compte rendu daté</div>
+      <h1>Avancement Meeshy</h1>
+    </div>
+    <div class="meta">
+      <span>Généré le <b id="genAt"></b> depuis GitHub</span>
+      <a href="https://github.com/orgs/isopen-io/projects/1" target="_blank" rel="noopener">Projet « Meeshy — pilotage »</a>
+      <a href="https://github.com/isopen-io/meeshy/milestones" target="_blank" rel="noopener">Milestones</a>
+    </div>
+  </header>
+
+  <p class="notice" id="modeNote" hidden>Mode dégradé : les champs du projet (Status « En cours », noms d'horizon) ne sont pas lisibles sans le secret <code>PILOTAGE_TOKEN</code> — les horizons affichés sont les échéances des milestones.</p>
+
+  <div class="filters" role="group" aria-label="Filtres">
+    <div class="seg" role="group" aria-label="Granularité des périodes" id="periodSeg">
+      <button type="button" data-p="day">Jour</button>
+      <button type="button" data-p="week">Semaine</button>
+      <button type="button" data-p="month">Mois</button>
+      <button type="button" data-p="quarter">Trimestre</button>
+      <button type="button" data-p="semester">Semestre</button>
+      <button type="button" data-p="year">Année</button>
+    </div>
+    <label>Horizon
+      <select id="horizonSel"><option value="">Tous les horizons</option></select>
+    </label>
+    <span class="hint">Les filtres s'appliquent à toute la page</span>
+  </div>
+
+  <section class="card">
+    <div class="hero">
+      <div class="lead">
+        <div class="eyebrow">Avancement global</div>
+        <div class="value"><span id="heroPct"></span><small>%</small></div>
+        <div class="caption" id="heroCap"></div>
+        <div class="meter" id="heroMeter" role="img" aria-label=""></div>
+        <div class="legend" style="margin-top:10px"><span><i class="sw-done"></i>Livrées</span><span><i class="sw-wip"></i>En cours</span><span><i class="sw-todo"></i>À faire</span></div>
+      </div>
+      <div class="kpis" id="kpis"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="head"><div><h2>Par horizon — version cible</h2><p class="sub">Quatre horizons, une échéance chacun ; chaque milestone appartient à un seul horizon.</p></div>
+      <div class="legend"><span><i class="sw-done"></i>Livrées</span><span><i class="sw-wip"></i>En cours</span><span><i class="sw-todo"></i>À faire</span></div></div>
+    <div class="hrows" id="horizons"></div>
+    <details><summary>Voir en tableau</summary><div class="tscroll"><table id="horizonTable"></table></div></details>
+  </section>
+
+  <section class="card">
+    <div class="head"><div><h2>Rythme de livraison</h2><p class="sub">Issues fermées et créées, par période en cours, comparées à la période précédente.</p></div></div>
+    <div class="tscroll"><table class="period-table" id="periodTable"></table></div>
+    <div class="charts">
+      <div class="chart">
+        <h3>Issues fermées par <span id="granName"></span></h3>
+        <p class="sub" id="colSub"></p>
+        <div id="colChart"></div>
+        <details><summary>Voir en tableau</summary><div class="tscroll"><table id="colTable"></table></div></details>
+      </div>
+      <div class="chart">
+        <h3>Courbe de livraison</h3>
+        <p class="sub">Cumul des issues livrées face au périmètre, en fin de <span class="granName"></span>.</p>
+        <div class="legend" style="margin-bottom:8px"><span><i class="line sw-done"></i>Livrées (cumul)</span><span><i class="line sw-scope"></i>Périmètre (issues créées, cumul)</span></div>
+        <div id="burnChart"></div>
+        <details><summary>Voir en tableau</summary><div class="tscroll"><table id="burnTable"></table></div></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="head"><div><h2>Par milestone</h2><p class="sub">Un milestone = un livrable nommé par son résultat. Groupés par horizon, triés par échéance.</p></div>
+      <div class="legend"><span><i class="sw-done"></i>Livrées</span><span><i class="sw-wip"></i>En cours</span><span><i class="sw-todo"></i>À faire</span></div></div>
+    <div class="tscroll"><table id="msTable"></table></div>
+  </section>
+
+  <footer>
+    <p><b>Méthode.</b> Une issue est « livrée » quand elle est fermée sur GitHub (le projet passe alors son Status à Done). Le pourcentage rapporte les issues livrées à toutes les issues du projet, y compris les 94 lignes de la planche MeeshyComposer déjà livrées. Les horizons sont les versions cibles de la roadmap ; l'échéance d'un horizon est celle de ses milestones.</p>
+    <p><b>Lecture.</b> Les 115 fermetures du 26 août 2026 correspondent à la bascule de la planche dans le projet : la courbe par jour ne parle qu'à partir du 27 août. En cas d'écart, l'issue GitHub fait foi.</p>
+  </footer>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script>
+(() => {
+  __COMPUTE__
+  const D = JSON.parse(document.getElementById('data').textContent);
+  const fmtNum = n => new Intl.NumberFormat('fr-FR').format(n);
+  const today = ymd(D.fetchedAt);
+  const HORIZONS = horizonOrder(D.items);
+  const state = { period: 'month', horizon: '' };
+  try { const s = JSON.parse(localStorage.getItem('meeshy-avancement') || '{}'); if (GRAN[s.period]) state.period = s.period; if (HORIZONS.includes(s.horizon)) state.horizon = s.horizon; } catch (e) {}
+  const persist = () => { try { localStorage.setItem('meeshy-avancement', JSON.stringify(state)); } catch (e) {} };
+
+  const $ = id => document.getElementById(id);
+  const el = (tag, attrs, ...kids) => { const n = document.createElement(tag); for (const k in attrs || {}) { if (k === 'class') n.className = attrs[k]; else if (k === 'text') n.textContent = attrs[k]; else n.setAttribute(k, attrs[k]); } for (const c of kids) if (c != null) n.append(c); return n; };
+  const NS = 'http://www.w3.org/2000/svg';
+  const svgEl = (tag, attrs, ...kids) => { const n = document.createElementNS(NS, tag); for (const k in attrs || {}) { if (k === 'text') n.textContent = attrs[k]; else n.setAttribute(k, attrs[k]); } for (const c of kids) if (c != null) n.append(c); return n; };
+
+  const tip = $('tip');
+  const showTip = (x, y, title, rows) => { tip.replaceChildren(el('div', { class: 't', text: title }), ...rows.map(r => { const row = el('div', { class: 'r' }); if (r.color) { const i = el('i'); i.style.background = r.color; row.append(i); } row.append(el('b', { text: r.value }), el('span', { text: r.label })); return row; })); tip.style.display = 'block'; moveTip(x, y); };
+  const moveTip = (x, y) => { const w = tip.offsetWidth, h = tip.offsetHeight; tip.style.left = Math.min(x + 14, innerWidth - w - 8) + 'px'; tip.style.top = (y + 16 + h > innerHeight ? y - h - 10 : y + 16) + 'px'; };
+  const hideTip = () => { tip.style.display = 'none'; };
+  const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+  function stackBar(t, opts) {
+    const bar = el('div', { class: 'bar', role: 'img', 'aria-label': `${t.done} livrées, ${t.wip} en cours, ${t.todo} à faire sur ${t.total}` });
+    if (opts && opts.height) bar.style.height = opts.height;
+    const segs = [['done', t.done, 'Livrées', '--done'], ['wip', t.wip, 'En cours', '--wip'], ['rest', t.todo, 'À faire', '--todo']];
+    for (const [cls, n, label, v] of segs) {
+      if (!n) continue;
+      const s = el('i', { class: cls, tabindex: '0', 'aria-label': `${label} : ${n}` });
+      s.style.width = (100 * n / t.total) + '%';
+      s.style.flex = '0 0 ' + (100 * n / t.total) + '%';
+      const rows = () => [{ value: fmtNum(n), label: `${label} · ${pctOf(n, t.total)} %`, color: cssVar(v) }];
+      s.addEventListener('pointerenter', e => showTip(e.clientX, e.clientY, opts && opts.title || '', rows()));
+      s.addEventListener('pointermove', e => moveTip(e.clientX, e.clientY));
+      s.addEventListener('pointerleave', hideTip);
+      s.addEventListener('focus', () => { const r = s.getBoundingClientRect(); showTip(r.left, r.top, opts && opts.title || '', rows()); });
+      s.addEventListener('blur', hideTip);
+      bar.append(s);
+    }
+    return bar;
+  }
+  const pctCell = (t, extra) => { const p = el('span', { class: 'pct', text: pctOf(t.done, t.total) + ' %' }); if (extra !== false) p.append(el('small', { text: `${t.done} / ${t.total}` })); return p; };
+
+  const dueChip = (m, t) => {
+    const s = dueState(m, t, today);
+    if (s.kind === 'closed') return el('span', { class: 'chip closed' }, el('i'), `clos le ${fmtDay(m.closedAt.slice(0, 10), { day: 'numeric', month: 'short' })}`);
+    if (s.kind === 'none') return el('span', { class: 'chip' }, 'sans échéance');
+    if (s.kind === 'late') return el('span', { class: 'chip late' }, el('i'), `en retard de ${fmtNum(-s.days)} j`);
+    if (s.kind === 'soon') return el('span', { class: 'chip soon' }, el('i'), `dans ${s.days} j`);
+    return el('span', { class: 'chip' }, s.days === 0 ? "aujourd'hui" : `dans ${fmtNum(s.days)} j`);
+  };
+
+  function render() {
+    const g = GRAN[state.period];
+    const items = D.items.filter(i => !state.horizon || i.horizon === state.horizon);
+    const scopeLabel = state.horizon ? `horizon ${state.horizon}` : 'tout le projet';
+    $('modeNote').hidden = D.mode !== 'fallback';
+    document.querySelectorAll('#periodSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.p === state.period)));
+    $('horizonSel').value = state.horizon;
+    $('granName').textContent = g.name; document.querySelectorAll('.granName').forEach(n => n.textContent = g.name);
+    $('genAt').textContent = new Date(D.fetchedAt).toLocaleString('fr-FR', { timeZone: TZ, day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    // ---- Héros + KPI
+    const T = tally(items);
+    $('heroPct').textContent = pctOf(T.done, T.total);
+    $('heroCap').textContent = `${fmtNum(T.done)} issues livrées sur ${fmtNum(T.total)} — ${scopeLabel}`;
+    const meter = $('heroMeter'); meter.replaceChildren(); meter.setAttribute('aria-label', `${T.done} livrées, ${T.wip} en cours, ${T.todo} à faire`);
+    if (T.done) { const i = el('i'); i.style.width = (100 * T.done / T.total) + '%'; meter.append(i); }
+    if (T.wip) { const i = el('i', { class: 'wip' }); i.style.width = (100 * T.wip / T.total) + '%'; meter.append(i); }
+    const last30 = closedInLastDays(items, today, 30), prev30 = closedInLastDays(items, today, 60) - last30;
+    const msInScope = D.milestones.filter(m => items.some(i => i.milestoneNumber === m.number));
+    const msDone = msInScope.filter(m => m.state === 'closed' || tally(items.filter(i => i.milestoneNumber === m.number)).todo + tally(items.filter(i => i.milestoneNumber === m.number)).wip === 0).length;
+    const medianDays = median(items.filter(i => i.closedAt).map(i => (new Date(i.closedAt) - new Date(i.createdAt)) / DAY));
+    const kpis = [
+      { l: 'Livrées', v: fmtNum(T.done), d: `${pctOf(T.done, T.total)} % du périmètre` },
+      { l: 'En cours', v: fmtNum(T.wip), d: T.wip ? `${pctOf(T.wip, T.total)} % du périmètre` : 'aucune issue ouverte en cours' },
+      { l: 'Reste à livrer', v: fmtNum(T.todo), d: `${pctOf(T.todo, T.total)} % du périmètre` },
+      { l: 'Milestones clos', v: `${msDone} / ${msInScope.length}`, d: msInScope.length ? `${pctOf(msDone, msInScope.length)} % des livrables` : '' },
+      { l: 'Rythme sur 30 jours', v: (last30 / 30).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' / j', d: `${fmtNum(last30)} fermées · ${last30 - prev30 >= 0 ? '+' : ''}${fmtNum(last30 - prev30)} vs 30 j précédents`, cls: last30 - prev30 > 0 ? 'up' : last30 - prev30 < 0 ? 'down' : '' },
+      { l: 'Délai médian de résolution', v: medianDays == null ? '—' : (medianDays < 1 ? '< 1 j' : Math.round(medianDays) + ' j'), d: 'de la création à la fermeture' },
+    ];
+    $('kpis').replaceChildren(...kpis.map(k => el('div', { class: 'kpi' }, el('div', { class: 'l', text: k.l }), el('div', { class: 'v', text: k.v }), el('div', { class: 'd ' + (k.cls || ''), text: k.d }))));
+
+    // ---- Horizons
+    const hz = $('horizons'); hz.replaceChildren();
+    const hRows = [];
+    for (const h of HORIZONS.concat(items.some(i => !i.horizon) ? [null] : [])) {
+      const list = items.filter(i => i.horizon === h); if (!list.length) continue;
+      const t = tally(list);
+      const dues = [...new Set(list.map(i => i.milestoneDue).filter(Boolean).map(d => d.slice(0, 10)))].sort();
+      const due = dues.length ? dues[dues.length - 1] : null;
+      const name = h || 'Sans horizon';
+      const msCount = new Set(list.map(i => i.milestoneNumber).filter(Boolean)).size;
+      hz.append(el('div', { class: 'hrow' }, el('div', { class: 'name', text: name }, el('small', { text: `${msCount} milestone${msCount > 1 ? 's' : ''}${due ? ' · échéance ' + fmtDay(due, { day: 'numeric', month: 'long', year: 'numeric' }) : ''}` })), stackBar(t, { title: name }), pctCell(t)));
+      hRows.push([name, due ? fmtDay(due, { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—', t.done, t.wip, t.todo, t.total, pctOf(t.done, t.total) + ' %']);
+    }
+    fillTable($('horizonTable'), ['Horizon', 'Échéance', 'Livrées', 'En cours', 'À faire', 'Total', 'Avancement'], hRows, [2, 3, 4, 5, 6]);
+
+    // ---- Périodes
+    const rows = periodStats(items, today);
+    const pt = $('periodTable'); pt.replaceChildren();
+    pt.append(el('thead', null, el('tr', null, ...['Période', 'En cours', 'Fermées', 'Précédente', 'Écart', 'Créées', 'Flux net (fermées − créées)'].map((h, i) => el('th', { class: i >= 2 ? 'num' : '', text: h })))));
+    pt.append(el('tbody', null, ...rows.map(r => {
+      const d = r.closed - r.prevClosed, net = r.closed - r.created;
+      return el('tr', null, el('td', { text: r.name.charAt(0).toUpperCase() + r.name.slice(1) }), el('td', { text: r.label }), el('td', { class: 'num', text: fmtNum(r.closed) }), el('td', { class: 'num', text: fmtNum(r.prevClosed) }),
+        el('td', { class: 'num' }, el('span', { class: 'delta ' + (d > 0 ? 'up' : d < 0 ? 'down' : ''), text: (d > 0 ? '+' : '') + fmtNum(d) })),
+        el('td', { class: 'num', text: fmtNum(r.created) }), el('td', { class: 'num' }, el('span', { class: 'delta ' + (net > 0 ? 'up' : net < 0 ? 'down' : ''), text: (net > 0 ? '+' : '') + fmtNum(net) })));
+    })));
+
+    // ---- Buckets pour les graphiques
+    const bk = buckets(items, g, today);
+    const firstDay = bk.length ? utcToYmd(g.start(bk[0].key)) : today;
+    $('colSub').textContent = `${bk.length} ${g.name}${bk.length > 1 && g.name !== 'mois' ? 's' : ''} depuis le ${fmtDay(firstDay, { day: 'numeric', month: 'long', year: 'numeric' })}`;
+    drawColumns($('colChart'), bk, g);
+    drawBurnup($('burnChart'), bk, g);
+    fillTable($('colTable'), ['Période', 'Fermées', 'Créées'], bk.map(b => [g.long(b.key), b.closed, b.created]), [1, 2]);
+    fillTable($('burnTable'), ['Période', 'Livrées (cumul)', 'Périmètre (cumul)', 'Avancement'], bk.map(b => [g.long(b.key), b.cumDone, b.cumScope, pctOf(b.cumDone, b.cumScope) + ' %']), [1, 2, 3]);
+
+    // ---- Milestones
+    const mt = $('msTable'); mt.replaceChildren();
+    mt.append(el('thead', null, el('tr', null, ...[['Milestone', ''], ['Échéance', ''], ['Avancement', 'barcell'], ['', 'num'], ['En cours', 'num'], ['À faire', 'num']].map(([h, c]) => el('th', { class: c, text: h })))));
+    const tb = el('tbody');
+    const byNum = new Map(D.milestones.map(m => [m.number, m]));
+    for (const h of HORIZONS.concat([null])) {
+      const list = items.filter(i => i.horizon === h); if (!list.length) continue;
+      const nums = [...new Set(list.map(i => i.milestoneNumber))];
+      const ms = nums.map(n => byNum.get(n) || { number: null, title: 'Sans milestone', state: 'open', dueOn: null, url: 'https://github.com/isopen-io/meeshy/issues?q=is%3Aissue+no%3Amilestone' });
+      ms.sort((a, b) => (a.state === 'closed') - (b.state === 'closed') || (a.dueOn || '9') .localeCompare(b.dueOn || '9') || a.title.localeCompare(b.title));
+      const ht = tally(list);
+      tb.append(el('tr', { class: 'group' }, el('td', { colspan: '2' }, (h || 'Sans horizon'), el('small', { text: `${ms.length} milestone${ms.length > 1 ? 's' : ''}` })), el('td', null, stackBar(ht, { title: h || 'Sans horizon', height: '10px' })), el('td', { class: 'num' }, pctCell(ht)), el('td', { class: 'num', text: fmtNum(ht.wip) }), el('td', { class: 'num', text: fmtNum(ht.todo) })));
+      for (const m of ms) {
+        const ml = list.filter(i => i.milestoneNumber === m.number); const t = tally(ml);
+        const title = el('div', { class: 'ms-title' }, el('a', { href: m.url, target: '_blank', rel: 'noopener', text: m.title }), el('span', { class: 'n', text: m.number ? `#${m.number}` : '' }));
+        const due = el('div', null, m.dueOn ? el('div', { text: fmtDay(m.dueOn.slice(0, 10), { day: 'numeric', month: 'short', year: 'numeric' }) }) : el('div', { text: '—' }), dueChip(m, t));
+        tb.append(el('tr', null, el('td', null, title), el('td', null, due), el('td', { class: 'barcell' }, stackBar(t, { title: m.title, height: '10px' })), el('td', { class: 'num' }, pctCell(t)), el('td', { class: 'num', text: fmtNum(t.wip) }), el('td', { class: 'num', text: fmtNum(t.todo) })));
+      }
+    }
+    mt.append(tb);
+  }
+
+  function fillTable(table, heads, rows, numCols) {
+    table.replaceChildren(el('thead', null, el('tr', null, ...heads.map((h, i) => el('th', { class: (numCols || []).includes(i) ? 'num' : '', text: h })))),
+      el('tbody', null, ...rows.map(r => el('tr', null, ...r.map((c, i) => el('td', { class: (numCols || []).includes(i) ? 'num' : '', text: typeof c === 'number' ? fmtNum(c) : c }))))));
+  }
+  const niceStep = max => { if (max <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(max))); const f = max / p; return (f <= 1 ? .2 : f <= 2 ? .5 : f <= 5 ? 1 : 2) * p; };
+  const xTicks = n => { const every = Math.max(1, Math.ceil(n / 8)); return i => i % every === 0 || i === n - 1; };
+
+  function drawColumns(host, buckets, g) {
+    host.replaceChildren(); if (!buckets.length) return host.append(el('div', { class: 'empty', text: 'Aucune donnée' }));
+    const W = Math.max(320, host.clientWidth || 520), H = 230, m = { t: 18, r: 12, b: 28, l: 36 }, pw = W - m.l - m.r, ph = H - m.t - m.b;
+    const max = Math.max(1, ...buckets.map(b => b.closed)), step = niceStep(max), top = Math.ceil(max / step) * step;
+    const y = v => m.t + ph - ph * v / top, slot = pw / buckets.length, bw = Math.min(24, Math.max(2, slot - 2));
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `Issues fermées par ${g.name}` });
+    for (let v = 0; v <= top + 1e-9; v += step) { svg.append(svgEl('line', { class: v === 0 ? 'axis' : 'grid', x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) })); svg.append(svgEl('text', { x: m.l - 6, y: y(v) + 4, 'text-anchor': 'end', text: fmtNum(v) })); }
+    const show = xTicks(buckets.length), maxI = buckets.reduce((a, b, i) => b.closed > buckets[a].closed ? i : a, 0);
+    buckets.forEach((b, i) => {
+      const x = m.l + slot * i + (slot - bw) / 2, h = ph * b.closed / top, yt = y(b.closed);
+      if (b.closed > 0) { const r = Math.min(4, bw / 2, h); svg.append(svgEl('path', { class: 'col', d: `M${x},${yt + h} V${yt + r} Q${x},${yt} ${x + r},${yt} H${x + bw - r} Q${x + bw},${yt} ${x + bw},${yt + r} V${yt + h} Z` })); }
+      if (show(i)) svg.append(svgEl('text', { x: x + bw / 2, y: H - 8, 'text-anchor': 'middle', text: g.label(b.key) }));
+      if ((i === maxI || i === buckets.length - 1) && b.closed > 0) svg.append(svgEl('text', { class: 'val', x: x + bw / 2, y: yt - 5, 'text-anchor': 'middle', text: fmtNum(b.closed) }));
+      const hit = svgEl('rect', { class: 'hit', x: m.l + slot * i, y: m.t, width: slot, height: ph });
+      const rows = () => [{ value: fmtNum(b.closed), label: 'fermées', color: cssVar('--done') }, { value: fmtNum(b.created), label: 'créées', color: cssVar('--axis') }];
+      hit.addEventListener('pointerenter', e => { svg.querySelectorAll('.col').forEach(c => c.classList.add('dim')); const c = svg.querySelectorAll('.col')[buckets.slice(0, i).filter(q => q.closed > 0).length]; if (c && b.closed > 0) c.classList.remove('dim'); showTip(e.clientX, e.clientY, g.long(b.key), rows()); });
+      hit.addEventListener('pointermove', e => moveTip(e.clientX, e.clientY));
+      hit.addEventListener('pointerleave', () => { svg.querySelectorAll('.col').forEach(c => c.classList.remove('dim')); hideTip(); });
+      svg.append(hit);
+    });
+    host.append(svg);
+  }
+
+  function drawBurnup(host, buckets, g) {
+    host.replaceChildren(); if (!buckets.length) return host.append(el('div', { class: 'empty', text: 'Aucune donnée' }));
+    const W = Math.max(320, host.clientWidth || 520), H = 230, m = { t: 18, r: 64, b: 28, l: 36 }, pw = W - m.l - m.r, ph = H - m.t - m.b;
+    const max = Math.max(1, ...buckets.map(b => b.cumScope)), step = niceStep(max), top = Math.ceil(max / step) * step;
+    const n = buckets.length, x = i => m.l + (n === 1 ? pw / 2 : pw * i / (n - 1)), y = v => m.t + ph - ph * v / top;
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Cumul des issues livrées face au périmètre' });
+    for (let v = 0; v <= top + 1e-9; v += step) { svg.append(svgEl('line', { class: v === 0 ? 'axis' : 'grid', x1: m.l, x2: W - m.r, y1: y(v), y2: y(v) })); svg.append(svgEl('text', { x: m.l - 6, y: y(v) + 4, 'text-anchor': 'end', text: fmtNum(v) })); }
+    const pts = k => buckets.map((b, i) => `${x(i)},${y(b[k])}`).join(' ');
+    svg.append(svgEl('path', { class: 'area-done', d: `M${x(0)},${y(0)} L` + pts('cumDone') + ` L${x(n - 1)},${y(0)} Z` }));
+    svg.append(svgEl('polyline', { class: 'line-scope', points: pts('cumScope') }));
+    svg.append(svgEl('polyline', { class: 'line-done', points: pts('cumDone') }));
+    const last = buckets[n - 1];
+    svg.append(svgEl('circle', { class: 'dot-scope', cx: x(n - 1), cy: y(last.cumScope), r: 4 }), svgEl('circle', { class: 'dot-done', cx: x(n - 1), cy: y(last.cumDone), r: 4 }));
+    const ys = y(last.cumScope), yd = y(last.cumDone), sep = Math.abs(ys - yd) < 14;
+    svg.append(svgEl('text', { class: 'val', x: x(n - 1) + 8, y: (sep ? ys - 7 : ys) + 4, text: fmtNum(last.cumScope) + ' périmètre' }));
+    svg.append(svgEl('text', { class: 'val', x: x(n - 1) + 8, y: (sep ? yd + 7 : yd) + 4, text: fmtNum(last.cumDone) + ' livrées' }));
+    const show = xTicks(n); buckets.forEach((b, i) => { if (show(i)) svg.append(svgEl('text', { x: x(i), y: H - 8, 'text-anchor': i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle', text: g.label(b.key) })); });
+    const xhair = svgEl('line', { class: 'xhair', y1: m.t, y2: m.t + ph, x1: -10, x2: -10, visibility: 'hidden' }); svg.append(xhair);
+    const hit = svgEl('rect', { class: 'hit', x: m.l, y: m.t, width: pw, height: ph });
+    const nearest = e => { const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * W / r.width; let best = 0, bd = 1e9; for (let i = 0; i < n; i++) { const d = Math.abs(x(i) - px); if (d < bd) { bd = d; best = i; } } return best; };
+    const onMove = e => { const i = nearest(e), b = buckets[i]; xhair.setAttribute('x1', x(i)); xhair.setAttribute('x2', x(i)); xhair.setAttribute('visibility', 'visible'); showTip(e.clientX, e.clientY, g.long(b.key), [{ value: fmtNum(b.cumDone), label: `livrées · ${pctOf(b.cumDone, b.cumScope)} %`, color: cssVar('--done') }, { value: fmtNum(b.cumScope), label: 'périmètre', color: cssVar('--axis') }]); };
+    hit.addEventListener('pointerenter', onMove); hit.addEventListener('pointermove', onMove);
+    hit.addEventListener('pointerleave', () => { xhair.setAttribute('visibility', 'hidden'); hideTip(); });
+    svg.append(hit); host.append(svg);
+  }
+
+  // ---- Contrôles
+  const sel = $('horizonSel'); for (const h of HORIZONS) sel.append(el('option', { value: h, text: h }));
+  sel.addEventListener('change', () => { state.horizon = sel.value; persist(); render(); });
+  document.querySelectorAll('#periodSeg button').forEach(b => b.addEventListener('click', () => { state.period = b.dataset.p; persist(); render(); }));
+  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(render, 120); });
+  render();
+})();
+</script>

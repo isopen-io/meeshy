@@ -1,0 +1,76 @@
+# =============================================================================
+# Pilotage — page « Avancement Meeshy » publiée sur GitHub Pages
+# Régénérée toutes les 6 h, à chaque mouvement d'issue ou de milestone, et à la demande.
+# Sans secret PILOTAGE_TOKEN (PAT lisant les projets d'organisation), la page se
+# génère en mode dégradé (issues + milestones ; ni « En cours » ni noms d'horizon).
+# =============================================================================
+name: Pilotage — avancement (Pages)
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  issues:
+    types: [opened, closed, reopened, milestoned, demilestoned, deleted]
+  milestone:
+    types: [created, closed, opened, edited, deleted]
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/pilotage/**'
+      - '.github/workflows/pilotage-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pilotage-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Tests, extraction, génération
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Tests du calcul (node --test)
+        run: node --test scripts/pilotage/compute.test.mjs
+
+      - name: Tests du générateur (unittest)
+        working-directory: scripts/pilotage
+        run: python3 -m unittest -q test_pilotage
+
+      - name: Extraction depuis GitHub
+        env:
+          GH_TOKEN: ${{ secrets.PILOTAGE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: python3 scripts/pilotage/fetch.py site/data.json
+
+      - name: Génération de la page
+        run: python3 scripts/pilotage/build.py --data site/data.json --out site/index.html
+
+      - name: Artefact Pages
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    name: Déploiement Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Déployer
+        id: deployment
+        uses: actions/deploy-pages@v5
