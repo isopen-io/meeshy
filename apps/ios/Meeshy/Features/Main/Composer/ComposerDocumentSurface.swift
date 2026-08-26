@@ -985,6 +985,13 @@ nonisolated enum ComposerDocumentDestination: String, CaseIterable, Equatable {
     /// surface plate. Lu par le meuble pour basculer `mountedSurface`.
     var mountsScene: Bool { self == .story }
 
+    /// Le `ComposerFormat` que la destination impose au SOCLE — `.story` pour
+    /// STORY (le fan monte alors la scène et publie `STORY`, EXACTEMENT le chip
+    /// STORY du fan), `.post` sinon (POST/RÉEL restent la surface document, dont
+    /// le publieur élit RÉEL/POST via `forcePlainPost`). C'est ce qui fait « le
+    /// type choisi gouverne la publication » de bout en bout.
+    var composerFormat: ComposerFormat { self == .story ? .story : .post }
+
     /// Le glyphe du segment — famille ligne (jeu moderne C, #3882), zéro `.fill`
     /// daté sauf le réel, conservé identique à l'interrupteur absorbé.
     var symbolName: String {

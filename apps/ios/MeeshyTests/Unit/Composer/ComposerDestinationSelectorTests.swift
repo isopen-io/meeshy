@@ -106,4 +106,24 @@ final class ComposerDestinationSelectorTests: XCTestCase {
             "Le publieur lit `documentDestination.forcePlainPost` — le type choisi gouverne la publication."
         )
     }
+
+    // 7 — STORY impose `.story` au socle (scène + publication STORY) ; POST/RÉEL
+    // gardent `.post` (la surface document). La loi qui rend « le type choisi
+    // gouverne la publication » vraie de bout en bout.
+    func test_laDestination_imposeSonFormatAuSocle() {
+        XCTAssertEqual(ComposerDocumentDestination.story.composerFormat, .story)
+        XCTAssertEqual(ComposerDocumentDestination.post.composerFormat, .post)
+        XCTAssertEqual(ComposerDocumentDestination.reel.composerFormat, .post,
+                       "RÉEL reste sur la surface document — le publieur l'élit via forcePlainPost, pas la scène.")
+    }
+
+    // 8 — le sélecteur POSE le format du socle au tap (sinon STORY monterait la
+    // scène mais publierait sous le format du fil, RÉEL — un type faux servi).
+    func test_leSelecteur_poseLeFormatDuSocle_auTap() throws {
+        let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        XCTAssertTrue(
+            src.contains("formatSelection.wrappedValue=destination.composerFormat"),
+            "Taper une destination pose `currentFormat` — STORY route vers la scène ET publie STORY."
+        )
+    }
 }

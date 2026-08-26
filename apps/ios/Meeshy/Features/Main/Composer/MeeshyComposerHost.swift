@@ -1053,6 +1053,12 @@ struct MeeshyComposerHost: View {
                 let isOn = documentDestination == destination
                 Button {
                     documentDestination = destination
+                    // Le type CHOISI gouverne la publication : STORY impose
+                    // `.story` au socle (scène + publication STORY, comme le
+                    // chip STORY du fan) ; POST/RÉEL gardent la surface document.
+                    // L'écriture passe par `formatSelection`, l'ÉCRIVAIN UNIQUE
+                    // du format (la liaison du fan) — jamais un second `currentFormat =`.
+                    formatSelection.wrappedValue = destination.composerFormat
                     HapticFeedback.light()
                 } label: {
                     HStack(spacing: 4) {
