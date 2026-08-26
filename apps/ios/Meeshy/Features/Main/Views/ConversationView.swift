@@ -1556,6 +1556,15 @@ struct ConversationView: View {
                         scrollState.scrollToMessageId = messageId
                         scrollState.scrollToMessageTrigger += 1
                     },
+                    // #3901 — la Rivière ne rend jamais bulle par bulle
+                    // (`MessageListViewController.rendersThread`), donc ne
+                    // peut jamais faire avancer le curseur de lecture par le
+                    // chemin habituel (`seenIds`). Le curseur avance ici,
+                    // SANS jamais geler de `readAt` individuel, quand le
+                    // lecteur atteint le présent.
+                    onReachPresent: {
+                        viewModel.markCaughtUpFromSummaryOrRiver()
+                    },
                     text: { message in
                         viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
                     }
@@ -2048,6 +2057,21 @@ struct ConversationView: View {
 
             searchResultsBlurOverlay
             returnToLatestButton
+        }
+        // #3901 — le Résumé Vivant ne rend jamais bulle par bulle
+        // (`MessageListViewController.rendersThread`), donc ne peut jamais
+        // faire avancer le curseur de lecture par le chemin habituel
+        // (`seenIds`). Posé sur le ZStack ENGLOBANT (jamais sur la branche
+        // `.summary` elle-même) : cette branche disparaît du même geste qui
+        // fait sortir `mode` de `.summary`, et un `onChange` attaché à une
+        // vue qui se démonte avec la valeur surveillée ne se déclenche
+        // jamais. « Quitté le Résumé après l'avoir affiché » couvre les DEUX
+        // sorties possibles — bouton « Reprendre le fil » (`onResumeThread`)
+        // ET sélecteur de mode de l'en-tête (`readingModeController.select`
+        // depuis `ReadingModeLensCatalog`), qui contourne ce bouton.
+        .adaptiveOnChange(of: readingModeController.mode) { old, new in
+            guard old == .summary, new != .summary else { return }
+            viewModel.markCaughtUpFromSummaryOrRiver()
         }
         )
     }

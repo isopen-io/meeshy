@@ -37,6 +37,14 @@ struct RiverConversationHost: View {
     /// l'appelant qui possède le contrôleur de mode et le composeur.
     var onOpenInThread: ((String) -> Void)? = nil
     var onReply: ((String) -> Void)? = nil
+    /// #3901 — appelé quand le curseur ATTEINT le présent (rang de la bulle
+    /// la plus récente, `RiverConversationMapping.isAtPresent`) : c'est ici,
+    /// et seulement ici, que l'appelant sait qu'il peut faire avancer le
+    /// curseur de lecture serveur (`ConversationViewModel
+    /// .markCaughtUpFromSummaryOrRiver`) — la Rivière ne rend jamais bulle
+    /// par bulle (`MessageListViewController.rendersThread`), donc
+    /// n'alimente aucun `seenIds` pour le chemin de rattrapage habituel.
+    var onReachPresent: (() -> Void)? = nil
 
     @StateObject private var navigation: RiverNavigationController
     /// Échelle du plan, POSÉE par le pince (retour produit 2026-08-22).
@@ -71,6 +79,7 @@ struct RiverConversationHost: View {
         onViewStory: ((String) -> Void)? = nil,
         onOpenInThread: ((String) -> Void)? = nil,
         onReply: ((String) -> Void)? = nil,
+        onReachPresent: (() -> Void)? = nil,
         text: @escaping (MeeshyMessage) -> String
     ) {
         self.messages = messages
@@ -84,6 +93,7 @@ struct RiverConversationHost: View {
         self.onViewStory = onViewStory
         self.onOpenInThread = onOpenInThread
         self.onReply = onReply
+        self.onReachPresent = onReachPresent
         self.text = text
         let geometry = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
         _geometry = State(initialValue: geometry)
@@ -191,6 +201,19 @@ struct RiverConversationHost: View {
                     landingToken += 1
                 }
             }
+        // #3901 — le SEUL site qui sait, à l'instant où ça se produit, que le
+        // curseur vient d'ATTEINDRE le présent (`isAtPresent`) : un pas
+        // (`RiverNavigationController.step`), un atterrissage (`moveTo`, tap
+        // sur une bulle) ou le recadrage ci-dessus peuvent tous y mener.
+        // `initial: false` (par défaut) délibérément : la Rivière atterrit
+        // déjà au présent à l'ouverture (`initialCursor`), et déclarer un
+        // rattrapage sur ce seul atterrissage, avant toute lecture réelle,
+        // reproduirait le sur-déclarement que ce correctif évite ailleurs —
+        // un survol d'un instant qui repart aussitôt ne prouve rien.
+        .adaptiveOnChange(of: navigation.cursor) { _, newCursor in
+            guard RiverConversationMapping.isAtPresent(cursor: newCursor, geometry: geometry) else { return }
+            onReachPresent?()
+        }
     }
 
 
