@@ -183,6 +183,15 @@ self.addEventListener('push', (event) => {
   if (!event.data) return;
   try {
     const data = event.data.json();
+    // Push de CONTRÔLE `notification_revoked` (data-only) : le serveur a
+    // retiré une notification, la bannière déjà affichée se ferme — et rien
+    // ne s'affiche à sa place. Le bloc de contrôle voyage sous `data.data`
+    // (forme FCM) ou à la racine (forme Web Push brute).
+    const revocation = parseNotificationRevocation(data.data) || parseNotificationRevocation(data);
+    if (revocation) {
+      event.waitUntil(closeRevokedNotifications(self.registration, revocation));
+      return;
+    }
     event.waitUntil(self.registration.showNotification(data.title, {
       body: data.body,
       icon: data.icon || '/android-chrome-192x192.png',
@@ -191,6 +200,47 @@ self.addEventListener('push', (event) => {
     }));
   } catch (e) { log('Push error', e); }
 });
+
+
+// ----------------------------------------------------------------------------
+// Révocation d'une bannière déjà LIVRÉE — MIROIR de
+// apps/web/utils/notification-revocation.ts (`parseNotificationRevocation`,
+// `selectRevokedNotifications`) : un Service Worker ne peut pas importer le
+// module, la règle est recopiée à l'IDENTIQUE. Toute évolution touche les
+// TROIS sites (le module, ce SW, l'autre SW).
+// ----------------------------------------------------------------------------
+
+function parseNotificationRevocation(data) {
+  if (!data || typeof data !== 'object') return null;
+  if (data.type !== 'notification_revoked' || typeof data.notificationIds !== 'string') return null;
+  const ids = data.notificationIds.split(',').filter((id) => id !== '');
+  if (ids.length === 0) return null;
+  return {
+    notificationIds: ids,
+    conversationIds: typeof data.conversationIds === 'string' ? data.conversationIds.split(',') : [],
+  };
+}
+
+function selectRevokedNotifications(notifications, revocation) {
+  const revokedIds = new Set(revocation.notificationIds);
+  const revokedConversations = new Set(revocation.conversationIds.filter((id) => id !== ''));
+  return notifications.filter((notification) => {
+    const data = notification.data && typeof notification.data === 'object' ? notification.data : null;
+    if (!data) return false;
+    if (typeof data.notificationId === 'string' && data.notificationId !== '') {
+      return revokedIds.has(data.notificationId);
+    }
+    return typeof data.conversationId === 'string' && revokedConversations.has(data.conversationId);
+  });
+}
+
+function closeRevokedNotifications(registration, revocation) {
+  return registration.getNotifications().then((shown) => {
+    const revoked = selectRevokedNotifications(shown, revocation);
+    revoked.forEach((notification) => notification.close());
+    log('Revoked notifications closed:', revoked.length);
+  });
+}
 
 // ----------------------------------------------------------------------------
 // Construction de l'URL de clic depuis le bloc `data` du push.

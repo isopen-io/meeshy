@@ -126,6 +126,14 @@ if (messaging) {
   messaging.onBackgroundMessage((payload) => {
     log('Background message received:', payload);
 
+    // Push de CONTRÔLE `notification_revoked` (data-only) : le serveur a
+    // retiré une notification, la bannière déjà affichée se ferme — et rien
+    // ne s'affiche à sa place.
+    const revocation = parseNotificationRevocation(payload.data);
+    if (revocation) {
+      return closeRevokedNotifications(self.registration, revocation);
+    }
+
     const notificationTitle = payload.notification?.title || payload.data?.title || 'Notification';
     const notificationOptions = {
       body: payload.notification?.body || payload.data?.body || '',
@@ -165,6 +173,47 @@ if (messaging) {
       .catch((error) => {
         log('Notification display error:', error);
       });
+  });
+}
+
+
+// ----------------------------------------------------------------------------
+// Révocation d'une bannière déjà LIVRÉE — MIROIR de
+// apps/web/utils/notification-revocation.ts (`parseNotificationRevocation`,
+// `selectRevokedNotifications`) : un Service Worker ne peut pas importer le
+// module, la règle est recopiée à l'IDENTIQUE. Toute évolution touche les
+// TROIS sites (le module, ce SW, l'autre SW).
+// ----------------------------------------------------------------------------
+
+function parseNotificationRevocation(data) {
+  if (!data || typeof data !== 'object') return null;
+  if (data.type !== 'notification_revoked' || typeof data.notificationIds !== 'string') return null;
+  const ids = data.notificationIds.split(',').filter((id) => id !== '');
+  if (ids.length === 0) return null;
+  return {
+    notificationIds: ids,
+    conversationIds: typeof data.conversationIds === 'string' ? data.conversationIds.split(',') : [],
+  };
+}
+
+function selectRevokedNotifications(notifications, revocation) {
+  const revokedIds = new Set(revocation.notificationIds);
+  const revokedConversations = new Set(revocation.conversationIds.filter((id) => id !== ''));
+  return notifications.filter((notification) => {
+    const data = notification.data && typeof notification.data === 'object' ? notification.data : null;
+    if (!data) return false;
+    if (typeof data.notificationId === 'string' && data.notificationId !== '') {
+      return revokedIds.has(data.notificationId);
+    }
+    return typeof data.conversationId === 'string' && revokedConversations.has(data.conversationId);
+  });
+}
+
+function closeRevokedNotifications(registration, revocation) {
+  return registration.getNotifications().then((shown) => {
+    const revoked = selectRevokedNotifications(shown, revocation);
+    revoked.forEach((notification) => notification.close());
+    log('Revoked notifications closed:', revoked.length);
   });
 }
 

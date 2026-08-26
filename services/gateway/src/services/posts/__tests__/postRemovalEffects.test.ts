@@ -52,7 +52,11 @@ const removedPost = { id: POST_ID, authorId: AUTHOR_ID, type: 'STORY' };
 function rawFind(ids: readonly string[]) {
   return {
     cursor: {
-      firstBatch: ids.map((id) => ({ _id: { $oid: id }, userId: { $oid: RECIPIENT_ID } })),
+      firstBatch: ids.map((id) => ({
+        _id: { $oid: id },
+        userId: { $oid: RECIPIENT_ID },
+        delivery: { pushSent: true },
+      })),
       id: 0,
       ns: 'meeshy.Notification',
     },
@@ -77,12 +81,19 @@ describe('applyPostRemovalEffects — retrait des notifications du post', () => 
     await applyPostRemovalEffects(prisma, removedPost, { id: AUTHOR_ID }, soundCapture, announcer);
 
     expect(runCommandRaw).toHaveBeenCalledWith(
-      expect.objectContaining({ filter: { 'context.postId': { $in: [POST_ID] } } })
+      expect.objectContaining({
+        filter: {
+          $or: [
+            { 'context.postId': { $in: [POST_ID] } },
+            { 'metadata.repostId': { $in: [POST_ID] } },
+          ],
+        },
+      })
     );
     expect(notificationDeleteMany).toHaveBeenCalledWith({ where: { id: { in: ['n1', 'n2'] } } });
     expect(announceNotificationsRetracted).toHaveBeenCalledWith([
-      { id: 'n1', userId: RECIPIENT_ID },
-      { id: 'n2', userId: RECIPIENT_ID },
+      { id: 'n1', userId: RECIPIENT_ID, pushSent: true },
+      { id: 'n2', userId: RECIPIENT_ID, pushSent: true },
     ]);
   });
 

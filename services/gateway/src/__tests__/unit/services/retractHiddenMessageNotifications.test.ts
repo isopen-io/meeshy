@@ -31,7 +31,11 @@ const USER = '507f1f77bcf86cd799439021';
 const OTHER_USER = '507f1f77bcf86cd799439022';
 const CONV = '507f1f77bcf86cd799439012';
 
-type Row = { id: string; userId: string };
+/** La LIGNE relue : `delivery` en fait partie — la révocation push le lit. */
+type Row = { id: string; userId: string; delivery?: unknown };
+
+/** Ce que le hub reçoit : la ligne réduite, `pushSent` résolu. */
+type AnnouncedRow = { id: string; userId: string; pushSent: boolean };
 
 const makePrisma = (found: Row[] = []) => ({
   notification: {
@@ -41,7 +45,7 @@ const makePrisma = (found: Row[] = []) => ({
 });
 
 const makeAnnouncer = () => ({
-  announceNotificationsRetracted: jest.fn(async (_rows: readonly Row[]) => undefined),
+  announceNotificationsRetracted: jest.fn(async (_rows: readonly AnnouncedRow[]) => undefined),
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -50,7 +54,7 @@ const callArgs = (mock: { mock: { calls: ReadonlyArray<ReadonlyArray<unknown>> }
 
 describe('retractNotificationsForHiddenMessages', () => {
   it('ne retire que les notifications DU lecteur, pour SES messages masqués', async () => {
-    const prisma = makePrisma([{ id: 'n1', userId: USER }]);
+    const prisma = makePrisma([{ id: 'n1', userId: USER, delivery: { pushSent: true } }]);
 
     await retractNotificationsForHiddenMessages(
       prisma as never,
@@ -64,7 +68,7 @@ describe('retractNotificationsForHiddenMessages', () => {
   });
 
   it('annonce les lignes retirées APRÈS l\'écriture, jamais avant', async () => {
-    const prisma = makePrisma([{ id: 'n1', userId: USER }]);
+    const prisma = makePrisma([{ id: 'n1', userId: USER, delivery: { pushSent: true } }]);
     const announcer = makeAnnouncer();
     const order: string[] = [];
     prisma.notification.deleteMany.mockImplementation(async () => {
@@ -83,7 +87,7 @@ describe('retractNotificationsForHiddenMessages', () => {
 
     expect(order).toEqual(['delete', 'announce']);
     expect(announcer.announceNotificationsRetracted).toHaveBeenCalledWith([
-      { id: 'n1', userId: USER },
+      { id: 'n1', userId: USER, pushSent: true },
     ]);
   });
 
@@ -115,7 +119,7 @@ describe('retractNotificationsForHiddenMessages', () => {
   });
 
   it('ne fait pas échouer la suppression quand le retrait échoue', async () => {
-    const prisma = makePrisma([{ id: 'n1', userId: USER }]);
+    const prisma = makePrisma([{ id: 'n1', userId: USER, delivery: { pushSent: true } }]);
     prisma.notification.deleteMany.mockRejectedValue(new Error('mongo down') as never);
 
     await expect(
@@ -132,7 +136,7 @@ describe('retractNotificationsForClearedHistory', () => {
   const before = new Date('2026-05-21T12:00:00.000Z');
 
   it('vise les messages de CETTE conversation antérieurs à la coupure, pour CE lecteur', async () => {
-    const prisma = makePrisma([{ id: 'n1', userId: USER }]);
+    const prisma = makePrisma([{ id: 'n1', userId: USER, delivery: { pushSent: true } }]);
 
     await retractNotificationsForClearedHistory(
       prisma as never,
@@ -149,7 +153,7 @@ describe('retractNotificationsForClearedHistory', () => {
   });
 
   it('laisse intactes les notifications d\'un autre lecteur de la même conversation', async () => {
-    const prisma = makePrisma([{ id: 'n1', userId: USER }]);
+    const prisma = makePrisma([{ id: 'n1', userId: USER, delivery: { pushSent: true } }]);
     const announcer = makeAnnouncer();
 
     await retractNotificationsForClearedHistory(
@@ -160,7 +164,7 @@ describe('retractNotificationsForClearedHistory', () => {
 
     expect(callArgs(prisma.notification.findMany).where.userId).toBe(USER);
     expect(announcer.announceNotificationsRetracted).toHaveBeenCalledWith([
-      { id: 'n1', userId: USER },
+      { id: 'n1', userId: USER, pushSent: true },
     ]);
     expect(callArgs(prisma.notification.findMany).where.userId).not.toBe(OTHER_USER);
   });
@@ -181,7 +185,7 @@ describe('retractNotificationsForClearedHistory', () => {
 
 describe('l\'annonce et le retrait ne partagent pas leur sort', () => {
   it('rend le nombre DÉTRUIT même quand l\'annonce échoue', async () => {
-    const prisma = makePrisma([{ id: 'n1', userId: USER }]);
+    const prisma = makePrisma([{ id: 'n1', userId: USER, delivery: { pushSent: true } }]);
     const announcer = makeAnnouncer();
     announcer.announceNotificationsRetracted.mockRejectedValue(new Error('socket down') as never);
 

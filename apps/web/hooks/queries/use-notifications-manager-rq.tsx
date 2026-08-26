@@ -22,6 +22,7 @@ import {
 } from '@meeshy/shared/utils/notification-read-bulk';
 import { toast } from 'sonner';
 import { buildNotificationTitle, buildNotificationContent, getNotificationLink, getNotificationBorderColor } from '@/utils/notification-helpers';
+import { closeDeliveredNotifications, revocationOfDeletedNotification } from '@/utils/notification-revocation';
 import { useI18n } from '@/hooks/useI18n';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
@@ -342,6 +343,11 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     };
 
     const handleNotificationDeleted = (notificationId: string) => {
+      // La bannière déjà livrée par un Service Worker part avec la ligne : le
+      // serveur a retiré la notification, l'écran de l'OS ne doit plus la
+      // montrer. Best effort — la liste et les compteurs ne l'attendent pas.
+      void closeDeliveredNotifications(revocationOfDeletedNotification(notificationId)).catch(() => {});
+
       let wasUnread = false;
 
       queryClient.setQueriesData(

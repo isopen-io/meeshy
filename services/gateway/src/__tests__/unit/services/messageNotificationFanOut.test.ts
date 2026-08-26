@@ -37,7 +37,7 @@ function makePrisma(options: {
   /** Le message a disparu de la base entre l'envoi et la relecture. */
   messageVanished?: boolean;
   /** Les lignes `Notification` que la relecture trouvera ancrées sur le message. */
-  anchoredNotifications?: Array<{ id: string; userId: string }>;
+  anchoredNotifications?: Array<{ id: string; userId: string; delivery?: unknown }>;
 } = {}) {
   const members = options.members ?? [PEER_USER_ID];
   const conversation =
@@ -1027,9 +1027,17 @@ describe('notifyMessageRecipients — l’éventail', () => {
  * nécessairement née avant une relecture qui, elle, voit `deletedAt`.
  */
 describe('notifyMessageRecipients — le rappel qui court après l’éventail', () => {
+  // La relecture du rappel projette `delivery` : la révocation push ne
+  // réveille un appareil que là où un push nominal est parti.
   const anchored = [
-    { id: 'notif-peer', userId: PEER_USER_ID },
-    { id: 'notif-other', userId: OTHER_USER_ID },
+    { id: 'notif-peer', userId: PEER_USER_ID, delivery: { pushSent: true } },
+    { id: 'notif-other', userId: OTHER_USER_ID, delivery: { pushSent: true } },
+  ];
+
+  /** Ce que le rappel ANNONCE : la ligne réduite, `pushSent` résolu. */
+  const announcedAnchored = [
+    { id: 'notif-peer', userId: PEER_USER_ID, pushSent: true },
+    { id: 'notif-other', userId: OTHER_USER_ID, pushSent: true },
   ];
 
   it('un message rappelé pendant l’éventail perd les notifications qu’il vient de produire', async () => {
@@ -1098,7 +1106,7 @@ describe('notifyMessageRecipients — le rappel qui court après l’éventail',
       retractionAnnouncer: { announceNotificationsRetracted },
     });
 
-    expect(announceNotificationsRetracted).toHaveBeenCalledWith(anchored);
+    expect(announceNotificationsRetracted).toHaveBeenCalledWith(announcedAnchored);
   });
 
   // La relecture est le prix de la fermeture ; un éventail qui n'a rien créé
