@@ -40,6 +40,34 @@ sealed interface StoryTextBackground {
     companion object {
         /** The default glass blur sigma offered by the picker — parity with iOS `.glass(radius: 24)`. */
         const val DEFAULT_GLASS_RADIUS: Double = 24.0
+
+        /**
+         * The effective backing for a wire text object, honouring backward compatibility —
+         * the reader-side port of iOS `StoryTextObject.resolvedBackgroundStyle`
+         * (`StoryModels.swift`). Priority: the modern [backgroundStyle] (new) > the legacy
+         * [textBg] hex → [Solid] > [None]. The modern style WINS even when it resolves to
+         * [None] (an explicit `type: "none"` suppresses a stale legacy `textBg`), so this is
+         * the exact inverse of [toStyleWire] and never double-counts a backing.
+         *
+         * Decodes TOLERANTLY, mirroring the rest of the story wire decoders: a [Solid] with no
+         * usable hex, an unknown `type`, or a blank legacy hex all decay to [None] rather than
+         * render a colourless box; a [Glass] whose radius is absent/non-finite/non-positive keeps
+         * the author's glass intent and clamps the sigma to [DEFAULT_GLASS_RADIUS].
+         */
+        fun resolve(backgroundStyle: StoryTextBackgroundStyle?, textBg: String?): StoryTextBackground {
+            backgroundStyle?.let { return fromWire(it) }
+            val legacy = textBg?.takeIf { it.isNotBlank() } ?: return None
+            return Solid(hex = legacy)
+        }
+
+        private fun fromWire(style: StoryTextBackgroundStyle): StoryTextBackground = when (style.type) {
+            "solid" -> style.hex?.takeIf { it.isNotBlank() }?.let { Solid(hex = it) } ?: None
+            "glass" -> {
+                val radius = style.radius?.takeIf { it.isFinite() && it > 0.0 } ?: DEFAULT_GLASS_RADIUS
+                Glass(radius = radius)
+            }
+            else -> None
+        }
     }
 }
 

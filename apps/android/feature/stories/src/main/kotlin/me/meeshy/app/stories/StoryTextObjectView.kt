@@ -14,8 +14,10 @@ import me.meeshy.sdk.model.StoryTextObject
  * [fadeIn]/[fadeOut] envelope, call [animated] with the playhead to obtain the
  * transform for that instant. [text] is already resolved through the Prisme
  * Linguistique chain (see [StoryTextObjectProjection.resolveText]); [colorHex] and
- * [align] carry the authored style for rendering. Unlike a media clip, a text
- * object never participates in a clip transition, so none is folded here.
+ * [align] carry the authored style for rendering. [background] is the resolved
+ * frosted-glass/solid text backing (see [StoryTextBackground.resolve]) the canvas
+ * paints behind the glyphs. Unlike a media clip, a text object never participates
+ * in a clip transition, so none is folded here.
  */
 @Immutable
 data class StoryTextObjectView(
@@ -34,6 +36,7 @@ data class StoryTextObjectView(
     val fadeIn: Double = 0.0,
     val fadeOut: Double = 0.0,
     val keyframes: List<StoryKeyframe> = emptyList(),
+    val background: StoryTextBackground = StoryTextBackground.None,
 ) {
     /**
      * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
@@ -132,7 +135,10 @@ object StoryTextObjectProjection {
      * Projects [textObject] into the viewer view, resolving its text via
      * [resolveText] and carrying its transform, timing and keyframe fields so the
      * canvas can animate it. Absent timing fields default to `0` (a non-timed
-     * object is always visible), and absent keyframes to an empty list.
+     * object is always visible), and absent keyframes to an empty list. The text
+     * backing is resolved once via [StoryTextBackground.resolve] (modern
+     * `backgroundStyle` over legacy `textBg`, both tolerantly), so an iOS/web-authored
+     * frosted-glass or solid backdrop renders on Android too.
      * [overrideLanguage] threads the "Exploration" pick through to [resolveText].
      */
     fun project(
@@ -155,6 +161,7 @@ object StoryTextObjectProjection {
             fadeIn = textObject.fadeIn ?: 0.0,
             fadeOut = textObject.fadeOut ?: 0.0,
             keyframes = textObject.keyframes.orEmpty(),
+            background = StoryTextBackground.resolve(textObject.backgroundStyle, textObject.textBg),
         )
 
     /**

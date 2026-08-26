@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryTextObject
+import me.meeshy.sdk.model.StoryTextBackgroundStyle
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -190,5 +191,41 @@ class StoryTextObjectProjectionTest {
         assertThat(view.fadeIn).isEqualTo(0.0)
         assertThat(view.fadeOut).isEqualTo(0.0)
         assertThat(view.keyframes).isEmpty()
+    }
+
+    @Test
+    fun `project carries no text backing when the wire object declares none`() {
+        val wire = StoryTextObject(id = "t", text = "Hello")
+        val view = StoryTextObjectProjection.project(wire, preferredLanguages = emptyList())
+        assertThat(view.background).isEqualTo(StoryTextBackground.None)
+    }
+
+    @Test
+    fun `project resolves a modern glass background style into the view backing`() {
+        val wire = StoryTextObject(
+            id = "t",
+            text = "Hello",
+            backgroundStyle = StoryTextBackgroundStyle(type = "glass", radius = 24.0),
+        )
+        val view = StoryTextObjectProjection.project(wire, preferredLanguages = emptyList())
+        assertThat(view.background).isEqualTo(StoryTextBackground.Glass(radius = 24.0))
+    }
+
+    @Test
+    fun `project resolves a modern solid background style into the view backing`() {
+        val wire = StoryTextObject(
+            id = "t",
+            text = "Hello",
+            backgroundStyle = StoryTextBackgroundStyle(type = "solid", hex = "6366F1"),
+        )
+        val view = StoryTextObjectProjection.project(wire, preferredLanguages = emptyList())
+        assertThat(view.background).isEqualTo(StoryTextBackground.Solid(hex = "6366F1"))
+    }
+
+    @Test
+    fun `project falls back to a legacy textBg hex as a solid backing`() {
+        val wire = StoryTextObject(id = "t", text = "Hello", textBg = "112233")
+        val view = StoryTextObjectProjection.project(wire, preferredLanguages = emptyList())
+        assertThat(view.background).isEqualTo(StoryTextBackground.Solid(hex = "112233"))
     }
 }
