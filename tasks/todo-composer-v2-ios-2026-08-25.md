@@ -219,3 +219,28 @@ SE-0466. **À investiguer séparément** (leçon SE-0466 mise à jour : une dein
 **Note de méthode** : plusieurs `xcodebuild` concurrents dans le worktree ont verrouillé la build
 DB et corrompu des mesures intermédiaires ; parade appliquée = un seul xcodebuild à la fois, kill
 ciblé par PID (jamais pkill global), nettoyage `XCBuildData` avant relance.
+
+## Vague 1c — ACHÈVEMENT (2026-08-26) : périmètre RÉEL + découverte staleness
+
+**Le sweep initial (71 OO app) était incomplet.** Le re-gate COMPLET (868 suites
+app, CLEAN build, 26.1) a révélé que TOUTE classe @MainActor non-`nonisolated` sans
+deinit crashe — pas que les ObservableObject. Périmètre final (5 sites, ~246 classes) :
+- app @MainActor OO : 71 (`9fb54c40d0`)
+- app @MainActor NON-OO (critère !nonisolated) : 92 (`17daa79d41`, dont WidgetActionFlusher)
+- MeeshyUI non-nonisolated : 69 (`a18a428e69`)
+- core MeeshySDK @MainActor explicite : 13 (`c77f5b6bd3`)
+- AudioRecorderManager (restauré) + TileBox (merge, `3174eaab6a`)
+Gardes élargies : app+UI critère !nonisolated ; core @MainActor explicite. Parseur
+durci : préprocesseur iOS (`#if os(iOS)/#else` = double décl. de classe, ex. P2P).
+
+**⚠️ LEÇON MAJEURE — builds incrémentaux STALES.** Des heures perdues à « prouver »
+que `nonisolated deinit` ne corrigeait pas AudioRecorderManager/ConversationAudioCoordinator/
+AuthServiceTests. FAUX : `.o` PÉRIMÉS (verrous de build-DB, kills, sweeps/reverts →
+l'incrémental ne recompilait pas, l'app liait de vieux `.o` sans le nonisolated deinit).
+La conclusion « AudioRecorderManager = AVFoundation » est RÉTRACTÉE. **Un CLEAN build
+tranche : 868 suites app, malloc=0.** Dès qu'un verrou/kill/revert survient, tout
+résultat incrémental est suspect — refaire un CLEAN build avant de conclure.
+
+**Mesuré (CLEAN builds 26.1)** : app full target 868 suites malloc=0, 3 gardes GREEN,
+AudioRecorderManager 15/15, AuthService/BubbleContentMatrix/AudioBubble verts. SDK full
+re-gate en cours de confirmation.
