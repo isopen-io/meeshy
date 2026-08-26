@@ -116,6 +116,46 @@
       "_label": "saute les entrées vides de la liste de langues du lecteur",
       "input": { "preview": "Hello", "translations": { "fr": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["", "fr"] },
       "expected": "Bonjour"
+    },
+    {
+      "_label": "réduit une CLÉ ISO 639-3 (fra) au rang normalisé du lecteur (fr)",
+      "input": { "preview": "Hello", "translations": { "fra": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["fr"] },
+      "expected": "Bonjour"
+    },
+    {
+      "_label": "réduit une LANGUE LECTEUR ISO 639-3 (fra) contre une clé (fr)",
+      "input": { "preview": "Hello", "translations": { "fr": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["fra"] },
+      "expected": "Bonjour"
+    },
+    {
+      "_label": "réduit une LANGUE LECTEUR ISO 639-3 (spa) contre une clé (es)",
+      "input": { "preview": "Hello", "translations": { "es": "Hola" }, "originalLanguage": "en", "preferredLanguages": ["spa"] },
+      "expected": "Hola"
+    },
+    {
+      "_label": "la langue d'ORIGINE ISO 639-3 (deu) concourt à son rang réduit (de)",
+      "input": { "preview": "Guten Tag", "translations": { "fr": "Bonjour" }, "originalLanguage": "deu", "preferredLanguages": ["de", "fr"] },
+      "expected": "Guten Tag"
+    },
+    {
+      "_label": "réduit un alias ISO 639-1 déprécié en CLÉ (iw) au rang du lecteur (he)",
+      "input": { "preview": "Hello", "translations": { "iw": "Shalom" }, "originalLanguage": "en", "preferredLanguages": ["he"] },
+      "expected": "Shalom"
+    },
+    {
+      "_label": "réduit un alias ISO 639-1 déprécié en LANGUE LECTEUR (iw) contre une clé (he)",
+      "input": { "preview": "Hello", "translations": { "he": "Shalom" }, "originalLanguage": "en", "preferredLanguages": ["iw"] },
+      "expected": "Shalom"
+    },
+    {
+      "_label": "réduit une CLÉ à séparateur underscore (fr_FR) au rang normalisé (fr)",
+      "input": { "preview": "Hello", "translations": { "fr_FR": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["fr"] },
+      "expected": "Bonjour"
+    },
+    {
+      "_label": "réduit une CLÉ à tag de script (zh-Hant-HK) au rang du lecteur (zh)",
+      "input": { "preview": "Hello", "translations": { "zh-Hant-HK": "你好" }, "originalLanguage": "en", "preferredLanguages": ["zh"] },
+      "expected": "你好"
     }
   ]
 }
