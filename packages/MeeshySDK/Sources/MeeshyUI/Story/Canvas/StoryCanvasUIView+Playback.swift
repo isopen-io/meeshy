@@ -476,18 +476,125 @@ extension StoryCanvasUIView {
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
         link.add(to: .main, forMode: .common)
         editDisplayLink = link
+        // Fresh grace window every time the link is (re)armed — opening the
+        // composer, or reattaching after a cover/sheet dismiss — so a screen
+        // that just appeared never idles down before the user gets a chance
+        // to touch it (issue #3906).
+        lastEditInteractionAt = CACurrentMediaTime()
+        isEditClockThrottled = false
     }
 
     func stopEditDisplayLink() {
         editDisplayLink?.invalidate()
         editDisplayLink = nil
+        isEditClockThrottled = false
     }
 
     @objc func editTick(_ link: CADisplayLink) {
+        driveEditClock(now: link.timestamp)
+    }
+
+    /// Core of `editTick`, extracted so `_driveEditClockForTesting(now:)` can
+    /// exercise the idle-throttle decision without spinning a real
+    /// `CADisplayLink`.
+    ///
+    /// Issue #3906 — a screen nobody is touching (no gesture, no keystroke,
+    /// no active playback) must not keep the display's high-refresh clock —
+    /// nor the ambient edit-mode preview loop it drives — running forever.
+    /// Idling down PAUSES `editDisplayLink` itself: once paused, no further
+    /// tick arrives, so waking back up is entirely the job of
+    /// `noteEditInteraction()`, called from every interaction entry point.
+    func driveEditClock(now: CFTimeInterval) {
+        let regime = EditClockThrottle.regime(now: now,
+                                              lastInteractionAt: lastEditInteractionAt,
+                                              isMediaActivelyPlaying: isEditMediaActivelyPlaying)
+        guard regime == .full else {
+            idleDownEditClock()
+            return
+        }
         // Gesture handlers drive their own rebuilds; the tick keeps the 120 Hz
         // clock alive on ProMotion while editing AND (WS2.1) re-feeds the glass
         // text backdrop so it tracks a playing video background between rebuilds.
-        refreshEditGlassBackdropIfNeeded(now: link.timestamp)
+        refreshEditGlassBackdropIfNeeded(now: now)
+    }
+
+    /// `true` while a media clock genuinely needs `editDisplayLink` at full
+    /// rate regardless of touch activity — currently only the timeline
+    /// preview transport actually PLAYING (`StoryCanvasTimelineBridge
+    /// .setPlaying(true)`). Deliberately excludes the ambient
+    /// `playsVideoInEditMode` / `playsAudioInEditMode` loop: that loop is
+    /// exactly what idling is meant to suspend (see `EditClockThrottle`).
+    var isEditMediaActivelyPlaying: Bool {
+        isTimelinePreviewActive && timelinePreviewPlaying
+    }
+
+    /// Feeds `EditClockThrottle`. Called by every gesture entry point
+    /// (`gestureRecognizerShouldBegin`), by inline text edits
+    /// (`textViewDidChange`), by the timeline-preview transport
+    /// (`setTimelinePreview` / `setTimelinePreviewPlaying`) and by every
+    /// real slide mutation while editing (`slide.didSet`). Resets the idle
+    /// clock and, if the clock was throttled down, immediately restores full
+    /// rate and resumes the suspended preview loop — an interaction must
+    /// never wait out any part of the idle delay to feel responsive again.
+    func noteEditInteraction() {
+        lastEditInteractionAt = CACurrentMediaTime()
+        guard isEditClockThrottled else { return }
+        resumeEditClockFromIdle()
+    }
+
+    private func idleDownEditClock() {
+        guard !isEditClockThrottled else { return }
+        isEditClockThrottled = true
+        editDisplayLink?.isPaused = true
+        suspendEditModeMediaForIdle()
+    }
+
+    private func resumeEditClockFromIdle() {
+        isEditClockThrottled = false
+        editDisplayLink?.isPaused = false
+        resumeEditModeMediaFromIdle()
+    }
+
+    /// Suspends the ambient edit-mode preview loop when the edit clock idles
+    /// down: background + foreground video (`playsVideoInEditMode`) and the
+    /// foreground/background audio mixer (`playsAudioInEditMode`). A SOFT
+    /// pause — players stay attached, the mixer's schedule stays intact — so
+    /// `resumeEditModeMediaFromIdle()` can restart in place with no reload
+    /// and no audible restart-from-zero.
+    func suspendEditModeMediaForIdle() {
+        guard mode == .edit else { return }
+        if playsVideoInEditMode {
+            backgroundLayer.isPlaybackActive = false
+            forEachAVPlayer { $0.pause() }
+        }
+        if playsAudioInEditMode {
+            audioMixer.pause()
+        }
+    }
+
+    /// Resumes the ambient edit-mode preview loop suspended by
+    /// `suspendEditModeMediaForIdle()`. Reuses `applyEditPlayback()` for the
+    /// video branch (idempotent — exactly what re-flipping
+    /// `playsVideoInEditMode` already does) and calls `startEditAudioPlayback()`
+    /// directly for audio: `reconfigureAudioForPlayback()` (which
+    /// `applyEditPlayback()` also calls) is gated on `slideAudioRevision` and
+    /// would no-op here since the composition hasn't changed — it would
+    /// never actually resume the transport. Both no-op while a timeline
+    /// preview owns the transport (`isTimelinePreviewActive`), by the same
+    /// guards `applyEditPlayback()`/`startEditAudioPlayback()` already carry.
+    func resumeEditModeMediaFromIdle() {
+        guard mode == .edit else { return }
+        applyEditPlayback()
+        if playsAudioInEditMode {
+            startEditAudioPlayback()
+        }
+    }
+
+    /// Test-only seam: drives the idle-throttle decision exactly as
+    /// `editTick` does, at an explicit timestamp, without spinning a real
+    /// `CADisplayLink`.
+    public func _driveEditClockForTesting(now: CFTimeInterval) {
+        driveEditClock(now: now)
     }
 
     /// WS2.1 — keep glass-style text backdrops in sync with a PLAYING video

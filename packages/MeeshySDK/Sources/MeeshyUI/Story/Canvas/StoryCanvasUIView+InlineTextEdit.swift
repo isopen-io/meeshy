@@ -322,6 +322,9 @@ extension StoryCanvasUIView: UITextViewDelegate {
     // MARK: - UITextViewDelegate
 
     public func textViewDidChange(_ textView: UITextView) {
+        // A keystroke is user activity — wakes the idle-throttled edit clock
+        // (issue #3906). See `noteEditInteraction()`.
+        noteEditInteraction()
         let editor = textView as? StoryInlineTextEditor
         editor?.updatePlaceholderVisibility()
         // Croissance immédiate des bounds de l'éditeur pour englober tout
