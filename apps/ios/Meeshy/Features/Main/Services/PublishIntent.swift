@@ -115,6 +115,46 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         self.mobileTranscription = mobileTranscription
     }
 
+    /// Le geste « **j'ai composé un document** » — un post ou un réel né du
+    /// meuble, portant ses fichiers LOCAUX, sa position et sa langue déclarée.
+    ///
+    /// AUCUN paramètre n'a de valeur par défaut : même discipline que
+    /// `audioRecording`, vérifiée par la même garde de source. Un média local
+    /// part par la file durable (le type l'enfile) — jamais un upload direct.
+    static func document(
+        localMedia: [ComposerDocumentMedia],
+        forcePlainPost: Bool,
+        content: String?,
+        visibility: String,
+        visibilityUserIds: [String]?,
+        originalLanguage: String?,
+        mentions: [PostMentionInput]?,
+        location: SharedPlace?,
+        discoverabilityPrecision: DiscoverabilityPrecision?
+    ) -> PublishIntent {
+        PublishIntent(
+            clientMutationId: ClientMutationId.generate(),
+            // La règle de composition vit dans `ReelComposition`, jamais ici —
+            // un `"REEL"`/`"POST"` codé en dur ferait diverger la surface
+            // d'atterrissage d'un document de celle d'un vocal ou d'un média.
+            type: ReelComposition.defaultType(
+                mimeTypes: localMedia.map(\.mimeType),
+                durationsMs: localMedia.map(\.durationMs),
+                forcePlainPost: forcePlainPost
+            ).rawValue,
+            localMediaURLs: localMedia.map(\.url),
+            localMediaMimeTypes: localMedia.map(\.mimeType),
+            content: content,
+            visibility: visibility,
+            visibilityUserIds: visibilityUserIds,
+            originalLanguage: originalLanguage,
+            mentions: mentions,
+            location: location,
+            discoverabilityPrecision: discoverabilityPrecision,
+            mobileTranscription: nil
+        )
+    }
+
     /// Le geste « **j'ai enregistré ma voix** ».
     ///
     /// **AUCUN paramètre n'a de valeur par défaut**, et une garde de source le

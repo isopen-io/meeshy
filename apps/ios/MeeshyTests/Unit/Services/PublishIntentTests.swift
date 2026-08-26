@@ -52,6 +52,24 @@ final class PublishIntentTests: XCTestCase {
         )
     }
 
+    private func intentionDocument(
+        localMedia: [ComposerDocumentMedia] = [],
+        forcePlainPost: Bool = false,
+        originalLanguage: String? = nil
+    ) -> PublishIntent {
+        PublishIntent.document(
+            localMedia: localMedia,
+            forcePlainPost: forcePlainPost,
+            content: "bonjour",
+            visibility: "PUBLIC",
+            visibilityUserIds: nil,
+            originalLanguage: originalLanguage,
+            mentions: nil,
+            location: nil,
+            discoverabilityPrecision: nil
+        )
+    }
+
     // MARK: - 1. Le type suit la règle de composition, au MÊME endroit qu'avant
 
     /// Non-régression exacte de `ReelComposition.defaultType` : la convergence
@@ -153,6 +171,37 @@ final class PublishIntentTests: XCTestCase {
         XCTAssertEqual(intention.mentions?.count, 1)
     }
 
+    // MARK: - T2.1 — le geste « je publie un document composé dans le meuble »
+
+    /// Même règle de composition que le vocal — `ReelComposition`, et nulle
+    /// part ailleurs.
+    func test_leTypeDUnDocument_suitLaRegleDeCompositionDuReel() {
+        let video = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/clip.mp4"), mimeType: "video/mp4", durationMs: 4000
+        )
+        XCTAssertEqual(
+            intentionDocument(localMedia: [video]).type, "REEL",
+            "Une vidéo d'au moins 3 s qualifie un RÉEL — même moteur que les autres chemins de publication."
+        )
+        XCTAssertEqual(
+            intentionDocument(localMedia: [video], forcePlainPost: true).type, "POST",
+            "`forcePlainPost` reste honoré : l'auteur qui refuse le format réel garde son post."
+        )
+        let photo = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/photo.jpg"), mimeType: "image/jpeg", durationMs: nil
+        )
+        XCTAssertEqual(
+            intentionDocument(localMedia: [photo]).type, "POST",
+            "Une seule image ne qualifie pas — il en faut deux ou plus."
+        )
+    }
+
+    /// La langue d'un document est celle que l'auteur a DÉCLARÉE — à la
+    /// différence du vocal, dont la langue vient de la transcription.
+    func test_laLangueDUnDocument_estCelleQueLAuteurADeclaree() {
+        XCTAssertEqual(intentionDocument(originalLanguage: "es").originalLanguage, "es")
+    }
+
     // MARK: - Lecture de la source de production
 
     private var racineApp: URL {
@@ -216,23 +265,29 @@ final class PublishIntentTests: XCTestCase {
     /// faire passer pour un contrôle qu'elle n'exerce plus.
     func test_laFabriqueDeLIntention_nePoseAucunDefaut() throws {
         let code = try sourceDuVerbe()
-        guard let parametres = listeDeParametres(
-            de: "static func audioRecording(", dans: code
-        ) else {
-            throw AncreIntrouvable(ancre: "static func audioRecording(")
-        }
+        let ancresEtMotsAttendus = [
+            "static func audioRecording(": "fileURL:",
+            "static func document(": "localMedia:",
+        ]
 
-        XCTAssertTrue(
-            parametres.contains("fileURL:"),
-            "La liste de paramètres lue est vide ou fausse — la garde ne mesurerait RIEN."
-        )
-        XCTAssertFalse(
-            parametres.contains("="),
-            "La fabrique pose une valeur par défaut. Un défaut fait disparaître un champ d'un site d'appel "
-                + "SANS casser la compilation : c'est le mécanisme exact qui a fait partir un mood vocal "
-                + "muet et sans sa source. Chaque geste DÉCLARE tout ce qu'il publie, `nil` compris. "
-                + "Paramètres lus — \(parametres)"
-        )
+        for (ancre, motAttendu) in ancresEtMotsAttendus {
+            guard let parametres = listeDeParametres(de: ancre, dans: code) else {
+                throw AncreIntrouvable(ancre: ancre)
+            }
+
+            XCTAssertTrue(
+                parametres.contains(motAttendu),
+                "La liste de paramètres lue est vide ou fausse pour « \(ancre) » — la garde ne mesurerait "
+                    + "RIEN."
+            )
+            XCTAssertFalse(
+                parametres.contains("="),
+                "« \(ancre) » pose une valeur par défaut. Un défaut fait disparaître un champ d'un site "
+                    + "d'appel SANS casser la compilation : c'est le mécanisme exact qui a fait partir un "
+                    + "mood vocal muet et sans sa source. Chaque geste DÉCLARE tout ce qu'il publie, `nil` "
+                    + "compris. Paramètres lus — \(parametres)"
+            )
+        }
     }
 
     // MARK: - 5. Le verbe naît DÉCLARÉ sans appelant

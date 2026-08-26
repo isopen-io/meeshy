@@ -894,7 +894,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     func test_leBrouillonDuDocument_nePlafonnePasLeTexte_carUnPostNaPasDePlafond() {
         let long = String(repeating: "a", count: 300)
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil
+            format: .post, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
         )
 
         XCTAssertEqual(brouillon.text?.count, 300)
@@ -906,7 +906,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// lecteur aurait crue tenue.
     func test_leBrouillonDuDocument_neFabriqueNiEmojiNiMention() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil
+            format: .post, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
         )
         XCTAssertNil(brouillon.emoji)
         XCTAssertNil(brouillon.mentions)

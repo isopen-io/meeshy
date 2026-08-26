@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 import MeeshyUI
+import MeeshySDK
 @testable import Meeshy
 
 /// V2 — **la surface « document sans scène »**, et la règle qui la choisit.
@@ -1248,7 +1249,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// document ne portait pas le champ du tout.
     func test_leBrouillonDuDocument_porteSaListeNominative_quandLAudienceLExige() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .only, visibilityUserIds: ["u1", "u2"], repostOfId: nil
+            format: .post, text: "bonjour", visibility: .only, visibilityUserIds: ["u1", "u2"], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
         )
         XCTAssertEqual(
             brouillon.visibilityUserIds, ["u1", "u2"],
@@ -1261,7 +1262,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// n'en veut pas la ferait persister pour rien.
     func test_leBrouillonDuDocument_ecarteLaListe_quandLAudienceNeLExigePas() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: ["u1"], repostOfId: nil
+            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
         )
         XCTAssertNil(
             brouillon.visibilityUserIds,
@@ -1281,7 +1282,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// dur, et aucun appelant ne pouvait donc le remplir.
     func test_leBrouillonDuDocument_porteSaSource_sansQuoiLAncragePerdSonOrigine() {
         let ancrage = ComposerDocumentDraft.document(
-            format: .post, text: "je garde", visibility: .public, visibilityUserIds: [], repostOfId: "mood-source"
+            format: .post, text: "je garde", visibility: .public, visibilityUserIds: [], repostOfId: "mood-source", localMedia: [], location: nil, originalLanguage: nil
         )
         XCTAssertEqual(
             ancrage.repostOfId, "mood-source",
@@ -1325,6 +1326,112 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             branche.contains("moodSeed"),
             "La source est lue sur la GRAINE : deux sources pour « quelle publication republie-t-on », et "
                 + "c'est exactement ce que la branche `.mood` documente comme à ne pas faire."
+        )
+    }
+
+    // MARK: - Lot 2 (T2.1) — le brouillon porte média, position et langue
+
+    /// **La première capacité manquante du DoD du lot 2, comblée.**
+    ///
+    /// `test_leBrouillon_nAAucunCanalMedia_ceQuiTientLeLitteralDuPlan` mesurait
+    /// l'ABSENCE comme garde NÉGATIVE et documentait son propre déclencheur :
+    /// « elle rougira le jour où `ComposerDocumentDraft` gagne un champ de
+    /// média ». C'est ce jour — et le brouillon gagne dans le même geste sa
+    /// position et sa langue déclarée.
+    func test_leBrouillonDuDocument_porteSonMediaSaPositionEtSaLangue() {
+        let media = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/photo.jpg"), mimeType: "image/jpeg", durationMs: nil
+        )
+        let lieu = SharedPlace(latitude: 48.8583736, longitude: 2.2944813, name: "Tour Eiffel")
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil,
+            localMedia: [media], location: lieu, originalLanguage: "es"
+        )
+
+        XCTAssertEqual(brouillon.localMedia, [media])
+        XCTAssertEqual(brouillon.location, lieu)
+        XCTAssertEqual(brouillon.originalLanguage, "es")
+    }
+
+    /// **Le cas NOMINAL, média compris : la promesse « offline compris » tient
+    /// aussi pour une photo.**
+    ///
+    /// Résolution du blocage §B.3 (vague 1b, 2026-08-26) : `FeedViewModel.publish`
+    /// enfile SANS condition réseau (`FeedViewModel.swift:878-884` — « Aucune
+    /// condition réseau ici, et c'est une décision »). Router un média EN LIGNE
+    /// vers `.upload` refusait donc le cas nominal —
+    /// `ComposerDocumentSendPlan.plan` convertit tout chemin non durable en
+    /// `.refuse(.nonDurablePath(.upload))`.
+    func test_lePlan_dUnPostAvecMedia_prendLaFileDurable_desDeuxCotesDuReseau() {
+        let media = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/photo.jpg"), mimeType: "image/jpeg", durationMs: nil
+        )
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil,
+            localMedia: [media], location: nil, originalLanguage: nil
+        )
+        for horsLigne in [true, false] {
+            XCTAssertEqual(
+                ComposerDocumentSendPlan.plan(for: brouillon, isOffline: horsLigne),
+                .send(.durableOutbox),
+                "Un post avec média est durable des DEUX côtés du réseau — jamais `.upload`, qui jette hors "
+                    + "ligne et refuserait le cas nominal en ligne."
+            )
+        }
+    }
+
+    /// **Une photo sans légende n'est plus un brouillon vide.**
+    ///
+    /// La feuille historique l'accepte déjà (`hasContent`,
+    /// `FeedView+Attachments.swift:914-920` : texte OU pièce jointe OU
+    /// position) ; le plan ne connaissait qu'un texte, et rejetait une photo
+    /// seule là où la feuille qu'il remplace l'accepte.
+    func test_lePlan_neRefusePlusUnBrouillonSansTexte_siUnMediaLAccompagne() {
+        let media = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/photo.jpg"), mimeType: "image/jpeg", durationMs: nil
+        )
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, text: "", visibility: .public, visibilityUserIds: [], repostOfId: nil,
+            localMedia: [media], location: nil, originalLanguage: nil
+        )
+        XCTAssertNotEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
+            .refuse(.emptyDraft),
+            "Une photo seule est une matière — la feuille l'accepte, ce plan doit l'accepter aussi."
+        )
+    }
+
+    /// **RETOURNÉE (T2.1) — le brouillon a gagné son canal média, exactement au
+    /// jour que cette garde annonçait.** Le littéral `hasLocalMedia: false` est
+    /// devenu le mensonge qu'elle protégeait : le plan doit désormais DÉRIVER
+    /// `hasLocalMedia` du canal réel du brouillon, jamais le supposer.
+    func test_lePlan_deriveHasLocalMedia_duCanalReelDuBrouillon() throws {
+        XCTAssertFalse(
+            try planBlock().contains("hasLocalMedia: false"),
+            "Le plan écrit encore le littéral `false` : une composition avec média partirait par le chemin "
+                + "TEXTE en laissant son fichier sur place."
+        )
+        XCTAssertTrue(
+            try planBlock().contains("hasLocalMedia: !draft.localMedia.isEmpty"),
+            "Le plan doit dériver `hasLocalMedia` du canal RÉEL du brouillon — jamais un littéral."
+        )
+    }
+
+    /// **Garde NÉGATIVE + garde-fou (T2.1).** Un média composé ne doit jamais
+    /// retraverser un upload direct : `TusUploadManager` jette hors ligne, et un
+    /// média composé hors ligne y serait perdu — c'est exactement le second
+    /// chemin d'envoi que la file durable a fermé.
+    func test_laPorteDuDocument_publishNeRemonteAucunUploadDirect() throws {
+        let envoi = try doorSendBlock()
+
+        XCTAssertFalse(envoi.isEmpty, "Le corps de `publish` est vide — l'appariement d'accolades a échoué.")
+        XCTAssertTrue(
+            envoi.contains("ComposerDocumentSendPlan"),
+            "Le corps lu n'est pas celui de l'envoi — la garde ne mesurerait RIEN."
+        )
+        XCTAssertFalse(
+            envoi.contains("TusUploadManager"),
+            "L'envoi remonte `TusUploadManager` : c'est le second chemin d'envoi que la file durable a fermé."
         )
     }
 
@@ -1609,10 +1716,14 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
     }
 
-    func test_envoi_enLigne_avecMedia_passeParLUpload() {
+    /// **RETOURNÉE (résolution du blocage §B.3, vague 1b, 2026-08-26).** Le
+    /// média ne branche plus sur `isOffline` : `.upload` refusait le cas
+    /// NOMINAL — une photo composée EN LIGNE —, `ComposerDocumentSendPlan.plan`
+    /// le convertissant en `.refuse(.nonDurablePath(.upload))`.
+    func test_envoi_enLigne_avecMedia_prendLaFileDurable() {
         XCTAssertEqual(
             ComposerDocumentSendRouting.path(isQuote: false, hasLocalMedia: true, isOffline: false),
-            .upload
+            .durableOutbox
         )
     }
 
@@ -1903,7 +2014,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUnBrouillonQuiNestPasUnPost() {
         for format in [ComposerFormat.status, .story, .reel] {
             let brouillon = ComposerDocumentDraft.document(
-                format: format, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil
+                format: format, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -1925,7 +2036,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUnBrouillonSansMatiere() {
         for texte in ["", "   ", "\n"] {
             let brouillon = ComposerDocumentDraft.document(
-                format: .post, text: texte, visibility: .public, visibilityUserIds: [], repostOfId: nil
+                format: .post, text: texte, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -1951,7 +2062,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUneAudienceNominativeSansPersonne() {
         for nominative in PostVisibility.composerSelectableCases where nominative.requiresUserSelection {
             let brouillon = ComposerDocumentDraft.document(
-                format: .post, text: "bonjour", visibility: nominative, visibilityUserIds: [], repostOfId: nil
+                format: .post, text: "bonjour", visibility: nominative, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -1961,7 +2072,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             )
 
             let complet = ComposerDocumentDraft.document(
-                format: .post, text: "bonjour", visibility: nominative, visibilityUserIds: ["u1"], repostOfId: nil
+                format: .post, text: "bonjour", visibility: nominative, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: complet, isOffline: false),
@@ -1982,7 +2093,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// `isOffline()` répond oui.
     func test_lePlan_dUnPostTexte_prendLeCheminDejaDurable_desDeuxCotesDuReseau() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil
+            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
         )
         for horsLigne in [true, false] {
             XCTAssertEqual(
@@ -2031,7 +2142,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             visibilityUserIds: nil,
             mentions: nil,
             repostOfId: "post-source",
-            audioUrl: nil
+            audioUrl: nil, localMedia: [], location: nil, originalLanguage: nil
         )
         XCTAssertEqual(
             ComposerDocumentSendPlan.plan(for: citation, isOffline: false),
@@ -2059,36 +2170,6 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                 "Le plan nomme « \(recopie) » : il a commencé à réécrire la table qu'il devait interroger."
             )
         }
-    }
-
-    /// **Le brouillon n'a AUCUN canal média — et c'est ce qui rend honnête le
-    /// littéral `hasLocalMedia: false` du plan.**
-    ///
-    /// Garde NÉGATIVE dont toute la valeur est dans le jour où elle rougira :
-    /// dès que `ComposerDocumentDraft` gagnera un champ de média — la première
-    /// capacité manquante du DoD du lot 2 —, ce littéral deviendra un MENSONGE.
-    /// Une composition avec photo prendrait le chemin texte, et le fichier
-    /// resterait sur place sans qu'aucune erreur ne le dise.
-    ///
-    /// Le littéral ne peut pas se garder lui-même : il est vrai par ABSENCE, et
-    /// une absence ne se voit nulle part.
-    func test_leBrouillon_nAAucunCanalMedia_ceQuiTientLeLitteralDuPlan() throws {
-        let source = try surfaceSource()
-        guard let brouillon = blockBody(startingAt: "struct ComposerDocumentDraft", in: source) else {
-            return XCTFail("`ComposerDocumentDraft` est introuvable — la garde ne mesurerait RIEN")
-        }
-        for canal in ["mediaIds", "attachmentIds", "attachments", "fileURL", "localMedia", "imageIds"] {
-            XCTAssertFalse(
-                brouillon.contains(canal),
-                "Le brouillon porte « \(canal) » : le littéral `hasLocalMedia: false` du plan est devenu faux, "
-                    + "et une composition média partirait par le chemin TEXTE en laissant son fichier sur place."
-            )
-        }
-
-        XCTAssertTrue(
-            try planBlock().contains("hasLocalMedia: false"),
-            "Le plan n'écrit plus le littéral que cette garde protège — elle ne mesurerait plus rien."
-        )
     }
 
     // MARK: - L'ISSUE de l'envoi — ce que le publieur a rendu
@@ -2221,13 +2302,25 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// SANS consulter la connectivité — c'est exactement la promesse « offline
     /// compris ». Un appel direct au service la contournerait, et un post
     /// composé hors ligne serait perdu au premier kill de l'app.
+    /// **RETOURNÉE (T2.1).** Elle exigeait `createPost(` — la seule entrée qui
+    /// enfilait durablement, à l'époque où le brouillon ne portait aucun média.
+    /// `FeedViewModel.publish(_ intent: PublishIntent)` enfile désormais SANS
+    /// condition réseau, média compris (`FeedViewModel.swift:878-884` —
+    /// « Aucune condition réseau ici, et c'est une décision ») : c'est le
+    /// publieur NOMMÉ que `PublishIntent.document(…)` compose pour lui, et un
+    /// seul des deux doit décider.
     func test_laPorteDuDocument_envoieParLaFileDurableDuModele() throws {
         let envoi = try doorSendBlock()
 
         XCTAssertTrue(
+            envoi.contains("viewModel.publish(PublishIntent.document("),
+            "L'envoi doit passer par `FeedViewModel.publish(PublishIntent.document(…))` — le publieur unique "
+                + "qui enfile SANS condition réseau, média compris."
+        )
+        XCTAssertFalse(
             envoi.contains("createPost("),
-            "L'envoi doit passer par `FeedViewModel.createPost` — la seule entrée du dépôt dont la branche "
-                + "texte enfile la ligne durablement, en ligne comme hors ligne."
+            "L'envoi appelle encore `createPost(` : deux chemins pour un même geste, dont un seul devrait "
+                + "décider."
         )
         XCTAssertTrue(
             envoi.contains("ComposerDocumentSendPlan.plan("),

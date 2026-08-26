@@ -1257,7 +1257,7 @@ struct MeeshyComposerHost: View {
                 text: documentText,
                 visibility: composerVisibility,
                 visibilityUserIds: composerVisibilityUserIds,
-                repostOfId: intent.origin.repostedPostId
+                repostOfId: intent.origin.repostedPostId, localMedia: [], location: nil, originalLanguage: nil
             )
         }
     }

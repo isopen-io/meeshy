@@ -516,9 +516,14 @@ nonisolated enum ComposerDocumentSendPath: Equatable {
 /// personne ne le cherche, puisque la table, elle, est désormais légitime.
 nonisolated enum ComposerDocumentSendRouting {
 
-    /// L'ordre des trois questions EST la règle, et l'inverser perd du contenu :
-    /// tester le hors-ligne après avoir choisi l'upload enverrait une
-    /// composition média dans un tus qui jette dès la première requête.
+    /// **Le média ne branche plus sur `isOffline` (résolution du blocage §B.3,
+    /// vague 1b, 2026-08-26).** Mesuré : `FeedViewModel.publish` enfile sa
+    /// ligne SANS condition réseau (doc-comment de `publish(_:)`,
+    /// `FeedViewModel.swift:878-884` — « Aucune condition réseau ici, et c'est
+    /// une décision »). Router un média EN LIGNE vers `.upload` refusait donc
+    /// le cas NOMINAL : `ComposerDocumentSendPlan.plan` convertit tout chemin
+    /// non durable en `.refuse`, et le seul publieur qui accepte ce chemin est
+    /// déjà durable des deux côtés du réseau.
     ///
     /// - Parameter hasLocalMedia: une pièce jointe portée par un fichier LOCAL
     ///   — image, vidéo, document ou **son enregistré**. Depuis c10801bbca (lot
@@ -545,7 +550,7 @@ nonisolated enum ComposerDocumentSendRouting {
     ) -> ComposerDocumentSendPath {
         if isQuote { return .quotedRepost }
         guard hasLocalMedia else { return .textOnly }
-        return isOffline ? .durableOutbox : .upload
+        return .durableOutbox
     }
 }
 
@@ -608,20 +613,19 @@ nonisolated enum ComposerDocumentSendRefusal: Equatable {
 /// brouillon qu'elle n'a pas, et à ce plan une règle de routage qu'il aurait
 /// fallu recopier.
 ///
-/// **`hasLocalMedia` y est un littéral `false`, et c'est mesuré, pas supposé** :
-/// `ComposerDocumentDraft` ne porte ni identifiants de média, ni fichier — la
-/// première capacité manquante du DoD du lot 2. Ce littéral est vrai par
-/// ABSENCE, et une absence ne se garde pas toute seule : le jour où le brouillon
-/// gagnera un canal média, il deviendra un MENSONGE et une composition avec
-/// photo partirait par le chemin texte en laissant son fichier sur place.
-/// `test_leBrouillon_nAAucunCanalMedia_ceQuiTientLeLitteralDuPlan` rougit ce
-/// jour-là.
+/// **`hasLocalMedia` dérive désormais le canal RÉEL du brouillon (T2.1).**
+/// `ComposerDocumentDraft` portait ni identifiants de média, ni fichier — la
+/// première capacité manquante du DoD du lot 2, comblée par `localMedia`. Un
+/// littéral `false` serait redevenu un MENSONGE : une composition avec photo
+/// partirait par le chemin texte en laissant son fichier sur place.
 ///
-/// **`isOffline` est demandé même s'il n'est pas lu aujourd'hui.** La table ne
-/// le consulte qu'après avoir vu un fichier local, et il n'y en a pas : le
-/// paramètre traverse donc sans effet. Le supprimer aurait fait de ce plan une
-/// fonction du seul format, et il aurait fallu le rouvrir — c'est-à-dire
-/// retrouver la question — le jour où un média voyage.
+/// **`isOffline` traverse toujours SANS effet, et c'est désormais une
+/// décision, pas une absence.** `ComposerDocumentSendRouting.path` route un
+/// média EN LIGNE COMME HORS LIGNE vers `.durableOutbox` — la même règle que
+/// `FeedViewModel.publish` (`FeedViewModel.swift:878-884` : « Aucune condition
+/// réseau ici, et c'est une décision »). Le supprimer aurait fait de ce plan
+/// une fonction du seul format, et il aurait fallu le rouvrir le jour où cette
+/// décision serait remise en cause.
 nonisolated enum ComposerDocumentSendPlan: Equatable {
 
     /// Le brouillon part, et par ce chemin-là.
@@ -632,8 +636,11 @@ nonisolated enum ComposerDocumentSendPlan: Equatable {
 
     static func plan(for draft: ComposerDocumentDraft, isOffline: Bool) -> ComposerDocumentSendPlan {
         guard draft.format == .post else { return .refuse(.wrongFormat(draft.format)) }
-        guard let texte = draft.text,
-              !texte.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        // Un média SEUL suffit à faire partir un post — la feuille historique
+        // l'accepte, et T2.1 aligne le meuble dessus. `emptyDraft` ne se refuse
+        // que quand il n'y a NI texte NI média.
+        let texteVide = draft.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
+        guard !texteVide || !draft.localMedia.isEmpty else {
             return .refuse(.emptyDraft)
         }
         // La complétude de l'audience passe par la MÊME règle que le gate de la
@@ -649,7 +656,7 @@ nonisolated enum ComposerDocumentSendPlan: Equatable {
 
         let chemin = ComposerDocumentSendRouting.path(
             isQuote: draft.repostOfId != nil,
-            hasLocalMedia: false,
+            hasLocalMedia: !draft.localMedia.isEmpty,
             isOffline: isOffline
         )
         guard chemin.isDurable else { return .refuse(.nonDurablePath(chemin)) }
@@ -802,6 +809,14 @@ nonisolated enum ComposerDocumentPublishGate {
 /// est entendu par le serveur comme un EFFACEMENT), et la liste nominative
 /// écartée quand l'audience ne l'exige pas. Les laisser aux quatre sites de
 /// montage du lot 4.6, ce serait écrire la loi 3 quatre fois.
+/// Une pièce jointe LOCALE portée par un brouillon de document — image, vidéo
+/// ou document, avant tout envoi.
+nonisolated struct ComposerDocumentMedia: Equatable, Sendable {
+    let url: URL
+    let mimeType: String
+    let durationMs: Int?
+}
+
 nonisolated struct ComposerDocumentDraft: Equatable {
     let format: ComposerFormat
 
@@ -820,6 +835,16 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     let mentions: [PostMentionInput]?
     let repostOfId: String?
     let audioUrl: String?
+
+    /// Les pièces jointes LOCALES du document — `[]` pour un mood, qui n'en a
+    /// pas.
+    let localMedia: [ComposerDocumentMedia]
+
+    /// La position jointe au document.
+    let location: SharedPlace?
+
+    /// La langue DÉCLARÉE du contenu. `nil` ⇒ le serveur détecte.
+    let originalLanguage: String?
 
     /// Le brouillon d'un MOOD.
     ///
@@ -856,7 +881,10 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             visibilityUserIds: visibility.requiresUserSelection ? visibilityUserIds : nil,
             mentions: ComposerMoodPolicy.declared(references),
             repostOfId: repostOfId,
-            audioUrl: audioUrl
+            audioUrl: audioUrl,
+            localMedia: [],
+            location: nil,
+            originalLanguage: nil
         )
     }
 
@@ -890,7 +918,10 @@ nonisolated struct ComposerDocumentDraft: Equatable {
         text: String,
         visibility: PostVisibility,
         visibilityUserIds: [String],
-        repostOfId: String?
+        repostOfId: String?,
+        localMedia: [ComposerDocumentMedia],
+        location: SharedPlace?,
+        originalLanguage: String?
     ) -> ComposerDocumentDraft {
         ComposerDocumentDraft(
             format: format,
@@ -900,7 +931,10 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             visibilityUserIds: visibility.requiresUserSelection ? visibilityUserIds : nil,
             mentions: nil,
             repostOfId: repostOfId,
-            audioUrl: nil
+            audioUrl: nil,
+            localMedia: localMedia,
+            location: location,
+            originalLanguage: originalLanguage
         )
     }
 }
@@ -1266,13 +1300,20 @@ struct DocumentComposerDoor: View {
         // `content:` reçoit le texte du brouillon tel quel : le plan vient de
         // garantir qu'il n'est ni absent ni blanc, et le re-normaliser ici en
         // ferait une seconde écriture de la même règle.
-        await viewModel.createPost(
+        // La langue reste la CONSTANTE en T2.1 — sa déclaration par l'auteur est
+        // le geste de T2.2. Le canal `draft.originalLanguage` existe déjà, il
+        // n'est simplement pas encore branché ici.
+        await viewModel.publish(PublishIntent.document(
+            localMedia: draft.localMedia,
+            forcePlainPost: false,
             content: draft.text,
             visibility: draft.visibility.rawValue,
             visibilityUserIds: draft.visibilityUserIds,
             originalLanguage: DefaultComposerLanguage.resolve(),
-            mentions: draft.mentions
-        )
+            mentions: draft.mentions,
+            location: draft.location,
+            discoverabilityPrecision: nil
+        ))
 
         let issue = ComposerDocumentSendOutcome.reported(
             succeeded: viewModel.publishSuccess,
