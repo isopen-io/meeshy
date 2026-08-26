@@ -937,6 +937,9 @@ struct MeeshyComposerHost: View {
             onPickBackground: { hex in
                 documentBackground = hex
                 viewModel.applyBackground(hex: hex)
+                // E1 — la toile qui naît prend la langue DÉCLARÉE au composer
+                // comme défaut de tout objet posé (`declaredContentLanguage`).
+                viewModel.declaredContentLanguage = documentLanguage
             }
         )
         // La capsule se superpose plutôt que d'être peinte PAR la surface :
@@ -1059,6 +1062,9 @@ struct MeeshyComposerHost: View {
                     // L'écriture passe par `formatSelection`, l'ÉCRIVAIN UNIQUE
                     // du format (la liaison du fan) — jamais un second `currentFormat =`.
                     formatSelection.wrappedValue = destination.composerFormat
+                    // E1 — STORY monte la scène : son contenu et ses objets
+                    // partent dans la langue DÉCLARÉE au composer (la capsule).
+                    viewModel.declaredContentLanguage = documentLanguage
                     HapticFeedback.light()
                 } label: {
                     HStack(spacing: 4) {

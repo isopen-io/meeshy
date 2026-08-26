@@ -112,4 +112,15 @@ final class ComposerSceneActivationTests: XCTestCase {
             XCTAssertNotNil(locs[loc], "Picker de fond : locale « \(loc) » manquante (cliquet i18n)")
         }
     }
+
+    // 6 — E1 (#3886) : la naissance de la scène SÈME la langue déclarée (la
+    // capsule) dans l'atelier, défaut de tout objet posé.
+    func test_laNaissanceDeLaScene_semeLaLangueDeclaree() throws {
+        let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        XCTAssertTrue(
+            src.contains("viewModel.declaredContentLanguage=documentLanguage"),
+            "Quand la scène naît (fond OU STORY), l'atelier reçoit la langue DÉCLARÉE au composer "
+                + "(`documentLanguage`) comme défaut de tout objet — jamais « fr » codé en dur."
+        )
+    }
 }

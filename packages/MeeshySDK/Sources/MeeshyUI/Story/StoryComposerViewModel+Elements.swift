@@ -239,7 +239,7 @@ extension StoryComposerViewModel {
             textStyle: "classic",
             textColor: "FFFFFF",
             textAlign: "center",
-            sourceLanguage: Self.defaultSourceLanguage
+            sourceLanguage: declaredContentLanguage
         )
         var effects = currentEffects
         var texts = effects.textObjects
@@ -363,7 +363,7 @@ extension StoryComposerViewModel {
             textColor: "FFFFFF",
             textAlign: "center",
             backgroundStyle: .solid(hex: MeeshyColors.brandPrimaryHex),
-            sourceLanguage: Self.defaultSourceLanguage
+            sourceLanguage: declaredContentLanguage
         )
         obj.referenceUserId = userId
         var effects = currentEffects
@@ -498,7 +498,7 @@ extension StoryComposerViewModel {
             // (user report 2026-05-27).
             isBackground: shouldBeBackground,
             loop: shouldBeBackground,
-            sourceLanguage: Self.defaultSourceLanguage
+            sourceLanguage: declaredContentLanguage
         )
         var medias = targetEffects.mediaObjects ?? []
         medias.append(obj)
@@ -609,7 +609,7 @@ extension StoryComposerViewModel {
             waveformSamples: sound.waveform,
             isBackground: hasExistingBackgroundAudio ? nil : true,
             duration: sound.durationSeconds.map { Float($0) },
-            sourceLanguage: Self.defaultSourceLanguage,
+            sourceLanguage: declaredContentLanguage,
             // Le titre de l'auteur, quand il existe, sert de nom de piste dans
             // la timeline. Sans titre on laisse `nil` : le libellé par défaut se
             // compose à l'affichage, dans la langue du lecteur.
@@ -646,7 +646,7 @@ extension StoryComposerViewModel {
             volume: 1.0,
             waveformSamples: [],
             isBackground: hasExistingBackgroundAudio ? nil : true,
-            sourceLanguage: Self.defaultSourceLanguage
+            sourceLanguage: declaredContentLanguage
         )
         var effects = currentEffects
         var audios = effects.audioPlayerObjects ?? []
