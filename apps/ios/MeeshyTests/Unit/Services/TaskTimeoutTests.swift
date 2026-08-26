@@ -20,7 +20,7 @@ final class TaskTimeoutTests: XCTestCase {
     func test_slowOperation_throwsTimeoutError() async {
         do {
             _ = try await withTaskTimeout(seconds: 0.05) {
-                try await Task.sleep(nanoseconds: 500_000_000)
+                try await Task.sleep(for: .milliseconds(500))
                 return "should not return"
             }
             XCTFail("Expected TaskTimeoutError")
