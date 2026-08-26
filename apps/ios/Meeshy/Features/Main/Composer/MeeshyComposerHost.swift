@@ -879,11 +879,14 @@ struct MeeshyComposerHost: View {
     /// AVEC le transfert de la saisie, jamais avant lui — et la règle de
     /// placement le dira d'elle-même, sans qu'on ait à toucher ce fichier.
     ///
-    /// La TABLE de C1 désigne par ailleurs le meuble pour `.feedComposer`
-    /// (`routesToLegacy: nil`) depuis le lot 3, mais aucun site de présentation
-    /// n'a bougé — le fil monte toujours sa feuille et son composer inline
-    /// depuis ses propres booléens. La porte la plus utilisée ne passe donc pas
-    /// encore ici.
+    /// La TABLE de C1 désigne le meuble pour `.feedComposer`
+    /// (`routesToLegacy: nil`) depuis le lot 3, et depuis T3.1 le PLEIN composer
+    /// du fil PASSE ici : `RootViewComponents` monte
+    /// `DocumentComposerDoor(intent: ComposerIntent(origin: .feedComposer))`.
+    /// Ce qui n'a pas bougé, c'est le reste — les deux CITATIONS montent encore
+    /// leur feuille (T3.2, levée 7.5) et le composer inline iPad son propre
+    /// booléen (T3.3 le nomme ; sa migration T3.4 est descopée). La porte la
+    /// plus utilisée, elle, passe désormais par le meuble.
     ///
     /// **Ne pas confondre les deux blocages, ils n'ont ni la même cause ni la
     /// même levée.** Celui de `.feedComposer` est côté SDK (le transfert de la

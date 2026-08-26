@@ -2501,19 +2501,25 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
     }
 
-    /// **Garde NÉGATIVE, à condition de levée nommée.**
+    /// **Garde RETOURNÉE au T3.1 — désormais POSITIVE, à un site nommé.**
     ///
-    /// Aucun site de production ne monte encore cette porte, et ce n'est pas un
-    /// oubli de câblage :
-    /// `test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`
-    /// retient la porte du fil tant que la RANGÉE d'outils du document ne couvre
-    /// pas celle de la feuille qu'elle remplace. L'ENVOI, lui, est tenu depuis
-    /// le lot 4.10 — c'était la troisième des trois capacités du DoD du lot 2.
+    /// Jusqu'à T3.1, aucun site de production ne montait cette porte, et ce
+    /// n'était pas un oubli de câblage : ce test retenait la porte du fil tant
+    /// que la RANGÉE d'outils du document ne couvrait pas celle de la feuille
+    /// qu'elle remplace. L'ENVOI, lui, est tenu depuis le lot 4.10 — c'était la
+    /// troisième des trois capacités du DoD du lot 2.
     ///
-    /// Elle existe pour que la porte ne soit pas montée « puisqu'elle existe »
-    /// avant que la première capacité tombe. Ses déclencheurs sont ses deux
-    /// dernières assertions : le jour où elles tombent TOUTES LES DEUX, plus
-    /// rien ne retient la porte, et ce test se RETOURNE — il ne se supprime pas.
+    /// Elle existait pour que la porte ne soit pas montée « puisqu'elle
+    /// existe » avant que la première capacité tombe. Ses déclencheurs
+    /// étaient ses deux dernières assertions : le jour où elles tombent
+    /// TOUTES LES DEUX (T2.6), plus rien ne retenait la porte — mais elle
+    /// restait à `montages == 0` jusqu'à ce qu'un site de production la
+    /// monte réellement. C'est T3.1 : RootViewComponents construit
+    /// désormais `DocumentComposerDoor(` sur le PLEIN composer du fil
+    /// (`.fullScreenCover(isPresented: $showFullComposer)`), et la garde se
+    /// RETOURNE en conséquence — elle ne se supprime pas, elle exige
+    /// maintenant `montages == 1` : ni zéro (régression du câblage), ni deux
+    /// ou plus (un second site l'aurait montée en plus du fil).
     ///
     /// **ÉLARGIE : la rangée n'était pas tout ce que la feuille absorbée
     /// porte.** La mesure ne comparait que `servedRow` à `canonicalRow`, et
@@ -2568,20 +2574,22 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         XCTAssertEqual(declarations, 1, "La porte doit exister, et une seule fois — sinon la garde ne mesure rien.")
         XCTAssertEqual(
-            montages, 0,
-            "Un site de production monte `DocumentComposerDoor` alors que la rangée d'outils du document ne "
-                + "couvre pas encore celle de la feuille historique : l'auteur y perdrait "
-                + "photo·caméra·fichier·lieu·micro d'un coup. Ce n'est pas un échec — c'est la condition de "
-                + "levée. Retourner ce test, ne pas le supprimer."
+            montages, 1,
+            "Exactement UN site de production doit monter `DocumentComposerDoor` : RootViewComponents "
+                + "(le PLEIN composer du fil, `.fullScreenCover(isPresented: $showFullComposer)`) — c'est "
+                + "la levée décidée à T3.1, la rangée d'outils du document couvrant désormais celle de la "
+                + "feuille historique. Zéro dirait que le câblage a régressé ; deux ou plus dirait qu'un "
+                + "second site l'a montée en plus du fil — la CITATION, elle, reste sur `FeedComposerSheet` "
+                + "(c'est T3.2, distincte)."
         )
-        // **RETOURNÉE au T2.6.** `.microphone` gagne enfin son effet
-        // (`.attachesTranscribedAudio`), dernier des six — la rangée du
-        // document couvre désormais la rangée canonique. C'est la PREMIÈRE
-        // des deux conditions de levée de la porte, tombée ; la SECONDE (la
-        // langue) l'était déjà depuis T2.2, vérifiée juste en-dessous. Les
-        // deux tombées ne montent pas la porte pour autant : `montages == 0`
-        // ci-dessus reste la garde qui compte tant qu'aucun site de
-        // production ne construit `DocumentComposerDoor(` — décision T3.1.
+        // **RETOURNÉE au T3.1.** `.microphone` avait gagné son effet
+        // (`.attachesTranscribedAudio`) au T2.6, dernier des six outils — la
+        // rangée du document couvrait déjà la rangée canonique, et la langue
+        // déclarée depuis T2.2 : les deux conditions de levée étaient tombées,
+        // mais `montages` restait à ZÉRO tant qu'aucun site de production ne
+        // construisait `DocumentComposerDoor(`. C'est ce câblage que T3.1
+        // prend : RootViewComponents monte désormais la porte sur le PLEIN
+        // composer du fil, et `montages == 1` en est la preuve.
         XCTAssertEqual(
             ComposerDocumentTool.servedRow, ComposerDocumentTool.canonicalRow,
             "La rangée du document couvre désormais la rangée canonique — photo·caméra·emoji·document·"

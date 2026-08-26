@@ -62,6 +62,38 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         XCTAssertTrue(code.contains("struct MeeshyComposerHost"), "Le fichier lu n'est pas celui du host")
     }
 
+    private func rootViewComponentsCompact() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/Composer
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/Views/RootViewComponents.swift")
+        return compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
+    }
+
+    /// **T3.1 — garde de source, sur le COMPTE, jamais sur l'absence.**
+    ///
+    /// Depuis T3.1 le PLEIN composer du fil passe par `DocumentComposerDoor` ;
+    /// `RootViewComponents` ne monte donc plus `FeedComposerSheet(` qu'UNE fois
+    /// — la CITATION (`.fullScreenCover(item: $quoteOriginalPost)`), que T3.2
+    /// retient tant que 7.5 (un écrivain durable du repost) n'a pas d'appelant.
+    /// Assérer `0` serait un rouge injustifié ET la tentation de recâbler la
+    /// citation sur une porte qui la REFUSE ; assérer `>= 1` cesserait de
+    /// compter — un second montage du plein composer repasserait sans un mot.
+    func test_rootViewComponents_neMonteFeedComposerSheet_quePourLaCitation() throws {
+        let code = try rootViewComponentsCompact()
+        XCTAssertTrue(code.contains("structThemedFeedOverlay"), "Le fichier lu n'est pas RootViewComponents")
+        let montages = code.components(separatedBy: "FeedComposerSheet(").count - 1
+        XCTAssertEqual(
+            montages, 1,
+            "RootViewComponents doit monter `FeedComposerSheet(` EXACTEMENT une fois — la citation "
+                + "(`.fullScreenCover(item: $quoteOriginalPost)`). Le plein composer du fil est passé au "
+                + "meuble à T3.1 ; zéro dirait que la citation a été recâblée sur une porte qui la refuse "
+                + "(levée 7.5), deux ou plus qu'un second montage du plein composer est revenu."
+        )
+    }
+
     // MARK: - V3-2 : le meuble a un APPELANT
 
     /// **LA garde qui empêche ce chantier de retomber inerte.**
@@ -1572,15 +1604,23 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// outil pour outil ? C'est cela, « ne pas régresser », et c'est ce qu'un
     /// booléen « au moins un » ne pouvait pas dire.
     ///
-    /// Ce qu'elle retient, donc : **la table peut désigner le meuble ; une porte
-    /// de PRÉSENTATION ne peut pas le monter tant que le document est une
-    /// impasse.** Elle est muette aujourd'hui par construction — aucun site ne
-    /// construit cette intention — et c'est le jour du câblage qu'elle parle.
+    /// Ce qu'elle retenait, donc : **la table peut désigner le meuble ; une
+    /// porte de PRÉSENTATION ne peut pas le monter tant que le document est
+    /// une impasse.** Elle était muette par construction — aucun site ne
+    /// construisait cette intention — et c'était le jour du câblage qu'elle
+    /// devait parler.
     ///
-    /// Ce qu'elle ne dit PAS : que les trois capacités soient tenues. Elle
-    /// n'exige rien tant que personne ne monte la porte, et c'est délibéré —
-    /// la dette du lot 2 reste une dette CONSIGNÉE, que le lot 7 lèvera ; cette
-    /// garde interdit seulement de la découvrir par un écran sans issue.
+    /// **Ce jour est T3.1.** RootViewComponents construit désormais
+    /// `ComposerIntent(origin: .feedComposer)` sur le PLEIN composer du fil,
+    /// et `sitesDeProductionOuvrantUnePorteDocument()` n'est plus vide : la
+    /// garde ARME les trois assertions qu'elle portait en silence, plutôt
+    /// que de sortir tôt sur `guard !sites.isEmpty else { return }`. Ce
+    /// qu'elle disait PAS avant : que les trois capacités soient tenues. Elle
+    /// n'exigeait rien tant que personne ne montait la porte — et depuis
+    /// T3.1 quelqu'un la monte, donc elle exige désormais les trois : la
+    /// dette du lot 2 est SOLDÉE (les trois capacités sont vraies depuis le
+    /// lot 4.10 / T2.6 / T2.2), et cette garde le certifie enfin plutôt que
+    /// de se taire dessus.
     ///
     /// **Et elle ne couvre PAS le chemin de l'ÉVENTAIL — à savoir, à ne pas
     /// redécouvrir.** Elle filtre sur `portesDocumentDuMeuble`, c'est-à-dire sur
@@ -1609,7 +1649,15 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         let publieurAtteignable = try leDocumentAUnPublieurAtteignable()
 
         let sites = try sitesDeProductionOuvrantUnePorteDocument()
-        guard !sites.isEmpty else { return }
+        XCTAssertTrue(
+            sites.contains { $0.fichier == "RootViewComponents.swift" && $0.porte == "feedComposer" },
+            "Depuis T3.1, RootViewComponents doit construire `ComposerIntent(origin: .feedComposer)` sur le "
+                + "PLEIN composer du fil (`.fullScreenCover(isPresented: $showFullComposer)`) — c'est le "
+                + "câblage qui arme les trois assertions suivantes. Sans ce site, cette garde restait MUETTE "
+                + "(`guard !sites.isEmpty else { return }`) : elle ne certifiait plus rien sur la rangée, "
+                + "l'issue du texte, ou le publieur — verte pour toujours, y compris le jour où le câblage "
+                + "aurait régressé."
+        )
 
         let ou = sites.map { "\($0.porte) dans \($0.fichier)" }.joined(separator: ", ")
 
