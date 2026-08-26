@@ -698,6 +698,31 @@ extension StoryComposerViewModel {
         zIndexMap.removeValue(forKey: id)
     }
 
+    /// **E3 (#3888) — l'élément NON-TEXTE sélectionné supporte-t-il le choix de
+    /// langue ?** Le texte a déjà sa pastille dans l'éditeur inline ; média,
+    /// audio, sticker et lieu passent par le contrôle overlay. `nil` sélection
+    /// ⇒ `false`.
+    var selectedElementSupportsLanguage: Bool {
+        guard let id = selectedElementId else { return false }
+        let fx = currentEffects
+        if fx.mediaObjects?.contains(where: { $0.id == id }) == true { return true }
+        if fx.audioPlayerObjects?.contains(where: { $0.id == id }) == true { return true }
+        if fx.stickerObjects?.contains(where: { $0.id == id }) == true { return true }
+        if fx.locationObjects.contains(where: { $0.id == id }) { return true }
+        return false
+    }
+
+    /// La langue d'origine de l'élément non-texte sélectionné, ou `nil`.
+    var selectedElementSourceLanguage: String? {
+        guard let id = selectedElementId else { return nil }
+        let fx = currentEffects
+        if let m = fx.mediaObjects?.first(where: { $0.id == id }) { return m.sourceLanguage }
+        if let a = fx.audioPlayerObjects?.first(where: { $0.id == id }) { return a.sourceLanguage }
+        if let st = fx.stickerObjects?.first(where: { $0.id == id }) { return st.sourceLanguage }
+        if let l = fx.locationObjects.first(where: { $0.id == id }) { return l.sourceLanguage }
+        return nil
+    }
+
     func updateElementLanguage(elementId: String, language: String) {
         var effects = currentEffects
 

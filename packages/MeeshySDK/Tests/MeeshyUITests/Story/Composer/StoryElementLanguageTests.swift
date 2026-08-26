@@ -40,4 +40,57 @@ final class StoryElementLanguageTests: XCTestCase {
         XCTAssertEqual(vm.currentEffects.locationObjects.first?.sourceLanguage, "pt",
                        "…et sur la pastille de lieu.")
     }
+
+    // L'UI : un objet non-texte sélectionné SUPPORTE le contrôle de langue ;
+    // rien de sélectionné ⇒ pas de barre (loi 4).
+    func test_selectionNonTexte_supporteLeControleDeLangue() {
+        let vm = StoryComposerViewModel()
+        var fx = StoryEffects()
+        let sticker = StorySticker(emoji: "🎉", sourceLanguage: "en")
+        fx.stickerObjects = [sticker]
+        vm.currentEffects = fx
+
+        XCTAssertFalse(vm.selectedElementSupportsLanguage,
+                       "Sans sélection, aucune barre de langue d'élément.")
+
+        vm.selectedElementId = sticker.id
+        XCTAssertTrue(vm.selectedElementSupportsLanguage,
+                      "Un sticker sélectionné supporte le contrôle de langue.")
+        XCTAssertEqual(vm.selectedElementSourceLanguage, "en",
+                       "…et le contrôle lit la langue courante de l'élément.")
+    }
+
+    // Le TEXTE n'ouvre PAS cette barre — il a sa propre pastille dans l'éditeur
+    // inline (pas deux contrôles pour la même chose).
+    func test_selectionTexte_nOuvrePasLaBarreDElement() {
+        let vm = StoryComposerViewModel()
+        var fx = StoryEffects()
+        let text = StoryTextObject(id: "t1", text: "Bonjour", sourceLanguage: "fr")
+        fx.textObjects = [text]
+        vm.currentEffects = fx
+        vm.selectedElementId = "t1"
+
+        XCTAssertFalse(vm.selectedElementSupportsLanguage,
+                       "Le texte garde sa pastille d'éditeur — la barre d'élément ne double pas.")
+    }
+
+    // GARDE SOURCE : la barre est montée dans le canvas, et écrit par le point
+    // d'entrée UNIQUE `updateElementLanguage`, avec les MÊMES choix que le texte.
+    func test_gardeSource_laBarreEstCablee_etReutiliseLesChoix() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()   // MeeshySDK
+        func src(_ rel: String) throws -> String {
+            try String(contentsOf: root.appendingPathComponent(rel), encoding: .utf8)
+        }
+        let canvas = try src("Sources/MeeshyUI/Story/StoryComposerView+Canvas.swift")
+        XCTAssertTrue(canvas.contains("StoryElementLanguageBar(viewModel: viewModel)"),
+                      "La barre doit être montée dans le canvas, comme le toolbar texte.")
+        let bar = try src("Sources/MeeshyUI/Story/StoryElementLanguageBar.swift")
+        XCTAssertTrue(bar.contains("viewModel.updateElementLanguage(elementId: elementId, language: code)"),
+                      "La barre écrit par le point d'entrée UNIQUE `updateElementLanguage`.")
+        XCTAssertTrue(bar.contains("TextEditToolOptions.languageChoices(current: current)"),
+                      "…et réutilise les MÊMES choix de langue que le texte, jamais une liste recopiée.")
+    }
 }
