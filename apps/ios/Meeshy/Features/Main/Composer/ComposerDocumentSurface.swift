@@ -397,6 +397,27 @@ nonisolated enum ComposerDocumentToolEffect: Equatable {
     /// l'emporte (T2.1), et `PublishIntent.document(localMedia:)` le poste tel
     /// quel.
     case attachesLocalMedia(ComposerMediaIntake)
+
+    /// Ouvre `LocationPickerView` et pose une POSITION sur le brouillon (T2.5).
+    ///
+    /// **Ce n'ingère aucun fichier** — c'est pourquoi cet effet n'est pas une
+    /// quatrième famille de `ComposerMediaIntake` : `attachesLocalMedia` répond
+    /// à « quel sélecteur ouvrir pour un FICHIER ? », celui-ci répond à une
+    /// question distincte, sans sélecteur commun.
+    ///
+    /// La destination existe de bout en bout : `ComposerDocumentDraft.location`
+    /// la porte depuis T2.1 (semée `nil` faute de picker câblé), et
+    /// `PublishIntent.document(location:)` la poste déjà telle quelle. Ce lot
+    /// ferme le SEUL trou restant — aucun geste du meuble n'atteignait ce
+    /// champ.
+    ///
+    /// **Le SECOND opt-in — « rendre trouvable à proximité » — n'est PAS un
+    /// second effet.** Il voyage AVEC le lieu choisi, sur le même geste :
+    /// `FeedNearbyDiscoverability.offers(hasPlace:visibility:)` en décide,
+    /// jamais une valeur associée ici. Une position choisie sans jamais
+    /// activer ce second opt-in reste un lieu affiché ordinaire — les deux
+    /// opt-ins sont indépendants, dans les deux sens.
+    case attachesLocation
 }
 
 nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
@@ -432,12 +453,21 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     /// et fichier ont donc une destination réelle — le même trou qui les
     /// retenait tous les trois à la fois.
     ///
-    /// `.place` et `.microphone` restent `nil` : le brouillon ne porte encore
-    /// ni position ni enregistrement vocal composé sur cette surface (le lieu
-    /// tri-état de la feuille absorbée, le vocal de sa propre surface mood).
-    /// C'est ce qui tient `servedRow != canonicalRow` — la garde de la porte du
-    /// document (`ComposerDocumentSurfaceTests.test_laPorteDuDocument_...`) ne
-    /// se retourne pas ce lot.
+    /// **`.place` gagne un effet au T2.5** : `ComposerDocumentDraft.location`
+    /// (T2.1) trouve enfin son geste — `.attachesLocation` ouvre
+    /// `LocationPickerView`. `.microphone` reste seul `nil` : le brouillon ne
+    /// porte encore aucun enregistrement vocal composé sur cette surface (le
+    /// vocal de sa propre surface mood, T2.6). C'est ce qui tient
+    /// `servedRow != canonicalRow` — la garde de la porte du document
+    /// (`ComposerDocumentSurfaceTests.test_laPorteDuDocument_...`) ne se
+    /// retourne pas ce lot.
+    ///
+    /// **Ce que `.place` ne fait PAS gagner : le tri-état de la feuille
+    /// absorbée** (`PostLocationUpdate` : remplacer, retirer, ne pas toucher).
+    /// `ComposerDocumentDraft.location: SharedPlace?` ne porte que DEUX états —
+    /// un lieu, ou son absence — le seul dont une CRÉATION a besoin. Le
+    /// troisième état appartient à l'ÉDITION, hors du périmètre de ce lot
+    /// (`EditParityInventoryTests`, capacité « position tri-état »).
     ///
     /// Le `switch` reste exhaustif : un septième outil casse la compilation ICI
     /// plutôt que d'hériter d'un effet par défaut.
@@ -451,7 +481,9 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
             return .insertsEmojiIntoText
         case .document:
             return .attachesLocalMedia(.files)
-        case .place, .microphone:
+        case .place:
+            return .attachesLocation
+        case .microphone:
             return nil
         }
     }
@@ -687,10 +719,14 @@ nonisolated enum ComposerDocumentSendPlan: Equatable {
     static func plan(for draft: ComposerDocumentDraft, isOffline: Bool) -> ComposerDocumentSendPlan {
         guard draft.format == .post else { return .refuse(.wrongFormat(draft.format)) }
         // Un média SEUL suffit à faire partir un post — la feuille historique
-        // l'accepte, et T2.1 aligne le meuble dessus. `emptyDraft` ne se refuse
-        // que quand il n'y a NI texte NI média.
+        // l'accepte, et T2.1 aligne le meuble dessus. Un LIEU seul le fait
+        // partir de même (T2.5, parité avec `hasContent` de la feuille
+        // historique, `FeedView+Attachments.publishPostWithAttachments`) :
+        // `handleFeedLocationSelection` range un lieu dans `pendingPlace` sans
+        // texte ni média, et `emptyDraft` ne doit se refuser que quand il n'y a
+        // NI texte NI média NI lieu.
         let texteVide = draft.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
-        guard !texteVide || !draft.localMedia.isEmpty else {
+        guard !texteVide || !draft.localMedia.isEmpty || draft.location != nil else {
             return .refuse(.emptyDraft)
         }
         // La complétude de l'audience passe par la MÊME règle que le gate de la
@@ -915,6 +951,15 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// La position jointe au document.
     let location: SharedPlace?
 
+    /// **T2.5 — le SECOND opt-in de position**, indépendant du premier
+    /// (`location` juste au-dessus, qui EST le lieu affiché). `nil` tant que
+    /// l'auteur n'a rien choisi : `NearbyDiscoverabilityChoice.precisionToSend`
+    /// vaut déjà `nil` off, et poser ici une valeur par défaut rendrait
+    /// trouvable un contenu que personne n'a demandé à rendre trouvable — même
+    /// interdit que celui documenté sur `DiscoverabilityPrecision` (SDK).
+    /// Aucune valeur par défaut, même discipline que le reste du type (T2.1).
+    let discoverabilityPrecision: DiscoverabilityPrecision?
+
     /// La langue DÉCLARÉE du contenu. `nil` ⇒ le serveur détecte.
     let originalLanguage: String?
 
@@ -967,6 +1012,9 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             audioUrl: audioUrl,
             localMedia: [],
             location: nil,
+            // Un mood n'a ni tuile de lieu ni second opt-in : les deux vivent
+            // sous la surface document (`documentSurface`, `MeeshyComposerHost`).
+            discoverabilityPrecision: nil,
             originalLanguage: nil,
             // Un mood ne porte jamais de média local (`localMedia: []`
             // au-dessus) : il ne peut donc jamais qualifier comme réel, et ce
@@ -1008,6 +1056,13 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// moindre compilation, et un auteur qui viendrait de choisir « Post »
     /// verrait sa composition partir en `"REEL"` sans qu'aucun écran ne le
     /// dise.
+    ///
+    /// **`discoverabilityPrecision` est arrivé au T2.5, avec la tuile de
+    /// lieu**, et n'a pas davantage de valeur par défaut — pour la MÊME raison
+    /// que `forcePlainPost` juste au-dessus, mordant ici avec plus de force
+    /// encore : un défaut non-`nil` rendrait trouvable un contenu que
+    /// l'auteur n'a jamais choisi de rendre trouvable (le SECOND opt-in,
+    /// `FeedNearbyDiscoverability`, off par défaut).
     static func document(
         format: ComposerFormat,
         forcePlainPost: Bool,
@@ -1017,6 +1072,7 @@ nonisolated struct ComposerDocumentDraft: Equatable {
         repostOfId: String?,
         localMedia: [ComposerDocumentMedia],
         location: SharedPlace?,
+        discoverabilityPrecision: DiscoverabilityPrecision?,
         originalLanguage: String?
     ) -> ComposerDocumentDraft {
         ComposerDocumentDraft(
@@ -1030,6 +1086,7 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             audioUrl: nil,
             localMedia: localMedia,
             location: location,
+            discoverabilityPrecision: discoverabilityPrecision,
             originalLanguage: originalLanguage,
             forcePlainPost: forcePlainPost
         )
@@ -1418,6 +1475,10 @@ struct DocumentComposerDoor: View {
         // meuble l'y a semé — jamais d'un littéral : un `false` en dur ferait
         // partir en `"REEL"` la composition qu'un auteur vient de retenir en
         // POST simple.
+        // `location:` et `discoverabilityPrecision:` viennent tous deux du
+        // brouillon (T2.5) — jamais d'un littéral `nil` : le premier est le
+        // lieu choisi, le second le SECOND opt-in, indépendant, que l'auteur
+        // seul peut activer (`FeedNearbyDiscoverability`, off par défaut).
         await viewModel.publish(PublishIntent.document(
             localMedia: draft.localMedia,
             forcePlainPost: draft.forcePlainPost,
@@ -1427,7 +1488,7 @@ struct DocumentComposerDoor: View {
             originalLanguage: draft.originalLanguage,
             mentions: draft.mentions,
             location: draft.location,
-            discoverabilityPrecision: nil
+            discoverabilityPrecision: draft.discoverabilityPrecision
         ))
 
         let issue = ComposerDocumentSendOutcome.reported(

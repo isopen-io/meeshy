@@ -425,6 +425,10 @@ struct MeeshyComposerHost: View {
     @State private var showsCamera = false
     @State private var showsFileImporter = false
 
+    /// **Le sélecteur de lieu (T2.5).** Même patron que les trois au-dessus :
+    /// vit dans le meuble, jamais dans `ComposerDocumentSurface`.
+    @State private var showsLocationPicker = false
+
     /// Les pièces jointes LOCALES composées jusqu'ici. `documentDraft` les
     /// transmet désormais sous `.document` — `ComposerDocumentDraft.localMedia`
     /// ne repartait qu'à `[]` avant ce lot.
@@ -437,6 +441,25 @@ struct MeeshyComposerHost: View {
     /// défaut : la composition part REEL dès qu'elle qualifie, exactement le
     /// comportement de T2.3, jusqu'à ce que l'auteur bascule.
     @State private var documentForcePlainPost = false
+
+    /// **T2.5 — la POSITION posée sur le brouillon.** Vit dans le MEUBLE, comme
+    /// `documentLocalMedia` juste au-dessus : `ComposerDocumentDraft.location`
+    /// (T2.1) ne portait encore le résultat d'aucun geste, faute de picker
+    /// câblé. `LocationPickerView` — le même sélecteur que le composer inline
+    /// du fil (`FeedView+Attachments.handleFeedLocationSelection`) — l'écrit
+    /// ici ; en fabriquer un second aurait donné deux flux de lieu à faire
+    /// diverger.
+    @State private var documentLocation: SharedPlace?
+
+    /// **T2.5 — le SECOND opt-in**, indépendant du lieu lui-même : « rendre ce
+    /// contenu trouvable à proximité ». `.disabled` est l'état INERTE — off,
+    /// aucun palier offert — et c'est la valeur de départ obligée : rien n'a
+    /// encore été choisi tant qu'aucun lieu n'existe. Un lieu CHOISI la
+    /// remplace par `FeedNearbyDiscoverability.choiceForNewPlace()`, qui lit la
+    /// mémoire locale (`LocationSharingPreferencesStore`) — jamais l'inverse :
+    /// pré-sélectionner avant le premier lieu offrirait un sélecteur de grain
+    /// sans lieu à indexer.
+    @State private var documentDiscoverability: NearbyDiscoverabilityChoice = .disabled
 
     init(
         intent: ComposerIntent,
@@ -889,6 +912,29 @@ struct MeeshyComposerHost: View {
         .overlay(alignment: .topTrailing) {
             if documentComposesReel { documentForcePlainPostToggle }
         }
+        // **La tuile de lieu (T2.5)**, symétrique de la capsule de langue —
+        // `.bottomLeading` face à `.bottomTrailing` : les deux occupent le bas
+        // de la surface, sur les bords opposés de la rangée d'outils.
+        .overlay(alignment: .bottomLeading) {
+            if let place = documentLocation { documentLocationTile(place) }
+        }
+        // **Le SECOND opt-in (T2.5)**, en `safeAreaInset` et non en overlay :
+        // `NearbyDiscoverabilityControl` porte un titre, un sélecteur de grain
+        // et des notices — bien plus large qu'une capsule, il ne doit
+        // recouvrir ni le texte ni la rangée d'outils. Gaté sur
+        // `documentOffersNearbyDiscoverability`, jamais sur `documentLocation
+        // != nil` seul : l'audience compte autant que le lieu.
+        .safeAreaInset(edge: .bottom) {
+            if documentOffersNearbyDiscoverability {
+                NearbyDiscoverabilityControl(
+                    choice: $documentDiscoverability,
+                    accentColor: MeeshyColors.brandPrimaryHex
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+            }
+        }
+        .sheet(isPresented: $showsLocationPicker) { documentLocationPickerSheet }
         // Retirer un média qui dé-qualifie fait DISPARAÎTRE l'interrupteur — et
         // doit réarmer le drapeau à `false`. Le drapeau n'est jamais invisible
         // ET effectif (il ne pèse que quand ça qualifie, et l'interrupteur est
@@ -972,20 +1018,94 @@ struct MeeshyComposerHost: View {
                     : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
                     .font(MeeshyFont.relative(12))
             }
-            .foregroundColor(documentForcePlainPost ? MeeshyColors.textSecondary(isDark: true) : MeeshyColors.indigo300)
+            .foregroundColor(documentForcePlainPost ? MeeshyColors.textSecondary(isDark: true) : MeeshyColors.indigo400)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(
                 Capsule()
-                    .fill(MeeshyColors.indigo100.opacity(0.15))
+                    .fill(MeeshyColors.indigo400.opacity(0.15))
                     .overlay(
                         Capsule()
-                            .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
+                            .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1)
                     )
             )
         }
         .accessibilityHint(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
         .padding(16)
+    }
+
+    /// **Le sélecteur de lieu (T2.5)**, monté ICI plutôt que dans
+    /// `ComposerDocumentSurface` — même patron que `documentCameraSheet` juste
+    /// au-dessus : le picker est le même composant que le composer inline du
+    /// fil (`FeedView+Attachments.handleFeedLocationSelection`), qui se
+    /// referme lui-même (`LocationPickerView.dismiss()`) après `onSelect`.
+    ///
+    /// **Un lieu choisi recalcule le second opt-in DEPUIS LA MÉMOIRE**, jamais
+    /// depuis l'état courant : `FeedNearbyDiscoverability.choiceForNewPlace()`
+    /// lit `LocationSharingPreferencesStore` à cet instant précis, exactement
+    /// ce que fait le composer inline sur le même geste — un second lieu choisi
+    /// dans la même session doit repartir du dernier palier RETENU, pas d'un
+    /// toggle resté ouvert pour le lieu précédent.
+    private var documentLocationPickerSheet: some View {
+        LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { place in
+            documentLocation = place
+            documentDiscoverability = FeedNearbyDiscoverability.choiceForNewPlace()
+        }
+    }
+
+    /// **La tuile de lieu (T2.5)** — même idiome capsule que
+    /// `documentForcePlainPostToggle` juste au-dessus : un chip retirable,
+    /// jamais le pavé pin-drop du composer inline (`feedPlaceTile`), que ce
+    /// meuble n'a pas de rangée de vignettes pour accueillir.
+    ///
+    /// Retirer le lieu ne referme PAS le second opt-in — même comportement que
+    /// `feedPlaceTile` (`FeedView+Attachments.swift`), dont le bouton de
+    /// retrait ne touche pas `nearbyDiscoverability` : la garde de
+    /// `documentOffersNearbyDiscoverability` (`hasPlace: false`) suffit à
+    /// masquer le contrôle et à priver `discoverabilityPrecision` de toute
+    /// valeur, sans qu'il faille une seconde écriture de la même règle.
+    private func documentLocationTile(_ place: SharedPlace) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "mappin.circle.fill")
+                .font(MeeshyFont.relative(12))
+                .foregroundColor(MeeshyColors.indigo400)
+            Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+                .font(MeeshyFont.relative(12, weight: .medium))
+                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                .lineLimit(1)
+            Button {
+                HapticFeedback.light()
+                documentLocation = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(MeeshyFont.relative(12))
+                    .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+            }
+            .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(MeeshyColors.indigo400.opacity(0.15))
+                .overlay(
+                    Capsule()
+                        .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .padding(16)
+    }
+
+    /// **Le SECOND opt-in n'est offert que sous la MÊME garde que le composer
+    /// inline** — `FeedNearbyDiscoverability.offers(hasPlace:visibility:)`,
+    /// APPELÉE et jamais recopiée (`hasPlace && visibility == .public`) : une
+    /// condition réécrite ici diverge de l'originale au premier ajustement de
+    /// l'une des deux, exactement le défaut que ce type existe pour fermer.
+    private var documentOffersNearbyDiscoverability: Bool {
+        FeedNearbyDiscoverability.offers(
+            hasPlace: documentLocation != nil,
+            visibility: composerVisibility
+        )
     }
 
     /// **La capsule de langue (T2.2)** — le septième contrôle que la feuille
@@ -1018,10 +1138,10 @@ struct MeeshyComposerHost: View {
                 .padding(.vertical, 6)
                 .background(
                     Capsule()
-                        .fill(MeeshyColors.indigo100.opacity(0.15))
+                        .fill(MeeshyColors.indigo400.opacity(0.15))
                         .overlay(
                             Capsule()
-                                .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
+                                .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1)
                         )
                 )
         }
@@ -1073,6 +1193,9 @@ struct MeeshyComposerHost: View {
         case .attachesLocalMedia(let intake):
             HapticFeedback.light()
             presentMediaIntake(intake)
+        case .attachesLocation:
+            HapticFeedback.light()
+            showsLocationPicker = true
         case .none:
             break
         }
@@ -1431,6 +1554,16 @@ struct MeeshyComposerHost: View {
     private func chooseAudience(_ candidate: PostVisibility) {
         composerVisibility = candidate
         lastDocumentVisibility = candidate.rawValue
+        // **Parité vie privée (T2.5).** Le consentement de trouvabilité porte
+        // sur UNE publication ET UNE audience : quitter PUBLIC réarme l'opt-in
+        // de découvrabilité. Sans lui, un opt-in armé en PUBLIC survivrait à un
+        // resserrement puis à un ré-élargissement — le contrôle réapparaîtrait
+        // DÉJÀ ON et publierait sur un consentement PÉRIMÉ que personne n'a
+        // réexaminé. Le composer inline de référence le fait pour cette raison
+        // exacte (`FeedView+Attachments`), et le même meuble l'applique déjà à
+        // `forcePlainPost` (T2.4). `reset()` pose `isDiscoverable = false`, ce
+        // qui rend `precisionToSend == nil`.
+        if candidate != .public { documentDiscoverability.reset() }
         if candidate.requiresUserSelection { audiencePickerMode = candidate }
     }
 
@@ -1598,13 +1731,30 @@ struct MeeshyComposerHost: View {
             // `documentForcePlainPost`) — jamais d'un littéral `false` : un
             // littéral ferait toujours élire `"REEL"` sur une composition
             // qualifiante, exactement la régression que ce lot referme.
+            //
+            // `location` vient du SOCLE (`documentLocation`, T2.5, écrit par
+            // `LocationPickerView`) — jamais d'un littéral `nil` : un littéral
+            // jetterait le lieu que l'auteur vient de choisir.
+            //
+            // `discoverabilityPrecision` est le SECOND opt-in, gardé par
+            // `documentOffersNearbyDiscoverability` — la MÊME garde que celle
+            // qui peint le contrôle (`FeedNearbyDiscoverability.offers(`),
+            // jamais recopiée : un contrôle absent de l'écran ne doit jamais
+            // pouvoir peser sur ce qui part. Hors de cette garde, ou tant que
+            // l'auteur n'a rien activé, `precisionToSend` vaut déjà `nil`
+            // (`NearbyDiscoverabilityChoice`, off par défaut).
             return ComposerDocumentDraft.document(
                 format: selectedFormat,
                 forcePlainPost: documentForcePlainPost,
                 text: documentText,
                 visibility: composerVisibility,
                 visibilityUserIds: composerVisibilityUserIds,
-                repostOfId: intent.origin.repostedPostId, localMedia: documentLocalMedia, location: nil,
+                repostOfId: intent.origin.repostedPostId,
+                localMedia: documentLocalMedia,
+                location: documentLocation,
+                discoverabilityPrecision: documentOffersNearbyDiscoverability
+                    ? documentDiscoverability.precisionToSend
+                    : nil,
                 originalLanguage: documentLanguage
             )
         }
@@ -1641,6 +1791,14 @@ struct MeeshyComposerHost: View {
     /// fait déjà par `publishSuccess` / `publishError`.
     private func publishDocument() {
         guard canPublishDocument, let draft = documentDraft else { return }
+        // Le palier RETENU pour la PROCHAINE publication est écrit ICI, au
+        // moment où il SERT — même geste que
+        // `FeedView+Attachments.publishPostWithAttachments`
+        // (`FeedNearbyDiscoverability.remember(nearbyDiscoverability)`) : la
+        // spec parle du dernier choix « utilisé », pas du dernier survolé.
+        if documentOffersNearbyDiscoverability {
+            FeedNearbyDiscoverability.remember(documentDiscoverability)
+        }
         isPublishingDocument = true
         Task {
             let accepted = await onPublishDocument(draft)

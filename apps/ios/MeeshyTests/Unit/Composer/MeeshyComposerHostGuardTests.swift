@@ -894,7 +894,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     func test_leBrouillonDuDocument_nePlafonnePasLeTexte_carUnPostNaPasDePlafond() {
         let long = String(repeating: "a", count: 300)
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil
         )
 
         XCTAssertEqual(brouillon.text?.count, 300)
@@ -906,7 +906,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// lecteur aurait crue tenue.
     func test_leBrouillonDuDocument_neFabriqueNiEmojiNiMention() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil
         )
         XCTAssertNil(brouillon.emoji)
         XCTAssertNil(brouillon.mentions)
@@ -1997,6 +1997,25 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         XCTAssertFalse(
             compact(corps).contains(compact("documentForcePlainPostToggle")),
             "L'interrupteur POST ↔ RÉEL n'est pas un outil de plateau — il vit dans le socle, sous `documentComposesReel`."
+        )
+    }
+
+    /// **Resserrer l'audience hors PUBLIC réarme l'opt-in de découvrabilité
+    /// (T2.5, parité VIE PRIVÉE).** Le consentement de trouvabilité porte sur
+    /// UNE publication ET UNE audience. Sans ce reset, un opt-in armé en PUBLIC
+    /// survivrait à un resserrement (`friends`) puis à un ré-élargissement vers
+    /// PUBLIC : le contrôle réapparaîtrait DÉJÀ ON et publierait sur un
+    /// consentement PÉRIMÉ que personne n'a réexaminé. Le composer inline de
+    /// référence (`FeedView+Attachments`) fait ce reset pour cette raison ; le
+    /// même fichier l'applique déjà à `forcePlainPost` (T2.4). Constat de revue
+    /// Opus T2.5. Garde ancrée sur le bloc de `chooseAudience`.
+    func test_host_resserrerLAudienceHorsPublic_reArmeLaDecouvrabilite() throws {
+        guard let corps = declarationBody(startingAt: "private func chooseAudience", in: try hostCode()) else {
+            return XCTFail("`chooseAudience` doit être une fonction — la garde s'ancre sur son bloc.")
+        }
+        XCTAssertTrue(
+            compact(corps).contains(compact("if candidate != .public { documentDiscoverability.reset() }")),
+            "Quitter PUBLIC doit réarmer l'opt-in — un consentement de trouvabilité périmé ne survit pas au resserrement."
         )
     }
 

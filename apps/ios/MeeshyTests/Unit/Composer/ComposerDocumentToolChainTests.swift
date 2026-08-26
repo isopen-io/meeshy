@@ -102,33 +102,190 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         )
     }
 
-    // MARK: - 2. servedRow sert les quatre, dans l'ordre canonique
+    // MARK: - T2.5 — 1. `.place` gagne un effet, vers `.attachesLocation`
+
+    /// Mutation nommée par le plan : `.place.effect` vaut `nil` aujourd'hui —
+    /// le laisser ainsi fait rougir ce test. L'égalité EXACTE avec
+    /// `.attachesLocation` (pas seulement `!= nil`) attrape en prime un
+    /// aiguillage sur un mauvais cas de `ComposerDocumentToolEffect`.
+    func test_place_gagneUnEffet_versLaPosition() {
+        XCTAssertEqual(
+            ComposerDocumentTool.place.effect, .attachesLocation,
+            "`.place` doit ouvrir `LocationPickerView` — le canal que `ComposerDocumentDraft.location` "
+                + "(T2.1) attend depuis le début."
+        )
+    }
+
+    // MARK: - 2. servedRow sert les cinq, dans l'ordre canonique
 
     /// Mutation nommée par le plan : écrire une seconde liste ferait bouger
     /// l'ordre que les doigts connaissent. `servedRow` reste une PROJECTION de
     /// `canonicalRow` (`canonicalRow.filter { $0.effect != nil }`), jamais une
-    /// liste écrite à part.
-    func test_servedRow_sertPhotoCameraEmojiDocument_dansLOrdreCanonique() {
+    /// liste écrite à part. Élargi au T2.5 : `.place` rejoint la rangée servie.
+    func test_servedRow_sertPhotoCameraEmojiDocumentPlace_dansLOrdreCanonique() {
         XCTAssertEqual(
             ComposerDocumentTool.servedRow,
-            [.photo, .camera, .emoji, .document],
-            "L'ordre vient de `canonicalRow` — photo · caméra · emoji · document — jamais d'une liste à part."
+            [.photo, .camera, .emoji, .document, .place],
+            "L'ordre vient de `canonicalRow` — photo · caméra · emoji · document · lieu — jamais d'une "
+                + "liste à part."
         )
     }
 
-    // MARK: - 3. servedRow != canonicalRow — la porte du document reste NON montée
+    // MARK: - 3. servedRow != canonicalRow — seul le micro manque encore
 
-    /// Mutation nommée par le plan : donner un effet aux six outils d'un coup
-    /// ferait tomber la garde de la porte du document AVANT que ce lot ne le
+    /// Mutation nommée par le plan : donner un effet au micro d'un coup
+    /// ferait tomber la garde de la porte du document AVANT que T2.6 ne le
     /// décide (`ComposerDocumentSurfaceTests.test_laPorteDuDocument_...`).
-    func test_servedRow_resteDistinctDeCanonicalRow_lieuEtMicroManquentEncore() {
+    func test_servedRow_resteDistinctDeCanonicalRow_seulLeMicroManqueEncore() {
         XCTAssertNotEqual(
             ComposerDocumentTool.servedRow, ComposerDocumentTool.canonicalRow,
-            "Lieu et micro doivent encore manquer à la rangée servie : les leur donner ferait tomber la "
-                + "garde de la porte avant que ce lot ne le décide."
+            "Le micro doit encore manquer à la rangée servie : lui donner un effet ferait tomber la garde "
+                + "de la porte avant que T2.6 ne le décide."
         )
-        XCTAssertNil(ComposerDocumentTool.place.effect, "Le lieu ne gagne pas d'effet dans ce lot.")
+        XCTAssertNotNil(
+            ComposerDocumentTool.place.effect,
+            "`.place` gagne un effet à ce lot — sans ça, le test ci-dessus ne prouverait rien de ce lot."
+        )
         XCTAssertNil(ComposerDocumentTool.microphone.effect, "Le micro ne gagne pas d'effet dans ce lot.")
+    }
+
+    // MARK: - T2.5 — Le lieu choisi atteint le brouillon envoyé à la porte
+
+    /// **Le canal, pas seulement le sélecteur.** `LocationPickerView` prouve
+    /// que l'auteur PEUT choisir un lieu ; cette garde prouve que ce choix
+    /// ATTEINT le brouillon envoyé à la porte. Sans elle, `ComposerDocumentDraft`
+    /// porterait `location` depuis T2.1 sans qu'aucun geste du meuble ne
+    /// l'alimente jamais — exactement le trou que ce lot ferme.
+    ///
+    /// Mutation nommée par le plan : un littéral `location: nil` (au lieu de
+    /// `location: documentLocation`) fait rougir ce test — le lieu choisi
+    /// serait JETÉ avant même d'atteindre `PublishIntent.document(location:)`.
+    func test_leBrouillonDuDocument_porteLeLieuChoisi_pasUnLitteralNil() throws {
+        guard let corps = declarationBody(startingAt: "private var documentDraft", in: try hostCode()) else {
+            return XCTFail("`documentDraft` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
+        }
+        let compacte = compact(corps)
+        XCTAssertTrue(
+            compacte.contains(compact("location: documentLocation")),
+            "Le cas `.document` doit poser `location: documentLocation` — l'état que `LocationPickerView` "
+                + "écrit, pas un littéral qui l'ignorerait."
+        )
+        XCTAssertFalse(
+            compacte.contains(compact("location: nil,")),
+            "Le cas `.document` pose encore `location: nil` : le lieu choisi n'atteint jamais le brouillon "
+                + "envoyé à la porte."
+        )
+    }
+
+    /// **Round-trip pur, sans lire de source** — le plombage que la garde
+    /// ci-dessus câble existe bien de bout en bout : un lieu posé sur
+    /// `ComposerDocumentDraft.document(location:)` doit atteindre
+    /// `PublishIntent.document(location:)` tel quel, exactement le canal que
+    /// `DocumentComposerDoor.publish` emprunte en production
+    /// (`location: draft.location`). Mutation nommée par le plan : le jeter
+    /// en route fait rougir ce test.
+    func test_unLieuChoisi_voyageJusquALIntentionPubliee() {
+        let lieu = SharedPlace(latitude: 48.8583736, longitude: 2.2944813, name: "Tour Eiffel")
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: lieu,
+            discoverabilityPrecision: nil, originalLanguage: nil
+        )
+        XCTAssertEqual(brouillon.location, lieu, "Le brouillon doit porter le lieu tel que la fabrique l'a reçu.")
+
+        let intent = PublishIntent.document(
+            localMedia: brouillon.localMedia,
+            forcePlainPost: brouillon.forcePlainPost,
+            content: brouillon.text,
+            visibility: brouillon.visibility.rawValue,
+            visibilityUserIds: brouillon.visibilityUserIds,
+            originalLanguage: brouillon.originalLanguage,
+            mentions: brouillon.mentions,
+            location: brouillon.location,
+            discoverabilityPrecision: brouillon.discoverabilityPrecision
+        )
+        XCTAssertEqual(intent.location, lieu, "Le lieu choisi doit atteindre l'intention publiée, jamais s'y perdre.")
+    }
+
+    // MARK: - T2.5 — Le second opt-in ne part QUE sur un choix explicite
+
+    /// **Mutation nommée par le plan : poser une valeur par défaut ⇒ on
+    /// rendrait trouvable un contenu que personne n'a accepté.**
+    ///
+    /// Comportement, testé au niveau du type qui porte la règle —
+    /// `NearbyDiscoverabilityChoice` reste FERMÉ tant que rien n'a été activé,
+    /// quelle que soit la mémoire locale. T2.5 délègue entièrement à lui,
+    /// jamais une seconde écriture de la même règle.
+    func test_leSecondOptIn_neParTQueSurUnChoixExplicite_jamaisParDefaut() {
+        let memoireOuverte = NearbyDiscoverabilityChoice(memorized: .city, sharing: .exact)
+        XCTAssertNil(
+            memoireOuverte.precisionToSend,
+            "Une mémoire non vide ne doit PRÉ-SÉLECTIONNER que le PALIER, jamais ACTIVER l'opt-in : "
+                + "`isDiscoverable` reste `false` tant que l'auteur ne l'a pas ouvert."
+        )
+        XCTAssertNil(
+            NearbyDiscoverabilityChoice.disabled.precisionToSend,
+            "L'état inerte (aucun lieu choisi) ne doit jamais envoyer de palier."
+        )
+    }
+
+    /// **Garde de câblage** — le meuble doit lire CE canal, jamais poser une
+    /// valeur en dur. Sans elle, le test ci-dessus pourrait être juste et
+    /// correct sans que la production ne l'appelle jamais.
+    func test_leBrouillonDuDocument_porteLeSecondOptInDepuisLeChoix_jamaisUnLitteral() throws {
+        guard let corps = declarationBody(startingAt: "private var documentDraft", in: try hostCode()) else {
+            return XCTFail("`documentDraft` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
+        }
+        let compacte = compact(corps)
+        XCTAssertTrue(
+            compacte.contains(compact("documentDiscoverability.precisionToSend")),
+            "Le cas `.document` doit poser `discoverabilityPrecision:` depuis "
+                + "`documentDiscoverability.precisionToSend` — la seule source qui sache si l'auteur a "
+                + "explicitement activé le second opt-in."
+        )
+    }
+
+    // MARK: - T2.5 — Le second opt-in n'est offert que sous la garde SDK, appelée
+
+    /// Mutation nommée par le plan : recopier la condition
+    /// (`hasPlace && visibility == .public` écrit à la main) diverge de
+    /// `FeedNearbyDiscoverability.offers` au premier ajustement de l'une des
+    /// deux — c'est exactement le défaut que cette fonction existe pour
+    /// fermer, et que le composer inline du fil a déjà fermé une fois.
+    func test_leSecondOptIn_estGateParFeedNearbyDiscoverabilityOffers_appelee_pasRecopiee() throws {
+        guard let corps = declarationBody(startingAt: "private var documentOffersNearbyDiscoverability", in: try hostCode()) else {
+            return XCTFail("`documentOffersNearbyDiscoverability` est introuvable dans le meuble — la garde "
+                + "ne mesurerait RIEN.")
+        }
+        XCTAssertTrue(
+            corps.contains("FeedNearbyDiscoverability.offers("),
+            "Le second opt-in doit être gardé par `FeedNearbyDiscoverability.offers(hasPlace:visibility:)` "
+                + "— la MÊME règle que le composer inline, jamais une condition recopiée."
+        )
+        XCTAssertFalse(
+            compact(corps).contains(compact("== .public")),
+            "Une condition `== .public` recopiée ICI diverge de `FeedNearbyDiscoverability.offers` au "
+                + "premier ajustement de l'une des deux."
+        )
+    }
+
+    // MARK: - T2.5 — Un lieu SEUL, sans texte ni média, peut partir
+
+    /// Mutation nommée par le plan : exiger un texte ferait refuser
+    /// exactement ce que `FeedView+Attachments.publishPostWithAttachments`
+    /// accepte déjà (`pendingPlace != nil` dans son garde d'entrée) — parité
+    /// de plan entre le meuble et la feuille historique.
+    func test_unLieuSeul_sansTexteNiMedia_peutPartir() {
+        let lieu = SharedPlace(latitude: 48.8583736, longitude: 2.2944813, name: "Tour Eiffel")
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [], location: lieu,
+            discoverabilityPrecision: nil, originalLanguage: nil
+        )
+        XCTAssertNotEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
+            "Un lieu seul doit suffire à faire partir un post — la feuille historique l'accepte déjà."
+        )
     }
 
     // MARK: - 4. handleDocumentTool reste exhaustif, sans `default`
@@ -153,7 +310,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             "Un `default:` réintroduit ferait hériter un septième effet du silence — voir le doc-comment "
                 + "de `ComposerDocumentToolEffect`."
         )
-        for casNomme in [".insertsEmojiIntoText", ".attachesLocalMedia(", "case.none"] {
+        for casNomme in [".insertsEmojiIntoText", ".attachesLocalMedia(", ".attachesLocation", "case.none"] {
             XCTAssertTrue(
                 compacte.contains(compact(casNomme)),
                 "« \(casNomme) » est absent de `handleDocumentTool` : le `switch` sur `tool.effect` n'est "

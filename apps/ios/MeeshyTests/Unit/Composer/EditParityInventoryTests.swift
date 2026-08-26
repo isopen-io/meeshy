@@ -101,10 +101,10 @@ final class EditParityInventoryTests: XCTestCase {
         // d'envoi refuse un brouillon blanc, et le socle peint la fleche sous le
         // document. C'est une capacite REPRISE, la premiere des sept.
         let brouillonBlanc = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "   ", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: "   ", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil
         )
         let brouillonPlein = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "un texte", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: "un texte", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil
         )
         let refuseLeBlanc = ComposerDocumentSendPlan.plan(for: brouillonBlanc, isOffline: false)
             == .refuse(.emptyDraft)
@@ -164,16 +164,23 @@ final class EditParityInventoryTests: XCTestCase {
         // 6 — POSITION TRI-ETAT.
         // La feuille distingue TROIS etats (`PostLocationUpdate` : remplacer,
         // retirer, ne pas toucher) — c'est ce qui empeche une reouverture de
-        // vider une position que l'auteur n'a pas regardee. Le meuble n'a meme
-        // pas le premier : son outil de lieu ne declenche rien.
-        let positionTriEtat = ComposerDocumentTool.place.effect != nil
+        // vider une position que l'auteur n'a pas regardee. T2.5 pose desormais
+        // UN etat cote CREATION (`ComposerDocumentTool.place.effect`,
+        // `ComposerDocumentDraft.location: SharedPlace?` — un OPTIONNEL a DEUX
+        // etats, pas trois). Mesurer `effect != nil` serait redevenu un mode
+        // d'echec PROXY, exactement le piege nomme par "retrait de medias"
+        // juste au-dessus au T2.3 : l'outil declenche desormais un effet REEL,
+        // mais ni un canal de RETRAIT ni le troisieme etat ("ne pas toucher")
+        // qu'une REPRISE exige n'existent. Mesuree sur le texte source, comme
+        // "retrait de medias".
+        let positionTriEtat = sourceDuDocument.contains("LocationUpdate")
 
         // 7 — AUDIENCE + LISTE NOMMEE.
         // Reprise au lot 4.9 : le socle peint un vrai selecteur sous le
         // document, et le brouillon porte la liste nominative que ONLY et EXCEPT
         // exigent. Seconde des deux capacites tenues.
         let brouillonNomme = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "x", visibility: .only, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, originalLanguage: nil
+            format: .post, forcePlainPost: false, text: "x", visibility: .only, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil
         )
         let audienceEtListe = ComposerChromeOwnership.socleZones(for: .document).contains(.audience)
             && brouillonNomme.visibilityUserIds == ["u1"]
