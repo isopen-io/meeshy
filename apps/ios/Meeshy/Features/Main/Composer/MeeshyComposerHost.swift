@@ -443,6 +443,13 @@ struct MeeshyComposerHost: View {
     /// `documentDestination.mountsScene` fera basculer la scène (F2).
     @State private var documentDestination: ComposerDocumentDestination = .reel
 
+    /// **F2 (#3885) — la couleur de FOND choisie sur le document.** `nil` = pas
+    /// de fond, la surface reste plate ; une couleur fait NAÎTRE la scène 9:16
+    /// (`ComposerSceneActivation.activatesScene`) — « un post sans visuel
+    /// devient une toile ». La couleur est aussi semée dans l'atelier
+    /// (`viewModel.backgroundColor`) pour que la scène montée l'affiche.
+    @State private var documentBackground: String?
+
     /// **T2.5 — la POSITION posée sur le brouillon.** Vit dans le MEUBLE, comme
     /// `documentLocalMedia` juste au-dessus : `ComposerDocumentDraft.location`
     /// (T2.1) ne portait encore le résultat d'aucun geste, faute de picker
@@ -584,7 +591,14 @@ struct MeeshyComposerHost: View {
     /// qui peint la publication, le gate pour savoir ce qui fait matière. Trois
     /// lectures de la même expression auraient été trois occasions de diverger.
     private var mountedSurface: ComposerSurfaceKind {
-        ComposerSurfaceRouting.surface(opening: profile.opensWith, format: selectedFormat)
+        // F2 — une couleur de fond OU la destination STORY (F1) fait naître la
+        // scène 9:16, quelle que soit la surface que le routage aurait montée.
+        // Décision PURE (`ComposerSceneActivation`), jamais recopiée ici. Le
+        // routage reste la source unique pour tout le reste.
+        if ComposerSceneActivation.activatesScene(background: documentBackground, destination: documentDestination) {
+            return .scene
+        }
+        return ComposerSurfaceRouting.surface(opening: profile.opensWith, format: selectedFormat)
     }
 
     /// QUI peint la publication — audience, aperçu, flèche. UNE source, lue deux
@@ -919,7 +933,11 @@ struct MeeshyComposerHost: View {
             onClose: onDismiss,
             onTool: { tool in handleDocumentTool(tool) },
             localMedia: documentLocalMedia,
-            onRemoveMedia: { media in documentLocalMedia.removeAll { $0 == media } }
+            onRemoveMedia: { media in documentLocalMedia.removeAll { $0 == media } },
+            onPickBackground: { hex in
+                documentBackground = hex
+                viewModel.applyBackground(hex: hex)
+            }
         )
         // La capsule se superpose plutôt que d'être peinte PAR la surface :
         // `ComposerDocumentSurface` reste une présentation sans état, et c'est

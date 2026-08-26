@@ -469,6 +469,16 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         isAdoptedDraftSession = false
     }
 
+    /// **Semer une couleur de fond depuis un hôte app (F2, #3885).** Point
+    /// d'entrée PUBLIC : le composer POST fait naître la scène 9:16 en posant un
+    /// fond (« un post sans visuel devient une toile »), et cette couleur doit
+    /// apparaître sur la scène montée. `backgroundColor` reste `internal` —
+    /// l'atelier l'écrit lui-même par son picker ; l'hôte passe par cette porte,
+    /// qui normalise le préfixe `#`. Le `didSet` propage à la slide courante.
+    public func applyBackground(hex: String) {
+        backgroundColor = hex.hasPrefix("#") ? hex : "#\(hex)"
+    }
+
     /// Absorbe les médias d'un brouillon restauré en UNE passe et bump
     /// `loadedImagesVersion` quand des bitmaps sont arrivés : le canvas ne
     /// reconstruit son `ComposerImageCacheReader` que sur ce cookie — merger

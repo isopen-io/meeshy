@@ -1007,6 +1007,18 @@ nonisolated enum ComposerDocumentDestination: String, CaseIterable, Equatable {
     }
 }
 
+/// **F2 (#3885) — quand la scène 9:16 naît.**
+///
+/// Décision PURE, testable off-main : la scène s'active dès qu'une couleur de
+/// FOND est choisie (« un post sans visuel devient une toile ») OU que la
+/// destination est STORY (F1, `mountsScene`). Sinon, la surface reste celle du
+/// routage. `mountedSurface` la consulte — jamais une condition recopiée.
+nonisolated enum ComposerSceneActivation {
+    static func activatesScene(background: String?, destination: ComposerDocumentDestination) -> Bool {
+        background != nil || destination.mountsScene
+    }
+}
+
 nonisolated struct ComposerDocumentDraft: Equatable {
     let format: ComposerFormat
 
@@ -1226,6 +1238,14 @@ nonisolated enum ComposerDocumentCopy {
                defaultValue: "Médias joints", bundle: .main)
     }
 
+    /// Le libellé du picker de couleur de fond (F2, #3883… F2, #3885) — clé
+    /// neuve sur le patron de `mediaStrip` (dotée, à l'abri du cliquet
+    /// français), traduite dans les sept locales.
+    static var background: String {
+        String(localized: "composer.document.a11y.background",
+               defaultValue: "Couleur de fond", bundle: .main)
+    }
+
     /// **Clé neuve (T2.2), sur le patron de `toolRow` juste au-dessus.** Ne
     /// reprend PAS le littéral `"Langue du post"` de la feuille historique :
     /// sa clé contient des espaces et échappe au cliquet français
@@ -1362,6 +1382,12 @@ struct ComposerDocumentSurface: View {
     /// qui RE-JUGE le format (loi 4 : le toggle POST↔RÉEL suit le média).
     var onRemoveMedia: ((ComposerDocumentMedia) -> Void)? = nil
 
+    /// **Choisir une couleur de FOND (F2, #3885).** Le geste REMONTE au meuble,
+    /// qui pose le fond du socle (`documentBackground`) et bascule la scène 9:16
+    /// (« un post sans visuel devient une toile »). `nil` ⇒ aucune bande de
+    /// fond (loi 4) — la surface reste sans état.
+    var onPickBackground: ((String) -> Void)? = nil
+
     @FocusState private var isContentFocused: Bool
 
     /// Le dernier outil tapé — pilote le rebond SF (`.symbolEffect(.bounce)`)
@@ -1380,6 +1406,7 @@ struct ComposerDocumentSurface: View {
             content
             Spacer(minLength: 0)
             mediaStrip
+            backgroundStrip
             toolRow
         }
         .onAppear { raiseKeyboardIfPromised() }
@@ -1481,6 +1508,38 @@ struct ComposerDocumentSurface: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel(Text(ComposerDocumentCopy.mediaStrip))
+        }
+    }
+
+    /// **Le picker de couleur de fond (F2, #3885)** — « un post sans visuel
+    /// devient une toile ». Une bande horizontale de pastilles sur la palette
+    /// PARTAGÉE du SDK (`StoryBackgroundPalette.colors`, jamais recopiée) ;
+    /// taper une couleur REMONTE au meuble (`onPickBackground`), qui pose le
+    /// fond du socle et fait naître la scène. `nil` closure ⇒ aucune bande
+    /// (loi 4) — la surface reste sans état.
+    @ViewBuilder
+    private var backgroundStrip: some View {
+        if onPickBackground != nil {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
+                        Button {
+                            onPickBackground?(hex)
+                        } label: {
+                            Circle()
+                                .fill(Color(hex: hex))
+                                .frame(width: 28, height: 28)
+                                .overlay(Circle().stroke(
+                                    MeeshyColors.textSecondary(isDark: true).opacity(0.25), lineWidth: 1))
+                        }
+                        .accessibilityLabel(Text(ComposerDocumentCopy.background))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text(ComposerDocumentCopy.background))
         }
     }
 
