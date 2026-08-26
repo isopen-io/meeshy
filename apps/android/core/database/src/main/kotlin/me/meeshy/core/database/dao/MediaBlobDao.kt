@@ -21,6 +21,9 @@ public interface MediaBlobDao {
     @Query("SELECT * FROM media_blob WHERE cmid = :cmid")
     public suspend fun find(cmid: String): MediaBlobEntity?
 
+    @Query("SELECT EXISTS(SELECT 1 FROM media_blob WHERE cmid = :cmid)")
+    public suspend fun exists(cmid: String): Boolean
+
     @Query("DELETE FROM media_blob WHERE cmid = :cmid")
     public suspend fun delete(cmid: String)
 

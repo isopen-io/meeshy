@@ -15,6 +15,14 @@ public object OutboxIds {
 
     public fun cid(): String = CID_PREFIX + UUID.randomUUID()
 
+    /**
+     * Whether [id] is a client mutation id minted by [cmid] — an offline placeholder
+     * keyed to a durable outbox row and blob, as opposed to a server-assigned id. The
+     * story-draft restore reconciler uses this to know which restored media ids resolve
+     * against the local blob store versus which live server-side.
+     */
+    public fun isCmid(id: String): Boolean = id.startsWith(CMID_PREFIX)
+
     private const val CMID_PREFIX = "cmid_"
     private const val CID_PREFIX = "cid_"
 }

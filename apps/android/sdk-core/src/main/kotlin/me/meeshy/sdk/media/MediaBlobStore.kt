@@ -43,6 +43,13 @@ class MediaBlobStore @Inject constructor(
             MediaUploadItem(bytes = row.bytes, fileName = row.fileName, mimeType = row.mimeType)
         }
 
+    /**
+     * Whether a blob is still held for [cmid] — a cheap existence check that never
+     * loads the bytes, so an availability probe over many queued uploads (the story
+     * draft restore reconciler) costs a boolean per id, not a full payload read.
+     */
+    suspend fun has(cmid: String): Boolean = mediaBlobDao.exists(cmid)
+
     /** Drops the blob for [cmid] (delivered, or its chain abandoned). No-op if absent. */
     suspend fun remove(cmid: String) {
         mediaBlobDao.delete(cmid)

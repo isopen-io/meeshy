@@ -55,6 +55,22 @@ class MediaBlobStoreTest {
     }
 
     @Test
+    fun `has is true for a stored cmid and false for an unknown one`() = runTest {
+        store.put("c1", item())
+
+        assertThat(store.has("c1")).isTrue()
+        assertThat(store.has("missing")).isFalse()
+    }
+
+    @Test
+    fun `has turns false once the blob is removed`() = runTest {
+        store.put("c1", item())
+        store.remove("c1")
+
+        assertThat(store.has("c1")).isFalse()
+    }
+
+    @Test
     fun `put overwrites a previous item for the same cmid`() = runTest {
         store.put("c1", item(bytes = byteArrayOf(1)))
         store.put("c1", item(bytes = byteArrayOf(2, 2), fileName = "new.png"))
