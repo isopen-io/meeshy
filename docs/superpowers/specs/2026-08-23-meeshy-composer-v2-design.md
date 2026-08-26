@@ -41,7 +41,7 @@ ajouter quoi que ce soit.
 |---|---|---|
 | `2026-08-19-meeshy-composer-design.md` | la conception d'origine | figée |
 | `2026-08-20-meeshy-composer-execution-spec.md` | le **contrat gelé** inter-lots (A→H, « Hors v1 » opposable) | figée |
-| `2026-08-19-meeshy-composer-views.html` — *Planches MeeshyComposer*, 351 Ko | la **source vivante** : doctrine, inventaire, matrice maîtresse, **et le tableau de bord d'avancement** | rév. 10, 2026-08-22 — **77 %, 50/65 tâches** |
+| `planche-meeshy-composer.html` — *Planches MeeshyComposer*, 351 Ko | la **source vivante** : doctrine, inventaire, matrice maîtresse, **et le tableau de bord d'avancement** | rév. 10, 2026-08-22 — **77 %, 50/65 tâches** |
 | **ce document** | l'**extension** : promotion de « Hors v1 » + lois nouvelles | en revue |
 
 ### La règle de maintenance que ce chantier hérite
@@ -508,7 +508,7 @@ ouvrir les plans :
    (`EditParityInventoryTests`), pas une table de spec — une table de spec ne
    rougit pas quand le sol bouge sous elle, et c'est exactement ce qui est
    arrivé à celle du plan du lot 7 au merge du lot 4.
-4. **Le tableau de bord `2026-08-19-meeshy-composer-views.html` se contredit
+4. **Le tableau de bord `planche-meeshy-composer.html` se contredit
    lui-même** au 2026-08-24 (rév. 22 : arc `62 / 70`, puce verte « 57 tâches,
    81,4 % ») et il est **modifié non committé**. Le gate du premier lot qui y
    touchera doit réconcilier les deux, ou dire lequel fait foi — pas en choisir

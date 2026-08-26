@@ -20,7 +20,7 @@ test mesurés le 2026-08-24), types et lois partagés depuis `@meeshy/shared`.
 
 **Spec:** `docs/superpowers/specs/2026-08-23-meeshy-composer-v2-design.md` (§E lot 6, lois B1/B3/B4/B5,
 table des portes §C, « Hors v2 » §G opposable) — et la doctrine antérieure et souveraine des
-planches (`2026-08-19-meeshy-composer-views.html`, lois 4, 9, 10).
+planches (`planche-meeshy-composer.html`, lois 4, 9, 10).
 
 ---
 
@@ -533,7 +533,7 @@ produit édite et reposte par la surface neuve.
   (`:158-159`, `:161-162`, `:164-165`, `:167-168`, `:190-191`) : faciles à manquer si l'on ne
   retire que les fichiers
 - Modify: les **26** suites dont un `jest.mock('@/components/v2/X', …)` pointe un chemin supprimé (compte de l'audit 2026-08-24 ; ce plan écrivait « ~21 »)
-- Modify: `docs/superpowers/specs/2026-08-19-meeshy-composer-views.html` (P0)
+- Modify: `docs/product/planche-meeshy-composer.html` (P0)
 
 - [ ] **Step 1: Garde de source AVANT suppression** — aucun fichier de production de `apps/web`
       n'importe l'un des cinq modules (marche d'arbre, `__tests__` exclu). **Elle compte 0 sur un

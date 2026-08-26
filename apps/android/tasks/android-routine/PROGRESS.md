@@ -2,6 +2,160 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-26 **the composer gathers every per-element action behind ONE long-press context menu** (slice
+> `story-element-context-menu`, feature-parity E. Stories — the "Multi-element context menu" line, its LAST open
+> piece → the whole line is now `[x]`). Before this, an element's edit/duplicate/reorder/delete lived as scattered
+> buttons on the floating `TextStyleToolbar`; there was no single gesture that gathered them, and nothing told the
+> author which reorder directions were even possible from the element's current stacking position — the toolbar
+> buttons fired inert reducers silently at the extremes.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → empty; no `apps/android` collision. Prior
+> slice (`story-composer-safe-zone-overlay`) is on `main` (HEAD `e39cda78`). Branched off freshly-fetched
+> `origin/main`. (Local `main` ref was stale — many commits behind `origin/main` — so scope was verified with
+> `git diff --cached --name-only origin/main`, which is the real base; diffing against local `main` falsely showed
+> web/ios/gateway files that are simply newer on the remote. Noted so a future run trusts `origin/main`, not the
+> local ref, for the scope gate.)
+>
+> **The fix — one pure resolver + one VM triad + Compose glue.** (1) `StoryElementMenu.resolve(deck, elementId)`
+> (`:feature:stories`) → `StoryElementContextMenu?` (null when the id is absent from the SELECTED slide, so no menu
+> shows). Each of the seven `StoryElementMenuItem`s carries an `enabled` flag computed from the SAME rules the deck
+> reducers enforce: EDIT/DELETE always on; DUPLICATE iff the slide is below `MAX_TEXT_ELEMENTS_PER_SLIDE` (exactly
+> when `duplicateTextElement` would clone); the four reorder rows iff the element is not already at that extreme
+> (exactly when `reorderTextElement` would restack). `StoryElementAction.zOrder` is the ONE projection onto
+> `StoryZOrder`, so the menu and the reducer can never drift. (2) VM: `onOpenElementMenu` (selects the element +
+> opens, inert when off-slide), `onDismissElementMenu`, `onElementMenuAction` (routes to the existing
+> duplicate/reorder/remove/select intents then closes; a disabled or stale action leaves the deck same-instance and
+> still closes). A derived `StoryComposerUiState.elementContextMenu` resolves lazily so the screen stays glue.
+> (3) `TextElementLayer` gains a long-press (`detectTapGestures(onLongPress=…, onTap=…)`) that opens the menu and a
+> `DropdownMenu` anchored to the element, each row greyed per `enabled`, dispatching `onElementMenuAction`.
+>
+> **Tests: +22** (14 pure `StoryElementMenuTest` + 8 `StoryComposerViewModelTest`). The core promise is asserted
+> non-tautologically: each reorder row's `enabled` is checked `isEqualTo(deck.reorderTextElement(id, op) !== deck)`
+> and duplicate against `duplicateTextElement(...) !== deck` — the menu is proven to agree with the real reducer,
+> not with a restated constant. VM tests assert observable outcomes (DUPLICATE grows the slide by one and closes;
+> DELETE empties it and closes; BRING_TO_FRONT lands the element last and closes; a disabled SEND_TO_BACK on a
+> single-element slide is `isSameInstanceAs` the prior deck yet still closes; an action with no menu open is a
+> same-instance no-op). **Mutation-RED-proven**: forcing every row `enabled = true` reddens EXACTLY the 6
+> position/cap behavioural tests, the shape/order/mapping tests staying green.
+>
+> **SDK bootstrap — `dl.google.com` 200; the documented copy→patch (android-37.0 → android-37, keep BOTH).**
+> `sdkmanager` installed android-35 + build-tools 35 + platform-tools; AGP auto-installed pristine `android-37.0`;
+> the first `./gradlew` hash-errored on bare `android-37`; `cp -r android-37.0 android-37` + `source.properties`
+> `AndroidVersion.ApiLevel=37.0→37`, keeping BOTH dirs, resolved it (the recipe in NOTES).
+>
+> **Verified**: targeted `StoryElementMenuTest` + `StoryComposerViewModelTest` green, the mutation proof, then full
+> `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate)
+> **BUILD SUCCESSFUL in 5m 15s**. Reviewer PASS. Diff is `apps/android` only (9 files: 1 new resolver + 1 new test
+> + amended VM/screen/VM-test + 4 strings + tracking docs). Verdict: **PASS** — a pure resolver reused by a Compose
+> `DropdownMenu` glue; behavioural tests through the public API tied to the real reducers; no production logic
+> outside `apps/android`.
+>
+> **Next**: §E "Multi-element context menu" is now fully `[x]`. Candidates for the next-highest unchecked §E item:
+> the **"background designation toggle" AUDIO half** (mark one audio track per slide as background) is still blocked
+> on the composer gaining an audio-track authoring surface — so prefer either **Repost flow** (clone source story +
+> locked attribution badge), **Draft save/restore with media persistence + lost-media detection**, or the remaining
+> **offline publish** pieces (preview-before-publish, RAW background publish-all). Scout `feature-parity.md`
+> read-only before branching.
+
+> On 2026-08-26 **the composer draws the persistent safe-zone + rule-of-thirds overlay while dragging** (slice
+> `story-composer-safe-zone-overlay`, feature-parity E. Stories — the "Frosted-glass text backdrops; safe-zone
+> overlay; …" line, its LAST open piece → the whole line is now `[x]`). Before this, dragging an element lit only
+> the transient snap guide line(s) NEAR the drag (`StorySnapResolver` feedback); there was no persistent
+> composition frame, so an author had no on-canvas cue for where the viewer's top chrome / bottom reply-bar will
+> clip content. iOS shows exactly such a frame (`SafeZoneOverlay`, `if isDragging`) with ASYMMETRIC insets.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → four PRs, all iOS/gateway/shared
+> (#3854 iOS scroll, #3750 gateway reel-affinity, #3749 iOS TaskTimeout, #3619 shared Prisme-preview contract) —
+> none a `claude/apps/android/<slice-id>` routine slice, no `apps/android` collision. Prior slice
+> (`story-viewer-text-backdrop`) merged as #3748 (`main` HEAD before this run `f266d7ad`). Branched off
+> freshly-fetched `origin/main`.
+>
+> **The fix — one pure geometry resolver + canvas glue.** (1) `StorySafeZoneGrid.geometry(width, height)`
+> (`:feature:stories`) → `SafeZoneGeometry(safeLeft/Top/Right/Bottom, verticalThirds, horizontalThirds)` ports
+> iOS `StorySafeZone` exactly: asymmetric `TOP_INSET 0.18` / `BOTTOM_INSET 0.25` / `HORIZONTAL_INSET 0.05` (the
+> viewer's progress bars + header up top and reply bar + scrim at the bottom eat unequal margins) plus the
+> rule-of-thirds fractions `[1/3, 2/3]` — the centre (0.5) is OMITTED so the persistent grid never double-draws
+> the transient centre snap guide. A non-finite/non-positive dimension collapses to an `isEmpty` geometry
+> (zeroed rect + empty lists) so an unmeasured or zero canvas draws nothing. (2) The composer drag `Canvas`
+> (already gated on `snapFeedback != null`, i.e. shown only while dragging) strokes the dashed safe rect + faint
+> thirds lines at `primary@35%` BENEATH the existing accent snap guides — declarative glue over the resolver.
+>
+> **Tests: +9** (all pure/JVM `StorySafeZoneGridTest`): unit-rect equals the iOS insets; per-axis denormalisation
+> (1080×1920); the two thirds lines per axis (900×1800 → x 300/600, y 600/1200); centre-omission (a 1000px axis
+> must not list 500); and every degenerate guard — zero width, zero height, negative dimension, non-finite width,
+> non-finite height. **Mutation-RED-proven**: replacing the degenerate guard with `if (false)` reddened EXACTLY
+> the zero/non-finite tests (4) while the negative-dimension test correctly stayed green (a negative width makes
+> `safeRight < safeLeft`, so `isEmpty` is true geometrically without the guard).
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** `sdkmanager` installed android-35;
+> AGP auto-installed pristine `android-37.0`; the first `./gradlew` hash-errored on bare `android-37`; `cp -r
+> android-37.0 android-37` + `source.properties` `AndroidVersion.ApiLevel=37.0→37` (the FULL key), keeping BOTH
+> dirs, resolved it (the documented recipe).
+>
+> **Verified**: targeted `StorySafeZoneGridTest` 9/9 green, the mutation proof, then full
+> `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate)
+> **BUILD SUCCESSFUL in 4m 43s**. Reviewer PASS. Diff is `apps/android` only (1 new resolver + 1 amended composer
+> screen for the glue + 1 new test + tracking docs). Verdict: **PASS** — a pure geometry resolver reused by a
+> Compose `Canvas` glue; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: §E "Frosted-glass … safe-zone … snap-to-guide" is now fully `[x]`. Advance to the next-highest
+> unchecked §E item — the **single unified multi-element long-press context menu** (consolidating the already-shipped
+> edit/duplicate/reorder/delete per-element actions into one menu — feature-parity "Multi-element context menu"
+> line, `[~]`), or the "Per-element + per-slide duration; background designation toggle" remainders (the
+> background-designation toggle sub-piece). Scout `feature-parity.md` read-only before branching.
+
+> On 2026-08-26 **the viewer honours a text element's frosted-glass / solid BACKDROP** (slice
+> `story-viewer-text-backdrop`, feature-parity E. Stories — "Frosted-glass text backdrops … " line, the
+> reader-render half whose author half the composer already shipped). Before this, the composer authored a
+> text element's backing (`StoryTextElement.background` → `toTextObject` emits the `backgroundStyle` tagged
+> union, and the composer canvas painted it live), but the VIEWER dropped it entirely: `StoryTextObjectProjection.project`
+> never resolved `backgroundStyle`/`textBg`, and `StoryTextObjectView` carried no backing field — so an
+> iOS/web/backend-authored `.solid(hex)` or `.glass(radius)` text backdrop rendered on Android as plain
+> floating glyphs. A real cross-client parity gap, the exact "reader honours X" shape of the background-media
+> slices below.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3619 (`claude/brave-archimedes-wwkr4u`,
+> a `packages/shared` + cross-platform-test Prisme-preview contract) — not a `claude/apps/android/<slice-id>`
+> routine slice, no `apps/android` collision. Prior slice (`story-composer-background-video-transform`) is on
+> `main` (HEAD `dfa05c89`). Branched off freshly-fetched `origin/main`.
+>
+> **The fix — one pure resolver + one projection field + one viewer glue.** (1) `StoryTextBackground.resolve(backgroundStyle,
+> textBg)` (`:feature:stories`) ports iOS `StoryTextObject.resolvedBackgroundStyle` exactly — priority modern
+> `backgroundStyle` > legacy `textBg`→`Solid` > `None`, the modern style winning even when it resolves to `None`
+> (an explicit `type:"none"` suppresses a stale legacy hex), making it the exact inverse of the existing
+> `toStyleWire`. Decodes TOLERANTLY (Solid with no usable hex / unknown `type` / blank legacy hex → `None`;
+> Glass with absent/non-finite/non-positive radius keeps the glass intent and clamps the sigma to
+> `DEFAULT_GLASS_RADIUS`). (2) `StoryTextObjectView.background` (default `None`), set once in `project()`. (3)
+> The viewer's `StoryTextObjectLayer` wraps the glyphs in a backing Box — rounded solid fill (honouring an
+> 8-digit alpha hex via a reader-local parser, since the shared `hexColor` is 6-digit-only) or a translucent
+> frosted scrim for glass — mirroring the composer's `storyTextBacking` so author and reader agree on the look.
+>
+> **Tests: +19** (+1 net vs the routine's counting convention; all pure/JVM). 14 `StoryTextBackgroundTest.resolve`
+> covering every priority + tolerant-decay branch (none/solid/glass/explicit-none-wins/legacy-hex/blank-legacy/
+> null-hex/blank-hex/missing-radius→default/non-positive→default/NaN→default/unknown-type + a toStyleWire
+> round-trip); 4 projection (none/glass/solid/legacy). Mutation-RED-proven ×2: forcing `project()`'s background
+> to `None` reddened EXACTLY the 3 non-None projection tests (the None test stayed green); dropping the glass
+> radius guard (`?: DEFAULT` without the finite/positive `takeIf`) reddened EXACTLY the 2 non-positive/non-finite
+> tests (missing-radius stayed green).
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** `sdkmanager` installed android-35;
+> AGP auto-installed pristine `android-37.0`; the first `./gradlew` hash-errored on bare `android-37`; `cp -r
+> android-37.0 android-37` + `source.properties` `AndroidVersion.ApiLevel=37.0→37` (the FULL key), keeping BOTH
+> dirs, resolved it (the documented recipe).
+>
+> **Verified**: targeted `StoryTextBackgroundTest` + `StoryTextObjectProjectionTest` green, both mutation proofs,
+> then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate)
+> **BUILD SUCCESSFUL in 4m 49s** [PR CI = the merge gate]. Reviewer PASS. Diff is `apps/android` only (3 amended
+> prod files: resolver + view/projection + viewer screen; 2 amended test files; tracking docs). Verdict: **PASS**
+> — a pure resolver reused by a projection + a viewer `Box` glue mirroring the composer; behavioural tests
+> through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the last open piece of the "Frosted-glass text backdrops" line is the **persistent safe-zone overlay
+> grid** (composer): a static rule-of-thirds/safe-margin overlay while dragging, distinct from the transient
+> snap-guide feedback already shipped. Alternatively advance to the next-highest unchecked §E item (e.g. the
+> "Multi-element context menu" unified long-press menu, or "Per-element + per-slide duration" remainders). Scout
+> `feature-parity.md` read-only before branching.
+
 > On 2026-08-26 **the composer AUTHORS a background VIDEO's framing** (slice
 > `story-composer-background-video-transform`, feature-parity E. Stories — "Backgrounds: … looping/non-looping
 > video", the WRITE half that closes the author→reader loop the reader-video slice opened, and the last open

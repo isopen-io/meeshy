@@ -9,7 +9,7 @@ Planches visuelles (24 planches — inventaire exhaustif, matrice outil × forma
 revue système P15, écart SOTA P16, entrées externes P18, continuité P19, rupture
 vécue P20, spécimen des styles P21, iconographie des contrôles P22, éditeurs
 trim·crop·cut P23, cas d'usage carrousels & audio P24) :
-`./2026-08-19-meeshy-composer-views.html`
+`./planche-meeshy-composer.html`
 Révision 2026-08-20 : revue complète (optimisation · performance · compat 16→27, §8) ;
 intégrés — vrais stickers & bibliothèque locale (§6b), collage d'image (§6b), son de
 fond sur Post & loi des deux plans audio (§6a), « l'icône est le verbe » (§6c),
@@ -951,6 +951,6 @@ que de réécrire par-dessus.
    deux `wc -l` de la même session. Toutes les lignes citées ci-dessus
    viennent donc de `git show HEAD:` quand elles portent sur ces deux fichiers,
    et de l'arbre de travail sinon. Le tableau de bord
-   `2026-08-19-meeshy-composer-views.html` n'a **pas** été touché par cette
+   `planche-meeshy-composer.html` n'a **pas** été touché par cette
    révision : sa règle de maintenance veut qu'il bouge dans le MÊME commit que
    le gate d'un lot, et deux lots étaient en vol.

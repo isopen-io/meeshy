@@ -855,8 +855,16 @@ private struct LentilleRowTimestamp: View {
     let date: Date
 
     var body: some View {
-        TimelineView(.periodic(from: date, by: 60)) { _ in
+        // Miroir de `ThemedConversationRow.RelativeTimestampText.liveTickWindow`
+        // (audit chauffe 2026-08-26) : le tick minute ne vit que tant que le
+        // libellé change à la minute ; une rangée ancienne rend un texte
+        // statique, rafraîchi au prochain passage de body de la liste.
+        if Date().timeIntervalSince(date) > 3600 {
             Text(RelativeTimeFormatter.shortString(for: date))
+        } else {
+            TimelineView(.periodic(from: date, by: 60)) { _ in
+                Text(RelativeTimeFormatter.shortString(for: date))
+            }
         }
     }
 }

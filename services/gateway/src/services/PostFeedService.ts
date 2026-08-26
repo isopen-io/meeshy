@@ -19,6 +19,7 @@ import { getPresenceVisibilityService, type PresenceViewer } from './PresenceVis
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 
 const logger = enhancedLogger.child({ module: 'PostFeedService' });
@@ -763,7 +764,25 @@ export class PostFeedService {
     }), reader));
   }
 
-  /** Langues que l'utilisateur lit (Prisme Linguistique). Best-effort. */
+  /**
+   * Langues que l'utilisateur lit (Prisme Linguistique). Best-effort.
+   *
+   * Descend le prisme ORDONNÉ complet via la SSOT `resolveUserLanguagesOrdered`
+   * — systemLanguage → regionalLanguage → customDestinationLanguage →
+   * deviceLocale (rang 4, persisté sur `User.deviceLocale`). L'ancienne
+   * implémentation énumérait à la main les TROIS premiers rangs et OMETTAIT la
+   * locale appareil : un lecteur sans préférence in-app (nouveau compte, dont le
+   * seul signal est la locale appareil — cas nominal de la règle 2 du Prisme)
+   * recevait un ensemble VIDE, donc AUCUN reel n'était boosté par sa langue lue
+   * (`reelAffinity` `W.viewerLanguage`), et son fil « Pour toi » était classé
+   * sans ce signal. Même défaut que le hook posts/commentaires web
+   * (`usePostTranslation`, qui ne consultait que le rang 1).
+   *
+   * `resolveUserLanguagesOrdered` canonicalise déjà (casse repliée, région
+   * strippée) ; on repasse par `normalizeLanguageForDedup` pour que les clés du
+   * `Set` vivent dans l'ESPACE EXACT où `reelAffinity` compare le candidat
+   * (`.has()`), idempotent sur des codes déjà canoniques.
+   */
   private async getViewerLanguages(userId: string): Promise<Set<string>> {
     try {
       const u = await this.prisma.user.findUnique({
@@ -772,11 +791,13 @@ export class PostFeedService {
           systemLanguage: true,
           regionalLanguage: true,
           customDestinationLanguage: true,
+          deviceLocale: true,
         },
       });
-      const langs = [u?.systemLanguage, u?.regionalLanguage, u?.customDestinationLanguage]
-        .filter((l): l is string => !!l && l.trim() !== '')
-        .map((l) => normalizeLanguageForDedup(l));
+      if (!u) return new Set();
+      const langs = resolveUserLanguagesOrdered(u, {
+        deviceLocale: u.deviceLocale ?? undefined,
+      }).map((l) => normalizeLanguageForDedup(l));
       return new Set(langs);
     } catch {
       return new Set();

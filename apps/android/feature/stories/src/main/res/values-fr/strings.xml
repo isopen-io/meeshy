@@ -80,6 +80,8 @@
     <string name="stories_composer_align_center">Centrer</string>
     <string name="stories_composer_align_right">Aligner à droite</string>
     <string name="stories_composer_duplicate_element">Dupliquer l\'élément</string>
+    <string name="stories_composer_edit_element">Modifier le texte</string>
+    <string name="stories_composer_element_menu">Actions de l\'élément</string>
     <string name="stories_composer_zorder_to_back">Mettre en arrière-plan</string>
     <string name="stories_composer_zorder_backward">Reculer d\'un plan</string>
     <string name="stories_composer_zorder_forward">Avancer d\'un plan</string>

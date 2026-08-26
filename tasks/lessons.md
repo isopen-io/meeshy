@@ -16667,3 +16667,134 @@ Deux corollaires :
   être sémantique : le tracker interne parle en codes parce qu'il est écrit par
   ceux qui les connaissent ; le tableau public ne l'est pas.
 
+## Leçon 295 — Un artifact n'est pas un tableau de bord, et « ça marche » n'est pas « livré » (2026-08-26)
+
+**Contexte.** En une journée, trois sessions ont ouvert des pages publiées pour
+SUIVRE l'avancement : une page « composer-v2-progress » à côté de la planche, une
+« Roadmap Meeshy 2026-2027 » présentée comme dashboard produit, un instantané
+« Reliquats de branches » — pendant qu'un projet GitHub « Meeshy — pilotage »
+(milestones, 200+ issues, champs Status/Priorité/Horizon) venait d'être créé pour
+exactement cela. Le porteur a tranché : *gérer exclusivement le développement de
+Meeshy par GitHub Project ; les artifacts sont faits pour des brouillons, du design
+et des comptes rendus de communication.*
+
+> **L'état d'une tâche vit à UN endroit, et cet endroit est l'issue.** Une page
+> publiée qui affiche un état en fabrique une COPIE, datée du jour où on l'a
+> republiée ; deux sessions plus tard la copie ment, et elle ment avec l'autorité
+> d'une belle mise en page. Un artifact est légitime pour ce qui n'a PAS d'état à
+> tenir : un brouillon qu'on fait valider, un design qu'on regarde, un compte rendu
+> qu'on lit une fois. Dès qu'on veut y cocher quelque chose, c'est une issue.
+
+La seconde moitié de la directive fixe ce que « livré » veut dire : *un produit
+très optimisé sans lenteur, hyper fluide, aéré, agréable visuellement et
+fonctionnellement, avec une maturité sur plusieurs dimensions pour toutes ses
+features* — treize, nommées : sécurité, performance, mémoire, fluidité, facilité
+d'accès, cohérence de positionnement, facilité d'usage, UX, compatibilité, utilité,
+maintenabilité, simplicité d'usage, complétude.
+
+> **« Ça marche » est le rang 1 d'une échelle à treize barreaux.** Une feature qui
+> rend le bon résultat en 2 s là où le cache l'avait, qui saccade au scroll, qu'un
+> lecteur d'écran ne voit pas ou que personne n'ose modifier n'est pas livrée — elle
+> est *partielle*, et « partiel » est un Status d'issue, pas un livrable. Et **la
+> complexité se paie dans le code, jamais chez l'utilisateur** : on complexifie
+> volontiers l'implémentation (résolution automatique, pré-calcul, cache, inférence)
+> pour que l'usage n'exige rien.
+
+Corollaires :
+
+- **Fermer une issue, c'est dire quelles dimensions sont mûres** — et ouvrir une
+  issue par dimension qui ne l'est pas. Le commentaire de clôture est le seul
+  compte rendu d'avancement qui ne périme pas, parce qu'il vit avec l'état.
+- **Une lenteur est un bug, pas une dette** : elle a au moins la priorité de la
+  feature qu'elle dégrade. Cache-First, Optimistic Updates, Zero Unnecessary
+  Re-render ne sont pas des principes d'architecture — ce sont les mécanismes par
+  lesquels les dimensions 2, 4, 7, 8 et 12 se réalisent.
+- **La règle est inscrite dans les 9 `CLAUDE.md`** (racine : § « Pilotage du
+  développement » et § « Roadmap — treize dimensions » ; chaque sous-répertoire :
+  § « Pilotage & maturité » avec ses témoins propres). `tasks/todo*.md` ne se
+  crée plus ; `tasks/lessons.md` reste le seul tracker de fichier maintenu.
+
+## Leçon 293 — « one-for-one mirror » écrit dans un en-tête de test n'est pas un témoin de parité (2026-08-26, itération 272)
+
+> Coordination : suite directe des leçons 291/292 (couleur d'accent). Numérotée
+> 293 pour éviter la collision au merge de `tasks/lessons.md`.
+
+La leçon 292 a appliqué « quelles règles à N miroirs n'ont AUCUN témoin de
+parité ? » à la couleur d'accent. L'itération 272 l'a appliquée à la règle
+produit CENTRALE de Meeshy — la résolution du Prisme sur l'aperçu de dernier
+message (`resolveLastMessagePreview`, trois miroirs TS/iOS/Android nommés source
+de vérité par CLAUDE.md). Trou « zéro sur trois » : douze contrats de vecteurs
+partagés vivent dans `fixtures/reading-modes/` (accent, bridge, sections, sort…),
+mais AUCUN pour le Prisme.
+
+Ce qui rendait le trou traître : **chacune des trois suites écrites à la main se
+DÉCLARAIT « one-for-one mirror » des deux autres dans son en-tête.** Android :
+« One-for-one mirror of `resolve-last-message-preview.test.ts` and of
+`ConversationPrismeResolutionTests.swift` ». iOS pareil. La parité était donc
+AFFIRMÉE, noir sur blanc, à trois endroits — et vérifiée par rien. Trois copies
+parallèles de cas de test, entretenues à la main, qu'aucun build ne force à
+couvrir le même espace ni à s'accorder sur les résultats.
+
+> **Une phrase dans un en-tête de test qui AFFIRME la parité (« mirror of »,
+> « kept in sync with », « same cases as ») est un aveu qu'il n'existe pas de
+> témoin machine — sinon elle citerait le témoin, pas la copie sœur.** Cette
+> phrase est un marqueur à chercher : là où trois fichiers se citent mutuellement
+> comme miroirs, il y a trois copies et zéro contrat.
+
+Contrairement à l'accent (cycle 271, où le site non couvert avait DÉJÀ dérivé en
+un bug visible), les trois miroirs du Prisme s'accordaient réellement à la lecture
+— la parité était vraie AUJOURD'HUI, il lui manquait sa garde. Le geste 292
+(« rejouer le contrat sur le site non couvert et REGARDER ») reste obligatoire :
+c'est lui qui distingue « parité réelle, garde manquante » (ajouter le témoin
+suffit) de « parité rompue » (corriger d'abord). Ne jamais présumer l'un ou
+l'autre.
+
+Corollaire de méthode, tiré du même lot : **le contrat s'écrit sur l'INTERSECTION
+vérifiée des miroirs, et ce qui diffère entre eux s'EXCLUT explicitement.** Ici,
+une carte à deux clés canonisant vers la même langue (`{'pt', 'pt-BR'}`, prisme
+`['pt']`) : TS retient la première entrée, Android/iOS la dernière. Cas impossible
+en production (le gateway n'émet qu'une clé canonique par langue) — l'encoder
+déclarerait un miroir « en faute » sur un cas qui n'arrive jamais. Un vecteur de
+contrat ne doit jamais trancher un désaccord que la production ne produit pas ;
+il le documente comme hors-périmètre.
+
+## Leçon 294 — Un indice de connectivité n'est pas un verdict, et une relation REQUISE fait échouer la requête entière (2026-08-26, « bandeau hors ligne permanent »)
+
+**Contexte.** « Les appels ne passent plus, les sockets temps réel du web non plus,
+la pastille est rouge tout le temps et le bandeau hors ligne est permanent. » Le
+serveur était SAIN — prouvé par une sonde Socket.IO depuis la même IP publique
+(377 ms, `authenticated`) puis par une reproduction Playwright du build déployé
+(session fraîche verte). Traefik montrait pourtant **deux sockets de ce même
+compte authentifiés depuis 40 minutes** pendant que l'onglet affichait « Vous
+êtes hors ligne ». Le bandeau et la puce lisaient `navigator.onLine` comme un
+VERDICT ; le socket vivant ne pesait rien.
+
+> **Un signal heuristique du navigateur (`navigator.onLine`) ne peut pas
+> contredire une preuve directe (un socket authentifié qui reçoit des
+> événements).** `isOnline = navigator.onLine || socketConnected` : l'indice ne
+> compte que tant que la preuve manque. Et un événement `online`/`offline`
+> RESYNCHRONISE l'état depuis les diagnostics au lieu de le forcer — forcer
+> `isSocketConnected=false` sur `offline` puis ne rien relire sur `online`
+> laissait un socket survivant annoncé mort, ce qui armait les boucles de
+> `reconnect()` (qui commence par DÉCONNECTER).
+
+Second défaut, trouvé par la même chaîne de logs : à CHAQUE reconnexion de ce
+compte, `_emitUnreadCountsSnapshot` levait `Inconsistent query result: Field
+conversation is required` — une seule ligne `Participant` de 2025 pointait vers
+une conversation supprimée, et le `select` imbriqué sur la relation REQUISE
+faisait tomber les 118 compteurs vivants avec elle.
+
+> **Une relation requise dans un `select`/`include` Prisma transforme UNE ligne
+> orpheline en échec de TOUTE la requête.** Lire la table cible À PART (`findMany
+> where id in`) exclut naturellement l'orpheline, la rend visible (log) et ne
+> demande aucun `try/catch` de repli. Corollaire de diagnostic : un `WARN` répété
+> à chaque reconnexion d'un seul compte est une donnée corrompue, pas un flake.
+
+Méthode qui a tranché, dans l'ordre : logs serveur du compte (le symptôme est-il
+côté serveur ?) → sonde protocolaire depuis la machine du plaignant (le réseau ?)
+→ reproduction du build déployé en session fraîche (le code ?) → historique
+Traefik de l'IP (l'état de CET onglet). Chaque étape a éliminé une couche avant
+de lire le code du client — et c'est la dernière qui a désigné `navigator.onLine`.
+
+Sites : `apps/web/hooks/use-connection-status.ts` (`deriveStatus`),
+`services/gateway/src/socketio/MeeshySocketIOManager.ts` (`_emitUnreadCountsSnapshot`).

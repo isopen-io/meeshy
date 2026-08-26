@@ -200,7 +200,7 @@ lui-même. Elle contredisait de surcroît, mot pour mot, la ligne 117 ci-dessus
 mandat de D6d (ligne 171 : arbitrages 5 et 6 SEULEMENT — pas le STOP D4). Un
 agent d'implémentation ne peut pas lever un STOP de merge que son propre plan
 lui interdit de lever. Restaurée ici, à la ligne D4 du P0
-(`docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`) et à
+(`docs/product/planche-meeshy-composer.html`) et à
 l'en-tête du banc `Plan2DRenderMeasureTests` : le STOP reste TENU.**
 
 Ce que D4 Step 2 a réellement produit, et qui RESTE vrai : une mesure device

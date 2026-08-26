@@ -45,7 +45,12 @@ private final class WeakBox: @unchecked Sendable {
 /// file scope so the closure(s) passed to `reader.read` don't inherit any
 /// actor isolation context (which would trigger Swift 6 strict concurrency
 /// runtime checks at GRDB invocation).
-private func fetchMessageWindow(
+/// `nonisolated` EXPLICITE : la cible compile sous
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` (SE-0466), qui isolerait
+/// sinon cette fonction libre au MainActor — or elle est désormais appelée
+/// depuis la lecture DÉTACHÉE de `refreshFromDB`/`loadInitialSnapshot`
+/// (audit fluidité 2026-08-26), hors de toute isolation.
+private nonisolated func fetchMessageWindow(
     reader: any DatabaseWriter,
     convId: String,
     mode: WindowMode,
@@ -237,7 +242,12 @@ public final class MessageStore: ObservableObject {
                 // REST-refresh path. Window transitions (jump / restore /
                 // paginate) bypass this notification and call refreshFromDB()
                 // directly with a straight replace.
-                await store.refreshFromDB(mergeInMemory: true, skipRunLoopYield: true)
+                //
+                // COALESCÉ (`requestRealtimeRefresh`) : une rafale d'écritures
+                // (lot d'accusés de lecture, burst de livraisons) déclenche au
+                // plus une lecture en vol + une lecture de queue — plus jamais
+                // une lecture de fenêtre complète PAR écriture.
+                store.requestRealtimeRefresh()
             }
         }
         // Wrap the NotificationCenter observer in an AnyDatabaseCancellable so
@@ -272,22 +282,43 @@ public final class MessageStore: ObservableObject {
         let initialWindowSize = Self.initialWindowSize
         let reader = persistence.reader
 
-        // Read on the calling actor (MainActor). Direct reads via GRDB are
-        // fast (a single SELECT) and avoid the Swift 6 strict concurrency
-        // closure-isolation crash that hit Task.detached + reader.read
-        // combinations.
-        let newRecords: [MessageRecord]?
-        do {
-            newRecords = try fetchMessageWindow(
-                reader: reader, convId: convId, mode: mode,
-                anchor: anchor, initialWindowSize: initialWindowSize
-            )
-        } catch {
+        // La lecture de fenêtre part HORS du MainActor (audit fluidité
+        // 2026-08-26). En `.latest` ancré elle est SANS PLAFOND — après une
+        // remontée profonde du fil, chaque notification d'écriture GRDB
+        // (message entrant, accusé de livraison/lecture, réaction, tick de
+        // retry) rematérialisait des MILLIERS de lignes SQLite sur la boucle
+        // principale, en plein défilement : les accusés de lecture émis par
+        // le suivi de lecture pendant le scroll refermaient la boucle sur
+        // elle-même. Même patron détaché éprouvé que `loadOlder(before:)` —
+        // `fetchMessageWindow` est une fonction libre nonisolated, aucun état
+        // isolé ne traverse la fermeture (le crash historique Task.detached +
+        // reader.read venait de fermetures HÉRITANT une isolation d'acteur).
+        //
+        // Garde de génération : deux refreshes peuvent désormais
+        // s'entrelacer pendant l'await — seule la demande la PLUS RÉCENTE
+        // publie, sinon une fenêtre périmée réordonnerait l'affichage.
+        refreshGeneration &+= 1
+        let generation = refreshGeneration
+        let fetched: Result<[MessageRecord], any Error> = await Task.detached(priority: .userInitiated) {
+            Result {
+                try fetchMessageWindow(
+                    reader: reader, convId: convId, mode: mode,
+                    anchor: anchor, initialWindowSize: initialWindowSize
+                )
+            }
+        }.value
+
+        let newRecords: [MessageRecord]
+        switch fetched {
+        case .success(let records):
+            newRecords = records
+        case .failure(let error):
             Logger.messages.error("[MessageStore] refreshFromDB failed: \(error.localizedDescription)")
             return
         }
 
-        guard let newRecords, newRecords != messages else { return }
+        guard generation == refreshGeneration else { return }
+        guard newRecords != messages else { return }
 
         // Yield to a fresh runloop iteration before publishing the @Published
         // mutation. When refreshFromDB is invoked from a view's .task /
@@ -305,10 +336,45 @@ public final class MessageStore: ObservableObject {
             await yieldToRunLoop()
             // Re-check: state could have changed during the runloop yield (e.g.,
             // a socket message arrived and another refresh wrote first).
+            guard generation == refreshGeneration else { return }
             guard newRecords != messages else { return }
         }
 
         publish(records: newRecords, mergeInMemory: mergeInMemory)
+    }
+
+    /// Génération monotone des lectures de fenêtre — depuis que la lecture
+    /// part hors du MainActor, deux refreshes peuvent s'entrelacer pendant
+    /// l'await ; seule la demande la plus récente a le droit de publier.
+    private var refreshGeneration: UInt64 = 0
+
+    // MARK: - Coalescence des refreshes temps réel
+
+    /// Un refresh notification-driven par RAFALE, pas par écriture. Le chemin
+    /// socket poste `.messageStoreShouldRefresh` à CHAQUE écriture GRDB —
+    /// livraison, lecture, réaction, retry — et chacune relançait une lecture
+    /// de fenêtre complète + une repasse de snapshot O(n). Premier événement
+    /// servi IMMÉDIATEMENT (zéro latence ajoutée pour `message:new`) ; ceux
+    /// qui tombent pendant la lecture en vol sont fusionnés en UNE lecture
+    /// de queue, qui relit l'état le plus frais de toute façon.
+    private var realtimeRefreshInFlight = false
+    private var realtimeRefreshQueued = false
+
+    func requestRealtimeRefresh() {
+        if realtimeRefreshInFlight {
+            realtimeRefreshQueued = true
+            return
+        }
+        realtimeRefreshInFlight = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.refreshFromDB(mergeInMemory: true, skipRunLoopYield: true)
+            self.realtimeRefreshInFlight = false
+            if self.realtimeRefreshQueued {
+                self.realtimeRefreshQueued = false
+                self.requestRealtimeRefresh()
+            }
+        }
     }
 
     /// Publishes a freshly-read window into `@Published messages` and fires the
@@ -485,13 +551,24 @@ public final class MessageStore: ObservableObject {
         let initialWindow = Self.initialWindowSize
         let reader = persistence.reader
 
+        // Même lecture détachée que `refreshFromDB` : l'ouverture d'une
+        // conversation ne matérialise plus sa fenêtre SQLite sur la boucle
+        // principale (elle est bornée à `initialWindowSize` ici, mais une
+        // réouverture ancrée relit toute la profondeur déjà paginée).
+        let fetched: Result<[MessageRecord], any Error> = await Task.detached(priority: .userInitiated) {
+            Result {
+                try fetchMessageWindow(
+                    reader: reader, convId: convId, mode: mode,
+                    anchor: anchor, initialWindowSize: initialWindow
+                )
+            }
+        }.value
+
         let records: [MessageRecord]
-        do {
-            records = try fetchMessageWindow(
-                reader: reader, convId: convId, mode: mode,
-                anchor: anchor, initialWindowSize: initialWindow
-            )
-        } catch {
+        switch fetched {
+        case .success(let fetchedRecords):
+            records = fetchedRecords
+        case .failure(let error):
             Logger.messages.error("[MessageStore] loadInitialSnapshot failed: \(error.localizedDescription)")
             return []
         }

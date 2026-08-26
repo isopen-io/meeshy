@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript strict + Jest (gateway, `bun run test`), Swift 6.2 + Swift Testing/XCTest (SDK, scheme `MeeshySDK-Package`), SwiftUI + XCTest (app, `./apps/ios/meeshy.sh test`), GRDB (outbox), JSON sur disque (`StoryPublishQueue`).
 
-**Spec:** `docs/superpowers/specs/2026-08-23-meeshy-composer-v2-design.md` (§A ligne promue « file de publication UNIQUE (`PublishIntent`, S2) » → lot 7 ; §B lois 1 et 3 ; §E lot 7) · `docs/superpowers/specs/2026-08-20-meeshy-composer-execution-spec.md` (§F « Hors v1 » opposable) · `docs/superpowers/specs/2026-08-19-meeshy-composer-views.html` (doctrine souveraine, S2 déscopé rév. 2 C11 — ce lot le REPREND en changeant sa justification, voir ci-dessous).
+**Spec:** `docs/superpowers/specs/2026-08-23-meeshy-composer-v2-design.md` (§A ligne promue « file de publication UNIQUE (`PublishIntent`, S2) » → lot 7 ; §B lois 1 et 3 ; §E lot 7) · `docs/superpowers/specs/2026-08-20-meeshy-composer-execution-spec.md` (§F « Hors v1 » opposable) · `docs/product/planche-meeshy-composer.html` (doctrine souveraine, S2 déscopé rév. 2 C11 — ce lot le REPREND en changeant sa justification, voir ci-dessous).
 
 ---
 
@@ -509,7 +509,7 @@ lève est celui qui possède `MeeshyUI` — pas celui-ci.
 - [ ] `cd packages/shared && TZ=UTC bun run test` — `composer-contract.test.ts` étendu vert.
 - [ ] Scheme `MeeshySDK-Package` COMPLET (DerivedData privée `/tmp/meeshy-dd-lot-7-sdk`, attendre le lock `xcodebuild` voisin).
 - [ ] `xcodegen generate` puis `./apps/ios/meeshy.sh test` COMPLET — les **cinq** classes de test neuves de ce lot doivent apparaître dans le delta `project.pbxproj` ; greffer le delta contre `origin/main`, **jamais** committer un pbxproj régénéré en entier (il emporterait le WIP des lots voisins).
-- [ ] Planches P0 (`docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`) — **remesuré à l'audit du 2026-08-24 : rév. 22 (2026-08-24), fichier modifié NON COMMITTÉ, et INCOHÉRENT avec lui-même** (arc et centre `62 / 70` l. 278-281 contre « 57 tâches (81,4 %) » l. 287 ; rév. 17 « INCHANGÉ : 57/70 » contre rév. 22 « INCHANGÉ à 62/70 »). Le « 57/70 » qu'écrivait ce plan ne peut donc pas être repris tel quel — réconcilier, ou dire laquelle fait foi : camembert **ET** matrice mis à jour **dans le même commit que ce gate** — la règle de maintenance héritée (§A bis du design) en fait un défaut bloquant. La ligne S2 y porte encore « PublishIntent déscopé / différé » : elle est **amendée**, pas réécrite, avec la raison du §B ci-dessus (la prémisse a changé, pas l'arbitrage d'hygiène).
+- [ ] Planches P0 (`docs/product/planche-meeshy-composer.html`) — **remesuré à l'audit du 2026-08-24 : rév. 22 (2026-08-24), fichier modifié NON COMMITTÉ, et INCOHÉRENT avec lui-même** (arc et centre `62 / 70` l. 278-281 contre « 57 tâches (81,4 %) » l. 287 ; rév. 17 « INCHANGÉ : 57/70 » contre rév. 22 « INCHANGÉ à 62/70 »). Le « 57/70 » qu'écrivait ce plan ne peut donc pas être repris tel quel — réconcilier, ou dire laquelle fait foi : camembert **ET** matrice mis à jour **dans le même commit que ce gate** — la règle de maintenance héritée (§A bis du design) en fait un défaut bloquant. La ligne S2 y porte encore « PublishIntent déscopé / différé » : elle est **amendée**, pas réécrite, avec la raison du §B ci-dessus (la prémisse a changé, pas l'arbitrage d'hygiène).
 - [ ] Merge : **après** les lots 3 et 0 bis ; la tâche 7.8 **après** le lot 4.
 
 ---

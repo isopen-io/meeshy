@@ -700,7 +700,7 @@ if let draftId { composer.adoptDraft(id: draftId) }
 - [ ] `./apps/ios/meeshy.sh test` — chiffres RÉELS consignés au commit (nombre de
       suites, nombre de tests), jamais « ça passe »
 - [ ] Envoi RÉEL depuis la porte : une photo, une vidéo (§T4)
-- [ ] Planches P0 (`docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`) :
+- [ ] Planches P0 (`docs/product/planche-meeshy-composer.html`) :
       la planche **se contredit elle-même** (arc `62/70` l. 278-281 contre puce
       « 57 tâches (81,4 %) » l. 287). Réconcilier ou dire laquelle fait foi, dans
       le commit du gate. Relire la révision la plus RÉCENTE avant d'écrire.

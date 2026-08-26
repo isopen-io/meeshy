@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.outlined.Comment
@@ -925,12 +926,7 @@ private fun StoryTextObjectLayer(
             .toFloat()
             .times(canvasWidthPx / TEXT_DESIGN_CANVAS_WIDTH)
             .coerceAtLeast(1f)
-        Text(
-            text = animated.text,
-            color = color,
-            textAlign = textAlign,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = with(density) { fontSizePx.toSp() },
+        Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .onSizeChanged { textSize = it }
@@ -941,7 +937,47 @@ private fun StoryTextObjectLayer(
                     )
                 }
                 .graphicsLayer { rotationZ = animated.rotation.toFloat() }
-                .alpha(animated.opacity.toFloat().coerceIn(0f, 1f)),
-        )
+                .alpha(animated.opacity.toFloat().coerceIn(0f, 1f))
+                .storyTextBacking(animated.background)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+        ) {
+            Text(
+                text = animated.text,
+                color = color,
+                textAlign = textAlign,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = with(density) { fontSizePx.toSp() },
+            )
+        }
     }
 }
+
+/**
+ * Paints an iOS/web-authored text backing behind the reader's glyphs (glue): a rounded
+ * solid fill for [StoryTextBackground.Solid], a translucent frosted scrim approximating the
+ * iOS glass blur for [StoryTextBackground.Glass], and nothing for [StoryTextBackground.None].
+ * The *choice* of backing is the unit-tested [StoryTextBackground.resolve]; this only renders
+ * it, mirroring the composer's own backing so author and reader agree on the look.
+ */
+private fun Modifier.storyTextBacking(background: StoryTextBackground): Modifier = when (background) {
+    StoryTextBackground.None -> this
+    is StoryTextBackground.Solid ->
+        this.background(readerBackingColor(background.hex), RoundedCornerShape(10.dp))
+    is StoryTextBackground.Glass ->
+        this.background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
+}
+
+/**
+ * Parses a `RRGGBB` or `RRGGBBAA` backing hex (gateway parity, no `#`) into a [Color],
+ * honouring the alpha byte so a translucent solid renders as authored. Decays to
+ * [Color.Transparent] on anything unexpected so a malformed backing never crashes the canvas.
+ */
+private fun readerBackingColor(hex: String): Color = runCatching {
+    val h = hex.removePrefix("#")
+    val argb = when (h.length) {
+        8 -> h.substring(6, 8) + h.substring(0, 6)
+        6 -> "ff$h"
+        else -> return Color.Transparent
+    }
+    Color(argb.toLong(16))
+}.getOrDefault(Color.Transparent)

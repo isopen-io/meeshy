@@ -1339,7 +1339,7 @@ défaut, pas une approximation.
   bonne, pour une raison indépendante : un `json.dump` réordonnerait et
   reformaterait les 3369 entrées, rendant le diff illisible et tout conflit avec
   une session voisine indémêlable.
-- **La planche P0** (`docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`)
+- **La planche P0** (`docs/product/planche-meeshy-composer.html`)
   n'a pas été relue : elle est réécrite en parallèle par un autre agent. Les
   cellules à y porter sont déposées dans `wave1/planche-deltas.md`.
 

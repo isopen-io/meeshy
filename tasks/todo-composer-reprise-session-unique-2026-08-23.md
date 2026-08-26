@@ -77,7 +77,7 @@ V5 média reçu/forward · V6 web complet · V7 file de publication unique.
 ## 5. Les règles du chantier, non négociables
 
 1. **Le P0 est vivant** : chaque tâche dont le gate passe met à jour
-   `docs/superpowers/specs/2026-08-19-meeshy-composer-views.html` — **camembert ET
+   `docs/product/planche-meeshy-composer.html` — **camembert ET
    matrice** — dans le MÊME commit que son gate. Un P0 périmé est un défaut bloquant.
    *Dette constatée à la reprise* : la matrice ne porte pas encore de LIGNE W1/W2
    alors que le dénominateur est passé à 67 ; et C3 y est « tout » alors que

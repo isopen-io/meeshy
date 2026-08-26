@@ -3872,7 +3872,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `storyEffects.filter`/`filterIntensity` (a filter-only slide still emits a `storyEffects` payload).
       +31 tests (21 matrix, 10 deck) + 7 VM + 5 draft; +11 strings × 4 locales. Mirrors iOS's per-slide
       photo filter with an adjustable strength.
-- [~] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
+- [x] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
       **Snap-to-guide + out-of-bounds warning done** (`story-canvas-snap-guides`): a pure
       `StorySnapResolver.resolve(x, y, …)` → `SnapResult(x, y, verticalGuide, horizontalGuide,
       withinSafeZone)` is the single source of truth for where a dragged element settles. Each axis
@@ -3887,8 +3887,40 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       draws the active guide line(s) (accent `primary`) and an `error`-coloured warning border when
       out of bounds; the drag-end signal is a non-consuming `Final`-pass `awaitEachGesture` that
       runs alongside the transform detector (glue). A natural magnetic-alignment gesture — surpasses
-      iOS, whose snapping has no per-axis guide overlay here. +25 tests (18 resolver, 7 VM). Pending:
-      frosted-glass text backdrops, persistent safe-zone overlay grid.
+      iOS, whose snapping has no per-axis guide overlay here. +25 tests (18 resolver, 7 VM).
+      **Frosted-glass / solid text backdrops READER done** (`story-viewer-text-backdrop`): the composer
+      already AUTHORED a text element's backing (`StoryTextElement.background` → `toTextObject` writes the
+      `backgroundStyle` tagged union) and painted it live on the composer canvas, but the VIEWER dropped it
+      entirely — `StoryTextObjectProjection.project` never resolved `backgroundStyle`/`textBg`, so an
+      iOS/web/backend-authored `.solid(hex)` or `.glass(radius)` text backdrop rendered on Android as plain
+      floating glyphs (a real cross-client parity gap). A pure `StoryTextBackground.resolve(backgroundStyle,
+      textBg)` ports iOS `StoryTextObject.resolvedBackgroundStyle` exactly (priority: modern `backgroundStyle`
+      > legacy `textBg`→Solid > None — the modern style wins even when it resolves to None, suppressing a
+      stale legacy hex), decoding TOLERANTLY (a Solid with no usable hex / an unknown `type` / a blank legacy
+      hex → None; a Glass with an absent/non-finite/non-positive radius keeps the glass intent and clamps the
+      sigma to `DEFAULT_GLASS_RADIUS`). `project()` resolves it once onto `StoryTextObjectView.background`;
+      the viewer's `StoryTextObjectLayer` paints the backing behind the glyphs (rounded solid fill honouring
+      an 8-digit alpha hex, translucent frosted scrim for glass), mirroring the composer's own `storyTextBacking`
+      so author and reader agree on the look. +19 tests (14 `StoryTextBackgroundTest.resolve` covering every
+      priority + tolerant-decay branch + a toStyleWire round-trip; 4 projection: none/glass/solid/legacy;
+      +1 net accounting). Mutation-RED-proven twice (dropping the projection's resolution reddened EXACTLY the
+      3 non-None projection tests while the None test stayed green; dropping the glass radius guard reddened
+      EXACTLY the 2 non-positive/non-finite tests while the missing-radius test stayed green).
+      **Persistent safe-zone overlay grid done** (`story-composer-safe-zone-overlay`): closes this line. The
+      transient snap feedback above lit only the guide line(s) NEAR the drag; the persistent overlay draws the
+      full composition frame while dragging (parity with iOS `SafeZoneOverlay`). A pure `StorySafeZoneGrid.geometry(width,
+      height)` → `SafeZoneGeometry(safeLeft/Top/Right/Bottom, verticalThirds, horizontalThirds)` ports iOS
+      `StorySafeZone`'s ASYMMETRIC insets (`TOP_INSET 0.18` / `BOTTOM_INSET 0.25` / `HORIZONTAL_INSET 0.05` —
+      the viewer's top chrome and bottom reply-bar eat unequal margins, so a centred safe zone would lie) plus
+      the classic rule-of-thirds lines (`THIRDS [1/3, 2/3]`, the centre deliberately OMITTED so it never
+      double-draws the transient snap guide). A non-finite or non-positive dimension collapses to an `isEmpty`
+      geometry (zeroed rect + empty line lists) so an unmeasured/zero canvas draws nothing. The composer's drag
+      `Canvas` (already shown only while `snapFeedback != null`) strokes the dashed safe rect + faint thirds
+      lines at `primary@35%` beneath the existing accent snap guides — pure glue over the resolver. +9 tests
+      (all `StorySafeZoneGridTest`: unit-rect equals the iOS insets, per-axis denormalisation, the two thirds
+      lines per axis, centre-omission, and every degenerate guard — zero/negative/non-finite width & height).
+      Mutation-RED-proven: dropping the degenerate guard reddened EXACTLY the zero/non-finite tests (the
+      negative case is geometrically empty regardless — `safeRight < safeLeft` — and correctly stayed green).
 - [x] Z-order management (front/back, forward/backward) persisted for WYSIWYG playback
       (`story-text-element-zorder`): the slide's `elements` list order *is* the paint order (index 0 =
       back, last = front), so a pure `StorySlideDeck.reorderTextElement(id, StoryZOrder)` restacks the
@@ -3900,7 +3932,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `TextStyleToolbar` gains a 4-button z-order row (send-to-back / backward / forward / bring-to-front)
       whose order rides into publish via the existing element serialisation. +16 tests (13 reducer, 3 VM);
       +4 strings × 4 locales. Mirrors iOS's front/back + forward/backward layering controls.
-- [~] Multi-element context menu (edit, duplicate, reorder, delete) — **edit** (tap-to-select +
+- [x] Multi-element context menu (edit, duplicate, reorder, delete) — **edit** (tap-to-select +
       caption/element routing), **delete** (per-element remove handle), **duplicate**
       (`story-text-element-duplicate`), and **reorder** (`story-text-element-zorder`, z-order row in the
       floating toolbar) done. Duplicate: pure `StorySlideDeck.duplicateTextElement`
@@ -3908,8 +3940,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       normalised offset (clamped into the canvas) so the copy is visible, inert when the source id is
       unknown / the new id collides / the slide is at the ≤5 cap; `StoryComposerViewModel.onDuplicateTextElement`
       mints the id, selects the copy, and warns-without-adding at the cap; a duplicate `ContentCopy`
-      handle sits in the floating `TextStyleToolbar`. Pending: a single unified long-press context menu
-      consolidating these per-element actions.
+      handle sits in the floating `TextStyleToolbar`. **Unified long-press context menu done** (slice
+      `story-element-context-menu`, 2026-08-26): a long-press on any on-canvas text element opens ONE
+      `DropdownMenu` gathering all seven actions (edit · duplicate · send-to-back · backward · forward ·
+      bring-to-front · delete). The pure `StoryElementMenu.resolve(deck, elementId)` decides each row's
+      `enabled` flag from the SAME rules the deck reducers enforce — a reorder row is enabled iff
+      `reorderTextElement` would actually restack (not already at that extreme) and duplicate iff below
+      the ≤5 cap — so a greyed row can never dispatch an inert op. `StoryElementAction.zOrder` is the one
+      projection onto `StoryZOrder`, so the menu and the reducer cannot drift. VM: `onOpenElementMenu`
+      (selects + opens, inert off-slide), `onDismissElementMenu`, and `onElementMenuAction` (routes to the
+      existing duplicate/reorder/remove/select intents and closes; disabled or stale action = safe no-op).
+      +22 tests (14 resolver: presence/selected-slide gate, seven-action order, edit/delete always on,
+      per-position reorder enablement each tied to the real reducer's inert-ness, cap-gated duplicate tied
+      to the real reducer, zOrder mapping, absent-row isEnabled; 8 VM: open/dismiss/select, each action's
+      observable deck outcome + menu close, disabled no-op, no-menu no-op). Mutation-RED-proven (forcing
+      every row `enabled = true` reddens exactly the 6 position/cap behavioural tests). +2 strings × 4 locales.
 - [~] Per-element + per-slide duration; background designation toggle (1 visual + 1 audio/slide) —
       **per-slide duration RESOLUTION done** (slice `story-viewer-slide-duration`, 2026-08-25): the
       viewer honours the author-pinned/content-derived slide duration via the pure `StorySlideDuration`

@@ -35,9 +35,17 @@ final class ConversationViewModelTests: XCTestCase {
         // send semantics need the singleton to report connected. Tests that
         // exercise the offline path explicitly flip this to false.
         MessageSocketManager.shared.isConnected = true
+        // `APIClient.shared` est un singleton de processus : un SUT construit
+        // avec une session anonyme y pose son jeton, et seul un VM DÉMARRÉ le
+        // retire dans son `deinit` (`guard hasStarted`). Un SUT jamais démarré
+        // — le cas de ces tests — le laisse donc au test SUIVANT :
+        // `test_init_withNilAnonymousSession…` héritait « test-anon-token » de
+        // son jumeau. Remis à zéro ici ET au tearDown, comme tout état partagé.
+        APIClient.shared.anonymousSessionToken = nil
     }
 
     override func tearDown() async throws {
+        APIClient.shared.anonymousSessionToken = nil
         // Reset singleton so other test classes don't inherit a forced
         // connected state. The default for a fresh app session is false.
         MessageSocketManager.shared.isConnected = false

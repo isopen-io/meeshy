@@ -13,7 +13,7 @@
  * deux sites.
  *
  * @see docs/superpowers/specs/2026-08-23-meeshy-composer-v2-design.md
- * @see docs/superpowers/specs/2026-08-19-meeshy-composer-views.html — doctrine
+ * @see docs/product/planche-meeshy-composer.html — doctrine
  */
 
 /**

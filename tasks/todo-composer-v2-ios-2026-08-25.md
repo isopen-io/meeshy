@@ -14,7 +14,7 @@
 | `docs/superpowers/specs/2026-08-20-meeshy-composer-execution-spec.md` | contrat gelé v1, « Hors v1 » opposable |
 | `docs/superpowers/specs/2026-08-23-meeshy-composer-v2-design.md` | extension v2 : lots 0→7, six lois |
 | `docs/superpowers/plans/2026-08-2*-meeshy-composer-v2-lot-*.md` | plans d'exécution ; **chaque plan prime sur le §E qu'il détaille** |
-| `docs/superpowers/specs/2026-08-19-meeshy-composer-views.html` | la planche : doctrine, inventaire, **tableau de bord P0** — rév. 24 au 2026-08-25 |
+| `docs/product/planche-meeshy-composer.html` | la planche : doctrine, inventaire, **tableau de bord P0** — rév. 24 au 2026-08-25 |
 | audit du 2026-08-25 (42 agents, lecture seule) | la mesure lot par lot qui a produit la rév. 24 — reproduite dans la planche, pas ici |
 
 **Règle héritée, inchangée** : une tâche dont le gate passe met à jour la
@@ -22,6 +22,10 @@ planche — camembert ET matrice — dans le MÊME commit ; un P0 périmé est u
 défaut bloquant. **La rév. 24 rend cette règle mécanique** : chaque ligne de
 matrice porte `data-task` / `data-kind` / `data-state`, et un script recompte
 depuis le DOM ; si l'arc diverge, un bandeau rouge s'affiche dans la page.
+**Et la page publiée suit le fichier (26/08)** : chaque commit `docs(p0)` republie
+l'artifact « Planches MeeshyComposer » (https://claude.ai/code/artifact/95de2699-a55c-4ba8-ab00-508594c239ce)
+depuis `docs/product/planche-meeshy-composer.html` — la page publiée le 20/08
+est restée cinq révisions derrière le dépôt ; aucune page « progress » parallèle.
 
 ## Ce que la mesure du 2026-08-25 a établi (résumé — le détail est dans la planche)
 

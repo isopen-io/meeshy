@@ -3,7 +3,9 @@
  *
  * Covers:
  * - Initial state derived from navigator.onLine + meeshySocketIOService diagnostics
- * - online/offline window events
+ * - isOnline = navigator.onLine OR a connected socket (the socket is the proof;
+ *   navigator.onLine is a hint honoured only while the socket is down)
+ * - online/offline window events (online resyncs the socket flag from diagnostics)
  * - Socket status change via onStatusChange callback
  * - No re-render when state is identical (stable reference optimization)
  * - Cleanup on unmount
@@ -102,9 +104,19 @@ describe('useConnectionStatus', () => {
       expect(result.current.isReady).toBe(false);
     });
 
-    it('returns isOnline: false and isReady: false when navigator is offline', () => {
+    it('keeps isOnline: true and isReady: true when navigator.onLine is false but the socket is connected — a live socket is the proof of connectivity', () => {
       Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
       mockGetConnectionDiagnostics.mockReturnValue({ isConnected: true, hasSocket: true });
+
+      const { result } = renderHook(() => useConnectionStatus());
+
+      expect(result.current.isOnline).toBe(true);
+      expect(result.current.isReady).toBe(true);
+    });
+
+    it('returns isOnline: false and isReady: false when navigator is offline AND the socket is down', () => {
+      Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
+      mockGetConnectionDiagnostics.mockReturnValue({ isConnected: false, hasSocket: true });
 
       const { result } = renderHook(() => useConnectionStatus());
 
@@ -140,28 +152,37 @@ describe('useConnectionStatus', () => {
       expect(result.current.isOnline).toBe(true);
     });
 
-    it('sets isOnline: false and forces isSocketConnected: false on offline event', () => {
+    it("does not declare the app offline on an offline event while the socket is still connected — the socket's own disconnect does", () => {
       mockGetConnectionDiagnostics.mockReturnValue({ isConnected: true, hasSocket: true });
 
       const { result } = renderHook(() => useConnectionStatus());
       expect(result.current.isOnline).toBe(true);
-      expect(result.current.isSocketConnected).toBe(true);
 
       Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
       fireOffline();
+
+      expect(result.current.isOnline).toBe(true);
+      expect(result.current.isSocketConnected).toBe(true);
+      expect(result.current.isReady).toBe(true);
+
+      triggerStatusChange({ isConnected: false, hasSocket: true });
 
       expect(result.current.isOnline).toBe(false);
       expect(result.current.isSocketConnected).toBe(false);
       expect(result.current.isReady).toBe(false);
     });
 
-    it('sets isReady: false on offline regardless of socket state', () => {
-      mockGetConnectionDiagnostics.mockReturnValue({ isConnected: true, hasSocket: true });
+    it('resyncs isSocketConnected from the socket diagnostics on the online event — a socket that survived the blip is not left reported as disconnected', () => {
+      mockGetConnectionDiagnostics.mockReturnValue({ isConnected: false, hasSocket: true });
+
       const { result } = renderHook(() => useConnectionStatus());
+      expect(result.current.isSocketConnected).toBe(false);
 
-      fireOffline();
+      mockGetConnectionDiagnostics.mockReturnValue({ isConnected: true, hasSocket: true });
+      fireOnline();
 
-      expect(result.current.isReady).toBe(false);
+      expect(result.current.isSocketConnected).toBe(true);
+      expect(result.current.isReady).toBe(true);
     });
 
     it('sets isReady: true when back online and socket is connected', () => {
@@ -287,12 +308,12 @@ describe('useConnectionStatus', () => {
   // ── isReady computation ───────────────────────────────────────────────────
 
   describe('isReady computation', () => {
-    it('is false when isOnline is false even if socket is connected', () => {
+    it('is true when the socket is connected even if navigator.onLine is false', () => {
       Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
       mockGetConnectionDiagnostics.mockReturnValue({ isConnected: true, hasSocket: true });
 
       const { result } = renderHook(() => useConnectionStatus());
-      expect(result.current.isReady).toBe(false);
+      expect(result.current.isReady).toBe(true);
     });
 
     it('is false when socket is not connected even if online', () => {
@@ -347,7 +368,8 @@ describe('useIsOnline', () => {
     expect(typeof result.current).toBe('boolean');
   });
 
-  it('updates when offline event fires', () => {
+  it('updates when offline event fires and no socket is connected', () => {
+    mockGetConnectionDiagnostics.mockReturnValue({ isConnected: false, hasSocket: false });
     const { result } = renderHook(() => useIsOnline());
     expect(result.current).toBe(true);
 

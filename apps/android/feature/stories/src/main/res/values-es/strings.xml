@@ -80,6 +80,8 @@
     <string name="stories_composer_align_center">Centrar</string>
     <string name="stories_composer_align_right">Alinear a la derecha</string>
     <string name="stories_composer_duplicate_element">Duplicar elemento</string>
+    <string name="stories_composer_edit_element">Editar texto</string>
+    <string name="stories_composer_element_menu">Acciones del elemento</string>
     <string name="stories_composer_zorder_to_back">Enviar al fondo</string>
     <string name="stories_composer_zorder_backward">Atrás un nivel</string>
     <string name="stories_composer_zorder_forward">Adelante un nivel</string>
