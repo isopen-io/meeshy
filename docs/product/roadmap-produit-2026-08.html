@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Source : docs/product/roadmap-produit-2026-08.md — page publiée https://claude.ai/code/artifact/7eb96094-e9f9-4758-a4fd-2b64bd340479 -->
+<title>Roadmap Meeshy 2026-2027</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F3F5F9; --surface:#FFFFFF; --surface-2:#EBEFF5;
+  --ink:#151B2B; --muted:#5B647A; --hair:#D7DDE8;
+  --accent:#0F7B87; --accent-ink:#0B5C65; --accent-soft:#DCEFF1;
+  --critical:#C6451F; --critical-soft:#FBE4DC;
+  --high:#A66A12; --high-soft:#FBEFD6;
+  --mid:#4A5A9A; --mid-soft:#E3E7F7;
+  --ok:#2F7A46; --ok-soft:#DDF0E2;
+  --h1:#0F7B87; --h2:#2C6F9E; --h3:#5A5CA8; --h4:#8A4A9C;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0F1420; --surface:#171E2E; --surface-2:#1E2739;
+    --ink:#E6EAF2; --muted:#98A2B8; --hair:#2A3347;
+    --accent:#5BC4CE; --accent-ink:#8FDCE3; --accent-soft:#163A40;
+    --critical:#FF8A66; --critical-soft:#3E1F16;
+    --high:#E4B15A; --high-soft:#3B2C10;
+    --mid:#9DA8F0; --mid-soft:#232A4B;
+    --ok:#74C48A; --ok-soft:#173523;
+    --h1:#5BC4CE; --h2:#6FA9DA; --h3:#9B9CE0; --h4:#C18AD3;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0F1420; --surface:#171E2E; --surface-2:#1E2739;
+  --ink:#E6EAF2; --muted:#98A2B8; --hair:#2A3347;
+  --accent:#5BC4CE; --accent-ink:#8FDCE3; --accent-soft:#163A40;
+  --critical:#FF8A66; --critical-soft:#3E1F16;
+  --high:#E4B15A; --high-soft:#3B2C10;
+  --mid:#9DA8F0; --mid-soft:#232A4B;
+  --ok:#74C48A; --ok-soft:#173523;
+  --h1:#5BC4CE; --h2:#6FA9DA; --h3:#9B9CE0; --h4:#C18AD3;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:var(--accent-ink)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+h1,h2,h3,h4{font-family:"Bricolage Grotesque","IBM Plex Sans",sans-serif;line-height:1.1;margin:0;text-wrap:balance;letter-spacing:-0.01em}
+h1{font-size:clamp(2.2rem,5vw,3.6rem);font-weight:800;font-variation-settings:"opsz" 96}
+h2{font-size:clamp(1.5rem,2.6vw,2rem);font-weight:700;margin-top:.2em}
+h3{font-size:1.2rem;font-weight:700}
+p{margin:0 0 1em}
+.prose{max-width:68ch}
+.eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+code{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.88em;background:var(--surface-2);padding:.08em .35em;border-radius:3px}
+
+header.hero{padding:64px 0 40px;border-bottom:1px solid var(--hair)}
+.hero-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:40px;align-items:end}
+.hero .lede{font-size:1.15rem;color:var(--muted);max-width:62ch;margin-top:20px}
+.spectrum{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;height:10px;margin:28px 0 0}
+.spectrum span{display:block;border-radius:2px}
+.spectrum .s1{background:var(--h1)} .spectrum .s2{background:var(--h2)} .spectrum .s3{background:var(--h3)} .spectrum .s4{background:var(--h4)}
+.facts{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.fact{background:var(--surface);border:1px solid var(--hair);border-radius:6px;padding:14px 16px}
+.fact .n{font-family:"Bricolage Grotesque",sans-serif;font-size:1.9rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.fact .l{color:var(--muted);font-size:.85rem;margin-top:6px}
+
+nav.toc{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--ground) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--hair)}
+nav.toc ul{list-style:none;margin:0;padding:10px 0;display:flex;gap:6px 22px;flex-wrap:wrap}
+nav.toc a{text-decoration:none;color:var(--muted);font-size:.9rem;font-weight:500}
+nav.toc a:hover{color:var(--ink)}
+
+section{padding:56px 0;border-bottom:1px solid var(--hair)}
+section:last-of-type{border-bottom:0}
+.sec-head{display:grid;grid-template-columns:1fr 2fr;gap:32px;margin-bottom:28px}
+.sec-head p{color:var(--muted)}
+
+.thesis{background:var(--surface);border:1px solid var(--hair);border-left:4px solid var(--accent);border-radius:6px;padding:22px 26px;max-width:76ch;margin:0 0 28px}
+.thesis strong{color:var(--accent-ink)}
+
+.horizons{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.hz{background:var(--surface);border:1px solid var(--hair);border-radius:6px;padding:18px 18px 16px;display:flex;flex-direction:column;gap:10px;border-top:5px solid var(--hz-c)}
+.hz .k{display:flex;justify-content:space-between;align-items:baseline}
+.hz .k .num{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:1.6rem;color:var(--hz-c);line-height:1}
+.hz .k .when{font-family:"IBM Plex Mono",monospace;font-size:.75rem;color:var(--muted)}
+.hz h3{font-size:1.15rem}
+.hz p{font-size:.93rem;color:var(--muted);margin:0}
+.hz-1{--hz-c:var(--h1)} .hz-2{--hz-c:var(--h2)} .hz-3{--hz-c:var(--h3)} .hz-4{--hz-c:var(--h4)}
+
+.gaps{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:28px}
+.gap{background:var(--surface);border:1px solid var(--hair);border-radius:6px;padding:18px 20px}
+.gap h3{display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.gap p{margin:0;font-size:.95rem}
+.promise{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:.92rem;margin-top:10px}
+.promise .lab{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:3px}
+
+.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;font-weight:500;white-space:nowrap}
+.chip.critical{background:var(--critical-soft);color:var(--critical)}
+.chip.high{background:var(--high-soft);color:var(--high)}
+.chip.mid{background:var(--mid-soft);color:var(--mid)}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.exist{background:var(--accent-soft);color:var(--accent-ink)}
+
+.axes{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.axis{background:var(--surface);border:1px solid var(--hair);border-radius:6px;padding:18px 20px}
+.axis header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:10px}
+.axis ul{margin:0;padding-left:1.1em;font-size:.93rem}
+.axis li{margin:.35em 0}
+.axis li .ev{color:var(--muted);font-size:.85rem}
+.axis .plus{color:var(--ok)}
+
+.tablewrap{overflow-x:auto;border:1px solid var(--hair);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+th,td{text-align:left;vertical-align:top;padding:11px 14px;border-bottom:1px solid var(--hair)}
+th{font-family:"IBM Plex Mono",monospace;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--surface-2)}
+tr:last-child td{border-bottom:0}
+td.jalon{font-weight:600;min-width:200px}
+td.ind{color:var(--muted);min-width:180px}
+.sev td:first-child{font-variant-numeric:tabular-nums}
+
+.hz-block{margin-top:36px}
+.hz-block .hz-title{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+.hz-block .hz-title .num{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:2rem;color:var(--hz-c);line-height:1}
+.hz-block .goal{max-width:72ch;color:var(--muted);margin-bottom:16px}
+
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.list{background:var(--surface);border:1px solid var(--hair);border-radius:6px;padding:18px 22px}
+.list ol,.list ul{margin:0;padding-left:1.2em}
+.list li{margin:.45em 0;font-size:.95rem}
+.note{font-size:.9rem;color:var(--muted)}
+footer{padding:32px 0 56px;color:var(--muted);font-size:.85rem}
+
+@media (max-width:900px){
+  .hero-grid,.sec-head,.cols2{grid-template-columns:1fr}
+  .horizons{grid-template-columns:1fr 1fr}
+  .gaps,.axes{grid-template-columns:1fr}
+}
+@media (max-width:560px){
+  .horizons,.facts{grid-template-columns:1fr}
+  header.hero{padding:40px 0 28px}
+}
+@media (prefers-reduced-motion: no-preference){
+  .hz,.gap,.axis{transition:transform .18s ease}
+  .hz:hover{transform:translateY(-2px)}
+}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <div class="eyebrow">Analyse à 360° · 26 août 2026 · main 65c61e469f — mise à jour du 26 août après-midi · main af5655d74e</div>
+        <h1 style="margin-top:14px">Tenir debout et dire vrai, avant de grandir</h1>
+        <p class="lede">Meeshy a la surface d'un produit mûr — messagerie traduite, voix clonée, stories, réels, communautés, appels — sur trois clients. L'analyse trouve quatre écarts entre ce qui est promis et ce qui est vrai. La roadmap les ferme dans l'ordre, en quatre horizons nommés par ce qu'ils rendent vrai.</p>
+        <div class="spectrum" aria-hidden="true"><span class="s1"></span><span class="s2"></span><span class="s3"></span><span class="s4"></span></div>
+      </div>
+      <div class="facts" aria-label="Chiffres clés">
+        <div class="fact"><div class="n mono">482</div><div class="l">routes gateway (108 d'administration)</div></div>
+        <div class="fact"><div class="n mono">3,9 M</div><div class="l">lignes iOS + SDK + web + Android</div></div>
+        <div class="fact"><div class="n mono">25</div><div class="l">langues offertes qui rendent du français en silence</div></div>
+        <div class="fact"><div class="n mono">5 060</div><div class="l">commits sur 30 jours, 2 auteurs + Claude</div></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sommaire">
+  <div class="wrap"><ul>
+    <li><a href="#lecture">Lecture en une page</a></li>
+    <li><a href="#ecarts">Les quatre écarts</a></li>
+    <li><a href="#axes">Le 360°</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+    <li><a href="#transversal">Actions transversales</a></li>
+    <li><a href="#arbitrages">Arbitrages</a></li>
+    <li><a href="#github">Branchement GitHub</a></li>
+  </ul></div>
+</nav>
+
+<section id="lecture">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Lecture en une page</h2>
+      <p>Où en est le produit, et l'ordre dans lequel on avance. Les quatre horizons sont une séquence : chacun rend vrai ce que le suivant suppose.</p>
+    </div>
+    <div class="thesis prose">
+      <strong>iOS</strong> est le produit de référence (1,48 M lignes d'app, 0,76 M de SDK, 1 589 fichiers de tests) et part en App Store en 1.0.6. <strong>Le web</strong> est en production mais son temps réel est jugé « trop bogué » par le porteur — 2 correctifs sur 7 livrés. <strong>Android</strong> est large (217 k lignes, 11 modules, 591 tests) mais jamais publié. <strong>Le backend</strong> porte tout, avec deux failles critiques, un chiffrement promis qui n'existe pas, et un moteur de traduction qui rend du français quand on lui demande du tamoul.
+    </div>
+    <div class="horizons">
+      <div class="hz hz-1"><div class="k"><span class="num">1</span><span class="when">sept. → oct. 2026</span></div><h3>Fiable et honnête</h3><p>L'app ne ment plus (E2E, langues, RGPD), ne fuit plus (sessions, débit, fichiers), et ses trois canaux de base marchent : temps réel web, appels, publication.</p></div>
+      <div class="hz hz-2"><div class="k"><span class="num">2</span><span class="when">nov. 2026 → janv. 2027</span></div><h3>Trois plateformes, une expérience</h3><p>Android en beta Play, composer v2 partout, iPad, web en 7 langues et partageable, traduction rapide et mesurée.</p></div>
+      <div class="hz hz-3"><div class="k"><span class="num">3</span><span class="when">févr. → avr. 2027</span></div><h3>Une croissance qui se mesure</h3><p>Activation et rétention instrumentées, onboarding court, parrainage attribué, boucles virales fermées, campagne fandom.</p></div>
+      <div class="hz hz-4"><div class="k"><span class="num">4</span><span class="when">mai → août 2027</span></div><h3>Confiance vérifiable et premier revenu</h3><p>E2EE réel (libsignal), Meeshy+ freemium, modération automatique, appels de groupe traduits, plateforme prête pour 100 k.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="ecarts">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Les quatre écarts entre promis et vrai</h2>
+      <p>Chaque écart est prouvé dans le code. Ce sont eux qui fixent l'ordre de la roadmap : on ne fait pas de campagne sur une promesse fausse.</p>
+    </div>
+    <div class="gaps">
+      <div class="gap">
+        <h3><span class="chip critical">Critique</span> Sécurité des sessions et du débit</h3>
+        <div class="promise"><span class="lab">Promis</span><span>Déconnexion, réinitialisation et bannissement coupent l'accès.</span><span class="lab">Vrai</span><span>Le JWT est irrévocable 24 h et <code>/auth/refresh</code> échange un JWT expiré sans borne ni session. Derrière Traefik, sans <code>trustProxy</code>, toute la plateforme partage un seul seau de 300 requêtes/min — 3 inscriptions par 5 minutes pour tout le monde. Secrets de production dans la doc versionnée ; IDOR sur les pièces jointes.</span></div>
+      </div>
+      <div class="gap">
+        <h3><span class="chip critical">Critique</span> Confidentialité et conformité</h3>
+        <div class="promise"><span class="lab">Promis</span><span>« Chiffrement de bout en bout — personne, même pas nous, ne peut lire vos messages. » Suppression définitive après 30 jours.</span><span class="lab">Vrai</span><span>iOS n'a jamais chiffré un message ; le serveur stocke des clés privées et accepte du clair en mode e2ee ; MongoDB de prod tourne sans authentification. Effacement = <code>isActive:false</code> après 90 jours, sans purge. Aucun âge minimum pour une cible 16-25.</span></div>
+      </div>
+      <div class="gap">
+        <h3><span class="chip critical">Critique</span> Langues et latence</h3>
+        <div class="promise"><span class="lab">Promis</span><span>« 80+ langues », latence « &lt; 200 ms ».</span><span class="lab">Vrai</span><span>63 langues ont un modèle ; 25 proposées aux clients (dont 7 langues africaines mises en avant) retombent sur <code>fra_Latn</code> en silence. Latence mesurée en prod ~30 s / 500 caractères par langue, traduction multi-langues séquentielle, GPU jamais utilisé, aucune mesure de qualité.</span></div>
+      </div>
+      <div class="gap">
+        <h3><span class="chip high">Haute</span> Croissance sans boucle fermée</h3>
+        <div class="promise"><span class="lab">Promis</span><span>Parrainage, invitations, liens tracés, partage.</span><span class="lab">Vrai</span><span>Le web attribue, iOS n'appelle jamais <code>/affiliate/register</code> ; l'e-mail d'invitation pointe vers <code>/download</code> qui n'existe pas ; un post partagé n'a pas d'aperçu ; aucun feed public ; zéro capture App Store ; zéro monétisation.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="axes">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Le 360°, axe par axe</h2>
+      <p>Cinq rapports d'agents (traduction, voix, croissance, sécurité, chiffrement &amp; conformité) et 24 mesures directes. Les zones non mesurées sont dites.</p>
+    </div>
+    <div class="axes">
+      <div class="axis"><header><h3>Produit et plateformes</h3><span class="chip high">Haute</span></header><ul>
+        <li>Temps réel web cassé pour l'utilisateur — chaîne « message qui n'arrive pas » et consolidation ouvertes <span class="ev">(plan 2026-08-25, tâches 3-7)</span></li>
+        <li>Android 0.1.0, aucun fastlane/Play, 0 test instrumenté ; ne lit ni n'émet les scènes v3 <span class="ev">(<code>build.gradle.kts:17</code>)</span></li>
+        <li>Composer v2 pas encore le chemin de publication du fil ; publication depuis une pièce jointe non protégée côté serveur <span class="ev">(état des lieux § P1-P2)</span></li>
+        <li>Appels : trois paires non validées bout en bout ; « À proximité » : 1 tâche sur 11 livrée ; iPad verrouillé en portrait sans le vouloir</li>
+        <li>Un agent LLM de 16 k lignes et 36 routes d'administration, désactivé en produit — à décider</li>
+      </ul></div>
+      <div class="axis"><header><h3>Prisme, traduction, voix</h3><span class="chip critical">Critique</span></header><ul>
+        <li>Quatre listes de langues divergentes (63 / 40 / 77 / 83) ; 25 langues fantômes rendent du français <span class="ev">(<code>translator_engine.py:402</code>)</span></li>
+        <li>Multi-langues séquentiel ; GPU comparé à <code>'cuda'</code> alors que le device vaut <code>"cuda:0"</code> ; scaling <code>pass</code> <span class="ev">(<code>worker_pool.py:196</code>)</span></li>
+        <li>Aucune évaluation de qualité ; textes de repli <code>[ML-Batch-Error]</code> servis comme traductions et mis en cache</li>
+        <li>Whisper large-v3 int8 CPU + diarisation par défaut ; TTS pour toutes les langues cibles, politique on-demand inopérante <span class="ev">(coût)</span></li>
+        <li class="plus">Clonage : 23 langues Chatterbox, 18 langues africaines MMS, lingala VITS ; consentement voix bien porté par le gateway</li>
+      </ul></div>
+      <div class="axis"><header><h3>Sécurité gateway</h3><span class="chip critical">Critique</span></header><ul>
+        <li>JWT irrévocable + refresh sans borne <span class="ev">(<code>auth/magic-link.ts:157</code>)</span> ; rate limiting sur l'IP du proxy <span class="ev">(<code>rate-limiter.ts:61</code>)</span></li>
+        <li>Secrets réels dans <code>apps/docs/PASSWORD_RESET_GUIDE.md</code> ; <code>JWT_SECRET</code> par défaut accepté ; seeds <code>bigboss123</code></li>
+        <li>IDOR par <code>attachmentId</code> (transcriptions, traductions, coût Whisper) ; socket jamais re-vérifié ; magic link contourne le 2FA ; 2FA absent d'iOS</li>
+        <li>Fichiers publics à vie, SVG inline ; MIME déclaré, EXIF/GPS conservés ; web sans en-têtes de sécurité, jetons en <code>localStorage</code></li>
+        <li class="plus">Garde <code>route-auth-coverage</code> sans trou ; TURN HMAC éphémère ; appartenance vérifiée sur conversations/messages/posts</li>
+      </ul></div>
+      <div class="axis"><header><h3>Chiffrement et conformité</h3><span class="chip critical">Critique</span></header><ul>
+        <li>Politique : « personne, même pas nous » ; statut interne : « NOT fully functional » ; 7 phases Signal ⏳</li>
+        <li>iOS envoie <code>isEncrypted:false</code> aux 3 sites ; serveur stocke les clés privées ; Mongo prod <code>--noauth</code>, UIs Mongo/Redis routées</li>
+        <li>RGPD : 30 j promis, 90 j codé, soft-delete seul ; export partiel ; CGU acceptées mais jamais persistées</li>
+        <li>Aucun âge minimum ; pas de filtre CSAM/NSFW ; pas de retour au signalant (DSA) ; mentions légales absentes ; « hébergé en France » vs scripts <code>nyc1</code></li>
+      </ul></div>
+      <div class="axis"><header><h3>Croissance et acquisition</h3><span class="chip high">Haute</span></header><ul>
+        <li>Inscription en 8 étapes ; contacts hors onboarding ; aucune suggestion d'amis ; <code>profileCompletionRate</code> jamais calculé</li>
+        <li>Attribution iOS absente ; <code>/download</code> 404 ; pas de code de parrainage ; gamification déclarée sans producteur</li>
+        <li>Aucun OG sur <code>/post/*</code> ; aucun feed public ; ni sitemap ni robots ; <code>next-intl</code> désactivé ; web 4 langues vs iOS 7</li>
+        <li>Captures App Store : 0 fichier ; aucune fiche Play ; <code>apps/docs</code> = 123 Markdown non publiés</li>
+        <li class="plus">Liens tracés à 30 dimensions, liens de conversation anonymes, Universal/App Links, watermark d'export story</li>
+      </ul></div>
+      <div class="axis"><header><h3>Monétisation et coûts</h3><span class="chip mid">À construire</span></header><ul>
+        <li>Aucun code de paiement (StoreKit, Play Billing, Stripe) ; aucun plan/quota/crédit dans les 85 modèles Prisma</li>
+        <li>Coûts variables : traduction CPU, TTS pour toutes les langues, Whisper + diarisation, médias sur volume local, TURN</li>
+        <li>Points d'accroche naturels d'un freemium : langues de voix clonée, minutes TTS, taille des communautés, export sans watermark, appels de groupe</li>
+      </ul></div>
+      <div class="axis"><header><h3>Qualité, CI, dette</h3><span class="chip high">Haute</span></header><ul>
+        <li>Tests : gateway 907 · web 795 · iOS 702 · SDK 887 · Android 591 fichiers — mais Playwright 0, jest-axe 5, ML entièrement mocké</li>
+        <li>300 derniers runs : CI 79 % de succès (17 annulés), iOS 75 % à 42 min, SDK 79 %, fastlane 0/1</li>
+        <li>5 060 commits / 30 j ; <code>any</code> : 1 706 sites ; <code>try?</code> : 905 ; couleurs en dur iOS : 583 ; TODO iOS : 1 854</li>
+        <li>Gateway monoprocess sans adapter Redis ; aucun stockage objet ; Sentry référencé, métriques dans 4 fichiers, <code>logError</code> muet sur 166 sites</li>
+        <li class="plus">959 branches non mergées auditées au contenu le 26 août : 16 commits vivants récupérés et poussés, ≈ 750 distantes + 46 locales supprimables (listes prêtes), 179 vieilles sessions <code>claude/*</code> restent à instruire <span class="ev">(<a href="https://claude.ai/code/artifact/219c5d51-7490-4d70-bb7b-a89edc1ef43c">Reliquats de branches</a>)</span></li>
+      </ul></div>
+      <div class="axis"><header><h3>UX, accessibilité, i18n</h3><span class="chip mid">Moyenne</span></header><ul>
+        <li>UI : iOS 7 langues · web 4 · Android 4 — l'arabe (RTL) n'existe que sur iOS ; la fiche promet 7</li>
+        <li>117 fichiers de tests iOS touchent VoiceOver ; Dynamic Type testé ; contraste du bouton d'envoi &lt; 3:1 sur 11/39 accents</li>
+        <li>La première traduction « vécue » — le moment de vérité — n'est pas instrumentée ; la position est demandée sans explication</li>
+        <li class="note">Non mesuré : audit écran par écran, performance perçue web, restauration de sauvegarde jouée</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>La roadmap</h2>
+      <p>Un jalon = un milestone GitHub, nommé par le résultat. « existant » = créé le matin du 26 août depuis <code>tasks/</code> ; les autres ont été créés l'après-midi avec leur échéance. Chaque ligne porte son indicateur de sortie ; les pastilles vertes disent ce qui est déjà livré.</p>
+    </div>
+
+    <div class="hz-block hz-1">
+      <div class="hz-title"><span class="num">1</span><h3>Fiable et honnête <span class="mono note">· septembre → fin octobre 2026</span></h3></div>
+      <p class="goal">L'application ne ment plus, ne fuit plus, et ses trois canaux de base fonctionnent. Aucune acquisition avant : chaque utilisateur gagné aujourd'hui découvrirait les écarts ci-dessus.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Jalon</th><th>Contenu</th><th>Indicateur de sortie</th></tr></thead>
+        <tbody>
+          <tr><td class="jalon">iOS 1.0.6 — sortie App Store <span class="chip exist">existant</span></td><td>Soumission, captures 7 locales, App Preview, chaîne fastlane CI, collision Xcode Cloud</td><td class="ind">« Ready for Sale » ; crash-free ≥ 99,5 %</td></tr>
+          <tr><td class="jalon">Sessions et fichiers sûrs</td><td>JWT révocable (session ou <code>jti</code> vérifiée par requête, refresh borné) ; <code>trustProxy</code> + limiteur par utilisateur + middleware Traefik ; rotation des secrets fuités, refus de boot sans secret fort, seeds via env ; IDOR pièces jointes ; socket re-vérifié ; magic link → 2FA ; URLs de fichiers signées ; SVG en <code>attachment</code> ; sniff MIME + strip EXIF</td><td class="ind">0 critique/haute ouvert ; garde d'autorisation étendue aux IDOR</td></tr>
+          <tr><td class="jalon">Dire vrai : promesses alignées sur le code</td><td>Retirer « bout en bout » de la politique, de la fiche et des bandeaux ; effacement réel (purge + anonymisation), 30 j = 30 j ; export complet ; âge minimum 15 ans + clause CGU + acceptation persistée ; mentions légales, hébergeur réel, sous-traitants ; défaut géo <code>NEIGHBORHOOD</code> ; claim langues = nombre réel</td><td class="ind">Pages légales publiées ; test de suppression prouvant la purge ; inscription refusée &lt; 15 ans</td></tr>
+          <tr><td class="jalon">Base de données et secrets verrouillés</td><td>Mongo avec authentification ; UIs Mongo/Redis hors routage public ; <code>turnserver.conf</code> versionné ; restauration de sauvegarde jouée</td><td class="ind"><code>--noauth</code> absent ; une restauration prouvée</td></tr>
+          <tr><td class="jalon">Temps réel web fiable</td><td>Plan du 25/08, tâches 3-7 : message arrivant jamais perdu, lecture échouée ≠ « zéro message », une seule source, gardes</td><td class="ind">Playwright : envoyer / recevoir / recharger &lt; 1 s p95</td></tr>
+          <tr><td class="jalon">Appels audio/vidéo fonctionnels sur les trois paires <span class="chip exist">existant</span></td><td>Phases 1-4 du tracker : paires, cycle de vie, résilience, instrumentation retirée</td><td class="ind">3 paires validées sur device ; 0 session zombie</td></tr>
+          <tr><td class="jalon">Composer v2 — publication depuis une pièce jointe sécurisée <span class="chip ok">2 / 3 livrées</span></td><td>Garde serveur média protégé et visibilité par type livrées le 26 août (<code>60a7a6e61c</code>, test de route HTTP) ; reste la diffusion complète — notifications aux amis et hashtags (#3542)</td><td class="ind">Test de route HTTP vert ✓ ; #3542 fermée</td></tr>
+          <tr><td class="jalon">Travail existant à faire atterrir <span class="chip ok">clos 6 / 6</span> · CI iOS plus rapide <span class="chip exist">existant</span></td><td>Les 6 items ont atterri sur <code>main</code> le 26 août (<code>f0ad7dbe8a</code>, beta, CI 7/7 verte), avec 10 autres reliquats récupérés de branches jamais mergées — détail dans <a href="https://claude.ai/code/artifact/219c5d51-7490-4d70-bb7b-a89edc1ef43c">Reliquats de branches Meeshy</a>. CI iOS : cache SPM, tests parallèles, runner ; s'y ajoutent le nettoyage de ≈ 750 branches livrées (#3728) et les 179 vieilles sessions à instruire (#3729)</td><td class="ind">CI iOS &lt; 20 min ; succès CI &gt; 90 % ; branches non mergées &lt; 200</td></tr>
+          <tr><td class="jalon">Voir ce qui se passe en prod</td><td><code>logError</code> qui écrit (166 sites) ; Sentry vérifié par un événement reçu ; Crashlytics ; métriques translator (latence par étape, hit cache, files) ; alerting minimal</td><td class="ind">8 métriques sur un tableau ; une alerte testée</td></tr>
+        </tbody></table></div>
+    </div>
+
+    <div class="hz-block hz-2">
+      <div class="hz-title"><span class="num">2</span><h3>Trois plateformes, une expérience <span class="mono note">· novembre 2026 → fin janvier 2027</span></h3></div>
+      <p class="goal">La même app sur iOS, Android et web ; le Prisme tient ses promesses ; le composer v2 est le seul chemin de publication.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Jalon</th><th>Contenu</th><th>Indicateur de sortie</th></tr></thead>
+        <tbody>
+          <tr><td class="jalon">Android en beta fermée sur le Play Store</td><td>Scènes v3 lues et émises <span class="chip exist">existant</span> ; tests instrumentés du cœur ; décodeurs tolérants sur tout le fil ; fastlane <code>supply</code> + fiche Play 7 langues ; Crashlytics ; Internal → Closed testing</td><td class="ind">50 testeurs ; crash-free ≥ 99 % ; parité « cœur messagerie »</td></tr>
+          <tr><td class="jalon">Composer v2 — outils, langue déclarée et bascule du fil, puis finitions <span class="chip exist">existants</span></td><td>12 tâches + scène 9:16 + verrou de double publication</td><td class="ind"><code>FeedComposerSheet</code> retiré ; planche P0 à 100 %</td></tr>
+          <tr><td class="jalon">iPad — parité complète <span class="chip exist">existant</span></td><td>Hôte d'overlay fenêtre → orientation → surfaces → affordances</td><td class="ind">Rotation et overlays corrects</td></tr>
+          <tr><td class="jalon">Traduction : toutes les langues promises, plus vite, mesurée</td><td>Une seule liste de langues (shared = source) ; les 25 fantômes mappées ou retirées ; erreur explicite au lieu de <code>fra_Latn</code> ; GPU/MPS réels ; batch multi-langues ; jeu doré + COMET en CI ; textes de repli jamais servis comme traductions</td><td class="ind">p95 &lt; 3 s / langue (500 car.) ; 0 langue fantôme ; COMET suivi</td></tr>
+          <tr><td class="jalon">Voix : coût maîtrisé, qualité visible</td><td>TTS on-demand réel ; Whisper distil ou GPU ; diarisation à la demande ; plafond de durée audio ; langues avec/sans voix affichées</td><td class="ind">Coût TTS par message ÷ 3 ; latence vocale p95 &lt; 8 s</td></tr>
+          <tr><td class="jalon">Web en 7 langues, indexable et partageable</td><td>de, it, ar (RTL) ; <code>next-intl</code> + <code>hreflang</code> ; sitemap/robots ; OG dynamique sur les posts ; pages publiques post et <code>/@username</code> ; <code>/download</code> ; en-têtes de sécurité importés</td><td class="ind">7 locales ; Lighthouse SEO &gt; 90 ; aperçu riche sur WhatsApp/X</td></tr>
+          <tr><td class="jalon">Une règle, trois clients : les miroirs gardés</td><td>Gardes de parité présence / Prisme (4 familles) / aperçu / accent — golden partagé TS/Swift/Kotlin ; <code>any</code> −50 %, <code>try?</code> réduits</td><td class="ind">4 gardes vertes ; <code>any</code> &lt; 850</td></tr>
+        </tbody></table></div>
+    </div>
+
+    <div class="hz-block hz-3">
+      <div class="hz-title"><span class="num">3</span><h3>Une croissance qui se mesure <span class="mono note">· février → fin avril 2027</span></h3></div>
+      <p class="goal">On sait ce que font les utilisateurs, on raccourcit le chemin vers le moment de vérité — un message compris dans une autre langue — et chaque boucle virale est fermée et attribuée.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Jalon</th><th>Contenu</th><th>Indicateur de sortie</th></tr></thead>
+        <tbody>
+          <tr><td class="jalon">Mesure produit : activation et rétention</td><td>Événements unifiés (Firebase Analytics déjà sur iOS → web/Android, ou PostHog) : inscription, 1re conversation, 1re traduction reçue, 1er vocal traduit, invitation ; D1/D7/D30 ; funnel d'onboarding</td><td class="ind">Tableau hebdo ; définition d'« activé » adoptée</td></tr>
+          <tr><td class="jalon">Onboarding court et amis retrouvés</td><td>3 étapes ; nom/photo différés ; Sign in with Apple/Google ; contacts dans le flux ; suggestions d'amis ; <code>profileCompletionRate</code> en direct ; permission position expliquée</td><td class="ind">Inscription → 1re conversation &lt; 3 min ; activation +50 %</td></tr>
+          <tr><td class="jalon">Parrainage attribué et boucles virales</td><td>Attribution iOS/Android ; code de parrainage ; <code>/download</code> intelligent ; invitation attribuée ; QR de profil ; partage Instagram/TikTok/WhatsApp avec watermark ; export watermarké serveur <span class="chip exist">existant</span></td><td class="ind">K-factor mesuré ; 30 % d'inscriptions attribuées</td></tr>
+          <tr><td class="jalon">Réengagement qui tient</td><td>Relances J3/J7/J30 dans la langue du lecteur ; streaks/badges avec un vrai producteur (ou retrait des 4 types) ; digest enrichi</td><td class="ind">D7 +5 pts</td></tr>
+          <tr><td class="jalon">Lancement : campagne fandom et captures</td><td>Captures 7 locales + App Preview ; landing alignée ; campagne TikTok/UGC K-pop/anime ; <code>apps/docs</code> publié ou supprimé</td><td class="ind">1 000 installs organiques / mois</td></tr>
+          <tr><td class="jalon">« À proximité » mature</td><td>Plan de maturation tâches 2-11 ; Discover staff → Discover public par communautés géolocalisées</td><td class="ind">0 crash ; 5 états tenus</td></tr>
+        </tbody></table></div>
+    </div>
+
+    <div class="hz-block hz-4">
+      <div class="hz-title"><span class="num">4</span><h3>Confiance vérifiable et premier revenu <span class="mono note">· mai → fin août 2027</span></h3></div>
+      <p class="goal">Tenir enfin la promesse de confidentialité avec une technologie éprouvée, ouvrir un revenu qui suit les coûts variables, protéger la plateforme à l'échelle.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Jalon</th><th>Contenu</th><th>Indicateur de sortie</th></tr></thead>
+        <tbody>
+          <tr><td class="jalon">Chiffrement de bout en bout vérifiable (libsignal)</td><td>Plan état de l'art phases 0-4 : assainissement, gateway relais opaque, iOS libsignal, Android libsignal-android, web appareil lié. Arbitrage préalable : Prisme on-device ou traduction coupée en E2EE</td><td class="ind">Safety numbers ; audit externe ; politique redevenue vraie</td></tr>
+          <tr><td class="jalon">Meeshy+ : premier revenu</td><td>Freemium : voix clonée dans toutes les langues, minutes TTS, grandes communautés, export sans watermark, appels de groupe ; StoreKit 2 + Play Billing + Stripe web ; quotas gateway</td><td class="ind">2 % de conversion ; revenu ≥ coût variable des payants</td></tr>
+          <tr><td class="jalon">Modération automatique et conformité DSA</td><td>Hash-matching CSAM ; NSFW sur médias publics ; toxicité sur le feed public ; retour au signalant ; bannissement durable + journal d'audit ; <code>abuse@</code></td><td class="ind">Traitement &lt; 24 h ; 100 % des signalements notifiés</td></tr>
+          <tr><td class="jalon">Appels de groupe et appels traduits</td><td>Groupe iOS/web/Android ; sous-titres traduits en direct (briques existantes) ; bannière « Reprendre l'appel »</td><td class="ind">Appel à 4 stable 10 min ; sous-titres &lt; 2 s</td></tr>
+          <tr><td class="jalon">Plateforme prête pour 100 k</td><td>Adapter Socket.IO Redis + sticky sessions (gateway monoprocess aujourd'hui) ; stockage objet ; translator horizontal ; test de charge mensuel</td><td class="ind">10 k connexions simultanées ; p95 message &lt; 500 ms</td></tr>
+          <tr><td class="jalon">Agent ✦ : décision</td><td>Garder (assistant multilingue, résumé vivant) ou retirer 16 k lignes et 36 routes</td><td class="ind">ADR écrite</td></tr>
+        </tbody></table></div>
+    </div>
+  </div>
+</section>
+
+<section id="transversal">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Actions transversales et refus</h2>
+      <p>Ce qui vaut dès maintenant, sans jalon dédié — et ce qu'on refuse de faire, pour que la roadmap reste tenable.</p>
+    </div>
+    <div class="cols2">
+      <div class="list"><h3 style="margin-bottom:10px">Dès maintenant</h3><ol>
+        <li><strong>Définition de terminé</strong> : parité 3 clients énumérée (jamais « jumelles »), test de route ou d'écran, mesure avant/après, claim marketing ≤ code.</li>
+        <li><strong>Train de release</strong> : iOS toutes les 2 semaines, web à chaque merge vert, Android hebdo en Internal testing dès l'horizon 2.</li>
+        <li><strong>Budget de dette 20 %</strong> par cycle : <code>any</code>, <code>try?</code>, couleurs en dur, code mort (gRPC translator, <code>admin/roles.ts</code>, dossier DMA inatteignable).</li>
+        <li><strong>CI bloquante</strong> : Trivy <code>exit-code</code>, CodeQL, gitleaks, <code>bun audit</code> ; revue de sécurité trimestrielle.</li>
+        <li><strong>Registre des traitements et DPO</strong> — obligation dès la collecte de données vocales.</li>
+        <li><strong>Une source de vérité exécutable par règle miroir</strong> (présence, Prisme, accent).</li>
+      </ol></div>
+      <div class="list"><h3 style="margin-bottom:10px">Ce qu'on ne fera pas</h3><ul>
+        <li><strong>Pas de nouvelle surface produit</strong> avant la fin de l'horizon 2 : la surface actuelle dépasse déjà la capacité de la tenir cohérente sur trois clients.</li>
+        <li><strong>Pas de campagne payante</strong> avant la mesure produit : sans activation ni rétention mesurées, l'acquisition achète des désinstallations.</li>
+        <li><strong>Pas d'E2EE maison</strong> : libsignal ou rien.</li>
+        <li><strong>Pas de « 200 langues »</strong> nulle part tant que la liste unique n'existe pas.</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<section id="arbitrages">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Arbitrages à trancher par le porteur</h2>
+      <p>Six décisions qui changent la roadmap. Elles sont posées maintenant parce que leur réponse oriente déjà l'horizon 1.</p>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Décision</th><th>Options</th><th>Ce que ça change</th></tr></thead>
+      <tbody>
+        <tr><td class="jalon">Prisme × E2EE</td><td>(a) traduction on-device dans les conversations chiffrées · (b) traduction coupée en E2EE, assumée publiquement · (c) E2EE réservé aux DM sans traduction</td><td class="ind">Horizon 4, et le discours marketing dès l'horizon 1</td></tr>
+        <tr><td class="jalon">Âge minimum</td><td>15 ans (France) · 13 ans (COPPA) · 16 ans</td><td class="ind">Inscription et réglages par défaut, horizon 1</td></tr>
+        <tr><td class="jalon">Langues fantômes</td><td>Mapper (NLLB couvre ~20 des 25) · retirer des clients</td><td class="ind">Horizon 2 ; claim « 80+ »</td></tr>
+        <tr><td class="jalon">Runner CI auto-hébergé</td><td>Machine dédiée · runners GitHub</td><td class="ind">Horizon 1 ; sécurité d'un dépôt public</td></tr>
+        <tr><td class="jalon">Agent LLM</td><td>Garder · retirer</td><td class="ind">Horizon 4</td></tr>
+        <tr><td class="jalon">Modèle de revenu</td><td>Freemium Meeshy+ · B2B équipes/communautés · les deux</td><td class="ind">Horizon 4, mais oriente l'instrumentation de l'horizon 3</td></tr>
+      </tbody></table></div>
+  </div>
+</section>
+
+<section id="github">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Branchement sur GitHub</h2>
+      <p>Le pilotage vit dans <code>isopen-io/meeshy</code> : milestones + projet « Meeshy — pilotage ». La roadmap s'y matérialise en jalons nommés par le résultat, avec une échéance par horizon.</p>
+    </div>
+    <div class="cols2">
+      <div class="list"><h3 style="margin-bottom:10px">En place (26 août, soir)</h3><ul>
+        <li>33 milestones : les 11 du matin et les 22 jalons de cette roadmap, une échéance par horizon (31 oct. 2026 · 31 janv. · 30 avr. · 31 août 2027 — normalisées le soir)</li>
+        <li>215 issues : 86 sourcées sur <code>tasks/</code> et la planche P0, 108 issues de la roadmap, 20 issues de l'audit des branches (#3728–#3747) — chacune avec sa preuve et son critère de fin</li>
+        <li>Projet Projects v2 avec Statut, Priorité et Horizon ; fermer une issue la passe seule en « Done »</li>
+      </ul></div>
+      <div class="list"><h3 style="margin-bottom:10px">Mouvements de l'après-midi</h3><ul>
+        <li>« Travail existant à faire atterrir » clos 6 / 6 ; « publication depuis une pièce jointe » 2 / 3 — #3540 et #3541 fermées, #3542 commentée pour son reste</li>
+        <li>5 issues de l'audit rangées dans les nouveaux jalons (Sessions et fichiers sûrs, « À proximité » mature, Une règle trois clients, Android beta) ; 1 doublon fermé (#3742 → #3644-#3646)</li>
+        <li>Reste dans le projet : une vue Roadmap groupée par échéance de milestone — les vues ne se créent pas par API</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">Sources : rapports d'agents (traduction texte, voix/TTS, croissance, sécurité gateway, chiffrement &amp; conformité), 24 mesures directes sur <code>main 65c61e469f</code>, <code>docs/marketing/app-store-fiche-2026-08.md</code>, planche P0 rév. 25, plans du 25/08. Document source : <code>docs/product/roadmap-produit-2026-08.md</code>. Mise à jour du 26 août après-midi : audit des worktrees et des 959 branches non mergées (<a href="https://claude.ai/code/artifact/219c5d51-7490-4d70-bb7b-a89edc1ef43c">Reliquats de branches Meeshy</a>), merge <code>f0ad7dbe8a</code> (beta), issues #3728–#3747.</div>
+</footer>
+</body>
+</html>
