@@ -14,6 +14,7 @@ import { validatePagination } from '../../utils/pagination';
 import { mayOrderByRawPresence, servedOnlineFirst, viewerFromRequest } from './presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
 
@@ -55,6 +56,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
                       id: { type: 'string' },
                       title: { type: 'string' },
                       type: { type: 'string', enum: ['direct', 'group'] },
+                      avatar: { type: 'string', nullable: true },
                       isActive: { type: 'boolean' },
                       lastMessage: {
                         type: 'object',
@@ -299,7 +301,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
           id: conv.id,
           title: displayTitle,
           type: conv.type,
-          avatar: conv.avatar ?? otherUser?.avatar ?? null,
+          avatar: resolveParticipantAvatar({ avatar: conv.avatar, user: otherUser }),
           isActive: activeConversations > 0,
           lastMessage: conv.messages && conv.messages.length > 0 ? {
             content: conv.messages[0].content,

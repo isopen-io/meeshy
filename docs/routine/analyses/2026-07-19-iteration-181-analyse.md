@@ -101,3 +101,219 @@ d'écriture, dans un seul fichier déjà couvert par tests.
   (`username ?? displayName ?? …`, sémantique « présence key ») : hors périmètre,
   à ne PAS uniformiser sans analyse dédiée.
 - F69 (`sanitizeFileName` overlong sans extension) : latent, 0 appelant.
+# Iteration 181 — `ReactionService.getMessageReactions` : fallback compte court-circuité (avatar/displayName du réacteur) → réacteurs enregistrés affichés « Anonymous »
+
+## Protocole (démarrage)
+`main` @ `612872b` (derniers merges : #2048 android/status StatusRepository,
+#2046 android/status mood-core, #2044 web/i18n normalize language codes — itér.
+180). Branche `claude/brave-archimedes-fopjm9` réinitialisée sur `origin/main`
+(l'itération 180 a été mergée). Ce cycle prend **181**.
+
+Environnement : Linux, aucune toolchain Swift/Xcode/Android → surface testable =
+TypeScript (gateway/shared/web). Reconnaissance menée par sous-agent Explore sur
+la famille de bugs « SSOT non branchée » (avatar/displayName résolus à la main
+au lieu des helpers `resolveParticipant*`, fuite chaîne-vide, invariants
+d'agrégat) que les itérations 177-180 ont uniformisée.
+
+## Current state
+`services/gateway/src/services/ReactionService.ts` → `getMessageReactions()`
+enrichit chaque réacteur agrégé (popup emoji, feuille « qui a réagi ») avec un
+`username` + `avatar`. La requête Prisma des participants (`:209-214`)
+sélectionnait `{ id, displayName, avatar, userId }` — elle porte le `userId`
+mais **ne joignait PAS le compte `user`**. L'enrichissement émettait ensuite :
+
+```ts
+username: participant?.displayName ?? 'Anonymous',
+avatar: participant?.avatar ?? null,
+```
+
+Or `Participant.displayName` / `Participant.avatar` sont des **overrides locaux
+par conversation**, `null` dans le cas nominal : un utilisateur enregistré
+s'appuie sur son compte (`User.displayName` / `User.avatar`). Le pendant correct
+est à un répertoire de là — `routes/conversations/messages.ts:1178-1179,
+1214-1215, 2320-2321, 2636-2637` joint `user` et délègue à
+`resolveParticipantDisplayName` / `resolveParticipantAvatar`
+(`packages/shared/utils/participant-helpers.ts`, SSOT #1925 / itér. 178-179).
+
+## Problems identified
+1. **Fallback compte court-circuité (SSOT non branchée).** Pour un réacteur
+   enregistré dont `Participant.displayName`/`avatar` local est `null` (cas
+   nominal), l'agrégat émettait `username: 'Anonymous'` + `avatar: null` au lieu
+   du nom/avatar du compte — alors que le **même** utilisateur apparaît
+   correctement nommé dans le fil de messages voisin. La donnée de repli n'était
+   même pas **chargée** (pas de jointure `user`).
+2. **Fuite chaîne-vide.** `?? 'Anonymous'` / `?? null` ne bascule que sur
+   `null`/`undefined` : un `displayName: ''` local émettait un nom vide, un
+   `avatar: ''` émettait `''` → `<img src="">` (rechargement parasite de la page
+   courante), exactement le défaut éliminé partout ailleurs par la
+   normalisation blank des helpers.
+3. **Divergence de surface.** Deux vues de la même donnée participant→compte
+   (fil de messages vs popup/feuille de réactions) affichaient deux identités
+   différentes pour le même réacteur.
+
+## Root cause
+`getMessageReactions` réimplémentait la résolution identité participant à la
+main (`?? 'Anonymous'` / `?? null`) sans joindre le compte lié, au lieu de
+déléguer à la source unique `resolveParticipant*` déjà utilisée pour la même
+famille de données dans les routes conversation/message. C'était le **dernier
+émetteur d'identité participant côté gateway** encore branché à la main —
+`getMessageStatusDetails` (itér. 178), les 7 sites `displayName` conversation
+(itér. 179) et `getMessageReadStatus` étaient déjà migrés.
+
+## Business / Technical impact
+- **UX** : dans une conversation de groupe, la liste « a réagi 👍 » affichait
+  « Anonymous » (et aucun avatar) pour des membres pourtant enregistrés et
+  nommés ailleurs — perte de confiance, impossibilité de reconnaître qui a
+  réagi. Chemins chauds : REST `GET /reactions` (`reactions.ts:518-523`) et sync
+  socket `reaction:*` (`socketio/handlers/ReactionHandler.ts:343`).
+- **Technique** : `<img src="">` parasite sur les avatars blancs ; incohérence
+  d'identité entre deux surfaces API de la même entité (le gateway est la SSOT
+  consommée par iOS/Android/web).
+
+## Risk assessment
+Très faible. Type de retour inchangé (`ReactionAggregation`). Les helpers
+`resolveParticipant*` sont idempotents et déjà en production sur les chemins de
+messages/read-status ; pour un participant sans compte lié (anonyme) le résultat
+est identique (`resolveParticipantDisplayName` → `null` → `'Anonymous'`,
+`resolveParticipantAvatar` → `null`). La jointure `user` ajoute deux scalaires à
+un `findMany` déjà borné par les `participantIds` de la page. Les 78 tests
+`ReactionService` pré-existants + 508 tests des 15 suites réaction restent verts.
+
+## Correctif (TDD)
+- **RED** : +5 tests (`ReactionService.test.ts`, describe `getMessageReactions`)
+  — fallback compte quand local `null` ; priorité local > compte ; blank local
+  traité comme absent (jamais `''`) ; `'Anonymous'` / `null` quand ni participant
+  ni compte ; assertion que le `select` joint `user`. 3/5 échouent sur le code
+  d'origine (fallback, blank, jointure), 2 sont des gardes.
+- **GREEN** :
+  1. Import `resolveParticipantAvatar` / `resolveParticipantDisplayName` depuis
+     `@meeshy/shared/utils/participant-helpers`.
+  2. `select` participant enrichi de `user: { select: { displayName: true,
+     avatar: true } }` — la donnée de repli est désormais chargée.
+  3. Enrichissement : `username: resolveParticipantDisplayName(participant) ??
+     'Anonymous'` ; `avatar: resolveParticipantAvatar(participant)`.
+
+## Expected benefits
+- Parité stricte d'identité réacteur ↔ identité message pour tous les réacteurs
+  enregistrés.
+- Fin des `'Anonymous'` fantômes et des `<img src="">` sur les popups/feuilles
+  de réaction.
+- Un émetteur d'identité participant de moins réécrit à la main dans la gateway.
+
+## Implementation complexity
+Faible — jointure `user` + délégation à deux helpers existants sur un seul site.
+
+## Validation criteria
+- `ReactionService.test.ts` **83/83** verts (5 nouveaux).
+- Suites consommatrices `ReactionHandler|reactions` **508/508** verts (15 suites).
+- ts-jest type-check du service OK (aucune nouvelle erreur ; la baseline TS2347
+  ligne 407 dépend de `prisma generate`, hors périmètre).
+
+## Backlog (candidats consignés pour une itération future)
+- **CommentReactionService.ts:247-248** (`user?.displayName ?? 'Anonymous'` /
+  `avatar ?? null`) : niveau compte seul (pas d'override local), donc pas de
+  fallback manquant — mais fuite chaîne-vide `''` restante. Aucun fichier de
+  test co-localisé → itération dédiée (RED d'abord).
+- **routes/conversations/stats.ts:77-78** et **participants.ts:541** : mêmes
+  fuites chaîne-vide `''` (niveau compte seul). Impact moindre (panneau stats /
+  toast transitoire).
+- `MeeshySocketIOManager.ts:752` — ordre de résolution « présence key » distinct,
+  à NE PAS uniformiser sans analyse dédiée.
+# Iteration 181 — `StatusService.resetMetrics()` sous-évalue `cacheSize` (omet `onlineEnsureCache`)
+
+## Protocole (démarrage)
+`main` @ `4881f06` (derniers merges : #2061 android/status L1 cache, #2058
+Republish action, #2055 status composer…). Branche `claude/brave-archimedes-6l1efc`
+réinitialisée sur `origin/main`. Ce cycle prend **181**.
+
+Environnement : Linux, aucune toolchain Swift/Xcode/Android → surface testable =
+TypeScript (web/shared/gateway). Les dépendances gateway ont été installées
+(`bun install`), le client Prisma généré et `@meeshy/shared` buildé pour
+reproduire la parité CI locale (jest 30 sous Node 22).
+
+## Current state
+`services/gateway/src/services/StatusService.ts` maintient trois caches de
+throttling en mémoire : `activityCache`, `connectionCache` et `onlineEnsureCache`
+(ce dernier ajouté plus tard pour throttler `ensureUserOnline` via REST). La
+métrique d'observabilité `metrics.cacheSize` (exposée par `getMetrics()` et
+consommée par la route `GET /maintenance` → `maintenance.ts:178`) doit refléter la
+taille cumulée **des trois** caches.
+
+Six sites recalculent `cacheSize` à l'identique après une mutation de cache :
+```ts
+this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+```
+Mais `resetMetrics()` (ligne 502) réécrivait la somme **à la main** en oubliant le
+troisième cache :
+```ts
+cacheSize: this.activityCache.size + this.connectionCache.size,  // onlineEnsureCache manquant
+```
+
+## Problems identified
+1. **`cacheSize` sous-évaluée après `resetMetrics()`.** Immédiatement après un
+   reset des compteurs (déclenché par `POST /maintenance/reset-metrics` →
+   `maintenance.ts:216`), `metrics.cacheSize` omet `onlineEnsureCache.size`. Un
+   opérateur qui reset puis lit les métriques voit une taille de cache fausse
+   (sous-estimée du nombre d'utilisateurs actuellement throttlés sur
+   `ensureUserOnline`). `resetMetrics` **ne vide pas** les caches — il est donc
+   censé conserver la taille *live* réelle, ce que la ligne fautive brisait.
+2. **Duplication de l'expression (7 copies) = divergence par construction.** La
+   même somme était réécrite littéralement à 7 endroits. Le bug est exactement la
+   conséquence de cette duplication : un seul site (`resetMetrics`) a dérivé
+   quand `onlineEnsureCache` fut ajouté aux six autres.
+
+## Root cause
+`onlineEnsureCache` a été introduit après coup et les six sites d'assignation ont
+été mis à jour pour l'inclure, mais `resetMetrics` — qui recopiait l'expression à
+la main plutôt que de la factoriser — a été oublié. Aucune source unique du calcul
+n'existait pour empêcher cette dérive.
+
+## Business / Technical impact
+- **Observabilité** : métrique de capacité mémoire faussée après reset → un
+  monitoring/alerting basé sur `cacheSize` (fuite mémoire des caches de throttle)
+  peut manquer une croissance anormale de `onlineEnsureCache`. Impact limité aux
+  outils d'ops (pas d'impact fonctionnel utilisateur), mais c'est précisément le
+  genre de dette silencieuse que la mission vise à éliminer.
+- **Maintenabilité** : 7 copies d'une même expression → chaque futur cache ajouté
+  risque de reproduire l'oubli.
+
+## Risk assessment
+Très faible. Refactor purement interne : extraction d'une méthode privée
+`computeCacheSize()` renvoyant la somme des trois caches, appelée par les 7 sites.
+Comportement inchangé pour les six sites déjà corrects (résultat identique) ;
+`resetMetrics` est ramené à la valeur correcte. Aucune signature publique touchée.
+
+## Proposed improvements / Correctif (TDD)
+- **RED** : +1 test (`unit/services/StatusService.test.ts` → `resetMetrics`) —
+  peuple les trois caches (`activityCache`, `connectionCache`, `onlineEnsureCache`)
+  puis appelle `resetMetrics()` et attend `cacheSize === 3`. Échoue sur le code
+  d'origine (`Received: 2`).
+- **GREEN + REFACTOR** :
+  1. Ajout de la méthode privée `computeCacheSize()` (source unique de la somme,
+     JSDoc documentant le bug historique évité).
+  2. Les 6 assignations `this.metrics.cacheSize = …` et la ligne `resetMetrics`
+     délèguent à `this.computeCacheSize()`.
+
+## Expected benefits
+- `cacheSize` exacte dans tous les états, y compris juste après `resetMetrics`.
+- Divergence future impossible : une seule expression à maintenir.
+
+## Implementation complexity
+Faible — extraction d'un helper privé + remplacement de 7 sites (dont 6
+strictement identiques via `replace_all`).
+
+## Validation criteria
+- `services/gateway` : `unit/services/StatusService.test.ts` **55/55** verts
+  (1 nouveau) ; `unit/routes/maintenance-routes.test.ts` **13/13** verts
+  (consommateur de `getMetrics`/`resetMetrics`). Total **68/68**.
+- RED prouvé : le nouveau test échoue (`Expected 3, Received 2`) sur la ligne
+  fautive restaurée, passe avec le fix.
+
+## Backlog (candidats consignés pour une itération future)
+- `MeeshySocketIOManager.ts:752` — ordre de résolution `username ?? displayName`
+  (sémantique « présence key ») : hors périmètre, à ne PAS uniformiser sans analyse
+  dédiée (reporté depuis itér. 179/180).
+- Résolution `sender.displayName || sender.username` dispersée dans ~15 composants
+  admin/web sans passer par `getUserDisplayName` (SSOT) : candidat SSOT large, à
+  planifier (les 4 définitions de `getUserDisplayName` sont déjà consolidées).
+- F69 (`sanitizeFileName` overlong sans extension) : latent, 0 appelant.

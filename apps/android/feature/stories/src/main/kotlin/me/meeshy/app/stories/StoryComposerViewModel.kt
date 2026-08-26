@@ -939,7 +939,7 @@ class StoryComposerViewModel @Inject constructor(
      * upload has no server URL to point the reader's background layer at, so it publishes
      * as a plain flat-media slide until the upload lands) — never a broken object. Carries
      * the slide's author-chosen [StorySlide.backgroundLoop] (honoured only for a video) and
-     * the [resolveBackgroundFraming] pan/zoom (honoured only for a framed image).
+     * the [resolveBackgroundFraming] pan/zoom (honoured for a framed image or video alike).
      */
     private fun resolveBackgroundMedia(slide: StorySlide, state: StoryComposerUiState): StoryBackgroundMedia? {
         val attachments = state.attachments
@@ -960,8 +960,8 @@ class StoryComposerViewModel @Inject constructor(
      * renders (and the pan/zoom gesture reframes) the slide's **first** resolved attachment;
      * if the author designated a *different* attachment as the background, that gesture never
      * framed it, so its framing stays [StoryBackgroundFraming.IDENTITY] rather than borrowing a
-     * pan the author applied to another image. [StoryBackgroundMedia.toMediaObject] further
-     * drops framing for a video, so a non-image background is unaffected here too.
+     * pan the author applied to another attachment. Applies to an image or a video background
+     * identically — each client's reader honours the framing on both.
      */
     private fun resolveBackgroundFraming(
         slide: StorySlide,

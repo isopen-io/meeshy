@@ -146,8 +146,22 @@ export interface GetUserReactionsResponse {
  * Vérifie si le string est un emoji unicode valide
  */
 export function isValidEmoji(emoji: string): boolean {
-  // Regex pour détecter les emojis unicode
-  const emojiRegex = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)$/u;
+  // Un emoji valide est UN seul grapheme emoji RGI (Recommended for General
+  // Interchange) : la définition exacte qu'un emoji-picker moderne présente.
+  // `\p{RGI_Emoji}` (propriété de STRING, donc drapeau `v` obligatoire, ES2024)
+  // matche en un seul jeton les séquences multi-code-points — modificateur de
+  // teint (`👍🏽`), ZWJ (`👩‍💻`), drapeaux régionaux (`🇫🇷`), keycaps (`#️⃣`) —
+  // que l'ancienne regex mono-code-point rejetait toutes, bloquant au portillon
+  // de réaction les emojis les plus courants. Elle refuse aussi enfin les faux
+  // positifs de l'ancienne branche `\p{Emoji}️` : un chiffre ou `*` suivi
+  // d'un sélecteur de variante (`'1️'`, `'*️'`) n'est PAS un emoji
+  // autonome — seule la séquence keycap complète (`'1️⃣'`) l'est.
+  //
+  // Construit via `new RegExp(..., 'v')` plutôt qu'un littéral : la cible tsc du
+  // package est ES2020 (TS1501 refuse le drapeau `v` en littéral), mais les
+  // SEULS consommateurs de cette fonction sont les services gateway
+  // (Node 22 + bun CI), dont le runtime supporte `v`. Aucun appel côté client.
+  const emojiRegex = new RegExp('^\\p{RGI_Emoji}$', 'v');
   return emojiRegex.test(emoji.trim());
 }
 

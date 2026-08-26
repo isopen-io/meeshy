@@ -526,6 +526,18 @@ describe('StatusService', () => {
       expect(m.successfulUpdates).toBe(0);
       expect(m.throttledRequests).toBe(0);
     });
+
+    it('recomputes cacheSize across all three throttle caches (incl. onlineEnsureCache)', () => {
+      const sut = makeSut();
+      (sut as any).activityCache.set('u1', Date.now());
+      (sut as any).connectionCache.set('u2', Date.now());
+      (sut as any).onlineEnsureCache.set('u3', Date.now());
+
+      sut.resetMetrics();
+
+      // cacheSize must reflect the live size of ALL three caches, not just two.
+      expect(sut.getMetrics().cacheSize).toBe(3);
+    });
   });
 
   // ── shutdown ─────────────────────────────────────────────────────────────

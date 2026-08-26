@@ -37,6 +37,7 @@ import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-pa
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
   socketInitiateCallSchema,
@@ -2446,7 +2447,7 @@ export class CallEventsHandler {
               isVideoEnabled: p.isVideoEnabled,
               username: p.participant?.user?.username || p.participant?.displayName,
               displayName: p.participant?.displayName || p.participant?.user?.displayName,
-              avatar: p.participant?.user?.avatar || p.participant?.avatar
+              avatar: resolveParticipantAvatar(p.participant)
             }))
           };
           const iceServers = this.callService.generateIceServers(userId);
@@ -2580,7 +2581,7 @@ export class CallEventsHandler {
             isVideoEnabled: p.isVideoEnabled,
             username: p.participant?.user?.username || p.participant?.displayName,
             displayName: p.participant?.displayName || p.participant?.user?.displayName,
-            avatar: p.participant?.user?.avatar || p.participant?.avatar
+            avatar: resolveParticipantAvatar(p.participant)
           }))
         };
 
@@ -2934,7 +2935,7 @@ export class CallEventsHandler {
             isVideoEnabled: participant.isVideoEnabled,
             username: participant.participant?.user?.username || participant.participant?.displayName,
             displayName: participant.participant?.displayName || participant.participant?.user?.displayName,
-            avatar: participant.participant?.user?.avatar || participant.participant?.avatar
+            avatar: resolveParticipantAvatar(participant.participant)
           },
           mode: callSession.mode
         };

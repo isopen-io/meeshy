@@ -17,6 +17,7 @@ import { createUnifiedAuthMiddleware, findTrustedSession, UnifiedAuthRequest} fr
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
+import { resolveAutoTranslateEnabled } from '../../utils/auto-translate-preference';
 
 // Logger dédié pour magic-link
 const logger = enhancedLogger.child({ module: 'magic-link' });
@@ -89,7 +90,8 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
             systemLanguage: anonymousUser.language,
             regionalLanguage: anonymousUser.language,
             customDestinationLanguage: null,
-            autoTranslateEnabled: false,
+            // Un participant anonyme n'a pas de ligne UserPreferences : le défaut partagé s'applique.
+            autoTranslateEnabled: resolveAutoTranslateEnabled(null),
             isOnline: true,
             lastActiveAt: new Date(),
             isActive: true,

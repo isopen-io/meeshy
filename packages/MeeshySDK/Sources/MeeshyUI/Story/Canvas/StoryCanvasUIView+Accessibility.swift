@@ -295,9 +295,15 @@ extension StoryCanvasUIView {
     /// sticker/location — the SAME dead end exists there today for sighted
     /// users, pre-existing and out of this pass's scope. Not replicating it
     /// here for VoiceOver avoids adding a NEW instance of the same gap.
+    ///
+    /// Un élément verrouillé (badge d'attribution d'une republication) n'offre
+    /// ni « Modifier », ni « Supprimer », ni « Dupliquer » — la règle est
+    /// celle du menu long-press (`StoryCanvasContextAction.offered`) : les
+    /// annoncer sur un élément qui les refuse serait le même cul-de-sac.
     func makeCustomActions(forId id: String, kind: CanvasItemKind) -> [UIAccessibilityCustomAction] {
+        let offered = StoryCanvasContextAction.offered(isLocked: isLockedItem(id: id))
         var actions: [UIAccessibilityCustomAction] = []
-        if kind == .text || kind == .media {
+        if offered.contains(.edit), kind == .text || kind == .media {
             actions.append(UIAccessibilityCustomAction(
                 name: String(localized: "story.composer.editSlide", defaultValue: "Modifier", bundle: .module)
             ) { [weak self] _ in
@@ -308,26 +314,28 @@ extension StoryCanvasUIView {
                 return true
             })
         }
-        actions.append(contentsOf: [
-            UIAccessibilityCustomAction(
+        if offered.contains(.delete) {
+            actions.append(UIAccessibilityCustomAction(
                 name: String(localized: "story.composer.deleteSlide", defaultValue: "Supprimer", bundle: .module)
             ) { [weak self] _ in
                 self?.deleteItem(id: id)
                 return true
-            },
-            UIAccessibilityCustomAction(
+            })
+        }
+        if offered.contains(.duplicate) {
+            actions.append(UIAccessibilityCustomAction(
                 name: String(localized: "story.composer.duplicateSlide", defaultValue: "Dupliquer", bundle: .module)
             ) { [weak self] _ in
                 self?.duplicateItem(id: id)
                 return true
-            },
-            UIAccessibilityCustomAction(
-                name: String(localized: "story.canvas.a11y.sendToBack", defaultValue: "Mettre à l'arrière", bundle: .module)
-            ) { [weak self] _ in
-                self?.sendToBack(id: id)
-                return true
-            },
-        ])
+            })
+        }
+        actions.append(UIAccessibilityCustomAction(
+            name: String(localized: "story.canvas.a11y.sendToBack", defaultValue: "Mettre à l'arrière", bundle: .module)
+        ) { [weak self] _ in
+            self?.sendToBack(id: id)
+            return true
+        })
         return actions
     }
 }

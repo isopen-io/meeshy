@@ -2,6 +2,51 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-26 **the composer AUTHORS a background VIDEO's framing** (slice
+> `story-composer-background-video-transform`, feature-parity E. Stories — "Backgrounds: … looping/non-looping
+> video", the WRITE half that closes the author→reader loop the reader-video slice opened, and the last open
+> piece of §E "Backgrounds"). This was the explicit "Next" from the prior entry. Before this, the composer
+> resolved the canvas pan/zoom onto ANY designated background (`resolveBackgroundFraming` is type-agnostic) but
+> `StoryBackgroundMedia.toMediaObject` still forced IDENTITY for a video — so a video an Android author framed
+> published with the bare centred defaults and rendered UN-framed on every client (its own reader, which now
+> honours video framing, included).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → `[]` (empty). Prior slice
+> (`story-viewer-background-video-transform`, merged) is `main`'s HEAD `2e5fe179`. Branched off freshly-fetched
+> `origin/main`.
+>
+> **The fix — drop ONE guard.** `toMediaObject` no longer special-cases a video for framing: it emits the author's
+> `framing.x/y/scale` for a video exactly as for an image, now that the reader's video branch converts them back via
+> the same `StoryBackgroundObjectTransform.from`. `loop`/`intrinsicDuration`/`duration` stay strictly video-only and
+> ride alongside the framing unclobbered (asserted). The VM and its type-agnostic `resolveBackgroundFraming` were
+> already correct — only the wire-mapping's stale scoped-out guard remained. Two doc-comments (VM + model) updated
+> to record that framing now applies to a video and an image alike.
+>
+> **Tests: +3 net** (2 replace the two now-obsolete `video ignores/never carries framing` tests that asserted the
+> closed scoped-out behaviour — a behaviour change, not a weakening; +1 new unframed-video edge). Draft:
+> `a video background carries the author's framing as normalised x, y and scale` (x=0.75/y=0.25/scale=2.5 +
+> loop=true & intrinsicDuration=4.0 regression), `an unframed video background serialises the bare centred defaults`.
+> VM: `publishing a panned and zoomed video background carries the framing onto the wire object` (through the public
+> `publish()` API: x=0.5+200/1080, y=0.5+100/1920, scale=2.0, loop=true). Mutation-RED-proven: re-introducing the
+> `if (isVideo) IDENTITY` guard reddened EXACTLY the two framed-video tests (verified via the FAILED set) while the
+> unframed-video test and every other suite stayed green.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** `sdkmanager` installed android-35;
+> AGP auto-installed pristine `android-37.0`; the first `./gradlew` hash-errored on bare `android-37`; `cp -r
+> android-37.0 android-37` + `source.properties` `AndroidVersion.ApiLevel=37.0→37` (the FULL key), keeping BOTH
+> dirs, resolved it (the documented recipe).
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror
+> gate) **BUILD SUCCESSFUL in 6m 1s** with the correct code, then the mutation proof, then restored [RESULT PENDING —
+> see run log]. Reviewer PASS. Diff is `apps/android` only (1 amended prod model + 1 amended prod VM doc + 2 amended
+> test files + tracking docs). Verdict: **PASS** — removing a stale wire-mapping guard now that its downstream reader
+> honours the value; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: §E "Backgrounds" is closed author→reader on both image and video. Move to the next-highest unchecked
+> §E item (e.g. the master `[~]` "Backgrounds: random pastel, colour/gradient palette, …" line still carries a
+> partial marker — audit which of its sub-pieces remain), or advance the build order toward the next area. Scout
+> `feature-parity.md` read-only before branching.
+
 > On 2026-08-26 **the viewer honours a background VIDEO's framing transform** (slice
 > `story-viewer-background-video-transform`, feature-parity E. Stories — "Backgrounds: … looping/non-looping
 > video", the reader-render half that was the explicit "Next" from the two prior background slices). Before this,

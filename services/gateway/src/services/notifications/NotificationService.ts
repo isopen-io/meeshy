@@ -43,6 +43,7 @@ import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type 
 import { recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
+import { truncateByCodePoints } from '../../utils/truncate-text';
 import { filterMutedRecipients } from './mutedRecipients';
 import { visibleNotificationsWhere } from './visibleNotificationsWhere';
 import type { ServerEmitIOWithRooms } from '../../socketio/serverEmit';
@@ -1085,7 +1086,7 @@ export class NotificationService {
   ): { translatedContent?: string; translatedLanguage?: string } {
     if (!matched) return {};
     return {
-      translatedContent: matched.text.substring(0, PUSHED_TRANSLATION_MAX_CHARS),
+      translatedContent: truncateByCodePoints(matched.text, PUSHED_TRANSLATION_MAX_CHARS),
       // La clé TELLE QUE STOCKÉE, pas sa forme canonique : elle repart sur le
       // fil APNs et le client la rapproche de sa propre carte.
       translatedLanguage: matched.language,
@@ -1662,7 +1663,7 @@ export class NotificationService {
           // paresseusement quand l'appelant ne l'a pas fournie (réponses,
           // réactions, mentions…), jamais un 'fr' codé en dur.
           const pushBody = showPreview
-            ? params.content.substring(0, 200)
+            ? truncateByCodePoints(params.content, 200)
             : notificationString(await recipientLang(), 'push.private');
 
           // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
@@ -1919,7 +1920,7 @@ export class NotificationService {
                     name: user.username || 'User',
                     language: emailLang,
                     alertType: params.type,
-                    details: params.content.substring(0, 500),
+                    details: truncateByCodePoints(params.content, 500),
                   }).catch(err => {
                     notificationLogger.error('Immediate email failed', { error: err, userId: params.userId });
                   });
@@ -1933,7 +1934,7 @@ export class NotificationService {
                     name: user.username || 'User',
                     language: emailLang,
                     notificationType: params.type,
-                    details: params.content.substring(0, 500),
+                    details: truncateByCodePoints(params.content, 500),
                   }).catch(err => {
                     notificationLogger.error('Immediate notification email failed', { error: err, userId: params.userId });
                   });
@@ -2612,9 +2613,7 @@ export class NotificationService {
     }) !== null;
 
     const messagePreview = message?.content && !isProtected
-      ? message.content.length > 100
-        ? message.content.substring(0, 100) + '…'
-        : message.content
+      ? truncateByCodePoints(message.content, 100, '…')
       : null;
 
     return this.createNotification({
