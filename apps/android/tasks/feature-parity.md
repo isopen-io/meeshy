@@ -3795,8 +3795,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (the control is never a no-op), localised en/fr/es/pt. +13 tests (7 deck default/set/inert×2/only-selected/
       reset-on-redesignate/reset-on-remove; 2 draft video-loop-false + image-always-loops; 4 VM
       intent/publish-loop-false/is-video-derivation). Mutation-RED-proven (forcing `loop = true` in
-      `toMediaObject` reddened EXACTLY the 2 loop-false tests while image-always-loops stayed green). Pending:
-      background IMAGE with transform.
+      `toMediaObject` reddened EXACTLY the 2 loop-false tests while image-always-loops stayed green).
+      **Reader honours a background IMAGE's framing transform done** (`story-viewer-background-media-transform`):
+      the viewer previously drew any background image as a plain `ContentScale.Crop` fill, silently dropping the
+      pan/zoom framing an iOS/web/backend author put on the background `StoryMediaObject` (`x`/`y`/`scale`/
+      `rotation`) — a real cross-client parity gap (a story framed on iOS rendered un-framed on Android). A pure
+      `StoryBackgroundObjectTransform.from(StoryMediaObject)` (`:feature:stories`) ports iOS's render conversion
+      exactly (`StoryCanvasUIView+Rendering.swift`): aspect-fill base, then `scale` + a pixel offset FROM CENTRE
+      `((x-0.5), (y-0.5))` kept as canvas FRACTIONS (resolution-independent) + `rotation`, ignoring `anchor`/
+      `aspectRatio` (background-only, unlike a foreground object). Decays TOLERANTLY — a non-finite/non-positive
+      `scale` → neutral 1×, a non-finite position/rotation → its neutral component — so a malformed object never
+      blanks or inverts the slide. `StoryViewerViewModel.resolveBackgroundMedia` projects it onto
+      `StorySlideView.backgroundTransform` for an IMAGE background only (the transform rides only on a modern
+      `isBackground` object whose own URL is what renders; a legacy/flat fallback keeps IDENTITY); the viewer's
+      image branch applies it via `graphicsLayer` (offset fractions × measured `size`, clipped by the frame,
+      mirroring iOS's "zoom inside the background"). +14 tests (10 `StoryBackgroundObjectTransformTest` pure
+      conversion incl. every decay branch; 4 VM projection: framed image / default-framed image / video / no-bg).
+      Mutation-RED-proven twice (dropping the `-0.5` centre offset reddened EXACTLY the 4 offset tests while
+      scale/rotation stayed green; forcing the VM projection to IDENTITY reddened EXACTLY the framed-image test).
+      Pending: composer AUTHORING carries the per-slide `StoryCanvasTransform` onto the published background
+      object's `x`/`y`/`scale` (the write half); background VIDEO framing at render (the video player path).
 - [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
       (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —
       `StoryFilterMatrix.baseMatrix(StoryFilter)` → a `StoryColorMatrix` (4×5 `List<Float>`, value

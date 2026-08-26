@@ -553,6 +553,89 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `a background image with author framing projects that transform onto the slide`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/photo.jpg", mimeType = "image/jpeg")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/photo.jpg",
+                        mediaType = "image",
+                        isBackground = true,
+                        x = 0.7,
+                        y = 0.5,
+                        scale = 1.5,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val transform = vm.state.value.current?.backgroundTransform
+        assertThat(transform?.scale).isWithin(1e-6f).of(1.5f)
+        assertThat(transform?.offsetXFraction).isWithin(1e-6f).of(0.2f)
+        assertThat(transform?.offsetYFraction).isEqualTo(0f)
+        assertThat(transform?.isIdentity).isFalse()
+    }
+
+    @Test
+    fun `a background image with default framing leaves the transform at identity`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/photo.jpg", mimeType = "image/jpeg")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/photo.jpg",
+                        mediaType = "image",
+                        isBackground = true,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
+    fun `a background VIDEO with framing is not reframed this slice (identity)`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/bg.mp4", mimeType = "video/mp4")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/bg.mp4",
+                        mediaType = "video",
+                        isBackground = true,
+                        x = 0.8,
+                        scale = 2.0,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
+    fun `a slide with no background media leaves the transform at identity`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = listOf(storyPost("a1", "a", hoursAgo = 1)))
+
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
     fun `a non-background mediaObject is exposed as foreground media`() = runTest {
         val post = storyPost("a1", "a", hoursAgo = 1).copy(
             media = listOf(

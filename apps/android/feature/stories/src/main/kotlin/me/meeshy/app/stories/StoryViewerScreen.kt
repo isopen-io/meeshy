@@ -388,6 +388,7 @@ fun StoryViewerScreen(
             }
             slide?.imageUrl != null -> {
                 val imageUrl = slide.imageUrl
+                val bg = slide.backgroundTransform
                 AsyncImage(
                     model = imageUrl,
                     contentDescription = null,
@@ -395,7 +396,18 @@ fun StoryViewerScreen(
                     // Resolved (loaded or failed) → the countdown gate may open.
                     onSuccess = { viewModel.onImageResolved(imageUrl) },
                     onError = { viewModel.onImageResolved(imageUrl) },
-                    modifier = Modifier.fillMaxSize(),
+                    // Aspect-fill base, then the author's pan/zoom framing on top — the
+                    // offset fractions scale to the measured canvas so it is resolution-
+                    // independent (mirrors iOS's "zoom inside the background", clipped).
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = bg.scale
+                            scaleY = bg.scale
+                            rotationZ = bg.rotationDegrees
+                            translationX = bg.offsetXFraction * size.width
+                            translationY = bg.offsetYFraction * size.height
+                        },
                 )
             }
             slide != null -> {

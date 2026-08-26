@@ -179,6 +179,15 @@ data class StorySlideView(
      * `renderBackground` priority.
      */
     val background: StoryBackgroundValue? = null,
+    /**
+     * The framing (pan/zoom) the author applied to a background IMAGE, projected once
+     * from the background media object via [StoryBackgroundObjectTransform]. iOS
+     * aspect-fills the background then applies this on top (an Instagram-style "zoom
+     * inside the background"); the viewer mirrors that with a `graphicsLayer` on the
+     * image. [StoryBackgroundObjectTransform.IDENTITY] (the default) means a plain
+     * aspect-fill — a video background or a legacy/flat story never carries one yet.
+     */
+    val backgroundTransform: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform.IDENTITY,
 )
 
 /**
@@ -683,6 +692,7 @@ class StoryViewerViewModel @Inject constructor(
             languageCode = resolved.languageCode,
             backgroundVideoUrl = background.videoUrl,
             backgroundLoop = background.loop,
+            backgroundTransform = background.transform,
             foregroundMedia = foreground,
             textObjects = textObjects,
             backgroundAudioUrl = resolveAudioUrl(preferBackground = true),
@@ -694,7 +704,12 @@ class StoryViewerViewModel @Inject constructor(
         )
     }
 
-    private data class BackgroundMedia(val imageUrl: String?, val videoUrl: String?, val loop: Boolean)
+    private data class BackgroundMedia(
+        val imageUrl: String?,
+        val videoUrl: String?,
+        val loop: Boolean,
+        val transform: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform.IDENTITY,
+    )
 
     /**
      * Resolves the slide's single background layer. `storyEffects.mediaObjects`
@@ -718,11 +733,20 @@ class StoryViewerViewModel @Inject constructor(
             ?.let { resolveMediaUrl(it, config.socketUrl) }
 
         if (isVideo) {
+            // The background object's transform (framing) is authored on iOS for videos
+            // too, but Android renders a video background through a separate player path;
+            // applying the transform there is a follow-up, so a video keeps a plain fill.
             return BackgroundMedia(imageUrl = null, videoUrl = resolvedUrl, loop = backgroundObject?.loop ?: true)
         }
         val imageUrl = resolvedUrl
             ?: media.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.socketUrl) }
-        return BackgroundMedia(imageUrl = imageUrl, videoUrl = null, loop = true)
+        // The framing rides only on a modern `isBackground` object; a legacy/flat
+        // fallback image never carries one, so it stays a plain aspect-fill (IDENTITY).
+        val transform = backgroundObject
+            ?.takeIf { imageUrl == resolvedUrl && resolvedUrl != null }
+            ?.let { StoryBackgroundObjectTransform.from(it) }
+            ?: StoryBackgroundObjectTransform.IDENTITY
+        return BackgroundMedia(imageUrl = imageUrl, videoUrl = null, loop = true, transform = transform)
     }
 
     private fun StoryMediaObject.toForegroundMediaView(
