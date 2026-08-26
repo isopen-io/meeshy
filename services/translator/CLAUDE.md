@@ -219,5 +219,10 @@ opération voix, lire les logs avant de conclure à un problème de données.
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (FastAPI, Faster-Whisper, NLLB-200, multi-backend TTS, ZeroMQ, worker pool, Redis fallback, OpenVoice V2, uv, singletons, config, audio pipeline) avec contexte, alternatives rejetes et consquences.
 
+## Pilotage & maturité (règle transverse — détail dans le `CLAUDE.md` racine)
+- **Le pilotage se fait EXCLUSIVEMENT sur GitHub** (projet « Meeshy — pilotage », milestones, issues) : toute tâche de ce répertoire est une issue au titre sémantique, passée `In Progress` au démarrage et fermée par le commit qui la livre (`Closes #n`). Pas de `todo.md`, pas de page « progress » ; les artifacts servent aux brouillons, au design et aux comptes rendus — jamais à l'état.
+- **Chaque feature est portée à maturité sur les treize dimensions** (sécurité, performance, mémoire, fluidité, accessibilité, cohérence de positionnement, facilité d'usage, UX, compatibilité, utilité, maintenabilité, simplicité d'usage, complétude). Ici, les témoins qui comptent d'abord : latence par langue et par longueur telle que l'utilisateur la PERÇOIT, mémoire GPU/CPU des modèles chargés (et GPU réellement utilisé), qualité mesurée — aucun repli silencieux vers `fra_Latn`, couverture RÉELLE des langues offertes (complétude), pins de version tenus (compatibilité).
+- **La complexité se paie dans le code, jamais chez l'utilisateur.** Une lenteur, une saccade, une action sans feedback immédiat sont des bugs, pas de la dette : ils ont au moins la priorité de la feature qu'ils dégradent. Le commentaire de clôture d'une issue dit quelles dimensions sont mûres et ouvre une issue par dimension restante.
+
 ## Quality Gate
 Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

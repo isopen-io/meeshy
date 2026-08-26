@@ -3,6 +3,52 @@
 ## Project Overview
 Meeshy is a high-performance real-time messaging platform with multi-language translation, voice cloning, and end-to-end encryption. It supports 100k+ messages/second with simultaneous multi-language translation.
 
+## Pilotage du développement — GitHub Project, exclusivement (directive 2026-08-26)
+
+**Le développement de Meeshy se pilote UNIQUEMENT depuis GitHub** : le projet Projects v2 « Meeshy — pilotage » (org `isopen-io`, projet #1 — https://github.com/orgs/isopen-io/projects/1), les milestones et les issues du dépôt `isopen-io/meeshy`. Rien d'autre ne fait foi sur l'état d'une tâche — ni un fichier `tasks/todo-*.md`, ni une page publiée, ni un message de session.
+
+| Objet | Où il vit | Règle |
+|---|---|---|
+| Une tâche | une **issue** | titre SÉMANTIQUE (le résultat attendu), corps = Contexte · Preuve · Critère de fin · source (`tasks/…:ligne`, spec, planche) ; les codes internes (`T2.1`, `Lot H`, `P0 …`) vont dans le corps, jamais dans le titre |
+| Un livrable | un **milestone** avec échéance | nommé par le résultat (« Une story ne peut plus partir deux fois »), jamais A/B/C, Vague, Phase 1 |
+| L'état | les champs du projet : `Status`, `Priorité`, `Horizon`, `Début`, `Échéance`, `Tâche P0` | l'état se LIT dans le projet et ne se recopie dans aucun fichier |
+| La fin | l'issue **fermée** par le commit qui la livre (`Closes #n`) avec sa preuve (gate, mesure, PR) | « partiel » est un Status, pas un état livrable |
+| Le plan | un milestone + ses issues + leurs dépendances | un plan qui n'est pas dans le projet n'existe pas |
+| Une décision produit ouverte | une issue labellisée `décision-produit`, assignée au porteur | jamais une question qui traîne dans un doc |
+
+**Les artifacts (`claude.ai/code/artifact/…`) servent à TROIS choses, et trois seulement : les BROUILLONS (draft d'un doc, d'une spec, d'une analyse à faire valider), le DESIGN (planches, maquettes, vues cibles, iconographie, prototypes visuels) et les COMPTES RENDUS de communication (bilan de session, rapport d'audit, compte rendu de revue, note au porteur).** Un artifact n'est jamais un tableau de bord d'avancement, une liste de tâches à cocher ni une source d'état : s'il montre l'état d'une tâche, c'est au titre d'un compte rendu DATÉ, et l'issue GitHub a raison en cas d'écart. Ne pas ouvrir de page « progress », « suivi », « todo » ou « pilotage » — ouvrir des issues.
+
+Corollaires :
+- `tasks/*.md` sont des JOURNAUX et des SOURCES : on y lit l'histoire et on y renvoie depuis les issues ; on ne s'en sert plus pour piloter. `tasks/lessons.md` reste vivant (leçons) — c'est le seul tracker de fichier maintenu.
+- Une session qui démarre un chantier commence par lire ses issues (`gh issue list --milestone "<nom>" --state open`, `gh project item-list 1 --owner isopen-io`) et pose `Status = In Progress` ; une session qui livre ferme ses issues et dit, dans le commentaire de clôture, ce qui est mûr et ce qui reste (voir les treize dimensions ci-dessous). Le scope `project` du token est requis pour les champs (`gh auth refresh -s project,read:project`).
+- Les documents de design du dépôt (`docs/product/*.html`, `docs/product/*.md`) gardent leur rendu publié en artifact — c'est du design, autorisé — mais l'ÉTAT des tâches qu'ils décrivent vit dans les issues, jamais dans le document.
+
+## Roadmap — un produit très optimisé, hyper fluide, mûr sur treize dimensions (directive 2026-08-26)
+
+La roadmap (milestones + champ `Horizon` du projet ; analyse dans `docs/product/roadmap-produit-2026-08.md`) ne suit pas une liste de features : elle suit la réalisation d'un produit **TRÈS optimisé — sans aucune lenteur —, HYPER fluide, aéré, agréable visuellement ET fonctionnellement**. Chaque feature, existante ou à venir, est portée à MATURITÉ sur les treize dimensions ci-dessous. Une feature « qui marche » mais qui rame, à qui il manque un état, qu'on ne trouve pas ou qu'on n'ose pas modifier n'est pas livrée.
+
+| # | Dimension | La question à poser | Le témoin |
+|---|---|---|---|
+| 1 | Sécurité | Qui peut voir / faire ça — et qu'est-ce qui part À CÔTÉ ? | gardes fail-closed testées, champs voisins relus, secrets hors dépôt |
+| 2 | Performance | Combien de temps avant que l'utilisateur VOIE quelque chose ? | p95 mesuré (API, rendu, démarrage à froid) ; cache-first : jamais de spinner sur un cache non vide |
+| 3 | Optimisation mémoire | Que reste-t-il en mémoire une fois l'écran quitté ? | aucune rétention (cycles ARC, listeners, caches non bornés), profil sur appareil réel |
+| 4 | Fluidité | Y a-t-il UNE image perdue pendant le geste ? | 60/120 fps au scroll, aux transitions et pendant la frappe ; optimistic update sur chaque action |
+| 5 | Facilité d'accès | Peut-on y arriver sans le savoir, sans voir, sans la souris ? | VoiceOver / TalkBack / lecteur d'écran, contrastes, cibles 44 pt, clavier, RTL, Dynamic Type |
+| 6 | Cohérence de positionnement | Est-ce à la place où l'utilisateur la chercherait, avec le vocabulaire du reste ? | même geste ⇒ même effet sur les trois plateformes ; même mot, même icône, même couleur de contexte |
+| 7 | Facilité d'usage | Combien de gestes pour l'usage nominal ? | chemin nominal ≤ 2 gestes, défauts justes, zéro configuration obligatoire |
+| 8 | Expérience utilisateur | Est-ce agréable, aéré, lisible — a-t-on envie d'y revenir ? | états vide / chargement / erreur / hors-ligne dessinés, feedback instantané, animation qui explique |
+| 9 | Compatibilité | Ça marche sur quoi ? | iOS 16→26 + iPad, Android API cible, navigateurs courants, réseau lent, hors-ligne, clair/sombre, 7 langues |
+| 10 | Utilité | À quel besoin réel ça répond — l'a-t-on mesuré ? | usage mesuré (analytics, retours) ; sinon la feature sort de la roadmap (§ 4 du doc) |
+| 11 | Maintenabilité | Peut-on la changer sans la casser ? | UNE source de vérité, tests de comportement, TypeScript strict, aucune jumelle divergente |
+| 12 | Simplicité d'usage | L'utilisateur a-t-il DÛ comprendre quelque chose pour s'en servir ? | **la complexité se paie dans le CODE, jamais chez l'utilisateur** : on complexifie volontiers l'implémentation (résolution automatique, cache, pré-calcul, inférence) pour que la feature s'utilise sans friction |
+| 13 | Complétude | Manque-t-il un état, un cas, une plateforme, une langue ? | matrice cas × plateforme remplie ; « partiel » est un Status d'issue, pas un livrable |
+
+Règles de tenue :
+- Une issue de feature déclare, à sa création, les dimensions qu'elle vise ; à sa fermeture, elle dit lesquelles sont mûres et ouvre une issue par dimension qui ne l'est pas (même milestone ou suivant — jamais oubliée).
+- **Une lenteur est un BUG, pas une dette.** Un écran qui attend le réseau alors que le cache a des données, une liste qui saccade, une action sans feedback immédiat ont au moins la priorité de la feature qu'ils dégradent, et se corrigent avant toute nouvelle feature du même écran.
+- Un milestone se compose en équilibrant les treize dimensions — pas trois issues de sécurité et zéro de fluidité. Le champ `Horizon` ordonne ; l'analyse 360° (`docs/product/roadmap-produit-2026-08.md` § 2) alimente.
+- Cache-First, Stale-While-Revalidate, Optimistic Updates, Offline Graceful Degradation, Zero Unnecessary Re-render (§ Instant App Principles) et le Prisme Linguistique sont les MÉCANISMES par lesquels les dimensions 2, 4, 6, 7, 8 et 12 se réalisent — ils ne sont pas optionnels.
+
 ## Prisme Linguistique — Philosophie Produit
 
 Le Prisme Linguistique est le principe fondamental de l'experience Meeshy :
@@ -311,12 +357,13 @@ feat/{area}-{feature}  ex: feat/settings-legal, feat/settings-account
 ```
 
 ## Task Management
-1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
-2. **Verify Plan**: Check in before starting implementation
-3. **Track Progress**: Mark items complete as you go
-4. **Explain Changes**: High-level summary at each step
-5. **Document Results**: Add review section to `tasks/todo.md`
-6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
+Le pilotage est sur GitHub (§ « Pilotage du développement ») — aucun `tasks/todo.md` n'est créé ni maintenu.
+1. **Plan First**: le plan = un milestone + ses issues (titres sémantiques, critère de fin par issue, dépendances)
+2. **Verify Plan**: le porteur valide le milestone avant l'implémentation ; ce qui reste ouvert devient une issue `décision-produit`
+3. **Track Progress**: `Status` du projet posé au démarrage (`In Progress`) ; une issue livrée est fermée par son commit (`Closes #n`)
+4. **Explain Changes**: résumé de haut niveau à chaque étape, dans un commentaire de l'issue — pas dans un fichier
+5. **Document Results**: commentaire de clôture = preuve (commit, gate, mesure) + dimensions mûres / restantes
+6. **Capture Lessons**: `tasks/lessons.md` après toute correction — seul tracker de fichier maintenu
 
 ## Core Principles
 - **Simplicity First**: Make every change as simple as possible. Minimal code impact.
@@ -483,10 +530,11 @@ accent = hueShift(primary, −30°)
 - `emit()` does NOT await Promises
 - Always wrap async Socket.IO/EventEmitter listeners in try/catch
 
-## MeeshyComposer — la planche est le document maintenu
-`docs/product/planche-meeshy-composer.html` (ex-`docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`, 100+ révisions) est le **bord de pilotage vivant** du composer : matrice feature × état (`data-task` / `data-kind` / `data-state`), onze lois, inventaire, budgets, risques, et les VUES cibles (anatomie, scène 9:16, outils, timeline, étagère, viewers, 18 styles de texte, iconographie, éditeurs). C'est cette vision, validée, que MeeshyComposer / Scène / Timeline doivent reproduire à la fin.
-- Une tâche dont le gate passe bascule SA ligne (camembert ET matrice) dans le MÊME commit `docs(p0): …`, et republie la page https://claude.ai/code/artifact/95de2699-a55c-4ba8-ab00-508594c239ce depuis ce fichier — jamais une page « progress » parallèle.
-- Les rendus des vues (PNG/PDF) vivent dans `docs/product/planche-meeshy-composer/` et sont référencés par le projet GitHub « Meeshy — pilotage » ; chaque tâche de la planche y est une issue portant son identifiant dans le champ « Tâche P0 ».
+## MeeshyComposer — la planche est le document de DESIGN maintenu
+`docs/product/planche-meeshy-composer.html` (ex-`docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`, 100+ révisions) est la **vision de design vivante** du composer : matrice feature × état (`data-task` / `data-kind` / `data-state`), onze lois, inventaire, budgets, risques, et les VUES cibles (anatomie, scène 9:16, outils, timeline, étagère, viewers, 18 styles de texte, iconographie, éditeurs). C'est cette vision, validée, que MeeshyComposer / Scène / Timeline doivent reproduire à la fin.
+- La planche porte la VISION ; **l'ÉTAT de chaque tâche est porté par son issue GitHub** (champ « Tâche P0 » = identifiant de ligne ; milestone « MeeshyComposer — livré » pour le fait). Une ligne de la matrice qui bascule (`docs(p0): …`) le fait dans le même commit que le gate, et l'issue correspondante se ferme / passe `In Progress` dans le même mouvement — si les deux divergent, l'issue a raison.
+- La page publiée https://claude.ai/code/artifact/95de2699-a55c-4ba8-ab00-508594c239ce est le RENDU de design de ce fichier (artifact = design, autorisé) : republiée depuis le fichier tracké à chaque révision, jamais depuis une copie, jamais doublée d'une page « progress ».
+- Les rendus des vues (PNG/PDF) vivent dans `docs/product/planche-meeshy-composer/` et sont référencés par les issues du projet « Meeshy — pilotage ».
 
 ## Subdirectory CLAUDE.md Files
 Each major directory has its own CLAUDE.md with domain-specific conventions:
