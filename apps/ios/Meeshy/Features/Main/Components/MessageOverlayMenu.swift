@@ -931,7 +931,7 @@ private struct PreviewAudioPlayer: View {
                 .accessibilityLabel(player.isPlaying
                     ? String(localized: "media.pauseAudio", defaultValue: "Mettre en pause", bundle: .main)
                     : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
-                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.timeLabel(totalDuration: attachment.duration)))
+                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.spokenTotalDuration(totalDuration: attachment.duration)))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
@@ -1311,15 +1311,25 @@ private class OverlayAudioPlayer: ObservableObject {
 
     func timeLabel(totalDuration: Int?) -> String {
         let current = formatTime(currentTime)
-        let total = formatTime(duration > 0 ? duration : Double(totalDuration ?? 0))
+        let total = formatTime(totalSeconds(fallback: totalDuration))
         return "\(current) / \(total)"
     }
 
+    /// Ce qu'un indice VoiceOver DIT de cet audio : sa longueur, en toutes
+    /// lettres. L'indice servait `timeLabel` — deux horloges séparées d'une
+    /// barre oblique (« 0:12 / 1:30 »), que le synthétiseur lit comme deux
+    /// heures. Un indice se lit une fois, après le libellé : la POSITION
+    /// courante n'y a rien à faire, seule la durée totale renseigne.
+    func spokenTotalDuration(totalDuration: Int?) -> String {
+        LocalizedNumber.spokenDuration(seconds: totalSeconds(fallback: totalDuration))
+    }
+
+    private func totalSeconds(fallback: Int?) -> TimeInterval {
+        duration > 0 ? duration : TimeInterval(fallback ?? 0)
+    }
+
     private func formatTime(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite && seconds >= 0 else { return "0:00" }
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
+        LocalizedNumber.duration(seconds: seconds)
     }
 
     private func setupTimeObserver() {

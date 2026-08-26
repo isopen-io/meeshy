@@ -5,6 +5,30 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-26 — closing an author→reader loop: the pure conversion is the INVERSE of the reader's, and the "missing" datum is captured where it's uniquely available (slice `story-composer-background-image-transform`)
+The reader slice below made Android HONOUR a background image's `x`/`y`/`scale` framing; this slice made the composer
+WRITE it, so a story an Android author frames renders framed everywhere (its own reader included). Three reusable moves:
+
+- **Author-side conversion is the reader-side conversion run backwards, and a round-trip test proves it.** The reader
+  reads `offsetFraction = x - 0.5` (then × canvas size); the composer writes `x = 0.5 + offsetX / canvasWidth`. Rather
+  than eyeball the algebra, one test feeds a `StoryCanvasTransform` through `toBackgroundFraming` → a `StoryMediaObject`
+  → the reader's `StoryBackgroundObjectTransform.from` and asserts the offset survives. That single test is the loop's
+  guarantee; it caught nothing here only because the two halves were written to match — which is exactly what it exists
+  to keep true as either half changes.
+- **The "wrinkle" (a datum not retained in the VM) dissolves once you ask where it is UNIQUELY available.** NOTES flagged
+  "canvas width isn't retained at publish". The fix wasn't a new measurement intent — it was noticing that the ONLY way
+  to produce a non-identity transform is `onCanvasTransform`, which is HANDED the canvas size on every gesture. So the
+  size that produced an offset is always in scope to invert it; capture it there. When a needed value seems missing,
+  look at the one code path that could have created the state that needs it — the value is usually passing through.
+- **Float→Double: divide in Double, don't widen a Float quotient.** `(200f / 1920f).toDouble()` differs from
+  `200.0 / 1920.0` by ~2.5e-9 — enough to redden a 1e-9 test. `offset.toDouble() / size.toDouble()` is exact. When a
+  pure conversion feeds a wire `Double`, do the arithmetic in Double from the start.
+- **A guard the reader doesn't need, the author does: frame only the media the canvas actually SHOWED.** The composer
+  canvas previews (and pans) the slide's FIRST attachment, but the author may designate a DIFFERENT attachment as the
+  background. Projecting the pan onto a differently-designated background would mis-frame an image the author never
+  touched — so `resolveBackgroundFraming` returns IDENTITY unless the designated id IS the first resolved slide media.
+  (Corollary follow-up surfaced, not taken: the canvas SHOULD preview the designated background, not the first media.)
+
 ## 2026-08-26 — a background object carries the SAME transform fields as a foreground one but the reader converts them DIFFERENTLY (slice `story-viewer-background-media-transform`)
 The Android viewer drew any background image as a plain `ContentScale.Crop` fill, dropping the pan/zoom framing an
 author put on the background `StoryMediaObject`. The trap was assuming a background's `x`/`y`/`scale` mean what a

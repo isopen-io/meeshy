@@ -662,10 +662,7 @@ struct ThemedConversationRow: View {
     }
 
     private func formatDurationMs(_ ms: Int) -> String {
-        let totalSec = ms / 1000
-        let mins = totalSec / 60
-        let secs = totalSec % 60
-        return String(format: "%d:%02d", mins, secs)
+        LocalizedNumber.duration(seconds: ms / 1000)
     }
 }
 

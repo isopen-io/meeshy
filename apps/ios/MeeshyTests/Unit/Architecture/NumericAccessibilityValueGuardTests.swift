@@ -160,6 +160,147 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - Durées (247i)
+
+    /// **Le trou que cette garde avait, et qui a laissé la famille ouverte deux
+    /// ans.**
+    ///
+    /// L'interdiction du haut de fichier reconnaît un LITTÉRAL interpolé. Une
+    /// durée n'en est pas un : elle traversait un formateur privé —
+    ///
+    /// ```swift
+    /// private func formatDuration(_ s: TimeInterval) -> String {
+    ///     String(format: "%d:%02d", Int(s) / 60, Int(s) % 60)
+    /// }
+    /// ```
+    ///
+    /// — et arrivait au site d'appel sous la forme la plus INNOCENTE qui soit,
+    /// `.accessibilityValue(formattedDuration)`. Aucun littéral, aucun `\(…)`,
+    /// aucune alerte : chiffres latins dans une interface arabe, et « 4:32 »
+    /// annoncé « 4 heures 32 » pour un compte à rebours de quatre minutes.
+    ///
+    /// La leçon de forme : **une garde qui épingle une SYNTAXE est contournée
+    /// par une fonction.** Celle-ci va donc chercher le motif à sa SOURCE, dans
+    /// le corps du formateur, où il redevient un littéral.
+    private func handRolledClockFormats(in text: String) -> [String] {
+        let pattern = #"String\(format:\s*"%0?\d*d:%02d"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let range = NSRange(text.startIndex..., in: text)
+        return regex.matches(in: text, range: range).compactMap {
+            Range($0.range, in: text).map { r in String(text[r]) }
+        }
+    }
+
+    /// `NotificationSettingsView.formattedDndTime` grave « HH:mm » pour la
+    /// PERSISTANCE — le format que `UserNotificationPreferences` relit et que
+    /// le gateway reçoit. Le localiser corromprait la donnée : c'est le seul
+    /// site du dépôt où les chiffres latins sont la bonne réponse, et il est
+    /// nommé ici plutôt que toléré en silence.
+    private let clockFormatIsDataNotUI = ["NotificationSettingsView.swift"]
+
+    func test_noHandRolledClockFormatterSurvivesInTheApp() {
+        var offenders: [String] = []
+        for file in swiftFiles(under: appRoot)
+        where !clockFormatIsDataNotUI.contains(file.lastPathComponent) {
+            guard let raw = try? String(contentsOf: file, encoding: .utf8) else { continue }
+            for hit in handRolledClockFormats(in: strippedOfComments(raw)) {
+                offenders.append("\(file.lastPathComponent) — \(hit)")
+            }
+        }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "Ces sites composent une horloge à la main. `String(format:)` sans locale "
+            + "grave les chiffres latins : une durée MONTRÉE passe par "
+            + "`LocalizedNumber.duration`, une durée DITE par "
+            + "`LocalizedNumber.spokenDuration` :\n"
+            + offenders.sorted().joined(separator: "\n")
+        )
+    }
+
+    /// L'interdiction ci-dessus resterait verte si les minuteries disparaissaient.
+    /// Ces hôtes sont ceux que 247i a convertis.
+    func test_convertedDurationHostsNameTheSingleSource() {
+        let hosts = [
+            "Features/Main/Components/CameraView.swift",
+            "Features/Main/Components/ComposerModels.swift",
+            "Features/Main/Components/MessageOverlayMenu.swift",
+            "Features/Main/Components/RecentMediaStrip.swift",
+            "Features/Main/Components/UniversalComposerBar+Recording.swift",
+            "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",
+            "Features/Main/Components/MessageDetail/MessageViewsDetailView.swift",
+            "Features/Main/Services/CallManager.swift",
+            "Features/Main/Views/AudioPostComposerView.swift",
+            "Features/Main/Views/MagicLinkView.swift",
+            "Features/Main/Views/ThemedConversationRow.swift",
+        ]
+        for host in hosts {
+            let url = appRoot.appendingPathComponent(host)
+            let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+            XCTAssertTrue(
+                text.contains("LocalizedNumber.duration")
+                || text.contains("LocalizedNumber.spokenDuration")
+                || text.contains("LocalizedNumber.wholeSeconds"),
+                "\(host) ne nomme plus la source des durées — soit la minuterie a disparu "
+                + "(mettre la liste à jour), soit la règle a été réécrite sur place."
+            )
+        }
+    }
+
+    /// **La moitié PARLÉE de la règle.** Une durée d'horloge servie à VoiceOver
+    /// est fausse même en chiffres latins : le synthétiseur lit « 2:05 » comme
+    /// une heure. Ces vues rendent une minuterie ET l'annoncent ; leur valeur
+    /// d'accessibilité doit venir de la forme parlée, jamais de celle affichée.
+    func test_timerHostsSpeakTheirDurationInWords() {
+        let hosts = [
+            "Features/Main/Views/CallView.swift",
+            "Features/Main/Views/FloatingCallPillView.swift",
+            "Features/Main/Views/MagicLinkView.swift",
+            "Features/Main/Views/AudioPostComposerView.swift",
+            "Features/Main/Components/CameraView.swift",
+            "Features/Main/Components/UniversalComposerBar+Recording.swift",
+        ]
+        for host in hosts {
+            let url = appRoot.appendingPathComponent(host)
+            let text = AppSourceGuard.stripComments(
+                (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+            )
+            XCTAssertTrue(
+                text.contains("spokenDuration") || text.contains("spokenCountdown"),
+                "\(host) rend une minuterie sans jamais nommer sa forme parlée : "
+                + "sa valeur d'accessibilité annonce donc une heure."
+            )
+        }
+    }
+
+    /// L'extracteur de durées doit reconnaître les TROIS orthographes que l'app
+    /// portait — sans quoi l'interdiction serait verte pour la mauvaise raison.
+    func test_theClockExtractorFindsEveryKnownOffender() {
+        let fabricated = #"""
+        String(format: "%d:%02d", mins, secs)
+        String(format: "%02d:%02d", minutes, seconds)
+        String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        """#
+        XCTAssertEqual(
+            handRolledClockFormats(in: fabricated).count, 3,
+            "L'extracteur ne reconnaît plus les formes qu'il est censé interdire."
+        )
+    }
+
+    /// …et doit épargner la forme corrigée ET les autres `String(format:)` du
+    /// dépôt, sans quoi il enverrait corriger ce qui ne l'est pas (leçon 238i).
+    func test_theClockExtractorSparesEverythingElse() {
+        let innocent = #"""
+        LocalizedNumber.duration(seconds: total)
+        LocalizedNumber.spokenDuration(seconds: total)
+        String(format: String(localized: "a11y.transcription.confidence"), pct)
+        String(format: "%.1f MB", megabytes)
+        """#
+        XCTAssertTrue(
+            handRolledClockFormats(in: innocent).isEmpty,
+            "La forme corrigée et les formats sans rapport ne doivent pas être signalés."
+        )
+    }
+
     /// Le dépouilleur doit manger les commentaires SANS manger les littéraux :
     /// `LocalizedNumber` cite le code fautif dans sa documentation.
     func test_theStripperRemovesCommentsButKeepsLiterals() {

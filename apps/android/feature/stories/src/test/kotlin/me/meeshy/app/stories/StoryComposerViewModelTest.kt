@@ -422,6 +422,83 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `publishing a panned and zoomed image background carries the framing onto the wire object`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        vm.onMediaPicked(listOf(item()))
+        vm.onToggleSlideBackgroundMedia("m1")
+        // One pinch-out + pan gesture on the measured 1080x1920 canvas.
+        vm.onCanvasTransform(panX = 200f, panY = 0f, zoom = 2f, canvasWidth = 1080f, canvasHeight = 1920f)
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.isBackground).isTrue()
+        assertThat(obj?.mediaType).isEqualTo("image")
+        assertThat(obj?.scale).isWithin(1e-6).of(2.0)
+        assertThat(obj?.x!!).isWithin(1e-6).of(0.5 + 200.0 / 1080.0)
+        assertThat(obj.y).isWithin(1e-6).of(0.5)
+    }
+
+    @Test
+    fun `publishing an unframed image background carries the centred defaults`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        vm.onMediaPicked(listOf(item()))
+        vm.onToggleSlideBackgroundMedia("m1")
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.x).isEqualTo(0.5)
+        assertThat(obj?.y).isEqualTo(0.5)
+        assertThat(obj?.scale).isEqualTo(1.0)
+    }
+
+    @Test
+    fun `framing is not projected when the designated background is not the framed media`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
+        vm.onMediaPicked(listOf(item()))
+        // The canvas frames the FIRST slide media (m1); designate the SECOND (m2) as background.
+        vm.onToggleSlideBackgroundMedia("m2")
+        vm.onCanvasTransform(panX = 200f, panY = 0f, zoom = 2f, canvasWidth = 1080f, canvasHeight = 1920f)
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.postMediaId).isEqualTo("m2")
+        assertThat(obj?.x).isEqualTo(0.5)
+        assertThat(obj?.y).isEqualTo(0.5)
+        assertThat(obj?.scale).isEqualTo(1.0)
+    }
+
+    @Test
+    fun `a video background never carries framing even after a canvas gesture`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
+        vm.onMediaPicked(listOf(item("clip.mp4")))
+        vm.onToggleSlideBackgroundMedia("v1")
+        vm.onCanvasTransform(panX = 200f, panY = 100f, zoom = 2f, canvasWidth = 1080f, canvasHeight = 1920f)
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.mediaType).isEqualTo("video")
+        assertThat(obj?.x).isEqualTo(0.5)
+        assertThat(obj?.y).isEqualTo(0.5)
+        assertThat(obj?.scale).isEqualTo(1.0)
+    }
+
+    @Test
     fun `publishing with no designated background emits no media objects`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))

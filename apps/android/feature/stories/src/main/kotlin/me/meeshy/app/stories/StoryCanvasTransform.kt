@@ -54,6 +54,26 @@ data class StoryCanvasTransform(
             offsetY = clampOffset(offsetY, canvasHeight, scale),
         )
 
+    /**
+     * Projects this pixel-space framing onto the wire's normalised background coordinates —
+     * the author-side inverse of [StoryBackgroundObjectTransform.from]. A pixel offset FROM
+     * the canvas edge becomes a fraction OF the canvas (`x = 0.5 + offsetX / canvasWidth`),
+     * so the value is resolution-independent and reproduces the exact offset the reader
+     * converts back on any device.
+     *
+     * Total on a degenerate input: a not-yet-measured (`<= 0`) or non-finite canvas
+     * dimension collapses that axis to the centre rather than dividing by zero, a
+     * non-finite offset collapses to centre, and a non-finite/non-positive [scale] decays
+     * to the neutral 1× — so a malformed transform can never blank or invert the wire
+     * object, only fail to reframe it (mirroring the reader's tolerant decay).
+     */
+    fun toBackgroundFraming(canvasWidth: Float, canvasHeight: Float): StoryBackgroundFraming =
+        StoryBackgroundFraming(
+            x = 0.5 + fractionOffset(offsetX, canvasWidth),
+            y = 0.5 + fractionOffset(offsetY, canvasHeight),
+            scale = scale.toDouble().takeIf { it.isFinite() && it > 0.0 } ?: 1.0,
+        )
+
     companion object {
         /** Content fills the 9:16 canvas exactly — no pan range. */
         const val MIN_SCALE: Float = 1f
@@ -74,5 +94,9 @@ data class StoryCanvasTransform(
             val limit = maxOffset(containerSize, scale)
             return offset.coerceIn(-limit, limit)
         }
+
+        /** A pixel [offset] as a signed fraction of [size]; `0.0` on a degenerate size/offset. */
+        private fun fractionOffset(offset: Float, size: Float): Double =
+            if (size > 0f && offset.isFinite()) offset.toDouble() / size.toDouble() else 0.0
     }
 }

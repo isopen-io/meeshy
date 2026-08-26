@@ -93,6 +93,8 @@ data class StoryComposerUiState(
     val isUploadingMedia: Boolean = false,
     val isPublishing: Boolean = false,
     val errorMessage: String? = null,
+    val canvasWidthPx: Float = 0f,
+    val canvasHeightPx: Float = 0f,
 ) {
     /**
      * Publishable when some slide carries text, media **or** a publishable text
@@ -667,12 +669,20 @@ class StoryComposerViewModel @Inject constructor(
      * gesture deltas and the measured canvas size; all transform math is unit-tested
      * in one place, so the canvas stays glue.
      */
-    fun onCanvasTransform(panX: Float, panY: Float, zoom: Float, canvasWidth: Float, canvasHeight: Float) =
-        applyDeck { deck ->
-            deck.updateSelectedTransform(
-                deck.selectedSlide.transform.apply(panX, panY, zoom, canvasWidth, canvasHeight),
-            )
+    fun onCanvasTransform(panX: Float, panY: Float, zoom: Float, canvasWidth: Float, canvasHeight: Float) {
+        // The canvas is a single fixed 9:16 box shared by every slide, and a gesture is the
+        // only way to make a transform non-identity — so the size that produced the offset is
+        // captured here and is exactly the size needed to normalise it back at publish.
+        _state.update {
+            it.copy(
+                deck = it.deck.updateSelectedTransform(
+                    it.deck.selectedSlide.transform.apply(panX, panY, zoom, canvasWidth, canvasHeight),
+                ),
+                canvasWidthPx = canvasWidth,
+                canvasHeightPx = canvasHeight,
+            ).mirrorDraftToSelection()
         }
+    }
 
     /**
      * Sets (or clears, with null) the **selected** slide's photo filter — the Effets
@@ -913,7 +923,7 @@ class StoryComposerViewModel @Inject constructor(
                 filterIntensity = slide.filterIntensity,
                 durationSecondsPin = slide.durationSecondsPin,
                 background = slide.background,
-                backgroundMedia = resolveBackgroundMedia(slide, current.attachments),
+                backgroundMedia = resolveBackgroundMedia(slide, current),
             )
             PublishPlan(
                 request = draft.toCreateStoryRequest(language),
@@ -928,9 +938,11 @@ class StoryComposerViewModel @Inject constructor(
      * nothing is designated or the id has no uploaded media yet (a still-pending offline
      * upload has no server URL to point the reader's background layer at, so it publishes
      * as a plain flat-media slide until the upload lands) — never a broken object. Carries
-     * the slide's author-chosen [StorySlide.backgroundLoop] (honoured only for a video).
+     * the slide's author-chosen [StorySlide.backgroundLoop] (honoured only for a video) and
+     * the [resolveBackgroundFraming] pan/zoom (honoured only for a framed image).
      */
-    private fun resolveBackgroundMedia(slide: StorySlide, attachments: List<UploadedMedia>): StoryBackgroundMedia? {
+    private fun resolveBackgroundMedia(slide: StorySlide, state: StoryComposerUiState): StoryBackgroundMedia? {
+        val attachments = state.attachments
         val media = slide.backgroundMediaId?.let { bgId -> attachments.firstOrNull { it.id == bgId } } ?: return null
         return StoryBackgroundMedia(
             mediaId = media.id,
@@ -938,7 +950,27 @@ class StoryComposerViewModel @Inject constructor(
             mimeType = media.mimeType,
             durationSeconds = media.durationMs?.let { it / 1000.0 },
             loop = slide.backgroundLoop,
+            framing = resolveBackgroundFraming(slide, media, state),
         )
+    }
+
+    /**
+     * Projects the slide's canvas pan/zoom onto the wire's normalised framing — but only when
+     * the designated background is the media the canvas actually frames. The composer canvas
+     * renders (and the pan/zoom gesture reframes) the slide's **first** resolved attachment;
+     * if the author designated a *different* attachment as the background, that gesture never
+     * framed it, so its framing stays [StoryBackgroundFraming.IDENTITY] rather than borrowing a
+     * pan the author applied to another image. [StoryBackgroundMedia.toMediaObject] further
+     * drops framing for a video, so a non-image background is unaffected here too.
+     */
+    private fun resolveBackgroundFraming(
+        slide: StorySlide,
+        media: UploadedMedia,
+        state: StoryComposerUiState,
+    ): StoryBackgroundFraming {
+        val framedMediaId = slide.mediaIds.firstOrNull { id -> state.attachments.any { it.id == id } }
+        if (media.id != framedMediaId) return StoryBackgroundFraming.IDENTITY
+        return slide.transform.toBackgroundFraming(state.canvasWidthPx, state.canvasHeightPx)
     }
 
     private fun resolvePublishLanguage(): String =
