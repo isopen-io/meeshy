@@ -87,6 +87,7 @@ data class StoryComposerUiState(
     val attachments: List<UploadedMedia> = emptyList(),
     val pendingUploads: List<PendingMediaUpload> = emptyList(),
     val selectedTextElementId: String? = null,
+    val elementMenuId: String? = null,
     val selectedStickerId: String? = null,
     val snapFeedback: SnapFeedback? = null,
     val band: ComposerBandState = ComposerBandState.Hidden,
@@ -174,6 +175,16 @@ data class StoryComposerUiState(
 
     /** True while the text field edits an on-canvas element rather than the slide caption. */
     val isEditingTextElement: Boolean get() = selectedTextElement != null
+
+    /**
+     * The unified long-press context menu for the element [elementMenuId] on the selected
+     * slide, or `null` when no menu is open (or the id no longer resolves, e.g. after the
+     * element was removed) — the pure [StoryElementMenu.resolve] decides which of edit /
+     * duplicate / reorder / delete may fire, so the screen renders a greyed row it can
+     * never mis-dispatch and stays glue.
+     */
+    val elementContextMenu: StoryElementContextMenu?
+        get() = elementMenuId?.let { StoryElementMenu.resolve(deck, it) }
 
     /**
      * The effective on-screen duration (seconds) of the **selected** slide — the
@@ -301,6 +312,49 @@ class StoryComposerViewModel @Inject constructor(
     /** Stops editing the active element — the field returns to the slide caption. */
     fun onDeselectTextElement() {
         _state.update { if (it.selectedTextElementId == null) it else it.copy(selectedTextElementId = null) }
+    }
+
+    /**
+     * Opens the unified long-press context menu on the on-canvas element [id], selecting it
+     * (so the menu targets the element the toolbar edits) and clearing any sticker selection.
+     * Inert when [id] is not on the selected slide, so a stale long-press never opens an empty
+     * menu. The available actions are resolved lazily by [StoryComposerUiState.elementContextMenu].
+     */
+    fun onOpenElementMenu(id: String) {
+        _state.update {
+            if (it.deck.selectedSlide.elements.none { element -> element.id == id }) it
+            else it.copy(elementMenuId = id, selectedTextElementId = id, selectedStickerId = null)
+        }
+    }
+
+    /** Dismisses the element context menu without touching the deck or the selection. */
+    fun onDismissElementMenu() {
+        _state.update { if (it.elementMenuId == null) it else it.copy(elementMenuId = null) }
+    }
+
+    /**
+     * Dispatches a chosen context-menu [action] to the existing per-element intent and then
+     * dismisses the menu. A disabled action (its row greyed by [StoryElementMenu.resolve]) or
+     * a menu that has since gone stale is a safe no-op on the deck — the menu still closes.
+     * EDIT just keeps the element selected for the text field; the others reuse the same
+     * duplicate / reorder / remove reducers the floating toolbar already drives.
+     */
+    fun onElementMenuAction(action: StoryElementAction) {
+        val menu = _state.value.elementContextMenu
+        if (menu != null && menu.isEnabled(action)) {
+            val id = menu.elementId
+            when (action) {
+                StoryElementAction.EDIT -> onSelectTextElement(id)
+                StoryElementAction.DUPLICATE -> onDuplicateTextElement(id)
+                StoryElementAction.DELETE -> onRemoveTextElement(id)
+                StoryElementAction.SEND_TO_BACK,
+                StoryElementAction.MOVE_BACKWARD,
+                StoryElementAction.MOVE_FORWARD,
+                StoryElementAction.BRING_TO_FRONT,
+                -> action.zOrder?.let { onReorderTextElement(id, it) }
+            }
+        }
+        onDismissElementMenu()
     }
 
     /**

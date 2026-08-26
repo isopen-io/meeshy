@@ -2319,4 +2319,110 @@ class StoryComposerViewModelTest {
         coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
         assertThat(request.captured.storyEffects?.background).isEqualTo("gradient:FF2E63:08D9D6")
     }
+
+    // --- unified element context menu ---
+
+    @Test
+    fun `onOpenElementMenu selects the element and exposes its resolved menu`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onOpenElementMenu(id)
+
+        val menu = vm.state.value.elementContextMenu!!
+        assertThat(menu.elementId).isEqualTo(id)
+        assertThat(vm.state.value.selectedTextElementId).isEqualTo(id)
+        assertThat(vm.state.value.selectedStickerId).isNull()
+    }
+
+    @Test
+    fun `onOpenElementMenu on an id absent from the selected slide is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onOpenElementMenu("ghost")
+
+        assertThat(vm.state.value.elementContextMenu).isNull()
+    }
+
+    @Test
+    fun `onDismissElementMenu closes the menu without disturbing the selection`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+        vm.onOpenElementMenu(id)
+
+        vm.onDismissElementMenu()
+
+        assertThat(vm.state.value.elementContextMenu).isNull()
+        assertThat(vm.state.value.selectedTextElementId).isEqualTo(id)
+    }
+
+    @Test
+    fun `onElementMenuAction DUPLICATE clones the element and closes the menu`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+        vm.onOpenElementMenu(id)
+
+        vm.onElementMenuAction(StoryElementAction.DUPLICATE)
+
+        assertThat(vm.state.value.selectedSlideTextElements).hasSize(2)
+        assertThat(vm.state.value.elementContextMenu).isNull()
+    }
+
+    @Test
+    fun `onElementMenuAction DELETE removes the element and closes the menu`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+        vm.onOpenElementMenu(id)
+
+        vm.onElementMenuAction(StoryElementAction.DELETE)
+
+        assertThat(vm.state.value.selectedSlideTextElements).isEmpty()
+        assertThat(vm.state.value.elementContextMenu).isNull()
+    }
+
+    @Test
+    fun `onElementMenuAction BRING_TO_FRONT restacks the element and closes the menu`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val back = vm.state.value.selectedTextElement!!.id
+        vm.onAddTextElement() // a second element sits in front of the first
+        vm.onOpenElementMenu(back)
+
+        vm.onElementMenuAction(StoryElementAction.BRING_TO_FRONT)
+
+        assertThat(vm.state.value.selectedSlideTextElements.last().id).isEqualTo(back)
+        assertThat(vm.state.value.elementContextMenu).isNull()
+    }
+
+    @Test
+    fun `onElementMenuAction on a disabled action leaves the deck untouched but closes the menu`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val only = vm.state.value.selectedTextElement!!.id
+        vm.onOpenElementMenu(only)
+        // A single-element slide: SEND_TO_BACK is a disabled row (already at the back).
+        val before = vm.state.value.deck
+
+        vm.onElementMenuAction(StoryElementAction.SEND_TO_BACK)
+
+        assertThat(vm.state.value.deck).isSameInstanceAs(before)
+        assertThat(vm.state.value.elementContextMenu).isNull()
+    }
+
+    @Test
+    fun `onElementMenuAction with no menu open is a safe no-op`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val before = vm.state.value.deck
+
+        vm.onElementMenuAction(StoryElementAction.DELETE)
+
+        assertThat(vm.state.value.deck).isSameInstanceAs(before)
+        assertThat(vm.state.value.elementContextMenu).isNull()
+    }
 }

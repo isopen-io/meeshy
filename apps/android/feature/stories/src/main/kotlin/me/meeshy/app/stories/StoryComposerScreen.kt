@@ -50,6 +50,8 @@ import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.BorderColor
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatAlignLeft
@@ -67,6 +69,8 @@ import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
@@ -82,6 +86,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -243,10 +248,14 @@ fun StoryComposerScreen(
                 colorMatrix = state.selectedSlideFilterMatrix,
                 textElements = state.selectedSlideTextElements,
                 selectedElement = state.selectedTextElement,
+                elementMenu = state.elementContextMenu,
                 stickers = state.selectedSlideStickers,
                 selectedStickerId = state.selectedStickerId,
                 onTransform = viewModel::onCanvasTransform,
                 onElementTap = viewModel::onSelectTextElement,
+                onElementLongPress = viewModel::onOpenElementMenu,
+                onElementMenuAction = viewModel::onElementMenuAction,
+                onElementMenuDismiss = viewModel::onDismissElementMenu,
                 onElementDrag = viewModel::onTextElementMoved,
                 onElementDragEnd = viewModel::onTextElementDragEnd,
                 onElementTransform = viewModel::onTextElementTransform,
@@ -592,10 +601,14 @@ private fun StoryCanvasSurface(
     colorMatrix: StoryColorMatrix,
     textElements: List<StoryTextElement>,
     selectedElement: StoryTextElement?,
+    elementMenu: StoryElementContextMenu?,
     stickers: List<StoryStickerElement>,
     selectedStickerId: String?,
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
     onElementTap: (String) -> Unit,
+    onElementLongPress: (String) -> Unit,
+    onElementMenuAction: (StoryElementAction) -> Unit,
+    onElementMenuDismiss: () -> Unit,
     onElementDrag: (String, Float, Float) -> Unit,
     onElementDragEnd: () -> Unit,
     onElementTransform: (String, Float, Float) -> Unit,
@@ -723,9 +736,13 @@ private fun StoryCanvasSurface(
                 TextElementLayer(
                     element = element,
                     selected = element.id == selectedElement?.id,
+                    menu = elementMenu?.takeIf { it.elementId == element.id },
                     canvasWidthPx = canvasWidthPx,
                     canvasHeightPx = canvasHeightPx,
                     onTap = { onElementTap(element.id) },
+                    onLongPress = { onElementLongPress(element.id) },
+                    onMenuAction = onElementMenuAction,
+                    onMenuDismiss = onElementMenuDismiss,
                     onDrag = { dxPx, dyPx ->
                         if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
                             onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
@@ -793,9 +810,13 @@ private fun StoryCanvasSurface(
 private fun TextElementLayer(
     element: StoryTextElement,
     selected: Boolean,
+    menu: StoryElementContextMenu?,
     canvasWidthPx: Float,
     canvasHeightPx: Float,
     onTap: () -> Unit,
+    onLongPress: () -> Unit,
+    onMenuAction: (StoryElementAction) -> Unit,
+    onMenuDismiss: () -> Unit,
     onDrag: (Float, Float) -> Unit,
     onDragEnd: () -> Unit,
     onTransform: (Float, Float) -> Unit,
@@ -820,7 +841,9 @@ private fun TextElementLayer(
                 sizePx = it
                 onMeasured(it)
             }
-            .pointerInput(element.id) { detectTapGestures { onTap() } }
+            .pointerInput(element.id) {
+                detectTapGestures(onLongPress = { onLongPress() }, onTap = { onTap() })
+            }
             .pointerInput(element.id) {
                 detectTransformGestures { _, pan, zoom, rotation ->
                     onDrag(pan.x, pan.y)
@@ -917,7 +940,43 @@ private fun TextElementLayer(
                 )
             }
         }
+        // Unified long-press context menu, anchored to the element it targets. Each row's
+        // availability comes from the pure StoryElementMenu.resolve, so a greyed row can
+        // never dispatch an inert reducer; picking one routes through onMenuAction, which
+        // also closes the menu.
+        DropdownMenu(expanded = menu != null, onDismissRequest = onMenuDismiss) {
+            menu?.items?.forEach { item ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(item.action.labelRes())) },
+                    enabled = item.enabled,
+                    leadingIcon = { Icon(item.action.menuIcon(), contentDescription = null) },
+                    onClick = { onMenuAction(item.action) },
+                )
+            }
+        }
     }
+}
+
+/** The localised label for a context-menu [StoryElementAction] row. */
+private fun StoryElementAction.labelRes(): Int = when (this) {
+    StoryElementAction.EDIT -> R.string.stories_composer_edit_element
+    StoryElementAction.DUPLICATE -> R.string.stories_composer_duplicate_element
+    StoryElementAction.SEND_TO_BACK -> R.string.stories_composer_zorder_to_back
+    StoryElementAction.MOVE_BACKWARD -> R.string.stories_composer_zorder_backward
+    StoryElementAction.MOVE_FORWARD -> R.string.stories_composer_zorder_forward
+    StoryElementAction.BRING_TO_FRONT -> R.string.stories_composer_zorder_to_front
+    StoryElementAction.DELETE -> R.string.stories_composer_remove_text
+}
+
+/** The leading icon for a context-menu [StoryElementAction] row. */
+private fun StoryElementAction.menuIcon(): ImageVector = when (this) {
+    StoryElementAction.EDIT -> Icons.Filled.Edit
+    StoryElementAction.DUPLICATE -> Icons.Filled.ContentCopy
+    StoryElementAction.SEND_TO_BACK -> Icons.Filled.VerticalAlignBottom
+    StoryElementAction.MOVE_BACKWARD -> Icons.Filled.ArrowDownward
+    StoryElementAction.MOVE_FORWARD -> Icons.Filled.ArrowUpward
+    StoryElementAction.BRING_TO_FRONT -> Icons.Filled.VerticalAlignTop
+    StoryElementAction.DELETE -> Icons.Filled.Delete
 }
 
 /**

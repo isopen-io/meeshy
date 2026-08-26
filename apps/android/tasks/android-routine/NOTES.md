@@ -5,6 +5,26 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-26 — the scope gate must diff against `origin/main`, not the local `main` ref (slice `story-element-context-menu`)
+Branching with `git checkout -B <slice> origin/main` bases the slice on the freshly-fetched remote, but the LOCAL `main`
+ref stays wherever it last was — here dozens of commits behind. So `git diff main...HEAD` (or `git diff --cached main`)
+listed `.github/workflows/*`, `CLAUDE.md`, and a pile of `core/model` files that this slice never touched: they are simply
+NEWER on `origin/main` than on the stale local ref, and the diff shows every commit the local ref is missing as if the
+slice deleted/reverted them. That would fail the "apps/android only" merge gate for a phantom reason. **Always verify scope
+with `git diff --cached --name-only origin/main`** (the real base), or `git fetch origin main && git branch -f main origin/main`
+first. The clean run showed the true 9-file `apps/android`-only diff. Cheap lesson, but it turns a 3-second panic into a
+non-event next time.
+
+## 2026-08-26 — a context-menu resolver earns behavioural tests by being tied to the reducer it fronts (slice `story-element-context-menu`)
+A "which menu rows are enabled?" resolver is trivially tautology-bait: `assertThat(resolve(backElement).sendToBack.enabled).isFalse()`
+just restates the code. The non-tautological form asserts the resolver AGREES WITH THE REDUCER it gates:
+`assertThat(menu.isEnabled(action)).isEqualTo(deck.reorderTextElement(id, action.zOrder!!) !== deck)` — the row is enabled
+exactly when the op is not inert, proven against the real `reorderTextElement`/`duplicateTextElement` inert-ness rather than
+against a hand-set expectation. This also future-proofs the menu: if the reducer's inert conditions ever change, the property
+test fails until the resolver follows. Keep the enum→op mapping (`StoryElementAction.zOrder`) a SINGLE projection so the menu
+and the reducer physically cannot drift, and mutation-prove it (force every row `enabled = true` → only the position/cap
+behavioural tests redden, never the shape/mapping ones).
+
 ## 2026-08-26 — closing an author→reader loop: the pure conversion is the INVERSE of the reader's, and the "missing" datum is captured where it's uniquely available (slice `story-composer-background-image-transform`)
 The reader slice below made Android HONOUR a background image's `x`/`y`/`scale` framing; this slice made the composer
 WRITE it, so a story an Android author frames renders framed everywhere (its own reader included). Three reusable moves:

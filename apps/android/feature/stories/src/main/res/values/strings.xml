@@ -80,6 +80,8 @@
     <string name="stories_composer_align_center">Align centre</string>
     <string name="stories_composer_align_right">Align right</string>
     <string name="stories_composer_duplicate_element">Duplicate element</string>
+    <string name="stories_composer_edit_element">Edit text</string>
+    <string name="stories_composer_element_menu">Element actions</string>
     <string name="stories_composer_zorder_to_back">Send to back</string>
     <string name="stories_composer_zorder_backward">Send backward</string>
     <string name="stories_composer_zorder_forward">Bring forward</string>
