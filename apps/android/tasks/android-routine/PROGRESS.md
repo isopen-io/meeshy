@@ -2,6 +2,59 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-26 **the viewer honours a background IMAGE's framing transform** (slice
+> `story-viewer-background-media-transform`, feature-parity E. Stories — "Backgrounds: … image", the reader half of
+> the pending "background IMAGE with transform" item). Before this, the viewer drew any background image as a plain
+> `ContentScale.Crop` fill, silently dropping the pan/zoom framing an iOS/web/backend author placed on the
+> background `StoryMediaObject` (`x`/`y`/`scale`/`rotation`) — a real cross-client parity gap: a story framed on
+> iOS rendered un-framed on Android.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3523 (`feat/presence-privacy`,
+> gateway/web/iOS) — not a `claude/apps/android/<slice-id>` slice from this routine, no `apps/android` collision.
+> Prior slice (`story-composer-background-video-loop`) already merged. Branched off freshly-fetched `origin/main`
+> (`4b8200db`).
+>
+> **Investigated iOS FIRST (Explore subagent) before porting** — to avoid shipping a no-op if the transform were a
+> phantom. Finding: iOS's `StoryCanvasUIView+Rendering.swift` aspect-FILLS the background as a base, then applies
+> the object's `scale` + a pixel offset FROM CENTRE `((x-0.5)*W, (y-0.5)*H)` + `rotation` ON TOP, clipped
+> (`masksToBounds`) — an "Instagram zoom inside the background". A background IGNORES `anchor`/`aspectRatio`
+> (unlike a foreground object, which uses `x`/`y` as an anchored position and `aspectRatio` to size a box). So the
+> port is a DISTINCT conversion, not a reuse of the foreground projection.
+>
+> **The fix — one pure conversion + one VM projection + one screen `graphicsLayer`.** (1) `StoryBackgroundObjectTransform`
+> (`:feature:stories`, pure): `from(StoryMediaObject)` → `(scale, offsetXFraction=(x-0.5), offsetYFraction=(y-0.5),
+> rotationDegrees)`, offset kept as a canvas FRACTION so it is resolution-independent. Decays TOLERANTLY — a
+> non-finite/non-positive `scale` → neutral 1× (a 0/negative scale would vanish the background), a non-finite
+> position/rotation → its neutral component. (2) `StoryViewerViewModel.resolveBackgroundMedia` projects it onto
+> `StorySlideView.backgroundTransform` for an IMAGE background ONLY, and only when the resolved image is the
+> background object's OWN url (a legacy/flat thumbnail fallback keeps IDENTITY); a video keeps IDENTITY (its player
+> render path is a scoped-out follow-up, no regression). (3) The viewer's image branch applies it via `graphicsLayer`
+> (offset fractions × measured `size`, `rotationZ`, clipped by the 9:16 frame).
+>
+> **Tests: +14** — 10 `StoryBackgroundObjectTransformTest` (identity; right-of-centre +x; left/above −x/−y; scale
+> passthrough; rotation passthrough; non-positive scale → 1×; non-finite scale → 1×; non-finite position → 0
+> offset; non-finite rotation → 0; isIdentity only-when-all-neutral), 4 `StoryViewerViewModelTest` (framed image
+> projects the transform; default-framed image → IDENTITY; framed VIDEO → IDENTITY; no background media → IDENTITY).
+> Mutation-RED-proven twice: dropping the `-0.5` centre offset reddened EXACTLY the 4 offset tests while
+> scale/rotation stayed green; forcing the VM projection to IDENTITY reddened EXACTLY the framed-image test.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** AGP auto-installed pristine
+> `android-37.0`; the first `./gradlew` hash-errored on `android-37`; `cp -r android-37.0 android-37` +
+> `source.properties` ApiLevel 37.0→37, keeping BOTH dirs, resolved it (documented recipe).
+>
+> **Verified**: targeted suites green, then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest,
+> 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL in 6m 5s** before any push. Reviewer PASS. Diff is `apps/android`
+> only (1 new prod file + 2 amended prod files + 1 new test file + 1 amended test file + 2 tracking docs). Verdict:
+> **PASS** — a pure render-conversion + a VM projection + a screen `graphicsLayer`; behavioural tests through the
+> public API; no production logic outside `apps/android`.
+>
+> **Next**: close the author→reader loop — the composer AUTHORING half. The composer already persists framing as a
+> per-slide `StoryCanvasTransform` (viewport **pixels**: scale + offsetX/Y px) but publishes the background object
+> with default `x`/`y`/`scale`. Closing it needs a px→normalised conversion (`x = 0.5 + offsetX/canvasWidth`) that
+> requires the canvas width at publish — NOT currently retained in the VM (the real wrinkle; see NOTES). Also
+> pending: background VIDEO framing at render (the video player path). Scout `feature-parity.md` read-only before
+> branching.
+
 > On 2026-08-25 **the composer AUTHORS whether a background VIDEO loops** (slice
 > `story-composer-background-video-loop`, feature-parity E. Stories — "Backgrounds: … looping/non-looping
 > video", the pending half of that item). Before this, `StoryBackgroundMedia.toMediaObject()` hard-coded

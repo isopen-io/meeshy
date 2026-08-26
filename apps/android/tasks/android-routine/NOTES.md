@@ -5,6 +5,30 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-26 — a background object carries the SAME transform fields as a foreground one but the reader converts them DIFFERENTLY (slice `story-viewer-background-media-transform`)
+The Android viewer drew any background image as a plain `ContentScale.Crop` fill, dropping the pan/zoom framing an
+author put on the background `StoryMediaObject`. The trap was assuming a background's `x`/`y`/`scale` mean what a
+foreground object's do. They do NOT: iOS's `StoryCanvasUIView+Rendering.swift` aspect-FILLS the background as a base,
+then applies `scale` + a pixel offset **FROM CENTRE** `((x-0.5)*W, (y-0.5)*H)` + `rotation` ON TOP, clipped — an
+"Instagram zoom inside the background". A foreground object instead uses `x`/`y` as an anchored POSITION and
+`aspectRatio`/`anchor` to size a discrete box (`StoryMediaLayer`); a background ignores `anchor`/`aspectRatio`
+entirely. So the port is a distinct pure conversion (`StoryBackgroundObjectTransform.from`), not a reuse of the
+foreground projection. Kept the offset as a canvas FRACTION (`x-0.5`) so the Compose `graphicsLayer` multiplies by
+its own measured `size` — resolution-independent, no canvas dims threaded into the VM. Confirmed the split by reading
+iOS first (an Explore subagent) BEFORE porting: the alternative reading (background = aspect-fill only, transform is
+a phantom) would have shipped a no-op — the recurring "don't port a non-functional iOS toggle" trap, avoided here by
+reading the RENDER path, not just the model.
+
+Reader-first is deliberate and has precedent: the colour/gradient background shipped reader-side
+(`story-slide-background-value`) as its OWN slice before composer authoring (`story-composer-slide-background`). This
+slice is the reader half; it is NOT a dead end — it renders framing that iOS/web/backend ALREADY publish and Android
+users view cross-client. The standing authoring debt (the author→reader loop, per the 08-25 note below): the composer
+holds framing as a per-slide `StoryCanvasTransform` in **viewport pixels** (scale + offsetX/Y px), while the wire
+wants **normalised** `x`/`y`. Closing the loop needs a px→fraction conversion (`x = 0.5 + offsetX/canvasWidth`) that
+requires the canvas width at publish — not currently retained in the VM. That is the real wrinkle for the follow-up,
+noted so it is not re-discovered. Video-background framing was scoped OUT (separate player render path) and kept at
+IDENTITY, so no regression to the existing video path.
+
 ## 2026-08-25 — an authoring designation must produce the exact wire object the reader ALREADY reads (slice `story-composer-background-media`)
 The Android composer published slide media as a flat `mediaIds` list and emitted **no** `effects.mediaObjects` — so
 the reader's rich background path (`resolveBackgroundMedia` → `firstOrNull { it.isBackground }`, and the
