@@ -15,16 +15,40 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
 // ─── Mock logger (must be before imports) ─────────────────────────────────────
-jest.mock('../../../utils/logger-enhanced', () => ({
+jest.mock('../../../utils/logger-enhanced', () => {
+  const child = {
+    info: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  };
+  return {
+    enhancedLogger: {
+      child: () => child,
+    },
+  };
+});
+
+type MockedLoggerModule = {
   enhancedLogger: {
-    child: () => ({
-      info: jest.fn(),
-      debug: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-    }),
-  },
-}));
+    child: () => {
+      info: jest.Mock;
+      debug: jest.Mock;
+      warn: jest.Mock;
+      error: jest.Mock;
+    };
+  };
+};
+
+const zmqLogger = (jest.requireMock('../../../utils/logger-enhanced') as MockedLoggerModule)
+  .enhancedLogger.child();
+
+function allLogCallsSerialized(): string {
+  return [zmqLogger.info, zmqLogger.debug, zmqLogger.warn, zmqLogger.error]
+    .flatMap(fn => fn.mock.calls as unknown[][])
+    .map(call => JSON.stringify(call))
+    .join('\n');
+}
 
 // ─── Mock zmq-helpers ─────────────────────────────────────────────────────────
 const mockLoadAudioAsBinary = jest.fn();
@@ -185,6 +209,92 @@ describe('ZmqRequestSender', () => {
     });
   });
 
+  // ── Log hygiene: aucun contenu utilisateur, une ligne structurée par envoi ────
+
+  describe('log hygiene (no user content in logs)', () => {
+    const SENTINEL = 'SECRET_UTTERANCE_XYZ';
+
+    beforeEach(() => {
+      zmqLogger.info.mockClear();
+      zmqLogger.debug.mockClear();
+      zmqLogger.warn.mockClear();
+      zmqLogger.error.mockClear();
+    });
+
+    it('never logs the translation request text', async () => {
+      await sender.sendTranslationRequest(makeTranslationRequest({ text: SENTINEL }));
+      expect(allLogCallsSerialized()).not.toContain(SENTINEL);
+    });
+
+    it('logs a single structured line per translation send, with textLength instead of text', async () => {
+      const req = makeTranslationRequest({ text: SENTINEL });
+      await sender.sendTranslationRequest(req, 'tid-log-1');
+      expect(zmqLogger.info).toHaveBeenCalledTimes(1);
+      expect(zmqLogger.info).toHaveBeenCalledWith(
+        'translation push sent',
+        expect.objectContaining({
+          taskId: 'tid-log-1',
+          messageId: req.messageId,
+          conversationId: req.conversationId,
+          sourceLanguage: req.sourceLanguage,
+          targetLanguages: ['fr', 'de'],
+          modelType: 'basic',
+          textLength: SENTINEL.length,
+        })
+      );
+    });
+
+    it('never logs audio base64 data on transcription-only sends', async () => {
+      const audioData = Buffer.from(SENTINEL).toString('base64');
+      await sender.sendTranscriptionOnlyRequest(
+        makeTranscriptionRequest({ audioPath: undefined, audioData, audioFormat: 'wav' })
+      );
+      expect(allLogCallsSerialized()).not.toContain(audioData);
+      expect(allLogCallsSerialized()).not.toContain(SENTINEL);
+    });
+
+    it('logs at most 2 lines per transcription-only send', async () => {
+      await sender.sendTranscriptionOnlyRequest(makeTranscriptionRequest());
+      expect(zmqLogger.info.mock.calls.length).toBeLessThanOrEqual(2);
+    });
+
+    it('never logs mobile transcription text on audio process sends', async () => {
+      await sender.sendAudioProcessRequest(
+        makeAudioProcessRequest({
+          mobileTranscription: { text: SENTINEL, language: 'en', confidence: 0.9 },
+        })
+      );
+      expect(allLogCallsSerialized()).not.toContain(SENTINEL);
+    });
+
+    it('logs at most 2 lines per audio process send, structured without content', async () => {
+      const req = makeAudioProcessRequest();
+      await sender.sendAudioProcessRequest(req, 'audio-log-1');
+      expect(zmqLogger.info.mock.calls.length).toBeLessThanOrEqual(2);
+      expect(zmqLogger.info).toHaveBeenCalledWith(
+        'audio process push sent',
+        expect.objectContaining({
+          taskId: 'audio-log-1',
+          messageId: req.messageId,
+          attachmentId: req.attachmentId,
+          conversationId: req.conversationId,
+          targetLanguages: ['fr'],
+          hasMobileTranscription: false,
+        })
+      );
+    });
+
+    it('logs at most 2 lines per voice API send', async () => {
+      await sender.sendVoiceAPIRequest(makeVoiceAPIRequest());
+      expect(zmqLogger.info.mock.calls.length).toBeLessThanOrEqual(2);
+    });
+
+    it('logs at most 2 lines per voice profile send', async () => {
+      await sender.sendVoiceProfileRequest(makeVoiceProfileRequest());
+      expect(zmqLogger.info.mock.calls.length).toBeLessThanOrEqual(2);
+    });
+  });
+
   // ── sendTranslationRequest ────────────────────────────────────────────────────
 
   describe('sendTranslationRequest', () => {
@@ -300,10 +410,9 @@ describe('ZmqRequestSender', () => {
       expect(taskId).toBe('audio-existing-id');
     });
 
-    it('includes "provided" in log when mobileTranscription is set', async () => {
+    it('sends when mobileTranscription is set', async () => {
       const req = makeAudioProcessRequest({ mobileTranscription: { text: 'hello', language: 'en', confidence: 0.9 } });
       await sender.sendAudioProcessRequest(req);
-      // branch: request.mobileTranscription ? 'provided' : 'none' — truthy side
       expect(connectionManager.sendMultipart).toHaveBeenCalledTimes(1);
     });
 
@@ -414,7 +523,7 @@ describe('ZmqRequestSender', () => {
       expect(sender.getPendingRequestsCount()).toBe(1);
     });
 
-    it('logs "OUI" branch when mobileTranscription is provided', async () => {
+    it('sends in base64 mode when mobileTranscription is provided', async () => {
       const audioData = Buffer.from('bytes').toString('base64');
       const req = makeTranscriptionRequest({
         audioPath: undefined,
@@ -422,15 +531,12 @@ describe('ZmqRequestSender', () => {
         mobileTranscription: { text: 'hello', language: 'en', confidence: 0.95 },
       });
       await sender.sendTranscriptionOnlyRequest(req);
-      // branch: request.mobileTranscription ? 'OUI' : 'NON' — truthy side (line 251)
-      // branch: request.mobileTranscription ? 'provided' : 'none' — truthy side (line 323)
       expect(connectionManager.sendMultipart).toHaveBeenCalledTimes(1);
     });
 
-    it('logs "N/A" when attachmentId is omitted', async () => {
+    it('sends when attachmentId is omitted', async () => {
       const req = makeTranscriptionRequest({ attachmentId: undefined });
       await sender.sendTranscriptionOnlyRequest(req);
-      // branch: request.attachmentId || 'N/A' — falsy side (line 317)
       expect(connectionManager.sendMultipart).toHaveBeenCalledTimes(1);
     });
 
@@ -494,10 +600,9 @@ describe('ZmqRequestSender', () => {
       expect(taskId).toBe('vapi-key-2');
     });
 
-    it('logs "N/A" when userId is omitted', async () => {
+    it('sends when userId is omitted', async () => {
       const req = makeVoiceAPIRequest({ taskId: 'vapi-no-user', userId: undefined });
       await sender.sendVoiceAPIRequest(req);
-      // branch: request.userId || 'N/A' — falsy side (line 358)
       expect(connectionManager.send).toHaveBeenCalledTimes(1);
     });
   });
