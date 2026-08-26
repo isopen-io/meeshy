@@ -2,6 +2,57 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-26 **you can repost someone else's story** (slice `story-composer-repost-link`, feature-parity
+> E. Stories — the "Repost flow" line, its AUTHOR half now carries the link → the line moves from
+> reader-only to reader + author-link, still `[~]` because cloning the source's slide CONTENT remains). Before
+> this, Android had NO way to create a repost at all: the viewer's options menu offered only Delete (own) /
+> Report (other), and the composer always published a fresh, unlinked story.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3874 + #3861, both gateway PRs
+> (admin pagination schema, broadcast Prisme) — neither a `claude/apps/android/<slice-id>` routine slice, no
+> `apps/android` collision, nothing of mine to merge. Prior slice (`story-viewer-repost-attribution`) is on
+> `main` (#3864, HEAD `af05cf12`). Branched off freshly-fetched `origin/main`; scope verified with
+> `git diff --cached --name-only origin/main` (11 files, all `apps/android`).
+>
+> **The fix — one draft field + one VM intent + publish threading + Compose/nav glue.** (1)
+> `StoryComposerDraft.repostOfId` (new, optional) + `withRepostOf(value)` normalising blank/whitespace/`null`
+> → `null` (a repost of "nothing" must never ride the wire); `toCreateStoryRequest` carries it. (2)
+> `publishPlans` threads `current.draft.repostOfId` into EVERY per-slide plan, so a multi-slide repost links
+> every slide to the source. (3) VM `onRepostSource(sourceId)` — inert on blank, sets only the link (leaves the
+> author's own draft content untouched). (4) Composer-screen `LaunchedEffect(repostOfId)` seam calling
+> `onRepostSource`. (5) Viewer "Repost" `DropdownMenuItem` (non-own branch) → `onRepost(currentStoryId)`;
+> `story_composer?repostOfId={id}` optional nav arg; strings EN/FR/ES/PT. **Improves on iOS**: the reader half
+> already renders attribution from the published story's server-resolved fields, so Android needs NO
+> composer-side locked-badge element (iOS clones a brittle `isLocked` text object the composer must then
+> protect from drag/edit/delete) — the author side is a pure link.
+>
+> **Tests: +11** (5 `StoryComposerDraftTest` wire-carry/normalise + 6 `StoryComposerViewModelTest`
+> intent/publish, incl. a multi-slide repost asserting BOTH slides' requests carry the id). Non-tautological:
+> the wire tests drive real `toCreateStoryRequest`/`publish()` and assert the captured `CreateStoryRequest`,
+> not a restated constant. **Mutation-RED-proven**: neutering the wire mapping (`repostOfId = null`) reddens
+> EXACTLY the 3 link-carrying tests — the null-default, blank-drop, `withRepostOf`, and `onRepostSource`-state
+> tests stay green.
+>
+> **SDK bootstrap** — `dl.google.com` 200; the documented android-37 copy→patch (`cp -r android-37.0
+> android-37`, patch `source.properties` ApiLevel 37.0→37, keep BOTH dirs).
+>
+> **Verified**: targeted `StoryComposerDraftTest` + `StoryComposerViewModelTest` green, then the mutation
+> proof, then full `./apps/android/meeshy.sh check` equivalent (`assembleDebug` + `testDebugUnitTest`, 973
+> tasks, the CI-mirror gate) — **BUILD SUCCESSFUL in 5m 9s**. Reviewer PASS. Diff is `apps/android` only (11
+> files: draft field + VM intent/threading + composer-screen seam + viewer menu + nav arg + 4 strings + 2 test
+> files + tracking docs). Verdict: **PASS** — a pure draft/VM link carried through the exercised publish path;
+> behavioural tests through the public API tied to the real wire mapping; no production logic outside
+> `apps/android`.
+>
+> **Next**: §E "Repost flow" content-clone half (clone the source story's caption + text-elements + effects
+> into the composer as an editable starting point — a pure `StoryItem.storyEffects` → `StorySlide` mapping,
+> which needs the composer to load the source story by id via `StoryRepository`). OR the next-highest unchecked
+> §E item — "Draft save/restore … lost-media detection" (note: the lost-media resolver's core is currently
+> UNREACHABLE through the composer's public API — every deck media id is added together with its attachment /
+> pending upload, so a "dangling" id needs a draft-RESTORE seam first; build the restore/persistence infra
+> before the lost-media prompt, else its tests are unreachable). Scout `feature-parity.md` read-only before
+> branching.
+
 > On 2026-08-26 **the story viewer shows a reposted story's locked attribution badge** (slice
 > `story-viewer-repost-attribution`, feature-parity E. Stories — the "Repost flow: clone source story + locked
 > attribution badge" line, now `[~]`: the READER half ships; the AUTHOR clone half remains). Before this, the viewer

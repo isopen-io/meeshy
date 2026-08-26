@@ -222,10 +222,16 @@ object Routes {
     const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
     const val STORY_COMPOSER = "story_composer"
+    const val STORY_COMPOSER_REPOST_ARG = "repostOfId"
+    const val STORY_COMPOSER_ROUTE = "story_composer?$STORY_COMPOSER_REPOST_ARG={$STORY_COMPOSER_REPOST_ARG}"
     const val REELS = "reels?seed={seed}"
     val CALL = CallRoute.PATTERN
 
     fun reels(seed: String? = null): String = if (seed == null) "reels" else "reels?seed=$seed"
+
+    /** Opens the story composer as a repost of [storyId] — the source id rides as an optional arg. */
+    fun storyComposerRepost(storyId: String): String =
+        "story_composer?$STORY_COMPOSER_REPOST_ARG=${Uri.encode(storyId)}"
 
     fun postDetail(postId: String): String = "feed/post/$postId"
     fun chat(conversationId: String): String = "chat/$conversationId"
@@ -837,10 +843,25 @@ fun MeeshyApp(
                     navDeepLink { uriPattern = Routes.STORY_DEEP_LINK },
                 ),
             ) {
-                StoryViewerScreen(onClose = { navController.popBackStack() })
+                StoryViewerScreen(
+                    onClose = { navController.popBackStack() },
+                    onRepost = { storyId -> navController.navigate(Routes.storyComposerRepost(storyId)) },
+                )
             }
-            composable(Routes.STORY_COMPOSER) {
-                StoryComposerScreen(onClose = { navController.popBackStack() })
+            composable(
+                route = Routes.STORY_COMPOSER_ROUTE,
+                arguments = listOf(
+                    navArgument(Routes.STORY_COMPOSER_REPOST_ARG) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
+            ) { entry ->
+                StoryComposerScreen(
+                    onClose = { navController.popBackStack() },
+                    repostOfId = entry.arguments?.getString(Routes.STORY_COMPOSER_REPOST_ARG),
+                )
             }
             composable(
                 route = Routes.REELS,

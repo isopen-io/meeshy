@@ -611,4 +611,41 @@ class StoryComposerDraftTest {
         assertThat(request.storyEffects).isNotNull()
         assertThat(request.storyEffects?.mediaObjects).isNull()
     }
+
+    @Test
+    fun `a non-repost draft sends no repost link on the wire`() {
+        val request = StoryComposerDraft(text = "hi").toCreateStoryRequest("en")
+
+        assertThat(request.repostOfId).isNull()
+    }
+
+    @Test
+    fun `a repost draft carries the source id on the wire`() {
+        val request = StoryComposerDraft(text = "hi", repostOfId = "src-1").toCreateStoryRequest("en")
+
+        assertThat(request.repostOfId).isEqualTo("src-1")
+    }
+
+    @Test
+    fun `a blank repost source id is dropped from the wire`() {
+        val request = StoryComposerDraft(text = "hi", repostOfId = "   ").toCreateStoryRequest("en")
+
+        assertThat(request.repostOfId).isNull()
+    }
+
+    @Test
+    fun `withRepostOf normalises a blank source id to null`() {
+        assertThat(StoryComposerDraft().withRepostOf("  \t ").repostOfId).isNull()
+        assertThat(StoryComposerDraft().withRepostOf(null).repostOfId).isNull()
+    }
+
+    @Test
+    fun `withRepostOf keeps a non-blank source id and leaves the rest of the draft intact`() {
+        val draft = StoryComposerDraft(text = "keep me", visibility = StoryVisibility.FRIENDS)
+            .withRepostOf("src-9")
+
+        assertThat(draft.repostOfId).isEqualTo("src-9")
+        assertThat(draft.text).isEqualTo("keep me")
+        assertThat(draft.visibility).isEqualTo(StoryVisibility.FRIENDS)
+    }
 }

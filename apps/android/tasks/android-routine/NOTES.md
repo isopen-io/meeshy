@@ -5,6 +5,24 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-26 — the repost AUTHOR half is a pure LINK on Android, and a "lost-media" slice is currently unreachable (slice `story-composer-repost-link`)
+Two findings from carving the repost author half:
+- **The author side needs no composer-side badge.** iOS clones a `isLocked` text-object badge into the composer and then
+  must protect it from drag/edit/delete (a brittle, cross-cutting surface). Android already renders repost attribution
+  on the READER (slice `story-viewer-repost-attribution`) from the published story's server-resolved
+  `repostOfId`/`repostAuthorUsername` — so the author side collapses to carrying `repostOfId` onto **every** published
+  slide's `CreateStoryRequest`. The thin slice is: `StoryComposerDraft.repostOfId` + `withRepostOf` (blank→null) +
+  `toCreateStoryRequest` + `publishPlans` per-slide threading + a `onRepostSource` intent, reachable via the viewer's
+  existing options `DropdownMenu` (no new UI surface) and a `story_composer?repostOfId=` optional nav arg. Landing the
+  wiring in the ALREADY-EXERCISED publish path is what keeps the "lost"/link branch testable through the public API.
+- **Why the "Draft lost-media detection" slice was NOT taken this run.** The composer holds media as `deck.mediaIds`
+  resolved against `attachments`/`pendingUploads`. Every public path that adds a deck media id
+  (`applyUploaded`, `queueDurably`) adds its backing attachment/pending in the SAME update, and `onRemoveMedia` drops
+  both together — so a "dangling" id (in the deck, backed by nothing) is **unreachable through the public API today**.
+  A lost-media resolver's core branch therefore can't be driven behaviourally until a draft-RESTORE seam exists (restore
+  deck ids from disk WITHOUT their transient in-memory attachments = the real lost-media scenario). Build the
+  persistence/restore infra FIRST; a lost-media prompt shipped before it would be orphan UI with untestable logic.
+
 ## 2026-08-26 — a reader-side "locked badge" slice is a THREE-LAYER port, and each layer needs its own test (slice `story-viewer-repost-attribution`)
 Porting iOS's repost attribution badge (repost glyph + `@handle` after the author's name) looked like "add a Composable
 if-block", but a faithful port touched three layers, each with a distinct failure mode a test had to pin:
