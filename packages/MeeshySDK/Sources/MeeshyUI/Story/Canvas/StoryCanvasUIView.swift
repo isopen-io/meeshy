@@ -54,6 +54,16 @@ public final class StoryCanvasUIView: UIView {
             // change qu'à la réassignation de `slide`.
             cachedSlideTotalDuration = slide.computedTotalDuration()
 
+            // Any real slide mutation while editing counts as user activity —
+            // the single choke point through which every composer control
+            // (color/font/filter panels, sticker add/remove, background
+            // transform chips, gesture-driven drags) and every inline text
+            // edit eventually mutate the model, deduped against spurious
+            // SwiftUI re-renders by `StoryComposerCanvasView.slidesEqualForCanvas`
+            // upstream. Wakes the idle-throttled edit clock immediately
+            // (issue #3906) — see `noteEditInteraction()`.
+            if mode == .edit { noteEditInteraction() }
+
             // Skip expensive full-layer rebuild while a gesture is actively
             // manipulating an item (pan/pinch/rotate). The gesture handlers
             // update the specific CALayer transform directly. A full rebuild
@@ -549,10 +559,21 @@ public final class StoryCanvasUIView: UIView {
     // `WeakDisplayLinkTarget`, donc le deinit est atteignable.
     nonisolated(unsafe) var displayLink: CADisplayLink?
 
-    /// Always-on while in `.edit` and the view is in a window — preferred 120 Hz on
+    /// Runs while in `.edit` and the view is in a window — preferred 120 Hz on
     /// ProMotion devices for buttery gesture transforms (active rendering happens
-    /// inside the gesture handlers; this link's tick is a no-op for now and exists
-    /// so the display server keeps the high-rate clock running while editing).
+    /// inside the gesture handlers; the tick itself only re-feeds the glass
+    /// backdrop, see `refreshEditGlassBackdropIfNeeded`) so the display server
+    /// keeps the high-rate clock running while editing.
+    ///
+    /// **Not actually always-on (issue #3906).** After
+    /// `EditClockThrottle.defaultIdleDelay` seconds without a detected
+    /// interaction (and no genuinely active media, e.g. a playing timeline
+    /// preview), `driveEditClock(now:)` pauses this link (`isPaused = true`)
+    /// and suspends the ambient edit-mode preview loop — a screen nobody is
+    /// touching must not keep the GPU/decoder awake and heat the device.
+    /// `noteEditInteraction()` (called from every interaction entry point:
+    /// gestures, text edits, timeline scrub/play, slide mutations) resumes
+    /// both instantly. See `isEditClockThrottled`.
     nonisolated(unsafe) var editDisplayLink: CADisplayLink?
 
     // MARK: - Inline text editing
@@ -839,6 +860,29 @@ public final class StoryCanvasUIView: UIView {
     // MARK: - ProMotion edit-mode link
 
     var lastEditBackdropTimestamp: CFTimeInterval = 0
+
+    // MARK: - Edit clock idle throttle (issue #3906)
+
+    /// Timestamp (`CACurrentMediaTime()` domain — same as `CADisplayLink
+    /// .timestamp`) of the last detected user interaction on this canvas:
+    /// a gesture beginning (`gestureRecognizerShouldBegin`), an inline text
+    /// keystroke (`textViewDidChange`), a timeline-preview scrub/play
+    /// (`setTimelinePreview`/`setTimelinePreviewPlaying`), or a genuine
+    /// model mutation reaching `slide.didSet` while editing. Re-seeded to
+    /// "now" whenever `editDisplayLink` is (re)armed
+    /// (`startEditDisplayLinkIfNeeded`) so a freshly opened/reattached
+    /// composer always gets a full grace window before it can idle down.
+    /// Feeds `EditClockThrottle.regime(...)` from `driveEditClock(now:)`.
+    var lastEditInteractionAt: CFTimeInterval = 0
+
+    /// `true` while `editDisplayLink` is idled down (paused) and the
+    /// edit-mode preview loop (background/foreground video, foreground/
+    /// background audio) is suspended after
+    /// `EditClockThrottle.defaultIdleDelay` seconds without interaction or
+    /// genuinely active media. `public internal(set)` so composer-level
+    /// instrumentation and tests can observe the throttle without spinning
+    /// a real `CADisplayLink`.
+    public internal(set) var isEditClockThrottled: Bool = false
 
     // MARK: - Snap guides
 

@@ -41,6 +41,9 @@ extension StoryCanvasUIView {
     /// (nil). No-op hors `.edit` — le reader/viewer ne preview jamais.
     public func setTimelinePreview(seconds: Double?) {
         guard mode == .edit else { return }
+        // Scrubbing the timeline sheet is a composer-control interaction —
+        // wakes the idle-throttled edit clock (issue #3906).
+        noteEditInteraction()
         let wasActive = isTimelinePreviewActive
         timelinePreviewSeconds = seconds
         guard let seconds else {
@@ -61,6 +64,11 @@ extension StoryCanvasUIView {
     public func setTimelinePreviewPlaying(_ playing: Bool) {
         guard isTimelinePreviewActive else { return }
         guard timelinePreviewPlaying != playing else { return }
+        // Pressing play/pause is itself an interaction, and — while playing —
+        // `isEditMediaActivelyPlaying` only forces full rate on the NEXT tick;
+        // this wakes the (possibly idled) clock immediately, with no gap
+        // (issue #3906).
+        noteEditInteraction()
         timelinePreviewPlaying = playing
         pushSlidePlayheadToLayers()
         backgroundLayer.isPlaybackActive = playing
