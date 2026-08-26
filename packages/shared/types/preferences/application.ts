@@ -13,6 +13,12 @@ export const ApplicationPreferenceSchema = z.object({
   // Langue de l'interface uniquement (les langues de traduction sont dans User)
   interfaceLanguage: z.string().default('en'),
 
+  // Traduction automatique du contenu reçu — la SEULE préférence de
+  // traduction qui n'est PAS une langue. `User` n'a aucune colonne pour elle :
+  // ce document est son unique store, lu par les réponses d'authentification
+  // (`services/gateway/src/utils/auto-translate-preference.ts`).
+  autoTranslateEnabled: z.boolean().default(true),
+
   // UI Settings
   fontSize: z.enum(['small', 'medium', 'large']).default('medium'),
   fontFamily: z.string().default('inter'),
@@ -55,6 +61,7 @@ export const APPLICATION_PREFERENCE_DEFAULTS: ApplicationPreference = {
   theme: 'auto',
   accentColor: 'blue',
   interfaceLanguage: 'en',
+  autoTranslateEnabled: true,
   fontSize: 'medium',
   fontFamily: 'inter',
   lineHeight: 'normal',
