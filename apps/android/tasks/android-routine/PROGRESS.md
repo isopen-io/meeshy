@@ -2,6 +2,61 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-26 **the composer gathers every per-element action behind ONE long-press context menu** (slice
+> `story-element-context-menu`, feature-parity E. Stories — the "Multi-element context menu" line, its LAST open
+> piece → the whole line is now `[x]`). Before this, an element's edit/duplicate/reorder/delete lived as scattered
+> buttons on the floating `TextStyleToolbar`; there was no single gesture that gathered them, and nothing told the
+> author which reorder directions were even possible from the element's current stacking position — the toolbar
+> buttons fired inert reducers silently at the extremes.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → empty; no `apps/android` collision. Prior
+> slice (`story-composer-safe-zone-overlay`) is on `main` (HEAD `e39cda78`). Branched off freshly-fetched
+> `origin/main`. (Local `main` ref was stale — many commits behind `origin/main` — so scope was verified with
+> `git diff --cached --name-only origin/main`, which is the real base; diffing against local `main` falsely showed
+> web/ios/gateway files that are simply newer on the remote. Noted so a future run trusts `origin/main`, not the
+> local ref, for the scope gate.)
+>
+> **The fix — one pure resolver + one VM triad + Compose glue.** (1) `StoryElementMenu.resolve(deck, elementId)`
+> (`:feature:stories`) → `StoryElementContextMenu?` (null when the id is absent from the SELECTED slide, so no menu
+> shows). Each of the seven `StoryElementMenuItem`s carries an `enabled` flag computed from the SAME rules the deck
+> reducers enforce: EDIT/DELETE always on; DUPLICATE iff the slide is below `MAX_TEXT_ELEMENTS_PER_SLIDE` (exactly
+> when `duplicateTextElement` would clone); the four reorder rows iff the element is not already at that extreme
+> (exactly when `reorderTextElement` would restack). `StoryElementAction.zOrder` is the ONE projection onto
+> `StoryZOrder`, so the menu and the reducer can never drift. (2) VM: `onOpenElementMenu` (selects the element +
+> opens, inert when off-slide), `onDismissElementMenu`, `onElementMenuAction` (routes to the existing
+> duplicate/reorder/remove/select intents then closes; a disabled or stale action leaves the deck same-instance and
+> still closes). A derived `StoryComposerUiState.elementContextMenu` resolves lazily so the screen stays glue.
+> (3) `TextElementLayer` gains a long-press (`detectTapGestures(onLongPress=…, onTap=…)`) that opens the menu and a
+> `DropdownMenu` anchored to the element, each row greyed per `enabled`, dispatching `onElementMenuAction`.
+>
+> **Tests: +22** (14 pure `StoryElementMenuTest` + 8 `StoryComposerViewModelTest`). The core promise is asserted
+> non-tautologically: each reorder row's `enabled` is checked `isEqualTo(deck.reorderTextElement(id, op) !== deck)`
+> and duplicate against `duplicateTextElement(...) !== deck` — the menu is proven to agree with the real reducer,
+> not with a restated constant. VM tests assert observable outcomes (DUPLICATE grows the slide by one and closes;
+> DELETE empties it and closes; BRING_TO_FRONT lands the element last and closes; a disabled SEND_TO_BACK on a
+> single-element slide is `isSameInstanceAs` the prior deck yet still closes; an action with no menu open is a
+> same-instance no-op). **Mutation-RED-proven**: forcing every row `enabled = true` reddens EXACTLY the 6
+> position/cap behavioural tests, the shape/order/mapping tests staying green.
+>
+> **SDK bootstrap — `dl.google.com` 200; the documented copy→patch (android-37.0 → android-37, keep BOTH).**
+> `sdkmanager` installed android-35 + build-tools 35 + platform-tools; AGP auto-installed pristine `android-37.0`;
+> the first `./gradlew` hash-errored on bare `android-37`; `cp -r android-37.0 android-37` + `source.properties`
+> `AndroidVersion.ApiLevel=37.0→37`, keeping BOTH dirs, resolved it (the recipe in NOTES).
+>
+> **Verified**: targeted `StoryElementMenuTest` + `StoryComposerViewModelTest` green, the mutation proof, then full
+> `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate)
+> **BUILD SUCCESSFUL in 5m 15s**. Reviewer PASS. Diff is `apps/android` only (9 files: 1 new resolver + 1 new test
+> + amended VM/screen/VM-test + 4 strings + tracking docs). Verdict: **PASS** — a pure resolver reused by a Compose
+> `DropdownMenu` glue; behavioural tests through the public API tied to the real reducers; no production logic
+> outside `apps/android`.
+>
+> **Next**: §E "Multi-element context menu" is now fully `[x]`. Candidates for the next-highest unchecked §E item:
+> the **"background designation toggle" AUDIO half** (mark one audio track per slide as background) is still blocked
+> on the composer gaining an audio-track authoring surface — so prefer either **Repost flow** (clone source story +
+> locked attribution badge), **Draft save/restore with media persistence + lost-media detection**, or the remaining
+> **offline publish** pieces (preview-before-publish, RAW background publish-all). Scout `feature-parity.md`
+> read-only before branching.
+
 > On 2026-08-26 **the composer draws the persistent safe-zone + rule-of-thirds overlay while dragging** (slice
 > `story-composer-safe-zone-overlay`, feature-parity E. Stories — the "Frosted-glass text backdrops; safe-zone
 > overlay; …" line, its LAST open piece → the whole line is now `[x]`). Before this, dragging an element lit only

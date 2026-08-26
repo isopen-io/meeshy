@@ -3932,7 +3932,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `TextStyleToolbar` gains a 4-button z-order row (send-to-back / backward / forward / bring-to-front)
       whose order rides into publish via the existing element serialisation. +16 tests (13 reducer, 3 VM);
       +4 strings × 4 locales. Mirrors iOS's front/back + forward/backward layering controls.
-- [~] Multi-element context menu (edit, duplicate, reorder, delete) — **edit** (tap-to-select +
+- [x] Multi-element context menu (edit, duplicate, reorder, delete) — **edit** (tap-to-select +
       caption/element routing), **delete** (per-element remove handle), **duplicate**
       (`story-text-element-duplicate`), and **reorder** (`story-text-element-zorder`, z-order row in the
       floating toolbar) done. Duplicate: pure `StorySlideDeck.duplicateTextElement`
@@ -3940,8 +3940,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       normalised offset (clamped into the canvas) so the copy is visible, inert when the source id is
       unknown / the new id collides / the slide is at the ≤5 cap; `StoryComposerViewModel.onDuplicateTextElement`
       mints the id, selects the copy, and warns-without-adding at the cap; a duplicate `ContentCopy`
-      handle sits in the floating `TextStyleToolbar`. Pending: a single unified long-press context menu
-      consolidating these per-element actions.
+      handle sits in the floating `TextStyleToolbar`. **Unified long-press context menu done** (slice
+      `story-element-context-menu`, 2026-08-26): a long-press on any on-canvas text element opens ONE
+      `DropdownMenu` gathering all seven actions (edit · duplicate · send-to-back · backward · forward ·
+      bring-to-front · delete). The pure `StoryElementMenu.resolve(deck, elementId)` decides each row's
+      `enabled` flag from the SAME rules the deck reducers enforce — a reorder row is enabled iff
+      `reorderTextElement` would actually restack (not already at that extreme) and duplicate iff below
+      the ≤5 cap — so a greyed row can never dispatch an inert op. `StoryElementAction.zOrder` is the one
+      projection onto `StoryZOrder`, so the menu and the reducer cannot drift. VM: `onOpenElementMenu`
+      (selects + opens, inert off-slide), `onDismissElementMenu`, and `onElementMenuAction` (routes to the
+      existing duplicate/reorder/remove/select intents and closes; disabled or stale action = safe no-op).
+      +22 tests (14 resolver: presence/selected-slide gate, seven-action order, edit/delete always on,
+      per-position reorder enablement each tied to the real reducer's inert-ness, cap-gated duplicate tied
+      to the real reducer, zOrder mapping, absent-row isEnabled; 8 VM: open/dismiss/select, each action's
+      observable deck outcome + menu close, disabled no-op, no-menu no-op). Mutation-RED-proven (forcing
+      every row `enabled = true` reddens exactly the 6 position/cap behavioural tests). +2 strings × 4 locales.
 - [~] Per-element + per-slide duration; background designation toggle (1 visual + 1 audio/slide) —
       **per-slide duration RESOLUTION done** (slice `story-viewer-slide-duration`, 2026-08-25): the
       viewer honours the author-pinned/content-derived slide duration via the pure `StorySlideDuration`
