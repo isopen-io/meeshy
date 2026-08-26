@@ -1,5 +1,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { RetractedNotificationAnnouncer } from '../notifications/retractedNotifications';
+import {
+  retractedNotificationOf,
+  type RetractedNotificationAnnouncer,
+} from '../notifications/retractedNotifications';
 
 /**
  * Retirer les notifications qu'un message a produites — le geste, isolé de ses
@@ -61,11 +64,17 @@ export async function retractMessageNotifications(
   messageId: string,
   announcer: RetractedNotificationAnnouncer | undefined
 ): Promise<void> {
-  const retracted = await prisma.notification.findMany({
+  // `context` relu pour sa seule `conversationId` : la révocation push en a
+  // besoin, le web et Android indexant leurs bannières par conversation. Et
+  // `type` avec lui : seul un ARRIVAGE de message indexe sa bannière par
+  // conversation, et sans le type le client ne peut pas le savoir. `delivery`
+  // dit si un push est PARTI — sans lui il n'y a aucune bannière à retirer.
+  const rows = await prisma.notification.findMany({
     where: { messageId },
-    select: { id: true, userId: true },
+    select: { id: true, userId: true, type: true, context: true, delivery: true },
   });
-  if (retracted.length === 0) return;
+  if (rows.length === 0) return;
+  const retracted = rows.map(retractedNotificationOf);
 
   // Filtré sur `messageId` et non sur les ids relus : une notification créée
   // entre la lecture et l'écriture part avec les autres. Elle n'est alors pas

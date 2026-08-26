@@ -5,9 +5,10 @@ import { SequenceService } from '../services/SequenceService';
 import { computeETag, ifNoneMatchMatches } from '../utils/etag';
 import { loadPersonalHistoryHidingByConversation } from '../services/personalHistoryFilter';
 import {
+  HISTORY_FLOOR_PARTICIPANT_SELECT,
   historyFloorClause,
-  loadShareLinkHistoryFloorsOrFail,
-} from '../services/shareLinkHistoryFloor';
+  loadHistoryFloorsOrFail,
+} from '../services/historyFloor';
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
 import { messageSenderUserSelect } from './conversations/utils/message-sender-select';
@@ -789,9 +790,11 @@ async function syncMessages(opts: {
   //
   // `permissions` et `anonymousSession` s'y ajoutent pour la même raison : le
   // droit de voir l'avant-jointure est FIGÉ sur cette ligne, et la surcharge de
-  // l'hôte y vit aussi. Sans eux dans le `select`, `historyFloorFor` ne voit
-  // rien de figé et retombe sur le lien — donc /sync appliquerait une règle
-  // différente de GET messages pour le même lecteur.
+  // l'hôte y vit aussi. `role` et `historyVisibleFrom` de même (un admin voit
+  // tout, un octroi par date ouvre depuis cette date). Sans eux dans le
+  // `select`, `historyFloorFor` ne voit rien et retombe sur le lien — donc
+  // /sync appliquerait une règle différente de GET messages pour le même
+  // lecteur. D'où la projection PARTAGÉE, jamais recopiée.
   const memberships = await prisma.participant.findMany({
     where: identity.kind === 'anonymous'
       ? { id: identity.participantId, isActive: true, ...(scope ? { conversationId: scope } : {}) }
@@ -804,10 +807,7 @@ async function syncMessages(opts: {
       // le champ ne coûte pas un aller-retour de plus.
       id: true,
       conversationId: true,
-      joinedAt: true,
-      shareLinkId: true,
-      permissions: true,
-      anonymousSession: true,
+      ...HISTORY_FLOOR_PARTICIPANT_SELECT,
     },
   });
   if (memberships.length === 0) {
@@ -827,7 +827,7 @@ async function syncMessages(opts: {
   // raison, et elle ne se confond pas avec le budget de poids : ici on ne
   // reprendra pas « plus loin », on reprendra AU MÊME endroit jusqu'à ce que la
   // lecture du plancher redevienne possible.
-  const { floors, unreadableConversationIds } = await loadShareLinkHistoryFloorsOrFail(
+  const { floors, unreadableConversationIds } = await loadHistoryFloorsOrFail(
     prisma,
     memberships,
   );

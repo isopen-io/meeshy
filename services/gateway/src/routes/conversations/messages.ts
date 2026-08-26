@@ -17,7 +17,13 @@ import { resolveForwardSourceGateForReader } from '../../services/preferences/fo
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
-import { historyFloorFor } from '../../services/shareLinkHistoryFloor';
+import {
+  HISTORY_FLOOR_PARTICIPANT_SELECT,
+  applyHistoryFloor,
+  historyFloorFor,
+  historyReaderFromAuthContext,
+  loadReaderHistoryFloor
+} from '../../services/historyFloor';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
@@ -529,7 +535,7 @@ export function registerMessagesRoutes(
       const currentParticipant = !isAnonymousUser && userId
         ? await prisma.participant.findFirst({
             where: { userId, conversationId, isActive: true },
-            select: { id: true, joinedAt: true, shareLinkId: true, permissions: true, anonymousSession: true }
+            select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
           })
         : null;
 
@@ -537,7 +543,7 @@ export function registerMessagesRoutes(
       const anonymousParticipant = isAnonymousUser && authRequest.authContext.participantId
         ? await prisma.participant.findFirst({
             where: { id: authRequest.authContext.participantId },
-            select: { id: true, joinedAt: true, shareLinkId: true, permissions: true, anonymousSession: true }
+            select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
           })
         : null;
 
@@ -554,23 +560,25 @@ export function registerMessagesRoutes(
       // Un seul aller-retour : le module ne charge rien, cette route lit déjà
       // la ligne pour les colonnes de la porte.
       const participant = isAnonymousUser ? anonymousParticipant : currentParticipant;
-      let historyStartDate: Date | null = null;
-
-      if (participant?.shareLinkId) {
-        const shareLink = await prisma.conversationShareLink.findFirst({
-          where: { id: participant.shareLinkId },
-          select: { allowViewHistory: true, expiresAt: true, maxUses: true, currentUses: true }
-        });
-        if (shareLink) {
-          if (shareLink.expiresAt && new Date(shareLink.expiresAt) < new Date()) {
-            return sendForbidden(reply, 'This share link has expired', { code: 'SHARE_LINK_EXPIRED' });
-          }
-          if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
-            return sendForbidden(reply, 'This share link has reached its usage limit', { code: 'SHARE_LINK_MAX_USES' });
-          }
+      const shareLink = participant?.shareLinkId
+        ? await prisma.conversationShareLink.findFirst({
+            where: { id: participant.shareLinkId },
+            select: { allowViewHistory: true, expiresAt: true, maxUses: true, currentUses: true }
+          })
+        : null;
+      if (shareLink) {
+        if (shareLink.expiresAt && new Date(shareLink.expiresAt) < new Date()) {
+          return sendForbidden(reply, 'This share link has expired', { code: 'SHARE_LINK_EXPIRED' });
         }
-        historyStartDate = historyFloorFor(participant, shareLink);
+        if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
+          return sendForbidden(reply, 'This share link has reached its usage limit', { code: 'SHARE_LINK_MAX_USES' });
+        }
       }
+      // Le plancher vaut pour TOUT participant, lien ou non : un membre ajouté
+      // après coup, un inscrit dans le salon global, un octroi par date d'un
+      // administrateur — la ligne participant porte la réponse, le lien n'est
+      // que son dernier repli.
+      const historyStartDate: Date | null = participant ? historyFloorFor(participant, shareLink) : null;
 
       t0 = performance.now();
       const personalHiding = await personalHidingPromise;
@@ -612,8 +620,10 @@ export function registerMessagesRoutes(
       let isAroundMode = false;
       if (around && !before) {
         isAroundMode = true;
+        // La cible n'entre dans la fenêtre que si elle est LISIBLE : sous le
+        // plancher, `around` se comporte comme un id inconnu.
         const aroundMessage = await prisma.message.findFirst({
-          where: { id: around, conversationId },
+          where: applyHistoryFloor({ id: around, conversationId }, historyStartDate),
           select: { createdAt: true }
         });
 
@@ -655,8 +665,10 @@ export function registerMessagesRoutes(
             ...messagesAfter.map(m => m.id)
           ];
           whereClause.id = { in: allIds };
-          // Remove any createdAt filter since we're using id-based filtering
+          // Remove any createdAt filter since we're using id-based filtering —
+          // sauf le plancher, qui ne se retire jamais d'une lecture.
           delete whereClause.createdAt;
+          if (historyStartDate) whereClause.createdAt = { gte: historyStartDate };
         }
       }
 
@@ -836,10 +848,7 @@ export function registerMessagesRoutes(
           ? Promise.resolve(0)
           : prisma.message.count({
               where: applyPersonalHistoryHiding(
-                {
-                  conversationId: conversationId,
-                  deletedAt: null
-                },
+                applyHistoryFloor({ conversationId: conversationId, deletedAt: null }, historyStartDate),
                 personalHiding
               )
             }),
@@ -1457,7 +1466,10 @@ export function registerMessagesRoutes(
         if (firstMsg) {
           const olderCount = await prisma.message.count({
             where: applyPersonalHistoryHiding(
-              { conversationId, deletedAt: null, createdAt: { lt: new Date(firstMsg.createdAt) } },
+              applyHistoryFloor(
+                { conversationId, deletedAt: null, createdAt: { lt: new Date(firstMsg.createdAt) } },
+                historyStartDate
+              ),
               personalHiding
             )
           });
@@ -2433,14 +2445,16 @@ export function registerMessagesRoutes(
         userId: authRequest.authContext.type === 'anonymous' ? null : authRequest.authContext.userId,
         conversationId
       });
+      // Et pas plus qu'elle ne rend un message d'AVANT l'arrivée du lecteur :
+      // une épingle est la porte la plus évidente sur l'historique interdit.
+      const pinnedFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId,
+        reader: historyReaderFromAuthContext(authRequest.authContext)
+      });
 
       const pinnedMessages = await prisma.message.findMany({
         where: applyPersonalHistoryHiding(
-          {
-            conversationId,
-            pinnedAt: { not: null },
-            deletedAt: null
-          },
+          applyHistoryFloor({ conversationId, pinnedAt: { not: null }, deletedAt: null }, pinnedFloor),
           pinnedHiding
         ),
         orderBy: { pinnedAt: 'desc' },
@@ -2866,24 +2880,33 @@ export function registerMessagesRoutes(
         userId: authRequest.authContext.type === 'anonymous' ? null : userId,
         conversationId
       });
+      // Même raison pour le plancher : chercher un mot est le moyen le plus
+      // court de lire ce qui précède son arrivée.
+      const searchFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId,
+        reader: historyReaderFromAuthContext(authRequest.authContext)
+      });
 
       // Search content AND translations in parallel
       const [contentMatches, translationCandidates] = await Promise.all([
         prisma.message.findMany({
-          where: applyPersonalHistoryHiding(whereClause, searchHiding),
+          where: applyPersonalHistoryHiding(applyHistoryFloor(whereClause, searchFloor), searchHiding),
           select: messageSelect,
           orderBy: { createdAt: 'desc' },
           take: searchLimit + 1
         }),
         prisma.message.findMany({
           where: applyPersonalHistoryHiding(
-            {
-              conversationId,
-              deletedAt: null,
-              NOT: { content: { contains: queryLower, mode: 'insensitive' } },
-              translations: { not: { equals: null } },
-              ...(cursor ? { createdAt: whereClause.createdAt } : {})
-            },
+            applyHistoryFloor(
+              {
+                conversationId,
+                deletedAt: null,
+                NOT: { content: { contains: queryLower, mode: 'insensitive' } },
+                translations: { not: { equals: null } },
+                ...(cursor ? { createdAt: whereClause.createdAt } : {})
+              },
+              searchFloor
+            ),
             searchHiding
           ),
           select: messageSelect,

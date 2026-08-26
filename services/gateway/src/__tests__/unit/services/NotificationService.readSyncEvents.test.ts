@@ -366,9 +366,11 @@ describe('NotificationService — événements de sync de lecture multi-appareil
     const OTHER_USER_ID = '64a000000000000000000002';
 
     it('émet notification:deleted vers la room de CHAQUE destinataire', async () => {
+      // `pushSent: false` : ces témoins observent le canal SOCKET. Aucune
+      // bannière n'était partie, donc aucun push de révocation n'est dû.
       await service.announceNotificationsRetracted([
-        { id: 'notif-a', userId: USER_ID },
-        { id: 'notif-b', userId: OTHER_USER_ID },
+        { id: 'notif-a', userId: USER_ID, pushSent: false },
+        { id: 'notif-b', userId: OTHER_USER_ID, pushSent: false },
       ]);
       await flushAsync();
 
@@ -382,8 +384,8 @@ describe('NotificationService — événements de sync de lecture multi-appareil
       // Une mention et une réponse sur le même message rappelé visent la même
       // personne : deux lignes retirées, un seul badge à recalculer.
       await service.announceNotificationsRetracted([
-        { id: 'notif-a', userId: USER_ID },
-        { id: 'notif-b', userId: USER_ID },
+        { id: 'notif-a', userId: USER_ID, pushSent: false },
+        { id: 'notif-b', userId: USER_ID, pushSent: false },
       ]);
       await flushAsync();
 
@@ -397,7 +399,7 @@ describe('NotificationService — événements de sync de lecture multi-appareil
       const offline = new NotificationService(prisma);
 
       await expect(
-        offline.announceNotificationsRetracted([{ id: 'notif-a', userId: USER_ID }])
+        offline.announceNotificationsRetracted([{ id: 'notif-a', userId: USER_ID, pushSent: false }])
       ).resolves.toBeUndefined();
       expect(mockIO.emit).not.toHaveBeenCalled();
     });

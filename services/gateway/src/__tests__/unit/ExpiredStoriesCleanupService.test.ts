@@ -398,7 +398,12 @@ describe('ExpiredStoriesCleanupService — notifications des posts détruits', (
     expect(fake.prisma.$runCommandRaw).toHaveBeenCalledWith(
       expect.objectContaining({
         find: 'Notification',
-        filter: { 'context.postId': { $in: ['story1', 'repost1'] } },
+        filter: {
+          $or: [
+            { 'context.postId': { $in: ['story1', 'repost1'] } },
+            { 'metadata.repostId': { $in: ['story1', 'repost1'] } },
+          ],
+        },
       })
     );
   });
@@ -432,8 +437,8 @@ describe('ExpiredStoriesCleanupService — notifications des posts détruits', (
     (fake.prisma.$runCommandRaw as jest.Mock<any>).mockResolvedValueOnce({
       cursor: {
         firstBatch: [
-          { _id: { $oid: 'n1' }, userId: { $oid: '64a000000000000000000001' } },
-          { _id: { $oid: 'n2' }, userId: { $oid: '64a000000000000000000002' } },
+          { _id: { $oid: 'n1' }, userId: { $oid: '64a000000000000000000001' }, delivery: { pushSent: true } },
+          { _id: { $oid: 'n2' }, userId: { $oid: '64a000000000000000000002' }, delivery: { pushSent: true } },
         ],
       },
     });
@@ -445,8 +450,8 @@ describe('ExpiredStoriesCleanupService — notifications des posts détruits', (
       where: { id: { in: ['n1', 'n2'] } },
     });
     expect(ANNOUNCER.announceNotificationsRetracted).toHaveBeenCalledWith([
-      { id: 'n1', userId: '64a000000000000000000001' },
-      { id: 'n2', userId: '64a000000000000000000002' },
+      { id: 'n1', userId: '64a000000000000000000001', pushSent: true },
+      { id: 'n2', userId: '64a000000000000000000002', pushSent: true },
     ]);
   });
 

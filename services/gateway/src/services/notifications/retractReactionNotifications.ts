@@ -1,6 +1,6 @@
-import type {
-  RetractedNotification,
-  RetractedNotificationAnnouncer,
+import {
+  retractedNotificationOf,
+  type RetractedNotificationAnnouncer,
 } from './retractedNotifications';
 
 /**
@@ -109,8 +109,16 @@ export const REACTION_NOTIFICATION_RETRACTION_BATCH_SIZE = 50;
 
 type RawObjectId = string | { $oid?: string };
 
+type RawNotificationRow = {
+  _id?: RawObjectId;
+  userId?: RawObjectId;
+  type?: unknown;
+  context?: { conversationId?: unknown };
+  delivery?: { pushSent?: unknown };
+};
+
 type RawNotificationBatch = {
-  cursor?: { firstBatch?: ReadonlyArray<{ _id?: RawObjectId; userId?: RawObjectId }> };
+  cursor?: { firstBatch?: ReadonlyArray<RawNotificationRow> };
 };
 
 /**
@@ -165,7 +173,13 @@ export async function retractReactionNotifications(
         anyPathEquals(EMOJI_PATHS, removed.emoji),
       ],
     },
-    projection: { _id: 1, userId: 1 },
+    // `context.conversationId` pour le push de révocation : une réaction à un
+    // MESSAGE vit dans une conversation, et deux clients ne savent retirer
+    // leur bannière qu'à cette maille. `type` avec elle, et c'est lui qui
+    // empêche la casse : la bannière d'une RÉACTION n'est pas indexée par la
+    // conversation, et l'annuler à cette maille retirerait celle du dernier
+    // message du fil.
+    projection: { _id: 1, userId: 1, type: 1, 'context.conversationId': 1, 'delivery.pushSent': 1 },
     singleBatch: true,
     batchSize: REACTION_NOTIFICATION_RETRACTION_BATCH_SIZE,
   })) as RawNotificationBatch;
@@ -179,9 +193,13 @@ export async function retractReactionNotifications(
   // L'annonce APRÈS l'écriture durable, et jamais l'inverse : les compteurs
   // qu'elle recalcule doivent voir la base d'après le retrait. Une ligne sans
   // `userId` lisible n'est pas annonçable — elle est tout de même supprimée.
-  const retracted = rows
-    .map((row) => ({ id: objectId(row._id), userId: objectId(row.userId) }))
-    .filter((row): row is RetractedNotification => !!row.id && !!row.userId);
+  const retracted = rows.flatMap((row) => {
+    const id = objectId(row._id);
+    const userId = objectId(row.userId);
+    return id && userId
+      ? [retractedNotificationOf({ id, userId, type: row.type, context: row.context, delivery: row.delivery })]
+      : [];
+  });
   if (retracted.length > 0) {
     await announcer?.announceNotificationsRetracted(retracted);
   }

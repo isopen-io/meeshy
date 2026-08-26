@@ -165,6 +165,9 @@ const mockPrisma = {
   participant: {
     findFirst: jest.fn(),
     create: jest.fn()
+  },
+  message: {
+    create: jest.fn()
   }
 } as any;
 
@@ -564,11 +567,105 @@ describe('AuthService', () => {
             canSendVideos: true,
             canSendAudios: true,
             canSendLocations: true,
-            canSendLinks: true
+            canSendLinks: true,
+            canViewHistory: false
           },
           joinedAt: expect.any(Date),
           isActive: true
         }
+      });
+    });
+
+    // ── Cinquième porte d'entrée : l'inscription annonce l'arrivée dans le
+    // salon global, même loi que les quatre autres (`postJoinSystemMessage`).
+    describe('avis d’arrivée dans le salon global', () => {
+      const globalConversation = { id: 'global-conv-id', identifier: 'meeshy' };
+      const arrange = () => {
+        const createdUser = { ...mockUser, ...validRegisterData, id: 'new-user-id', displayName: 'New User' };
+        mockPrisma.user.findFirst.mockResolvedValue(null);
+        mockBcryptHash.mockResolvedValue('$2b$12$hashedPassword');
+        mockPrisma.user.create.mockResolvedValue(createdUser);
+        mockPrisma.conversation.findFirst.mockResolvedValue(globalConversation);
+        mockPrisma.participant.findFirst.mockResolvedValue(null);
+        mockPrisma.participant.create.mockResolvedValue({ id: 'member-row-id' });
+        mockPrisma.message.create.mockResolvedValue({ id: 'sys-msg', conversationId: 'global-conv-id' });
+      };
+
+      it('poste « X a rejoint la conversation », signé du Participant.id de l’arrivant', async () => {
+        arrange();
+
+        await authService.register(validRegisterData);
+
+        expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
+        const data = mockPrisma.message.create.mock.calls[0][0].data;
+        expect(data).toMatchObject({
+          conversationId: 'global-conv-id',
+          senderId: 'member-row-id',
+          messageType: 'system',
+          messageSource: 'system',
+          metadata: {
+            kind: 'member-joined',
+            participantId: 'member-row-id',
+            displayName: 'New User',
+            isAnonymous: false,
+            viaShareLink: false
+          }
+        });
+      });
+
+      it('diffuse l’avis par le manager Socket.IO résolu à l’appel', async () => {
+        arrange();
+        const broadcastMessage = jest.fn<any>().mockResolvedValue(undefined);
+        const manager = { broadcastMessage };
+        const service = new AuthService(mockPrisma, jwtSecret, { resolveSocketManager: () => manager });
+
+        await service.register(validRegisterData);
+
+        expect(broadcastMessage).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'sys-msg' }),
+          'global-conv-id'
+        );
+      });
+
+      it('persiste l’avis même sans manager Socket.IO (pas encore initialisé)', async () => {
+        arrange();
+        const service = new AuthService(mockPrisma, jwtSecret, { resolveSocketManager: () => null });
+
+        const result = await service.register(validRegisterData);
+
+        expect(result).not.toBeNull();
+        expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
+      });
+
+      it('n’annonce RIEN quand l’inscrit était déjà membre — idempotent', async () => {
+        arrange();
+        mockPrisma.participant.findFirst.mockResolvedValue({ id: 'already-there' });
+
+        await authService.register(validRegisterData);
+
+        expect(mockPrisma.participant.create).not.toHaveBeenCalled();
+        expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      });
+
+      it('ne fait JAMAIS échouer l’inscription sur une panne de l’avis', async () => {
+        arrange();
+        mockPrisma.message.create.mockRejectedValue(new Error('mongo down'));
+
+        const result = await authService.register(validRegisterData);
+
+        expect(result).not.toBeNull();
+        expect(result?.user?.id).toBe('new-user-id');
+      });
+
+      it('ne fait JAMAIS échouer l’inscription sur une panne de diffusion', async () => {
+        arrange();
+        const service = new AuthService(mockPrisma, jwtSecret, {
+          resolveSocketManager: () => ({ broadcastMessage: jest.fn<any>().mockRejectedValue(new Error('socket down')) })
+        });
+
+        const result = await service.register(validRegisterData);
+
+        expect(result).not.toBeNull();
       });
     });
 

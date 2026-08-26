@@ -18,6 +18,11 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
+import {
+  applyHistoryFloor,
+  historyReaderFromAuthContext,
+  loadReaderHistoryFloor,
+} from '../../services/historyFloor';
 import { reconcileEditedMentions } from '../../services/messaging/messageMentions';
 import {
   reconcileEditedLinks,
@@ -1209,13 +1214,19 @@ export function registerMessagesAdvancedRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
+      // Une réaction NOMME un message et l'identité de qui l'a posée : sur un
+      // message d'AVANT l'arrivée du lecteur, elle révèle l'existence de ce
+      // message, son id et qui était là. Le plancher borne donc le PRÉDICAT qui
+      // sélectionne les messages réagis, au même titre que leur contenu.
+      const reactionsFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId,
+        reader: historyReaderFromAuthContext(authRequest.authContext)
+      });
+
       // Récupérer toutes les réactions de tous les messages de la conversation
       const reactions = await prisma.reaction.findMany({
         where: {
-          message: {
-            conversationId: conversationId,
-            deletedAt: null
-          }
+          message: applyHistoryFloor({ conversationId: conversationId, deletedAt: null }, reactionsFloor)
         },
         include: {
           participant: {
@@ -1672,15 +1683,21 @@ export function registerMessagesAdvancedRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
+      // Le plancher d'historique du lecteur borne cette page comme il borne
+      // `GET …/messages` : `id`, `senderId`, `createdAt` et les accusés
+      // NOMINATIFS d'un message d'avant l'arrivée SONT l'historique, moins le
+      // texte. Une métadonnée fuit ce que le contenu tait.
+      const statusFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId,
+        reader: historyReaderFromAuthContext(authRequest.authContext)
+      });
+
       // BORNÉE. Sans `take`, ce handler chargeait CHAQUE message non supprimé
       // de la conversation, chacun avec ses entrées de statut et le participant
       // joint sur chacune — sur un fil de plusieurs dizaines de milliers de
       // messages, un déni de service qu'un simple participant déclenchait.
       const messages = await prisma.message.findMany({
-        where: {
-          conversationId: conversationId,
-          deletedAt: null
-        },
+        where: applyHistoryFloor({ conversationId: conversationId, deletedAt: null }, statusFloor),
         select: {
           id: true,
           senderId: true,

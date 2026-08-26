@@ -615,6 +615,14 @@ model Participant {
   /// ID du share link utilisé pour rejoindre (null = ajout direct)
   shareLinkId String? @db.ObjectId
 
+  /// Octroi d'historique PAR DATE, posé par un administrateur de la
+  /// conversation sur CE participant : il lit tout ce qui a été écrit depuis
+  /// cet instant, quel que soit son `joinedAt` et quel que soit le droit figé.
+  /// Toujours une date, jamais un message — un message se supprime, une date
+  /// reste lisible. `null` = aucun octroi, la règle ordinaire s'applique
+  /// (voir `historyFloorFor`, services/gateway/src/services/historyFloor.ts).
+  historyVisibleFrom DateTime?
+
   /// Embedded anonymous session data (only for type="anonymous")
   anonymousSession AnonymousSession?
 

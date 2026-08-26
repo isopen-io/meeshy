@@ -9,6 +9,7 @@ import {
   type PersonalHistoryHiding
 } from '../../services/personalHistoryFilter';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { applyHistoryFloor, historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
 import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -217,10 +218,16 @@ export function registerThreadsRoutes(
         userId: authContext.type === 'anonymous' ? null : authContext.userId,
         conversationId
       });
+      // Même loi pour le plancher d'historique : une racine d'AVANT l'arrivée
+      // du lecteur n'existe pas pour lui, et ses réponses non plus.
+      const historyFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId,
+        reader: historyReaderFromAuthContext(authContext)
+      });
 
       const parent = await prisma.message.findFirst({
         where: applyPersonalHistoryHiding(
-          { id: messageId, conversationId, deletedAt: null },
+          applyHistoryFloor({ id: messageId, conversationId, deletedAt: null }, historyFloor),
           hiding
         ),
         select: threadMessageSelect
@@ -230,7 +237,7 @@ export function registerThreadsRoutes(
         return sendNotFound(reply, 'Message not found');
       }
 
-      const replies = await collectThreadReplies(prisma, conversationId, messageId, hiding);
+      const replies = await collectThreadReplies(prisma, conversationId, messageId, hiding, historyFloor);
 
       return sendSuccess(reply, {
         parent: formatThreadMessage(parent as unknown as Record<string, unknown>),
@@ -249,11 +256,12 @@ function findReplies(
   prisma: PrismaClient,
   conversationId: string,
   parentIds: string[],
-  hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING
+  hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING,
+  historyFloor: Date | null = null
 ) {
   return prisma.message.findMany({
     where: applyPersonalHistoryHiding(
-      { conversationId, replyToId: { in: parentIds }, deletedAt: null },
+      applyHistoryFloor({ conversationId, replyToId: { in: parentIds }, deletedAt: null }, historyFloor),
       hiding
     ),
     select: threadMessageSelect,
@@ -267,7 +275,8 @@ async function collectThreadReplies(
   prisma: PrismaClient,
   conversationId: string,
   rootMessageId: string,
-  hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING
+  hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING,
+  historyFloor: Date | null = null
 ): Promise<ThreadMessage[]> {
   const allReplies: ThreadMessage[] = [];
   let frontier = [rootMessageId];
@@ -280,7 +289,7 @@ async function collectThreadReplies(
     // réponse masquée coupe aussi la branche qu'elle porte, ce qui est le
     // comportement voulu — ses filles descendent d'un message que ce lecteur
     // ne voit plus.
-    const batch = await findReplies(prisma, conversationId, frontier, hiding);
+    const batch = await findReplies(prisma, conversationId, frontier, hiding, historyFloor);
 
     if (batch.length === 0) break;
 

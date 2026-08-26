@@ -19,6 +19,7 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail } from '../../services/historyFloor';
 import {
   buildLastMessagePreviewTranslations,
   truncateMessagePreview
@@ -170,30 +171,6 @@ export function registerSearchRoutes(
         take: 50,
       });
 
-      // Même masquage personnel que la liste (`core.ts`) : la recherche de
-      // conversations rend la MÊME ligne, donc le même aperçu. Ici la route ne
-      // sélectionne pas les préférences, d'où l'absence de `clearHistoryBefore`
-      // dans les candidats — le résolveur charge alors les curseurs lui-même.
-      const searchVisibleLastMessages = await resolveVisibleLastMessages(prisma, {
-        // Cf. `core.ts` : `userId` vaut le jeton de session pour un anonyme.
-        userId: authRequest.authContext.type === 'anonymous' ? null : userId,
-        candidates: conversations.map(c => {
-          const preview = (c as any).messages?.[0];
-          return {
-            conversationId: c.id,
-            message: preview ? { id: preview.id, createdAt: preview.createdAt } : null
-          };
-        }),
-        query: { include: conversationSearchPreviewInclude as unknown as Record<string, unknown> }
-      });
-      for (const conversation of conversations) {
-        if (!searchVisibleLastMessages.has(conversation.id)) continue;
-        const replacement = searchVisibleLastMessages.get(conversation.id);
-        (conversation as any).messages = replacement ? [replacement] : [];
-      }
-
-      // Compute unread counts — iter-4: appel direct par userId (2+N queries vs 4×N)
-      const readStatusService = new MessageReadStatusService(prisma);
       const conversationIds = conversations.map(c => c.id);
 
       // Appartenance de l'appelant, résolue UNE fois pour la page entière.
@@ -217,15 +194,52 @@ export function registerSearchRoutes(
               isActive: true,
               ...(isAnonymousViewer ? { id: userId } : { userId })
             },
-            // `role` en plus, pour rien de plus : c'est le titre qui ouvre
-            // l'effectif ENTIER (creator/admin de la conversation) sur la
-            // ligne servie plus bas, et cette lecture est la seule du chemin
-            // qui connaisse le lecteur conversation par conversation.
-            select: { conversationId: true, role: true }
+            // `role` en plus : c'est le titre qui ouvre l'effectif ENTIER
+            // (creator/admin de la conversation) sur la ligne servie plus bas.
+            // Et tout ce qui décide du PLANCHER d'historique du lecteur : cette
+            // lecture est la seule du chemin qui connaisse le lecteur
+            // conversation par conversation, donc la seule à pouvoir le borner.
+            select: { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
           })
         : [];
       const memberConversationIds = new Set(memberships.map(p => p.conversationId));
       const memberRoleByConversation = new Map(memberships.map(p => [p.conversationId, p.role]));
+
+      // Le plancher d'historique du lecteur par conversation — fail-closed : une
+      // conversation dont le plancher est ILLISIBLE perd son aperçu.
+      const { floors: searchHistoryFloors, unreadableConversationIds } = await loadHistoryFloorsOrFail(prisma, memberships);
+      const unreadableFloors = new Set(unreadableConversationIds);
+
+      // Même masquage personnel que la liste (`core.ts`) : la recherche de
+      // conversations rend la MÊME ligne, donc le même aperçu. Ici la route ne
+      // sélectionne pas les préférences, d'où l'absence de `clearHistoryBefore`
+      // dans les candidats — le résolveur charge alors les curseurs lui-même.
+      const searchVisibleLastMessages = await resolveVisibleLastMessages(prisma, {
+        // Cf. `core.ts` : `userId` vaut le jeton de session pour un anonyme.
+        userId: authRequest.authContext.type === 'anonymous' ? null : userId,
+        candidates: conversations.map(c => {
+          const preview = (c as any).messages?.[0];
+          return {
+            conversationId: c.id,
+            message: preview ? { id: preview.id, createdAt: preview.createdAt } : null
+          };
+        }),
+        query: { include: conversationSearchPreviewInclude as unknown as Record<string, unknown> },
+        historyFloors: searchHistoryFloors
+      });
+      for (const conversation of conversations) {
+        if (unreadableFloors.has(conversation.id)) {
+          (conversation as any).messages = [];
+          continue;
+        }
+        if (!searchVisibleLastMessages.has(conversation.id)) continue;
+        const replacement = searchVisibleLastMessages.get(conversation.id);
+        (conversation as any).messages = replacement ? [replacement] : [];
+      }
+
+      // Compute unread counts — iter-4: appel direct par userId (2+N queries vs 4×N)
+      const readStatusService = new MessageReadStatusService(prisma);
+
 
       const unreadCountMap = conversationIds.length > 0
         ? await readStatusService.getUnreadCountsForUser(userId, conversationIds)

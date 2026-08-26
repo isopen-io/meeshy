@@ -192,7 +192,9 @@ describe('NotificationService — marquage par contexte en 1 requête (iter 35 F
     function rawFind(ids: string[]) {
       return {
         cursor: {
-          firstBatch: ids.map((id) => ({ _id: { $oid: id } })),
+          // `delivery.pushSent` fait partie de la projection : la révocation
+          // push ne réveille un appareil que là où un push nominal est parti.
+          firstBatch: ids.map((id) => ({ _id: { $oid: id }, delivery: { pushSent: true } })),
           id: 0,
           ns: 'meeshy.Notification',
         },
@@ -212,7 +214,7 @@ describe('NotificationService — marquage par contexte en 1 requête (iter 35 F
           userId: { $oid: USER_ID },
           'context.friendRequestId': FRIEND_REQUEST_ID,
         },
-        projection: { _id: 1 },
+        projection: { _id: 1, 'delivery.pushSent': 1 },
         singleBatch: true,
         batchSize: 1000,
       });

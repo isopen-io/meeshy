@@ -489,6 +489,100 @@ describe('registerCoreRoutes', () => {
       ...overrides,
     });
 
+    // ── Plancher d'historique de l'aperçu de liste ───────────────────────────
+    //
+    // Le dernier message GLOBAL du salon peut précéder l'arrivée du lecteur.
+    // La liste lit SES lignes en une passe batchée (`services/historyFloor`) et
+    // remplace l'aperçu par le premier message visible depuis son plancher — ou
+    // le vide. Fail-closed : plancher illisible ⇒ aperçu retiré.
+    describe('plancher d’historique de l’aperçu', () => {
+      const JOINED = new Date('2026-06-15T00:00:00Z');
+      const BEFORE_JOIN = new Date('2026-06-01T00:00:00Z');
+      const readerJoin = (over: Record<string, unknown> = {}) => ({
+        conversationId: CONV_ID,
+        role: 'member',
+        joinedAt: JOINED,
+        shareLinkId: null,
+        historyVisibleFrom: null,
+        permissions: { canViewHistory: false },
+        anonymousSession: null,
+        ...over,
+      });
+      const oldPreview = () => ({
+        id: 'm-old', content: 'avant ton arrivée', createdAt: BEFORE_JOIN, senderId: 'p-x',
+        originalLanguage: 'fr', translations: null, metadata: null, sender: null,
+      });
+
+      beforeEach(() => {
+        (prisma as any).userMessageDeletion = { findMany: jest.fn().mockResolvedValue([]) };
+        (prisma as any).userConversationPreferences = { findMany: jest.fn().mockResolvedValue([]) };
+        (prisma as any).conversationShareLink = { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) };
+      });
+
+      it('remplace un aperçu d’AVANT l’arrivée par le premier message visible depuis le plancher', async () => {
+        prisma.conversation.findMany.mockResolvedValue([makeConversation({ messages: [oldPreview()] })]);
+        prisma.participant.findMany.mockResolvedValue([readerJoin()]);
+        prisma.message.findFirst.mockResolvedValue({ ...oldPreview(), id: 'm-since', content: 'depuis', createdAt: new Date('2026-07-01T00:00:00Z') });
+
+        const reply = makeReply();
+        await getListHandler(fastify)(makeRequest({ query: {} }), reply);
+
+        expect(prisma.participant.findMany).toHaveBeenCalledWith(expect.objectContaining({
+          where: { conversationId: { in: [CONV_ID] }, isActive: true, userId: USER_ID },
+        }));
+        expect(prisma.message.findFirst.mock.calls[0][0].where).toMatchObject({ conversationId: CONV_ID, createdAt: { gte: JOINED } });
+        expect(reply._body.data[0].lastMessage.id).toBe('m-since');
+      });
+
+      it('vide l’aperçu quand rien n’a été écrit depuis l’arrivée', async () => {
+        prisma.conversation.findMany.mockResolvedValue([makeConversation({ messages: [oldPreview()] })]);
+        prisma.participant.findMany.mockResolvedValue([readerJoin()]);
+        prisma.message.findFirst.mockResolvedValue(null);
+
+        const reply = makeReply();
+        await getListHandler(fastify)(makeRequest({ query: {} }), reply);
+
+        expect(reply._body.data[0].lastMessage).toBeNull();
+      });
+
+      it('sert l’aperçu global à un administrateur de la conversation', async () => {
+        prisma.conversation.findMany.mockResolvedValue([makeConversation({ messages: [oldPreview()] })]);
+        prisma.participant.findMany.mockResolvedValue([readerJoin({ role: 'admin' })]);
+
+        const reply = makeReply();
+        await getListHandler(fastify)(makeRequest({ query: {} }), reply);
+
+        expect(reply._body.data[0].lastMessage.id).toBe('m-old');
+        expect(prisma.message.findFirst).not.toHaveBeenCalled();
+      });
+
+      it('cherche la ligne d’un lecteur ANONYME par `id`, pas par `userId`', async () => {
+        prisma.conversation.findMany.mockResolvedValue([makeConversation({ messages: [oldPreview()] })]);
+        prisma.participant.findMany.mockResolvedValue([]);
+
+        const reply = makeReply();
+        await getListHandler(fastify)(makeRequest({
+          query: {},
+          authContext: { type: 'anonymous', isAuthenticated: true, isAnonymous: true, userId: PARTICIPANT_ID, participantId: PARTICIPANT_ID },
+        }), reply);
+
+        expect(prisma.participant.findMany).toHaveBeenCalledWith(expect.objectContaining({
+          where: { conversationId: { in: [CONV_ID] }, isActive: true, id: PARTICIPANT_ID },
+        }));
+      });
+
+      it('retire l’aperçu d’une conversation dont le plancher est ILLISIBLE — jamais l’avant-arrivée', async () => {
+        prisma.conversation.findMany.mockResolvedValue([makeConversation({ messages: [oldPreview()] })]);
+        prisma.participant.findMany.mockResolvedValue([readerJoin({ permissions: {}, shareLinkId: 'sl-1' })]);
+        (prisma as any).conversationShareLink.findMany.mockRejectedValue(new Error('mongo down'));
+
+        const reply = makeReply();
+        await getListHandler(fastify)(makeRequest({ query: {} }), reply);
+
+        expect(reply._body.data[0].lastMessage).toBeNull();
+      });
+    });
+
     it('returns sendForbidden when not authenticated', async () => {
       const req = makeRequest({ authContext: { isAuthenticated: false, userId: null } });
       const reply = makeReply();

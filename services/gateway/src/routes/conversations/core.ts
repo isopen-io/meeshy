@@ -68,6 +68,7 @@ import { announceConversationClosed } from '../../socketio/announceConversationC
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 import { resolveVisibleLastMessages } from '../../services/resolveVisibleLastMessage';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail } from '../../services/historyFloor';
 import {
   ConversationBridgeService,
   type BridgeOrchestratorInput
@@ -627,6 +628,36 @@ export function registerCoreRoutes(
       // Optimisation : Calculer tous les unreadCounts avec le système de curseur
       const conversationIds = conversations.map(c => c.id);
 
+      // `authContext.userId` porte un `User.id` pour un compte mais un
+      // `Participant.id` pour un invité de lien partagé (branche anonyme
+      // d'`UnifiedAuthService`, documentée dans `utils/access-control.ts`) : la
+      // COLONNE se branche sur la NATURE de la clé, exactement comme
+      // `GET /conversations/search`.
+      const isAnonymousViewer = authRequest.authContext.type === 'anonymous';
+
+      // Le PLANCHER d'historique du lecteur, conversation par conversation :
+      // l'aperçu de liste est une lecture comme une autre, et le dernier message
+      // GLOBAL d'un salon peut précéder l'arrivée de ce lecteur. Une lecture
+      // batchée de SES lignes (`services/historyFloor` lit ce qu'il faut) — le
+      // top-5 ci-dessous ne projette pas ces champs, et un `select` qui les
+      // porterait multiplierait cinq lignes par conversation sur le fil.
+      // Fail-closed : une conversation dont le plancher est ILLISIBLE perd son
+      // aperçu plutôt que de le servir sans borne.
+      t0 = performance.now();
+      const readerJoins = userId && conversationIds.length > 0
+        ? await prisma.participant.findMany({
+            where: {
+              conversationId: { in: conversationIds },
+              isActive: true,
+              ...(isAnonymousViewer ? { id: userId } : { userId })
+            },
+            select: { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
+          })
+        : [];
+      const { floors: historyFloors, unreadableConversationIds } = await loadHistoryFloorsOrFail(prisma, readerJoins);
+      const unreadableFloors = new Set(unreadableConversationIds);
+      perfTimings.historyFloors = performance.now() - t0;
+
       // L'aperçu de la ligne de liste obéit au masquage personnel du lecteur.
       // Le `take: 1` imbriqué ne peut pas porter de filtre par conversation
       // (Prisma applique UN `where` à toute la sélection imbriquée), donc la
@@ -648,9 +679,14 @@ export function registerCoreRoutes(
             clearHistoryBefore: (c as any).userPreferences?.[0]?.clearHistoryBefore ?? null
           };
         }),
-        query: { select: conversationLastMessagePreviewSelect as unknown as Record<string, unknown> }
+        query: { select: conversationLastMessagePreviewSelect as unknown as Record<string, unknown> },
+        historyFloors
       });
       for (const conversation of conversations) {
+        if (unreadableFloors.has(conversation.id)) {
+          (conversation as any).messages = [];
+          continue;
+        }
         if (!visibleLastMessages.has(conversation.id)) continue;
         const replacement = visibleLastMessages.get(conversation.id);
         (conversation as any).messages = replacement ? [replacement] : [];
@@ -669,18 +705,12 @@ export function registerCoreRoutes(
       const currentUserParticipantIdMap = new Map<string, string>();
       const convsMissingCurrentUser: string[] = [];
 
-      // `authContext.userId` porte un `User.id` pour un compte mais un
-      // `Participant.id` pour un invité de lien partagé (branche anonyme
-      // d'`UnifiedAuthService`, documentée dans `utils/access-control.ts`) : la
-      // COLONNE se branche sur la NATURE de la clé, exactement comme
-      // `GET /conversations/search`. Comparer un `Participant.id` à la colonne
-      // `userId` ne matche RIEN — pas une erreur, une map vide : le rôle du
-      // lecteur disparaissait, et avec lui son droit à l'effectif ENTIER. Un
-      // admin de groupe anonyme (que `canViewExactMemberCount` autorise
-      // explicitement) était donc plafonné à « 199+ » ici et servi entier par
-      // la recherche : deux réponses pour un même lecteur.
-      const isAnonymousViewer = authRequest.authContext.type === 'anonymous';
-
+      // Comparer un `Participant.id` à la colonne `userId` ne matche RIEN — pas
+      // une erreur, une map vide : le rôle du lecteur disparaissait, et avec
+      // lui son droit à l'effectif ENTIER. Un admin de groupe anonyme (que
+      // `canViewExactMemberCount` autorise explicitement) était donc plafonné à
+      // « 199+ » ici et servi entier par la recherche : deux réponses pour un
+      // même lecteur. D'où `isAnonymousViewer`, résolu plus haut.
       if (userId) {
         for (const conv of conversations) {
           const found = (conv as any).participants.find((p: any) =>

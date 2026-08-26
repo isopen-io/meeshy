@@ -33,6 +33,9 @@ import javax.inject.Inject
  *  - a **stop-ring** data push ([IncomingCallPushRoute.StopRing] —
  *    `call_cancel` / `call_answered_elsewhere`) cancels that notification so the
  *    device stops ringing for a call that ended or was answered on another device.
+ *  - a **revocation** data push (`notification_revoked`, [NotificationRevocationParser])
+ *    cancels the banners the server retracted (reaction undone, message / post /
+ *    comment deleted) — data-only, so it reaches this service even when killed.
  *  - any other push shows the rich message notification + triggers an outbox flush.
  */
 @AndroidEntryPoint
@@ -59,8 +62,27 @@ class MeeshyFcmService : FirebaseMessagingService() {
             is IncomingCallPushRoute.Ring -> showIncomingCallNotification(route.push)
             is IncomingCallPushRoute.StopRing -> cancelIncomingCallNotification(route.push)
             is IncomingCallPushRoute.Suppress -> Timber.d("Suppressed call push: ${route.reason}")
-            IncomingCallPushRoute.NotACallPush -> handleMessagePush(message)
+            IncomingCallPushRoute.NotACallPush -> handleDataPush(message)
         }
+    }
+
+    /**
+     * La révocation passe AVANT le chemin message : elle est data-only, sans
+     * bloc `notification`, que [handleMessagePush] ignore par construction.
+     */
+    private fun handleDataPush(message: RemoteMessage) {
+        val revocation = NotificationRevocationParser.parse(message.data)
+        if (revocation != null) {
+            cancelRevokedNotifications(revocation)
+            return
+        }
+        handleMessagePush(message)
+    }
+
+    private fun cancelRevokedNotifications(revocation: NotificationRevocation) {
+        Timber.d("Revocation push: ${revocation.notificationIds.size} notification(s)")
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        revocation.notificationManagerIds().forEach { manager.cancel(it) }
     }
 
     private fun cancelIncomingCallNotification(push: CallStopPush) {
@@ -78,7 +100,13 @@ class MeeshyFcmService : FirebaseMessagingService() {
         showNotification(
             title = notification.title ?: "Meeshy",
             body = notification.body ?: "",
+            // Le TYPE décide de l'index de la bannière : le gateway pose
+            // `data.conversationId` pour TOUS les types, réactions comprises,
+            // et l'indexer par conversation les ferait toutes s'écraser avec le
+            // message courant du fil. Cf. [MessageNotificationId].
+            type = message.data["type"],
             conversationId = message.data["conversationId"],
+            notificationId = message.data["notificationId"],
         )
     }
 
@@ -178,7 +206,13 @@ class MeeshyFcmService : FirebaseMessagingService() {
         manager.notify(push.callId.hashCode(), notification)
     }
 
-    private fun showNotification(title: String, body: String, conversationId: String?) {
+    private fun showNotification(
+        title: String,
+        body: String,
+        type: String?,
+        conversationId: String?,
+        notificationId: String?,
+    ) {
         // The channel is created eagerly at process start
         // (NotificationChannelInstaller, MeeshyApplication.onCreate) — this
         // idempotent call is a defensive belt-and-suspenders only, kept so a
@@ -196,9 +230,15 @@ class MeeshyFcmService : FirebaseMessagingService() {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             conversationId?.let { putExtra("conversationId", it) }
         }
+        // Un seul index pour l'intent ET la bannière — celui que la révocation
+        // annule (MessageNotificationId) : la conversation pour un ARRIVAGE de
+        // message, la notification pour tout le reste, même quand la charge
+        // porte une conversation (les sociales se recouvraient sur 0, puis sur
+        // l'index du message courant).
+        val notificationManagerId = MessageNotificationId.of(type, conversationId, notificationId)
         val pendingIntent = PendingIntent.getActivity(
             this,
-            conversationId.hashCode(),
+            notificationManagerId,
             tapIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -212,7 +252,7 @@ class MeeshyFcmService : FirebaseMessagingService() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
 
-        manager.notify(conversationId.hashCode(), notification)
+        manager.notify(notificationManagerId, notification)
     }
 
     companion object {

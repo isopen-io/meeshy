@@ -3,6 +3,7 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { AttachmentService } from '../services/attachments/index.js';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../services/attachments/attachmentIncludes';
 import { hoistLocationOnto } from '../services/location/sharedPlace';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, type HistoryFloorJoin } from '../services/historyFloor';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 import { validatePagination } from '../utils/pagination';
@@ -317,7 +318,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             select: {
               participants: {
                 where: { userId: userId, isActive: true },
-                select: { userId: true, role: true }
+                // La ligne du lecteur porte aussi son PLANCHER d'historique
+                // (`historyFloorFor`) : lue ici, dans la même requête.
+                select: { userId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
               }
             }
           },
@@ -330,8 +333,16 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       }
 
       // Vérifier que l'utilisateur a accès à cette conversation
-      if (!(message as any).conversation.participants.length) {
+      const [readerRow] = (message as any).conversation.participants as Array<HistoryFloorJoin | undefined>;
+      if (!readerRow) {
         return sendForbidden(reply, 'Accès non autorisé à ce message');
+      }
+
+      // Un message d'AVANT l'arrivée du lecteur n'existe pas pour lui — même
+      // réponse qu'un id inconnu, comme la racine de fil sous le plancher.
+      const historyFloor = await loadHistoryFloor(prisma, readerRow);
+      if (historyFloor && message.createdAt < historyFloor) {
+        return sendNotFound(reply, 'Message non trouvé');
       }
 
       // Le résumé se CALCULE — les colonnes dénormalisées de la ligne Message

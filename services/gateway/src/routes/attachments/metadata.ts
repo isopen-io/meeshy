@@ -18,7 +18,7 @@ import type {
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
-import { loadShareLinkHistoryFloor } from '../../services/shareLinkHistoryFloor';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor } from '../../services/historyFloor';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from '../../services/personalHistoryFilter';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
@@ -309,16 +309,13 @@ export async function registerMetadataRoutes(
         // les tenir des mêmes modules — sans quoi la règle a deux énoncés qui
         // dérivent l'un de l'autre.
         const isAnonymous = Boolean(authContext.isAnonymous && authContext.participantId);
+        // La projection du plancher est PARTAGÉE avec `GET messages` et `/sync`
+        // — l'omettre d'un champ ferait retomber ce lecteur sur le lien
+        // pendant que les deux autres appliquent la ligne, soit la règle à
+        // deux énoncés que ce bloc s'interdit.
         const participantSelect = {
           conversationId: true,
-          joinedAt: true,
-          shareLinkId: true,
-          // Le droit de voir l'avant-jointure est FIGÉ sur la ligne participant,
-          // et la surcharge de l'hôte y vit aussi. Les omettre ferait retomber
-          // ce lecteur sur le lien pendant que les deux autres appliquent la
-          // valeur figée — soit la règle à deux énoncés que ce bloc s'interdit.
-          permissions: true,
-          anonymousSession: true,
+          ...HISTORY_FLOOR_PARTICIPANT_SELECT,
         } as const;
 
         const participant = isAnonymous
@@ -359,7 +356,7 @@ export async function registerMetadataRoutes(
         // seul rejet possible est celui du plancher, et il n'abandonne aucune
         // promesse sans écouteur.
         const [historyFloor, personalHiding] = await Promise.all([
-          loadShareLinkHistoryFloor(prisma, participant),
+          loadHistoryFloor(prisma, participant),
           loadPersonalHistoryHiding(prisma, {
             userId: isAnonymous ? null : authContext.userId,
             conversationId,

@@ -78,6 +78,16 @@ function makePrisma(overrides: any = {}) {
       findMany: jest.fn<any>().mockResolvedValue([]),
       ...overrides.message,
     },
+    // La ligne du LECTEUR, lue pour son plancher d'historique. `null` = pas de
+    // ligne, donc rien ne borne — le défaut de tout ce fichier.
+    participant: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      ...overrides.participant,
+    },
+    conversationShareLink: {
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+      ...overrides.conversationShareLink,
+    },
     ...overrides,
   };
 }
@@ -239,5 +249,95 @@ describe('GET /conversations/:id/threads/:messageId — service error', () => {
   it('returns 500 on service error', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
     expect(res.statusCode).toBe(500);
+  });
+});
+
+// ─── Plancher d'historique ────────────────────────────────────────────────────
+//
+// Un fil est une porte sur l'historique comme une autre : sa racine et ses
+// réponses obéissent au plancher du lecteur (`services/historyFloor`), le même
+// que `GET messages`. Une racine d'AVANT l'arrivée n'existe pas pour lui — 404,
+// comme pour un message masqué.
+
+describe('GET /conversations/:id/threads/:messageId — plancher d’historique du lecteur', () => {
+  const JOINED_AT = new Date('2026-06-15T00:00:00Z');
+  const memberRow = (over: Record<string, unknown> = {}) => ({
+    role: 'member',
+    joinedAt: JOINED_AT,
+    shareLinkId: null,
+    historyVisibleFrom: null,
+    permissions: { canViewHistory: false },
+    anonymousSession: null,
+    ...over,
+  });
+
+  it('borne la racine ET les réponses à `joinedAt` pour un membre au droit figé fermé', async () => {
+    const findFirst = jest.fn<any>().mockResolvedValue(MOCK_PARENT_MESSAGE);
+    const findMany = jest.fn<any>().mockResolvedValue([]);
+    const app = await buildApp({
+      prismaOverrides: {
+        message: { findFirst, findMany },
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(memberRow()) },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(findFirst.mock.calls[0][0].where).toMatchObject({ id: MESSAGE_ID, createdAt: { gte: JOINED_AT } });
+    expect(findMany.mock.calls[0][0].where).toMatchObject({ replyToId: { in: [MESSAGE_ID] }, createdAt: { gte: JOINED_AT } });
+    await app.close();
+  });
+
+  it('cherche la ligne du lecteur INSCRIT par `userId`', async () => {
+    const participantFindFirst = jest.fn<any>().mockResolvedValue(memberRow());
+    const app = await buildApp({ prismaOverrides: { participant: { findFirst: participantFindFirst } } });
+
+    await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+    expect(participantFindFirst.mock.calls[0][0].where).toEqual({ userId: USER_ID, conversationId: CONV_RESOLVED_ID, isActive: true });
+    await app.close();
+  });
+
+  it('ouvre tout à un administrateur de la conversation', async () => {
+    const findFirst = jest.fn<any>().mockResolvedValue(MOCK_PARENT_MESSAGE);
+    const app = await buildApp({
+      prismaOverrides: {
+        message: { findFirst, findMany: jest.fn<any>().mockResolvedValue([]) },
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(memberRow({ role: 'admin' })) },
+      },
+    });
+
+    await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+    expect(findFirst.mock.calls[0][0].where.createdAt).toBeUndefined();
+    await app.close();
+  });
+
+  it('ouvre depuis la DATE octroyée par un administrateur', async () => {
+    const GRANTED_FROM = new Date('2026-01-01T00:00:00Z');
+    const findFirst = jest.fn<any>().mockResolvedValue(MOCK_PARENT_MESSAGE);
+    const app = await buildApp({
+      prismaOverrides: {
+        message: { findFirst, findMany: jest.fn<any>().mockResolvedValue([]) },
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(memberRow({ historyVisibleFrom: GRANTED_FROM })) },
+      },
+    });
+
+    await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+    expect(findFirst.mock.calls[0][0].where.createdAt).toEqual({ gte: GRANTED_FROM });
+    await app.close();
+  });
+
+  it('rend 500, jamais le fil, quand le plancher est ILLISIBLE — contrôle d’accès fail-closed', async () => {
+    const findFirst = jest.fn<any>().mockResolvedValue(MOCK_PARENT_MESSAGE);
+    const app = await buildApp({
+      prismaOverrides: {
+        message: { findFirst, findMany: jest.fn<any>().mockResolvedValue([]) },
+        participant: { findFirst: jest.fn<any>().mockRejectedValue(new Error('mongo down')) },
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MESSAGE_ID}` });
+    expect(res.statusCode).toBe(500);
+    expect(findFirst).not.toHaveBeenCalled();
+    await app.close();
   });
 });

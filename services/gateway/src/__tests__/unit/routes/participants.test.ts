@@ -1573,6 +1573,9 @@ describe('registerParticipantsRoutes', () => {
             canSendVideos: true,
             canSendLocations: false,
             canSendLinks: false,
+            // Un membre ajouté après coup lit depuis son arrivée — écrit
+            // EXPLICITEMENT, jamais laissé au défaut du schéma.
+            canViewHistory: false,
           }),
         }),
       });

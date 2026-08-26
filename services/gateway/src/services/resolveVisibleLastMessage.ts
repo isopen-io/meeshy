@@ -27,7 +27,8 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
-import { applyPersonalHistoryHiding, loadPersonalHistoryHiding } from './personalHistoryFilter';
+import { applyPersonalHistoryHiding, loadPersonalHistoryHiding, NO_PERSONAL_HIDING } from './personalHistoryFilter';
+import { applyHistoryFloor } from './historyFloor';
 
 export interface PreviewCandidate {
   readonly conversationId: string;
@@ -51,6 +52,60 @@ export interface ResolveVisibleLastMessagesParams {
    * conversation search with `include`.
    */
   readonly query: { select: Record<string, unknown> } | { include: Record<string, unknown> };
+  /**
+   * `conversationId` → plancher d'historique du lecteur (`services/historyFloor`).
+   * Une conversation absente n'a pas de plancher. À la différence du masquage
+   * personnel, il vaut aussi pour un lecteur SANS compte, et il dégrade FERMÉ :
+   * une reprise qui échoue sous un plancher rend « aucun aperçu », jamais
+   * l'aperçu d'avant l'arrivée.
+   */
+  readonly historyFloors?: ReadonlyMap<string, Date>;
+}
+
+type PreviewWithMessage = PreviewCandidate & { message: { id: string; createdAt: Date } };
+
+/**
+ * La sonde du masquage PERSONNEL — deux lectures indexées sur les seuls
+ * aperçus de la page — rendue comme un prédicat sur un candidat.
+ */
+async function probePersonalHiding(
+  prisma: PrismaClient,
+  userId: string,
+  candidates: readonly PreviewWithMessage[],
+): Promise<(candidate: PreviewWithMessage) => boolean> {
+  const unknownCutoffs = candidates
+    .filter((c) => c.clearHistoryBefore === undefined)
+    .map((c) => c.conversationId);
+
+  const [deletions, loadedCutoffs] = await Promise.all([
+    prisma.userMessageDeletion.findMany({
+      where: { userId, messageId: { in: candidates.map((c) => c.message.id) } },
+      select: { messageId: true },
+    }),
+    unknownCutoffs.length === 0
+      ? Promise.resolve([] as Array<{ conversationId: string; clearHistoryBefore: Date | null }>)
+      : prisma.userConversationPreferences.findMany({
+          where: {
+            userId,
+            conversationId: { in: unknownCutoffs },
+            clearHistoryBefore: { not: null },
+          },
+          select: { conversationId: true, clearHistoryBefore: true },
+        }),
+  ]);
+  const individuallyHidden = new Set(deletions.map((d) => d.messageId));
+  const cutoffByConversation = new Map(
+    loadedCutoffs.map((row) => [row.conversationId, row.clearHistoryBefore])
+  );
+
+  return (c) => {
+    if (individuallyHidden.has(c.message.id)) return true;
+    const cutoff =
+      c.clearHistoryBefore === undefined
+        ? cutoffByConversation.get(c.conversationId) ?? null
+        : c.clearHistoryBefore;
+    return cutoff !== null && c.message.createdAt < cutoff;
+  };
 }
 
 /**
@@ -60,62 +115,36 @@ export interface ResolveVisibleLastMessagesParams {
  */
 export async function resolveVisibleLastMessages(
   prisma: PrismaClient,
-  { userId, candidates, query }: ResolveVisibleLastMessagesParams
+  { userId, candidates, query, historyFloors }: ResolveVisibleLastMessagesParams
 ): Promise<Map<string, unknown | null>> {
   const replacements = new Map<string, unknown | null>();
-  if (!userId) return replacements;
 
-  const withMessage = candidates.filter(
-    (c): c is PreviewCandidate & { message: { id: string; createdAt: Date } } => c.message !== null
-  );
+  const withMessage = candidates.filter((c): c is PreviewWithMessage => c.message !== null);
   if (withMessage.length === 0) return replacements;
 
+  const floorOf = (c: PreviewWithMessage): Date | null => historyFloors?.get(c.conversationId) ?? null;
+  const belowFloor = (c: PreviewWithMessage): boolean => {
+    const floor = floorOf(c);
+    return floor !== null && c.message.createdAt < floor;
+  };
+
   try {
-    const unknownCutoffs = withMessage
-      .filter((c) => c.clearHistoryBefore === undefined)
-      .map((c) => c.conversationId);
-
-    const [deletions, loadedCutoffs] = await Promise.all([
-      prisma.userMessageDeletion.findMany({
-        where: { userId, messageId: { in: withMessage.map((c) => c.message.id) } },
-        select: { messageId: true },
-      }),
-      unknownCutoffs.length === 0
-        ? Promise.resolve([] as Array<{ conversationId: string; clearHistoryBefore: Date | null }>)
-        : prisma.userConversationPreferences.findMany({
-            where: {
-              userId,
-              conversationId: { in: unknownCutoffs },
-              clearHistoryBefore: { not: null },
-            },
-            select: { conversationId: true, clearHistoryBefore: true },
-          }),
-    ]);
-    const individuallyHidden = new Set(deletions.map((d) => d.messageId));
-    const cutoffByConversation = new Map(
-      loadedCutoffs.map((row) => [row.conversationId, row.clearHistoryBefore])
-    );
-
-    const hiddenPreviews = withMessage.filter((c) => {
-      if (individuallyHidden.has(c.message.id)) return true;
-      const cutoff =
-        c.clearHistoryBefore === undefined
-          ? cutoffByConversation.get(c.conversationId) ?? null
-          : c.clearHistoryBefore;
-      return cutoff !== null && c.message.createdAt < cutoff;
-    });
+    // Le masquage personnel n'existe que pour un compte ; le plancher, lui,
+    // borne aussi un lecteur sans compte — un anonyme n'a rien à sonder, mais
+    // il a un plancher.
+    const hiddenPersonally = userId ? await probePersonalHiding(prisma, userId, withMessage) : () => false;
+    const hiddenPreviews = withMessage.filter((c) => belowFloor(c) || hiddenPersonally(c));
 
     if (hiddenPreviews.length === 0) return replacements;
 
     const resolved = await Promise.all(
       hiddenPreviews.map(async (candidate) => {
-        const hiding = await loadPersonalHistoryHiding(prisma, {
-          userId,
-          conversationId: candidate.conversationId,
-        });
+        const hiding = userId
+          ? await loadPersonalHistoryHiding(prisma, { userId, conversationId: candidate.conversationId })
+          : NO_PERSONAL_HIDING;
         const next = await prisma.message.findFirst({
           where: applyPersonalHistoryHiding(
-            { conversationId: candidate.conversationId, deletedAt: null },
+            applyHistoryFloor({ conversationId: candidate.conversationId, deletedAt: null }, floorOf(candidate)),
             hiding
           ),
           orderBy: { createdAt: 'desc' },
@@ -132,6 +161,9 @@ export async function resolveVisibleLastMessages(
     logger.warn('[resolveVisibleLastMessages] failed, serving the unfiltered preview', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return new Map();
+    // Le masquage personnel dégrade en « on sert » ; le plancher est un
+    // contrôle d'accès et dégrade en « rien » — sous un plancher, l'aperçu
+    // global est précisément ce que le lecteur n'a pas le droit de lire.
+    return new Map(withMessage.filter(belowFloor).map((c) => [c.conversationId, null] as const));
   }
 }

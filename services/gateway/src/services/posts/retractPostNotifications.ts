@@ -1,7 +1,7 @@
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import type {
-  RetractedNotification,
-  RetractedNotificationAnnouncer,
+import {
+  retractedNotificationOf,
+  type RetractedNotificationAnnouncer,
 } from '../notifications/retractedNotifications';
 
 const log = enhancedLogger.child({ module: 'retractPostNotifications' });
@@ -81,8 +81,14 @@ const MAX_RETRACTION_BATCHES = 200;
 
 type RawObjectId = string | { $oid?: string };
 
+type RawNotificationRow = {
+  _id?: RawObjectId;
+  userId?: RawObjectId;
+  delivery?: { pushSent?: unknown };
+};
+
 type RawNotificationBatch = {
-  cursor?: { firstBatch?: ReadonlyArray<{ _id?: RawObjectId; userId?: RawObjectId }> };
+  cursor?: { firstBatch?: ReadonlyArray<RawNotificationRow> };
 };
 
 /**
@@ -123,8 +129,21 @@ export async function retractPostNotifications(
   for (let batch = 0; batch < MAX_RETRACTION_BATCHES; batch += 1) {
     const raw = (await prisma.$runCommandRaw({
       find: 'Notification',
-      filter: { 'context.postId': { $in: targets } },
-      projection: { _id: 1, userId: 1 },
+      // Deux chemins, parce qu'une ligne `post_repost` nomme le post sous DEUX
+      // clés : `context.postId` porte l'ORIGINAL (c'est lui qu'elle ouvre) et
+      // `metadata.repostId` le repost qui l'a produite. Supprimer le repost
+      // doit la retirer, et seul le second chemin le sait — le premier la
+      // laissait en base, annonçant un repost qui n'existe plus.
+      filter: {
+        $or: [
+          { 'context.postId': { $in: targets } },
+          { 'metadata.repostId': { $in: targets } },
+        ],
+      },
+      // `delivery.pushSent` : la révocation push ne réveille un appareil que
+      // là où un push est parti. Aucune conversation ici — les lignes d'un post
+      // n'en portent pas.
+      projection: { _id: 1, userId: 1, 'delivery.pushSent': 1 },
       singleBatch: true,
       batchSize: POST_NOTIFICATION_RETRACTION_BATCH_SIZE,
     })) as RawNotificationBatch;
@@ -139,9 +158,11 @@ export async function retractPostNotifications(
     // qu'elle recalcule doivent voir la base d'après le retrait. Une ligne sans
     // `userId` lisible n'est pas annonçable — elle est tout de même supprimée,
     // parce que la laisser ferait boucler la relecture sur elle.
-    const retracted = rows
-      .map((row) => ({ id: objectId(row._id), userId: objectId(row.userId) }))
-      .filter((row): row is RetractedNotification => !!row.id && !!row.userId);
+    const retracted = rows.flatMap((row) => {
+      const id = objectId(row._id);
+      const userId = objectId(row.userId);
+      return id && userId ? [retractedNotificationOf({ id, userId, delivery: row.delivery })] : [];
+    });
     if (retracted.length > 0) {
       await announcer?.announceNotificationsRetracted(retracted);
     }

@@ -626,7 +626,7 @@ describe('PostCommentService.deleteComment — retrait des notifications', () =>
       return { count: 1 };
     });
     runCommandRaw.mockResolvedValue({
-      cursor: { firstBatch: [{ _id: { $oid: 'n1' }, userId: { $oid: 'u9' } }] },
+      cursor: { firstBatch: [{ _id: { $oid: 'n1' }, userId: { $oid: 'u9' }, delivery: { pushSent: true } }] },
       ok: 1,
     });
     notificationDeleteMany.mockImplementation(async () => {
@@ -639,7 +639,7 @@ describe('PostCommentService.deleteComment — retrait des notifications', () =>
 
     expect(order).toEqual(['soft-delete', 'retract']);
     expect(announcer.announceNotificationsRetracted).toHaveBeenCalledWith([
-      { id: 'n1', userId: 'u9' },
+      { id: 'n1', userId: 'u9', pushSent: true },
     ]);
   });
 
