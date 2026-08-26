@@ -519,14 +519,23 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
         canonicalRow.filter { $0.effect != nil }
     }
 
+    /// **Le jeu SF MODERNE — décision produit 2026-08-26 : SF retravaillés
+    /// d'abord, glyphes à identité forte « dans un second temps ».**
+    ///
+    /// Une famille LIGNE cohérente remplace le mélange `.fill` daté : chaque
+    /// glyphe DIT ce que l'outil fait — `photo` (bibliothèque), `camera`,
+    /// `face.smiling` (emoji), `paperclip` (joindre un fichier, plus parlant que
+    /// `doc`), `mappin.and.ellipse` (un LIEU, pas une flèche de localisation),
+    /// `mic`. Tous disponibles dès iOS 16 ; rendus en `.hierarchical` et animés
+    /// d'un rebond au tap par `ComposerDocumentSurface.toolRow`.
     var symbolName: String {
         switch self {
-        case .photo: return "photo.fill"
-        case .camera: return "camera.fill"
-        case .emoji: return "face.smiling.fill"
-        case .document: return "doc.fill"
-        case .place: return "location.fill"
-        case .microphone: return "mic.fill"
+        case .photo: return "photo"
+        case .camera: return "camera"
+        case .emoji: return "face.smiling"
+        case .document: return "paperclip"
+        case .place: return "mappin.and.ellipse"
+        case .microphone: return "mic"
         }
     }
 }
@@ -1285,6 +1294,11 @@ struct ComposerDocumentSurface: View {
 
     @FocusState private var isContentFocused: Bool
 
+    /// Le dernier outil tapé — pilote le rebond SF (`.symbolEffect(.bounce)`)
+    /// de l'icône concernée. Purement décoratif : aucune décision produit n'en
+    /// dépend, il ne fait que donner à la valeur d'effet une raison de changer.
+    @State private var lastTappedTool: ComposerDocumentTool?
+
     /// Le même délai que la feuille historique. Une prise de focus posée dans
     /// le tour de boucle de la présentation est avalée par l'animation de
     /// montée : le clavier ne se lève pas, et rien ne le signale.
@@ -1357,11 +1371,14 @@ struct ComposerDocumentSurface: View {
             HStack(spacing: 16) {
                 ForEach(tools, id: \.rawValue) { tool in
                     Button {
+                        lastTappedTool = tool
                         onTool?(tool)
                     } label: {
                         Image(systemName: tool.symbolName)
                             .font(.title3)
+                            .symbolRenderingMode(.hierarchical)
                             .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                            .composerToolBounce(active: lastTappedTool == tool)
                     }
                     .accessibilityLabel(Text(ComposerDocumentCopy.label(tool)))
                 }
@@ -1378,6 +1395,33 @@ struct ComposerDocumentSurface: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.focusDelay) {
             isContentFocused = true
         }
+    }
+}
+
+/// **Le rebond SF d'une icône d'outil, gardé derrière iOS 17.**
+///
+/// `.symbolEffect(.bounce)` n'existe qu'à partir d'iOS 17 ; la cible descend à
+/// 16. Le garde passe par un `AnyView` plutôt qu'un `if #available` en
+/// `@ViewBuilder` À DESSEIN : le second infère un `_ConditionalContent` qui
+/// AJOUTE de la profondeur de type, et la pile d'un appareil réel (≈1 Mo,
+/// contre 8 Mo au simulateur) déborde bien avant celle-ci — un défaut que le
+/// gate simulateur ne verrait même pas. `AnyView` efface le type : profondeur
+/// constante, aucun risque, au prix d'un coût d'exécution négligeable pour six
+/// icônes.
+private struct ComposerToolBounceModifier: ViewModifier {
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        guard #available(iOS 17.0, *) else { return AnyView(content) }
+        return AnyView(content.symbolEffect(.bounce, value: active))
+    }
+}
+
+extension View {
+    /// Rebondit l'icône quand `active` bascule (l'outil vient d'être tapé).
+    /// Statique et sûr en repli iOS 16.
+    func composerToolBounce(active: Bool) -> some View {
+        modifier(ComposerToolBounceModifier(active: active))
     }
 }
 
