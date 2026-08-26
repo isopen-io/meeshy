@@ -4033,7 +4033,45 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       EXACTLY the 3 link-carrying tests; the null-default, blank-drop, `withRepostOf` and
       `onRepostSource`-state tests stay green). **Pending**: cloning the source story's slide
       CONTENT (caption/text-elements/effects) into the composer as an editable starting point.
-- [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
+- [~] Draft save/restore with media persistence + lost-media detection / re-capture prompt —
+      **caption + media + structure + audience + repost persistence done** (slice
+      `story-composer-draft-autosave`, 2026-08-26): the composer now survives leaving and
+      reopening — iOS `StoryDraftStore.save/load` + `resetLocalState`/`isEmpty` purge parity.
+      SSOT split mirrors chat drafts: `StoryComposerDraftSnapshot` (`@Serializable`, primitive-only
+      `{slides:[{id,text,mediaIds}], selectedId, visibility, repostOfId, updatedAt}`) in
+      `core:model`; single-slot `StoryComposerDraftStore` (interface + `InMemory` + `DataStore`,
+      corrupt→null) in `sdk-core`; pure `StoryComposerAutosave` (resolve → Save/Clear/None; restore
+      → snapshot|null; deck↔snapshot mapping) in `:feature:stories`. Wired: VM `onEnterComposer`
+      (silent, **pristine-only** restore — never clobbers work begun in the async gap),
+      `persistDraft` (save-on-leave), `publish` clears; `DisposableEffect` glue; `SdkModule`
+      provider; `StoryVisibility.fromWire` (tolerant). **Fidelity gate (load-bearing)**: a draft
+      carrying rich on-canvas content (text/sticker elements, filter, background, pinned duration,
+      non-identity canvas transform) is *not yet persistable* — the primitive snapshot can't
+      represent it, so `resolve` purges any stale stored draft rather than restoring lossily. +33
+      tests (12 `StoryComposerDraftSnapshotTest` round-trip/validity/predicates, 7
+      `StoryComposerDraftStoreTest` InMemory+DataStore+corrupt, 20 `StoryComposerAutosaveTest`
+      resolve/restore/rich-gate/mapping, 6 `StoryComposerViewModelTest` restore/save/purge/publish).
+      Mutation-RED-proven (neutering the rich-content gate reddens EXACTLY the 7 gate tests; the
+      Save/None/Clear-simple, restore and round-trip tests stay green).
+      **Lost-media detection / re-capture done** (slice `story-draft-lost-media-reconcile`,
+      2026-08-26): on restore a persisted media id can dangle — an offline `cmid_` placeholder whose
+      durable blob was swept, or an upload chain abandoned — which would resurrect a broken tile or a
+      publish of media that is gone. Pure `StoryDraftMediaReconciler.reconcile(snapshot, isAvailable)`
+      strips every unavailable id from each slide (surviving order preserved, no slide ever dropped so
+      the deck's ≥1-slide / valid-selection invariants hold), returning `lostMediaIds` (first-seen order,
+      deduped) + `recaptureSlideIds` (slides the loss emptied of ALL content). Availability is real:
+      `OutboxIds.isCmid` classifies the id, an offline placeholder resolves against the durable blob
+      store via the new cheap `MediaBlobStore.has` (DAO `EXISTS`, never loads bytes), a server id is
+      available server-side. Wired into `onEnterComposer`: it seeds the CLEANED deck, surfaces
+      "Some media couldn't be restored" through the existing supportingText notice, and PURGES rather
+      than seeds a draft the loss emptied entirely. +22 tests (13 `StoryDraftMediaReconcilerTest`
+      all-available/drop/order/recapture/whitespace/idempotent/empties-whole-draft/repost-survives,
+      4 `StoryComposerViewModelTest` swept-drops+notifies / survivor-kept / server-id-no-probe /
+      emptied-purges, 2 `MediaBlobStoreTest` has, 2 `MediaBlobDaoTest` exists, 4 `OutboxIdsTest` isCmid).
+      Mutation-RED-proven (neutering the availability filter reddens EXACTLY the 8 cleaning-dependent
+      tests; the pure loss-reporting/order and no-media-slide tests stay green).
+      **Pending**: widening the snapshot to carry rich on-canvas content (lifts the fidelity gate) and
+      wiping the store on account teardown (`SessionTeardown`).
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
       reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes
       surface a Retry/Discard strip above the tray — no silent loss); preview-before-publish and

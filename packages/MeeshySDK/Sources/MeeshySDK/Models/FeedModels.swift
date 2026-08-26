@@ -65,6 +65,14 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     /// `PostMedia.translations` map; empty for non-audio media or when the
     /// translator pipeline has not produced TTS variants yet.
     public var translatedAudios: [MessageTranslatedAudio]
+    /// Variantes WebP responsive (D4) de l'image — `nil` pour une image chiffrée
+    /// ou un média dont le fil n'en sert pas. Transportées jusqu'à
+    /// `MeeshyMessageAttachment.imageVariants` pour que le plein écran élise la
+    /// variante à la largeur d'écran (`ImageVariantSelector`) au lieu de charger
+    /// l'original multi-Mo — la galerie ouverte depuis un post les perdait.
+    /// Décodage tolérant par élément (`LossyImageVariants`) : un blob de feed
+    /// persisté dont une variante est partielle rend quand même le média.
+    @LossyImageVariants public var imageVariants: [MeeshyImageVariant]?
 
     /// Ratio largeur/hauteur dérivé de `width`/`height`. `nil` si l'un des
     /// deux est absent ou si l'un des deux vaut 0 (évite une division par
@@ -80,12 +88,14 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
                 width: Int? = nil, height: Int? = nil, duration: Int? = nil,
                 fileName: String? = nil, fileSize: String? = nil, pageCount: Int? = nil,
                 transcription: MessageTranscription? = nil,
-                translatedAudios: [MessageTranslatedAudio] = []) {
+                translatedAudios: [MessageTranslatedAudio] = [],
+                imageVariants: [MeeshyImageVariant]? = nil) {
         self.id = id; self.type = type; self.url = url; self.thumbnailUrl = thumbnailUrl; self.thumbHash = thumbHash; self.thumbnailColor = thumbnailColor
         self.width = width; self.height = height; self.duration = duration
         self.fileName = fileName; self.fileSize = fileSize; self.pageCount = pageCount
         self.transcription = transcription
         self.translatedAudios = translatedAudios
+        self.imageVariants = imageVariants
     }
 
     public static func image(color: String = "4ECDC4") -> FeedMedia {
@@ -120,7 +130,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     private enum CodingKeys: String, CodingKey {
         case id, type, url, thumbnailUrl, thumbHash, thumbnailColor
         case width, height, duration, fileName, fileSize, pageCount
-        case transcription, translatedAudios
+        case transcription, translatedAudios, imageVariants
     }
 
     public init(from decoder: Decoder) throws {
@@ -139,6 +149,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         pageCount = try c.decodeIfPresent(Int.self, forKey: .pageCount)
         transcription = try c.decodeIfPresent(MessageTranscription.self, forKey: .transcription)
         translatedAudios = try c.decodeIfPresent([MessageTranslatedAudio].self, forKey: .translatedAudios) ?? []
+        _imageVariants = try c.decode(LossyImageVariants.self, forKey: .imageVariants)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -159,6 +170,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         if !translatedAudios.isEmpty {
             try c.encode(translatedAudios, forKey: .translatedAudios)
         }
+        try c.encodeIfPresent(imageVariants, forKey: .imageVariants)
     }
 }
 
@@ -180,7 +192,8 @@ extension FeedMedia {
             duration: duration.map { $0 * 1000 },
             latitude: nil,
             longitude: nil,
-            thumbnailColor: thumbnailColor
+            thumbnailColor: thumbnailColor,
+            imageVariants: imageVariants
         )
     }
 

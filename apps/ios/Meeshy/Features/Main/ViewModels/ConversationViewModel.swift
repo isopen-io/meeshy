@@ -3767,8 +3767,35 @@ class ConversationViewModel: ObservableObject {
     ///
     ///   Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
     func markAsRead(messageIds: [String]? = nil) {
+        sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpMessageId(seen: messageIds))
+    }
+
+    /// Rattrapage HORS mode Bulles — Résumé Vivant, Rivière (#3901). Ces deux
+    /// modes ne rendent JAMAIS chaque bulle individuellement
+    /// (`MessageListViewController.rendersThread` est faux pour eux), donc
+    /// n'alimentent aucun `seenIds` : `markAsRead(messageIds:)` seul ne peut
+    /// structurellement jamais y faire avancer le curseur serveur, quel que
+    /// soit le nombre de fois où l'utilisateur rouvre la conversation — d'où
+    /// un badge bloqué à vie au-delà du seuil de 25 non-lus.
+    ///
+    /// La preuve de consultation y est DIFFÉRENTE (Résumé affiché jusqu'au
+    /// bout, Rivière stabilisée au présent) et vient de l'appelant plutôt que
+    /// d'un lot `seen` — ce rattrapage avance donc directement le curseur
+    /// jusqu'au dernier message CONNU DU SERVEUR, sans jamais passer par
+    /// `seen.contains(newest)`. Comme en mode Bulles, seul le CURSEUR bouge :
+    /// aucun `MessageStatusEntry.readAt` individuel n'est gelé pour un
+    /// message que le lecteur n'a pas vu bulle par bulle.
+    func markCaughtUpFromSummaryOrRiver() {
+        guard !hasNewerMessages, let newest = newestServerMessageId() else { return }
+        lastCaughtUpMessageId = newest
+        sendReadReceipt(messageIds: nil, caughtUpId: newest)
+    }
+
+    /// Marque localement (badge, cache, widget) puis envoie au serveur —
+    /// partagé par `markAsRead` et `markCaughtUpFromSummaryOrRiver`, seule la
+    /// provenance de `caughtUpId` diffère entre les deux.
+    private func sendReadReceipt(messageIds: [String]?, caughtUpId: String?) {
         let convId = conversationId
-        let caughtUpId = caughtUpMessageId(seen: messageIds)
         if messageIds == nil || caughtUpId != nil {
             // Les trois surfaces locales d'un seul geste — cache + frontière,
             // lignes @Published + `ConversationStore`, badge d'icône + widget.
@@ -3841,20 +3868,23 @@ class ConversationViewModel: ObservableObject {
     /// dans l'outbox (coalescence par conversation) celui qui portait le
     /// rattrapage, et le badge repartirait au prochain sync.
     private func caughtUpMessageId(seen: [String]?) -> String? {
-        guard let seen, !hasNewerMessages else { return nil }
-        // Le message le plus récent que le SERVEUR connaît : une bulle
-        // optimiste qu'on vient d'envoyer ne porte pas encore d'ObjectId, et
-        // l'annoncer comme borne de curseur ferait rejeter le corps entier.
-        guard let newest = messages.reversed().lazy
-            .map({ self.serverId(for: $0.id) })
-            .first(where: { Self.isServerMessageId($0) })
-        else { return nil }
-
+        guard let seen, !hasNewerMessages, let newest = newestServerMessageId() else { return nil }
         if seen.contains(newest) {
             lastCaughtUpMessageId = newest
             return newest
         }
         return lastCaughtUpMessageId == newest ? newest : nil
+    }
+
+    /// Le message le plus récent que le SERVEUR connaît : une bulle
+    /// optimiste qu'on vient d'envoyer ne porte pas encore d'ObjectId, et
+    /// l'annoncer comme borne de curseur ferait rejeter le corps entier.
+    /// Partagé par `caughtUpMessageId(seen:)` et
+    /// `markCaughtUpFromSummaryOrRiver()`.
+    private func newestServerMessageId() -> String? {
+        messages.reversed().lazy
+            .map({ self.serverId(for: $0.id) })
+            .first(where: { Self.isServerMessageId($0) })
     }
 
     /// Un ObjectId MongoDB : 24 caractères hexadécimaux. Le gateway valide le

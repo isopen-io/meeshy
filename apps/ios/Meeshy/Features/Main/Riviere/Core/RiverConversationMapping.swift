@@ -296,6 +296,16 @@ nonisolated enum RiverConversationMapping {
         return RiverLaneResolver.RiverCursor(laneIndex: last.laneIndex, rank: last.rank)
     }
 
+    /// « Au présent » (#3901) : le curseur porte le rang de la bulle la plus
+    /// RÉCENTE — même calcul que `initialCursor`. Preuve de consultation pour
+    /// le rattrapage du badge en Rivière (`ConversationViewModel
+    /// .markCaughtUpFromSummaryOrRiver`) : un fil sans bulle n'a rien à
+    /// rattraper.
+    static func isAtPresent(cursor: RiverLaneResolver.RiverCursor, geometry: RiverLaneResolver.RiverGeometry) -> Bool {
+        guard let mostRecentRank = geometry.bubbles.map(\.rank).max() else { return false }
+        return cursor.rank == mostRecentRank
+    }
+
     /// Empreinte du fil pour ne recalculer la géométrie que si les messages
     /// QUI ONT UN RANG ont changé (ids + compte) — jamais à chaque passe de
     /// body.

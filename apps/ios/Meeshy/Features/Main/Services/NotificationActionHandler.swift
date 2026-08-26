@@ -1,9 +1,10 @@
 import UIKit
+import Combine
 @preconcurrency import UserNotifications
 import MeeshySDK
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
+private nonisolated let logger = Logger(subsystem: "me.meeshy.app", category: "push")
 
 // MARK: - Injection seams
 
@@ -137,6 +138,8 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let localMarkRead: @MainActor (String) -> Void
     private let removeDeliveredForConversation: @MainActor (String) -> Void
     private let removeDeliveredForPost: @MainActor (String) -> Void
+    private let removeDeliveredForNotificationIds: @MainActor ([String]) async -> Void
+    private var revocationSubscription: AnyCancellable?
 
     /// Resolved lazily so tests never touch `DependencyContainer.shared`
     /// (which opens the on-disk GRDB pool).
@@ -200,6 +203,12 @@ final class NotificationActionHandler: NotificationActionHandling {
                 matching: { ($0["postId"] as? String) == postId }
             )
         },
+        removeDeliveredForNotificationIds: @escaping @MainActor ([String]) async -> Void = { ids in
+            let revocation = NotificationRevocationPayload(notificationIds: ids, conversationIds: [])
+            await NotificationActionHandler.removeDeliveredNotificationsAwaiting(
+                matching: { revocation.covers($0) }
+            )
+        },
         prepareReplyQueue: (@MainActor () async -> Void)? = nil
     ) {
         self.messageService = messageService
@@ -219,6 +228,45 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.localMarkRead = localMarkRead
         self.removeDeliveredForConversation = removeDeliveredForConversation
         self.removeDeliveredForPost = removeDeliveredForPost
+        self.removeDeliveredForNotificationIds = removeDeliveredForNotificationIds
+    }
+
+    // MARK: - Révocation (features 4/5)
+
+    /// Retire les bannières déjà LIVRÉES des notifications révoquées — par le
+    /// push de contrôle `notification_revoked` (AppDelegate) comme par le
+    /// socket `notification:deleted` (`observeRevocations`). Un seul atome
+    /// `UNUserNotificationCenter` derrière : `removeDeliveredNotifications`.
+    func revokeDeliveredBanners(notificationIds: [String]) async {
+        guard !notificationIds.isEmpty else { return }
+        await removeDeliveredForNotificationIds(notificationIds)
+    }
+
+    /// Fenêtre de regroupement des révocations reçues par socket. Assez courte
+    /// pour rester imperceptible (la bannière part dans le même geste), assez
+    /// longue pour absorber une purge en lot.
+    private static let revocationBatchWindow: DispatchQueue.SchedulerTimeType.Stride = .milliseconds(200)
+
+    /// Abonne le retrait de bannières au flux des suppressions reçues par
+    /// socket (`NotificationToastManager.notificationWasDeleted`). Un nouvel
+    /// appel REMPLACE l'abonnement : la racine SwiftUI peut rejouer son câblage
+    /// sans retirer deux fois.
+    ///
+    /// Les ids arrivent UN PAR UN — `handleNotificationDeletedBulk` republie
+    /// ligne à ligne — alors que `revokeDeliveredBanners` prend DÉJÀ un
+    /// tableau : sans regroupement, une purge des lues venue d'un autre
+    /// appareil (deux cents lignes) enchaînait deux cents allers-retours
+    /// `getDeliveredNotifications` sur le main thread, chacun suivi de sa
+    /// boucle de confirmation. La rafale se replie ici en UN appel système.
+    func observeRevocations(from deletions: AnyPublisher<String, Never>) {
+        revocationSubscription = deletions
+            .collect(.byTime(DispatchQueue.main, Self.revocationBatchWindow))
+            .filter { !$0.isEmpty }
+            .sink { [weak self] notificationIds in
+                Task { @MainActor [weak self] in
+                    await self?.revokeDeliveredBanners(notificationIds: notificationIds)
+                }
+            }
     }
 
     // MARK: - Entry point
@@ -562,19 +610,128 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// Remove already-delivered banners matching the predicate. Without this,
     /// after a lock-screen action the banner lingers in Notification Center
     /// while the coordinator's badge count says 0.
+    ///
+    /// La `completion` n'est appelée qu'une fois le retrait CONFIRMÉ par une
+    /// relecture du centre — voir `removeDeliveredNotificationsAwaiting`.
     nonisolated static func removeDeliveredNotifications(
-        matching predicate: @escaping @Sendable ([AnyHashable: Any]) -> Bool
+        matching predicate: @escaping @Sendable ([AnyHashable: Any]) -> Bool,
+        center: DeliveredBannerCenter = .system,
+        confirmationTimeout: Duration = defaultRemovalConfirmationTimeout,
+        completion: (@Sendable () -> Void)? = nil
     ) {
-        // `.current()` returns the same shared instance every call — fetched
-        // fresh on both sides instead of captured, so the completion handler
-        // doesn't need to carry a UNUserNotificationCenter (not Sendable)
-        // across the @Sendable boundary.
-        UNUserNotificationCenter.current().getDeliveredNotifications { notifications in
-            let matching = notifications
-                .filter { predicate($0.request.content.userInfo) }
-                .map(\.request.identifier)
-            guard !matching.isEmpty else { return }
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: matching)
+        center.delivered { banners in
+            let matching = banners
+                .filter { predicate($0.userInfo) }
+                .map(\.identifier)
+            guard !matching.isEmpty else {
+                completion?()
+                return
+            }
+            center.remove(matching)
+            // Personne n'attend (nettoyage après action, fire-and-forget) :
+            // relire en boucle ne servirait qu'à brûler des allers-retours
+            // système. La confirmation n'a de sens que pour un appelant qui
+            // s'apprête à rendre la main à iOS.
+            guard let completion else { return }
+            confirmRemoval(
+                of: Set(matching),
+                center: center,
+                timeout: confirmationTimeout,
+                completion: completion
+            )
+        }
+    }
+
+    /// Variante attendue : la révocation par push silencieux doit avoir RETIRÉ
+    /// la bannière avant de rendre la main à iOS (`completionHandler`), sinon
+    /// le processus peut être suspendu la bannière encore affichée.
+    nonisolated static func removeDeliveredNotificationsAwaiting(
+        matching predicate: @escaping @Sendable ([AnyHashable: Any]) -> Bool,
+        center: DeliveredBannerCenter = .system,
+        confirmationTimeout: Duration = defaultRemovalConfirmationTimeout
+    ) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            removeDeliveredNotifications(
+                matching: predicate,
+                center: center,
+                confirmationTimeout: confirmationTimeout
+            ) { continuation.resume() }
+        }
+    }
+
+    /// Combien de temps on accepte d'attendre la CONFIRMATION du retrait. Le
+    /// budget d'un push silencieux se compte en secondes : une confirmation qui
+    /// n'arrive jamais ne doit pas le consommer entier.
+    nonisolated static let defaultRemovalConfirmationTimeout: Duration = .seconds(3)
+
+    /// Intervalle de relecture pendant la confirmation.
+    private nonisolated static let removalConfirmationPollInterval: Duration = .milliseconds(50)
+
+    /// `removeDeliveredNotifications(withIdentifiers:)` n'a AUCUN completion
+    /// handler : l'appeler est une ÉMISSION, pas un effet. Rendre la main à iOS
+    /// derrière elle laisse le système libre de suspendre le processus avant
+    /// que le retrait soit traité — la bannière reste affichée, exactement ce
+    /// que la révocation prétend empêcher. La RELECTURE est la seule preuve.
+    private nonisolated static func confirmRemoval(
+        of identifiers: Set<String>,
+        center: DeliveredBannerCenter,
+        timeout: Duration,
+        completion: (@Sendable () -> Void)?
+    ) {
+        Task.detached {
+            let deadline = ContinuousClock.now.advanced(by: timeout)
+            while true {
+                let stillDelivered = await center.deliveredIdentifiers()
+                if stillDelivered.isDisjoint(with: identifiers) { break }
+                guard ContinuousClock.now < deadline else {
+                    logger.error("Retrait de bannières non confirmé avant expiration du délai (\(identifiers.count, privacy: .public) id(s))")
+                    break
+                }
+                try? await Task.sleep(for: removalConfirmationPollInterval)
+            }
+            completion?()
+        }
+    }
+}
+
+// MARK: - Delivered banners (couture système)
+
+/// Une bannière DÉJÀ LIVRÉE, réduite à ce dont le retrait a besoin : son
+/// identifiant de requête et le `userInfo` que le prédicat interroge.
+nonisolated struct DeliveredBanner: @unchecked Sendable {
+    let identifier: String
+    let userInfo: [AnyHashable: Any]
+}
+
+/// Les trois gestes que le retrait de bannières fait sur `UNUserNotificationCenter` :
+/// LIRE les livrées, en RETIRER — et RELIRE pour prouver que le retrait a pris.
+///
+/// Couture explicite (mêmes clôtures injectables que le reste du handler) parce
+/// que la troisième capacité est ce qui distingue une émission d'un effet, et
+/// qu'aucun test ne peut l'observer sur le centre réel.
+nonisolated struct DeliveredBannerCenter: Sendable {
+    let delivered: @Sendable (@escaping @Sendable ([DeliveredBanner]) -> Void) -> Void
+    let remove: @Sendable ([String]) -> Void
+
+    /// `.current()` rend la même instance partagée à chaque appel — relue de
+    /// chaque côté plutôt que capturée, pour ne pas faire traverser un
+    /// `UNUserNotificationCenter` (non Sendable) à la frontière @Sendable.
+    static let system = DeliveredBannerCenter(
+        delivered: { completion in
+            UNUserNotificationCenter.current().getDeliveredNotifications { notifications in
+                completion(notifications.map {
+                    DeliveredBanner(identifier: $0.request.identifier, userInfo: $0.request.content.userInfo)
+                })
+            }
+        },
+        remove: { identifiers in
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
+        }
+    )
+
+    func deliveredIdentifiers() async -> Set<String> {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Set<String>, Never>) in
+            delivered { continuation.resume(returning: Set($0.map(\.identifier))) }
         }
     }
 }

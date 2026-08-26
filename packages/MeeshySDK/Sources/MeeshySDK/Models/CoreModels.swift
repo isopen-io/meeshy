@@ -1373,6 +1373,101 @@ public struct MeeshyImageVariant: Codable, Sendable, Hashable {
         self.size = size
         self.format = format
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case width, height, url, size, format
+    }
+
+    /// Le repli `"webp"` vit ICI et pas seulement dans l'init memberwise :
+    /// `format` est le seul champ que le fil peut légitimement taire (une
+    /// variante responsive EST une WebP — `UploadProcessor` la pose en dur),
+    /// et un défaut d'init ne décode rien.
+    ///
+    /// Les quatre autres champs restent EXIGÉS : un élément sans `url`, sans
+    /// dimension ou sans poids ne peut être ni élu ni mesuré — il n'est pas une
+    /// variante. Son absence n'est pas fatale pour autant : les porteurs le
+    /// décodent par `LossyImageVariants`, qui l'IGNORE au lieu de faire tomber
+    /// le message ou le post entier.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        width = try c.decode(Int.self, forKey: .width)
+        height = try c.decode(Int.self, forKey: .height)
+        url = try c.decode(String.self, forKey: .url)
+        size = try c.decode(Int.self, forKey: .size)
+        format = try c.decodeIfPresent(String.self, forKey: .format) ?? "webp"
+    }
+}
+
+/// Consomme un élément sans l'inspecter — avance le curseur au-delà d'un
+/// élément malformé (jumeau de `_StorySkippedElement`, l'autre décodage lossy
+/// du module).
+private struct _SkippedImageVariant: Decodable {
+    init(from decoder: Decoder) throws {}
+}
+
+/// Décodage TOLÉRANT PAR ÉLÉMENT de `imageVariants` — le SITE UNIQUE de cette
+/// tolérance, déclaré par les quatre porteurs du champ
+/// (`MeeshyMessageAttachment`, `APIMessageAttachment`, `FeedMedia`,
+/// `APIPostMedia`).
+///
+/// Le fil ne garantit RIEN de la forme d'un élément : `api-schemas.ts` ne pose
+/// aucun `required` sur les items et Prisma stocke un `Json?` libre. Un modèle
+/// plus STRICT que son fil ne perd pas le champ — il perd le CONTENU PORTEUR :
+/// une seule variante écrite à moitié faisait échouer le décodage du post ou du
+/// message entier, qui DISPARAISSAIT de la liste (précédent Android, mémoire
+/// `reference_android_model_stricter_than_the_wire`).
+///
+/// Sémantique conservée à l'identique de `decodeIfPresent` : clé absente ou
+/// valeur `null` → `nil` (jamais un tableau vide inventé) ; présente → la liste
+/// des éléments VALIDES, `[]` si aucun ne l'est. À l'encodage, la clé est omise
+/// quand la valeur est `nil` (cf. la surcharge `KeyedEncodingContainer.encode`
+/// ci-dessous) : les blobs de cache gardent exactement la forme d'avant.
+@propertyWrapper
+public struct LossyImageVariants: Codable, Sendable, Hashable {
+    public var wrappedValue: [MeeshyImageVariant]?
+
+    public init(wrappedValue: [MeeshyImageVariant]?) {
+        self.wrappedValue = wrappedValue
+    }
+
+    public init(from decoder: Decoder) throws {
+        guard var unkeyed = try? decoder.unkeyedContainer() else {
+            wrappedValue = nil
+            return
+        }
+        var kept: [MeeshyImageVariant] = []
+        while !unkeyed.isAtEnd {
+            if let variant = try? unkeyed.decode(MeeshyImageVariant.self) {
+                kept.append(variant)
+            } else {
+                _ = try? unkeyed.decode(_SkippedImageVariant.self)
+            }
+        }
+        wrappedValue = kept
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(wrappedValue)
+    }
+}
+
+/// Sans ces deux surcharges, le `Codable` SYNTHÉTISÉ d'un porteur appellerait
+/// `decode`/`encode` (le type enveloppe n'est pas optionnel) : une clé absente
+/// lèverait `keyNotFound` et une valeur nulle écrirait `"imageVariants": null`
+/// là où le champ était simplement omis. Elles rendent le wrapper transparent —
+/// même contrat que `decodeIfPresent`/`encodeIfPresent`.
+public extension KeyedDecodingContainer {
+    func decode(_ type: LossyImageVariants.Type, forKey key: Key) throws -> LossyImageVariants {
+        try decodeIfPresent(type, forKey: key) ?? LossyImageVariants(wrappedValue: nil)
+    }
+}
+
+public extension KeyedEncodingContainer {
+    mutating func encode(_ value: LossyImageVariants, forKey key: Key) throws {
+        guard let variants = value.wrappedValue else { return }
+        try encode(variants, forKey: key)
+    }
 }
 
 /// The current user's OWN playback progress for a media attachment, surfaced
@@ -1432,7 +1527,10 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public var width: Int?
     public var height: Int?
     /// D4 — responsive downscaled WebP variants for picking a lighter image.
-    public var imageVariants: [MeeshyImageVariant]?
+    /// Décodage tolérant par élément (`LossyImageVariants`) : un blob
+    /// `attachmentsJson` dont une variante est partielle rend quand même la
+    /// pièce jointe.
+    @LossyImageVariants public var imageVariants: [MeeshyImageVariant]?
     /// BUG2 A' — réactions par-image agrégées (emoji→count), miroir du reactionSummary
     /// message-level. Vit dans attachmentsJson (Codable synthétisé), pas de colonne GRDB.
     public var reactionSummary: [String: Int]?

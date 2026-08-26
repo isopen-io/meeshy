@@ -240,6 +240,7 @@ struct ConversationMediaGalleryView: View {
             GalleryVideoPage(
                 attachment: attachment,
                 accentColor: accentColor,
+                isActive: distance == 0,
                 isWindowed: GalleryRenderWindow.rendersFullPixels(distance: distance),
                 onToggleControls: { toggleControls() },
                 onCacheActivation: { cacheAttachment(attachment) },
@@ -477,25 +478,7 @@ struct ConversationMediaGalleryView: View {
 
     private func cacheAttachment(_ attachment: MessageAttachment?) {
         guard let attachment else { return }
-        // Préchauffe le cache image DÉCODÉ (`_imageCache`) : l'ouverture plein
-        // écran touche alors le fast-path synchrone de `ProgressiveCachedImage`
-        // (`DiskCacheStore.cachedImage`) → affichage instantané, sans placeholder.
-        // Pour une vidéo on préchauffe sa vignette (l'image montrée avant
-        // lecture) ; le fichier vidéo lui-même est mis en cache par
-        // `SharedAVPlayerManager` au tap lecture.
-        let urlStr: String
-        switch attachment.type {
-        case .video:
-            urlStr = attachment.thumbnailUrl ?? ""
-        default:
-            // 5.2 — préchauffer la MÊME variante que celle affichée, pas l'original,
-            // sinon on téléchargerait les deux.
-            urlStr = GalleryImageSource.fullscreenURL(for: attachment)
-        }
-        guard !urlStr.isEmpty,
-              let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString
-        else { return }
-        Task { _ = await CacheCoordinator.shared.images.image(for: resolved) }
+        GalleryPrewarm.warm(attachment)
     }
 
     /// Préchauffe STRICTEMENT la fenêtre de rendu. L'ancienne valeur (±2)
@@ -519,6 +502,36 @@ struct ConversationMediaGalleryView: View {
             suggestedFileName: att.originalName.isEmpty ? nil : att.originalName,
             attachmentId: att.id.isEmpty ? nil : att.id
         ))
+    }
+}
+
+// MARK: - Prewarm
+
+/// Préchauffage du plein écran — au TAP dans la conversation
+/// (`ConversationView.onMediaTap`) et pour la fenêtre de rendu
+/// (`prefetchNeighbors`). Il chauffe ce que le plein écran AFFICHE, jamais
+/// autre chose : image → la variante élue, décodée dans la NSCache (fast-path
+/// synchrone de `ProgressiveCachedImage` → affichage instantané, sans
+/// placeholder) ; vidéo → le poster NET, extrait SEULEMENT si le fichier est
+/// déjà sur l'appareil. Un préchauffage ne touche jamais le réseau pour une
+/// vidéo : le fichier lui-même est mis en cache par la page (auto-DL) ou par
+/// `SharedAVPlayerManager` au tap lecture.
+enum GalleryPrewarm {
+    static func warm(_ attachment: MessageAttachment) {
+        switch attachment.type {
+        case .video:
+            VideoPosterResolver.warmIfLocal(attachment)
+        case .image:
+            // 5.2 — préchauffer la MÊME variante que celle affichée, pas
+            // l'original, sinon on téléchargerait les deux.
+            let urlStr = GalleryImageSource.fullscreenURL(for: attachment)
+            guard !urlStr.isEmpty,
+                  let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString
+            else { return }
+            Task { _ = await CacheCoordinator.shared.images.image(for: resolved) }
+        case .audio, .file, .location:
+            return
+        }
     }
 }
 
@@ -561,7 +574,7 @@ enum GalleryRenderWindow {
 /// qu'une image pourra jamais devoir couvrir), pas une mesure de mise en page :
 /// `WindowMetricsSSOTTests` n'autorise cette lecture que dans les deux fichiers
 /// qui la font pour cette raison.
-private enum GalleryImageSource {
+enum GalleryImageSource {
     /// 5.2 — URL d'image à charger en plein écran : la plus petite variante
     /// `>=` la largeur écran (évite l'original multi-Mo quand une 1920 suffit).
     /// Sans variante (image chiffrée) → l'original. Utilisée pour l'affichage ET
@@ -579,6 +592,49 @@ private enum GalleryImageSource {
             originalWidth: attachment.width,
             targetWidthPx: targetPx
         )
+    }
+}
+
+// MARK: - Fullscreen image display source
+
+/// Ce que la page image de la fenêtre de rendu MONTE comme source d'affichage.
+///
+/// Feature 3 — « l'image de base doit être NETTE ; ouvrir en plein écran
+/// présuppose que la donnée est chargée, sinon charger et afficher DIRECTEMENT
+/// la première image nette — jamais la vignette ». D'où deux cas, et deux
+/// seulement : le plein format est RÉSIDENT (affiché tel quel, sans transition)
+/// ou il se CHARGE (forcé — l'ouverture est un geste manuel, §14.1 — avec le
+/// thumbHash pour seul fond, flou assumé). La vignette `thumbnailUrl` n'est
+/// jamais un étage d'affichage : le point de montage ne connaît même pas son
+/// URL. Elle pouvait rester l'image affichée quand la politique réseau bloquait
+/// le plein format — nette dans une bulle, floue au plein écran.
+enum FullscreenImageSource {
+    struct Mount: Equatable {
+        let fullURL: String
+        /// Fond décoratif pendant le chargement — `nil` quand le plein format
+        /// est déjà résident (rien à couvrir, aucune transition).
+        let backdropThumbHash: String?
+        let isResident: Bool
+    }
+
+    /// `nil` sans plein format : la page rend alors son glyphe d'état vide.
+    nonisolated static func resolve(fullURL: String?, thumbHash: String?, isFullResident: Bool) -> Mount? {
+        guard let fullURL, !fullURL.isEmpty else { return nil }
+        return Mount(
+            fullURL: fullURL,
+            backdropThumbHash: isFullResident ? nil : thumbHash,
+            isResident: isFullResident
+        )
+    }
+
+    /// Résidence = image DÉCODÉE en NSCache (lecture mémoire pure, aucun
+    /// `stat` par évaluation du `body`). Un fichier sur disque mais évincé de
+    /// la NSCache est de toute façon réchauffé de façon synchrone par
+    /// `ProgressiveCachedImage.init` — il s'affiche immédiatement, et le fond
+    /// passé n'est alors jamais décodé.
+    nonisolated static func isResident(_ url: String) -> Bool {
+        let resolved = MeeshyConfig.resolveMediaURL(url)?.absoluteString ?? url
+        return DiskCacheStore.cachedImage(for: resolved) != nil
     }
 }
 
@@ -686,10 +742,18 @@ private struct GalleryImagePage: View, Equatable {
     @ViewBuilder
     private var imageLayer: some View {
         if rendersFullPixels {
-            ProgressiveCachedImage(
+            // Feature 3 : plein format NET — résident ⇒ tel quel ; sinon chargé
+            // (forcé, geste manuel) sur le seul thumbHash. Jamais la vignette.
+            let mount = FullscreenImageSource.resolve(
+                fullURL: fullPixelURL,
                 thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbnailURL,
-                fullUrl: fullPixelURL
+                isFullResident: fullPixelURL.map(FullscreenImageSource.isResident) ?? false
+            )
+            ProgressiveCachedImage(
+                thumbHash: mount?.backdropThumbHash,
+                thumbnailUrl: nil,
+                fullUrl: mount?.fullURL,
+                autoLoad: true
             ) {
                 ProgressView().tint(.white)
             }
@@ -792,6 +856,11 @@ private struct GalleryImagePage: View, Equatable {
 private struct GalleryVideoPage: View, Equatable {
     let attachment: MessageAttachment
     let accentColor: String
+    /// La page que l'utilisateur REGARDE (distance nulle), par opposition aux
+    /// deux voisines que la fenêtre rend sans que personne ne les ait
+    /// ouvertes. C'est ce qui distingue un geste d'un préchauffage : seule la
+    /// page active paie le Mo d'une extraction en politique restrictive.
+    let isActive: Bool
     let isWindowed: Bool
     let onToggleControls: () -> Void
     let onCacheActivation: () -> Void
@@ -800,7 +869,34 @@ private struct GalleryVideoPage: View, Equatable {
     static func == (lhs: GalleryVideoPage, rhs: GalleryVideoPage) -> Bool {
         lhs.attachment.id == rhs.attachment.id
             && lhs.accentColor == rhs.accentColor
+            && lhs.isActive == rhs.isActive
             && lhs.isWindowed == rhs.isWindowed
+    }
+
+    init(
+        attachment: MessageAttachment,
+        accentColor: String,
+        isActive: Bool,
+        isWindowed: Bool,
+        onToggleControls: @escaping () -> Void,
+        onCacheActivation: @escaping () -> Void,
+        onDismiss: @escaping () -> Void
+    ) {
+        self.attachment = attachment
+        self.accentColor = accentColor
+        self.isActive = isActive
+        self.isWindowed = isWindowed
+        self.onToggleControls = onToggleControls
+        self.onCacheActivation = onCacheActivation
+        self.onDismiss = onDismiss
+        // Poster NET déjà persisté : lu de façon SYNCHRONE au montage — la page
+        // de départ s'ouvre dessus, sans transition. Fenêtre seulement : hors
+        // fenêtre, aucune lecture disque par page traversée (leçon 292).
+        let persisted = isWindowed ? VideoPosterResolver.persistedPoster(for: attachment) : nil
+        _poster = State(initialValue: persisted)
+        _thumbHashBackdrop = State(initialValue: (isWindowed && persisted == nil)
+            ? attachment.thumbHash.flatMap(UIImage.fromThumbHash)
+            : nil)
     }
 
     // Plain reference (NOT @ObservedObject): only `activeURL`/`player`/
@@ -815,6 +911,19 @@ private struct GalleryVideoPage: View, Equatable {
     @StateObject private var downloader = AttachmentDownloader()
     /// Décalage de fermeture, LOCAL à la page (cf. `GalleryImagePage`).
     @State private var offset: CGSize = .zero
+    /// Poster NET (feature 3) : première image de la vidéo, extraite de son
+    /// fichier — persisté sous `thumb:<url>`, résolu sinon par la cascade app
+    /// (`VideoPosterResolver`). Jamais la vignette serveur comme image affichée.
+    @State private var poster: UIImage?
+    /// Fond décoratif (thumbHash, flou assumé) le temps de la résolution.
+    @State private var thumbHashBackdrop: UIImage?
+    /// La cascade n'a rien rendu : dernier recours, la vignette serveur
+    /// (nette si disponible) forcée, puis le thumbHash.
+    @State private var posterUnavailable = false
+    /// La couche vidéo a COMPOSÉ sa première frame (KVO `isReadyForDisplay`).
+    /// Tant que non : le poster reste — `isPlaying` bascule AVANT la première
+    /// frame, et retirer le poster sur ce seul signal laissait l'écran noir.
+    @State private var surfaceReady = false
 
     private var availability: VideoAvailability {
         if downloader.isDownloading {
@@ -854,13 +963,17 @@ private struct GalleryVideoPage: View, Equatable {
 
     var body: some View {
         ZStack {
-            if !isPlayerActive {
+            if !isPlayerActive || !surfaceReady {
                 thumbnailLayer
             }
 
             if isPlayerActive || isPlayerAttached {
                 if let player = videoManagerPlayer {
-                    FullscreenAVPlayerLayerView(player: player, gravity: .resizeAspect)
+                    FullscreenAVPlayerLayerView(
+                        player: player,
+                        gravity: .resizeAspect,
+                        onReadyForDisplay: { surfaceReady = true }
+                    )
                         .ignoresSafeArea()
                 }
             }
@@ -895,6 +1008,34 @@ private struct GalleryVideoPage: View, Equatable {
                     downloader.start(attachment: attachment, onShare: nil)
                 }
             }
+            await resolvePosterIfNeeded()
+        }
+        // Le fichier vient d'atterrir (auto-DL, ou tap) et la cascade n'avait
+        // rien rendu : la première image nette se décode maintenant du fichier.
+        .task(id: downloader.isCached) {
+            guard isWindowed, downloader.isCached, poster == nil else { return }
+            posterUnavailable = false
+            await resolvePosterIfNeeded()
+        }
+        // La page voisine DEVIENT courante : le geste arrive après coup. Sans ce
+        // relais, une vidéo préchauffée en politique restrictive (aucun octet,
+        // donc aucun poster) resterait sur son thumbHash jusqu'au démontage.
+        .task(id: isActive) {
+            guard isWindowed, isActive, poster == nil else { return }
+            posterUnavailable = false
+            await resolvePosterIfNeeded()
+        }
+        // Failsafe temporel (leçon 25) : un KVO manqué ne fige jamais le poster
+        // sur une vidéo qui joue.
+        .task(id: isPlayerActive) {
+            guard isPlayerActive, !surfaceReady else { return }
+            try? await Task.sleep(for: .milliseconds(2500))
+            guard !Task.isCancelled else { return }
+            surfaceReady = true
+        }
+        .adaptiveOnChange(of: isPlayerAttached) { _, attached in
+            guard !attached else { return }
+            surfaceReady = false
         }
         .onReceive(videoManager.$activeURL) { videoManagerActiveURL = $0 }
         .onReceive(videoManager.$player) { videoManagerPlayer = $0 }
@@ -929,19 +1070,56 @@ private struct GalleryVideoPage: View, Equatable {
             }
     }
 
+    /// Ce qui tient l'écran avant la première frame composée : le poster NET
+    /// dès qu'il existe ; sinon, le temps de sa résolution, le thumbHash en fond
+    /// décoratif ; et en tout dernier recours — la cascade n'a rien rendu — la
+    /// vignette serveur, forcée (geste manuel) et nette si le serveur l'a
+    /// produite ainsi, puis le thumbHash. Jamais la vignette comme étage
+    /// intermédiaire : elle pouvait rester l'image affichée, floue au plein écran.
     @ViewBuilder
     private var thumbnailLayer: some View {
-        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-        if thumbUrl != nil || attachment.thumbHash != nil {
+        if let poster {
+            Image(uiImage: poster)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+        } else if posterUnavailable, serverThumbnailURL != nil || attachment.thumbHash != nil {
             ProgressiveCachedImage(
                 thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbUrl,
-                fullUrl: thumbUrl
+                thumbnailUrl: nil,
+                fullUrl: serverThumbnailURL,
+                autoLoad: true
             ) {
                 Color(hex: attachment.thumbnailColor)
             }
             .aspectRatio(contentMode: .fit)
+        } else if let thumbHashBackdrop {
+            Image(uiImage: thumbHashBackdrop)
+                .resizable()
+                .interpolation(.low)
+                .aspectRatio(contentMode: .fit)
         }
+    }
+
+    private var serverThumbnailURL: String? {
+        attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+    }
+
+    private func resolvePosterIfNeeded() async {
+        guard poster == nil else { return }
+        if thumbHashBackdrop == nil {
+            thumbHashBackdrop = attachment.thumbHash.flatMap(UIImage.fromThumbHash)
+        }
+        let resolved = await VideoPosterResolver.resolve(
+            attachment: attachment,
+            allowsNetwork: true,
+            intent: isActive ? .userOpened : .ambientPrewarm
+        )
+        guard !Task.isCancelled else { return }
+        guard let resolved else {
+            posterUnavailable = true
+            return
+        }
+        withAnimation(.easeIn(duration: 0.15)) { poster = resolved }
     }
 
     @ViewBuilder
