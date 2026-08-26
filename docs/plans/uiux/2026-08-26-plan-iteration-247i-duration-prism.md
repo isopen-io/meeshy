@@ -47,4 +47,14 @@ déterministes rejoués hors Swift sont tabulés au § 6 de l'analyse.
 
 ## Statut
 
-Terminé — PR ⏳
+**Terminé et MERGÉ** — PR [#3526](https://github.com/isopen-io/meeshy/pull/3526),
+`main` = `5741414e`.
+
+**Verdict CI, suite complète** : **8449 passés / 0 échec / 5 sautés sur 8454**
+(tête `36c2d31d`, check `Build app + tests unitaires`, `COMPILE_ONLY=false`,
+`"result": "Passed"`, `testFailures: []`, simulateur iPhone 16 Pro / iOS 18.2).
+Le NOM du check a été relu avant sa couleur (leçon 240i (c)).
+
+Atterrissage vérifié en entier sur `main` (leçon 236i) ; les deux seules
+occurrences restantes de `String(format: "%…d:%02d")` sous `apps/ios/Meeshy`
+sont la citation en doc-comment et le site de persistance allowlisté.
