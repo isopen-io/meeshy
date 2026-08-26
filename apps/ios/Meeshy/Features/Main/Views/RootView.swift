@@ -2186,6 +2186,12 @@ struct RootView: View {
                     label: entry.label,
                     hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
                     badge: menuBadgeCount(entry.badge),
+                    // L'échelle est montée EN PERMANENCE (opacité 0, zIndex −1
+                    // menu fermé) pour que le ressort d'ouverture parte d'un
+                    // état existant : le glow/pulse ne doit vivre que menu
+                    // OUVERT — six ombres re-rasterisées par frame en continu
+                    // derrière la liste, sinon (audit chauffe 2026-08-26).
+                    isGlowEnabled: showMenu,
                     action: { openMenuEntry(entry) }
                 )
                 .position(x: menuX, y: itemY)

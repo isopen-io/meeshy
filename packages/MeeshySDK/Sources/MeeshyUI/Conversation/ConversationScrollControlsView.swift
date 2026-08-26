@@ -211,10 +211,6 @@ public struct ConversationScrollControlsView: View {
             )
         }
         .allowsHitTesting(!isSearchingQuotedMessage)
-        .onReceive(typingDotTimer) { _ in
-            guard hasTypingIndicator else { return }
-            typingDotPhase = (typingDotPhase + 1) % 3
-        }
     }
 
     // MARK: - Quoted Message Search Indicator
@@ -522,6 +518,20 @@ public struct ConversationScrollControlsView: View {
                         value: typingDotPhase
                     )
             }
+        }
+        // L'abonnement vit sur la VUE DES POINTS, pas sur le bouton entier :
+        // attaché au bouton, l'`autoconnect` réveillait le main thread 2×/s
+        // tant que la pill « retour au bas » était montée (tout le temps qu'un
+        // lecteur remonte l'historique), pour un garde qui jetait le tick sans
+        // frappe en cours (audit chauffe 2026-08-26 — même forme que le
+        // `dotTimer` de SyncPill). Ici, pas de frappe ⇒ pas de vue ⇒ pas de
+        // timer ; et la réapparition repart d'un publisher NEUF plutôt que de
+        // parier sur la reconnexion d'un `autoconnect` déjà annulé.
+        .onReceive(typingDotTimer) { _ in
+            typingDotPhase = (typingDotPhase + 1) % 3
+        }
+        .onAppear {
+            typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
         }
     }
 }

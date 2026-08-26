@@ -349,14 +349,18 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     // `Story/Timeline/**` mais est le catalogue UNIQUE du module — toute
     // chaîne neuve du plan doit y entrer pour tenir la règle des 7 langues.
     // Le contourner (littéraux non localisés) coûterait plus cher que
-    // l'écart. Second écart : la matrice `docs/superpowers/specs/
-    // 2026-08-19-meeshy-composer-views.html`, dont ce lot ne touche QUE sa
+    // l'écart. Second écart : la matrice `docs/product/
+    // planche-meeshy-composer.html` (ex-`docs/superpowers/specs/
+    // 2026-08-19-meeshy-composer-views.html`, renommée quand la planche a
+    // pris son nom de produit — commit f266d7ad, 2026-08-26 ; le manifeste
+    // suit, sans quoi `test_everyFileOfTheD3Diff_exists` rougit sur toute
+    // branche qui déclenche sdk-tests), dont ce lot ne touche QUE sa
     // propre ligne (règle P0 du lot D).
 
     /// Les DEUX seuls chemins hors périmètre que D3 s'autorise.
     static let declaredOutOfScopePaths: Set<String> = [
         "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings",
-        "docs/superpowers/specs/2026-08-19-meeshy-composer-views.html"
+        "docs/product/planche-meeshy-composer.html"
     ]
 
     static let ownedPathPrefixes: [String] = [
@@ -369,7 +373,7 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     /// l'aimant : les bancs de glissement qui passent désormais la géométrie
     /// rendue en paramètre en font partie).
     static let d3DiffPaths: [String] = [
-        "docs/superpowers/specs/2026-08-19-meeshy-composer-views.html",
+        "docs/product/planche-meeshy-composer.html",
         "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Logic/Plan2DLayout.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift",

@@ -49,6 +49,15 @@ public struct MeeshyMoodBadge: View {
     /// Départ décalé au hasard : sans lui, N pastilles montées ensemble
     /// respirent à l'unisson — un battement de troupe, pas une foule.
     public static let maximumStartDelay: Double = 1.5
+    /// Fenêtre de respiration après l'apparition (~4 cycles de ressort), puis
+    /// la pastille SE POSE. Le ressort tournait sans fin : dans la bande de
+    /// stories — premier enfant NON lazy du scroll de la liste de
+    /// conversations — chaque mood continuait de respirer hors écran, pendant
+    /// toute la lecture de la liste (audit chauffe 2026-08-26 ; précédent
+    /// « hog device 2026-07-03 » cité plus bas). L'annonce respire, le repos
+    /// se tait — même arbitrage que `SyncPillRotator.maxCycles` et le halo
+    /// d'annonce de `NotificationBadge`.
+    public static let breathingDuration: Double = 8
     /// Le glyphe est rendu à cette fraction du cadre ; le cadre porte la
     /// place visuelle complète et la zone de tap.
     public static let glyphRatio: CGFloat = 0.65
@@ -86,7 +95,16 @@ public struct MeeshyMoodBadge: View {
                     let frame = geo.frame(in: .global)
                     onTap?(CGPoint(x: frame.midX, y: frame.midY))
                 }
-                .onAppear { startPulse() }
+                // `.task` et non `.onAppear` : une seule séquence par identité
+                // de vue — respirer la fenêtre d'annonce, puis se poser. Un
+                // `.onAppear` re-tiré par re-parenting relancerait un ressort
+                // qu'aucun apaisement ne viendrait plus clore.
+                .task {
+                    startPulse()
+                    try? await Task.sleep(for: .seconds(Self.maximumStartDelay + Self.breathingDuration))
+                    guard !Task.isCancelled else { return }
+                    settlePulse()
+                }
                 .onDisappear {
                     withTransaction(Transaction(animation: nil)) { scale = Self.restingScale }
                 }
@@ -114,6 +132,16 @@ public struct MeeshyMoodBadge: View {
                 .delay(Double.random(in: 0...Self.maximumStartDelay))
         ) {
             scale = Self.pulsedScale
+        }
+    }
+
+    /// Fin de la fenêtre d'annonce : le ressort répété est REMPLACÉ par une
+    /// détente unique vers le repos — jamais un arrêt sec au milieu d'un
+    /// cycle, jamais un `repeatForever` qui survivrait posé à 1.18.
+    private func settlePulse() {
+        guard scale != Self.restingScale else { return }
+        withAnimation(.spring(response: Self.springResponse, dampingFraction: Self.springDamping)) {
+            scale = Self.restingScale
         }
     }
 }

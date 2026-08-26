@@ -412,9 +412,23 @@ struct ThemedConversationRow: View {
     private struct RelativeTimestampText: View {
         let date: Date
 
+        /// Le tick minute n'a de sens que tant que le libellé change à la
+        /// minute (« 3 min », « 47 min ») : au-delà d'une heure, chaque rangée
+        /// réalisée gardait quand même SA `TimelineView` — 15-20 réveils
+        /// par minute pour des libellés (« 2 h », « 3 mois ») qui ne bougeront
+        /// pas avant des heures (audit chauffe 2026-08-26). Une rangée
+        /// ancienne rend un texte STATIQUE, rafraîchi par le prochain passage
+        /// de body de la liste — largement plus fréquent que le changement
+        /// de son libellé.
+        static let liveTickWindow: TimeInterval = 3600
+
         var body: some View {
-            TimelineView(.periodic(from: date, by: 60)) { _ in
+            if Date().timeIntervalSince(date) > Self.liveTickWindow {
                 Text(RelativeTimeFormatter.shortString(for: date))
+            } else {
+                TimelineView(.periodic(from: date, by: 60)) { _ in
+                    Text(RelativeTimeFormatter.shortString(for: date))
+                }
             }
         }
     }

@@ -334,6 +334,9 @@ final class MessageListViewController: UIViewController {
     /// `@testable import Meeshy`, jamais par une autre cible app.
     var focalCollectionViewForTesting: UICollectionView? { collectionView }
     var focalDataSourceForTesting: UICollectionViewDiffableDataSource<MessageListSection, MessageListItem>? { dataSource }
+    /// Visée vérifiée en cours — lue par les tests pour prouver qu'un saut
+    /// se solde (cible flashée puis vidée) au lieu de rester pendant.
+    var scrollSettleTargetForTesting: ScrollToMessageSettleLaw.PendingTarget? { scrollSettleTarget }
 
     // MARK: - WS-2 (F-086bis) — pilule « jour · heure » du fil, montage
 
@@ -1961,6 +1964,89 @@ final class MessageListViewController: UIViewController {
     /// citation, slow-scroll de recherche) — le verrou laisse faire.
     private var isIntentionalProgrammaticScroll = false
 
+    // MARK: - Visée vérifiée (saut vers un message)
+
+    /// Cible d'un saut en cours de VÉRIFICATION (`ScrollToMessageSettleLaw`).
+    /// `scrollToItem` vise un offset calculé sur des hauteurs ESTIMÉES : les
+    /// cellules qui se réalisent pendant l'animation décalent le contenu et
+    /// l'atterrissage rate la cible. À chaque fin d'animation, la loi compare
+    /// l'offset atteint à l'offset qui centrerait la cible (attributs FRAIS)
+    /// et re-vise tant que l'écart dépasse la tolérance, budget borné.
+    /// Annulée dès que le doigt reprend la main (`scrollViewWillBeginDragging`)
+    /// ou qu'un autre scroll voulu part (`scrollToBottom`, slow-scroll).
+    private var scrollSettleTarget: ScrollToMessageSettleLaw.PendingTarget?
+
+    /// Démarre une visée vérifiée vers `localId` (déjà résolu, présent dans le
+    /// snapshot à `indexPath`). Le flash n'est plus émis à l'AVEUGLE sur un
+    /// délai — il part à la POSE vérifiée, quand la cellule est réellement là.
+    private func beginVerifiedScroll(toLocalId localId: String, at indexPath: IndexPath, strong: Bool) {
+        // L'index vient du SNAPSHOT (`dataSource.snapshot()`), qui peut être
+        // en avance sur ce que la collection view a déjà INGÉRÉ (apply en
+        // vol) : `scrollToItem` sur un index pas encore matérialisé lève une
+        // NSInternalInconsistencyException. Le trigger parent re-visera une
+        // fois la fenêtre posée — même contrat que la cible absente.
+        guard indexPath.item < collectionView.numberOfItems(inSection: 0) else { return }
+        isIntentionalProgrammaticScroll = true
+        scrollSettleTarget = ScrollToMessageSettleLaw.PendingTarget(localId: localId, strong: strong)
+        collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
+        scheduleScrollSettleFallback()
+    }
+
+    /// Filet du no-op : un `scrollToItem(animated: true)` DÉJÀ à l'offset
+    /// cible ne livre jamais `scrollViewDidEndScrollingAnimation`. Si l'offset
+    /// n'a pas bougé d'ici là (aucune animation n'a démarré), la vérification
+    /// se joue ici ; s'il a bougé, l'animation vit encore et son épilogue
+    /// (`scrollViewDidEndScrollingAnimation`) s'en charge.
+    private func scheduleScrollSettleFallback() {
+        let capturedOffsetY = collectionView.contentOffset.y
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self, self.scrollSettleTarget != nil else { return }
+            guard !self.collectionView.isDragging, !self.collectionView.isDecelerating else { return }
+            guard abs(self.collectionView.contentOffset.y - capturedOffsetY) < 0.5 else { return }
+            self.verifyScrollSettleTarget()
+        }
+    }
+
+    /// Fin d'une passe : la loi tranche — posé (flash), re-visée (nouvelle
+    /// animation, budget décrémenté), ou abandon (flash sur place, la cible
+    /// est de toute façon à l'écran ou presque).
+    private func verifyScrollSettleTarget() {
+        guard var target = scrollSettleTarget else { return }
+        guard let dataSource,
+              let indexPath = dataSource.indexPath(for: .message(localId: target.localId)),
+              let attrs = collectionView.layoutAttributesForItem(at: indexPath)
+        else {
+            // Cible sortie du snapshot (changement de fenêtre) — le chemin
+            // parent (jumpToQuotedMessage) reprendra avec son propre trigger.
+            scrollSettleTarget = nil
+            return
+        }
+        let desired = ScrollToMessageSettleLaw.centeredOffsetY(
+            itemFrame: attrs.frame,
+            boundsHeight: collectionView.bounds.height,
+            contentHeight: collectionView.contentSize.height,
+            topContentInset: collectionView.contentInset.top,
+            bottomContentInset: collectionView.contentInset.bottom
+        )
+        switch ScrollToMessageSettleLaw.verdict(
+            currentOffsetY: collectionView.contentOffset.y,
+            desiredOffsetY: desired,
+            passesRemaining: target.passesRemaining
+        ) {
+        case .settled, .giveUp:
+            scrollSettleTarget = nil
+            isIntentionalProgrammaticScroll = false
+            captureSceneLockAnchor()
+            flashCell(at: indexPath, strong: target.strong)
+        case .correct:
+            target.passesRemaining -= 1
+            scrollSettleTarget = target
+            isIntentionalProgrammaticScroll = true
+            collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
+            scheduleScrollSettleFallback()
+        }
+    }
+
     /// `visibleIndexPaths` : l'inventaire déjà lu par l'appelant du tour de
     /// frame (`scrollViewDidScroll`) — `nil` ⇒ lecture interne, pour les
     /// appels hors défilement (`scrollToBottom`, `settleAtRest`).
@@ -2244,6 +2330,10 @@ final class MessageListViewController: UIViewController {
         // didEndDragging/Decelerating → settleAtRest. Non animé : l'offset
         // est posé synchrone, on retombe au tour suivant.
         isIntentionalProgrammaticScroll = true
+        // Un « aller au dernier message » remplace toute visée vérifiée en
+        // cours — sans quoi la fin de SON animation re-viserait l'ancienne
+        // cible et renverrait l'utilisateur en arrière.
+        scrollSettleTarget = nil
         if !animated {
             DispatchQueue.main.async { [weak self] in
                 self?.isIntentionalProgrammaticScroll = false
@@ -2392,10 +2482,13 @@ final class MessageListViewController: UIViewController {
             return
         }
 
-        let indexPath = IndexPath(item: index, section: 0)
-        collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
-
-        flashCell(at: indexPath)
+        // Visée VÉRIFIÉE (ScrollToMessageSettleLaw) : l'ancien
+        // `scrollToItem` + flash différé visait un offset calculé sur des
+        // hauteurs estimées et atterrissait à côté dès que des cellules se
+        // réalisaient pendant l'animation — le flash partait alors sur une
+        // cellule hors écran, et l'utilisateur voyait le fil « sauter au
+        // mauvais endroit ». Le flash part désormais à la pose vérifiée.
+        beginVerifiedScroll(toLocalId: resolvedId, at: IndexPath(item: index, section: 0), strong: false)
     }
 
     /// Scrolls fast (no slow-scroll preamble) to a message that was just loaded
@@ -2415,11 +2508,12 @@ final class MessageListViewController: UIViewController {
             return false
         }) else { return }
 
-        let indexPath = IndexPath(item: index, section: 0)
-        // Use an animated jump for a swift but visible scroll.
-        collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
-
-        flashCell(at: indexPath, strong: true)
+        // Même visée vérifiée que `scrollToMessage` — ce chemin arrive après
+        // un `loadWindow(around:)` : la fenêtre vient d'être ENTIÈREMENT
+        // remplacée, donc AUCUNE cellule autour de la cible n'est réalisée et
+        // l'écart estimé/réel y est maximal. C'était le saut « au mauvais
+        // emplacement » le plus visible (recherche, citation hors fenêtre).
+        beginVerifiedScroll(toLocalId: resolvedId, at: IndexPath(item: index, section: 0), strong: true)
     }
 
     // MARK: - Cell Frame Lookup
@@ -2459,6 +2553,9 @@ final class MessageListViewController: UIViewController {
     /// that the app is actively browsing through message history.
     func startSlowScrollUp() {
         isIntentionalProgrammaticScroll = true
+        // Le slow-scroll pilote l'offset frame par frame : aucune visée
+        // vérifiée ne doit lui disputer la destination.
+        scrollSettleTarget = nil
         guard slowScrollDisplayLink == nil else { return }
         // Proxy weak partagé (WeakDisplayLinkTarget) : un link `target: self`
         // retenait le VC entier (run loop → link → VC, deinit inatteignable)
@@ -2851,6 +2948,19 @@ extension MessageListViewController: UICollectionViewDelegate {
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
         isIntentionalProgrammaticScroll = false
         settleAtRest()
+        // Visée vérifiée : l'animation vient d'atterrir — la loi compare
+        // l'offset atteint à celui qui centre la cible (attributs frais,
+        // les cellules autour d'elle sont désormais réalisées) et re-vise
+        // si l'écart dépasse la tolérance. Après `settleAtRest()` : le flush
+        // des reconfigures différés est passé, les hauteurs sont posées.
+        verifyScrollSettleTarget()
+    }
+
+    /// Le doigt reprend la main : toute visée vérifiée en cours est annulée —
+    /// la scène n'appartient qu'au doigt (loi du rouleau), on ne re-vise
+    /// jamais par-dessus un geste.
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        scrollSettleTarget = nil
     }
 
     /// Pose commune à l'arrêt (geste ou animation) — RETRAIT FOCAL iOS

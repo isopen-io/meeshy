@@ -174,17 +174,6 @@ struct SyncPill: View {
         .adaptiveOnChange(of: entries.count) { _, newCount in
             rotator.setItemCount(newCount)
         }
-        .onReceive(dotTimer) { _ in
-            // Le pulse/points n'a de sens que si le pill affiche une entrée.
-            // `entries` est vide la majorité du temps (connecté + synchronisé →
-            // branche EmptyView). Sans ce garde, `dotPhase += 1` ré-évalue le
-            // body de SyncPill 2x/s en permanence pour ne rien afficher — un
-            // réveil render inutile sur l'écran principal (toujours monté via
-            // ConnectionBanner). La rotation, elle, est déjà coupée par
-            // SyncPillRotator quand itemCount == 0 ; on aligne le pulse dessus.
-            guard !entries.isEmpty else { return }
-            dotPhase += 1
-        }
     }
 
     @ViewBuilder
@@ -219,6 +208,26 @@ struct SyncPill: View {
             : String(localized: "sync.pill.a11y.pause", defaultValue: "Mettre en pause", bundle: .main)
         ) {
             togglePause()
+        }
+        // L'abonnement vit ICI, dans la branche VISIBLE — pas sur le `Group`
+        // racine. Attaché à la racine, `.onReceive` connectait l'`autoconnect`
+        // même quand `entries` était vide (l'état nominal : connecté +
+        // synchronisé → EmptyView) : un réveil main-thread 2×/s en permanence
+        // dans le chrome de l'app, pour un garde qui ne faisait que jeter le
+        // tick (audit chauffe 2026-08-26). Ici, la pill démontée = abonnement
+        // annulé = timer déconnecté ; le pulse ne coûte que quand il s'affiche.
+        // La rotation, elle, est déjà coupée par SyncPillRotator à
+        // itemCount == 0.
+        .onReceive(dotTimer) { _ in
+            dotPhase += 1
+        }
+        // La pill peut disparaître (abonnement annulé → connexion du timer
+        // coupée) puis revenir : on repart d'un publisher NEUF plutôt que de
+        // parier sur la reconnexion d'un `autoconnect` déjà annulé.
+        .onAppear {
+            dotPhase = 0
+            dotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+            marqueeTimer = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
         }
     }
 
