@@ -22,6 +22,10 @@ planche — camembert ET matrice — dans le MÊME commit ; un P0 périmé est u
 défaut bloquant. **La rév. 24 rend cette règle mécanique** : chaque ligne de
 matrice porte `data-task` / `data-kind` / `data-state`, et un script recompte
 depuis le DOM ; si l'arc diverge, un bandeau rouge s'affiche dans la page.
+**Et la page publiée suit le fichier (26/08)** : chaque commit `docs(p0)` republie
+l'artifact « Planches MeeshyComposer » (https://claude.ai/code/artifact/95de2699-a55c-4ba8-ab00-508594c239ce)
+depuis `docs/superpowers/specs/2026-08-19-meeshy-composer-views.html` — la page publiée le 20/08
+est restée cinq révisions derrière le dépôt ; aucune page « progress » parallèle.
 
 ## Ce que la mesure du 2026-08-25 a établi (résumé — le détail est dans la planche)
 
