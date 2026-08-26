@@ -27,10 +27,11 @@ node --test scripts/pilotage/compute.test.mjs
 (cd scripts/pilotage && python3 -m unittest -q test_pilotage)
 ```
 
-## Le secret `PILOTAGE_TOKEN`
+## Le secret `PILOTAGE_TOKEN` (seulement si le projet devient privé)
 
-Le `GITHUB_TOKEN` des Actions ne lit pas les projets d'organisation. Sans secret, la page
-se génère en **mode dégradé** (Status dérivé de l'état de l'issue, horizon = échéance) et le
-signale. Pour le mode nominal : un jeton fine-grained (organisation `isopen-io` → Projects :
-lecture ; dépôt `meeshy` → Issues : lecture) ou classique (`read:project`, `repo`), posé en
-secret `PILOTAGE_TOKEN` du dépôt.
+Tant que le projet « Meeshy — pilotage » est **public**, le `GITHUB_TOKEN` des Actions le lit
+(vérifié le 2026-08-26 : run 32991204250, 318 items en mode nominal). S'il devenait privé, le
+`GITHUB_TOKEN` ne le lirait plus : la page se générerait en **mode dégradé** (Status dérivé de
+l'état de l'issue, horizon = échéance) et le signalerait. Pour rester en mode nominal dans ce
+cas : un jeton fine-grained (organisation `isopen-io` → Projects : lecture ; dépôt `meeshy` →
+Issues : lecture) ou classique (`read:project`, `repo`), posé en secret `PILOTAGE_TOKEN`.
