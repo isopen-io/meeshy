@@ -434,13 +434,14 @@ struct MeeshyComposerHost: View {
     /// ne repartait qu'à `[]` avant ce lot.
     @State private var documentLocalMedia: [ComposerDocumentMedia] = []
 
-    /// **T2.4 — l'interrupteur POST ↔ RÉEL.** Depuis T2.3, une vidéo ou ≥ 2
-    /// images composées ici font élire `"REEL"` par `ReelComposition.defaultType`
-    /// sans que l'auteur puisse garder un post simple — la capacité que la
-    /// feuille absorbée portait et que le meuble avait perdue. `false` par
-    /// défaut : la composition part REEL dès qu'elle qualifie, exactement le
-    /// comportement de T2.3, jusqu'à ce que l'auteur bascule.
-    @State private var documentForcePlainPost = false
+    /// **F1 (#3884) — la DESTINATION d'un média qui qualifie.** Remplace le
+    /// booléen POST↔RÉEL : dès qu'une vidéo, un audio ≥ 3 s ou ≥ 2 images
+    /// qualifient, l'auteur choisit d'un geste entre POST, RÉEL et STORY.
+    /// `.reel` par défaut — la composition part RÉEL dès qu'elle qualifie,
+    /// exactement le comportement de T2.4, jusqu'à ce que l'auteur bascule.
+    /// `documentDestination.forcePlainPost` alimente le publieur ;
+    /// `documentDestination.mountsScene` fera basculer la scène (F2).
+    @State private var documentDestination: ComposerDocumentDestination = .reel
 
     /// **T2.5 — la POSITION posée sur le brouillon.** Vit dans le MEUBLE, comme
     /// `documentLocalMedia` juste au-dessus : `ComposerDocumentDraft.location`
@@ -931,7 +932,7 @@ struct MeeshyComposerHost: View {
         // capsule de langue occupe déjà l'angle bas, et ce contrôle n'a rien
         // à voir avec la langue.
         .overlay(alignment: .topTrailing) {
-            if documentComposesReel { documentForcePlainPostToggle }
+            if documentComposesReel { documentDestinationSelector }
         }
         // **La tuile de lieu (T2.5)**, symétrique de la capsule de langue —
         // `.bottomLeading` face à `.bottomTrailing` : les deux occupent le bas
@@ -958,17 +959,18 @@ struct MeeshyComposerHost: View {
         .sheet(isPresented: $showsLocationPicker) { documentLocationPickerSheet }
         // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
         .sheet(isPresented: $showsAudioComposer) { documentAudioComposerSheet }
-        // Retirer un média qui dé-qualifie fait DISPARAÎTRE l'interrupteur — et
-        // doit réarmer le drapeau à `false`. Le drapeau n'est jamais invisible
-        // ET effectif (il ne pèse que quand ça qualifie, et l'interrupteur est
-        // peint exactement alors) : le risque que ce reset ferme est plus
-        // subtil — un `Post` forcé pour UNE composition survivrait à son
-        // remplacement par une AUTRE qui re-qualifie, imposant en silence un
-        // choix fait pour un contenu différent. Le reset fait repartir toute
-        // re-qualification du défaut honnête (REEL).
+        // Retirer un média qui dé-qualifie fait DISPARAÎTRE le sélecteur — et
+        // doit réarmer la destination au défaut honnête (`.reel`). La
+        // destination n'est jamais invisible ET effective (elle ne pèse que
+        // quand ça qualifie, et le sélecteur est peint exactement alors) : le
+        // risque que ce reset ferme est plus subtil — un POST (ou une STORY)
+        // choisi pour UNE composition survivrait à son remplacement par une
+        // AUTRE qui re-qualifie, imposant en silence un choix fait pour un
+        // contenu différent. Le reset fait repartir toute re-qualification du
+        // défaut honnête (RÉEL).
         .adaptiveOnChange(of: documentLocalMedia) { _, _ in
             guard !documentComposesReel else { return }
-            documentForcePlainPost = false
+            documentDestination = .reel
         }
         .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
         .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
@@ -1020,40 +1022,43 @@ struct MeeshyComposerHost: View {
         )
     }
 
-    /// **L'interrupteur POST ↔ RÉEL (T2.4)** — la capacité que la feuille
-    /// absorbée portait et que le meuble avait perdue depuis T2.3 : un média
-    /// qualifiant (vidéo, audio ≥ 3 s, ≥ 2 images) fait élire `"REEL"` par
-    /// `ReelComposition.defaultType` sans offrir à l'auteur le moyen de garder
-    /// un post simple. Même modèle visuel et **mêmes clés i18n** que
-    /// `FeedView+Attachments.reelTypeToggle` (`feed.composer.type.post` /
-    /// `.reel` / `.hint`) — zéro clé neuve, deux traductions à faire diverger
-    /// sinon.
-    private var documentForcePlainPostToggle: some View {
-        Button {
-            documentForcePlainPost.toggle()
-            HapticFeedback.light()
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: documentForcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
-                    .font(MeeshyFont.relative(10))
-                Text(documentForcePlainPost
-                    ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
-                    : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
-                    .font(MeeshyFont.relative(12))
+    /// **Le sélecteur de DESTINATION (F1, #3884)** — remplace l'interrupteur
+    /// binaire POST↔RÉEL par un choix à trois segments (POST · RÉEL · STORY),
+    /// peint exactement quand la composition qualifie (`documentComposesReel`,
+    /// loi 4). Il itère `ComposerDocumentDestination.allCases` : ajouter une
+    /// destination demain la peint sans toucher cette vue. **Mêmes clés i18n**
+    /// que l'interrupteur absorbé (`feed.composer.type.post` / `.reel`) plus
+    /// `content.type.story`, toutes déjà traduites — zéro clé neuve.
+    private var documentDestinationSelector: some View {
+        HStack(spacing: 2) {
+            ForEach(ComposerDocumentDestination.allCases, id: \.self) { destination in
+                let isOn = documentDestination == destination
+                Button {
+                    documentDestination = destination
+                    HapticFeedback.light()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: destination.symbolName)
+                            .font(MeeshyFont.relative(10))
+                        Text(destination.label)
+                            .font(MeeshyFont.relative(12))
+                    }
+                    .foregroundColor(isOn ? MeeshyColors.indigo400 : MeeshyColors.textSecondary(isDark: true))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(isOn ? MeeshyColors.indigo400.opacity(0.15) : Color.clear))
+                }
+                .accessibilityAddTraits(isOn ? [.isSelected] : [])
             }
-            .foregroundColor(documentForcePlainPost ? MeeshyColors.textSecondary(isDark: true) : MeeshyColors.indigo400)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(MeeshyColors.indigo400.opacity(0.15))
-                    .overlay(
-                        Capsule()
-                            .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1)
-                    )
-            )
         }
-        .accessibilityHint(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
+        .padding(2)
+        .background(
+            Capsule()
+                .fill(MeeshyColors.indigo400.opacity(0.08))
+                .overlay(Capsule().stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1))
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
         .padding(16)
     }
 
@@ -1126,7 +1131,7 @@ struct MeeshyComposerHost: View {
     }
 
     /// **La tuile de lieu (T2.5)** — même idiome capsule que
-    /// `documentForcePlainPostToggle` juste au-dessus : un chip retirable,
+    /// `documentDestinationSelector` juste au-dessus : un chip retirable,
     /// jamais le pavé pin-drop du composer inline (`feedPlaceTile`), que ce
     /// meuble n'a pas de rangée de vignettes pour accueillir.
     ///
@@ -1803,10 +1808,10 @@ struct MeeshyComposerHost: View {
             // non plus d'un littéral `nil` : c'est la capsule qui l'écrit, la
             // porte qui la poste telle quelle.
             //
-            // `forcePlainPost` vient de l'interrupteur du SOCLE (T2.4,
-            // `documentForcePlainPost`) — jamais d'un littéral `false` : un
-            // littéral ferait toujours élire `"REEL"` sur une composition
-            // qualifiante, exactement la régression que ce lot referme.
+            // `forcePlainPost` vient de la DESTINATION du SOCLE (F1,
+            // `documentDestination.forcePlainPost`) — jamais d'un littéral
+            // `false` : un littéral ferait toujours élire `"REEL"` sur une
+            // composition qualifiante, et le type CHOISI ne gouvernerait plus.
             //
             // `location` vient du SOCLE (`documentLocation`, T2.5, écrit par
             // `LocationPickerView`) — jamais d'un littéral `nil` : un littéral
@@ -1827,7 +1832,7 @@ struct MeeshyComposerHost: View {
             // re-transcrirait ce travail en silence.
             return ComposerDocumentDraft.document(
                 format: selectedFormat,
-                forcePlainPost: documentForcePlainPost,
+                forcePlainPost: documentDestination.forcePlainPost,
                 text: documentText,
                 visibility: composerVisibility,
                 visibilityUserIds: composerVisibilityUserIds,

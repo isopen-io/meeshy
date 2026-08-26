@@ -957,6 +957,56 @@ nonisolated enum ComposerDocumentMediaFactory {
 /// est entendu par le serveur comme un EFFACEMENT), et la liste nominative
 /// écartée quand l'audience ne l'exige pas. Les laisser aux quatre sites de
 /// montage du lot 4.6, ce serait écrire la loi 3 quatre fois.
+/// **F1 (#3884) — la DESTINATION d'un média qui qualifie.**
+///
+/// Remplace le booléen POST↔RÉEL (`documentForcePlainPost`) par un type SOMME à
+/// trois valeurs : dès qu'un audio ≥ 3 s, une vidéo ≥ 3 s ou ≥ 2 images
+/// qualifient (`ReelComposition.qualifiesAsReel`), l'auteur choisit d'un geste.
+/// `.post`/`.reel` gouvernent la publication de bout en bout via `forcePlainPost`
+/// (le serveur n'accepte que `POST`/`REEL` sur le chemin document) ; `.story`
+/// monte la scène 9:16 (F2, `mountsScene`) — la surface plate devient une toile.
+nonisolated enum ComposerDocumentDestination: String, CaseIterable, Equatable {
+    case post, reel, story
+
+    /// Le `PostType` publié — la loi « le type choisi gouverne la publication ».
+    var postType: PostType {
+        switch self {
+        case .post: return .post
+        case .reel: return .reel
+        case .story: return .story
+        }
+    }
+
+    /// `true` pour `.post` seul : retenir un post simple malgré la
+    /// qualification, exactement ce que l'ancien `forcePlainPost` exprimait.
+    var forcePlainPost: Bool { self == .post }
+
+    /// `.story` monte la scène 9:16 (F2) ; `.post`/`.reel` restent sur la
+    /// surface plate. Lu par le meuble pour basculer `mountedSurface`.
+    var mountsScene: Bool { self == .story }
+
+    /// Le glyphe du segment — famille ligne (jeu moderne C, #3882), zéro `.fill`
+    /// daté sauf le réel, conservé identique à l'interrupteur absorbé.
+    var symbolName: String {
+        switch self {
+        case .post: return "doc.text"
+        case .reel: return "play.rectangle.on.rectangle.fill"
+        case .story: return "rectangle.stack"
+        }
+    }
+
+    /* Le libellé du segment — MÊMES clés que l'interrupteur POST↔RÉEL absorbé
+       (`feed.composer.type.post`/`.reel`) plus `content.type.story`, toutes
+       déjà traduites dans les sept locales. Zéro clé neuve. */
+    var label: String {
+        switch self {
+        case .post: return String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
+        case .reel: return String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main)
+        case .story: return String(localized: "content.type.story", defaultValue: "Story", bundle: .main)
+        }
+    }
+}
+
 nonisolated struct ComposerDocumentDraft: Equatable {
     let format: ComposerFormat
 
