@@ -79,6 +79,8 @@ interface NotificationRow {
   id: string;
   userId: string;
   messageId: string | null;
+  /** Relu par le retrait : la révocation push ne vise que ce qui est parti. */
+  delivery?: { pushSent: boolean };
 }
 
 let notificationRows: NotificationRow[] = [];
@@ -91,8 +93,8 @@ function seedNotifications(rows: NotificationRow[]): void {
 }
 
 const ANCHORED_ON_REMOVED: NotificationRow[] = [
-  { id: 'notif-mention', userId: MENTIONED_USER_ID, messageId: MESSAGE_ID },
-  { id: 'notif-reply', userId: REPLIED_USER_ID, messageId: MESSAGE_ID },
+  { id: 'notif-mention', userId: MENTIONED_USER_ID, messageId: MESSAGE_ID, delivery: { pushSent: true } },
+  { id: 'notif-reply', userId: REPLIED_USER_ID, messageId: MESSAGE_ID, delivery: { pushSent: true } },
 ];
 const ANCHORED_ELSEWHERE: NotificationRow = {
   id: 'notif-autre-message',
@@ -133,10 +135,12 @@ beforeEach(() => {
   trackingLinkUpdateMany.mockResolvedValue({ count: 1 });
   seedNotifications([]);
   announceNotificationsRetracted.mockResolvedValue(undefined);
+  // Projette ce que le retrait SÉLECTIONNE, `delivery` compris : la révocation
+  // push le lit pour ne réveiller que les appareils qui portent une bannière.
   notificationFindMany.mockImplementation(async ({ where }: any) =>
     notificationRows
       .filter((row) => matchesWhere(row, where))
-      .map(({ id, userId }) => ({ id, userId }))
+      .map(({ id, userId, delivery }) => ({ id, userId, delivery }))
   );
   notificationDeleteMany.mockImplementation(async ({ where }: any) => {
     const kept = notificationRows.filter((row) => !matchesWhere(row, where));
@@ -446,8 +450,8 @@ describe('applyMessageRemovalEffects — notifications ancrées sur le message',
     await applyMessageRemovalEffects(prisma, removedMessage(), announcer);
 
     expect(announceNotificationsRetracted).toHaveBeenCalledWith([
-      { id: 'notif-mention', userId: MENTIONED_USER_ID },
-      { id: 'notif-reply', userId: REPLIED_USER_ID },
+      { id: 'notif-mention', userId: MENTIONED_USER_ID, pushSent: true },
+      { id: 'notif-reply', userId: REPLIED_USER_ID, pushSent: true },
     ]);
   });
 

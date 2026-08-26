@@ -16,6 +16,10 @@ import {
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
 import { CircuitBreaker } from '../utils/circuitBreaker';
+import {
+  isNotificationRevocationPush,
+  NOTIFICATION_REVOCATION_TTL_MS,
+} from './notifications/notificationRevocationPush';
 
 const pushLogger = enhancedLogger.child({ module: 'PushNotificationService' });
 
@@ -39,10 +43,14 @@ export interface PushNotificationPayload {
    * Pure background push (APNs `apns-push-type: background`, priority 5,
    * `content-available: 1`, NO alert/sound/badge): a data-only wake for
    * signals the user must never see as a banner — e.g. `call_cancel`, which
-   * stops CallKit ringing on a device whose socket never came up. iOS only;
-   * FCM sends currently ignore this flag (alert path unchanged). NEVER use
-   * the `voip` type for such signals: every VoIP push must report a new
-   * incoming call to CallKit or the system kills the app.
+   * stops CallKit ringing on a device whose socket never came up, or
+   * `notification_revoked`, which retires a banner already delivered. On FCM
+   * the flag makes the message DATA-ONLY on every platform (no `notification`
+   * block, no `webpush.notification`, `aps` reduced to `content-available`):
+   * a `notification` block is rendered by the SYSTEM while the app is
+   * backgrounded, and the handler that must act never runs. NEVER use the
+   * `voip` type for such signals: every VoIP push must report a new incoming
+   * call to CallKit or the system kills the app.
    */
   silent?: boolean;
   /**
@@ -94,7 +102,9 @@ export interface SendPushOptions {
   // call pushes are a dedicated category — `isPushAllowed` short-circuits on
   // `callsEnabled` alone for them, so neither this flag nor `pushEnabled:
   // false` governs call pushes (see isCallRelatedPush / the isCallPush
-  // early-return). `pushEnabled: false` still blocks every NON-call push.
+  // early-return). `pushEnabled: false` still blocks every NON-call push —
+  // except the `notification_revoked` control push, classified by its DATA
+  // TYPE and governed by no preference at all (see `applyUserPreferences`).
   bypassDnd?: boolean;
 }
 
@@ -166,6 +176,18 @@ const PUSH_RETRY_BASE_DELAY_MS = 200;
  * un ring livré après elle sonnerait pour un appel déjà missed.
  */
 const CALL_PUSH_TTL_MS = 60_000;
+
+/**
+ * Les types de données des pushes d'APPEL : la sonnerie et ses deux stop-ring.
+ * C'est le TYPE qui classe un push en appel — pas `silent`, qu'un second
+ * producteur (`notification_revoked`) pose désormais aussi, et qui n'a ni la
+ * fenêtre de sonnerie ni sa préférence `callsEnabled`.
+ */
+const CALL_PUSH_DATA_TYPES: ReadonlySet<string> = new Set(['call', 'call_cancel', 'call_answered_elsewhere']);
+
+function isCallPushDataType(type: string | undefined): boolean {
+  return type !== undefined && CALL_PUSH_DATA_TYPES.has(type);
+}
 
 // ============================================
 // SERVICE CLASS
@@ -305,8 +327,7 @@ export class PushNotificationService {
    */
   private isCallRelatedPush(options: SendPushOptions): boolean {
     if (options.types?.includes('voip')) return true;
-    const dataType = options.payload.data?.type;
-    return dataType === 'call' || dataType === 'call_cancel' || dataType === 'call_answered_elsewhere';
+    return isCallPushDataType(options.payload.data?.type);
   }
 
   /**
@@ -366,6 +387,28 @@ export class PushNotificationService {
   }
 
   /**
+   * Les préférences de l'utilisateur, appliquées au chokepoint : `null` quand
+   * elles bloquent l'envoi, sinon la charge à livrer (GW8 : sons, badge,
+   * regroupement).
+   *
+   * Un push de RÉVOCATION (`notification_revoked`) n'est gouverné par AUCUNE
+   * préférence — DND et `pushEnabled` compris — et n'en lit même pas. C'est un
+   * signal de contrôle qui RETIRE une bannière, jamais un contenu : le bloquer
+   * laisserait sur l'écran verrouillé une notification que le serveur a
+   * supprimée, y compris quand l'opt-out a été posé APRÈS sa livraison.
+   */
+  private async applyUserPreferences(options: SendPushOptions): Promise<PushNotificationPayload | null> {
+    const { userId, payload, bypassDnd } = options;
+    if (isNotificationRevocationPush(payload)) return payload;
+
+    const isCallPush = this.isCallRelatedPush(options);
+    const notifPrefs = await this.loadNotifPrefs(userId);
+    if (!this.isPushAllowed(notifPrefs, bypassDnd, isCallPush)) return null;
+
+    return isCallPush ? payload : this.applyDeliveryPreferences(payload, notifPrefs);
+  }
+
+  /**
    * Send push notification to a user
    */
   async sendToUser(options: SendPushOptions): Promise<PushResult[]> {
@@ -375,19 +418,13 @@ export class PushNotificationService {
       return [];
     }
 
-    const { userId, payload, types, platforms, bypassDnd } = options;
+    const { userId, types, platforms } = options;
 
-    // Vérifier les préférences push utilisateur (UserPreferences.notification)
-    const isCallPush = this.isCallRelatedPush(options);
-    const notifPrefs = await this.loadNotifPrefs(userId);
-    const pushAllowed = this.isPushAllowed(notifPrefs, bypassDnd, isCallPush);
-    if (!pushAllowed) {
+    const effectivePayload = await this.applyUserPreferences(options);
+    if (!effectivePayload) {
       pushLogger.info('Push blocked by user preferences', { userId });
       return [];
     }
-
-    // GW8 — Sons / Badges / regroupement appliqués une fois pour toutes ici.
-    const effectivePayload = isCallPush ? payload : this.applyDeliveryPreferences(payload, notifPrefs);
 
     // The `ENABLE_VOIP_PUSH` kill switch must gate every path that can reach
     // a `voip` token, not just a narrow helper — the real incoming-call push
@@ -502,19 +539,23 @@ export class PushNotificationService {
     }
 
     try {
-      // Pushes d'appel Android = DATA-ONLY. Un message FCM portant un bloc
+      // Un push SILENCIEUX est DATA-ONLY sur toutes les plateformes, et le
+      // ring Android l'est aussi. Un message FCM portant un bloc
       // `notification` est rendu par le SYSTÈME quand l'app est backgroundée
       // ou tuée : `onMessageReceived` ne s'exécute JAMAIS — le full-screen
-      // ring (MeeshyFcmService) et les handlers stop-ring
-      // (call_cancel/call_answered_elsewhere) étaient donc morts précisément
-      // dans le scénario pour lequel ils existent. Le title/body localisés
-      // serveur voyagent DANS data pour que le client rende sa notification
-      // d'appel dans la langue résolue de l'utilisateur (Prisme).
-      const androidCallDataOnly =
-        tokenRecord.platform === 'android' &&
-        (payload.silent === true || payload.data?.type === 'call');
+      // ring (MeeshyFcmService), les handlers stop-ring
+      // (call_cancel/call_answered_elsewhere) et la révocation
+      // (`notification_revoked`) seraient donc morts précisément dans le
+      // scénario pour lequel ils existent ; sur le web, le SDK afficherait
+      // une bannière VIDE sans jamais appeler `onBackgroundMessage`. Le
+      // title/body localisés serveur du ring voyagent DANS data pour que le
+      // client rende sa notification d'appel dans la langue résolue de
+      // l'utilisateur (Prisme).
+      const isCallPush = isCallPushDataType(payload.data?.type);
+      const dataOnly =
+        payload.silent === true || (tokenRecord.platform === 'android' && isCallPush);
 
-      const message: any = androidCallDataOnly
+      const message: any = dataOnly
         ? {
             token: tokenRecord.token,
             data: {
@@ -533,7 +574,15 @@ export class PushNotificationService {
           };
 
       // Platform-specific options
-      if (tokenRecord.platform === 'ios') {
+      if (tokenRecord.platform === 'ios' && payload.silent === true) {
+        // Background pur, miroir exact du chemin APNs direct : `content-available`
+        // seul, sans alert ni mutable-content (Apple rejette la combinaison),
+        // `apns-push-type: background` + priorité 5 en en-têtes.
+        message.apns = {
+          headers: { 'apns-push-type': 'background', 'apns-priority': '5' },
+          payload: { aps: { 'content-available': 1 } },
+        };
+      } else if (tokenRecord.platform === 'ios') {
         // `content-available: 1` wakes the app in the background even when it
         // has been swiped away, which is the only path that runs the
         // `application(_:didReceiveRemoteNotification:fetchCompletionHandler:)`
@@ -572,14 +621,25 @@ export class PushNotificationService {
         // the Android launcher badge in sync with the unread count carried by
         // the push payload — the same F1 guarantee already wired for iOS above,
         // which otherwise leaves the Android badge frozen when the app is closed.
-        // Data-only (appels) : pas de sous-bloc notification non plus — il
+        // Data-only : pas de sous-bloc notification non plus — il
         // réintroduirait le rendu système que le data-only vient d'éviter.
-        // TTL aligné sur la fenêtre de sonnerie serveur (60 s) : sans lui FCM
-        // garde le message ~4 semaines et un téléphone qui resurgit du
-        // hors-réseau sonne plein écran pour un appel mort depuis longtemps
-        // (et un stop-ring plus vieux que la sonnerie n'a plus rien à éteindre).
-        message.android = androidCallDataOnly
-          ? { priority: 'high', ttl: CALL_PUSH_TTL_MS }
+        // TTL aligné sur la fenêtre de sonnerie serveur (60 s) pour les
+        // APPELS : sans lui FCM garde le message ~4 semaines et un téléphone
+        // qui resurgit du hors-réseau sonne plein écran pour un appel mort
+        // depuis longtemps (et un stop-ring plus vieux que la sonnerie n'a
+        // plus rien à éteindre).
+        //
+        // La RÉVOCATION attend plus longtemps — la bannière qu'elle retire
+        // attend aussi — mais elle attend BORNÉ : FCM ne stocke que 100
+        // messages non-collapsibles par appareil hors ligne avant de tout
+        // jeter, et une purge de post à large audience évincerait sinon les
+        // pushes de vrais messages en attente pour cet appareil.
+        message.android = dataOnly
+          ? {
+              priority: 'high',
+              ...(isCallPush ? { ttl: CALL_PUSH_TTL_MS } : {}),
+              ...(isNotificationRevocationPush(payload) ? { ttl: NOTIFICATION_REVOCATION_TTL_MS } : {}),
+            }
           : {
               priority: 'high',
               notification: {
@@ -588,7 +648,7 @@ export class PushNotificationService {
                 ...(payload.badge !== undefined ? { notificationCount: payload.badge } : {}),
               },
             };
-      } else if (tokenRecord.platform === 'web') {
+      } else if (tokenRecord.platform === 'web' && !dataOnly) {
         const link = payload.link || (payload.data?.conversationId ? `/conversations/${payload.data.conversationId}` : undefined);
         message.webpush = {
           notification: {
@@ -751,9 +811,10 @@ export class PushNotificationService {
       // Expiration alignée sur la fenêtre de sonnerie (60 s), miroir du TTL
       // FCM Android : sans elle APNs peut livrer un ring VoIP ou un stop-ring
       // périmé à la reconnexion — CallKit fait sonner le téléphone pour un
-      // appel missed depuis longtemps. `silent` n'a qu'un producteur
-      // (call-push-mirroring), le scoping est donc strictement « appels ».
-      const isCallPush = isVoIP || payload.silent === true || payload.data?.type === 'call';
+      // appel missed depuis longtemps. Classé par le TYPE de données, pas par
+      // `silent` : la révocation d'une bannière est silencieuse aussi, et elle
+      // doit attendre un téléphone hors réseau aussi longtemps qu'APNs le permet.
+      const isCallPush = isVoIP || isCallPushDataType(payload.data?.type);
       if (isCallPush) {
         notification.expiry = Math.floor(Date.now() / 1000) + CALL_PUSH_TTL_MS / 1000;
       }

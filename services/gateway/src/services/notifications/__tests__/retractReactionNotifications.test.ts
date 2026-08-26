@@ -130,6 +130,9 @@ function seed(seeded: NotificationRow[]): void {
         firstBatch: matched.map((row) => ({
           _id: { $oid: row.id },
           userId: { $oid: row.userId },
+          // La projection relit `delivery.pushSent` : la révocation push ne
+          // réveille un appareil que là où un push nominal est parti.
+          delivery: { pushSent: true },
         })),
       },
     };
@@ -366,7 +369,7 @@ describe('retractReactionNotifications', () => {
 
       expect(order).toEqual(['delete', 'announce']);
       expect(announceNotificationsRetracted).toHaveBeenCalledWith([
-        { id: '607f1f77bcf86cd799439001', userId: AUTHOR_ID },
+        { id: '607f1f77bcf86cd799439001', userId: AUTHOR_ID, pushSent: true },
       ]);
     });
 

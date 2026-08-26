@@ -31,6 +31,8 @@ import {
 
 const POST_ID = '507f1f77bcf86cd799439011';
 const OTHER_POST_ID = '507f1f77bcf86cd799439012';
+const REPOST_ID = '507f1f77bcf86cd799439013';
+const OTHER_REPOST_ID = '507f1f77bcf86cd799439014';
 
 const AUTHOR_ID = '64a000000000000000000001';
 const COMMENTER_ID = '64a000000000000000000002';
@@ -40,6 +42,8 @@ interface NotificationRow {
   readonly id: string;
   readonly userId: string;
   readonly postId: string | null;
+  /** `metadata.repostId` — posé par `post_repost` seulement. */
+  readonly repostId?: string;
 }
 
 let rows: NotificationRow[] = [];
@@ -54,6 +58,14 @@ const prisma = {
   notification: { deleteMany },
 } as any;
 
+/** `{ '<chemin>': { $in } }` → la valeur de la ligne sous ce chemin est dans `$in`. */
+function matchesClause(row: NotificationRow, clause: Record<string, { $in?: string[] }>): boolean {
+  return Object.entries(clause).every(([path, predicate]) => {
+    const value = path === 'context.postId' ? row.postId : path === 'metadata.repostId' ? row.repostId : undefined;
+    return value != null && (predicate.$in ?? []).includes(value);
+  });
+}
+
 /**
  * Le double APPLIQUE le filtre reçu, et rend l'Extended JSON de Mongo.
  *
@@ -64,19 +76,25 @@ const prisma = {
  *
  * `filter` non reconnu ⇒ AUCUNE contrainte (sémantique Mongo), pour qu'une
  * garde absente en production se voie comme un retrait TROP LARGE et non
- * comme un no-op silencieux.
+ * comme un no-op silencieux. Le filtre attendu est un `$or` de clauses `$in`
+ * (`context.postId`, `metadata.repostId`) : une ligne matche dès qu'une
+ * clause la matche.
  */
 function seed(seeded: NotificationRow[]): void {
   rows = [...seeded];
   runCommandRaw.mockImplementation(async (command: any) => {
-    const wanted: string[] | undefined = command?.filter?.['context.postId']?.$in;
+    const clauses: Array<Record<string, { $in?: string[] }>> | undefined = command?.filter?.$or;
     const matched = rows.filter(
-      (row) => wanted === undefined || (row.postId !== null && wanted.includes(row.postId))
+      (row) => clauses === undefined || clauses.some((clause) => matchesClause(row, clause))
     );
     const batch = matched.slice(0, command?.batchSize ?? matched.length);
     return {
       cursor: {
-        firstBatch: batch.map((row) => ({ _id: { $oid: row.id }, userId: { $oid: row.userId } })),
+        firstBatch: batch.map((row) => ({
+          _id: { $oid: row.id },
+          userId: { $oid: row.userId },
+          delivery: { pushSent: true },
+        })),
         id: 0,
         ns: 'meeshy.Notification',
       },
@@ -95,6 +113,11 @@ function notification(id: string, userId: string, postId: string | null): Notifi
   return { id, userId, postId };
 }
 
+/** La ligne `post_repost` : `context.postId` = l'ORIGINAL, `metadata.repostId` = le repost. */
+function repostNotification(id: string, userId: string, originalPostId: string, repostId: string): NotificationRow {
+  return { id, userId, postId: originalPostId, repostId };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   announceNotificationsRetracted.mockResolvedValue(undefined);
@@ -102,7 +125,13 @@ beforeEach(() => {
 });
 
 describe('retractPostNotifications', () => {
-  it('lit par le chemin JSON context.postId — la seule trace du post sur la ligne', async () => {
+  /**
+   * Deux chemins, parce qu'une ligne `post_repost` nomme le post sous DEUX
+   * clés : `context.postId` porte l'ORIGINAL (c'est lui qu'elle ouvre), et
+   * `metadata.repostId` le repost qui l'a produite. Supprimer le repost doit
+   * la retirer — et seul le second chemin le sait.
+   */
+  it('lit par les deux chemins JSON qui nomment un post — context.postId et metadata.repostId', async () => {
     seed([notification('n1', AUTHOR_ID, POST_ID)]);
 
     await retractPostNotifications(prisma, [POST_ID], announcer);
@@ -110,10 +139,29 @@ describe('retractPostNotifications', () => {
     expect(runCommandRaw).toHaveBeenCalledWith(
       expect.objectContaining({
         find: 'Notification',
-        filter: { 'context.postId': { $in: [POST_ID] } },
-        projection: { _id: 1, userId: 1 },
+        filter: {
+          $or: [
+            { 'context.postId': { $in: [POST_ID] } },
+            { 'metadata.repostId': { $in: [POST_ID] } },
+          ],
+        },
+        projection: { _id: 1, userId: 1, 'delivery.pushSent': 1 },
       })
     );
+  });
+
+  it('retire la post_repost de l’auteur original quand c’est le REPOST qui est supprimé', async () => {
+    seed([
+      repostNotification('n-repost', AUTHOR_ID, POST_ID, REPOST_ID),
+      repostNotification('n-autre-repost', AUTHOR_ID, POST_ID, OTHER_REPOST_ID),
+      notification('n-like-original', AUTHOR_ID, POST_ID),
+    ]);
+
+    const count = await retractPostNotifications(prisma, [REPOST_ID], announcer);
+
+    expect(count).toBe(1);
+    expect(deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['n-repost'] } } });
+    expect(rows.map((row) => row.id)).toEqual(['n-autre-repost', 'n-like-original']);
   });
 
   it('retire les lignes de TOUTE l\'audience et annonce chacune à SON destinataire', async () => {
@@ -130,9 +178,9 @@ describe('retractPostNotifications', () => {
       where: { id: { in: ['n-auteur', 'n-commentaire', 'n-ami'] } },
     });
     expect(announceNotificationsRetracted).toHaveBeenCalledWith([
-      { id: 'n-auteur', userId: AUTHOR_ID },
-      { id: 'n-commentaire', userId: COMMENTER_ID },
-      { id: 'n-ami', userId: FRIEND_ID },
+      { id: 'n-auteur', userId: AUTHOR_ID, pushSent: true },
+      { id: 'n-commentaire', userId: COMMENTER_ID, pushSent: true },
+      { id: 'n-ami', userId: FRIEND_ID, pushSent: true },
     ]);
   });
 
@@ -241,7 +289,14 @@ describe('retractPostNotifications', () => {
     expect(count).toBe(2);
     expect(runCommandRaw).toHaveBeenCalledTimes(1);
     expect(runCommandRaw).toHaveBeenCalledWith(
-      expect.objectContaining({ filter: { 'context.postId': { $in: [POST_ID, OTHER_POST_ID] } } })
+      expect.objectContaining({
+        filter: {
+          $or: [
+            { 'context.postId': { $in: [POST_ID, OTHER_POST_ID] } },
+            { 'metadata.repostId': { $in: [POST_ID, OTHER_POST_ID] } },
+          ],
+        },
+      })
     );
     expect(rows).toHaveLength(0);
   });
@@ -280,7 +335,7 @@ describe('retractPostNotifications', () => {
       cursor: {
         firstBatch: Array.from(
           { length: POST_NOTIFICATION_RETRACTION_BATCH_SIZE },
-          (_, index) => ({ _id: { $oid: `n${index}` }, userId: { $oid: AUTHOR_ID } })
+          (_, index) => ({ _id: { $oid: `n${index}` }, userId: { $oid: AUTHOR_ID }, delivery: { pushSent: true } })
         ),
       },
     }));

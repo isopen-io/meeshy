@@ -1,7 +1,7 @@
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import type {
-  RetractedNotification,
-  RetractedNotificationAnnouncer,
+import {
+  retractedNotificationOf,
+  type RetractedNotificationAnnouncer,
 } from '../notifications/retractedNotifications';
 
 const log = enhancedLogger.child({ module: 'retractCommentNotifications' });
@@ -83,8 +83,14 @@ const MAX_RETRACTION_BATCHES = 200;
 
 type RawObjectId = string | { $oid?: string };
 
+type RawNotificationRow = {
+  _id?: RawObjectId;
+  userId?: RawObjectId;
+  delivery?: { pushSent?: unknown };
+};
+
 type RawNotificationBatch = {
-  cursor?: { firstBatch?: ReadonlyArray<{ _id?: RawObjectId; userId?: RawObjectId }> };
+  cursor?: { firstBatch?: ReadonlyArray<RawNotificationRow> };
 };
 
 /**
@@ -130,7 +136,9 @@ export async function retractCommentNotifications(
           { 'metadata.commentId': { $in: targets } },
         ],
       },
-      projection: { _id: 1, userId: 1 },
+      // `delivery.pushSent` : la révocation push ne réveille un appareil que
+      // là où un push est parti.
+      projection: { _id: 1, userId: 1, 'delivery.pushSent': 1 },
       singleBatch: true,
       batchSize: COMMENT_NOTIFICATION_RETRACTION_BATCH_SIZE,
     })) as RawNotificationBatch;
@@ -145,9 +153,11 @@ export async function retractCommentNotifications(
     // qu'elle recalcule doivent voir la base d'après le retrait. Une ligne sans
     // `userId` lisible n'est pas annonçable — elle est tout de même supprimée,
     // parce que la laisser ferait boucler la relecture sur elle.
-    const retracted = rows
-      .map((row) => ({ id: objectId(row._id), userId: objectId(row.userId) }))
-      .filter((row): row is RetractedNotification => !!row.id && !!row.userId);
+    const retracted = rows.flatMap((row) => {
+      const id = objectId(row._id);
+      const userId = objectId(row.userId);
+      return id && userId ? [retractedNotificationOf({ id, userId, delivery: row.delivery })] : [];
+    });
     if (retracted.length > 0) {
       await announcer?.announceNotificationsRetracted(retracted);
     }

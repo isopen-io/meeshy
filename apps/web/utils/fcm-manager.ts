@@ -28,6 +28,7 @@ import {
   notificationConfig,
 } from '@/firebase-config';
 import { firebaseChecker } from './firebase-availability-checker';
+import { closeDeliveredNotifications, parseNotificationRevocation } from './notification-revocation';
 
 export type NotificationPermission = 'default' | 'granted' | 'denied';
 
@@ -175,6 +176,17 @@ class FCMManager {
     try {
       this.unsubscribeMessage = onMessage(this.messaging, (payload) => {
         this.log('Message received (foreground):', payload);
+
+        // Push de CONTRÔLE `notification_revoked` : au premier plan, FCM le
+        // livre ici et non au Service Worker. Rien à afficher — fermer les
+        // bannières révoquées, dans tous les Service Workers de l'origine.
+        const revocation = parseNotificationRevocation(payload.data);
+        if (revocation) {
+          void closeDeliveredNotifications(revocation).catch((error) =>
+            this.handleError(error as Error, 'closeRevokedNotifications')
+          );
+          return;
+        }
 
         // Callback custom
         this.options.onMessage?.(payload);

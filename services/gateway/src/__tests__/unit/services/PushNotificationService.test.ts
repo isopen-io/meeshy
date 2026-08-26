@@ -157,6 +157,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { NOTIFICATION_REVOCATION_TTL_MS } from '../../../services/notifications/notificationRevocationPush';
 
 // Store original environment variables
 const originalEnv = { ...process.env };
@@ -3096,6 +3097,194 @@ describe('PushNotificationService', () => {
       );
       // findUnique called only once (p2's call was skipped by the guard)
       expect(mockPrisma.pushToken.findUnique).toHaveBeenCalledTimes(1);
+    });
+  });
+  // ==============================================
+  // notification_revoked — push de CONTRÔLE (révocation d'une bannière livrée)
+  // ==============================================
+  //
+  // Le retrait d'une notification (réaction défaite, message/post supprimé)
+  // pousse `data.type = 'notification_revoked'` pour que l'appareil retire la
+  // bannière déjà livrée. Ce n'est pas un contenu : aucune préférence ne le
+  // gouverne, il est data-only partout, et il ne porte rien d'affichable.
+
+  describe('notification_revoked — push de contrôle', () => {
+    const revocationPayload = {
+      title: '',
+      body: '',
+      silent: true,
+      data: {
+        type: 'notification_revoked',
+        notificationIds: '64d000000000000000000001,64d000000000000000000002',
+        conversationIds: '507f1f77bcf86cd799439021,',
+      },
+    };
+
+    const apnsEnv = {
+      ENABLE_PUSH_NOTIFICATIONS: 'true',
+      ENABLE_APNS_PUSH: 'true',
+      APNS_KEY_ID: 'test-key-id',
+      APNS_TEAM_ID: 'test-team-id',
+      APNS_KEY_PATH: '/path/to/key.p8',
+      APNS_BUNDLE_ID: 'me.meeshy.app',
+    };
+
+    async function apnsServiceWithPrefs(notificationPrefs: Record<string, unknown> | null) {
+      mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+      const { PushNotificationService } = await getServiceWithEnv(apnsEnv);
+      const service = new PushNotificationService(mockPrisma as any);
+      (mockPrisma as any).userPreferences = {
+        findUnique: jest.fn().mockResolvedValue(notificationPrefs ? { notification: notificationPrefs } : null),
+      };
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+      return service;
+    }
+
+    async function fcmServiceFor(platform: 'android' | 'web' | 'ios') {
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(
+        JSON.stringify({
+          type: 'service_account',
+          project_id: 'meeshy-test',
+          private_key: 'fake-key',
+          client_email: 'test@meeshy.iam.gserviceaccount.com',
+        })
+      );
+      mockFirebaseMessagingSend.mockResolvedValue('msg-id-123');
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_FCM_PUSH: 'true',
+        FIREBASE_ADMIN_CREDENTIALS_PATH: '/fake/creds.json',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+      (mockPrisma as any).userPreferences = { findUnique: jest.fn().mockResolvedValue(null) };
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: `fcm-${platform}`, type: 'fcm', platform, bundleId: null, apnsEnvironment: null },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+      return service;
+    }
+
+    afterEach(() => {
+      delete (mockPrisma as any).userPreferences;
+    });
+
+    it('APNs direct : background, priorité 5, sans alerte ni son ni badge, data intact, SANS expiration courte', async () => {
+      const service = await apnsServiceWithPrefs({ pushEnabled: true });
+
+      const result = await service.sendToUser({ userId: 'user-123', payload: revocationPayload, types: ['apns', 'fcm'], bypassDnd: true });
+
+      expect(result).toEqual([expect.objectContaining({ success: true })]);
+      const sent = mockApnsProviderSend.mock.calls[0][0];
+      expect(sent.pushType).toBe('background');
+      expect(sent.priority).toBe(5);
+      expect(sent.alert).toBeUndefined();
+      expect(sent.sound).toBeUndefined();
+      expect(sent.badge).toBeUndefined();
+      expect(sent.mutableContent).toBeUndefined();
+      expect(sent.contentAvailable).toBe(true);
+      expect(sent.payload).toEqual(revocationPayload.data);
+      // L'expiration à 60 s est celle d'une SONNERIE : une révocation doit
+      // attendre un téléphone hors réseau aussi longtemps qu'APNs le permet.
+      expect(sent.expiry).toBeUndefined();
+    });
+
+    /**
+     * Un TTL BORNÉ, et pas celui de la sonnerie. FCM ne garde que 100 messages
+     * non-collapsibles par appareil hors ligne, puis les jette TOUS : une purge
+     * de post à large audience, sans TTL, évince les pushes de VRAIS messages
+     * en attente et réveille l'appareil hors Doze pour une dé-réaction vieille
+     * de plusieurs semaines. Une révocation qui n'est pas arrivée en quelques
+     * heures n'a plus rien à retirer.
+     */
+    it('FCM Android : DATA-ONLY, priorité haute, aucun bloc notification, TTL borné', async () => {
+      const service = await fcmServiceFor('android');
+
+      await service.sendToUser({ userId: 'user-android', payload: revocationPayload, types: ['apns', 'fcm'], bypassDnd: true });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.notification).toBeUndefined();
+      expect(sentMsg?.data).toEqual(revocationPayload.data);
+      expect(sentMsg?.android).toEqual({ priority: 'high', ttl: NOTIFICATION_REVOCATION_TTL_MS });
+      // Ni le TTL de sonnerie (60 s, trop court pour un téléphone éteint la
+      // nuit), ni l'absence de TTL (~4 semaines de rétention FCM).
+      expect(NOTIFICATION_REVOCATION_TTL_MS).toBeGreaterThan(60_000);
+      expect(NOTIFICATION_REVOCATION_TTL_MS).toBeLessThanOrEqual(24 * 60 * 60_000);
+    });
+
+    it('FCM web : DATA-ONLY — aucun webpush.notification (le SDK afficherait une bannière vide)', async () => {
+      const service = await fcmServiceFor('web');
+
+      await service.sendToUser({ userId: 'user-web', payload: revocationPayload, types: ['apns', 'fcm'], bypassDnd: true });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.notification).toBeUndefined();
+      expect(sentMsg?.webpush?.notification).toBeUndefined();
+      expect(sentMsg?.data).toEqual(revocationPayload.data);
+    });
+
+    it('FCM iOS : background silencieux — content-available seul, sans alert ni mutable-content', async () => {
+      const service = await fcmServiceFor('ios');
+
+      await service.sendToUser({ userId: 'user-ios', payload: revocationPayload, types: ['apns', 'fcm'], bypassDnd: true });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.notification).toBeUndefined();
+      expect(sentMsg?.apns?.headers).toEqual(expect.objectContaining({ 'apns-push-type': 'background', 'apns-priority': '5' }));
+      expect(sentMsg?.apns?.payload?.aps).toEqual({ 'content-available': 1 });
+      expect(sentMsg?.data).toEqual(revocationPayload.data);
+    });
+
+    it('contourne la fenêtre DND — même sans bypassDnd, c’est la CHARGE qui le classe en contrôle', async () => {
+      const service = await apnsServiceWithPrefs({
+        pushEnabled: true,
+        dndEnabled: true,
+        dndStartTime: '00:00',
+        dndEndTime: '23:59',
+      });
+
+      const result = await service.sendToUser({ userId: 'user-123', payload: revocationPayload, types: ['apns'] });
+
+      expect(result).toEqual([expect.objectContaining({ success: true })]);
+      expect(mockApnsProviderSend).toHaveBeenCalledTimes(1);
+    });
+
+    // Décision : `pushEnabled:false` ne bloque PAS une révocation. Elle RETIRE
+    // une bannière livrée quand les pushes étaient actifs (ou depuis un autre
+    // appareil) ; la bloquer laisserait sur l'écran verrouillé une notification
+    // que le serveur a supprimée — l'inverse d'un opt-out.
+    it('part même quand pushEnabled:false — un retrait n’est pas un contenu', async () => {
+      const service = await apnsServiceWithPrefs({ pushEnabled: false });
+
+      const result = await service.sendToUser({ userId: 'user-123', payload: revocationPayload, types: ['apns'] });
+
+      expect(result).toEqual([expect.objectContaining({ success: true })]);
+    });
+
+    it('ne consulte AUCUNE préférence — un push de contrôle n’en lit même pas', async () => {
+      const service = await apnsServiceWithPrefs({ pushEnabled: false });
+
+      await service.sendToUser({ userId: 'user-123', payload: revocationPayload, types: ['apns'] });
+
+      expect((mockPrisma as any).userPreferences.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('un push d’appel silencieux garde, lui, son expiration de sonnerie (60 s)', async () => {
+      const service = await apnsServiceWithPrefs({ pushEnabled: true });
+
+      await service.sendToUser({
+        userId: 'user-123',
+        payload: { title: '', body: '', silent: true, data: { type: 'call_cancel', callId: 'call-1' } },
+        types: ['apns'],
+        bypassDnd: true,
+      });
+
+      const sent = mockApnsProviderSend.mock.calls[0][0];
+      expect(sent.pushType).toBe('background');
+      expect(sent.expiry).toBeGreaterThan(Math.floor(Date.now() / 1000));
     });
   });
 });

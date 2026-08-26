@@ -1,7 +1,10 @@
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../../utils/logger';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
-import type { RetractedNotificationAnnouncer } from '../notifications/retractedNotifications';
+import {
+  retractedNotificationOf,
+  type RetractedNotificationAnnouncer,
+} from '../notifications/retractedNotifications';
 import type { NotificationRetractionPrisma } from './retractMessageNotifications';
 
 /**
@@ -53,11 +56,14 @@ async function retract(
   context: Record<string, unknown>
 ): Promise<number> {
   try {
-    const retracted = await prisma.notification.findMany({
+    const rows = await prisma.notification.findMany({
       where,
-      select: { id: true, userId: true },
+      // `context` (sa `conversationId`), `type` et `delivery` pour la
+      // révocation push : cf. `retractedNotificationOf`.
+      select: { id: true, userId: true, type: true, context: true, delivery: true },
     });
-    if (retracted.length === 0) return 0;
+    if (rows.length === 0) return 0;
+    const retracted = rows.map(retractedNotificationOf);
 
     await prisma.notification.deleteMany({ where });
 
