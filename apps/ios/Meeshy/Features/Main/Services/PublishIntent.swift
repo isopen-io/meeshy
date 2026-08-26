@@ -160,17 +160,18 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             content: content,
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
-            // **E2 (#3887) — texte et média portent DEUX langues distinctes.**
-            // Le TEXTE du document garde la langue DÉCLARÉE (la capsule) : c'est
-            // ce que l'auteur a écrit, dans la langue qu'il a choisie. Le MÉDIA
-            // (l'audio joint) garde SA propre langue sur `mobileTranscription`
-            // ci-dessous — la transcription en porte la langue PARLÉE, et le
-            // Prisme la résout à part (famille audio). Les conflater en un seul
-            // `originalLanguage` faisait un audio wolof retitrer le TEXTE
-            // français d'un document, ou l'inverse. À la différence du vocal
-            // PUR (`audioRecording`), où il n'y a pas de texte : là, la langue
-            // de la transcription EST celle du contenu.
-            originalLanguage: originalLanguage,
+            // **E2 (#3887) — texte et média portent DEUX langues distinctes,
+            // SANS rouvrir la régression 7.4b.** La bascule est le TEXTE :
+            //  • `content == nil` (vocal/média PUR) → il n'y a pas de texte,
+            //    donc la langue PARLÉE de la transcription EST celle du contenu
+            //    et gagne sur la capsule — exactement 7.4b, gardé par
+            //    `ComposerDocumentToolChainTests.test_leCrux…`.
+            //  • `content != nil` (texte + média) → le TEXTE garde la langue
+            //    DÉCLARÉE (la capsule) ; le MÉDIA garde SA propre langue sur
+            //    `mobileTranscription` ci-dessous, résolue à part (famille
+            //    audio). Les conflater faisait un audio wolof retitrer le
+            //    texte français, ou l'inverse.
+            originalLanguage: content == nil ? (transcription?.language ?? originalLanguage) : originalLanguage,
             mentions: mentions,
             location: location,
             discoverabilityPrecision: discoverabilityPrecision,
