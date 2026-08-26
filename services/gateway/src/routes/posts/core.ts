@@ -10,8 +10,15 @@ import { MediaService } from '../../services/MediaService';
 import {
   planAttachmentPublication,
   postMediaFieldsFromAttachment,
-  DEFAULT_PUBLICATION_VISIBILITY,
+  defaultVisibilityForPostType,
 } from '../../services/posts/publishAttachment';
+// Les prédicats PARTAGÉS de protection — les mêmes qui gouvernent la bannière de
+// notification (cycle 125). La protection se lit aux DEUX niveaux : le message
+// parent (`protectedPreview`, où vit une vraie vue unique / flou / éphémère /
+// chiffré) et la pièce jointe (`maskedAttachment`). Les réutiliser, plutôt que
+// de réécrire la règle, garantit qu'un post publié ne fuit pas ce qu'un push
+// masque.
+import { protectedPreview, maskedAttachment } from '../../services/notifications/NotificationService';
 import { canAccessConversation } from '../conversations/utils/access-control';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
@@ -222,9 +229,39 @@ export function registerCoreRoutes(
         select: {
           id: true, messageId: true, mimeType: true, fileUrl: true, thumbnailUrl: true,
           originalName: true, width: true, height: true, duration: true, codec: true, thumbHash: true,
-          message: { select: { conversationId: true, conversation: { select: { identifier: true } } } },
+          // Protection au niveau PIÈCE JOINTE (lue par `maskedAttachment`).
+          isViewOnce: true, isBlurred: true, effectFlags: true,
+          // Protection au niveau MESSAGE PARENT (lue par `protectedPreview`) —
+          // c'est LÀ que vit une vraie vue unique / flou / éphémère / chiffré.
+          // Une garde qui ne lisait que la pièce jointe laissait tout cela
+          // sortir EN CLAIR vers un post.
+          message: { select: {
+            conversationId: true,
+            conversation: { select: { identifier: true } },
+            messageType: true, isViewOnce: true, isBlurred: true, isEncrypted: true,
+            effectFlags: true, expiresAt: true, createdAt: true,
+          } },
         },
       });
+
+      // Le VERDICT de protection, composé par les prédicats partagés aux DEUX
+      // niveaux. `protectedPreview` couvre aussi l'éphémère (refusé, cohérent
+      // avec la bannière) ; `maskedAttachment` couvre la pièce jointe masquée.
+      const mediaProtected =
+        protectedPreview({
+          messageType: attachment?.message?.messageType ?? null,
+          isViewOnce: attachment?.message?.isViewOnce,
+          isBlurred: attachment?.message?.isBlurred,
+          isEncrypted: attachment?.message?.isEncrypted,
+          effectFlags: attachment?.message?.effectFlags,
+          expiresAt: attachment?.message?.expiresAt,
+          createdAt: attachment?.message?.createdAt,
+        }) !== null
+        || maskedAttachment({
+          isViewOnce: attachment?.isViewOnce,
+          isBlurred: attachment?.isBlurred,
+          effectFlags: attachment?.effectFlags,
+        });
 
       // L'appartenance est établie AVANT de planifier : le plan lui-même refuse
       // sans elle, mais lui donner un verdict d'accès faux le rendrait complice.
@@ -243,6 +280,7 @@ export function registerCoreRoutes(
           ? { ...attachment, messageId: attachment.messageId ?? null }
           : null,
         callerIsMemberOfConversation: isMember,
+        mediaIsProtected: mediaProtected,
         target: parsed.data.target,
       });
 
@@ -250,6 +288,9 @@ export function registerCoreRoutes(
         const { reason } = plan;
         if (reason === 'forbidden') {
           return sendForbidden(reply, 'Not a member of this conversation', { code: 'FORBIDDEN' });
+        }
+        if (reason === 'protected-media') {
+          return sendBadRequest(reply, 'This media is protected and cannot be published', { code: 'PROTECTED_MEDIA' });
         }
         if (reason === 'unpublishable-media') {
           return sendBadRequest(reply, 'This media cannot be published', { code: 'UNPUBLISHABLE_MEDIA' });
@@ -272,10 +313,14 @@ export function registerCoreRoutes(
         }),
       });
 
+      const postType = plan.plan.postType;
       const post = await postService.createPost(
         {
-          type: plan.plan.postType,
-          visibility: parsed.data.visibility ?? DEFAULT_PUBLICATION_VISIBILITY,
+          type: postType,
+          // La visibilité par défaut SUIT le type : une STORY tombe sur FRIENDS
+          // (parité avec `POST /posts`), tout le reste sur PUBLIC. Une constante
+          // unique rendait toute story publiée depuis un partage PUBLIQUE.
+          visibility: parsed.data.visibility ?? defaultVisibilityForPostType(postType),
           content: parsed.data.content
             ? SecuritySanitizer.sanitizeText(parsed.data.content)
             : undefined,
@@ -284,7 +329,93 @@ export function registerCoreRoutes(
         authContext.registeredUser.id,
       );
 
-      return sendSuccess(reply, post, { message: 'Published' });
+      const postId = (post as any).id as string;
+      const postContent = (post as any).content as string | undefined;
+
+      // Le Prisme couvre AUSSI la légende d'un média publié — sans ce
+      // déclenchement, le texte d'un REEL/POST from-attachment n'était jamais
+      // traduit. Parité stricte avec `POST /posts` : STORY exclue (son `content`
+      // est déjà traduit par le pipeline audience-driven du service), langue
+      // source = celle persistée par `createPost` (SSOT), fire-and-forget.
+      const shouldTranslateContent = Boolean(parsed.data.content) && postType !== 'STORY';
+      if (shouldTranslateContent) {
+        try {
+          PostTranslationService.shared.translatePost(
+            postId,
+            parsed.data.content,
+            (post as any).originalLanguage,
+            authContext.registeredUser.id,
+          ).catch((err) => fastify.log.warn({ err }, '[POST /posts/from-attachment]: translate post failed'));
+        } catch {
+          // PostTranslationService not initialized — skip silently
+        }
+      }
+
+      // La publication n'est plus SILENCIEUSE : elle résout les mentions du
+      // contenu et diffuse en temps réel, exactement comme `POST /posts`. La
+      // charge de from-attachment n'a pas de canal `mentions` déclaré — seul le
+      // TEXTE de la légende nomme, d'où `declared: undefined`.
+      const createdMentions = await resolvePostMentions({
+        prisma,
+        mentionService,
+        notificationService: fastify.notificationService,
+        post: {
+          id: postId,
+          authorId: authContext.registeredUser.id,
+          type: postType as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
+          visibility: (post as any).visibility as string | undefined,
+          visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
+        },
+        content: postContent,
+        declared: undefined,
+        onError: (err: unknown) => {
+          fastify.log.error(`[POST /posts/from-attachment] post mention reconcile failed: ${err}`);
+        },
+      });
+
+      // Le jeu FINAL, relu APRÈS l'écriture des lignes — même raison qu'à
+      // `POST /posts` : `createPost` a chargé sa relation avant que ces lignes
+      // n'existent, la servir telle quelle rendrait `mentions: []` par
+      // construction.
+      const references = await finalReferences(postId, createdMentions, (err: unknown) => {
+        fastify.log.error(`[POST /posts/from-attachment] post reference reload failed: ${err}`);
+      });
+
+      const socialEvents = fastify.socialEvents;
+      if (socialEvents) {
+        // Charge utile d'AUDIENCE : neutre, sans les silencieuses — même règle
+        // que `POST /posts`.
+        const broadcastReferences = references && projectReferencesForViewer({
+          references,
+          authorId: authContext.registeredUser.id,
+          viewerId: undefined,
+        });
+        const broadcastPost = withMentions(
+          graftReferences(
+            hoistLocation(hoistTrackingLinks(post)) as unknown as Record<string, unknown>,
+            broadcastReferences
+          ),
+          WIRE_BROADCAST
+        ) as unknown as Post;
+        if (postType === 'STORY') {
+          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts/from-attachment]: broadcast story created failed'));
+        } else if (postType === 'STATUS') {
+          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts/from-attachment]: broadcast status created failed'));
+        } else {
+          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts/from-attachment]: broadcast post created failed'));
+        }
+      }
+
+      // La réponse va à l'AUTEUR, et lui voit tout — y compris les silencieuses
+      // qu'il vient de poser (parité avec `POST /posts`).
+      return sendSuccess(
+        reply,
+        withMentions(
+          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), references),
+          wireReaderFromRequest(request as UnifiedAuthRequest)
+        ),
+        { message: 'Published' }
+      );
     } catch (error) {
       return sendInternalError(reply, 'Failed to publish attachment', { code: 'PUBLISH_FAILED' });
     }

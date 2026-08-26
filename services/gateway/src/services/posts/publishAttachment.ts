@@ -54,6 +54,7 @@ export type PublishRefusal =
   | 'attachment-not-found'
   | 'attachment-not-in-a-message'
   | 'forbidden'
+  | 'protected-media'
   | 'unpublishable-media';
 
 export type PublishPlan = {
@@ -72,9 +73,21 @@ export type PublishPlan = {
 export const planAttachmentPublication = (input: {
   readonly attachment: PublishableAttachment | null;
   readonly callerIsMemberOfConversation: boolean;
+  /**
+   * Verdict de protection, calculé par l'APPELANT — seul à interroger la base.
+   *
+   * La protection d'un média se lit à DEUX niveaux qui ne se suivent pas : le
+   * MESSAGE parent (une vraie vue unique / flou / éphémère / chiffré y est
+   * rangée par `MessageProcessor.saveMessage`) ET la PIÈCE JOINTE (ses propres
+   * `isViewOnce` / `isBlurred` / `effectFlags`). Le plan reçoit donc le VERDICT,
+   * pas les colonnes : les prédicats partagés `protectedPreview` +
+   * `maskedAttachment` (NotificationService) le composent, et ne peuvent pas
+   * diverger de la bannière de notification qui les emploie déjà.
+   */
+  readonly mediaIsProtected: boolean;
   readonly target?: PublicationTarget;
 }): { readonly ok: true; readonly plan: PublishPlan } | { readonly ok: false; readonly reason: PublishRefusal } => {
-  const { attachment, callerIsMemberOfConversation, target } = input;
+  const { attachment, callerIsMemberOfConversation, mediaIsProtected, target } = input;
 
   if (!attachment) return { ok: false, reason: 'attachment-not-found' };
 
@@ -87,6 +100,13 @@ export const planAttachmentPublication = (input: {
   // publiable » à un tiers lui confirmerait déjà l'existence de la pièce jointe
   // et sa nature.
   if (!callerIsMemberOfConversation) return { ok: false, reason: 'forbidden' };
+
+  // Un média PROTÉGÉ ne se publie jamais — vue unique, flou, éphémère et
+  // chiffrement disent tous « ce contenu ne sort pas de cette conversation ».
+  // Le refus vit APRÈS l'appartenance (un non-membre reçoit toujours `forbidden`
+  // d'abord, pour ne rien divulguer) et AVANT la déduction de format (inutile
+  // de raisonner sur un type qu'on ne publiera pas).
+  if (mediaIsProtected) return { ok: false, reason: 'protected-media' };
 
   const fallback = defaultPublicationTargetFor(attachment.mimeType);
   if (!fallback) return { ok: false, reason: 'unpublishable-media' };
@@ -133,3 +153,15 @@ export const postMediaFieldsFromAttachment = (input: {
 
 /** Visibilité par défaut d'une publication née d'un partage. */
 export const DEFAULT_PUBLICATION_VISIBILITY: PostVisibility = 'PUBLIC';
+
+/**
+ * Visibilité par défaut d'une publication née d'un partage, SELON son type.
+ *
+ * Une STORY expire en 24 h et s'adresse d'abord au cercle proche : la publier
+ * PUBLIQUE par défaut la sortirait de ce cercle sans que l'auteur l'ait
+ * demandé. Elle tombe donc sur FRIENDS, exactement comme `POST /posts`. Tout
+ * autre type reste PUBLIC. `DEFAULT_PUBLICATION_VISIBILITY` demeure pour les
+ * appelants qui veulent la constante nue.
+ */
+export const defaultVisibilityForPostType = (postType: PostType): PostVisibility =>
+  postType === 'STORY' ? 'FRIENDS' : 'PUBLIC';

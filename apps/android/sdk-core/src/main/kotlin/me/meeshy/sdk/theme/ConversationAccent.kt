@@ -2,8 +2,6 @@ package me.meeshy.sdk.theme
 
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiParticipant
-import me.meeshy.sdk.theme.DynamicColorGenerator.ConversationContext
-import me.meeshy.sdk.theme.DynamicColorGenerator.ConversationType
 
 /**
  * Deterministic accent [DynamicColorGenerator.ColorPalette] for a conversation, via the
@@ -11,20 +9,12 @@ import me.meeshy.sdk.theme.DynamicColorGenerator.ConversationType
  * `secondary` heat-gradient tint (parity iOS `conversation.colorPalette`). Computed once
  * so a row consuming both hues never re-derives the palette.
  */
-fun ApiConversation.accentColorPalette(): DynamicColorGenerator.ColorPalette {
-    val context = ConversationContext(
-        name = title ?: identifier ?: id,
-        type = when (type.lowercase()) {
-            "group" -> ConversationType.GROUP
-            "community" -> ConversationType.COMMUNITY
-            "channel" -> ConversationType.CHANNEL
-            "bot" -> ConversationType.BOT
-            else -> ConversationType.DIRECT
-        },
-        memberCount = memberCount,
-    )
-    return DynamicColorGenerator.colorFor(context)
-}
+fun ApiConversation.accentColorPalette(): DynamicColorGenerator.ColorPalette =
+    // Route the wire `type` through the shared WIRE_TYPE_TO_CONTEXT_TYPE table so that
+    // `public`/`global`/`broadcast` collapse onto the COMMUNITY base color, exactly as
+    // web (`conversationAccentPalette`) and iOS (`MeeshyConversation.computeColorPalette`)
+    // do — a local `when { … else -> DIRECT }` served those three the DIRECT color.
+    DynamicColorGenerator.paletteForWire(type = type, memberCount = memberCount)
 
 /** Deterministic accent color (hex) for a conversation, via the shared color algorithm. */
 fun ApiConversation.accentHex(): String = accentColorPalette().primary
