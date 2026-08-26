@@ -256,3 +256,42 @@ Net : **+554 / −74**.
    `likePost`/`bookmarkPost` ; (c) `isProgrammaticScroll` ; (d) les 3 copies
    d'`isLoadingReactions` ; (e) `buildNativeMessageMenu`, découvrabilité du fil
    de réponses, cibles tactiles 44 pt d'`InteractiveProgressBar`.
+
+---
+
+## 9. Clôture — MERGÉE
+
+**PR [#3526](https://github.com/isopen-io/meeshy/pull/3526) · mergée le 2026-08-26 · `main` = `5741414e`.**
+
+**Verdict CI, suite COMPLÈTE sur la tête `36c2d31d`** : **8449 passés / 0 échec /
+5 sautés sur 8454** — check **`Build app + tests unitaires`**,
+`COMPILE_ONLY=false`, `"result": "Passed"`, `testFailures: []`, simulateur
+iPhone 16 Pro / iOS 18.2. Le **NOM** du check a été relu avant sa couleur
+(leçon 240i (c), le piège qui s'est refermé trois fois de suite) : c'est bien la
+suite qui a tourné, pas la compile seule.
+
+**Atterrissage vérifié EN ENTIER sur `main`** (leçon 236i) : la source unique et
+ses quatre entrées, les 11 hôtes convertis, la garde étendue, les 3 suites
+réalignées, l'analyse et le plan. Balayage post-merge : les **seules**
+occurrences de `String(format: "%…d:%02d")` restant sous `apps/ios/Meeshy` sont
+les deux attendues — la citation en doc-comment de `LocalizedNumber` (mangée par
+le dépouilleur de la garde) et `NotificationSettingsView`, allowlistée nommément.
+
+### Les deux doutes assumés sont LEVÉS
+
+Ils avaient été nommés au moment de pousser, faute de toolchain Swift ici. Les
+inscrire résolus évite qu'une itération suivante les re-porte comme risques :
+
+1. **Ambiguïté de surcharge** entre `duration(seconds: Int)` et
+   `duration(seconds: TimeInterval)` sur un littéral entier — Swift élit `Int`
+   (type par défaut du littéral). **La compile le confirme.**
+2. **`Duration.UnitsFormatStyle` avec `zeroValueUnits: .hide` sur une durée
+   NULLE** rend bien la plus petite unité autorisée, jamais la chaîne vide —
+   `test_spokenDuration_zeroIsStillSpoken` est vert. La minuterie de la caméra
+   et le pill d'appel, qui commencent tous deux à zéro, annoncent donc leur
+   mesure et non leur seul libellé.
+
+> **Un doute qu'on publie doit être SOLDÉ dès qu'il est mesuré.** Le laisser
+> dans l'analyse sous sa forme interrogative, une fois la CI passée, c'est
+> fabriquer le report que la leçon 286 décrit : la DESCRIPTION d'un risque se
+> propage d'itération en itération, jamais sa vérification.
