@@ -7,6 +7,8 @@
     <string name="stories_viewer_next">Next story</string>
     <string name="stories_viewer_previous">Previous story</string>
     <string name="stories_translated">Translated</string>
+    <string name="stories_reposted">Reposted</string>
+    <string name="stories_reposted_from">Reposted from @%1$s</string>
     <string name="stories_empty">No story to show</string>
     <string name="stories_viewers_title">Views</string>
     <string name="stories_viewers_count">%1$d views</string>

@@ -2,6 +2,49 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-26 **the story viewer shows a reposted story's locked attribution badge** (slice
+> `story-viewer-repost-attribution`, feature-parity E. Stories — the "Repost flow: clone source story + locked
+> attribution badge" line, now `[~]`: the READER half ships; the AUTHOR clone half remains). Before this, the viewer
+> header rendered only `state.authorName` — a story reposted from someone else looked identical to an original, dropping
+> the cross-client attribution iOS shows (`StoryViewerView+Sidebar`: repost glyph + `@handle` after the name, no "via").
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3862 + #3861, both gateway PRs (presence/log
+> hygiene, broadcast Prisme) — neither a `claude/apps/android/<slice-id>` routine slice, no `apps/android` collision,
+> nothing of mine to merge. Prior slice (`story-element-context-menu`) is on `main` (#3859, HEAD `3b051d4e`). Branched
+> off freshly-fetched `origin/main`; scope verified with `git diff --cached --name-only origin/main` (the NOTES lesson).
+>
+> **The fix — one wire field + one pure resolver + a mapper + VM projection + Compose glue.** (1) `StoryItem` gains
+> optional `repostAuthorUsername` (mirrors iOS; old payloads decode null). (2) `StoryGrouping.toStoryItem` (sdk-core)
+> populates it from `repostOf.author.username` (blank→null). (3) Pure `StoryRepostAttribution.resolve(...)`
+> (`:feature:stories`) → `null` for a non-repost (no glyph) else `StoryRepostAttribution(handle)` where `handle` is the
+> first NON-blank of username→name, trimmed (`null` handle = glyph only). Improves on iOS's `??`, which renders a lone
+> `@` for a present-but-empty username. (4) `StorySlideView.repostAttribution` resolved once at projection time
+> (per-slide — each slide is its own story, only some are reposts). (5) Header Compose glue: the author `Text` becomes a
+> `Row` holding the (ellipsised, weighted) name + the repost glyph (`Icons.Filled.Repeat`) + `@handle`, the pair
+> carrying a merged a11y `contentDescription` (`stories_reposted_from`/`stories_reposted`, EN/FR/ES/PT).
+>
+> **Tests: +15** (10 pure `StoryRepostAttributionTest` + 3 `StoryGroupingTest` mapping + 2 `StoryViewerViewModelTest`
+> projection). Non-tautological: the resolver tests assert handle PREFERENCE (username over name, blank→fallback, both
+> blank→null-handle-but-still-a-repost) not a restated constant; the VM tests drive a wire `ApiPost` with
+> `repostOf = ApiRepostOf(...)` through the real projection and assert `state.current?.repostAttribution`.
+> **Mutation-RED-proven**: neutering the repost gate (`if (repostOfId.isNullOrBlank())` → `if (false)`) reddens EXACTLY
+> the 4 non-repost tests, the handle-preference tests staying green.
+>
+> **SDK bootstrap — `dl.google.com` 200; the documented android-37 copy→patch (cp android-37.0 → android-37, patch
+> `source.properties` ApiLevel 37.0→37, keep BOTH dirs).**
+>
+> **Verified**: targeted `StoryRepostAttributionTest` + `StoryViewerViewModelTest` + `StoryGroupingTest` green
+> (BUILD SUCCESSFUL 2m47s), then the mutation proof, then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, the CI-mirror gate) — **BUILD SUCCESSFUL in 4m 49s** (973 tasks). Reviewer PASS. Diff is `apps/android` only (14 files: 1 new
+> resolver + 1 new test + model field + mapper + VM/screen + VM-test + 4 strings + tracking docs). Verdict: **PASS** —
+> a pure resolver + wire mapper reused by a Compose glue; behavioural tests through the public API tied to the real
+> mapper/projection; no production logic outside `apps/android`.
+>
+> **Next**: §E "Repost flow" AUTHOR half (reposting someone's story clones its slides into the composer carrying
+> `repostOfId`), OR the next-highest unchecked §E item — "Draft save/restore … lost-media detection" (a clean pure
+> lost-media resolver), or the offline-publish `[~]` remainders (preview-before-publish, RAW background publish-all).
+> Scout `feature-parity.md` read-only before branching.
+
 > On 2026-08-26 **the composer gathers every per-element action behind ONE long-press context menu** (slice
 > `story-element-context-menu`, feature-parity E. Stories — the "Multi-element context menu" line, its LAST open
 > piece → the whole line is now `[x]`). Before this, an element's edit/duplicate/reorder/delete lived as scattered

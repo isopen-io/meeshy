@@ -4005,7 +4005,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       +21 tests (8 deck reducer/invariant + 5 draft serialisation + 5 VM intent/publish-resolution + 3 boundary).
       **Pending**: the AUDIO half (mark one audio track per slide as background → `audioPlayerObjects[].isBackground`),
       blocked until the composer gains an audio-track authoring surface.
-- [ ] Repost flow: clone source story + locked attribution badge
+- [~] Repost flow: clone source story + locked attribution badge — **reader-side locked
+      attribution badge done** (slice `story-viewer-repost-attribution`, 2026-08-26): the story
+      viewer header now shows, after the author's name, the repost glyph + `@handle` (no "via" —
+      the icon says it), exactly gating like iOS `StoryViewerView+Sidebar` (glyph on
+      `repostOfId != null`; handle on `repostAuthorUsername ?? repostAuthorName`). Pure
+      `StoryRepostAttribution.resolve(...)` returns `null` for a non-repost (no glyph) else a
+      `StoryRepostAttribution(handle)` where `handle` is the first NON-blank of
+      username→name, trimmed (improving on iOS's `??`, which renders a lone `@` for a
+      present-but-empty username). Wired: `StoryItem.repostAuthorUsername` (new, optional wire
+      field), `StoryGrouping.toStoryItem` populates it from `repostOf.author.username`,
+      `StorySlideView.repostAttribution` resolved once at projection, header Compose glue
+      (merged a11y label `stories_reposted_from`/`stories_reposted`, EN/FR/ES/PT). +15 tests
+      (10 pure `StoryRepostAttributionTest` + 3 `StoryGroupingTest` mapping + 2
+      `StoryViewerViewModelTest` projection). **Pending**: the AUTHOR clone half (reposting
+      someone's story clones its slides into the composer carrying `repostOfId`).
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
       reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes

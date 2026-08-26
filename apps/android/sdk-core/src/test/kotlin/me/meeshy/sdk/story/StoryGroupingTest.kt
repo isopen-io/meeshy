@@ -3,6 +3,7 @@ package me.meeshy.sdk.story
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiRepostOf
 import org.junit.Test
 import java.time.Instant
 
@@ -97,6 +98,41 @@ class StoryGroupingTest {
             storyPost("p2", "u1", createdAt = isoAgo(2), viewed = false),
         ).toStoryGroups(nowMillis = now)
         assertThat(groups[0].hasUnviewed()).isTrue()
+    }
+
+    @Test
+    fun `a repost projects the source author's username as the attribution handle`() {
+        val post = storyPost("p1", "u1", createdAt = isoAgo(1)).copy(
+            repostOf = ApiRepostOf(
+                id = "src-story",
+                author = ApiAuthor(id = "orig", username = "alice", displayName = "Alice W."),
+            ),
+        )
+        val item = post.toStoryItem()
+        assertThat(item.repostOfId).isEqualTo("src-story")
+        assertThat(item.repostAuthorUsername).isEqualTo("alice")
+        assertThat(item.repostAuthorName).isEqualTo("Alice W.")
+    }
+
+    @Test
+    fun `a non-repost projects null repost attribution fields`() {
+        val item = storyPost("p1", "u1", createdAt = isoAgo(1)).toStoryItem()
+        assertThat(item.repostOfId).isNull()
+        assertThat(item.repostAuthorUsername).isNull()
+        assertThat(item.repostAuthorName).isNull()
+    }
+
+    @Test
+    fun `a repost whose source author has a blank username projects a null username`() {
+        val post = storyPost("p1", "u1", createdAt = isoAgo(1)).copy(
+            repostOf = ApiRepostOf(
+                id = "src-story",
+                author = ApiAuthor(id = "orig", username = "   ", displayName = "Alice W."),
+            ),
+        )
+        val item = post.toStoryItem()
+        assertThat(item.repostAuthorUsername).isNull()
+        assertThat(item.repostAuthorName).isEqualTo("Alice W.")
     }
 
     @Test

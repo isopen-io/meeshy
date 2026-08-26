@@ -7,6 +7,8 @@
     <string name="stories_viewer_next">Historia siguiente</string>
     <string name="stories_viewer_previous">Historia anterior</string>
     <string name="stories_translated">Traducido</string>
+    <string name="stories_reposted">Republicado</string>
+    <string name="stories_reposted_from">Republicado de @%1$s</string>
     <string name="stories_empty">No hay ninguna historia</string>
     <string name="stories_viewers_title">Vistas</string>
     <string name="stories_viewers_count">%1$d vistas</string>
