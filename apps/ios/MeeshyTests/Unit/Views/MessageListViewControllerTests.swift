@@ -69,6 +69,52 @@ final class MessageListViewControllerTests: XCTestCase {
         XCTAssertNotNil(vc.view) // RETRAIT FOCAL iOS (2026-08-18) : plus de pass — témoin no-crash
     }
 
+    // MARK: - Visée vérifiée (ScrollToMessageSettleLaw)
+
+    /// Un saut vers un message PRÉSENT arme une visée vérifiée, et la visée
+    /// se SOLDE : au plus tard via le filet du no-op (`scrollToItem` déjà à
+    /// l'offset cible ne livre jamais `scrollViewDidEndScrollingAnimation`),
+    /// la loi tranche `.settled` et vide la cible. Une cible qui resterait
+    /// pendante re-viserait par-dessus le prochain geste.
+    func test_scrollToMessage_targetPresent_settlesAndClearsPendingTarget() async throws {
+        let store = try await makeSeededStore()
+        let vc = makeSUT(store: store)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = vc
+        window.makeKeyAndVisible()
+        vc.view.layoutIfNeeded()
+
+        // L'apply diffable du premier snapshot peut se poser au tour suivant —
+        // on attend la matérialisation de la cellule avant de viser (borné).
+        for _ in 0..<20 where vc.focalCollectionViewForTesting?.numberOfItems(inSection: 0) == 0 {
+            try await Task.sleep(for: .milliseconds(25))
+        }
+
+        vc.scrollToMessage(localId: "m1")
+        XCTAssertNotNil(vc.scrollSettleTargetForTesting,
+            "un saut vers une cible présente doit armer la visée vérifiée")
+
+        // Filet du no-op à 0.4 s — on attend au-delà puis on vérifie le solde.
+        try await Task.sleep(for: .milliseconds(700))
+        XCTAssertNil(vc.scrollSettleTargetForTesting,
+            "la visée doit se solder (settled/giveUp) — jamais rester pendante")
+    }
+
+    /// Cible ABSENTE du snapshot : aucune visée armée (le chemin parent
+    /// jumpToQuotedMessage reprend la main avec son propre trigger).
+    func test_scrollToMessage_targetAbsent_doesNotArmPendingTarget() throws {
+        let store = try makeEmptyStore()
+        let vc = makeSUT(store: store)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = vc
+        window.makeKeyAndVisible()
+        vc.view.layoutIfNeeded()
+
+        vc.scrollToMessage(localId: "does-not-exist")
+
+        XCTAssertNil(vc.scrollSettleTargetForTesting)
+    }
+
     // MARK: - Helpers
 
     private func makeEmptyStore() throws -> MessageStore {
