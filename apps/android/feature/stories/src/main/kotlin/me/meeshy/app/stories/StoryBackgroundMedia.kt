@@ -43,27 +43,25 @@ data class StoryBackgroundMedia(
      * looping. Emitting the author's `loop = false` onto an image would be a wire value no
      * reader honours, so an image always publishes `loop = true`.
      *
-     * [framing] (the author's pan/zoom) is carried as normalised `x`/`y`/`scale` **only for
-     * an image** — the reader's image branch converts these back via
-     * [StoryBackgroundObjectTransform.from], closing the author→reader loop; its video branch
-     * keeps IDENTITY (a scoped-out follow-up), so a video publishes the bare centred defaults
-     * rather than a framing no client would honour.
+     * [framing] (the author's pan/zoom) is carried as normalised `x`/`y`/`scale` for **both an
+     * image and a video** — each client's reader converts these back via
+     * [StoryBackgroundObjectTransform.from] (the image branch and, since the prior slice, the
+     * video branch alike), closing the author→reader loop. An unframed background carries the
+     * neutral [StoryBackgroundFraming.IDENTITY], which serialises to the bare centred defaults.
      */
-    fun toMediaObject(): StoryMediaObject {
-        val framed = if (isVideo) StoryBackgroundFraming.IDENTITY else framing
-        return StoryMediaObject(
+    fun toMediaObject(): StoryMediaObject =
+        StoryMediaObject(
             id = mediaId,
             postMediaId = mediaId,
             mediaURL = url,
             mediaType = if (isVideo) "video" else "image",
             placement = "media",
-            x = framed.x,
-            y = framed.y,
-            scale = framed.scale,
+            x = framing.x,
+            y = framing.y,
+            scale = framing.scale,
             isBackground = true,
             loop = if (isVideo) loop else true,
             intrinsicDuration = publishableDuration?.takeIf { isVideo },
             duration = publishableDuration?.takeIf { isVideo },
         )
-    }
 }
