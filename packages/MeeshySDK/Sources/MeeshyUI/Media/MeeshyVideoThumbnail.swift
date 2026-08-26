@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import MeeshySDK
+import os
 
 // MARK: - Meeshy Video Thumbnail
 //
@@ -170,10 +171,14 @@ public struct MeeshyVideoThumbnail: View {
         let resolvedUrl = url.absoluteString
         let thumbKey = "thumb:\(resolvedUrl)"
 
-        // 1. Cache hit -> use immediately
+        // 1. Poster persisté — relu par DISQUE (`cachedFileURL`). `cachedData`
+        //    ne voyait que la NSCache mémoire, vide à chaque relance : le
+        //    poster était ré-extrait (1 Mo réseau) à chaque ouverture froide.
+        //    Décodé borné (`maxPixelSize`) : la clé est partagée avec le poster
+        //    plein écran, qui peut y avoir écrit une frame 1080p.
         let thumbStore = await CacheCoordinator.shared.thumbnails
-        if let cachedData = thumbStore.cachedData(for: thumbKey),
-           let image = UIImage(data: cachedData) {
+        if thumbStore.cachedFileURL(for: thumbKey) != nil,
+           let image = await thumbStore.image(for: thumbKey, maxPixelSize: Self.persistedPosterDecodeSize) {
             withAnimation(.easeIn(duration: 0.15)) { self.thumbnail = image }
             return
         }
@@ -182,37 +187,61 @@ public struct MeeshyVideoThumbnail: View {
         defer { isLoading = false }
 
         do {
-            var request = URLRequest(url: url)
-            request.setValue("bytes=0-1048575", forHTTPHeaderField: "Range")
-            request.timeoutInterval = 15
-
-            let (data, _) = try await URLSession.shared.data(for: request)
-
-            let tempURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent(UUID().uuidString)
-                .appendingPathExtension("mp4")
-            try data.write(to: tempURL)
-            defer { try? FileManager.default.removeItem(at: tempURL) }
-
-            let asset = AVURLAsset(url: tempURL)
-            let generator = AVAssetImageGenerator(asset: asset)
-            generator.appliesPreferredTrackTransform = true
-            generator.maximumSize = CGSize(width: 300, height: 300)
-
-            let time = CMTime(seconds: 0.1, preferredTimescale: 600)
-            let (cgImage, _) = try await generator.image(at: time)
-            let image = UIImage(cgImage: cgImage)
-
+            let image = try await Self.extractRemoteFirstFrame(from: url)
             if let jpegData = image.jpegData(compressionQuality: 0.7) {
-                await CacheCoordinator.shared.thumbnails.store(jpegData, for: thumbKey)
+                await thumbStore.store(jpegData, for: thumbKey)
             }
-
-            await MainActor.run {
-                withAnimation(.easeIn(duration: 0.15)) { self.thumbnail = image }
-            }
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.15)) { self.thumbnail = image }
         } catch {
-            // Placeholder remains visible
+            // Placeholder remains visible — but the reason is worth a trace: a
+            // 401 on protected media and a flaky link are two different bugs.
+            Logger.media.debug("Video poster range extraction failed for \(resolvedUrl, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// Plus grand côté (px) auquel un poster persisté est décodé pour une
+    /// surface de liste/bulle — borne la mémoire quand la clé `thumb:<url>`
+    /// porte une frame de grade plein écran.
+    private static let persistedPosterDecodeSize: CGFloat = 600
+
+    // MARK: - Remote first-frame extraction (atom)
+
+    /// Première image d'une vidéo DISTANTE, sans la télécharger : un `GET`
+    /// partiel (`Range` sur le premier Mo, où vit la première keyframe) que
+    /// `AVAssetImageGenerator` décode en matériel. Atome SDK : aucune
+    /// politique réseau, aucune persistance — l'appelant décide QUAND l'appeler
+    /// et sous QUELLE clé conserver le résultat (ici `thumb:<url>` ; côté app,
+    /// la cascade de poster plein écran, à côté de `VideoAvailabilityResolver`).
+    ///
+    /// `maxDimension` borne le plus grand côté de la frame rendue ; `timeout`
+    /// borne l'attente réseau — une surface qui affiche un fond en attendant
+    /// n'a aucune raison de patienter quinze secondes.
+    public nonisolated static func extractRemoteFirstFrame(
+        from url: URL,
+        maxDimension: CGFloat = 300,
+        timeout: TimeInterval = 15
+    ) async throws -> UIImage {
+        var request = URLRequest(url: url)
+        request.setValue("bytes=0-1048575", forHTTPHeaderField: "Range")
+        request.timeoutInterval = timeout
+
+        let (data, _) = try await URLSession.shared.data(for: request)
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("mp4")
+        try data.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let asset = AVURLAsset(url: tempURL)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: maxDimension, height: maxDimension)
+
+        let time = CMTime(seconds: 0.1, preferredTimescale: 600)
+        let (cgImage, _) = try await generator.image(at: time)
+        return UIImage(cgImage: cgImage)
     }
 
     // MARK: - Duration formatting

@@ -47,11 +47,17 @@ struct FullscreenAVPlayerLayerView: UIViewRepresentable {
     let player: AVPlayer
     let gravity: AVLayerVideoGravity
     var configurePip: Bool = true
+    /// Première frame COMPOSÉE (`AVPlayerLayer.isReadyForDisplay`, KVO) — le
+    /// signal sur lequel la galerie retire son poster net. Jamais
+    /// `currentItem` (`tasks/lessons.md` § 24) ; défaut `nil`, call sites intacts.
+    var onReadyForDisplay: (() -> Void)? = nil
 
     func makeUIView(context: Context) -> FullscreenPlayerUIView {
         let view = FullscreenPlayerUIView()
         view.playerLayer.videoGravity = gravity
         view.playerLayer.player = player
+        view.onReadyForDisplay = onReadyForDisplay
+        view.armReadinessObserver()
         if configurePip {
             SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
         }
@@ -59,6 +65,7 @@ struct FullscreenAVPlayerLayerView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: FullscreenPlayerUIView, context: Context) {
+        uiView.onReadyForDisplay = onReadyForDisplay
         uiView.updatePlayer(player)
         uiView.updateGravity(gravity)
         if configurePip {
@@ -73,6 +80,8 @@ struct FullscreenAVPlayerLayerView: UIViewRepresentable {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
         let playerLayer = AVPlayerLayer()
+        var onReadyForDisplay: (() -> Void)?
+        private var readinessObserver: NSKeyValueObservation?
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -90,6 +99,16 @@ struct FullscreenAVPlayerLayerView: UIViewRepresentable {
         func updatePlayer(_ player: AVPlayer) {
             guard playerLayer.player !== player else { return }
             playerLayer.player = player
+            armReadinessObserver()
+        }
+
+        /// `.initial` relit la valeur à l'enregistrement ; le rappel arrive sur
+        /// le fil d'AVFoundation → sauté sur le main actor.
+        func armReadinessObserver() {
+            readinessObserver = playerLayer.observe(\.isReadyForDisplay, options: [.new, .initial]) { [weak self] layer, _ in
+                guard layer.isReadyForDisplay else { return }
+                Task { @MainActor in self?.onReadyForDisplay?() }
+            }
         }
 
         func updateGravity(_ gravity: AVLayerVideoGravity) {

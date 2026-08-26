@@ -1865,11 +1865,12 @@ struct ConversationView: View {
                     focalShareFileItem = FocalShareFileItem(url: url)
                 },
                 onMediaTap: { attachment in
-                    // User tapped a media — opportunistically warm the cache,
-                    // then stage the attachment for the gallery presenter.
-                    if let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-                        Task { _ = try? await CacheCoordinator.shared.images.data(for: resolved) }
-                    }
+                    // Tap sur un média : on préchauffe ce que le plein écran
+                    // AFFICHE — la variante élue d'une image, le poster net
+                    // d'une vidéo déjà sur l'appareil — pas l'original
+                    // (`fileUrl`), sinon les deux se téléchargeaient ; puis on
+                    // met la pièce jointe en scène pour la galerie.
+                    GalleryPrewarm.warm(attachment)
                     scrollState.galleryStartAttachment = attachment
                 },
                 onConsumeViewOnce: { messageId, completion in

@@ -58,6 +58,14 @@ public struct APIPostMedia: Codable, Sendable {
     public let transcription: APIAttachmentTranscription?
     public let translations: [String: APIAttachmentTranslation]?
 
+    /// Variantes WebP responsive (D4). `PostMedia` ne les porte pas encore côté
+    /// gateway (le schéma Prisma n'a la colonne que sur `MessageAttachment`) :
+    /// déclarées ici pour que le jour où le fil les sert, iOS ne les jette pas
+    /// en silence — le précédent exact de `language` / `variantOf` ci-dessus.
+    /// Décodage tolérant par élément (`LossyImageVariants`) : une variante
+    /// partielle ne fait pas DISPARAÎTRE le post porteur.
+    @LossyImageVariants public var imageVariants: [MeeshyImageVariant]?
+
     public var mediaType: FeedMediaType {
         // Single source of truth for the mime → family dispatch.
         // See `AttachmentKind` in MeeshySDK/Models.
@@ -414,7 +422,8 @@ extension APIPostMedia {
             fileName: originalName ?? fileName,
             fileSize: fileSize.map { formatFileSize($0) },
             transcription: transcription,
-            translatedAudios: translatedAudios
+            translatedAudios: translatedAudios,
+            imageVariants: imageVariants
         )
     }
 }

@@ -30,7 +30,11 @@ public struct FullscreenImageView: View {
                 // l'image plein écran a presque toujours déjà été téléchargée par
                 // l'avatar/la bannière — la rouvrir doit être un hit disque, pas
                 // un nouveau téléchargement.
-                CachedAsyncImage(url: urlString) {
+                // autoLoad: true — ouvrir plein écran est un geste manuel (§14.1) :
+                // la politique réseau ambiante (Low Data / Wi-Fi seul) ne doit
+                // jamais laisser le viewer sur un spinner infini quand l'image
+                // n'est pas encore sur l'appareil.
+                CachedAsyncImage(url: urlString, autoLoad: true) {
                     ProgressView()
                         .tint(Color(hex: accentColor))
                 }

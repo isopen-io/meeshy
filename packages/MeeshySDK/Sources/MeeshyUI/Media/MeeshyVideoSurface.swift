@@ -25,6 +25,12 @@ internal struct MeeshyVideoSurface: UIViewRepresentable {
     /// explicite, l'init memberwise synthétisé porte donc le défaut — tout
     /// call site futur reste inchangé et hors PiP.
     var enablesPip: Bool = false
+    /// Première frame COMPOSÉE (`AVPlayerLayer.isReadyForDisplay`, KVO) — le
+    /// signal qui autorise l'hôte à retirer le poster net qu'il affiche par-
+    /// dessus. Armé sur la présence du PLAYER et le layer, jamais sur
+    /// `currentItem` (`tasks/lessons.md` § 24). Défaut `nil` : aucun call site
+    /// existant ne change.
+    var onReadyForDisplay: (() -> Void)? = nil
 
     func makeUIView(context: Context) -> _SurfaceUIView {
         let view = _SurfaceUIView()
@@ -32,6 +38,8 @@ internal struct MeeshyVideoSurface: UIViewRepresentable {
         view.playerLayer.videoGravity = gravity
         view.playerLayer.player = player
         player.isMuted = isMuted
+        view.onReadyForDisplay = onReadyForDisplay
+        view.armReadinessObserver()
         if enablesPip {
             SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
         }
@@ -39,8 +47,10 @@ internal struct MeeshyVideoSurface: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: _SurfaceUIView, context: Context) {
+        uiView.onReadyForDisplay = onReadyForDisplay
         if uiView.playerLayer.player !== player {
             uiView.playerLayer.player = player
+            uiView.armReadinessObserver()
         }
         if uiView.playerLayer.videoGravity != gravity {
             uiView.playerLayer.videoGravity = gravity
@@ -80,6 +90,18 @@ internal struct MeeshyVideoSurface: UIViewRepresentable {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
         override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var onReadyForDisplay: (() -> Void)?
+        private var readinessObserver: NSKeyValueObservation?
+
+        /// `.initial` relit la valeur à l'enregistrement : une frame déjà
+        /// composée (player partagé repris d'une bulle) signale immédiatement.
+        /// Le rappel arrive sur le fil d'AVFoundation → sauté sur le main actor.
+        func armReadinessObserver() {
+            readinessObserver = playerLayer.observe(\.isReadyForDisplay, options: [.new, .initial]) { [weak self] layer, _ in
+                guard layer.isReadyForDisplay else { return }
+                Task { @MainActor in self?.onReadyForDisplay?() }
+            }
+        }
         var playerLayer: AVPlayerLayer {
             guard let layer = layer as? AVPlayerLayer else {
                 preconditionFailure("MeeshyVideoSurface layer must be AVPlayerLayer")
