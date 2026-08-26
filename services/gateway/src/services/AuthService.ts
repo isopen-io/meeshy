@@ -2,6 +2,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import { generateNumericCode } from '../utils/verification-code';
 import { SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
 import { normalizeEmail, normalizeUsername, capitalizeName, normalizeDisplayName, normalizePhoneWithCountry, normalizePhoneNumber } from '../utils/normalize';
 import { SecuritySanitizer } from '../utils/sanitize.js';
@@ -1035,7 +1036,8 @@ export class AuthService {
    * Generate a 6-digit verification code
    */
   private generatePhoneCode(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    // Cryptographically secure 6-digit code (CWE-338) — single source of truth.
+    return generateNumericCode();
   }
 
   /**
