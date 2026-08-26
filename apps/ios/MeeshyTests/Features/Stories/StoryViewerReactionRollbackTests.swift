@@ -89,6 +89,97 @@ final class StoryViewerReactionRollbackTests: XCTestCase {
         """)
     }
 
+    // MARK: - Recovery decision (pure)
+
+    /// Une coupure réseau n'est pas un refus : la réaction doit rejoindre la
+    /// file, comme le commentaire de story. `MeeshyError.network` est la forme
+    /// que `APIClient` donne à tout `URLError` de transport.
+    func test_reactionRecovery_forNetworkFailure_queuesForReplay() {
+        XCTAssertEqual(StoryReactionRecovery.decide(for: MeeshyError.network(.noConnection)), .queueForReplay)
+        XCTAssertEqual(StoryReactionRecovery.decide(for: MeeshyError.network(.timeout)), .queueForReplay)
+        XCTAssertEqual(StoryReactionRecovery.decide(for: URLError(.notConnectedToInternet)), .queueForReplay,
+                       "Un URLError brut est normalisé en `.network` par `MeeshyError.from` — même verdict")
+    }
+
+    /// Le refus du serveur — le 409 `REACTION_LIMIT_REACHED` que cite
+    /// `sendReaction`, un 403, un 404 — rembobine TOUJOURS : le rejouer depuis
+    /// la file rendrait le même refus, avec un emoji fantôme entre-temps.
+    func test_reactionRecovery_forServerRefusal_rollsBack() {
+        XCTAssertEqual(StoryReactionRecovery.decide(for: MeeshyError.server(statusCode: 409, message: "REACTION_LIMIT_REACHED")), .rollback)
+        XCTAssertEqual(StoryReactionRecovery.decide(for: MeeshyError.forbidden(reason: nil, body: nil)), .rollback)
+        XCTAssertEqual(StoryReactionRecovery.decide(for: MeeshyError.server(statusCode: 404, message: "Post not found")), .rollback)
+        XCTAssertEqual(StoryReactionRecovery.decide(for: NSError(domain: "test", code: -1)), .rollback,
+                       "Une erreur locale inconnue n'est pas une panne de transport")
+    }
+
+    // MARK: - sendReaction offline (verified via the injected queue, not @State)
+
+    /// Réagir hors ligne ne doit pas perdre la réaction.
+    ///
+    /// Le commentaire de story a sa file depuis longtemps ; la réaction, elle,
+    /// se contentait de rembobiner l'affichage et la mutation disparaissait.
+    /// Elle emprunte désormais le kind `toggleLikePost` — le gateway sert la
+    /// réaction de story sur `POST /posts/:id/like` et la journalise sous ce
+    /// nom ; un kind dédié dupliquerait une mutation qu'il traite comme une
+    /// seule. L'emoji doit voyager jusqu'à la ligne enfilée.
+    @MainActor
+    func test_sendReaction_whenTheNetworkFails_queuesItInsteadOfLosingIt() async throws {
+        let sut = makeSUT()
+        let api = MockAPIClientForApp()
+        api.errorToThrow = MeeshyError.network(.noConnection)
+        let queue = MockOfflineQueue()
+
+        await sut.sendReaction(emoji: "🔥", priorReactions: [], priorCount: 0,
+                               interactionService: StoryInteractionService(api: api),
+                               offlineQueue: queue).value
+
+        XCTAssertEqual(api.postCount, 1, "Le POST direct est tenté d'abord — la file n'est que le recours")
+        XCTAssertEqual(queue.enqueueCalls.count, 1, "La réaction a été perdue au lieu d'être mise en file.")
+        XCTAssertEqual(queue.enqueueCalls.first?.kind, .toggleLikePost)
+        XCTAssertEqual(queue.enqueueCalls.first?.conversationId, "story-0",
+                       "La ligne se range sous la story, comme le commentaire de story")
+        let payload = try XCTUnwrap(queue.lastPayload as? ToggleLikePostPayload)
+        XCTAssertEqual(payload.postId, "story-0")
+        XCTAssertEqual(payload.emoji, "🔥", "L'emoji doit voyager jusqu'à la file.")
+        XCTAssertTrue(payload.liked)
+    }
+
+    /// Un refus du serveur ne va PAS en file : la ligne y rendrait le même
+    /// refus au rejeu. Le rembobinage (couvert par `reactionRollbackTarget`
+    /// ci-dessus) reste la seule issue — et la file ne voit rien passer.
+    @MainActor
+    func test_sendReaction_whenTheServerRefuses_rollsBackWithoutQueueing() async {
+        let sut = makeSUT()
+        let api = MockAPIClientForApp()
+        api.errorToThrow = MeeshyError.server(statusCode: 409, message: "REACTION_LIMIT_REACHED")
+        let queue = MockOfflineQueue()
+
+        await sut.sendReaction(emoji: "🔥", priorReactions: [], priorCount: 0,
+                               interactionService: StoryInteractionService(api: api),
+                               offlineQueue: queue).value
+
+        XCTAssertEqual(api.postCount, 1)
+        XCTAssertTrue(queue.enqueueCalls.isEmpty,
+                      "Un 409 REACTION_LIMIT_REACHED est un refus, pas une coupure : rien ne doit être enfilé")
+    }
+
+    /// Le succès n'enfile rien non plus : la file est un recours, jamais un
+    /// second envoi.
+    @MainActor
+    func test_sendReaction_whenThePostSucceeds_leavesTheQueueUntouched() async {
+        let sut = makeSUT()
+        let api = MockAPIClientForApp()
+        api.stub("/posts/story-0/like", result: makeEmptyResponse())
+        let queue = MockOfflineQueue()
+
+        await sut.sendReaction(emoji: "🔥", priorReactions: [], priorCount: 0,
+                               interactionService: StoryInteractionService(api: api),
+                               offlineQueue: queue).value
+
+        XCTAssertEqual(api.postCount, 1)
+        XCTAssertTrue(queue.enqueueCalls.isEmpty)
+    }
+
     @MainActor
     func test_sendReaction_hitsCorrectEndpointWithGivenEmoji() async {
         let sut = makeSUT()

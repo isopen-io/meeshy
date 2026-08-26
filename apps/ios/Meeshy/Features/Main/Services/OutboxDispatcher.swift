@@ -539,11 +539,12 @@ struct OutboxDispatcher: OutboxDispatching {
     private func dispatchToggleLikePost(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: ToggleLikePostPayload.self)
         let method = payload.liked ? "POST" : "DELETE"
+        let body = try ToggleLikePostBody.encoded(for: payload)
         do {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
                 endpoint: "/posts/\(payload.postId)/like",
                 method: method,
-                body: nil,
+                body: body,
                 queryItems: nil,
                 headers: ["X-Client-Mutation-Id": payload.clientMutationId]
             )
@@ -1183,6 +1184,25 @@ struct OutboxDispatcher: OutboxDispatching {
             // is the same as for a true success — gateway dedup means the
             // server-side outcome is already terminal regardless.
         }
+    }
+}
+
+// MARK: - toggleLikePost wire body
+
+/// Corps de `POST /posts/:id/like` quand la ligne porte une RÉACTION (story) :
+/// `{ emoji }`, la forme que `LikeSchema` lit côté gateway et que le chemin
+/// direct émet déjà (`ReactionRequest`, `StoryInteractionService.react`). Un
+/// like simple n'a pas d'emoji et garde son corps vide — le gateway retombe
+/// alors sur son défaut, exactement comme avant ce champ.
+/// `nonisolated` et `internal`, comme `MarkAsReadBody` : le dispatch hérite de
+/// l'isolation de son appelant, et le contrat d'encodage se lit depuis
+/// `MeeshyTests`.
+nonisolated struct ToggleLikePostBody: Encodable {
+    let emoji: String
+
+    /// `nil` sans emoji : un like simple ne change pas de forme sur le fil.
+    static func encoded(for payload: ToggleLikePostPayload) throws -> Data? {
+        try payload.emoji.map { try JSONEncoder().encode(ToggleLikePostBody(emoji: $0)) }
     }
 }
 
