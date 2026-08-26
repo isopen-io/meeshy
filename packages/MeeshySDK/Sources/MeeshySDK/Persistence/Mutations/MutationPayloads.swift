@@ -498,11 +498,24 @@ public struct ToggleLikePostPayload: Codable, Sendable, Equatable {
     /// `true` = like, `false` = unlike. Encoded explicitly (not as presence)
     /// so the offline replay is deterministic regardless of server state.
     public let liked: Bool
+    /// Emoji de la réaction, `nil` pour un like simple.
+    ///
+    /// Une réaction à une story n'a pas de route à elle : elle emprunte
+    /// `POST /posts/:id/like`, que le gateway journalise sous le même
+    /// `kind: 'toggleLikePost'` qu'un like de post. Un `OutboxKind` dédié
+    /// dupliquerait une mutation que le serveur traite déjà comme une seule —
+    /// l'emoji est le seul élément qui manquait au voyage.
+    ///
+    /// Optionnel aussi pour les lignes DÉJÀ en file : encodées avant ce champ,
+    /// elles doivent continuer à se décoder, sinon la mise à jour ferait perdre
+    /// des mutations en attente.
+    public let emoji: String?
 
-    public init(clientMutationId: String, postId: String, liked: Bool) {
+    public init(clientMutationId: String, postId: String, liked: Bool, emoji: String? = nil) {
         self.clientMutationId = clientMutationId
         self.postId = postId
         self.liked = liked
+        self.emoji = emoji
     }
 }
 

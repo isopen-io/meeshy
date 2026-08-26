@@ -3845,7 +3845,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       +4 tests (video framed → x=0.3/scale=2.0; video default → IDENTITY; legacy video-only → IDENTITY; background
       video object with null own-url + fallback video → IDENTITY, guard). Mutation-RED-proven (forcing the video
       branch back to IDENTITY reddened EXACTLY the one framed-video test while the three IDENTITY-expecting tests
-      stayed green). Pending: composer AUTHORING of framing onto a background VIDEO (the composer frames images only).
+      stayed green). **Composer AUTHORING of a background VIDEO's framing done**
+      (`story-composer-background-video-transform`): closes the last open piece of §E "Backgrounds" — the WRITE half
+      the reader-video slice above opened. The VM's `resolveBackgroundFraming` already projected the canvas pan/zoom
+      onto ANY designated background (type-agnostic); the only remaining gap was `StoryBackgroundMedia.toMediaObject`,
+      which still forced IDENTITY for a video (the framing was a wire value no reader honoured while the reader video
+      path kept IDENTITY). Now that the reader honours a background video's `x`/`y`/`scale`, `toMediaObject` emits the
+      author's `framing` for a video exactly as for an image; `loop`/`intrinsicDuration`/`duration` stay video-only and
+      ride alongside the framing unclobbered. +3 tests replacing/adding around the old `video ignores framing` cases
+      (draft: video carries framing incl. loop+duration regression, unframed video → centred defaults; VM: publish a
+      panned+zoomed video background carries `x=0.5+200/1080`, `y=0.5+100/1920`, `scale=2.0`, loop=true). Mutation-RED-
+      proven (re-introducing the `if (isVideo) IDENTITY` guard reddened EXACTLY the two framed-video tests while the
+      unframed-video test and every other suite stayed green). §E Backgrounds is now closed author→reader on both
+      image and video.
 - [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
       (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —
       `StoryFilterMatrix.baseMatrix(StoryFilter)` → a `StoryColorMatrix` (4×5 `List<Float>`, value

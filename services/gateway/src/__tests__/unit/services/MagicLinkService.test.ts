@@ -691,6 +691,50 @@ describe('MagicLinkService', () => {
           twoFactorEnabledAt: null
         });
       });
+
+      // `autoTranslateEnabled` n'a qu'un store : `UserPreferences.application`.
+      // Le témoin s'écrit sur `false` — sur `true`, la valeur en dur que ce site
+      // servait et la lecture rendent le même verdict, et il ne peut pas tomber.
+      it('serves autoTranslateEnabled=false when the user preference says so', async () => {
+        mockPrisma.magicLinkToken.findUnique.mockResolvedValue({
+          ...mockMagicLinkToken,
+          user: { ...mockUser, userPreferences: { application: { autoTranslateEnabled: false } } }
+        });
+
+        const result = await service.validateMagicLink(validValidation);
+
+        expect(result.success).toBe(true);
+        expect(result.user.autoTranslateEnabled).toBe(false);
+      });
+
+      it('falls back to the shared default when the user has no preferences row', async () => {
+        mockPrisma.magicLinkToken.findUnique.mockResolvedValue({
+          ...mockMagicLinkToken,
+          user: { ...mockUser, userPreferences: null }
+        });
+
+        const result = await service.validateMagicLink(validValidation);
+
+        expect(result.user.autoTranslateEnabled).toBe(true);
+      });
+
+      // Un mock Prisma rend ce qu'on lui dit quel que soit le `select` : seule
+      // une assertion sur la REQUÊTE prouve que la lecture est possible en aval.
+      it('projects UserPreferences.application in the token lookup so the preference can be read', async () => {
+        await service.validateMagicLink(validValidation);
+
+        expect(mockPrisma.magicLinkToken.findUnique).toHaveBeenCalledWith(
+          expect.objectContaining({
+            include: {
+              user: {
+                select: expect.objectContaining({
+                  userPreferences: { select: { application: true } }
+                })
+              }
+            }
+          })
+        );
+      });
     });
 
     describe('Error Handling', () => {

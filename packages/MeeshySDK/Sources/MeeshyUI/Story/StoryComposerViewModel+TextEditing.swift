@@ -87,9 +87,17 @@ extension StoryComposerViewModel {
     /// Aucune mutation de géométrie : seul `textEditingMode` change. Le texte
     /// continue d'être rendu à sa vraie position par le canvas.
     /// Idempotent : ré-entrer sur le même texte est un no-op.
+    ///
+    /// Un texte verrouillé n'ouvre pas l'éditeur. Le seul qui l'est est le
+    /// badge d'attribution d'une republication : le réécrire, le décolorer ou
+    /// le pousser hors champ reviendrait à retirer l'attribution que le verrou
+    /// garantit. Suppression et duplication sont gardées côté canvas
+    /// (`isLockedItem`) et côté ViewModel (`deleteElement`) ; l'édition l'est
+    /// ici, à son point d'entrée unique.
     func enterTextEditingMode(textId: String) {
         if case .active(let current, _) = textEditingMode, current == textId { return }
-        guard currentEffects.textObjects.contains(where: { $0.id == textId }) else { return }
+        guard let target = currentEffects.textObjects.first(where: { $0.id == textId }),
+              target.isLocked != true else { return }
         selectedElementId = textId
         textEditingMode = .active(textId: textId, expandedTool: nil)
     }

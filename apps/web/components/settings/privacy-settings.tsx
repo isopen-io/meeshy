@@ -5,8 +5,10 @@
  * Gestion des préférences de confidentialité avec synchronisation API
  * Utilise /api/v1/me/preferences/privacy (12 champs backend)
  * SUPPRIME localStorage - tout est synchronisé avec le serveur via React Query
+ * L'export RGPD lit /api/v1/me/export (portabilité des données)
  */
 
+import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -17,6 +19,7 @@ import { useI18n } from '@/hooks/use-i18n';
 import { SoundFeedback } from '@/hooks/use-accessibility';
 import { usePreferences } from '@/hooks/use-preferences';
 import type { PrivacyPreference } from '@/types/preferences';
+import { apiService } from '@/services/api.service';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +31,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+
+const DATA_EXPORT_ENDPOINT = '/me/export';
+const DATA_EXPORT_QUERY = { format: 'json', types: 'profile,messages,contacts' } as const;
+
+type PersonalDataExport = Record<string, unknown>;
+
+const downloadJson = (payload: unknown, filename: string) => {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
 export function PrivacySettings() {
   const { t } = useI18n('settings');
@@ -46,6 +64,8 @@ export function PrivacySettings() {
       console.warn('[PrivacySettings] Consentement requis:', violations);
     },
   });
+
+  const [isExporting, setIsExporting] = useState(false);
 
   /**
    * Gère le changement d'un champ de préférence
@@ -74,30 +94,30 @@ export function PrivacySettings() {
   };
 
   /**
-   * Export des données utilisateur (placeholder)
+   * Export des données utilisateur (RGPD, portabilité) : la passerelle compose
+   * l'archive (GET /api/v1/me/export), le client ne fait que la télécharger.
    */
-  const exportData = () => {
+  const exportData = async () => {
     SoundFeedback.playClick();
+    setIsExporting(true);
 
-    // TODO: Implémenter l'export réel via API
-    const userData = {
-      profile: 'Données de profil...',
-      messages: 'Données de messages...',
-      translations: 'Cache de traduction...',
-      settings: 'Paramètres utilisateur...',
-      exportedAt: new Date().toISOString(),
-    };
+    try {
+      const response = await apiService.get<PersonalDataExport>(DATA_EXPORT_ENDPOINT, { ...DATA_EXPORT_QUERY });
+      if (!response.success || !response.data) {
+        throw new Error(response.message ?? response.error ?? 'Export failed');
+      }
 
-    const blob = new Blob([JSON.stringify(userData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `meeshy-data-export-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+      downloadJson(response.data, `meeshy-data-export-${Date.now()}.json`);
 
-    SoundFeedback.playSuccess();
-    toast.success(t('privacy.dataExported', 'Données exportées avec succès'));
+      SoundFeedback.playSuccess();
+      toast.success(t('privacy.dataExported', 'Données exportées avec succès'));
+    } catch (err) {
+      console.error('[PrivacySettings] Erreur export:', err);
+      SoundFeedback.playError();
+      toast.error(t('privacy.exportError', "Échec de l'export des données"));
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   /**
@@ -286,9 +306,10 @@ export function PrivacySettings() {
             <Button
               variant="outline"
               onClick={exportData}
+              disabled={isExporting}
               className="flex items-center gap-2"
             >
-              <Download className="h-4 w-4" />
+              {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               {t('privacy.data.export.button')}
             </Button>
           </div>

@@ -6,6 +6,30 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Story reaction recovery
+
+/// Ce qu'on fait d'une réaction de story que le POST direct n'a pas posée.
+///
+/// Le tri lit `MeeshyError.from(_:)`, la normalisation `APIClient` de tout
+/// `URLError` de transport en `.network` — la même forme que
+/// `NearbyDiscoveryViewModel` lit pour dire « hors ligne », et celle sur
+/// laquelle la file elle-même exempte une ligne de son budget de tentatives
+/// (`OutboxFlusher.isNetworkTransportError`). Tout le reste est un REFUS ou une
+/// erreur locale : le 409 `REACTION_LIMIT_REACHED` du gateway, un 403, un 404,
+/// un décodage — rejouer ne changerait rien, l'optimisme est rembobiné.
+nonisolated enum StoryReactionRecovery: Equatable, Sendable {
+    /// Panne de transport : la file durable rejouera la réaction au retour du
+    /// réseau, et l'emoji affiché reste vrai.
+    case queueForReplay
+    /// Refus du serveur ou erreur locale : restaurer l'état d'avant le tap.
+    case rollback
+
+    static func decide(for error: Error) -> StoryReactionRecovery {
+        if case .network = MeeshyError.from(error) { return .queueForReplay }
+        return .rollback
+    }
+}
+
 // MARK: - Reveal Circle Shape
 
 /// Shape animable pour l'effet de révélation circulaire.
@@ -1014,31 +1038,68 @@ extension StoryViewerView {
     /// including the swipe-away guard below — against a `MockAPIClientForApp`
     /// instead of re-implementing the snapshot/rollback logic as local
     /// variables in a test that never calls production code.
+    ///
+    /// Une PANNE DE TRANSPORT ne rembobine plus : la réaction part dans la file
+    /// durable, comme le commentaire de story juste au-dessus, et l'optimisme
+    /// affiché reste vrai jusqu'au rejeu. Pas de `kind` dédié — le gateway sert
+    /// la réaction de story sur `POST /posts/:id/like`, journalisée
+    /// `toggleLikePost` comme un like de post, à l'emoji près. Le tri
+    /// transport / refus est `StoryReactionRecovery.decide(for:)` ; le rollback
+    /// reste réservé au refus du serveur et à une file qui refuse la ligne.
+    ///
+    /// `offlineQueue` est injectable pour la même raison que le service ; la
+    /// tâche est rendue pour qu'un témoin l'attende au lieu de dormir.
+    @discardableResult
     func sendReaction(
         emoji: String,
         priorReactions: [String],
         priorCount: Int,
-        interactionService: StoryInteractionService = StoryInteractionService()
-    ) {
-        guard let story = currentStory else { return }
+        interactionService: StoryInteractionService = StoryInteractionService(),
+        offlineQueue: OfflineQueueing = OfflineQueue.shared
+    ) -> Task<Void, Never> {
+        guard let story = currentStory else { return Task {} }
         EngagementTracker.shared.recordAction(.reacted, surface: .storyViewer)
 
-        Task {
+        return Task {
             do {
                 try await interactionService.react(storyId: story.id, emoji: emoji)
             } catch {
-                if let target = Self.reactionRollbackTarget(
-                    currentStoryId: currentStory?.id,
-                    originatingStoryId: story.id,
-                    priorReactions: priorReactions,
-                    priorCount: priorCount
-                ) {
-                    storyCurrentUserReactions = target.reactions
-                    storyReactionCount = target.count
-                    HapticFeedback.error()
+                guard StoryReactionRecovery.decide(for: error) == .queueForReplay else {
+                    rollBackReaction(originatingStoryId: story.id,
+                                     priorReactions: priorReactions,
+                                     priorCount: priorCount)
+                    return
+                }
+                do {
+                    try await offlineQueue.enqueue(
+                        .toggleLikePost,
+                        payload: ToggleLikePostPayload(
+                            clientMutationId: ClientMutationId.generate(),
+                            postId: story.id,
+                            liked: true,
+                            emoji: emoji
+                        ),
+                        conversationId: story.id
+                    )
+                } catch {
+                    rollBackReaction(originatingStoryId: story.id,
+                                     priorReactions: priorReactions,
+                                     priorCount: priorCount)
                 }
             }
         }
+    }
+
+    private func rollBackReaction(originatingStoryId: String, priorReactions: [String], priorCount: Int) {
+        guard let target = Self.reactionRollbackTarget(
+            currentStoryId: currentStory?.id,
+            originatingStoryId: originatingStoryId,
+            priorReactions: priorReactions,
+            priorCount: priorCount
+        ) else { return }
+        storyCurrentUserReactions = target.reactions
+        storyReactionCount = target.count
+        HapticFeedback.error()
     }
 
     /// Pure rollback decision for a rejected reaction — extracted so the
@@ -2370,6 +2431,36 @@ extension StoryViewerView {
         isLoadingComments = false
     }
 
+    /// Ligne de l'overlay bâtie depuis la PREMIÈRE charge réseau — le chemin
+    /// principal, celui de chaque ouverture sur cache froid. Sa langue passe par
+    /// le résolveur canonique du Prisme, comme les trois autres chemins de ce
+    /// fichier (réponses, temps réel, pagination) : la fermeture locale qui
+    /// vivait ici ignorait `originalLanguage`, si bien qu'un commentaire déjà
+    /// écrit dans la langue n°1 du lecteur s'affichait traduit dans sa langue
+    /// n°2 dès que le serveur avait produit cette traduction pour d'autres.
+    /// Extrait en `static` pour que le témoin de RANG lise ce chemin-ci, pas
+    /// seulement le résolveur.
+    static func storyComment(from c: APIPostComment, preferredLanguages langs: [String]) -> FeedComment {
+        FeedComment(
+            id: c.id, author: c.author.name, authorId: c.author.id,
+            authorUsername: c.author.username,
+            authorAvatarURL: c.author.avatar,
+            content: c.content, timestamp: c.createdAt,
+            likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+            parentId: c.parentId,
+            effectFlags: c.effectFlags ?? 0,
+            originalLanguage: c.originalLanguage,
+            translatedContent: PostDetailViewModel.resolveCommentTranslation(
+                translations: c.translations,
+                originalLanguage: c.originalLanguage,
+                preferredLanguages: langs
+            ),
+            currentUserReactions: c.currentUserReactions,
+            media: (c.media ?? []).map { $0.toFeedMedia() },
+            location: c.location
+        )
+    }
+
     private func fetchStoryCommentsFromNetwork(story: StoryItem, cacheKey: String) async {
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         do {
@@ -2377,28 +2468,7 @@ extension StoryViewerView {
             // Stale-write guard: drop ONLY if user has clearly swiped to a
             // different known story (tolerate transient nil reads).
             if let now = currentStory?.id, now != story.id { return }
-            let comments = response.data.map { c -> FeedComment in
-                let translated: String? = {
-                    guard let dict = c.translations else { return nil }
-                    for lang in langs {
-                        if let entry = dict[lang] { return entry.text }
-                    }
-                    return nil
-                }()
-                return FeedComment(
-                    id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorUsername: c.author.username,
-                    authorAvatarURL: c.author.avatar,
-                    content: c.content, timestamp: c.createdAt,
-                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                    parentId: c.parentId,
-                    effectFlags: c.effectFlags ?? 0,
-                    originalLanguage: c.originalLanguage, translatedContent: translated,
-                    currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() },
-                    location: c.location
-                )
-            }
+            let comments = response.data.map { Self.storyComment(from: $0, preferredLanguages: langs) }
             storyComments = comments
             storyCommentsNextCursor = response.pagination?.nextCursor
             storyCommentsHasMore = response.pagination?.hasMore ?? false

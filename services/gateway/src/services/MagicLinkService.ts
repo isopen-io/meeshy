@@ -20,6 +20,7 @@ import { createSession, initSessionService, generateSessionToken } from './Sessi
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { unsetOrNull } from '../utils/prisma-unset';
 import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../utils/recipient-language';
+import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
 
 const logger = enhancedLogger.child({ module: 'MagicLinkService' });
 
@@ -255,7 +256,8 @@ export class MagicLinkService {
               updatedAt: true,
               emailVerifiedAt: true,
               phoneVerifiedAt: true,
-              twoFactorEnabledAt: true
+              twoFactorEnabledAt: true,
+              ...AUTO_TRANSLATE_PREFERENCE_SELECT
             }
           }
         }
@@ -366,8 +368,7 @@ export class MagicLinkService {
         systemLanguage: user.systemLanguage,
         regionalLanguage: user.regionalLanguage,
         customDestinationLanguage: user.customDestinationLanguage,
-        // TODO: Load from UserPreferences.application
-        autoTranslateEnabled: true,
+        autoTranslateEnabled: resolveAutoTranslateEnabled(user),
         isActive: user.isActive,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
