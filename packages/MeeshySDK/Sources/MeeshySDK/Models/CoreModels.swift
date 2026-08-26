@@ -414,10 +414,18 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         // violation (#3) this resolver fights. Canonicalising at the comparison point
         // is idempotent on already-canonical codes (zero regression).
         let canon: (String) -> String = { MeeshyUser.normalizeLanguageCode($0) ?? $0.lowercased() }
-        let preferred = preferredLanguages.filter { !$0.isEmpty }.map(canon)
+        let isBlank: (String) -> Bool = { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let preferred = preferredLanguages.filter { !isBlank($0) }.map(canon)
         let original = lastMessageOriginalLanguage.map(canon)
+        // A blank translation is NOT a translation: the TypeScript SSOT
+        // (`resolvePrismTranslation`, `text.trim() === '' → continue`) and the
+        // Android twin (`text.isBlank() → continue`) both skip it, so the
+        // descent falls through to the next rank — or to the raw preview —
+        // instead of blanking the list row. The shared vector suite
+        // (`prism-preview.vectors.json`, « ignore une traduction vide au lieu
+        // de vider la ligne ») is what caught iOS serving "   " for "Hello".
         var translationsByCanonicalKey: [String: String] = [:]
-        for (lang, text) in translations {
+        for (lang, text) in translations where !isBlank(text) {
             translationsByCanonicalKey[canon(lang)] = text
         }
         // The prism is ORDERED, and the original language competes at its own
