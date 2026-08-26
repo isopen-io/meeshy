@@ -17,6 +17,11 @@ public protocol EngagementSinking: Sendable {
 /// topmost-owns-the-clock rule (an overlay surface pauses the one underneath).
 @MainActor
 final class EngagementTracker {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = EngagementTracker()
 
     private struct ActiveSession {

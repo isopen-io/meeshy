@@ -181,6 +181,11 @@ struct FeedPostsMapView: View {
 /// Map : le plancher iOS 16 n'offre ni annotations custom riches ni
 /// clustering côté SwiftUI — MKMarkerAnnotationView les fournit gratuitement.
 private final class PostMapAnnotation: NSObject, MKAnnotation {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     let postId: String
     let coordinate: CLLocationCoordinate2D
     let title: String?
@@ -225,6 +230,11 @@ private struct PostsMapRepresentable: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, MKMapViewDelegate {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         var selectedPostId: Binding<String?>
         private var appliedPostIds: Set<String> = []
 

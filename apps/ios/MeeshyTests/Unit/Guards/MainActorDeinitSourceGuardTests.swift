@@ -81,7 +81,7 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
         var out: [ClassDecl] = []
         for case let url as URL in enumerator where url.pathExtension == "swift" {
             let relative = url.path.replacingOccurrences(of: root.path + "/", with: "")
-            let stripped = DeclarationBodyScanner.mask(try String(contentsOf: url, encoding: .utf8))
+            let stripped = DeclarationBodyScanner.mask(Self.preprocessIOS(try String(contentsOf: url, encoding: .utf8)))
             out.append(contentsOf: Self.parse(stripped, relativePath: relative))
         }
         return out.sorted { ($0.relativePath, $0.name) < ($1.relativePath, $1.name) }
@@ -91,6 +91,56 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
     /// qui la précèdent (`nonisolated`, `@MainActor`), la clause d'héritage
     /// jusqu'à `{`, et cherche un `deinit` dans le corps équilibré. Exclut les
     /// membres statiques `class var`/`class func`/`class let`/`class subscript`.
+    /// Garde uniquement les branches actives pour une compilation iOS et
+    /// remplace les lignes des branches inactives (macOS/watchOS/tvOS/Catalyst)
+    /// par des lignes vides. Sans ça, une classe déclarée dans DEUX branches
+    /// d'un `#if os(iOS)/#else` (ex. `P2PWebRTCClient`) déséquilibre le
+    /// comptage d'accolades et masque sa propre `deinit`, produisant un faux
+    /// positif. Condition inconnue → branche gardée (conservateur).
+    static func preprocessIOS(_ source: String) -> String {
+        func condTrue(_ raw: String) -> Bool {
+            let c = raw.trimmingCharacters(in: .whitespaces)
+            if c.contains("os(macOS)") || c.contains("os(watchOS)")
+                || c.contains("os(tvOS)") || c.contains("os(visionOS)")
+                || c.contains("targetEnvironment(macCatalyst)") { return false }
+            return true
+        }
+        var out: [String] = []
+        var stack: [(active: Bool, taken: Bool)] = []
+        for line in source.components(separatedBy: "\n") {
+            let st = line.trimmingCharacters(in: .whitespaces)
+            if st.hasPrefix("#if ") {
+                let parent = stack.allSatisfy { $0.active }
+                let c = condTrue(String(st.dropFirst(4)))
+                stack.append((parent && c, c))
+                out.append(""); continue
+            }
+            if st.hasPrefix("#elseif ") {
+                if !stack.isEmpty {
+                    let parent = stack.dropLast().allSatisfy { $0.active }
+                    let taken = stack[stack.count - 1].taken
+                    let c = condTrue(String(st.dropFirst(8)))
+                    stack[stack.count - 1] = (parent && !taken && c, taken || c)
+                }
+                out.append(""); continue
+            }
+            if st.hasPrefix("#else") {
+                if !stack.isEmpty {
+                    let parent = stack.dropLast().allSatisfy { $0.active }
+                    let taken = stack[stack.count - 1].taken
+                    stack[stack.count - 1] = (parent && !taken, true)
+                }
+                out.append(""); continue
+            }
+            if st.hasPrefix("#endif") {
+                if !stack.isEmpty { stack.removeLast() }
+                out.append(""); continue
+            }
+            out.append(stack.allSatisfy { $0.active } ? line : "")
+        }
+        return out.joined(separator: "\n")
+    }
+
     private static func parse(_ code: String, relativePath: String) -> [ClassDecl] {
         let chars = Array(code)
         var out: [ClassDecl] = []
@@ -156,7 +206,14 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
     }
 
     private func inScope(_ d: ClassDecl) -> Bool {
-        d.isMainActor && d.conformsObservableObject && !d.isNonisolated
+        // Critère LARGE, aligné sur MeeshyUI : la cible app compile sous
+        // SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor, donc TOUTE classe non
+        // marquée `nonisolated` est @MainActor et porte une deinit isolée —
+        // pas seulement les ObservableObject (constat 4 de la revue Opus,
+        // confirmé par le re-gate complet : BubbleHeightCache, une classe
+        // @MainActor NON-OO, crashait). `isMainActor`/`conformsObservableObject`
+        // restent calculés pour le diagnostic mais ne restreignent plus le scope.
+        !d.isNonisolated
     }
 
     // MARK: - Garde principale

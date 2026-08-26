@@ -24,6 +24,11 @@ import os
 /// M1 follow-up to PR #280.
 @MainActor
 final class StoryInteractionService {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private let api: APIClientProviding
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "story.interaction")

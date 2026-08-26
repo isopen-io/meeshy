@@ -29,6 +29,11 @@ private let logger = Logger(subsystem: "me.meeshy.app", category: "live-activity
 /// See CODE_REVIEW_FINDINGS.md / Passe P4 for context.
 @MainActor
 final class LiveActivityBridge {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = LiveActivityBridge()
 
     private init() {}

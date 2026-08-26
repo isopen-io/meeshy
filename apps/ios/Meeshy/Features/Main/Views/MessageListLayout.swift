@@ -83,6 +83,11 @@ nonisolated enum MessageListOffsetCompensationLaw {
 /// anciens attributs sont déjà jetés) : l'hôte les mesure AVANT d'appliquer
 /// son snapshot et les dépose via `noteUpcomingDeletionCompensation(height:)`.
 final class MessageListLayout: UICollectionViewCompositionalLayout {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     /// Seuil « près du bas » de l'hôte (même règle que son
     /// `isCurrentlyNearBottom`). Le défaut infini désactive la compensation

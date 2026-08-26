@@ -14,6 +14,11 @@ nonisolated private let logger = Logger(subsystem: "me.meeshy.app", category: "w
 /// `ConversationService.shared.markRead(...)` for each, and clears the queue.
 @MainActor
 final class WidgetActionFlusher {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = WidgetActionFlusher()
 
     private let suiteName = "group.me.meeshy.apps"

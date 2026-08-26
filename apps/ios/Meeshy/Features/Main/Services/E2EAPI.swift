@@ -3,6 +3,11 @@ import MeeshySDK
 
 /// API Client dédié au protocole de chiffrement de bout en bout (E2EE Signal)
 public final class E2EAPI: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = E2EAPI()
     
     private init() {}

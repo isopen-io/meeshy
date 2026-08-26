@@ -59,6 +59,11 @@ protocol MessageForwardServiceProviding {
 ///   un identifiant qui n'existe pas encore côté serveur.
 @MainActor
 final class MessageForwardService: MessageForwardServiceProviding {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = MessageForwardService()
 
     private let api: APIClientProviding

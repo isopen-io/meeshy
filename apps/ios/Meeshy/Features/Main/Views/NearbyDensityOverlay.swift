@@ -96,6 +96,11 @@ enum NearbyDensityDisc {
 /// le ViewModel vient de fermer — une carte qui situe au mètre près quelqu'un
 /// qui a choisi « Région ».
 final class NearbyPostAnnotation: NSObject, MKAnnotation {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     let postId: String
     let coordinate: CLLocationCoordinate2D
     let title: String?
@@ -197,6 +202,11 @@ struct NearbyDiscoveryMapView: UIViewRepresentable {
 }
 
 final class NearbyMapCoordinator: NSObject, MKMapViewDelegate, UIGestureRecognizerDelegate {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     weak var map: MKMapView?
 
     private var onSelectPost: ((String) -> Void)?

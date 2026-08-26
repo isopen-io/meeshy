@@ -28,6 +28,11 @@ import MeeshySDK
 /// type, copy the pattern with that type rather than re-introducing the
 /// generic.
 private final class WeakBox: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     weak var value: MessageStore?
     init(_ value: MessageStore) { self.value = value }
 }
@@ -118,6 +123,11 @@ private func fetchMessageWindow(
 /// Holds cancellation tokens that must be accessible from `nonisolated deinit`.
 /// Explicitly non-isolated so its methods can be called from any context.
 private final class ObservationTokens: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     nonisolated(unsafe) var regionCancellable: AnyDatabaseCancellable?
     nonisolated(unsafe) var refreshTask: Task<Void, Never>?
 

@@ -22,6 +22,11 @@ import MeeshySDK
 /// `deinit` under Release `-O -whole-module-optimization` (Xcode Cloud
 /// archive). Keep typed on the concrete `FeedStore`.
 private final class FeedStoreWeakBox: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     weak var value: FeedStore?
     init(_ value: FeedStore) { self.value = value }
 }

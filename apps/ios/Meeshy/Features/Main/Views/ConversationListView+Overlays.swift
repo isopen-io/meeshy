@@ -889,6 +889,11 @@ enum ChipAutoScroll {
 /// re-fire pas sans mouvement du doigt).
 @MainActor
 final class ChipAutoScrollDriver {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     weak var scrollView: UIScrollView?
     /// Rebranché à chaque verrouillage de la chip, relâché par `stop()` (le
     /// closure capture la View : le garder à demeure lierait le cycle

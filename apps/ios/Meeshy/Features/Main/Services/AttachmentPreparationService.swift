@@ -127,6 +127,11 @@ enum AttachmentPreparationError: Error, Sendable {
 /// background.
 @MainActor
 final class AttachmentPreparationService {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = AttachmentPreparationService()
     private let log = Logger(subsystem: "me.meeshy.app", category: "attachment-prep")
 

@@ -29,12 +29,17 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
     /// mid-recording par un swipe-down de sheet : sans ce filet le Timer
     /// 20 Hz restait au run loop, le micro actif et la session jamais rendue.
     private final class CleanupHandle: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         nonisolated(unsafe) var timer: Timer?
         nonisolated(unsafe) var recorder: AVAudioRecorder?
     }
     private let cleanupHandle = CleanupHandle()
 
-    deinit {
+    nonisolated deinit {
         cleanupHandle.timer?.invalidate()
         // `recorder` non-nil ⟺ mort mid-recording : sémantique cancel
         // (fichier partiel dérivé de `recorder.url`). Déporté sur une queue
