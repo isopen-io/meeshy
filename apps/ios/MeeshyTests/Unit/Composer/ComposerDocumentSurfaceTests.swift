@@ -2552,7 +2552,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// et `DefaultComposerLanguage.resolve()` — dont cette garde mesure la
     /// constance — est épinglée au main actor.
     @MainActor
-    func test_laPorteDuDocument_nEstMonteeParAucunSiteDeProduction_etCEstLaRangeeQuiLaRetient() throws {
+    func test_laPorteDuDocument_estMonteeParExactementUnSiteDeProduction_leFil() throws {
         let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()

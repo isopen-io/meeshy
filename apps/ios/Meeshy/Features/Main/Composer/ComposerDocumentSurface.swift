@@ -479,8 +479,9 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     /// `.attachesTranscribedAudio` ouvre `AudioPostComposerView`, et c'est le
     /// dernier des six. `servedRow == canonicalRow` DÉSORMAIS — la garde de la
     /// porte du document (`ComposerDocumentSurfaceTests.test_laPorteDuDocument_...`)
-    /// se retourne à ce lot, sur SA première condition seulement (la rangée) ;
-    /// aucun site de production ne monte encore la porte pour autant.
+    /// se retourne : sa PREMIÈRE condition (la rangée) tombe ici, la SECONDE (la
+    /// langue) l'était depuis T2.2 — et à T3.1 un site la monte enfin
+    /// (`RootViewComponents`, `montages == 1`).
     ///
     /// **Ce que `.place` ne fait PAS gagner : le tri-état de la feuille
     /// absorbée** (`PostLocationUpdate` : remplacer, retirer, ne pas toucher).
@@ -1422,19 +1423,14 @@ struct ComposerDocumentSurface: View {
 /// point de DÉPART du brouillon ; ce n'est pas elle qui a changé, c'est cette
 /// porte qui a cessé de la rappeler à l'envoi.
 ///
-/// **Ce que la langue déclarée ne dit toujours pas : ce n'est plus une
-/// condition de levée de la porte.** La rangée d'outils, elle, en reste une —
-/// `ComposerDocumentTool.canonicalRow` modélise les six boutons d'attache, et
-/// T2.3 en a fait tomber TROIS (photo, caméra, fichier) :
-/// `ComposerDocumentTool.servedRow` sert désormais
-/// `[.photo, .camera, .emoji, .document]`. Il en reste deux — lieu et micro —
-/// et c'est encore eux, seuls, qui retiennent cette porte.
-///
-/// **Aucun site de production ne la monte encore**, et ce n'est pas un oubli de
-/// câblage : la rangée d'outils ne couvre pas ce que la feuille remplacée
-/// offre. Son témoin,
-/// `test_laPorteDuDocument_nEstMonteeParAucunSiteDeProduction_etCEstLaRangeeQuiLaRetient`,
-/// déclare cet état.
+/// **Ses deux conditions de levée sont tombées, et elle est MONTÉE.** La langue
+/// n'en est plus une (T2.2) ; la rangée d'outils l'était —
+/// `ComposerDocumentTool.canonicalRow` modélise les six boutons d'attache — et
+/// `servedRow == canonicalRow` depuis T2.6 (photo·caméra·fichier à T2.3, lieu à
+/// T2.5, micro à T2.6 ; l'emoji tenu). Les deux tombées, T3.1 a monté la porte
+/// sur le PLEIN composer du fil : `RootViewComponents` la construit, et son
+/// témoin `test_laPorteDuDocument_estMonteeParExactementUnSiteDeProduction_leFil`
+/// exige désormais `montages == 1`.
 /// **La porte du fil (T3.1) et de tout site qui compose un DOCUMENT** — texte,
 /// média local, lieu, transcription. Elle NE sert PAS la citation : un repost
 /// (`repostOfId != nil`) part par `POST /posts/:id/repost`, sans file durable,
