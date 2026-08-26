@@ -4,6 +4,25 @@ import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 const mongoId = z.string().regex(OBJECT_ID_REGEX);
 
 // ---------------------------------------------------------------------------
+// Pagination query fields — ONE bounded-integer shape for every admin list.
+//
+// These mirror `validatePagination` (utils/pagination.ts) at the schema layer:
+// a `limit` clamped to [1, maxLimit] and an `offset` floored at 0, both integers.
+// Coercing AND validating here is what lets the `pagination-parse-sweep`
+// (routes/__tests__/pagination-parse-sweep.ts) keep excluding `admin/`: its
+// written premise is that admin querystrings are "Zod-coercées (numériques), où
+// le parseInt opère sur une valeur déjà validée". Before this builder,
+// AnonymousUsers had no bound at all, and Broadcasts/Rankings left `offset`
+// unbounded / `limit` non-integer — divergent twins of their bounded siblings.
+// ---------------------------------------------------------------------------
+
+const paginationLimit = (defaultLimit: number, maxLimit = 100) =>
+  z.string().transform(Number).pipe(z.number().int().min(1).max(maxLimit)).prefault(String(defaultLimit));
+
+const paginationOffset = () =>
+  z.string().transform(Number).pipe(z.number().int().min(0)).prefault('0');
+
+// ---------------------------------------------------------------------------
 // Analytics
 // ---------------------------------------------------------------------------
 
@@ -14,7 +33,7 @@ export const AnalyticsMessageTypesQuerySchema = z.object({
 export type AnalyticsMessageTypesQuery = z.infer<typeof AnalyticsMessageTypesQuerySchema>;
 
 export const AnalyticsLanguageDistQuerySchema = z.object({
-  limit: z.string().transform(Number).prefault('5').pipe(z.number().int().min(1).max(100)),
+  limit: paginationLimit(5),
 });
 
 export type AnalyticsLanguageDistQuery = z.infer<typeof AnalyticsLanguageDistQuerySchema>;
@@ -30,8 +49,8 @@ export type AnalyticsKpisQuery = z.infer<typeof AnalyticsKpisQuerySchema>;
 // ---------------------------------------------------------------------------
 
 export const AnonymousUsersQuerySchema = z.object({
-  offset: z.string().transform(Number).prefault('0'),
-  limit: z.string().transform(Number).prefault('20'),
+  offset: paginationOffset(),
+  limit: paginationLimit(20),
   search: z.string().optional(),
   status: z.enum(['active', 'inactive']).optional(),
 });
@@ -49,8 +68,8 @@ export const BroadcastIdParamSchema = z.object({
 export type BroadcastIdParam = z.infer<typeof BroadcastIdParamSchema>;
 
 export const BroadcastsListQuerySchema = z.object({
-  offset: z.string().transform(Number).prefault('0'),
-  limit: z.string().transform(Number).pipe(z.number().min(1).max(100)).prefault('20'),
+  offset: paginationOffset(),
+  limit: paginationLimit(20),
   status: z.string().optional(),
 });
 
@@ -91,8 +110,8 @@ export type UpdateBroadcastBody = z.infer<typeof UpdateBroadcastBodySchema>;
 // ---------------------------------------------------------------------------
 
 export const InvitationsListQuerySchema = z.object({
-  offset: z.string().transform(Number).prefault('0'),
-  limit: z.string().transform(Number).pipe(z.number().int().min(1).max(100)).prefault('20'),
+  offset: paginationOffset(),
+  limit: paginationLimit(20),
   status: z.string().optional(),
   communityId: mongoId.optional(),
   senderId: mongoId.optional(),
@@ -118,7 +137,7 @@ export type UpdateInvitationBody = z.infer<typeof UpdateInvitationBodySchema>;
 
 export const LanguageStatsQuerySchema = z.object({
   period: z.enum(['7d', '30d', '90d']).default('30d'),
-  limit: z.string().transform(Number).prefault('10').pipe(z.number().int().min(1).max(100)),
+  limit: paginationLimit(10),
 });
 
 export type LanguageStatsQuery = z.infer<typeof LanguageStatsQuerySchema>;
@@ -131,7 +150,7 @@ export const LanguageTimelineQuerySchema = z.object({
 export type LanguageTimelineQuery = z.infer<typeof LanguageTimelineQuerySchema>;
 
 export const TranslationAccuracyQuerySchema = z.object({
-  limit: z.string().transform(Number).prefault('10').pipe(z.number().int().min(1).max(100)),
+  limit: paginationLimit(10),
 });
 
 export type TranslationAccuracyQuery = z.infer<typeof TranslationAccuracyQuerySchema>;
@@ -160,11 +179,7 @@ export const RankingsQuerySchema = z.object({
   entityType: z.enum(['users', 'conversations', 'messages', 'links']).default('users'),
   criterion: z.string().optional(),
   period: z.enum(['1d', '7d', '30d', '60d', '90d', '180d', '365d', 'all']).default('30d'),
-  limit: z
-    .string()
-    .transform(Number)
-    .prefault('50')
-    .pipe(z.number().min(1).max(100)),
+  limit: paginationLimit(50),
 });
 
 export type RankingsQuery = z.infer<typeof RankingsQuerySchema>;
