@@ -940,6 +940,9 @@ struct MeeshyComposerHost: View {
                 // E1 — la toile qui naît prend la langue DÉCLARÉE au composer
                 // comme défaut de tout objet posé (`declaredContentLanguage`).
                 viewModel.declaredContentLanguage = documentLanguage
+                // B1 — et elle GARDE le contenu déjà écrit (loi 9 : changer de
+                // mode ne jette jamais le texte).
+                viewModel.applyContentText(documentText)
             }
         )
         // La capsule se superpose plutôt que d'être peinte PAR la surface :
@@ -1065,6 +1068,8 @@ struct MeeshyComposerHost: View {
                     // E1 — STORY monte la scène : son contenu et ses objets
                     // partent dans la langue DÉCLARÉE au composer (la capsule).
                     viewModel.declaredContentLanguage = documentLanguage
+                    // B1 — le texte déjà écrit SUIT dans la scène (loi 9).
+                    viewModel.applyContentText(documentText)
                     HapticFeedback.light()
                 } label: {
                     HStack(spacing: 4) {

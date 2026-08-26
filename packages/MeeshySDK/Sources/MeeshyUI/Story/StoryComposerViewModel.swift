@@ -479,6 +479,20 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         backgroundColor = hex.hasPrefix("#") ? hex : "#\(hex)"
     }
 
+    /// **Semer le CONTENU depuis un hôte app (B1, #3924).** Point d'entrée
+    /// PUBLIC : le composer garde UN seul contenu (`documentText`) quand il
+    /// change de mode — la scène qui naît le reçoit sur la slide courante
+    /// (`StorySlide.content`), d'où il partira à la publication et où B2 le
+    /// rendra dans une section description repliable. Idempotent : re-semer le
+    /// même texte ne dirty pas la slide.
+    public func applyContentText(_ text: String) {
+        let value = text.isEmpty ? nil : text
+        var slide = currentSlide
+        guard slide.content != value else { return }
+        slide.content = value
+        currentSlide = slide
+    }
+
     /// **E1/E3 (#3886/#3888) — la langue DÉCLARÉE au bas du composer, défaut de
     /// TOUT objet posé sur la scène.** La capsule du composer (`documentLanguage`)
     /// la sème ; chaque `MeeshyObject` créé (texte, média, audio, sticker, lieu)
