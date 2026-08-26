@@ -124,6 +124,11 @@ extension CallState {
 
 @MainActor
 final class CallManager: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = CallManager()
 
     // MARK: - Published State
@@ -6043,6 +6048,11 @@ extension CallManager: WebRTCServiceDelegate {
 // MARK: - CallKit Delegate Proxy
 
 private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     weak var manager: CallManager?
 
     func providerDidReset(_ provider: CXProvider) {

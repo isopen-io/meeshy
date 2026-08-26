@@ -14,6 +14,11 @@ import UIKit
 /// is rendered exactly once, on `export()`.
 @MainActor
 public final class ImageEditorViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     /// Longest side, in pixels, of the working copy used for live preview.
     private static let workingMaxPixel: CGFloat = 2400

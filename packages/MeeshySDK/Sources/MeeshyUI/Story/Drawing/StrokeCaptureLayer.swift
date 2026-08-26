@@ -147,6 +147,11 @@ struct StrokeCaptureLayer: UIViewRepresentable {
     /// reconnu par un `UIPinchGestureRecognizer` dont la reconnaissance ANNULE le
     /// trait en cours (`cancelsTouchesInView` par défaut → `touchesCancelled`).
     final class StrokeCaptureView: UIView {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         private var points: [(location: CGPoint, t: TimeInterval, force: CGFloat)] = []
         private var currentStrokeId = UUID().uuidString
         /// Le doigt qui trace. Tout doigt supplémentaire appartient au geste

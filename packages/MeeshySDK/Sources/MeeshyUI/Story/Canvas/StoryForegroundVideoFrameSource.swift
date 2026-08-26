@@ -19,6 +19,11 @@ import MeeshySDK
 /// main-actor `renderFrame`, but the generator map is lock-guarded so the type
 /// stays `Sendable` for storage on the (nonisolated) compositor instance.
 public final class StoryForegroundVideoFrameSource: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private nonisolated let lock = NSLock()
     private nonisolated(unsafe) var generators: [String: AVAssetImageGenerator] = [:]

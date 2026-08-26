@@ -12,6 +12,11 @@ protocol AppVersionFloorProviding {
 
 @MainActor
 final class AppVersionFloorService: AppVersionFloorProviding {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private let api: APIClientProviding
 
@@ -62,6 +67,30 @@ final class UpgradeGateController: ObservableObject {
     /// un `deinit` qui touche l'état isolé, ce que Swift 6 refuse. Même
     /// arbitrage que `ImpressionBatcher`.
     private var cancellables = Set<AnyCancellable>()
+
+    /// `nonisolated` — pas un choix de style : AVANT ce correctif, cette classe
+    /// n'écrivait AUCUNE `deinit` (implicite, synthétisée par le compilateur) ;
+    /// c'est cette forme précise — `@MainActor` + `Set<AnyCancellable>` + zéro
+    /// `deinit` écrite — qui double-libérait sur le simulateur iOS 26.1 dès
+    /// qu'elle s'exécutait hors de tout contexte de tâche (`malloc: pointer
+    /// being freed was not allocated`, signal abrt). Mesuré sur
+    /// `test_requirement_auDemarrage_estNil` — le seul test SYNCHRONE de la
+    /// suite, donc le seul sans tâche courante ; les 6 tests `async` voisins,
+    /// eux, restaient verts ; iOS 18.2 ne montrait rien. Rien d'isolé n'est
+    /// touché ici : `cancellables` se démonte tout seul.
+    ///
+    /// Cette observation ne s'étend PAS à toute classe `@MainActor` : une
+    /// `deinit` ÉCRITE explicitement (même sans `nonisolated`) reste
+    /// non-isolée par défaut — `GlobalSearchViewModel.swift:146`,
+    /// `MessageListViewController.swift:380` et `PresenceManager.swift:211`
+    /// en dépendent et n'ont montré aucune erreur malloc sur ce même runtime
+    /// (`GlobalSearchViewModelTests`, tests synchrones inclus, 28/28,
+    /// malloc-errors=0, mesuré 2026-08-25). La vingtaine de classes
+    /// `@MainActor` restantes qui portent `Set<AnyCancellable>` SANS aucune
+    /// `deinit` écrite (`grep -L deinit` sur les sites `Set<AnyCancellable>`)
+    /// partagent la forme qui a crashé ici et restent à auditer — suivi noté
+    /// dans `wave1/planche-deltas.md`, pas encore fait.
+    nonisolated deinit {}
 
     init(
         floor: AppVersionFloorProviding = AppVersionFloorService(),

@@ -95,11 +95,50 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
             "Le primitive booléenne pré-E1 (existence gérée maintenant par l'enum " +
             "BackgroundAudioAnnouncement lui-même) ne doit plus être déclarée."
         )
-        XCTAssertFalse(
-            text.contains("let headerAudioDisplay: AudioChipHeaderModel"),
-            "Le modèle d'affichage pré-E1 (dérivé, sans title/duration séparables) ne doit " +
-            "plus être déclaré — remplacé par l'annonce brute BackgroundAudioAnnouncement."
-        )
+    }
+
+    // MARK: - Dette E1c : les signatures retirées ne reviennent pas par l'app
+
+    /// Cette garde disait l'inverse de ce qu'elle prouvait : son doc-comment
+    /// jumeau, côté SDK, annonçait que `AudioChipDisplay.resolve` « reste
+    /// vivant pour les appelants APP (`StoryViewerView` ×2) », et celle-ci ne
+    /// cherchait `AudioChipHeaderModel` que dans UN fichier. Mesuré au
+    /// 2026-08-25 :
+    /// `grep -rn 'AudioChipDisplay.resolve(' apps/ios/Meeshy` → 0 ligne. Les
+    /// trois signatures ont quitté le SDK (E1c) ; l'app balaie désormais tout
+    /// son arbre, et rougit dès qu'un site les rappelle.
+    func test_sourcesDeLApp_neRappellentAucuneDesTroisSignaturesRetirees() throws {
+        let bannis = [
+            "AudioChipDisplay.resolve(",
+            "AudioChipHeaderModel",
+            "StoryAudioAvailability.hasBackgroundAudioTrack",
+        ]
+        for banni in bannis {
+            XCTAssertEqual(
+                try Self.appSourceFilesContaining(banni), [],
+                "\(banni) a été retiré du SDK (E1c, aucun appelant de production) — " +
+                "l'app passe par BackgroundSoundBadge.announcement(for:), le résolveur partagé."
+            )
+        }
+    }
+
+    /// Fichiers de `apps/ios/Meeshy` dont une ligne de CODE contient `needle`
+    /// — commentaires retirés, sinon un doc-comment qui NOMME la signature
+    /// bannie ferait rougir la garde sans qu'aucun site ne l'appelle.
+    private static func appSourceFilesContaining(_ needle: String) throws -> [String] {
+        let root = MyStoriesSourceCorpus.appRoot().appendingPathComponent("Meeshy")
+        guard let walker = FileManager.default.enumerator(at: root,
+                                                          includingPropertiesForKeys: nil) else { return [] }
+        let swiftFiles = walker.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
+        XCTAssertGreaterThan(swiftFiles.count, 100,
+                             "Le corpus des sources de l'app est vide ou tronqué — la garde ne prouverait rien")
+        return swiftFiles
+            .filter { url in
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
+                return MyStoriesSourceCorpus.strippingComments(text).contains(needle)
+            }
+            .map { $0.lastPathComponent }
+            .sorted()
     }
 
     func test_storyViewer_resolvesAnnouncementThroughSharedHelper() throws {

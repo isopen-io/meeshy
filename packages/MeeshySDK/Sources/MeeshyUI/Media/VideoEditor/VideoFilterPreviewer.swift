@@ -22,6 +22,11 @@ import MeeshySDK
 /// equal-content one (uploaded thumbnails, etc.) won't pointlessly refresh.
 @MainActor
 final class VideoFilterPreviewCache: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     /// One filtered `UIImage` per preset. Read by `FilterController` tiles.
     @Published private(set) var previews: [VideoFilterPreset: UIImage] = [:]

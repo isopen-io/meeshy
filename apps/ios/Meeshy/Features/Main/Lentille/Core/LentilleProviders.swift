@@ -258,6 +258,11 @@ nonisolated protocol ConversationLiveCallProviding: Sendable {
 /// depuis l'état d'appel WebRTC/CallKit déjà détenu ailleurs (jamais
 /// recalculé ici : ce provider ne fait QUE relayer un état déjà connu).
 final class LocalLiveCallProvider: ConversationLiveCallProviding, @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private let lock = NSLock()
     private var liveCalls: [String: ConversationLiveCall] = [:]

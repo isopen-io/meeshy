@@ -12,6 +12,11 @@ import MeeshyUI
 /// à chaque tick. Le morph drag de l'overlay (+Overlays) hit-teste le doigt
 /// contre ces frames pour surligner puis résoudre la section de drop.
 final class SectionFrameRegistry {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     var frames: [String: CGRect] = [:]
 }
 
@@ -1498,7 +1503,7 @@ struct ConversationListView: View {
 
     /// Vue PURE routée vers les portes EXISTANTES : nouveau message
     /// (`onNewConversation`), story (`StoryViewModel.showStoryComposer`),
-    /// mood (`StatusComposerView`, déjà hébergé ici), post (drapeau `Router
+    /// mood (`MoodComposerDoor`, déjà hébergé ici), post (drapeau `Router
     /// .pendingOpenFeedComposer`, consommé par le flux), invitation
     /// (`AffiliateCreateView`, lien de parrainage), lien raccourci
     /// (`CreateTrackingLinkView`, `/l/<token>`).

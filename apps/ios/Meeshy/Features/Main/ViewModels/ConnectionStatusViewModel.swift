@@ -14,6 +14,11 @@ import MeeshySDK
 /// state transitions without bringing up real singletons.
 @MainActor
 public final class ConnectionStatusViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     /// Connection-health roll-up surfaced to the UI.
     /// - `.offline` — device has no network interface at all.

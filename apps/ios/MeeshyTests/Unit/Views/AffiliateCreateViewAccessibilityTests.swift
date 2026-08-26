@@ -80,7 +80,7 @@ final class AffiliateCreateViewAccessibilityTests: XCTestCase {
 
     /// The `link.badge.plus` glyph sits inside the button's label next to the
     /// text, so VoiceOver reads the SF Symbol name ahead of the real label.
-    /// Same treatment as the repost glyph in `StatusComposerView`.
+    /// Same treatment as the repost glyph in `ComposerMoodSurface.republicationBanner`.
     func test_ctaGlyph_isHiddenAndButtonIsLabelled() throws {
         let code = try code
         let glyph = try XCTUnwrap(code.range(of: "Image(systemName: \"link.badge.plus\")"))
@@ -100,7 +100,7 @@ final class AffiliateCreateViewAccessibilityTests: XCTestCase {
     /// While creating, the glyph is swapped for a bare `ProgressView`: sighted
     /// users see a spinner, VoiceOver users hear only "dimmed" and cannot tell
     /// whether the tap registered. The twin button (`CreateTrackingLinkView:136`)
-    /// and the mood composer (`StatusComposerView:263`) both carry that transient
+    /// and the mood composer (`MeeshyComposerHost.publishButton`) both carry that transient
     /// state as an `accessibilityValue`; this screen was the last holdout.
     func test_busyState_isCarriedAsAnAccessibilityValue() throws {
         let code = try code

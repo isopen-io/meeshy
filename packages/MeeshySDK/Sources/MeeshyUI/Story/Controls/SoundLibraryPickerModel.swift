@@ -6,6 +6,11 @@ import MeeshySDK
 /// État du sélecteur de sons. Séparé de la vue pour être testable sans SwiftUI.
 @MainActor
 public final class SoundLibraryPickerModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published public var tab: SoundLibraryPicker.Tab = .mine
     @Published public var query: String = ""
     @Published public private(set) var sounds: [APISound] = []

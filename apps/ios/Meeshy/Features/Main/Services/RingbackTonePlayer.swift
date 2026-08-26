@@ -24,6 +24,11 @@ import os
 /// it is effectively the call sound manager.
 @MainActor
 final class RingbackTonePlayer {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     private var loopPlayer: AVAudioPlayer?
     private var activeLoop: String?
     private let logger = Logger(subsystem: "me.meeshy.app", category: "call-sounds")

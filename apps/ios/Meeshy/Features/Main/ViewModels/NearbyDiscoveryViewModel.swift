@@ -306,6 +306,11 @@ nonisolated final class NearbyLocationProvider: NSObject, CLLocationManagerDeleg
 /// faux. Mieux vaut le dire que d'inventer une optimisation qui mentirait.
 @MainActor
 final class NearbyDiscoveryViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     /// Rayon de départ. Assez large pour qu'une ville dense rende quelque
     /// chose, assez étroit pour que « à proximité » veuille encore dire

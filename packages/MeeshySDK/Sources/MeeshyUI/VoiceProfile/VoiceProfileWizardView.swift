@@ -291,6 +291,11 @@ public struct VoiceProfileWizardView: View {
 
 @MainActor
 class VoiceProfileWizardViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var currentStep: VoiceProfileWizardStep = .consent
     @Published var consentGiven = false
     @Published var birthDate = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()

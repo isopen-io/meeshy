@@ -7,6 +7,11 @@ import MeeshyUI
 /// Separating state from command logic (ViewModel) simplifies the 3000-line God Object.
 @MainActor
 final class ConversationStateStore: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     /// Deliberately NOT `@Published`: no View ever reads it. The only observer
     /// of this store is `ConversationView` (as `typingObserver`), and its body
     /// reads typing/loading state, never `messages`. The three readers

@@ -521,12 +521,23 @@ nonisolated enum ComposerDocumentSendRouting {
     /// composition média dans un tus qui jette dès la première requête.
     ///
     /// - Parameter hasLocalMedia: une pièce jointe portée par un fichier LOCAL
-    ///   — image, vidéo, document ou **son enregistré**. La feuille historique
-    ///   n'y range pas son audio (`publishAudioFromSheet` monte droit sur tus,
-    ///   commentaire à l'appui : « Audio offline posts aren't queued through
-    ///   this composer path yet ») ; un enregistrement composé hors ligne y est
-    ///   donc perdu. La surface document ne reconduit pas cette exception : un
-    ///   fichier local est un fichier local.
+    ///   — image, vidéo, document ou **son enregistré**. Depuis c10801bbca (lot
+    ///   7.4b), les deux jumeaux audio de la feuille historique —
+    ///   `publishAudioPost` (`FeedView+Attachments.swift:496`) et
+    ///   `publishAudioFromSheet` (`FeedView+Attachments.swift:1867`) —
+    ///   convergent sur `PublishIntent.audioRecording`, transporté tel quel par
+    ///   `FeedViewModel.publish` (`FeedViewModel.swift:888`) jusqu'à
+    ///   `enqueueDurableMediaPost`, qui enfile SANS condition réseau (doc-comment
+    ///   de `publish(_:)` : « Aucune condition réseau ici, et c'est une
+    ///   décision »). Un vocal composé hors ligne n'est donc plus perdu sur la
+    ///   feuille historique non plus ; il part par la même file durable qu'un
+    ///   fichier local ordinaire. La distinction que ce paramètre portait a
+    ///   disparu avec l'exception qui la motivait — ce que `path` fait déjà
+    ///   (`hasLocalMedia` reste un booléen unique, sans branche audio) n'a donc
+    ///   plus besoin d'être justifié par un rattrapage : c'était la bonne règle
+    ///   avant même que le jumeau historique la respecte. Rien à conclure pour
+    ///   le routage lui-même (lot 2) ; ce qui change, c'est ce que la
+    ///   PRÉMISSE peut désormais affirmer sans lui.
     static func path(
         isQuote: Bool,
         hasLocalMedia: Bool,

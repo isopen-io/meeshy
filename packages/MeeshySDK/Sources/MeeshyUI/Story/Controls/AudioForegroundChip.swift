@@ -14,6 +14,11 @@ import MeeshySDK
 /// slide / story, appeler `clear()` pour repartir d'un état neutre.
 @MainActor
 public final class StoryReaderAudioMuteRegistry: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     public static let shared = StoryReaderAudioMuteRegistry()
 
@@ -52,6 +57,11 @@ public final class StoryReaderAudioMuteRegistry: ObservableObject {
 /// les vues observatrices.
 @MainActor
 public final class StoryReaderPlayheadState: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     public static let shared = StoryReaderPlayheadState()
 

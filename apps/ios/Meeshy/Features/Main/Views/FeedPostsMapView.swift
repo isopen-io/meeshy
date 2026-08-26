@@ -54,6 +54,11 @@ struct PostsMapRepresentable: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, MKMapViewDelegate {
+        // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+        // défaut) → double-free `pointer being freed was not allocated` (abrt)
+        // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+        // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+        nonisolated deinit {}
         var selectedPostId: Binding<String?>
         private var appliedPostIds: Set<String> = []
 
@@ -123,6 +128,11 @@ struct PostsMapRepresentable: UIViewRepresentable {
 
 /// Un point par post géolocalisé, planté sur le LIEU AFFICHÉ (`FeedPost.location`).
 private final class PostMapAnnotation: NSObject, MKAnnotation {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     let postId: String
     let coordinate: CLLocationCoordinate2D
     let title: String?

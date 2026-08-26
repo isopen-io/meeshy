@@ -111,10 +111,8 @@ extension BackgroundSoundBadge {
     ///    reconversion v3→legacy.
     ///
     /// `voiceAttachmentId` (note vocale) N'EST PAS un signal d'existence
-    /// ici — même règle produit que la source de vérité SDK
-    /// `StoryAudioAvailability.hasBackgroundAudioTrack`, qui exclut
-    /// explicitement les notes vocales de la notion de « fond audio » que
-    /// cette icône représente : une note vocale seule n'annonce rien.
+    /// ici : une note vocale seule n'est pas un « fond audio » au sens que
+    /// cette icône représente, donc elle n'annonce rien.
     ///
     /// Écrit UNE fois, appelé par les trois surfaces de lecture via
     /// `announcement(for:)` ci-dessous.

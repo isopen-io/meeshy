@@ -461,6 +461,11 @@ public struct CommunityCreateView: View {
 
 @MainActor
 final class CommunityCreateViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var name = ""
     @Published var identifier = ""
     @Published var description = ""

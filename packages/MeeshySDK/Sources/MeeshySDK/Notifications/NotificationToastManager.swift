@@ -18,6 +18,11 @@ private let logger = Logger(subsystem: "me.meeshy.sdk", category: "notifications
 /// `UIApplication.setBadgeCount` or to the App Group defaults.
 @MainActor
 public final class NotificationToastManager: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = NotificationToastManager()
 
     /// Mirrors `NotificationCoordinator.inAppNotificationUnread`. Kept as a

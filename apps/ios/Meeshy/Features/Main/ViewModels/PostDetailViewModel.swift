@@ -4,6 +4,11 @@ import MeeshySDK
 
 @MainActor
 class PostDetailViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var post: FeedPost?
     @Published var comments: [FeedComment] = [] {
         didSet { _topLevelComments = comments.filter { $0.parentId == nil } }

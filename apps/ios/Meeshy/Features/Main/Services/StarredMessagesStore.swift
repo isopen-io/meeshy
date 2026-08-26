@@ -26,6 +26,11 @@ struct StarredMessageSnapshot: Codable, Identifiable, Equatable, Sendable {
 /// `StarredMessagesView` can react without polling.
 @MainActor
 final class StarredMessagesStore: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = StarredMessagesStore()
 
     @Published private(set) var snapshots: [StarredMessageSnapshot] = []

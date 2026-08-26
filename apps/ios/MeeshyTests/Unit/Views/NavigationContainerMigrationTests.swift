@@ -59,10 +59,46 @@ final class NavigationContainerMigrationTests: XCTestCase {
         try assertMigrated("MeeshyShareExtension/ShareViewController.swift")
     }
 
-    // MARK: - Migrated in 220i — the last holdout
+    // MARK: - Migrated in 220i — RE-VISÉ au lot 4.8
 
-    func test_statusComposerView_usesNavigationStack() throws {
-        try assertMigrated("Meeshy/Features/Main/Views/StatusComposerView.swift")
+    /// **La raison d'origine, portée sur la surface qui a remplacé l'écran.**
+    ///
+    /// 220i avait migré `StatusComposerView` de `NavigationView` vers
+    /// `NavigationStack` parce qu'un `NavigationView` à un seul enfant s'effondre
+    /// en split view au largeur régulière (iPad) : le détail y est vide et la
+    /// feuille disparaît derrière lui. Le fichier est retiré par le lot 4.8, et
+    /// le mood est servi par le meuble, qui n'a AUCUN conteneur de navigation —
+    /// il peint son titre et sa croix lui-même.
+    ///
+    /// La garde ne peut donc pas exiger `NavigationStack {` ici : ce serait
+    /// exiger un conteneur que la nouvelle forme n'a pas. Elle garde sa moitié
+    /// OPPOSABLE — le conteneur déprécié reste interdit — et la double par ce qui
+    /// remplace la barre : le titre et la sortie, peints par la surface. Sans
+    /// cette seconde moitié, retirer le chrome à la main laisserait une feuille
+    /// sans titre ni congé, et rien ne le dirait.
+    func test_moodComposer_hostsItsChromeWithoutAnyNavigationContainer() throws {
+        let surfacePath = "Meeshy/Features/Main/Composer/ComposerMoodSurface.swift"
+        let hostPath = "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"
+
+        for path in [surfacePath, hostPath] {
+            let source = try String(contentsOf: iosRoot.appendingPathComponent(path), encoding: .utf8)
+            XCTAssertFalse(
+                source.contains("NavigationView {"),
+                "\(path) must not use the deprecated NavigationView container: with its default " +
+                "double-column style it collapses to an empty detail pane at regular width (iPad)."
+            )
+        }
+
+        let surface = try String(contentsOf: iosRoot.appendingPathComponent(surfacePath), encoding: .utf8)
+        XCTAssertTrue(
+            surface.contains("ComposerMoodCopy.title"),
+            "La surface doit peindre son TITRE : il vivait en `navigationTitle`, et le perdre en chemin " +
+            "laisserait `status.composer.title` sans lecteur et la feuille sans en-tête."
+        )
+        XCTAssertTrue(
+            surface.contains("let onClose: () -> Void"),
+            "La surface doit peindre sa SORTIE : sans barre de navigation, personne d'autre ne pose la croix."
+        )
     }
 
     private func assertMigrated(_ path: String, file: StaticString = #filePath, line: UInt = #line) throws {
@@ -84,7 +120,8 @@ final class NavigationContainerMigrationTests: XCTestCase {
     // MARK: - The debt is paid — this is now a regression guard
 
     /// 220i migrated `StatusComposerView`, the last holdout, so the expectation
-    /// is now the empty set. From here this test has changed character: it no
+    /// is now the empty set — et elle l'est restée après le retrait de ce
+    /// fichier au lot 4.8 : le balayage porte sur l'arbre, pas sur une liste. From here this test has changed character: it no
     /// longer pins tolerated debt, it forbids the container outright. Any new
     /// `NavigationView` anywhere in the shipping targets turns it red.
     func test_noNavigationViewRemains() throws {

@@ -9,6 +9,11 @@ import Foundation
 /// "Delete for everyone" remains a server round-trip via
 /// `MessageService.delete` — this store only covers the local-only variant.
 final class LocallyHiddenMessagesStore: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = LocallyHiddenMessagesStore()
 
     private let defaults: UserDefaults

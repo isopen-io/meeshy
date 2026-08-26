@@ -38,6 +38,11 @@ struct CacheCoordinatorReelFeedCache: ReelFeedCacheReading {
 /// reel) pages the seedless « Pour toi » thread.
 @MainActor
 final class ReelsViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published private(set) var reels: [FeedPost] = []
     /// Réel actuellement visible. Le `didSet` gère l'appartenance à la post room
     /// (`ROOMS.post`) du réel actif : on quitte l'ancienne, on rejoint la nouvelle.

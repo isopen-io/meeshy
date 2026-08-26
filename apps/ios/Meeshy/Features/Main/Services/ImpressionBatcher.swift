@@ -30,6 +30,11 @@ import UIKit
 /// comptage de portée ne doit jamais provoquer de re-render.
 @MainActor
 final class ImpressionBatcher: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "impressions")
 

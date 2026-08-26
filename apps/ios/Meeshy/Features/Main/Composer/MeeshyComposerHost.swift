@@ -138,12 +138,13 @@ nonisolated enum ComposerReelGate {
 /// livrées. Le socle est leur second lecteur : c'est ce qui les empêche de
 /// devenir orphelines le jour du retrait (lot 4.8).
 ///
-/// **Ce que ce déménagement NE règle PAS** : `status.composer.publish` reste
-/// lue par `StatusComposerView` SEULE. Le socle garde `composer.socle.publish`,
-/// qui n'est pas la même phrase — « Publish » contre « Post » en anglais — et
-/// fondre les deux serait une édition de catalogue que ce lot ne possède pas. Au
-/// retrait, c'est donc cette clé-là, et elle seule, qu'il faudra décider de
-/// garder ou de retirer.
+/// **Ce que ce déménagement n'avait pas réglé, et que le lot 4.8 a tranché** :
+/// `status.composer.publish` n'était lue que par `StatusComposerView`. Le socle
+/// garde `composer.socle.publish`, qui n'est pas la même phrase — « Publish »
+/// contre « Post » en anglais — et fondre les deux aurait été une édition de
+/// catalogue qu'aucun de ces lots ne possède. La clé a donc été RETIRÉE des sept
+/// locales avec l'écran qui la lisait : la laisser aurait fait rougir la garde
+/// des clés mortes (`LocalizationConsistencyTests`).
 nonisolated enum ComposerSocleCopy {
 
     /// L'état TRANSITOIRE, porté par `accessibilityValue` et non par le libellé.

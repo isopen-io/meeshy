@@ -31,6 +31,11 @@ import MeeshySDK
 /// reused by `StoryAVCompositor` per frame. Until that lands, the `CAFilter`
 /// fallback ships the user-facing effect.
 public final class StoryGlassBackdropLayer: CALayer {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private var sigma: Float = 24
     private var backdropTexture: MTLTexture?

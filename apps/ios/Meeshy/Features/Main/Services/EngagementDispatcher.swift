@@ -4,6 +4,11 @@ import MeeshySDK
 
 /// Bridges the SDK outbox to the app-side EngagementTracker sink protocol.
 public final class EngagementOutboxSink: EngagementSinking {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = EngagementOutboxSink()
     private let outbox: EngagementOutbox
     init(outbox: EngagementOutbox = .shared) { self.outbox = outbox }
@@ -51,6 +56,11 @@ enum EngagementFlushTrigger {
 
 @MainActor
 final class EngagementRetryScheduler {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = EngagementRetryScheduler()
     private var timer: Task<Void, Never>?
     private var networkCancellable: AnyCancellable?

@@ -37,6 +37,11 @@ import MeeshySDK
 ///   point d'atterrissage exact de cette lacune.
 @MainActor
 final class ScrollTimePillState: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published private(set) var label: String?
     @Published private(set) var isVisible: Bool = false
     @Published var isDark: Bool = false

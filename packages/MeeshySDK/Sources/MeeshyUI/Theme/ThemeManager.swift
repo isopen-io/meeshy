@@ -53,6 +53,11 @@ public enum ThemePreference: String, CaseIterable {
 // MARK: - Theme Manager
 
 public class ThemeManager: ObservableObject, @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = ThemeManager()
 
     @Published public var mode: ThemeMode = {

@@ -8,6 +8,11 @@ import MeeshySDK
 
 @MainActor
 public final class SharedAVPlayerManager: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = SharedAVPlayerManager()
 
     @Published public var player: AVPlayer?
@@ -591,6 +596,11 @@ public final class SharedAVPlayerManager: ObservableObject {
 // MARK: - PIP Delegate
 
 private final class PipDelegate: NSObject, AVPictureInPictureControllerDelegate {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     let onStart: () -> Void
     let onStop: () -> Void
     let onRestore: (@escaping (Bool) -> Void) -> Void

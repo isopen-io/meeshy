@@ -19,6 +19,11 @@ import Metal
 /// immutable `MTLDevice` (Apple caches the default device process-wide, so the construction cost is
 /// dominated by `CIContext` setup, not Metal driver bring-up).
 public final class DissolveVideoCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     // MARK: - Public
 

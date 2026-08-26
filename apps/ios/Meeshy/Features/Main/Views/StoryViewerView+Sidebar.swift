@@ -1212,11 +1212,22 @@ struct StoryHeaderView: View {
 
                         // 1. Republier en post — DIRECT, un tap (arbitrage D3).
                         // Sans `visibility` : le serveur hérite de l'audience de
-                        // l'original, donc jamais plus large.
+                        // l'original, donc jamais plus large. C'est l'ANCRAGE web
+                        // (`onRepostAsPost` / `KeepOnFeedIcon`, StoryViewer.tsx) :
+                        // glyphe DISTINCT du bouton du rail (:519, composeur), qui
+                        // portait le même `arrow.2.squarepath` avant le premier
+                        // correctif — deux permanences différentes n'ont pas le
+                        // même dessin. `bookmark.fill` (premier choix) désigne
+                        // déjà « Publications enregistrées » ailleurs dans l'app
+                        // (SettingsView.swift:606 et 4 autres sites, constat de
+                        // revue R3, 2026-08-25) : collision levée dans CE fichier,
+                        // rouverte à l'échelle de l'app. `infinity` reste libre de
+                        // tout sens produit concurrent et porte la permanence
+                        // (story éphémère → post durable).
                         Button {
                             repostAsPostDirect()
                         } label: {
-                            Label(String(localized: "story.viewer.repostAsPost", defaultValue: "Republier en post", bundle: .main), systemImage: "arrow.2.squarepath")
+                            Label(String(localized: "story.viewer.repostAsPost", defaultValue: "Republier en post", bundle: .main), systemImage: "infinity")
                         }
 
                         // 2. Citer en post — ouvre le composeur de POST avec la
