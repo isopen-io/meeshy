@@ -105,4 +105,154 @@ final class LocalizedNumberTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - duration — ce que l'app MONTRE
+
+    /// Les trois orthographes coexistaient déjà dans l'app ; ce qui est épinglé
+    /// ici est ce qui les DISTINGUE, pas une chaîne CLDR.
+    func test_duration_minuteSecond_doesNotPadTheMinute() {
+        XCTAssertEqual(
+            LocalizedNumber.duration(seconds: 125, locale: english), "2:05"
+        )
+    }
+
+    func test_duration_paddedMinuteSecond_padsTheMinuteToTwoDigits() {
+        XCTAssertEqual(
+            LocalizedNumber.duration(
+                seconds: 125, clock: .paddedMinuteSecond, locale: english
+            ),
+            "02:05"
+        )
+    }
+
+    func test_duration_hourMinuteSecond_carriesThreeFields() {
+        XCTAssertEqual(
+            LocalizedNumber.duration(
+                seconds: 3_900, clock: .hourMinuteSecond, locale: english
+            ),
+            "1:05:00"
+        )
+    }
+
+    /// Aucune horloge ne promeut les heures d'elle-même : les douze formateurs
+    /// privés remplacés accumulaient les minutes, et la promotion appartient à
+    /// l'appelant (`CallManager` est le seul à la vouloir). Le vérifier ici
+    /// évite qu'un changement de motif la fasse apparaître en silence sur les
+    /// minuteries média.
+    func test_duration_minuteSecond_accumulatesMinutesPastAnHour() {
+        let past = LocalizedNumber.duration(seconds: 3_695, locale: english)
+        XCTAssertEqual(
+            past.split(separator: ":").count, 2,
+            "L'horloge minute:seconde n'a que deux champs — obtenu « \(past) »."
+        )
+        XCTAssertNotEqual(
+            past, LocalizedNumber.duration(seconds: 95, locale: english),
+            "1 h 1 min 35 s et 1 min 35 s ne peuvent pas rendre la même horloge : "
+            + "laisser tomber les heures est précisément le défaut que "
+            + "`CallManager` a corrigé de son côté."
+        )
+    }
+
+    /// **Le défaut.** `String(format: "%d:%02d", …)` grave les chiffres latins,
+    /// quelle que soit la locale du lecteur.
+    func test_duration_arabicUsesItsOwnDigits() {
+        let rendered = LocalizedNumber.duration(seconds: 125, locale: arabic)
+        XCTAssertFalse(
+            rendered.contains("2") || rendered.contains("0") || rendered.contains("5"),
+            "En arabe, la durée ne doit pas s'écrire en chiffres latins — obtenu « \(rendered) »."
+        )
+        XCTAssertTrue(rendered.contains(where: \.isNumber), "Il doit rester une durée.")
+    }
+
+    /// `AVPlayer` rend `.nan` avant que l'élément soit prêt et `.infinity` pour
+    /// un flux sans durée ; `MessageOverlayMenu.formatTime` portait ce repli
+    /// localement. Il vit désormais dans le helper — et il est BORNÉ, parce que
+    /// `Int(1e30)` piège à l'exécution là où `isFinite` ne dit rien.
+    func test_duration_survivesTheValuesAVPlayerActuallyEmits() {
+        for hostile in [TimeInterval.nan, .infinity, -.infinity, -42, 1e30] {
+            XCTAssertFalse(
+                LocalizedNumber.duration(seconds: hostile, locale: english).isEmpty,
+                "\(hostile) doit rendre une durée, pas une chaîne vide."
+            )
+        }
+        XCTAssertEqual(
+            LocalizedNumber.duration(seconds: TimeInterval.nan, locale: english),
+            LocalizedNumber.duration(seconds: 0, locale: english)
+        )
+    }
+
+    /// Troncature, jamais arrondi : une minuterie qui affiche « 0:01 » à
+    /// 1,9 s ne doit pas sauter à « 0:02 ».
+    func test_duration_truncatesTowardZero() {
+        XCTAssertEqual(
+            LocalizedNumber.duration(seconds: 90.9, locale: english),
+            LocalizedNumber.duration(seconds: 90, locale: english)
+        )
+    }
+
+    // MARK: - spokenDuration — ce que l'app DIT
+
+    /// **Le défaut central de 247i.** « 4:32 » est l'orthographe d'une HEURE :
+    /// passée à `.accessibilityValue`, elle faisait annoncer « Le lien expire
+    /// dans 4 heures 32 » pour un compte à rebours de quatre minutes et demie.
+    /// La forme parlée doit donc DIFFÉRER de l'horloge — c'est l'énoncé, et il
+    /// se vérifie sans nommer une seule chaîne CLDR.
+    func test_spokenDuration_isNeverTheClockSpelling() {
+        for locale in [french, english, arabic] {
+            XCTAssertNotEqual(
+                LocalizedNumber.spokenDuration(seconds: 272, locale: locale),
+                LocalizedNumber.duration(seconds: 272, locale: locale),
+                "Ce que VoiceOver ENTEND ne peut pas être l'horloge que l'écran MONTRE."
+            )
+        }
+    }
+
+    /// L'horloge sépare ses champs par « : » ; la forme parlée les NOMME. Un
+    /// deux-points survivant signalerait que le style d'unités n'a pas été
+    /// appliqué du tout.
+    func test_spokenDuration_carriesNoClockSeparator() {
+        XCTAssertFalse(
+            LocalizedNumber.spokenDuration(seconds: 272, locale: english).contains(":")
+        )
+    }
+
+    func test_spokenDuration_followsTheReadersLocale() {
+        XCTAssertNotEqual(
+            LocalizedNumber.spokenDuration(seconds: 272, locale: french),
+            LocalizedNumber.spokenDuration(seconds: 272, locale: english)
+        )
+    }
+
+    /// Une durée nulle est un état RÉEL — la minuterie de la caméra et le pill
+    /// d'appel commencent tous deux à zéro. Une valeur d'accessibilité vide
+    /// laisserait VoiceOver annoncer le libellé seul, sans sa mesure.
+    func test_spokenDuration_zeroIsStillSpoken() {
+        for locale in [french, english, arabic] {
+            XCTAssertFalse(
+                LocalizedNumber.spokenDuration(seconds: 0, locale: locale).isEmpty,
+                "Une durée nulle doit s'annoncer, pas disparaître."
+            )
+        }
+    }
+
+    /// Le repli hostile est le même que celui de l'horloge — les deux faces
+    /// partagent `wholeSeconds`, et c'est ce partage qui est épinglé.
+    func test_spokenDuration_survivesTheValuesAVPlayerActuallyEmits() {
+        for hostile in [TimeInterval.nan, .infinity, -1, 1e30] {
+            XCTAssertFalse(
+                LocalizedNumber.spokenDuration(seconds: hostile, locale: english).isEmpty
+            )
+        }
+    }
+
+    /// La durée d'appel PARLÉE délègue ici — sans quoi la source unique en
+    /// serait deux, exactement comme `ReachMetricLabel.spokenCount` plus haut.
+    func test_callManagerSpokenDuration_delegatesToTheSameRule() {
+        for seconds in [0, 45, 272, 3_900] {
+            XCTAssertEqual(
+                CallManager.spokenDuration(TimeInterval(seconds), locale: french),
+                LocalizedNumber.spokenDuration(seconds: seconds, locale: french)
+            )
+        }
+    }
 }

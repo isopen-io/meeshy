@@ -14,7 +14,58 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
-> **POINTEUR iOS AUTORITAIRE (mis à jour 246i, 2026-08-25)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> **POINTEUR iOS AUTORITAIRE (mis à jour 247i, 2026-08-26)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> - **Synchronisation** : branche `claude/intelligent-noether-llro07` **repartie de `origin/main` `4b9acd3f`** · itération **247i** · PR ⏳ · merge ⏳. Aucune PR iOS ouverte au départ (#3523 présence/backend, #3525 web) : aucun conflit de fichier possible.
+>
+> ### 247i — la garde de 241i était contournée par une FONCTION
+>
+> 241i a fermé la famille « nombre servi à VoiceOver » **par la forme**, en
+> interdisant le LITTÉRAL interpolé. Onze sites servaient un nombre en chiffres
+> latins **sans jamais écrire de littéral** : le motif fautif vivait un cran plus
+> bas, dans le corps d'un `private func`, et ressortait au site d'appel sous la
+> forme la plus innocente qui soit — `.accessibilityValue(formattedDuration)`.
+>
+> - **Le défaut le plus visible : « Le lien expire dans 4 heures 32 ».**
+>   `MagicLinkView` posait « 4:32 » en valeur d'accessibilité. « 4:32 » est
+>   l'orthographe d'une HEURE ; le synthétiseur français la lit comme telle.
+>   **L'annonce se trompait d'un facteur soixante** sur la seule information que
+>   cet écran porte. Onze sites au total : `CallView` ×6, `FloatingCallPillView`,
+>   `AudioPostComposerView`, `CameraView`, `UniversalComposerBar`, `MagicLinkView`.
+> - **⚠️ 206i / 210i / 211i avaient traité la MOITIÉ de ce défaut** — elles ont
+>   donné son LIBELLÉ à une valeur nue (« Durée de l'appel »), l'ont documenté
+>   dans les vues, et se sont arrêtées là. **Un libellé nomme la mesure ; il ne
+>   corrige pas l'orthographe de ce qu'il introduit.** Trois itérations ont
+>   relu ces lignes exactes sans voir la seconde moitié.
+> - **⚠️ Leçon de forme 247i — une garde qui épingle une SYNTAXE est contournée
+>   par une FONCTION.** Et le contournement est invisible pour l'auteur de la
+>   garde : les onze formateurs privés dataient de 2025, la garde a été posée en
+>   2026 sur une surface qui ne contenait déjà plus le motif. **Question à poser
+>   à toute garde de forme : ce que j'interdis peut-il traverser une fonction
+>   avant d'atteindre le site que j'inspecte ?** Si oui, chercher le motif à sa
+>   SOURCE. La garde 247i le fait.
+> - **Consolidation** : onze copies de `String(format: "%d:%02d", …)` sous SIX
+>   noms (`formatDuration`, `formatDur`, `formatDurationMs`, `formatTime`,
+>   `formattedDuration`, `formattedCountdown`) → `LocalizedNumber.duration` /
+>   `.spokenDuration`, natives (`Duration.TimeFormatStyle` / `UnitsFormatStyle`,
+>   iOS 16+ = plancher du projet). **0 changement visuel en fr/en** ; les trois
+>   orthographes légitimes de l'app sont NOMMÉES (`DurationClock`), pas unifiées.
+> - **⚠️ Un douzième site n'est PAS de la famille et ne doit jamais l'être** :
+>   `NotificationSettingsView.formattedDndTime` grave « HH:mm » pour la
+>   **PERSISTANCE** (relu par `UserNotificationPreferences`). Le localiser
+>   corromprait la donnée. Il est allowlisté NOMMÉMENT dans la garde — le seul
+>   site du dépôt où les chiffres latins sont la bonne réponse.
+> - **Base de départ 248i+ : `main` HEAD après merge 247i.** **Piste 248i+** :
+>   (a) **les 17 copies SDK du même formateur** (`MeeshyUI/Story/Timeline/*`,
+>   `MeeshyUI/Media/*`, `MeeshySDK/Models/{Core,Call,Feed}Models`) — hors
+>   périmètre par règle, piste SDK, point de convergence `MediaTypes.formatDuration` ;
+>   (b) `ComposerModels:35`, chaîne française hors catalogue ; (c→g) carry-over
+>   246i inchangés : classer le bucket « appelée seulement par un test »
+>   (241 entrées), recâbler `FeedView` sur `likePost`/`bookmarkPost`,
+>   `isProgrammaticScroll`, les 3 copies d'`isLoadingReactions`,
+>   `buildNativeMessageMenu` / découvrabilité du fil de réponses / cibles
+>   tactiles 44 pt d'`InteractiveProgressBar`.
+
+> **POINTEUR iOS (historique, 246i, 2026-08-25)** — piste iOS (suffixe `i`).
 > - **243i, 244i et 245i sont MERGÉES** — PR [#3498](https://github.com/isopen-io/meeshy/pull/3498), [#3509](https://github.com/isopen-io/meeshy/pull/3509), [#3514](https://github.com/isopen-io/meeshy/pull/3514).
 >
 > ### ⛔ CORRECTION — le bloc 245i ci-dessous est FAUX sur son mécanisme principal

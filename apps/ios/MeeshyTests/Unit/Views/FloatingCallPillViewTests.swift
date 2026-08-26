@@ -524,9 +524,11 @@ final class FloatingCallPillViewTests: XCTestCase {
     func test_statusLine_showsDurationOnlyWhenConnected() throws {
         let source = try pillSource()
         XCTAssertTrue(
-            source.contains("pillStatus.isConnected ? formattedDuration"),
-            "The pill status line must show the live duration ONLY for the .connected state " +
-            "— pre-connection states must show a textual label, never 00:00."
+            source.contains("pillStatus.isConnected ? spokenDuration"),
+            "The pill status line must announce the live duration ONLY for the .connected " +
+            "state — pre-connection states must speak a textual label, never 00:00. The " +
+            "announced form is the SPOKEN twin since 247i: a speech synthesiser reads the " +
+            "clock spelling \"02:34\" as a time of day."
         )
     }
 
@@ -539,6 +541,18 @@ final class FloatingCallPillViewTests: XCTestCase {
             "reimplementing mm:ss locally — the pill's own reimplementation drops the " +
             "hours field past 60 minutes (\"125:33\" instead of \"2:05:33\"), unlike " +
             "every other duration label in CallView which already uses the shared helper."
+        )
+    }
+
+    /// The spoken twin obeys the same delegation rule, and for the same reason:
+    /// two spellings of one duration is how the pill's own reimplementation
+    /// drifted from CallView in the first place.
+    func test_spokenDuration_delegatesToCallManager_notLocalReimplementation() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("callManager.spokenDuration"),
+            "FloatingCallPillView.spokenDuration must delegate to CallManager.spokenDuration " +
+            "rather than re-deriving a spoken duration locally."
         )
     }
 
