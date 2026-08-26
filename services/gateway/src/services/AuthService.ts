@@ -24,6 +24,7 @@ import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetSe
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { recipientLanguage } from '../utils/recipient-language';
 import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
+import { postJoinSystemMessage, type JoinSystemMessageDeps } from './conversations/joinSystemMessage';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -80,15 +81,31 @@ export interface RegisterResult {
   };
 }
 
+/**
+ * Ce qu'il faut du manager Socket.IO pour annoncer une arrivée dans le fil.
+ * Résolu PARESSEUSEMENT, comme `ExpiredMessagesCleanupService` : le manager
+ * n'existe pas encore quand les routes s'enregistrent, et une capture retiendrait
+ * `null` pour toujours. Absent = pas de socket, l'avis reste persisté.
+ */
+export type JoinNoticeBroadcaster = {
+  broadcastMessage(message: unknown, conversationId: string): Promise<void>;
+};
+
+export type AuthServiceOptions = {
+  readonly resolveSocketManager?: () => JoinNoticeBroadcaster | null | undefined;
+};
+
 export class AuthService {
   private prisma: PrismaClient;
   private jwtSecret: string;
   private emailService: EmailService;
   private frontendUrl: string;
+  private readonly resolveSocketManager?: () => JoinNoticeBroadcaster | null | undefined;
 
-  constructor(prisma: PrismaClient, jwtSecret: string) {
+  constructor(prisma: PrismaClient, jwtSecret: string, options: AuthServiceOptions = {}) {
     this.prisma = prisma;
     this.jwtSecret = jwtSecret;
+    this.resolveSocketManager = options.resolveSocketManager;
     this.emailService = new EmailService();
     this.frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:3100';
 
@@ -110,6 +127,13 @@ export class AuthService {
    */
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  /** La diffusion de l'avis d'arrivée, résolue à l'appel — même forme que les quatre autres portes. */
+  private joinNoticeBroadcast(): JoinSystemMessageDeps['broadcast'] {
+    const resolve = this.resolveSocketManager;
+    if (!resolve) return undefined;
+    return (message, conversationId) => resolve()?.broadcastMessage(message, conversationId) ?? Promise.resolve();
   }
 
   /**
@@ -642,7 +666,7 @@ export class AuthService {
           });
 
           if (!existingMember) {
-            await this.prisma.participant.create({
+            const member = await this.prisma.participant.create({
               data: {
                 conversationId: globalConversation.id,
                 userId: user.id,
@@ -656,12 +680,31 @@ export class AuthService {
                   canSendVideos: true,
                   canSendAudios: true,
                   canSendLocations: true,
-                  canSendLinks: true
+                  canSendLinks: true,
+                  // L'inscrit lit le salon global depuis son arrivée, comme
+                  // tout membre ajouté après coup (`services/historyFloor`).
+                  canViewHistory: false
                 },
                 joinedAt: new Date(),
                 isActive: true
               }
             });
+
+            // Cinquième porte d'entrée, même loi que les quatre autres
+            // (`routes/anonymous.ts`, `sharing.ts` ×2, `participants.ts`) : le
+            // salon global voit arriver l'inscrit comme n'importe quel fil.
+            // `postJoinSystemMessage` ne rejette jamais — l'avis est un
+            // accessoire de l'inscription, jamais sa condition.
+            await postJoinSystemMessage(
+              { prisma: this.prisma, broadcast: this.joinNoticeBroadcast() },
+              {
+                conversationId: globalConversation.id,
+                participantId: member.id,
+                displayName: user.displayName || user.username,
+                isAnonymous: false,
+                viaShareLink: false
+              }
+            );
           }
         } else {
           logger.warn('[AUTH] ⚠️ Conversation globale "meeshy" non trouvée - impossible d\'ajouter l\'utilisateur');

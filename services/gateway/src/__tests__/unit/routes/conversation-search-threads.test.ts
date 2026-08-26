@@ -141,7 +141,11 @@ function createMockPrisma() {
       findMany: jest.fn<any>().mockImplementation(async (args: any) =>
         (args?.where?.conversationId?.in ?? []).map((conversationId: string) => ({ conversationId }))
       ),
+      // La ligne du LECTEUR, lue par le fil pour son plancher d'historique :
+      // `null` = aucune ligne, rien ne borne.
+      findFirst: jest.fn<any>().mockResolvedValue(null),
     },
+    conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) },
     message: {
       findFirst: jest.fn<any>(),
       findMany: jest.fn<any>(),
@@ -1487,5 +1491,84 @@ describe('registerThreadsRoutes — GET /conversations/:id/threads/:messageId', 
     expect(prisma.message.findMany).toHaveBeenCalledTimes(2);
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result.replies).toHaveLength(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEARCH — plancher d'historique de l'aperçu
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// La recherche rend la MÊME ligne que la liste, donc le même aperçu : le
+// dernier message global peut précéder l'arrivée du lecteur, et la lecture de
+// son appartenance (déjà faite pour l'effectif) porte désormais tout ce qui
+// décide de son plancher.
+
+describe('registerSearchRoutes — plancher d’historique de l’aperçu', () => {
+  const JOINED = new Date('2026-06-15T00:00:00Z');
+  const BEFORE_JOIN = new Date('2026-06-01T00:00:00Z');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGenerateDefaultConversationTitle.mockReturnValue('Default Title');
+    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+    mockResolveForTargets.mockImplementation(lawFaithfulResolver());
+  });
+
+  function setupBounded(membership: Record<string, unknown>, replacement: unknown) {
+    const fastify = createMockFastify();
+    const prisma = createMockPrisma();
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.conversation.findMany.mockResolvedValue([
+      makeConversation({ messages: [makeMessage({ id: 'm-old', createdAt: BEFORE_JOIN })] }),
+    ]);
+    prisma.participant.findMany.mockResolvedValue([{ conversationId: VALID_CONV_ID, ...membership }]);
+    prisma.message.findFirst.mockResolvedValue(replacement);
+    prisma.userMessageDeletion = { findMany: jest.fn<any>().mockResolvedValue([]) };
+    prisma.userConversationPreferences = { findMany: jest.fn<any>().mockResolvedValue([]) };
+    prisma.conversationShareLink.findMany = jest.fn<any>().mockResolvedValue([]);
+    registerSearchRoutes(fastify, prisma, jest.fn());
+    const route = getRoute(fastify, 'GET', 'search');
+    const reply = createMockReply();
+    return { prisma, route, reply };
+  }
+
+  it('lit la ligne du lecteur avec la projection du plancher', async () => {
+    const { prisma, route, reply } = setupBounded({ role: 'admin', joinedAt: JOINED }, null);
+    await route.handler(makeSearchRequest('My'), reply);
+
+    expect(prisma.participant.findMany.mock.calls[0][0].select).toMatchObject({
+      conversationId: true, role: true, joinedAt: true, shareLinkId: true, historyVisibleFrom: true, permissions: true,
+    });
+  });
+
+  it('remplace un aperçu d’AVANT l’arrivée d’un membre au droit figé fermé', async () => {
+    const since = makeMessage({ id: 'm-since', createdAt: new Date('2026-07-01T00:00:00Z') });
+    const { prisma, route, reply } = setupBounded(
+      { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false } },
+      since,
+    );
+    await route.handler(makeSearchRequest('My'), reply);
+
+    expect(prisma.message.findFirst.mock.calls[0][0].where).toMatchObject({ conversationId: VALID_CONV_ID, createdAt: { gte: JOINED } });
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].lastMessage.id).toBe('m-since');
+  });
+
+  it('sert l’aperçu global à un administrateur', async () => {
+    const { prisma, route, reply } = setupBounded({ role: 'admin', joinedAt: JOINED, permissions: { canViewHistory: false } }, null);
+    await route.handler(makeSearchRequest('My'), reply);
+
+    expect(prisma.message.findFirst).not.toHaveBeenCalled();
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].lastMessage.id).toBe('m-old');
+  });
+
+  it('retire l’aperçu quand le plancher est ILLISIBLE', async () => {
+    const { prisma, route, reply } = setupBounded({ role: 'member', joinedAt: JOINED, shareLinkId: 'sl-1', permissions: {} }, null);
+    prisma.conversationShareLink.findMany.mockRejectedValue(new Error('mongo down'));
+    await route.handler(makeSearchRequest('My'), reply);
+
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].lastMessage).toBeNull();
   });
 });

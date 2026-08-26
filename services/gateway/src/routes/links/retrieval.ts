@@ -10,6 +10,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { viewerFromRequest } from '../users/presence-gate';
 import { createLegacyHybridRequest } from './utils/link-helpers';
+import { historyReaderFromAuthContext, loadHistoryFloor, type HistoryFloorJoin } from '../../services/historyFloor';
 import { findShareLinkByIdentifier, getConversationMessages, countConversationMessages } from './utils/prisma-queries';
 import { formatMessageWithUnifiedSender } from './utils/message-formatters';
 import {
@@ -170,14 +171,35 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
       // yielded `NaN`/negative skip/take on malformed input, with no upper cap.
       const { limit, offset } = validatePagination(offsetStr, limitStr, { defaultLimit: 50, maxLimit: 100 });
 
+      // Le plancher du LECTEUR, lu sur SA ligne parmi les participants déjà
+      // chargés avec le lien — un anonyme se reconnaît par `Participant.id`,
+      // un inscrit par `userId`. Un visiteur en simple aperçu n'a pas de
+      // ligne : rien ne le borne, et c'est juste, `canPreview` exige déjà
+      // `allowViewHistory`.
+      const reader = historyReaderFromAuthContext(request.authContext);
+      const linkParticipants = shareLink.conversation.participants as ReadonlyArray<
+        HistoryFloorJoin & { id: string; type: string; userId: string | null; isActive: boolean }
+      >;
+      const readerRow = reader === null
+        ? null
+        : linkParticipants.find((p) =>
+            p.isActive && (reader.kind === 'anonymous'
+              ? p.id === reader.participantId
+              : p.type === 'user' && p.userId === reader.userId)
+          ) ?? null;
+      const historyFloor = readerRow
+        ? await loadHistoryFloor(fastify.prisma, readerRow, { link: shareLink })
+        : null;
+
       const messages = await getConversationMessages(
         fastify.prisma,
         shareLink.conversationId,
         limit,
-        offset
+        offset,
+        { historyFloor }
       );
 
-      const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId);
+      const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId, { historyFloor });
 
       const formattedMessages = messages.map(formatMessageWithUnifiedSender);
 

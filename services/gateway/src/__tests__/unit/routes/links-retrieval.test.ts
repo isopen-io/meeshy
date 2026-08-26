@@ -631,3 +631,100 @@ describe('GET /links/:identifier — DB error', () => {
     expect(res.statusCode).toBe(500);
   });
 });
+
+// ─── Plancher d'historique ────────────────────────────────────────────────────
+//
+// `GET /links/:identifier` sert des messages lui aussi. Le lecteur y est
+// reconnu sur sa ligne parmi les participants chargés AVEC le lien — un
+// anonyme par `Participant.id`, un inscrit par `userId` — et la borne voyage
+// jusqu'aux deux helpers (page et total). Un visiteur en aperçu n'a pas de
+// ligne : rien ne le borne, `canPreview` exige déjà `allowViewHistory`.
+
+describe('GET /links/:identifier — plancher d’historique du lecteur', () => {
+  const JOINED_AT = new Date('2026-06-15T00:00:00Z');
+  const ANON_ROW_ID = '507f1f77bcf86cd799439aaa';
+  const memberRow = (over: Record<string, unknown> = {}) => ({
+    ...mockShareLink.conversation.participants[0],
+    permissions: { canViewHistory: false },
+    joinedAt: JOINED_AT,
+    shareLinkId: null,
+    historyVisibleFrom: null,
+    ...over,
+  });
+  const anonymousRow = () => ({
+    id: ANON_ROW_ID, type: 'anonymous', userId: null, isActive: true, role: 'member',
+    joinedAt: JOINED_AT, displayName: 'ano_guest', language: 'fr', isOnline: false,
+    shareLinkId: mockShareLink.id, historyVisibleFrom: null, permissions: {},
+    anonymousSession: { profile: { firstName: 'Guest', lastName: 'X', username: 'ano_guest' } },
+    user: null,
+  });
+  const withParticipants = (participants: unknown[], over: Record<string, unknown> = {}) => ({
+    ...mockShareLink,
+    ...over,
+    conversation: { ...mockShareLink.conversation, participants },
+  });
+  const readOptionsOf = () => ({
+    page: mockGetConversationMessages.mock.calls[0][4],
+    total: mockCountConversationMessages.mock.calls[0][2],
+  });
+
+  beforeEach(() => {
+    mockGetConversationMessages.mockClear();
+    mockCountConversationMessages.mockClear();
+  });
+
+  it('borne un membre INSCRIT au droit figé fermé à son arrivée — page et total', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue(withParticipants([memberRow()]));
+    const app = await buildApp(
+      { isAuthenticated: true, isAnonymous: false, user: { id: USER_ID, username: 'alice', systemLanguage: 'fr' } },
+      { type: 'user', isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER' } }
+    );
+
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(readOptionsOf()).toEqual({ page: { historyFloor: JOINED_AT }, total: { historyFloor: JOINED_AT } });
+    await app.close();
+  });
+
+  it('borne un ANONYME entré par un lien qui ferme l’historique, reconnu par `Participant.id`', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue(
+      withParticipants([memberRow({ permissions: { canViewHistory: true } }), anonymousRow()], { allowViewHistory: false })
+    );
+    const app = await buildApp(
+      {
+        isAuthenticated: false, isAnonymous: true,
+        anonymousParticipant: {
+          shareLinkId: mockShareLink.id, id: 'session-token', username: 'ano_guest', firstName: 'Guest', lastName: 'X',
+          displayName: 'Guest', language: 'fr', canSendMessages: true, canSendFiles: false, canSendImages: false,
+        },
+      },
+      { type: 'anonymous', isAuthenticated: true, isAnonymous: true, userId: ANON_ROW_ID, participantId: ANON_ROW_ID }
+    );
+
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(readOptionsOf()).toEqual({ page: { historyFloor: JOINED_AT }, total: { historyFloor: JOINED_AT } });
+    await app.close();
+  });
+
+  it('ouvre tout à un administrateur de la conversation', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue(withParticipants([memberRow({ role: 'admin' })]));
+    const app = await buildApp(
+      { isAuthenticated: true, isAnonymous: false, user: { id: USER_ID, username: 'alice', systemLanguage: 'fr' } },
+      { type: 'user', isAuthenticated: true, isAnonymous: false, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER' } }
+    );
+
+    await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(readOptionsOf()).toEqual({ page: { historyFloor: null }, total: { historyFloor: null } });
+    await app.close();
+  });
+
+  it('ne borne RIEN pour un visiteur en simple aperçu — il n’a pas de ligne', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue(withParticipants([memberRow()]));
+    const app = await buildApp({ isAuthenticated: false, isAnonymous: false, user: null });
+
+    await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(readOptionsOf()).toEqual({ page: { historyFloor: null }, total: { historyFloor: null } });
+    await app.close();
+  });
+});

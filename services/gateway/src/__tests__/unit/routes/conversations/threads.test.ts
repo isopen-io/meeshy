@@ -109,6 +109,20 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findFirst: jest.fn<any>().mockResolvedValue(mockParentMessage),
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
+    // La ligne du LECTEUR, lue pour son plancher d'historique
+    // (`loadReaderHistoryFloor`). `null` = aucune ligne, donc aucun plancher :
+    // ce fichier-ci porte sur la MISE EN FORME du fil, et la règle du plancher
+    // a son propre témoin dans `conversations-threads.test.ts`.
+    //
+    // Sans ce double, `prisma.participant` valait `undefined` et la lecture du
+    // plancher levait — fail-closed, donc 500 sur CHAQUE requête : les huit
+    // témoins de format n'atteignaient plus une seule ligne du sérialiseur.
+    participant: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+    },
+    conversationShareLink: {
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+    },
     ...overrides,
   };
 }

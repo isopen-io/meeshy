@@ -10,6 +10,7 @@ import type {
 } from '@meeshy/shared/types/index';
 import type { MentionSuggestion } from '../services/MentionService.js';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
+import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../services/historyFloor.js';
 
 interface MessageParams {
   messageId: string;
@@ -146,6 +147,21 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       });
 
       if (!message) {
+        return sendNotFound(reply, 'Message non trouvé ou accès refusé');
+      }
+
+      // Cette route révèle DEUX choses d'un message : qu'il existe, et qui y est
+      // mentionné. Sous le plancher d'historique du lecteur, ni l'une ni l'autre
+      // ne lui appartiennent. 404 et non 403 — même réponse que le fil
+      // (`threads.ts`) et que l'épinglé : un message d'avant l'arrivée n'est pas
+      // interdit, il n'existe pas pour ce lecteur, et un 403 confirmerait
+      // exactement ce qu'on lui cache. Le plancher se lit APRÈS le message,
+      // parce qu'il faut sa conversation pour le connaître.
+      const historyFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId: message.conversationId,
+        reader: historyReaderFromAuthContext(authRequest.authContext)
+      });
+      if (historyFloor && message.createdAt < historyFloor) {
         return sendNotFound(reply, 'Message non trouvé ou accès refusé');
       }
 

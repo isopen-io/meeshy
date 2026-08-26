@@ -1522,7 +1522,8 @@ export interface ParticipantRoleUpdatedEventData {
  * recomposer la résolution, donc à en tenir un second énoncé.
  *
  * Le participant est nommé par `participantId` et non par `userId` : le sujet de
- * cet événement n'a précisément pas de compte.
+ * cet événement n'a précisément pas de compte — sauf pour l'octroi d'historique
+ * par DATE (`historyVisibleFrom`), qui vaut pour tout participant.
  */
 export interface ParticipantRightsUpdatedEventData {
   readonly conversationId: string;
@@ -1538,6 +1539,8 @@ export interface ParticipantRightsUpdatedEventData {
     readonly canSendLinks: boolean;
     readonly canViewHistory: boolean;
   };
+  /** Instant ISO 8601 depuis lequel ce participant lit l'historique ; `null` = aucun octroi. */
+  readonly historyVisibleFrom?: string | null;
 }
 
 /**

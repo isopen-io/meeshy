@@ -11,6 +11,12 @@ import { createLegacyHybridRequest } from './utils/link-helpers';
 import { getConversationMessagesWithDetails, countConversationMessages } from './utils/prisma-queries';
 import { formatLinkMessageWithDetails } from './utils/message-formatters';
 import {
+  HISTORY_FLOOR_PARTICIPANT_SELECT,
+  historyReaderFromAuthContext,
+  loadHistoryFloor,
+  loadReaderHistoryFloor
+} from '../../services/historyFloor';
+import {
   conversationSummarySchema,
   messageSchema
 } from './types';
@@ -111,14 +117,16 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
       }
 
       let hasAccess = false;
+      let member: { id: string; joinedAt: Date; shareLinkId: string | null } | null = null;
 
       if (hybridRequest.isAuthenticated && hybridRequest.user) {
-        const member = await fastify.prisma.participant.findFirst({
+        member = await fastify.prisma.participant.findFirst({
           where: {
             conversationId: shareLink.conversationId,
             userId: hybridRequest.user.id,
             isActive: true
-          }
+          },
+          select: { id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }
         });
         hasAccess = !!member;
       }
@@ -131,6 +139,19 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
         return sendForbidden(reply, 'Accès non autorisé à cette conversation');
       }
 
+      // Le plancher du LECTEUR — la même loi que `GET /conversations/:id/messages`,
+      // rendue par le même module. Cette route est la porte de lecture d'un
+      // visiteur entré par lien : sans borne, un lien `allowViewHistory: false`
+      // n'interdisait l'avant-jointure qu'aux lecteurs qui n'empruntaient pas
+      // cette URL. Le lien déjà chargé est réutilisé quand c'est le sien.
+      const historyFloor = member
+        ? await loadHistoryFloor(fastify.prisma, member, { link: shareLink })
+        : await loadReaderHistoryFloor(fastify.prisma, {
+            conversationId: shareLink.conversationId,
+            reader: historyReaderFromAuthContext(request.authContext),
+            link: shareLink
+          });
+
       // SSOT guard: string-schema pagination (AJV useDefaults fills '50'/'0'
       // but does not coerce or bound). Raw parseInt yielded `NaN`/negative
       // skip/take on malformed input, with no upper cap.
@@ -140,10 +161,11 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
         fastify.prisma,
         shareLink.conversationId,
         pageLimit,
-        pageOffset
+        pageOffset,
+        { historyFloor }
       );
 
-      const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId);
+      const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId, { historyFloor });
 
       const formattedMessages = messages.map(formatLinkMessageWithDetails);
 

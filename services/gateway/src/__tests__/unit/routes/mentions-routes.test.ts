@@ -34,6 +34,10 @@ jest.mock('../../../services/MentionService', () => ({
 }));
 
 const mockPrismaMessageFindFirst = jest.fn<any>();
+// `loadReaderHistoryFloor` lit la ligne participant du lecteur : sans elle, le
+// plancher n'est pas « absent », il est ILLISIBLE — et cette route rendrait 500
+// au lieu de servir.
+const mockPrismaParticipantFindFirst = jest.fn<any>();
 
 jest.mock('../../../middleware/auth', () => ({
   createUnifiedAuthMiddleware: jest.fn(
@@ -68,6 +72,8 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 function makePrisma() {
   return {
     message: { findFirst: mockPrismaMessageFindFirst },
+    participant: { findFirst: mockPrismaParticipantFindFirst },
+    conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) },
   } as unknown as PrismaClient;
 }
 
@@ -82,13 +88,21 @@ async function buildApp(): Promise<FastifyInstance> {
 
 const AUTH_HEADER = { authorization: 'Bearer token' };
 
+const MESSAGE_AT = new Date('2026-06-01T10:00:00.000Z');
+const makeMessageRow = (overrides: Record<string, unknown> = {}) => ({
+  id: VALID_MESSAGE_ID,
+  conversationId: VALID_CONV_ID,
+  createdAt: MESSAGE_AT,
+  ...overrides,
+});
+
 // ─── GET /mentions/messages/:messageId ───────────────────────────────────────
 
 describe('GET /mentions/messages/:messageId', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
-    mockPrismaMessageFindFirst.mockResolvedValue({ id: VALID_MESSAGE_ID, conversationId: VALID_CONV_ID });
+    mockPrismaMessageFindFirst.mockResolvedValue(makeMessageRow());
     mockGetMentionsForMessage.mockResolvedValue([]);
     app = await buildApp();
   });
@@ -97,7 +111,8 @@ describe('GET /mentions/messages/:messageId', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockPrismaMessageFindFirst.mockResolvedValue({ id: VALID_MESSAGE_ID, conversationId: VALID_CONV_ID });
+    mockPrismaMessageFindFirst.mockResolvedValue(makeMessageRow());
+    mockPrismaParticipantFindFirst.mockResolvedValue(null);
     mockGetMentionsForMessage.mockResolvedValue([]);
   });
 
@@ -173,6 +188,60 @@ describe('GET /mentions/messages/:messageId', () => {
       headers: AUTH_HEADER,
     });
     expect(res.statusCode).toBe(500);
+  });
+
+  /**
+   * Cette route RÉVÈLE deux choses d'un message : qu'il existe, et qui y est
+   * mentionné. Sous le plancher d'historique du lecteur, ni l'une ni l'autre ne
+   * lui appartiennent — d'où 404 et non 403, comme le fil (`threads.ts`) et
+   * l'épinglé : un message d'avant l'arrivée n'est pas interdit, il n'existe pas
+   * pour ce lecteur, et un 403 confirmerait précisément ce qu'on lui cache.
+   */
+  describe('plancher d’historique', () => {
+    const FLOOR = new Date('2026-07-01T00:00:00.000Z');
+    const boundReader = (floor: Date) => {
+      mockPrismaParticipantFindFirst.mockResolvedValue({
+        role: 'member', joinedAt: floor, shareLinkId: null, permissions: { canViewHistory: false },
+      });
+    };
+
+    it('rend 404 pour un message ANTÉRIEUR au plancher, sans lire ses mentions', async () => {
+      boundReader(FLOOR);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/mentions/messages/${VALID_MESSAGE_ID}`,
+        headers: AUTH_HEADER,
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(mockGetMentionsForMessage).not.toHaveBeenCalled();
+    });
+
+    it('sert un message écrit DEPUIS l’arrivée', async () => {
+      boundReader(new Date('2026-01-01T00:00:00.000Z'));
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/mentions/messages/${VALID_MESSAGE_ID}`,
+        headers: AUTH_HEADER,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(mockGetMentionsForMessage).toHaveBeenCalledWith(VALID_MESSAGE_ID);
+    });
+
+    it('sert un message posté À l’instant exact du plancher — la borne est inclusive', async () => {
+      boundReader(MESSAGE_AT);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/mentions/messages/${VALID_MESSAGE_ID}`,
+        headers: AUTH_HEADER,
+      });
+
+      expect(res.statusCode).toBe(200);
+    });
   });
 });
 

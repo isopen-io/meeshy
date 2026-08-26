@@ -524,7 +524,11 @@ export function registerSharingRoutes(
           canSendVideos: false,
           canSendAudios: false,
           canSendLocations: false,
-          canSendLinks: false
+          canSendLinks: false,
+          // Figé au join comme pour un anonyme (`routes/anonymous.ts`) : on
+          // entre sous les conditions du MOMENT, et le plancher de lecture
+          // (`services/historyFloor`) lit d'abord ce droit-là.
+          canViewHistory: shareLink.allowViewHistory
         },
         shareLinkId: shareLink.id
       };
@@ -814,7 +818,10 @@ export function registerSharingRoutes(
           canSendVideos: false,
           canSendAudios: false,
           canSendLocations: false,
-          canSendLinks: false
+          canSendLinks: false,
+          // Un membre invité après coup lit depuis son arrivée ; un
+          // administrateur lui ouvre l'avant par date (`historyVisibleFrom`).
+          canViewHistory: false
         }
       };
 

@@ -289,7 +289,15 @@ describe("resolveConversationEntry — l'état du conteneur", () => {
 });
 
 describe('REJOIN_PARTICIPANT_STATE', () => {
-  it('rouvre l\'appartenance et efface la date de départ, et RIEN d\'autre — `joinedAt` reste celui de la première venue', () => {
-    expect(REJOIN_PARTICIPANT_STATE).toEqual({ isActive: true, leftAt: null });
+  /**
+   * `historyVisibleFrom` a rejoint la remise à zéro : c'est un octroi (ou une
+   * restriction) accordé à UNE arrivée, et il PRIME sur tout sauf le rang admin
+   * (rang 2 du plancher, avant le droit figé et avant le lien). Le laisser
+   * survivre à un départ faisait qu'un membre exclu puis ré-ajouté rentrait avec
+   * la borne d'une venue périmée, que ni son nouveau rôle ni son nouveau lien ne
+   * pouvaient corriger — le rang 2 les court-circuite tous les deux.
+   */
+  it('rouvre l\'appartenance, efface la date de départ ET l\'octroi d\'historique — `joinedAt` reste celui de la première venue', () => {
+    expect(REJOIN_PARTICIPANT_STATE).toEqual({ isActive: true, leftAt: null, historyVisibleFrom: null });
   });
 });

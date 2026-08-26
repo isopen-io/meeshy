@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { attachmentMediaSelect } from '../../../services/attachments/attachmentIncludes';
+import { applyHistoryFloor } from '../../../services/historyFloor';
 
 const senderInclude = {
   select: {
@@ -51,10 +52,15 @@ export const shareLinkIncludeStructure = {
           joinedAt: true,
           userId: true,
           permissions: true,
-          // `profile` UNIQUEMENT : `anonymousSession.session` porte le hash du
-          // jeton, l'IP et l'empreinte appareil — jamais exposables sur une
-          // route consultable sans authentification.
-          anonymousSession: { select: { profile: true } },
+          // Ce qui décide du PLANCHER d'historique du lecteur (`historyFloorFor`)
+          // — la ligne du lien est le seul endroit où `retrieval.ts` lit sa
+          // participation, donc elle doit porter toute la règle.
+          shareLinkId: true,
+          historyVisibleFrom: true,
+          // `profile` et `rights` UNIQUEMENT : `anonymousSession.session` porte
+          // le hash du jeton, l'IP et l'empreinte appareil — jamais exposables
+          // sur une route consultable sans authentification.
+          anonymousSession: { select: { profile: true, rights: true } },
           user: {
             select: {
               id: true,
@@ -110,6 +116,16 @@ export async function findShareLinkByIdentifier(
 }
 
 /**
+ * Ce que le LECTEUR a le droit de relire. `historyFloor` est le plancher rendu
+ * par `services/historyFloor` pour sa participation ; `null` = tout. Les trois
+ * lecteurs de ce module l'appliquent par la même fonction, jamais par une
+ * clause écrite à la main.
+ */
+export type LinkMessageReadOptions = {
+  readonly historyFloor?: Date | null;
+};
+
+/**
  * Récupère les messages d'une conversation avec pagination
  *
  * Ne charge PAS `statusEntries` : ce chemin les ramenait sans qu'aucun lecteur
@@ -120,13 +136,11 @@ export async function getConversationMessages(
   prisma: PrismaClient,
   conversationId: string,
   limit: number,
-  offset: number
+  offset: number,
+  options: LinkMessageReadOptions = {}
 ): Promise<any[]> {
   return prisma.message.findMany({
-    where: {
-      conversationId,
-      deletedAt: null
-    },
+    where: applyHistoryFloor({ conversationId, deletedAt: null }, options.historyFloor ?? null),
     orderBy: { createdAt: 'desc' },
     take: limit,
     skip: offset,
@@ -159,13 +173,11 @@ export async function getConversationMessagesWithDetails(
   prisma: PrismaClient,
   conversationId: string,
   limit: number,
-  offset: number
+  offset: number,
+  options: LinkMessageReadOptions = {}
 ): Promise<any[]> {
   return prisma.message.findMany({
-    where: {
-      conversationId,
-      deletedAt: null
-    },
+    where: applyHistoryFloor({ conversationId, deletedAt: null }, options.historyFloor ?? null),
     orderBy: { createdAt: 'desc' },
     take: limit,
     skip: offset,
@@ -194,12 +206,10 @@ export async function getConversationMessagesWithDetails(
  */
 export async function countConversationMessages(
   prisma: PrismaClient,
-  conversationId: string
+  conversationId: string,
+  options: LinkMessageReadOptions = {}
 ): Promise<number> {
   return prisma.message.count({
-    where: {
-      conversationId,
-      deletedAt: null
-    }
+    where: applyHistoryFloor({ conversationId, deletedAt: null }, options.historyFloor ?? null)
   });
 }

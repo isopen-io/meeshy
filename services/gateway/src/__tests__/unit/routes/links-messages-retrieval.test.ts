@@ -101,8 +101,10 @@ function makePrisma(overrides: any = {}) {
 
 // ─── App factory ──────────────────────────────────────────────────────────────
 
-async function buildApp(hybridRequest: any = {}, prismaOverrides: any = {}): Promise<FastifyInstance> {
-  mockAuthMiddleware.mockImplementation(async () => {});
+async function buildApp(hybridRequest: any = {}, prismaOverrides: any = {}, authContext?: any): Promise<FastifyInstance> {
+  mockAuthMiddleware.mockImplementation(async (req: any) => {
+    if (authContext) req.authContext = authContext;
+  });
   mockCreateLegacyHybridRequest.mockReturnValue(hybridRequest);
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -276,5 +278,112 @@ describe('GET /links/:identifier/messages — DB error', () => {
   it('returns 500 on DB error', async () => {
     const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
     expect(res.statusCode).toBe(500);
+  });
+});
+
+// ─── Plancher d'historique ────────────────────────────────────────────────────
+//
+// Cette route est la porte de LECTURE d'un visiteur entré par lien. Elle
+// servait tout l'historique à qui la connaissait, pendant que
+// `GET /conversations/:id/messages` bornait le même lecteur à son arrivée. La
+// borne vient du même module (`services/historyFloor`) et voyage jusqu'aux
+// deux helpers de lecture — la page ET le total, sinon `hasMore` promettrait
+// des pages que la borne ne rend jamais.
+
+describe('GET /links/:identifier/messages — plancher d’historique du lecteur', () => {
+  const JOINED_AT = new Date('2026-06-15T00:00:00Z');
+  const ANON_ID = '507f1f77bcf86cd799439aaa';
+
+  beforeEach(() => {
+    mockGetConversationMessagesWithDetails.mockClear();
+    mockCountConversationMessages.mockClear();
+  });
+
+  const readOptionsOf = () => ({
+    page: mockGetConversationMessagesWithDetails.mock.calls[0][4],
+    total: mockCountConversationMessages.mock.calls[0][2],
+  });
+
+  it('borne un membre INSCRIT au droit figé fermé à son arrivée — page et total', async () => {
+    const app = await buildApp(
+      { isAuthenticated: true, isAnonymous: false, user: { id: USER_ID } },
+      {
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: 'part-1', role: 'member', joinedAt: JOINED_AT, shareLinkId: null, permissions: { canViewHistory: false },
+          }),
+        },
+      }
+    );
+
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
+    expect(res.statusCode).toBe(200);
+    expect(readOptionsOf()).toEqual({ page: { historyFloor: JOINED_AT }, total: { historyFloor: JOINED_AT } });
+    await app.close();
+  });
+
+  it('borne un ANONYME entré par un lien qui ferme l’historique — sa ligne est lue par `Participant.id`', async () => {
+    const participantFindFirst = jest.fn<any>().mockResolvedValue({
+      role: 'member', joinedAt: JOINED_AT, shareLinkId: LINK_DB_ID, historyVisibleFrom: null, permissions: {}, anonymousSession: null,
+    });
+    const app = await buildApp(
+      { isAuthenticated: false, isAnonymous: true, anonymousParticipant: { shareLinkId: LINK_DB_ID } },
+      {
+        conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue({ ...mockShareLink, allowViewHistory: false }) },
+        participant: { findFirst: participantFindFirst },
+      },
+      { type: 'anonymous', isAuthenticated: true, isAnonymous: true, userId: ANON_ID, participantId: ANON_ID }
+    );
+
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
+    expect(res.statusCode).toBe(200);
+    expect(participantFindFirst.mock.calls[0][0].where).toEqual({ id: ANON_ID, conversationId: CONV_ID, isActive: true });
+    expect(readOptionsOf()).toEqual({ page: { historyFloor: JOINED_AT }, total: { historyFloor: JOINED_AT } });
+    await app.close();
+  });
+
+  it('ne borne RIEN pour un anonyme dont le lien ouvre l’historique', async () => {
+    const app = await buildApp(
+      { isAuthenticated: false, isAnonymous: true, anonymousParticipant: { shareLinkId: LINK_DB_ID } },
+      {
+        conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue({ ...mockShareLink, allowViewHistory: true }) },
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ role: 'member', joinedAt: JOINED_AT, shareLinkId: LINK_DB_ID, permissions: {} }),
+        },
+      },
+      { type: 'anonymous', isAuthenticated: true, isAnonymous: true, userId: ANON_ID, participantId: ANON_ID }
+    );
+
+    await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
+    expect(readOptionsOf()).toEqual({ page: { historyFloor: null }, total: { historyFloor: null } });
+    await app.close();
+  });
+
+  it('ouvre tout à un administrateur de la conversation', async () => {
+    const app = await buildApp(
+      { isAuthenticated: true, isAnonymous: false, user: { id: USER_ID } },
+      {
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({
+            id: 'part-1', role: 'admin', joinedAt: JOINED_AT, shareLinkId: LINK_DB_ID, permissions: { canViewHistory: false },
+          }),
+        },
+      }
+    );
+
+    await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
+    expect(readOptionsOf()).toEqual({ page: { historyFloor: null }, total: { historyFloor: null } });
+    await app.close();
+  });
+
+  it('ne borne RIEN pour une participation legacy (droit ABSENT, aucun lien)', async () => {
+    const app = await buildApp(
+      { isAuthenticated: true, isAnonymous: false, user: { id: USER_ID } },
+      { participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'member', joinedAt: JOINED_AT, shareLinkId: null }) } }
+    );
+
+    await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
+    expect(readOptionsOf()).toEqual({ page: { historyFloor: null }, total: { historyFloor: null } });
+    await app.close();
   });
 });
