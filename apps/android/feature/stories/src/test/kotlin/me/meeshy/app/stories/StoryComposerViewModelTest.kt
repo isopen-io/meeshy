@@ -480,7 +480,7 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `a video background never carries framing even after a canvas gesture`() = runTest {
+    fun `publishing a panned and zoomed video background carries the framing onto the wire object`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
         vm.onMediaPicked(listOf(item("clip.mp4")))
@@ -492,10 +492,13 @@ class StoryComposerViewModelTest {
         vm.publish()
 
         val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.isBackground).isTrue()
         assertThat(obj?.mediaType).isEqualTo("video")
-        assertThat(obj?.x).isEqualTo(0.5)
-        assertThat(obj?.y).isEqualTo(0.5)
-        assertThat(obj?.scale).isEqualTo(1.0)
+        assertThat(obj?.scale).isWithin(1e-6).of(2.0)
+        assertThat(obj?.x!!).isWithin(1e-6).of(0.5 + 200.0 / 1080.0)
+        assertThat(obj.y).isWithin(1e-6).of(0.5 + 100.0 / 1920.0)
+        // The video-only fields survive alongside the framing.
+        assertThat(obj.loop).isTrue()
     }
 
     @Test

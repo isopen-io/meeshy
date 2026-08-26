@@ -525,9 +525,9 @@ class StoryComposerDraftTest {
     }
 
     @Test
-    fun `a video background ignores framing and stays at the identity coordinates`() {
-        // Reader-side video framing is a scoped-out follow-up (the video render path keeps
-        // IDENTITY), so authoring framing onto a video would be a wire value no client honours.
+    fun `a video background carries the author's framing as normalised x, y and scale`() {
+        // The reader now honours a background video's x/y/scale (prior slice), so the composer
+        // authors the same framing onto a video it authors onto an image.
         val request = StoryComposerDraft(
             text = "hi",
             mediaIds = listOf("v1"),
@@ -537,6 +537,29 @@ class StoryComposerDraftTest {
                 mimeType = "video/mp4",
                 durationSeconds = 4.0,
                 framing = StoryBackgroundFraming(x = 0.75, y = 0.25, scale = 2.5),
+            ),
+        ).toCreateStoryRequest("en")
+
+        val obj = request.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.mediaType).isEqualTo("video")
+        assertThat(obj?.x).isEqualTo(0.75)
+        assertThat(obj?.y).isEqualTo(0.25)
+        assertThat(obj?.scale).isEqualTo(2.5)
+        // Framing rides alongside the video-only fields without clobbering them.
+        assertThat(obj?.loop).isTrue()
+        assertThat(obj?.intrinsicDuration).isEqualTo(4.0)
+    }
+
+    @Test
+    fun `an unframed video background serialises the bare centred defaults`() {
+        val request = StoryComposerDraft(
+            text = "hi",
+            mediaIds = listOf("v1"),
+            backgroundMedia = StoryBackgroundMedia(
+                mediaId = "v1",
+                url = "https://cdn/v1.mp4",
+                mimeType = "video/mp4",
+                durationSeconds = 4.0,
             ),
         ).toCreateStoryRequest("en")
 
