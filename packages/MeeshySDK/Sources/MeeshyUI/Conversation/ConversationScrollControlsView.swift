@@ -6,6 +6,11 @@ public struct ConversationScrollControlsView: View {
     public var unreadCount: Int
     public var typingParticipants: [TypingParticipant]
     public var lastUnreadMessageContent: String?
+    /// Nom affiché de l'expéditeur du dernier message non lu — préfixe
+    /// l'aperçu (« Maiza Biyoko : Bonjour à tous »). `nil` en conversation
+    /// directe (décision app-side : le nom de l'unique interlocuteur n'ajoute
+    /// rien qu'on ne sache déjà) ; toujours fourni en groupe (#3921).
+    public var lastUnreadMessageSenderName: String?
     public var unreadAttachmentTypeLabel: String?
     public var unreadAttachmentThumbHash: String?
     public var unreadAttachmentThumbnailUrl: String?
@@ -39,6 +44,7 @@ public struct ConversationScrollControlsView: View {
         unreadCount: Int,
         typingParticipants: [TypingParticipant],
         lastUnreadMessageContent: String?,
+        lastUnreadMessageSenderName: String? = nil,
         unreadAttachmentTypeLabel: String?,
         unreadAttachmentThumbHash: String?,
         unreadAttachmentThumbnailUrl: String?,
@@ -59,6 +65,7 @@ public struct ConversationScrollControlsView: View {
         self.unreadCount = unreadCount
         self.typingParticipants = typingParticipants
         self.lastUnreadMessageContent = lastUnreadMessageContent
+        self.lastUnreadMessageSenderName = lastUnreadMessageSenderName
         self.unreadAttachmentTypeLabel = unreadAttachmentTypeLabel
         self.unreadAttachmentThumbHash = unreadAttachmentThumbHash
         self.unreadAttachmentThumbnailUrl = unreadAttachmentThumbnailUrl
@@ -297,6 +304,23 @@ public struct ConversationScrollControlsView: View {
         unreadCount > 0 && hasAttachmentPreview
     }
 
+    /// Jusqu'à 5 messages accumulés pendant que le lecteur est remonté dans
+    /// l'historique, la pastille se contente de l'aperçu (nom + dernier
+    /// message) — le format condensé « N nouveaux messages » n'apparaît
+    /// qu'au-delà (#3921, directive porteur 2026-08-26).
+    nonisolated static func shouldShowCountHeadline(unreadCount: Int) -> Bool {
+        unreadCount > 5
+    }
+
+    /// Compose l'aperçu texte du dernier message non lu, préfixé par le nom
+    /// de son expéditeur quand fourni (« Maiza Biyoko : Bonjour à tous ») —
+    /// `nil` quand il n'y a ni contenu ni nom à montrer (#3921).
+    nonisolated static func lastMessageLineText(senderName: String?, content: String?) -> String? {
+        guard let content, !content.isEmpty else { return nil }
+        guard let senderName, !senderName.isEmpty else { return content }
+        return "\(senderName) : \(content)"
+    }
+
     /// Unified rich preview used for BOTH single and multiple unreads. Shows
     /// the count headline when more than one message is pending, followed by a
     /// preview of the LAST received message — its text, or for media its type
@@ -328,8 +352,8 @@ public struct ConversationScrollControlsView: View {
                     }
                 }
 
-                // Count headline — only when more than one message is pending.
-                if unreadCount > 1 {
+                // Count headline — only past the 5-message threshold (#3921).
+                if Self.shouldShowCountHeadline(unreadCount: unreadCount) {
                     Text(String(localized: "conversation.unread_messages", defaultValue: "\(unreadCount) messages", bundle: .module))
                         .font(.system(size: 13, weight: .heavy))
                         .lineLimit(1)
@@ -363,8 +387,8 @@ public struct ConversationScrollControlsView: View {
     /// (e.g. "Audio · 0:34 · 410 KB", "Photo · 1280×720 · 2.3 MB").
     @ViewBuilder
     private var lastMessageLine: some View {
-        if let content = lastUnreadMessageContent, !content.isEmpty {
-            Text(content)
+        if let text = Self.lastMessageLineText(senderName: lastUnreadMessageSenderName, content: lastUnreadMessageContent) {
+            Text(text)
                 .font(.system(size: 12, weight: .regular))
                 .lineLimit(1)
                 .opacity(0.95)

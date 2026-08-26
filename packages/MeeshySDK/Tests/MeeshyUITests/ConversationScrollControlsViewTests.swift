@@ -134,6 +134,56 @@ final class ConversationScrollControlsViewTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    // MARK: - #3921 : nom de l'expéditeur devant l'aperçu, seuil de 5 avant
+    // le format condensé « N nouveaux messages »
+
+    func test_lastMessageLineText_withSenderName_prefixesDisplayName() {
+        XCTAssertEqual(
+            ConversationScrollControlsView.lastMessageLineText(senderName: "Maiza Biyoko", content: "Bonjour à tous"),
+            "Maiza Biyoko : Bonjour à tous"
+        )
+    }
+
+    func test_lastMessageLineText_noSenderName_returnsContentAlone() {
+        XCTAssertEqual(
+            ConversationScrollControlsView.lastMessageLineText(senderName: nil, content: "Bonjour à tous"),
+            "Bonjour à tous"
+        )
+    }
+
+    func test_lastMessageLineText_emptySenderName_returnsContentAlone() {
+        XCTAssertEqual(
+            ConversationScrollControlsView.lastMessageLineText(senderName: "", content: "Bonjour à tous"),
+            "Bonjour à tous"
+        )
+    }
+
+    func test_lastMessageLineText_noContent_returnsNil() {
+        XCTAssertNil(ConversationScrollControlsView.lastMessageLineText(senderName: "Maiza", content: nil))
+        XCTAssertNil(ConversationScrollControlsView.lastMessageLineText(senderName: "Maiza", content: ""))
+    }
+
+    /// Jusqu'à 5 messages accumulés : pas de ligne de décompte, juste
+    /// l'aperçu (nom + dernier message) — le format condensé « N nouveaux
+    /// messages » n'apparaît qu'au-delà.
+    func test_shouldShowCountHeadline_upToFive_isFalse() {
+        for count in [0, 1, 2, 5] {
+            XCTAssertFalse(
+                ConversationScrollControlsView.shouldShowCountHeadline(unreadCount: count),
+                "count=\(count) ne doit pas afficher la ligne de décompte"
+            )
+        }
+    }
+
+    func test_shouldShowCountHeadline_beyondFive_isTrue() {
+        for count in [6, 7, 200] {
+            XCTAssertTrue(
+                ConversationScrollControlsView.shouldShowCountHeadline(unreadCount: count),
+                "count=\(count) doit afficher « N nouveaux messages »"
+            )
+        }
+    }
+
     func test_typingDotTimer_isDeclaredAsState() throws {
         let source = try sdkSource("Sources/MeeshyUI/Conversation/ConversationScrollControlsView.swift")
         XCTAssertTrue(
