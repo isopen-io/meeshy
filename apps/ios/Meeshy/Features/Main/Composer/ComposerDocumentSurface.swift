@@ -783,6 +783,14 @@ nonisolated enum ComposerDocumentPublishGate {
     }
 }
 
+/// Une pièce jointe LOCALE portée par un brouillon de document — image, vidéo
+/// ou document, avant tout envoi.
+nonisolated struct ComposerDocumentMedia: Equatable, Sendable {
+    let url: URL
+    let mimeType: String
+    let durationMs: Int?
+}
+
 /// **Ce que le socle remet au site de montage quand l'auteur presse la flèche.**
 ///
 /// Une VALEUR, pas un envoi. Le meuble ne publie toujours pas : il assemble ce
@@ -809,14 +817,6 @@ nonisolated enum ComposerDocumentPublishGate {
 /// est entendu par le serveur comme un EFFACEMENT), et la liste nominative
 /// écartée quand l'audience ne l'exige pas. Les laisser aux quatre sites de
 /// montage du lot 4.6, ce serait écrire la loi 3 quatre fois.
-/// Une pièce jointe LOCALE portée par un brouillon de document — image, vidéo
-/// ou document, avant tout envoi.
-nonisolated struct ComposerDocumentMedia: Equatable, Sendable {
-    let url: URL
-    let mimeType: String
-    let durationMs: Int?
-}
-
 nonisolated struct ComposerDocumentDraft: Equatable {
     let format: ComposerFormat
 
