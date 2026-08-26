@@ -121,6 +121,18 @@ nonisolated struct PublishIntent: Equatable, Sendable {
     /// AUCUN paramètre n'a de valeur par défaut : même discipline que
     /// `audioRecording`, vérifiée par la même garde de source. Un média local
     /// part par la file durable (le type l'enfile) — jamais un upload direct.
+    ///
+    /// **`transcription` — le CRUX du lot T2.6.** Le meuble peut composer un
+    /// vocal comme sixième outil de sa rangée (`.microphone`), et cet
+    /// enregistrement entre par CE geste — `localMedia` porte le fichier,
+    /// `transcription` porte ce que Whisper a compris SUR L'APPAREIL. La règle
+    /// tranchée par `audioRecording` s'applique ICI À L'IDENTIQUE, et c'est la
+    /// régression que 7.4b avait fermée sur les deux jumeaux audio :
+    /// **quand une transcription a une langue, elle GAGNE sur la capsule.**
+    /// `originalLanguage: transcription?.language ?? originalLanguage` — jamais
+    /// `originalLanguage: originalLanguage` telle quelle, qui laisserait un
+    /// vocal wolof composé dans un meuble réglé « fr » partir étiqueté
+    /// français, et le Prisme le traduirait FR→WO sur un texte déjà wolof.
     static func document(
         localMedia: [ComposerDocumentMedia],
         forcePlainPost: Bool,
@@ -130,7 +142,8 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         originalLanguage: String?,
         mentions: [PostMentionInput]?,
         location: SharedPlace?,
-        discoverabilityPrecision: DiscoverabilityPrecision?
+        discoverabilityPrecision: DiscoverabilityPrecision?,
+        transcription: MobileTranscriptionPayload?
     ) -> PublishIntent {
         PublishIntent(
             clientMutationId: ClientMutationId.generate(),
@@ -147,11 +160,15 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             content: content,
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
-            originalLanguage: originalLanguage,
+            // La langue PARLÉE gagne sur la langue DÉCLARÉE par la capsule du
+            // meuble — même arbitrage que `audioRecording`, jamais un
+            // court-circuit : un document SANS vocal (`transcription: nil`)
+            // garde `originalLanguage` tel quel, celui de la capsule.
+            originalLanguage: transcription?.language ?? originalLanguage,
             mentions: mentions,
             location: location,
             discoverabilityPrecision: discoverabilityPrecision,
-            mobileTranscription: nil
+            mobileTranscription: transcription
         )
     }
 

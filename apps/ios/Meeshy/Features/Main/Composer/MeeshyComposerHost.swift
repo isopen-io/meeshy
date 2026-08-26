@@ -461,6 +461,22 @@ struct MeeshyComposerHost: View {
     /// sans lieu à indexer.
     @State private var documentDiscoverability: NearbyDiscoverabilityChoice = .disabled
 
+    /// **T2.6 — le sixième et dernier outil de la rangée.** Même patron que
+    /// `showsLocationPicker` juste au-dessus : le sélecteur vit dans le
+    /// MEUBLE, jamais dans `ComposerDocumentSurface`, qui reste une
+    /// présentation sans état.
+    @State private var showsAudioComposer = false
+
+    /// **T2.6 — la transcription du vocal composé par `AudioPostComposerView`.**
+    /// Voyage À CÔTÉ de `documentLocalMedia` (l'enregistrement, posé comme un
+    /// `ComposerDocumentMedia` ordinaire au retour) — jamais fondue dedans.
+    /// `documentDraft` la transmet telle quelle à
+    /// `ComposerDocumentDraft.document(mobileTranscription:)`, et
+    /// `PublishIntent.document(transcription:)` l'élit en aval pour la LANGUE :
+    /// la langue PARLÉE gagne sur `documentLanguage`, jamais l'inverse — la
+    /// régression que 7.4b avait fermée sur `PublishIntent.audioRecording`.
+    @State private var documentTranscription: MobileTranscriptionPayload?
+
     init(
         intent: ComposerIntent,
         initialVisibility: String,
@@ -935,6 +951,8 @@ struct MeeshyComposerHost: View {
             }
         }
         .sheet(isPresented: $showsLocationPicker) { documentLocationPickerSheet }
+        // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
+        .sheet(isPresented: $showsAudioComposer) { documentAudioComposerSheet }
         // Retirer un média qui dé-qualifie fait DISPARAÎTRE l'interrupteur — et
         // doit réarmer le drapeau à `false`. Le drapeau n'est jamais invisible
         // ET effectif (il ne pèse que quand ça qualifie, et l'interrupteur est
@@ -1051,6 +1069,55 @@ struct MeeshyComposerHost: View {
             documentLocation = place
             documentDiscoverability = FeedNearbyDiscoverability.choiceForNewPlace()
         }
+    }
+
+    /// **Le sixième outil (T2.6)**, dernier de la rangée — même composant que
+    /// le composer inline du fil monte déjà (`AudioPostComposerView`,
+    /// `FeedView+Attachments.swift`) : en fabriquer un second aurait donné
+    /// deux feuilles d'enregistrement/transcription à faire diverger,
+    /// exactement le défaut que `PublishIntent` existe pour fermer.
+    ///
+    /// **La destination est double, et c'est le cœur du lot.** L'enregistrement
+    /// rejoint `documentLocalMedia` comme un `ComposerDocumentMedia` ORDINAIRE
+    /// — il part par la file durable, comme tout média local (T2.3). La
+    /// transcription voyage À CÔTÉ dans `documentTranscription`, jamais fondue
+    /// dans le texte : `documentDraft` la transmet telle quelle à
+    /// `ComposerDocumentDraft.document(mobileTranscription:)`, que la porte
+    /// poste à `PublishIntent.document(transcription:)`.
+    ///
+    /// **La capsule de langue est SEMÉE, jamais imposée.** Poser
+    /// `documentLanguage = transcription.language` au retour rend le contrôle
+    /// RÉEL (loi 4) et évite qu'une voix parte étiquetée par la langue de
+    /// démarrage du meuble — mais ce n'est qu'un confort d'affichage : la
+    /// garantie qui compte est le `??` de `PublishIntent.document`, qui élit
+    /// la langue PARLÉE même si l'auteur rouvre la capsule et la change après
+    /// coup.
+    ///
+    /// **Un son EMPRUNTÉ à la bibliothèque est hors du périmètre de ce lot.**
+    /// `AudioPostComposerView.onPublishBorrowed` référence un `soundId` déjà
+    /// côté serveur, sans fichier LOCAL ni transcription — une matière que
+    /// `ComposerDocumentDraft` ne modélise pas ici. Fermer la feuille sans
+    /// effet est le choix assumé, plutôt qu'un second chemin d'envoi pour un
+    /// cas que la rangée du document n'offre nulle part ailleurs.
+    private var documentAudioComposerSheet: some View {
+        AudioPostComposerView(
+            onPublish: { audioURL, mimeType, durationMs, transcription in
+                documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+                    url: audioURL,
+                    declaredMimeType: mimeType,
+                    durationMs: durationMs
+                ))
+                documentTranscription = transcription
+                if let transcription {
+                    documentLanguage = transcription.language
+                }
+                showsAudioComposer = false
+                HapticFeedback.light()
+            },
+            onPublishBorrowed: { _ in
+                showsAudioComposer = false
+            }
+        )
     }
 
     /// **La tuile de lieu (T2.5)** — même idiome capsule que
@@ -1196,6 +1263,9 @@ struct MeeshyComposerHost: View {
         case .attachesLocation:
             HapticFeedback.light()
             showsLocationPicker = true
+        case .attachesTranscribedAudio:
+            HapticFeedback.light()
+            showsAudioComposer = true
         case .none:
             break
         }
@@ -1743,6 +1813,12 @@ struct MeeshyComposerHost: View {
             // pouvoir peser sur ce qui part. Hors de cette garde, ou tant que
             // l'auteur n'a rien activé, `precisionToSend` vaut déjà `nil`
             // (`NearbyDiscoverabilityChoice`, off par défaut).
+            //
+            // `mobileTranscription` vient du SOCLE (`documentTranscription`,
+            // T2.6, écrit par `AudioPostComposerView` au retour du sixième
+            // outil) — jamais d'un littéral `nil` : un littéral ferait perdre
+            // la transcription faite SUR L'APPAREIL, et le serveur
+            // re-transcrirait ce travail en silence.
             return ComposerDocumentDraft.document(
                 format: selectedFormat,
                 forcePlainPost: documentForcePlainPost,
@@ -1755,7 +1831,8 @@ struct MeeshyComposerHost: View {
                 discoverabilityPrecision: documentOffersNearbyDiscoverability
                     ? documentDiscoverability.precisionToSend
                     : nil,
-                originalLanguage: documentLanguage
+                originalLanguage: documentLanguage,
+                mobileTranscription: documentTranscription
             )
         }
     }

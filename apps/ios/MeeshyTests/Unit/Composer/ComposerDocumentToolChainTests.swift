@@ -15,11 +15,14 @@ import MeeshyUI
 /// second pour la langue (`documentLanguage`) — ce lot ferme le troisième pour
 /// TROIS des cinq outils restants : photo, caméra, document.
 ///
-/// **Ce que ce lot ne fait PAS**, et qu'il ne faut pas lire comme acquis :
-/// lieu et micro restent `nil`. `servedRow != canonicalRow` doit RESTER vrai —
-/// c'est l'assertion 3 de la garde de la porte du document
-/// (`ComposerDocumentSurfaceTests.test_laPorteDuDocument_...`), et elle ne se
-/// retourne pas ce lot.
+/// **Ce que ce lot (T2.3) ne faisait PAS encore** : lieu et micro restaient
+/// `nil`. Les deux ont depuis gagné un effet — `.place` au T2.5
+/// (`.attachesLocation`), `.microphone` au T2.6 (`.attachesTranscribedAudio`,
+/// dernier des six). `servedRow == canonicalRow` désormais : l'assertion 3 de
+/// la garde de la porte du document
+/// (`ComposerDocumentSurfaceTests.test_laPorteDuDocument_...`) s'est retournée
+/// au T2.6, sur sa PREMIÈRE condition (la rangée) — aucun site de production
+/// ne monte la porte pour autant.
 ///
 /// **Une valeur associée, jamais trois cas.**
 /// `ComposerDocumentToolEffect.attachesLocalMedia(ComposerMediaIntake)` porte
@@ -42,6 +45,23 @@ final class ComposerDocumentToolChainTests: XCTestCase {
 
     private func hostCode() throws -> String {
         AppSourceGuard.stripComments(try hostSource())
+    }
+
+    /// **T2.6** — même patron que `hostSource()`/`hostCode()` juste au-dessus,
+    /// pour `ComposerDocumentSurface.swift` : c'est là que vit
+    /// `DocumentComposerDoor.publish`, la porte d'envoi, jamais dans le meuble.
+    private func surfaceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/Composer
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func surfaceCode() throws -> String {
+        AppSourceGuard.stripComments(try surfaceSource())
     }
 
     private func compact(_ text: String) -> String {
@@ -116,37 +136,106 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         )
     }
 
-    // MARK: - 2. servedRow sert les cinq, dans l'ordre canonique
+    // MARK: - T2.6 — 1. `.microphone` gagne un effet, vers `.attachesTranscribedAudio`
 
-    /// Mutation nommée par le plan : écrire une seconde liste ferait bouger
-    /// l'ordre que les doigts connaissent. `servedRow` reste une PROJECTION de
-    /// `canonicalRow` (`canonicalRow.filter { $0.effect != nil }`), jamais une
-    /// liste écrite à part. Élargi au T2.5 : `.place` rejoint la rangée servie.
-    func test_servedRow_sertPhotoCameraEmojiDocumentPlace_dansLOrdreCanonique() {
+    /// Mutation nommée par le plan : `.microphone.effect` vaut `nil`
+    /// aujourd'hui — l'oublier fait rougir ce test. L'égalité EXACTE avec
+    /// `.attachesTranscribedAudio` (pas seulement `!= nil`) attrape en prime
+    /// un aiguillage sur un mauvais cas de `ComposerDocumentToolEffect` — par
+    /// exemple `.attachesLocalMedia`, qui ouvrirait un sélecteur de FICHIER au
+    /// lieu de la feuille d'enregistrement.
+    func test_microphone_gagneUnEffet_versLAudioTranscrit() {
         XCTAssertEqual(
-            ComposerDocumentTool.servedRow,
-            [.photo, .camera, .emoji, .document, .place],
-            "L'ordre vient de `canonicalRow` — photo · caméra · emoji · document · lieu — jamais d'une "
-                + "liste à part."
+            ComposerDocumentTool.microphone.effect, .attachesTranscribedAudio,
+            "`.microphone` doit ouvrir `AudioPostComposerView` — le sixième et dernier outil de la rangée "
+                + "historique, dernier `nil` à combler (T2.6)."
         )
     }
 
-    // MARK: - 3. servedRow != canonicalRow — seul le micro manque encore
+    // MARK: - 2. servedRow sert les SIX, dans l'ordre canonique
 
-    /// Mutation nommée par le plan : donner un effet au micro d'un coup
-    /// ferait tomber la garde de la porte du document AVANT que T2.6 ne le
-    /// décide (`ComposerDocumentSurfaceTests.test_laPorteDuDocument_...`).
-    func test_servedRow_resteDistinctDeCanonicalRow_seulLeMicroManqueEncore() {
-        XCTAssertNotEqual(
+    /// **RETOURNÉE au T2.6** — `servedRow` ne s'arrêtait qu'à cinq outils
+    /// (le micro manquait). Mutation nommée par le plan : oublier de donner
+    /// un effet à `.microphone` fait rougir CE test — `servedRow` resterait
+    /// alors à cinq éléments. `servedRow` reste une PROJECTION de
+    /// `canonicalRow` (`canonicalRow.filter { $0.effect != nil }`), jamais une
+    /// liste écrite à part.
+    func test_servedRow_sertLesSixOutils_dansLOrdreCanonique() {
+        XCTAssertEqual(
+            ComposerDocumentTool.servedRow,
+            ComposerDocumentTool.canonicalRow,
+            "L'ordre vient de `canonicalRow` — photo · caméra · emoji · document · lieu · micro — jamais "
+                + "d'une liste à part. Le micro doit désormais y figurer : c'est le dernier des six."
+        )
+        XCTAssertEqual(
+            ComposerDocumentTool.servedRow,
+            [.photo, .camera, .emoji, .document, .place, .microphone],
+            "La rangée servie doit couvrir la rangée canonique dans l'ordre exact que les doigts "
+                + "connaissent depuis la feuille historique."
+        )
+    }
+
+    // MARK: - 3. servedRow == canonicalRow — RETOURNÉE, le micro ne manque plus
+
+    /// **RETOURNÉE au T2.6.** Cette garde exigeait `servedRow != canonicalRow`
+    /// et le disait sans détour : « le micro doit encore manquer ». Elle
+    /// change de côté parce que la CONDITION qu'elle nommait vient de tomber —
+    /// `.microphone` gagne enfin son effet (`.attachesTranscribedAudio`), la
+    /// PREMIÈRE des deux conditions de levée de la porte du document
+    /// (`ComposerDocumentSurfaceTests.test_laPorteDuDocument_...`), la SECONDE
+    /// étant tombée au T2.2 (la langue). Aucun site de production ne monte la
+    /// porte pour autant : cette garde-ci ne parle que de la RANGÉE, pas du
+    /// montage.
+    ///
+    /// Mutation nommée par le plan : redonner `nil` au micro fait retomber
+    /// `servedRow` à cinq éléments et rougir CE test — le sens inverse de
+    /// l'ancienne garde, qui rougissait sur l'apparition d'un effet.
+    func test_servedRow_devientEgalACanonicalRow_leMicroVientDeGagnerUnEffet() {
+        XCTAssertEqual(
             ComposerDocumentTool.servedRow, ComposerDocumentTool.canonicalRow,
-            "Le micro doit encore manquer à la rangée servie : lui donner un effet ferait tomber la garde "
-                + "de la porte avant que T2.6 ne le décide."
+            "La rangée couvre désormais les six outils de la feuille absorbée — la PREMIÈRE des deux "
+                + "conditions de levée de la porte du document, la SECONDE (la langue) étant tombée au T2.2."
         )
         XCTAssertNotNil(
-            ComposerDocumentTool.place.effect,
-            "`.place` gagne un effet à ce lot — sans ça, le test ci-dessus ne prouverait rien de ce lot."
+            ComposerDocumentTool.microphone.effect,
+            "`.microphone` gagne un effet à ce lot — sans ça, le test ci-dessus ne prouverait rien de ce lot."
         )
-        XCTAssertNil(ComposerDocumentTool.microphone.effect, "Le micro ne gagne pas d'effet dans ce lot.")
+    }
+
+    // MARK: - T2.6 — DoD du lot 2 : le meuble sert RÉELLEMENT la rangée du document
+
+    /// **Assertion DIRECTE, pas une attente sur T3.1.**
+    /// `MeeshyComposerHostGuardTests.test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`
+    /// reste VACUOUS — ses trois booléens (dont `leMeubleSertLaRangeeDuDocument()`,
+    /// équivalent exact de ce test) ne s'évaluent QUE si un site de
+    /// production monte une porte-document, ce qu'aucun ne fait encore. La
+    /// deuxième capacité du DoD du lot 2 (spec v2 §E — la rangée d'outils du
+    /// meuble couvre celle de la feuille absorbée) tombe donc RÉELLEMENT à ce
+    /// lot, mais rien ne le mesure tant que T3.1 ne câble pas la porte. Cette
+    /// garde ferme ce trou : elle lit la SOURCE du meuble (`servedDocumentTools`
+    /// existe et EST `ComposerDocumentTool.servedRow`) et vérifie la valeur au
+    /// niveau du TYPE — même mesure que
+    /// `MeeshyComposerHostGuardTests.leMeubleSertLaRangeeDuDocument()`, câblée
+    /// ICI plutôt que d'attendre que la porte soit montée.
+    ///
+    /// Mutation nommée par le plan : oublier un effet sur n'importe lequel des
+    /// six outils fait rougir ce test.
+    func test_leMeuble_sertReellementLaRangeeDuDocument_dansLeSource() throws {
+        let code = try hostCode()
+        guard declarationBody(startingAt: "private var servedDocumentTools", in: code) != nil else {
+            return XCTFail("`servedDocumentTools` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
+        }
+        XCTAssertTrue(
+            compact(code).contains(compact("servedDocumentTools: [ComposerDocumentTool] { ComposerDocumentTool.servedRow }")),
+            "`servedDocumentTools` doit rester une PROJECTION de `ComposerDocumentTool.servedRow` — jamais "
+                + "une seconde liste écrite dans le meuble, qui pourrait diverger de la rangée canonique."
+        )
+        XCTAssertEqual(
+            ComposerDocumentTool.servedRow, ComposerDocumentTool.canonicalRow,
+            "Le meuble sert `servedDocumentTools`, projection de `servedRow` : tant que `servedRow` ne "
+                + "couvre pas `canonicalRow`, le meuble perd des outils par rapport à la feuille historique "
+                + "qu'il remplace — photo·caméra·fichier·lieu·micro d'un coup si la rangée était vide."
+        )
     }
 
     // MARK: - T2.5 — Le lieu choisi atteint le brouillon envoyé à la porte
@@ -189,7 +278,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "bonjour", visibility: .public,
             visibilityUserIds: [], repostOfId: nil, localMedia: [], location: lieu,
-            discoverabilityPrecision: nil, originalLanguage: nil
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
         )
         XCTAssertEqual(brouillon.location, lieu, "Le brouillon doit porter le lieu tel que la fabrique l'a reçu.")
 
@@ -202,7 +291,8 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             originalLanguage: brouillon.originalLanguage,
             mentions: brouillon.mentions,
             location: brouillon.location,
-            discoverabilityPrecision: brouillon.discoverabilityPrecision
+            discoverabilityPrecision: brouillon.discoverabilityPrecision,
+            transcription: brouillon.mobileTranscription
         )
         XCTAssertEqual(intent.location, lieu, "Le lieu choisi doit atteindre l'intention publiée, jamais s'y perdre.")
     }
@@ -280,11 +370,177 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "", visibility: .public,
             visibilityUserIds: [], repostOfId: nil, localMedia: [], location: lieu,
-            discoverabilityPrecision: nil, originalLanguage: nil
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
         )
         XCTAssertNotEqual(
             ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
             "Un lieu seul doit suffire à faire partir un post — la feuille historique l'accepte déjà."
+        )
+    }
+
+    // MARK: - T2.6 — Un vocal composé dans le meuble part AVEC sa transcription
+
+    /// **Round-trip pur, sans lire de source** — même patron que
+    /// `test_unLieuChoisi_voyageJusquALIntentionPubliee` juste au-dessus, pour
+    /// la transcription plutôt que le lieu. Sans `mobileTranscription`, le
+    /// serveur re-transcrit un vocal déjà transcrit SUR L'APPAREIL et jette ce
+    /// travail en silence.
+    ///
+    /// Mutation nommée par le plan : omettre `transcription:` à l'appel — ou
+    /// le poser à `nil` en dur — fait rougir ce test.
+    func test_unVocalComposeDansLeMeuble_partAvecSaTranscription() {
+        let vocal = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/vocal_\(UUID().uuidString).m4a"),
+            mimeType: "audio/mp4",
+            durationMs: 4000
+        )
+        let transcrit = MobileTranscriptionPayload(text: "Bonjour tout le monde", language: "fr")
+
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [vocal], location: nil,
+            discoverabilityPrecision: nil, originalLanguage: "fr", mobileTranscription: transcrit
+        )
+        XCTAssertEqual(
+            brouillon.mobileTranscription, transcrit,
+            "Le brouillon doit porter la transcription telle que la fabrique l'a reçue."
+        )
+
+        let intent = PublishIntent.document(
+            localMedia: brouillon.localMedia,
+            forcePlainPost: brouillon.forcePlainPost,
+            content: brouillon.text,
+            visibility: brouillon.visibility.rawValue,
+            visibilityUserIds: brouillon.visibilityUserIds,
+            originalLanguage: brouillon.originalLanguage,
+            mentions: brouillon.mentions,
+            location: brouillon.location,
+            discoverabilityPrecision: brouillon.discoverabilityPrecision,
+            transcription: brouillon.mobileTranscription
+        )
+        XCTAssertNotNil(
+            intent.mobileTranscription,
+            "La transcription faite SUR L'APPAREIL doit atteindre l'intention publiée — sans elle, le "
+                + "serveur re-transcrit un travail déjà fait et le jette en silence."
+        )
+        XCTAssertEqual(intent.mobileTranscription?.text, "Bonjour tout le monde")
+    }
+
+    /// **LE CRUX du lot — la régression de langue à NE PAS rouvrir.**
+    /// `PublishIntent.audioRecording` a fermé cette régression (7.4b) sur ses
+    /// deux jumeaux : la langue PARLÉE (celle de la transcription) doit
+    /// GAGNER sur la langue DÉCLARÉE par la capsule du composer. Un vocal en
+    /// wolof composé dans un meuble réglé « fr » ne doit PAS partir étiqueté
+    /// « fr » — le Prisme le servirait alors au rang 0 sous une étiquette
+    /// fausse.
+    ///
+    /// Mutation nommée par le plan : passer la capsule telle quelle
+    /// (`originalLanguage: originalLanguage`, sans le `??` sur
+    /// `transcription?.language`) fait rougir ce test — c'est exactement la
+    /// forme de la régression fermée par 7.4b, rouverte ici par une TROISIÈME
+    /// fabrique (`.document`) si elle n'est pas gardée à l'identique.
+    func test_leCrux_laLangueParleeGagneSurLaCapsule_memeSurLaTroisiemeFabrique() {
+        let vocal = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/vocal_\(UUID().uuidString).m4a"),
+            mimeType: "audio/mp4",
+            durationMs: 4000
+        )
+        let intent = PublishIntent.document(
+            localMedia: [vocal],
+            forcePlainPost: false,
+            content: nil,
+            visibility: "PUBLIC",
+            visibilityUserIds: nil,
+            originalLanguage: "fr",
+            mentions: nil,
+            location: nil,
+            discoverabilityPrecision: nil,
+            transcription: MobileTranscriptionPayload(text: "Salaam", language: "wo")
+        )
+        XCTAssertEqual(
+            intent.originalLanguage, "wo",
+            "La langue PARLÉE (transcription: « wo ») doit gagner sur la capsule du meuble (« fr ») — "
+                + "sinon un vocal wolof composé dans un composer réglé « fr » repart étiqueté français, et "
+                + "le Prisme le traduit FR→WO sur un texte déjà wolof."
+        )
+    }
+
+    /// **Un document SANS vocal garde la langue de la capsule.** Contre-épreuve
+    /// du crux ci-dessus : `transcription: nil` ne doit RIEN changer à
+    /// `originalLanguage` — sinon le `??` masquerait un défaut qui écraserait
+    /// la langue déclarée d'un post texte ordinaire.
+    func test_unDocumentSansVocal_gardeLaLangueDeLaCapsule() {
+        let intent = PublishIntent.document(
+            localMedia: [],
+            forcePlainPost: false,
+            content: "Hello everyone",
+            visibility: "PUBLIC",
+            visibilityUserIds: nil,
+            originalLanguage: "en",
+            mentions: nil,
+            location: nil,
+            discoverabilityPrecision: nil,
+            transcription: nil
+        )
+        XCTAssertEqual(
+            intent.originalLanguage, "en",
+            "Sans transcription, la langue DÉCLARÉE par la capsule doit voyager telle quelle."
+        )
+    }
+
+    /// **Le fichier enregistré survit à la porte.** `DocumentComposerDoor.publish`
+    /// (`ComposerDocumentSurface.swift`) ne doit JAMAIS effacer le fichier
+    /// local qu'il vient d'enfiler — ni sur un refus, ni sur un succès : la
+    /// file durable en dispose, et un `removeItem` posé ici détruirait
+    /// l'enregistrement AVANT qu'elle n'ait pu le lire. C'est la première des
+    /// trois divergences que `PublishIntent` a fermées entre les deux jumeaux
+    /// audio (doc-comment de `PublishIntent.swift`) : l'un des deux DÉTRUISAIT
+    /// le fichier dans son `catch`.
+    ///
+    /// **Non-régression plutôt que rouge propre à ce lot** : `publish` ne
+    /// touchait déjà pas au disque avant T2.6 (aucun média local n'y était
+    /// jamais posé). Le corps de cette garde vaut d'être écrit maintenant que
+    /// le sixième outil peut y déposer un fichier — même aveu que
+    /// `test_handleDocumentTool_resteExhaustif_sansDefault` sur son absence de
+    /// `default`.
+    ///
+    /// Mutation qui la fait rougir : ajouter un `try? FileManager.default.removeItem(`
+    /// dans le corps de `DocumentComposerDoor.publish`.
+    func test_lefichierEnregistre_neSurvitPasQuAUnRemoveItemAbsent() throws {
+        guard let corps = declarationBody(startingAt: "private func publish(_ draft: ComposerDocumentDraft)", in: try surfaceCode()) else {
+            return XCTFail("`DocumentComposerDoor.publish` est introuvable — la garde ne mesurerait RIEN.")
+        }
+        XCTAssertFalse(
+            compact(corps).contains("removeItem"),
+            "`DocumentComposerDoor.publish` efface un fichier : un vocal composé par le sixième outil "
+                + "serait détruit avant que la file durable n'ait pu l'uploader."
+        )
+    }
+
+    /// **Le canal, pas seulement la feuille.** `AudioPostComposerView` prouve
+    /// que l'auteur PEUT enregistrer et transcrire ; cette garde prouve que ce
+    /// résultat ATTEINT le brouillon envoyé à la porte — même patron que
+    /// `test_leBrouillonDuDocument_porteLeLieuChoisi_pasUnLitteralNil` pour le
+    /// lieu (T2.5).
+    ///
+    /// Mutation nommée par le plan : un littéral `mobileTranscription: nil`
+    /// (au lieu de `mobileTranscription: documentTranscription`) fait rougir
+    /// ce test — la transcription faite sur l'appareil serait JETÉE avant
+    /// même d'atteindre `PublishIntent.document(transcription:)`.
+    func test_leBrouillonDuDocument_porteLaTranscriptionEcrite_pasUnLitteralNil() throws {
+        guard let corps = declarationBody(startingAt: "private var documentDraft", in: try hostCode()) else {
+            return XCTFail("`documentDraft` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
+        }
+        let compacte = compact(corps)
+        XCTAssertTrue(
+            compacte.contains(compact("mobileTranscription: documentTranscription")),
+            "Le cas `.document` doit poser `mobileTranscription: documentTranscription` — l'état que "
+                + "`AudioPostComposerView` écrit au retour du sixième outil, pas un littéral qui l'ignorerait."
+        )
+        XCTAssertFalse(
+            compacte.contains(compact("mobileTranscription: nil")),
+            "Le cas `.document` pose encore `mobileTranscription: nil` : la transcription faite sur "
+                + "l'appareil n'atteint jamais le brouillon envoyé à la porte."
         )
     }
 
@@ -310,7 +566,10 @@ final class ComposerDocumentToolChainTests: XCTestCase {
             "Un `default:` réintroduit ferait hériter un septième effet du silence — voir le doc-comment "
                 + "de `ComposerDocumentToolEffect`."
         )
-        for casNomme in [".insertsEmojiIntoText", ".attachesLocalMedia(", ".attachesLocation", "case.none"] {
+        for casNomme in [
+            ".insertsEmojiIntoText", ".attachesLocalMedia(", ".attachesLocation",
+            ".attachesTranscribedAudio", "case.none"
+        ] {
             XCTAssertTrue(
                 compacte.contains(compact(casNomme)),
                 "« \(casNomme) » est absent de `handleDocumentTool` : le `switch` sur `tool.effect` n'est "

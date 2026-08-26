@@ -418,6 +418,26 @@ nonisolated enum ComposerDocumentToolEffect: Equatable {
     /// activer ce second opt-in reste un lieu affiché ordinaire — les deux
     /// opt-ins sont indépendants, dans les deux sens.
     case attachesLocation
+
+    /// Ouvre `AudioPostComposerView` et pose un enregistrement vocal — AVEC sa
+    /// transcription — dans le brouillon (T2.6, dernier outil de la rangée).
+    ///
+    /// **Ce n'ouvre aucun `ComposerMediaIntake`** : le sélecteur n'est ni la
+    /// photothèque, ni la caméra, ni l'importateur de fichiers — c'est la
+    /// feuille d'enregistrement/transcription dédiée, la même que le composer
+    /// inline du fil monte déjà (`AudioPostComposerView`,
+    /// `FeedView+Attachments.swift`).
+    ///
+    /// **La destination est double, et c'est le cœur du lot.** Le fichier
+    /// enregistré rejoint `ComposerDocumentDraft.localMedia` comme un
+    /// `ComposerDocumentMedia` ORDINAIRE — il part par la file durable, comme
+    /// tout média local (T2.1/T2.3). La transcription, elle, voyage À CÔTÉ,
+    /// dans `ComposerDocumentDraft.mobileTranscription` : c'est elle que
+    /// `PublishIntent.document(transcription:)` consulte pour ÉLIRE la langue
+    /// déclarée — la langue PARLÉE gagne sur la capsule du meuble, jamais
+    /// l'inverse (régression fermée par 7.4b sur `audioRecording`, rouverte
+    /// ici si `originalLanguage` partait tel quel).
+    case attachesTranscribedAudio
 }
 
 nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
@@ -455,12 +475,12 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     ///
     /// **`.place` gagne un effet au T2.5** : `ComposerDocumentDraft.location`
     /// (T2.1) trouve enfin son geste — `.attachesLocation` ouvre
-    /// `LocationPickerView`. `.microphone` reste seul `nil` : le brouillon ne
-    /// porte encore aucun enregistrement vocal composé sur cette surface (le
-    /// vocal de sa propre surface mood, T2.6). C'est ce qui tient
-    /// `servedRow != canonicalRow` — la garde de la porte du document
-    /// (`ComposerDocumentSurfaceTests.test_laPorteDuDocument_...`) ne se
-    /// retourne pas ce lot.
+    /// `LocationPickerView`. **`.microphone` gagne le SIEN au T2.6** —
+    /// `.attachesTranscribedAudio` ouvre `AudioPostComposerView`, et c'est le
+    /// dernier des six. `servedRow == canonicalRow` DÉSORMAIS — la garde de la
+    /// porte du document (`ComposerDocumentSurfaceTests.test_laPorteDuDocument_...`)
+    /// se retourne à ce lot, sur SA première condition seulement (la rangée) ;
+    /// aucun site de production ne monte encore la porte pour autant.
     ///
     /// **Ce que `.place` ne fait PAS gagner : le tri-état de la feuille
     /// absorbée** (`PostLocationUpdate` : remplacer, retirer, ne pas toucher).
@@ -484,7 +504,7 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
         case .place:
             return .attachesLocation
         case .microphone:
-            return nil
+            return .attachesTranscribedAudio
         }
     }
 
@@ -974,6 +994,19 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// d'appel sans casser la moindre compilation.
     let forcePlainPost: Bool
 
+    /// **T2.6 — la transcription du vocal composé sur CETTE surface.**
+    /// L'enregistrement lui-même entre dans `localMedia` comme un
+    /// `ComposerDocumentMedia` ordinaire ; ce champ porte ce que Whisper a
+    /// compris SUR L'APPAREIL, à côté du fichier — jamais fondu dedans.
+    /// `PublishIntent.document(transcription:)` le consulte pour ÉLIRE
+    /// `originalLanguage` : la langue PARLÉE gagne sur `documentLanguage`
+    /// (la capsule du meuble), jamais l'inverse. Aucune valeur par défaut,
+    /// même discipline que le reste du type (T2.1) : un défaut le ferait
+    /// disparaître d'un site d'appel sans casser la moindre compilation, et
+    /// un vocal composé ici repartirait étiqueté par la capsule — exactement
+    /// la régression que 7.4b avait fermée sur `PublishIntent.audioRecording`.
+    let mobileTranscription: MobileTranscriptionPayload?
+
     /// Le brouillon d'un MOOD.
     ///
     /// `repostOfId` et `audioUrl` sont les deux graines d'une republication (lot
@@ -1019,7 +1052,10 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             // Un mood ne porte jamais de média local (`localMedia: []`
             // au-dessus) : il ne peut donc jamais qualifier comme réel, et ce
             // champ n'a pas besoin d'un paramètre pour ce geste.
-            forcePlainPost: false
+            forcePlainPost: false,
+            // Un mood n'a pas d'outil micro (rangée du document seule, T2.6) :
+            // aucun geste ne peut jamais alimenter ce champ pour ce format.
+            mobileTranscription: nil
         )
     }
 
@@ -1063,6 +1099,13 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// encore : un défaut non-`nil` rendrait trouvable un contenu que
     /// l'auteur n'a jamais choisi de rendre trouvable (le SECOND opt-in,
     /// `FeedNearbyDiscoverability`, off par défaut).
+    ///
+    /// **`mobileTranscription` est arrivé au T2.6, avec le sixième outil**, et
+    /// n'a pas davantage de valeur par défaut — pour la MÊME raison que les
+    /// champs juste au-dessus : un défaut le ferait disparaître d'un site
+    /// d'appel sans casser la moindre compilation, et un vocal composé par le
+    /// meuble repartirait sans sa transcription — le serveur re-transcrirait
+    /// alors en silence un travail déjà fait sur l'appareil.
     static func document(
         format: ComposerFormat,
         forcePlainPost: Bool,
@@ -1073,7 +1116,8 @@ nonisolated struct ComposerDocumentDraft: Equatable {
         localMedia: [ComposerDocumentMedia],
         location: SharedPlace?,
         discoverabilityPrecision: DiscoverabilityPrecision?,
-        originalLanguage: String?
+        originalLanguage: String?,
+        mobileTranscription: MobileTranscriptionPayload?
     ) -> ComposerDocumentDraft {
         ComposerDocumentDraft(
             format: format,
@@ -1088,7 +1132,8 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             location: location,
             discoverabilityPrecision: discoverabilityPrecision,
             originalLanguage: originalLanguage,
-            forcePlainPost: forcePlainPost
+            forcePlainPost: forcePlainPost,
+            mobileTranscription: mobileTranscription
         )
     }
 }
@@ -1479,6 +1524,13 @@ struct DocumentComposerDoor: View {
         // brouillon (T2.5) — jamais d'un littéral `nil` : le premier est le
         // lieu choisi, le second le SECOND opt-in, indépendant, que l'auteur
         // seul peut activer (`FeedNearbyDiscoverability`, off par défaut).
+        // `transcription:` vient du brouillon (T2.6) — `draft.mobileTranscription`,
+        // jamais un littéral `nil` : c'est elle que `PublishIntent.document`
+        // consulte pour ÉLIRE `originalLanguage`, la langue PARLÉE gagnant sur
+        // la capsule. Ni ce corps ni son publieur (`FeedViewModel.publish`) ne
+        // touchent au disque : le fichier composé par le meuble n'est ni
+        // déplacé ni effacé ici — il survit à un refus comme à une acceptation,
+        // et c'est la file durable seule qui en dispose.
         await viewModel.publish(PublishIntent.document(
             localMedia: draft.localMedia,
             forcePlainPost: draft.forcePlainPost,
@@ -1488,7 +1540,8 @@ struct DocumentComposerDoor: View {
             originalLanguage: draft.originalLanguage,
             mentions: draft.mentions,
             location: draft.location,
-            discoverabilityPrecision: draft.discoverabilityPrecision
+            discoverabilityPrecision: draft.discoverabilityPrecision,
+            transcription: draft.mobileTranscription
         ))
 
         let issue = ComposerDocumentSendOutcome.reported(

@@ -55,7 +55,8 @@ final class PublishIntentTests: XCTestCase {
     private func intentionDocument(
         localMedia: [ComposerDocumentMedia] = [],
         forcePlainPost: Bool = false,
-        originalLanguage: String? = nil
+        originalLanguage: String? = nil,
+        transcription: MobileTranscriptionPayload? = nil
     ) -> PublishIntent {
         PublishIntent.document(
             localMedia: localMedia,
@@ -66,7 +67,8 @@ final class PublishIntentTests: XCTestCase {
             originalLanguage: originalLanguage,
             mentions: nil,
             location: nil,
-            discoverabilityPrecision: nil
+            discoverabilityPrecision: nil,
+            transcription: transcription
         )
     }
 
