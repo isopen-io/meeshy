@@ -142,12 +142,19 @@ nonisolated enum ComposerOpening: Equatable, CaseIterable {
 /// STRUCTUREL, et il se juge en fonction pure ; prétendre qu'il corrigeait un
 /// écran serait une victoire inventée.
 ///
-/// La doctrine du « cas qui reste déclaré » vaut désormais pour QUATRE valeurs,
+/// La doctrine du « cas qui reste déclaré » vaut désormais pour CINQ valeurs,
 /// et l'inventaire de parité qui gouverne le retrait d'`EditPostSheet.swift`
 /// vit dans `EditParityInventoryTests` — pas ici. Ce fichier ROUTE ; il ne
 /// décide pas d'un retrait.
+///
+/// **`feedInlineComposer` est arrivé à T3.3, et il NOMME l'overlay inline iPad**
+/// (`FeedView.composerOverlay`) que rien ne surveillait — `.feedComposer` ne le
+/// désigne pas, il part de son propre booléen. Le nommer le rend gardable
+/// (`FeedInlineComposerGuardTests`) SANS le migrer : T3.4, qui le ferait passer
+/// au meuble, est descopée. L'overlay reste donc NOMMÉ et GARDÉ — strictement
+/// mieux qu'un composer que rien ne mesure.
 nonisolated enum LegacyComposer: Equatable {
-    case statusComposer, repostComposer, storyEdit, editPostSheet, feedComposer
+    case statusComposer, repostComposer, storyEdit, editPostSheet, feedComposer, feedInlineComposer
 }
 
 /// Ce que la porte décide, et rien de plus.
@@ -237,62 +244,37 @@ nonisolated extension ComposerProfile {
             // retient, et celle-là n'existe plus.
             //
             // Ce que cette ligne change, EXACTEMENT : la table cesse de
-            // désigner `FeedComposerSheet`. Elle ne recâble aucun écran, et il
-            // ne faut pas la lire comme si elle l'avait fait. Aucun site de
-            // production ne construit `ComposerIntent(origin: .feedComposer)` :
-            // les trois montages de la feuille (`RootViewComponents` pour le
-            // fil et la citation, `FeedView` pour la citation iPad) et le
-            // composer INLINE de l'iPad (`FeedView.composerOverlay`, que
-            // `LegacyComposer` ne nomme même pas) partent chacun de leur propre
-            // booléen. Le jour où une porte lira cette table, elle trouvera le
-            // meuble ; aujourd'hui, sur ce chemin, personne ne la lit.
+            // désigner `FeedComposerSheet`. Depuis T3.1, le PLEIN composer du
+            // fil LIT cette table — `RootViewComponents` construit
+            // `ComposerIntent(origin: .feedComposer)` (via `DocumentComposerDoor`)
+            // et atterrit sur le meuble. Restent HORS table, chacun sur son
+            // propre booléen : les deux CITATIONS de la feuille
+            // (`RootViewComponents` et `FeedView`, retenues par T3.2 tant que
+            // 7.5 n'a pas d'écrivain durable du repost) et le composer INLINE
+            // de l'iPad (`FeedView.composerOverlay`, nommé
+            // `LegacyComposer.feedInlineComposer` à T3.3 ; sa migration T3.4 est
+            // descopée — l'overlay reste nommé et gardé).
             //
-            // DETTE CONSIGNÉE, jamais acquis : la surface ainsi désignée tient
-            // UNE des quatre capacités que la rév. 4 énumérait. Le clavier sur
-            // `content` est tenu de bout en bout. Ne le sont pas — la rangée
-            // photo·caméra·emoji·document·lieu·micro, dont UN SEUL outil se peint
-            // depuis le 2026-08-24 (l'emoji, le seul dont le résultat ait une
-            // destination ; les cinq autres n'ont ni champ sur
-            // `ComposerDocumentDraft` ni publieur qui les accepte, et restent donc
-            // ABSENTS plutôt qu'inertes, loi 4) ; la bascule réel
-            // `forcePlainPost`, absente du dossier Composer.
+            // DETTE DU LOT 2 : SOLDÉE (T2.1→T2.6). La surface désignée ne
+            // tenait au 2026-08-24 qu'UNE des trois capacités du DoD — le
+            // clavier sur `content` ; les deux autres sont tombées depuis. La
+            // rangée photo·caméra·emoji·document·lieu·micro se peint désormais
+            // en entier (T2.3 pose les fichiers, T2.4 la bascule réel
+            // `forcePlainPost`, T2.5 le lieu, T2.6 le micro ; la langue est
+            // déclarée depuis T2.2), et l'ENVOI DURABLE l'était déjà depuis le
+            // lot 4.10 : `DocumentComposerDoor` monte le meuble,
+            // `ComposerDocumentSendPlan` interroge la table, et l'envoi part par
+            // la branche texte de `FeedViewModel.createPost`. C'est cette triple
+            // couverture qui a permis à T3.1 de faire lire la table par le fil.
             //
-            // L'ENVOI DURABLE, lui, est TENU depuis le lot 4.10, et c'était la
-            // troisième des trois capacités : `DocumentComposerDoor` monte le
-            // meuble, `ComposerDocumentSendPlan` interroge la table — qui a donc
-            // désormais un appelant, et un seul —, et l'envoi part par la branche
-            // texte de `FeedViewModel.createPost`, qui enfile sa ligne sans même
-            // consulter la connectivité. La garde de source a été RETOURNÉE en
-            // conséquence : elle exige un appelant unique au lieu d'aucun. L'éventail des
-            // formats, lui, ne descend pas non plus sous le document — le
-            // paragraphe de `MeeshyComposerHost.documentSurface` dit le blocage
-            // SDK qui l'y retient. Basculer les écrans du fil AVANT ces
-            // capacités serait la régression sèche que la rév. 4 retenait ; ce
-            // lot déplace la TABLE et laisse les portes de présentation en
-            // place.
-            //
-            // Et cette dette n'est pas qu'écrite : elle est GARDÉE. Un site de
-            // production qui construirait cette intention pendant qu'il manque
-            // au document l'UNE des trois — rangée COUVERTE, issue pour sa
-            // saisie, publieur atteignable — fait rougir
+            // La garde de source correspondante a été RETOURNÉE en conséquence :
             // `MeeshyComposerHostGuardTests`
-            // `.test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`.
-            // Sans elle, la valeur `nil` posée ici aurait promis au lot suivant
-            // une surface que le meuble ne sait pas encore tenir.
-            //
-            // ÉTAT AU 2026-08-24 : DEUX des trois sont tombées, et il faut le
-            // lire au mot près. Le socle est peint sous le document
-            // (`ComposerChromeOwnership.owner(for: .document)` rend `.host`),
-            // sa flèche est un vrai bouton gaté sur la matière, et le texte a
-            // une issue — `MeeshyComposerHost.onPublishDocument`. Reste la
-            // PREMIÈRE, la rangée — et elle ne se lit plus comme un booléen :
-            // elle sert UN outil sur six. La garde a d'ailleurs changé de
-            // mesure le même jour, parce que la sienne était un PROXY : « ne
-            // rend pas `[]` » représentait « la rangée existe-t-elle ? », une
-            // question à laquelle servir un seul outil répond OUI. Elle mesure
-            // désormais la COUVERTURE de la rangée canonique. Lire « il ne
-            // reste plus rien » parce qu'une icône est apparue serait
-            // précisément l'erreur que cette garde existe pour empêcher.
+            // `.test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`
+            // exige désormais un appelant UNIQUE (le fil) au lieu d'aucun, et
+            // ARME les trois assertions qu'elle portait en silence. L'éventail
+            // des formats, lui, ne descend toujours PAS sous le document — le
+            // paragraphe de `MeeshyComposerHost.documentSurface` dit le blocage
+            // SDK qui l'y retient.
             return ComposerProfile(
                 initialFormat: .post,
                 offeredFormats: plusReel([.post, .story]),
