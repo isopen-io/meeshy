@@ -14,17 +14,16 @@
 import { describe, it, expect, beforeEach, jest as jestGlobal } from '@jest/globals';
 
 const mockResolveForTargets = jestGlobal.fn<any>();
-const mockResolvePrefsOnly = jestGlobal.fn<any>();
 jestGlobal.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
     resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
-    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
   }),
 }));
 
 import { PostFeedService } from '../../../services/PostFeedService';
 import { PostVisibility } from '@meeshy/shared/prisma/client';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 
 const FULL = { showOnline: true, showLastSeenTimestamp: true };
 const HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
@@ -34,9 +33,6 @@ let mockPrisma: PrismaClient;
 
 beforeEach(() => {
   mockResolveForTargets.mockReset().mockImplementation(async (_v: unknown, ids: string[]) =>
-    new Map(ids.map((id) => [id, FULL])),
-  );
-  mockResolvePrefsOnly.mockReset().mockImplementation(async (ids: string[]) =>
     new Map(ids.map((id) => [id, FULL])),
   );
   mockPostFindMany = jest.fn().mockResolvedValue([]);
@@ -93,12 +89,13 @@ describe('PostFeedService.getStories — author presence (isOnline/lastActiveAt)
 // bruts n'en est pas une. Les témoins ci-dessus figeaient le `select` et rien
 // d'autre : la valeur sortait sans jamais passer par `PresenceVisibilityService`.
 //
-// Le régime se décide PAR STORY, pas par page. Une story PUBLIQUE ne prouve
-// aucun lien — n'importe quel compte authentifié la voit, `buildPostVisibilityOrFilter`
-// portant `{ visibility: PUBLIC }` sans condition d'audience — donc critère
-// STRICT. Toute autre visibilité prouve un lien que les deux parties ont posé
-// (amitié, contact DM, co-appartenance de communauté, désignation nominative
-// par l'auteur) : contexte acquis, donc préférences seules.
+// Régime UNIQUE et STRICT (directive produit 2026-08-25) : quelle que soit la
+// visibilité de la story (PUBLIC, FRIENDS, COMMUNITY, ONLY…), TOUS les auteurs
+// de la page passent par le même `resolveForTargets(viewer, ids)` — self ou
+// ADMIN/BIGBOSS toujours privilégié, sinon amitié ACCEPTÉE requise. Une
+// co-appartenance de communauté ou un contact DM ne suffit plus à montrer la
+// présence, même si elle a suffi à autoriser l'accès à la story elle-même.
+// La résolution aveugle au viewer (préférences seules) a été SUPPRIMÉE du service.
 describe('PostFeedService.getStories — la présence de l auteur est filtrée', () => {
   const LAST_SEEN = new Date('2026-08-22T10:00:00.000Z');
 
@@ -115,60 +112,73 @@ describe('PostFeedService.getStories — la présence de l auteur est filtrée',
     };
   }
 
-  async function servedStories(stories: any[], opts?: { projection?: 'tray' }) {
+  async function servedStories(stories: any[], opts?: { projection?: 'tray'; viewerRole?: GlobalUserRoleType }) {
     mockPostFindMany.mockResolvedValue(stories);
     const service = new PostFeedService(mockPrisma);
     const result = await service.getStories('user-1', opts);
     return result.items as any[];
   }
 
-  it('masque la présence quand l auteur l a coupée', async () => {
-    mockResolvePrefsOnly.mockResolvedValue(new Map([['author-1', HIDDEN]]));
+  it('masque la présence d un auteur lié (non public) dont le viewer USER n est pas ami', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([['author-1', HIDDEN]]));
 
-    const [story] = await servedStories([makeStory()]);
+    const [story] = await servedStories([makeStory({ visibility: PostVisibility.COMMUNITY })]);
 
     expect(story.author.isOnline).toBe(false);
     expect(story.author.lastActiveAt).toBeNull();
+    const [viewer, ids] = mockResolveForTargets.mock.calls[0];
+    expect(viewer).toEqual({ userId: 'user-1', role: 'USER' });
+    expect(ids).toEqual(['author-1']);
   });
 
-  it('conserve la présence quand l auteur l autorise', async () => {
-    const [story] = await servedStories([makeStory()]);
+  it('conserve la présence d un ami (visible sous ses préférences)', async () => {
+    const [story] = await servedStories([makeStory({ visibility: PostVisibility.FRIENDS })]);
 
     expect(story.author.isOnline).toBe(true);
     expect(story.author.lastActiveAt).toEqual(LAST_SEEN);
   });
 
-  // Une story ONLY/FRIENDS/EXCEPT/COMMUNITY prouve un lien posé des DEUX côtés.
-  it('résout un auteur au contexte acquis par les préférences seules', async () => {
-    await servedStories([makeStory({ visibility: PostVisibility.COMMUNITY })]);
-
-    expect(mockResolvePrefsOnly).toHaveBeenCalledWith(['author-1']);
-    expect(mockResolveForTargets).not.toHaveBeenCalled();
-  });
-
-  // Une story PUBLIQUE ne prouve rien : un inconnu la voit.
-  it('résout un auteur vu seulement en PUBLIC par le critère strict', async () => {
+  it('résout un auteur vu en PUBLIC par le même critère strict', async () => {
     await servedStories([makeStory({ visibility: PostVisibility.PUBLIC })]);
 
     expect(mockResolveForTargets).toHaveBeenCalled();
     const [viewer, ids] = mockResolveForTargets.mock.calls[0];
     expect(ids).toEqual(['author-1']);
     expect(viewer).toEqual({ userId: 'user-1', role: 'USER' });
-    expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
   });
 
-  // Le lien se prouve une fois pour l'auteur, pas story par story.
-  it('classe au contexte acquis un auteur qui prouve le lien par UNE de ses stories', async () => {
+  // Un seul appel groupé pour tous les auteurs de la page, quelle que soit la
+  // visibilité de chacune de leurs stories.
+  it('résout tous les auteurs de la page en un seul appel groupé', async () => {
     await servedStories([
       makeStory({ id: 'story-public', visibility: PostVisibility.PUBLIC }),
-      makeStory({ id: 'story-friends', visibility: PostVisibility.FRIENDS }),
+      makeStory({ id: 'story-friends', visibility: PostVisibility.FRIENDS, author: { id: 'author-2', username: 'ben', isOnline: true, lastActiveAt: LAST_SEEN } }),
     ]);
 
-    expect(mockResolvePrefsOnly).toHaveBeenCalledWith(['author-1']);
-    expect(mockResolveForTargets).not.toHaveBeenCalled();
+    expect(mockResolveForTargets).toHaveBeenCalledTimes(1);
+    const ids = mockResolveForTargets.mock.calls[0][1] as string[];
+    expect(new Set(ids)).toEqual(new Set(['author-1', 'author-2']));
   });
 
-  it('ne masque jamais la présence sur MA propre story publique', async () => {
+  it('le viewer ADMIN voit toute la présence, y compris d un auteur non ami', async () => {
+    // Simule le bypass réel de PresenceVisibilityService.resolveForTargets :
+    // un viewer ADMIN/BIGBOSS reçoit FULL pour tout le monde.
+    mockResolveForTargets.mockImplementation(async (viewer: { role: string } | null, ids: string[]) =>
+      new Map(ids.map((id) => [id, viewer?.role === 'ADMIN' ? FULL : HIDDEN])),
+    );
+
+    const [story] = await servedStories(
+      [makeStory({ visibility: PostVisibility.COMMUNITY })],
+      { viewerRole: 'ADMIN' },
+    );
+
+    expect(story.author.isOnline).toBe(true);
+    expect(story.author.lastActiveAt).toEqual(LAST_SEEN);
+    const [viewer] = mockResolveForTargets.mock.calls[0];
+    expect(viewer).toEqual({ userId: 'user-1', role: 'ADMIN' });
+  });
+
+  it('ne masque jamais la présence sur MA propre story', async () => {
     await servedStories([
       makeStory({
         visibility: PostVisibility.PUBLIC,
@@ -176,13 +186,14 @@ describe('PostFeedService.getStories — la présence de l auteur est filtrée',
       }),
     ]);
 
-    expect(mockResolvePrefsOnly).toHaveBeenCalledWith(['user-1']);
-    expect(mockResolveForTargets).not.toHaveBeenCalled();
+    const [viewer, ids] = mockResolveForTargets.mock.calls[0];
+    expect(viewer).toEqual({ userId: 'user-1', role: 'USER' });
+    expect(ids).toEqual(['user-1']);
   });
 
   // Le défaut est le refus : un id que le résolveur n'a pas rendu sort masqué.
   it('masque un auteur que le résolveur n a pas rendu', async () => {
-    mockResolvePrefsOnly.mockResolvedValue(new Map());
+    mockResolveForTargets.mockResolvedValue(new Map());
 
     const [story] = await servedStories([makeStory()]);
 
@@ -191,7 +202,7 @@ describe('PostFeedService.getStories — la présence de l auteur est filtrée',
   });
 
   it('filtre aussi la projection tray', async () => {
-    mockResolvePrefsOnly.mockResolvedValue(new Map([['author-1', HIDDEN]]));
+    mockResolveForTargets.mockResolvedValue(new Map([['author-1', HIDDEN]]));
 
     const [story] = await servedStories([makeStory()], { projection: 'tray' });
 
@@ -202,7 +213,6 @@ describe('PostFeedService.getStories — la présence de l auteur est filtrée',
   it('n ouvre aucune résolution sur une page vide', async () => {
     await servedStories([]);
 
-    expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
     expect(mockResolveForTargets).not.toHaveBeenCalled();
   });
 });

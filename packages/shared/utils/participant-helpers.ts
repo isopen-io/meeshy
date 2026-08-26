@@ -132,9 +132,10 @@ export type SerializableParticipantRow = {
 };
 
 /**
- * Visibilité de présence telle que la rend `resolvePrefsOnly` : deux drapeaux,
- * ou RIEN quand la cible n'a pas de préférences (un anonyme n'a pas de compte).
- * Régime PREFS-ONLY — l'entrée absente RÉVÈLE, elle ne masque pas.
+ * Visibilité de présence telle que la rend `resolveForTargets(viewer, ids)` :
+ * deux drapeaux, ou RIEN quand la cible n'a pas de compte (un anonyme n'a pas
+ * de `userId`). L'entrée absente MASQUE, sauf pour un viewer ADMIN/BIGBOSS —
+ * l'appelant le dit par `PresenceMissingEntryPolicy`.
  * @see utils/presence-visibility.ts, `PresenceMissingEntryPolicy`
  */
 export type ParticipantPresenceVisibility = {
@@ -143,7 +144,12 @@ export type ParticipantPresenceVisibility = {
 };
 
 export type SerializeParticipantOptions = {
-  /** Préférences de la CIBLE. Absente ⇒ révèle (régime prefs-only). */
+  /**
+   * Visibilité SERVIE pour la cible, résolue par l'appelant PAR VIEWER
+   * (`resolveForTarget(s)`, puis `presenceFor` pour une entrée absente).
+   * Absente ⇒ MASQUE : la fabrique ne révèle jamais par défaut — un appelant
+   * qui l'omet sert `isOnline:false` / `lastActiveAt:null`, pas la colonne.
+   */
   readonly presence?: ParticipantPresenceVisibility;
   /**
    * Présence VIVE du `SocketIOManager` quand on l'a : la colonne
@@ -172,7 +178,11 @@ const ADMIN_ROLES = ['ADMIN', 'BIGBOSS'];
  *    `member` là où le contrat promet `USER`, en laissant `conversationRole` vide.
  * 2. **La présence ne sort jamais toute seule.** `isOnline`/`lastActiveAt` sont
  *    DÉCLARÉS par le schéma : sur un rang brut ils traversent sans garde. Ici
- *    ils ne peuvent sortir qu'à travers `options.presence`.
+ *    ils ne sortent qu'à travers `options.presence`, et seulement quand elle
+ *    le DIT (`showOnline === true`, `showLastSeenTimestamp === true`) : sans
+ *    visibilité fournie, la fabrique sert `false` / `null`. Le défaut FERME —
+ *    les trois appelants du gateway passent déjà `presenceFor` ; le quatrième,
+ *    qui l'oublierait, ne fuit plus.
  */
 export const serializeConversationParticipant = (
   participant: SerializableParticipantRow,
@@ -200,9 +210,9 @@ export const serializeConversationParticipant = (
     role: user?.role ?? 'USER',
     conversationRole: participant.role ?? null,
     joinedAt,
-    isOnline: presence?.showOnline === false ? false : effectiveOnline,
+    isOnline: presence?.showOnline === true ? effectiveOnline : false,
     lastActiveAt:
-      presence?.showLastSeenTimestamp === false ? null : participant.lastActiveAt ?? null,
+      presence?.showLastSeenTimestamp === true ? participant.lastActiveAt ?? null : null,
     systemLanguage: user?.systemLanguage ?? language,
     regionalLanguage: user?.regionalLanguage ?? language,
     customDestinationLanguage: user?.customDestinationLanguage ?? language,

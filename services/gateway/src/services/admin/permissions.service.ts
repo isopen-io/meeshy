@@ -17,6 +17,15 @@ export interface AdminPermissions {
   canModerateContent: boolean;
   canManageNotifications: boolean;
   canManageTranslations: boolean;
+  /**
+   * Voir isOnline/lastActiveAt d'un utilisateur (directive produit 2026-08-25 :
+   * « les utilisateurs avec le rôle ADMIN et supérieur peuvent constamment
+   * avoir l'état de présence »). Distinct de canViewSensitiveData — la
+   * présence n'est ni un email ni un téléphone, et le seuil est BIGBOSS/ADMIN
+   * seulement : MODERATOR, qui voit les données sensibles nulle part mais
+   * modère du contenu, ne doit pas voir la présence non plus.
+   */
+  canViewPresence: boolean;
 }
 
 export class PermissionsService {
@@ -46,7 +55,8 @@ export class PermissionsService {
       canViewAnalytics: true,
       canModerateContent: true,
       canManageNotifications: true,
-      canManageTranslations: true
+      canManageTranslations: true,
+      canViewPresence: true
     },
     'ADMIN': {
       canAccessAdmin: true,
@@ -64,7 +74,8 @@ export class PermissionsService {
       canViewAnalytics: true,
       canModerateContent: true,
       canManageNotifications: true,
-      canManageTranslations: true  // ADMIN can now manage translations
+      canManageTranslations: true,  // ADMIN can now manage translations
+      canViewPresence: true
     },
     'MODERATOR': {
       canAccessAdmin: true,
@@ -82,7 +93,8 @@ export class PermissionsService {
       canViewAnalytics: false,
       canModerateContent: true,
       canManageNotifications: false,
-      canManageTranslations: false
+      canManageTranslations: false,
+      canViewPresence: false  // ❌ Modération de contenu ≠ visibilité de présence
     },
     'AUDIT': {
       canAccessAdmin: true,
@@ -100,7 +112,8 @@ export class PermissionsService {
       canViewAnalytics: true,
       canModerateContent: false,
       canManageNotifications: false,
-      canManageTranslations: false
+      canManageTranslations: false,
+      canViewPresence: false
     },
     'ANALYST': {
       canAccessAdmin: false,
@@ -118,7 +131,8 @@ export class PermissionsService {
       canViewAnalytics: true,
       canModerateContent: false,
       canManageNotifications: false,
-      canManageTranslations: false
+      canManageTranslations: false,
+      canViewPresence: false
     },
     'USER': {
       canAccessAdmin: false,
@@ -136,7 +150,8 @@ export class PermissionsService {
       canViewAnalytics: false,
       canModerateContent: false,
       canManageNotifications: false,
-      canManageTranslations: false
+      canManageTranslations: false,
+      canViewPresence: false
     },
     // Aliases are handled by resolveRole method
   };
@@ -180,6 +195,15 @@ export class PermissionsService {
    */
   canViewSensitiveData(role: UserRoleEnum): boolean {
     return this.hasPermission(role, 'canViewSensitiveData');
+  }
+
+  /**
+   * Vérifie si un rôle peut voir l'état de présence (isOnline/lastActiveAt)
+   * d'un utilisateur dans l'espace admin (directive produit 2026-08-25 :
+   * ADMIN et supérieur uniquement — constamment).
+   */
+  canViewPresence(role: UserRoleEnum): boolean {
+    return this.hasPermission(role, 'canViewPresence');
   }
 
   /**

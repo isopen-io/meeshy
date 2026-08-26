@@ -97,6 +97,7 @@ jest.mock('../../services/MaintenanceService', () => ({
       startMaintenanceTasks: jest.fn().mockResolvedValue(undefined),
       setStatusBroadcastCallback: jest.fn(),
       setIsCurrentlyConnected: jest.fn(),
+      setSessionRevoker: jest.fn(),
     };
     return mockMaintenanceServiceInstance;
   }),

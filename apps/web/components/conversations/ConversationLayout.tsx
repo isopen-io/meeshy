@@ -128,7 +128,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   const conversations = paginatedConversations;
 
-  // Seed presence store from conversation participant data
+  // Seed the user store from conversation participant data — a CACHED list
+  // (React Query, persisted) feeds identity only and never overrides a presence
+  // the store already holds (a mask served by the gateway included).
   const mergeParticipants = useUserStore(state => state.mergeParticipants);
   useEffect(() => {
     if (!conversations.length) return;
@@ -140,7 +142,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
         if (u?.id) users.push(u as { id: string; [key: string]: unknown });
       }
     }
-    if (users.length > 0) mergeParticipants(users as unknown as Parameters<typeof mergeParticipants>[0]);
+    if (users.length > 0) {
+      mergeParticipants(users as unknown as Parameters<typeof mergeParticipants>[0], { presence: 'keep-existing' });
+    }
   }, [conversations, mergeParticipants]);
 
   // Derived stable value for effect deps - avoids re-runs when conversation objects change but IDs don't (#10, #11)

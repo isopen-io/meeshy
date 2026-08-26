@@ -22,9 +22,43 @@ jest.mock('../../../../utils/logger', () => ({
   logError: jest.fn(),
 }));
 
+// Porte de présence — même contrat que la production (`resolveForTargets`
+// rend UNE entrée par id), servi par la VRAIE loi partagée sur un ensemble
+// d'amis que le témoin choisit. Sans amis par défaut : un viewer ordinaire ne
+// voit que lui-même, un viewer absent ne voit personne.
+const mockResolveForTargets = jest.fn<any>(async (viewer: PresenceViewer, ids: readonly string[]) =>
+  lawFaithfulResolver()(viewer, ids));
+jest.mock('../../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
+  }),
+}));
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
+import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import type { PresenceViewer } from '../../../../services/PresenceVisibilityService';
 import { searchUsers, getUserStats } from '../../../../routes/users/preferences';
+
+const PRESENCE_HIDDEN = { showOnline: false, showLastSeenTimestamp: false } as const;
+
+const lawFaithfulVisibility = (viewer: PresenceViewer, id: string, friendsOfViewer: ReadonlySet<string>) =>
+  viewer
+    ? resolvePresenceVisibility({
+        isSelf: viewer.userId === id,
+        viewerRole: viewer.role,
+        areConnected: friendsOfViewer.has(id),
+        targetShowOnlineStatus: true,
+        targetShowLastSeen: true,
+        targetIsDeactivated: false,
+        isBlockedEitherWay: false,
+      })
+    : PRESENCE_HIDDEN;
+
+function lawFaithfulResolver(friendsOfViewer: ReadonlySet<string> = new Set()) {
+  return async (viewer: PresenceViewer, ids: readonly string[]) =>
+    new Map(ids.map((id) => [id, lawFaithfulVisibility(viewer, id, friendsOfViewer)]));
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -204,5 +238,111 @@ describe('GET /users/:userId/stats — DB error', () => {
     const res = await app.inject({ method: 'GET', url: `/users/${TARGET_USER_ID}/stats` });
     expect(res.statusCode).toBe(500);
     await app.close();
+  });
+});
+
+// ─── GET /users/search — l'ORDRE obéit à la loi de la présence ────────────────
+// La page était lue `orderBy: [{ isOnline: 'desc' }, …]` pour TOUT viewer, puis
+// la porte masquait `isOnline` : un inconnu en ligne arrivait en tête, masqué
+// `false`, et sa POSITION disait ce que le champ taisait. Seul un viewer que
+// la loi sert FULL (ADMIN/BIGBOSS) peut classer par la présence brute ; les
+// autres lisent une page classée par le nom, stabilisée ENSUITE sur la
+// présence SERVIE — un ami en ligne remonte pour qui a le droit de le voir,
+// et rien d'autre ne bouge. Un anonyme n'entre pas ici (401, voir plus haut).
+
+describe("GET /users/search — l'ORDRE obéit à la loi de la présence", () => {
+  const FRIEND_ONLINE_ID = '507f1f77bcf86cd799439101';
+  const FRIEND_OFFLINE_ID = '507f1f77bcf86cd799439102';
+  const STRANGER_ONLINE_ID = '507f1f77bcf86cd799439103';
+  const friendsOfViewer: ReadonlySet<string> = new Set([FRIEND_ONLINE_ID, FRIEND_OFFLINE_ID]);
+
+  const userRow = (id: string, firstName: string, isOnline: boolean) => ({
+    id, username: firstName.toLowerCase(), firstName, lastName: 'X', displayName: firstName,
+    email: `${firstName.toLowerCase()}@test.com`, isOnline, lastActiveAt: null, systemLanguage: 'en',
+  });
+  // Ce que la base rend pour un tri par NOM seul.
+  const byName = () => [
+    userRow(STRANGER_ONLINE_ID, 'Aaron', true),
+    userRow(FRIEND_OFFLINE_ID, 'Bob', false),
+    userRow(FRIEND_ONLINE_ID, 'Zoe', true),
+  ];
+  // Ce que la base rend pour un tri « en ligne d'abord », puis par nom.
+  const byRawPresenceThenName = () => [
+    userRow(STRANGER_ONLINE_ID, 'Aaron', true),
+    userRow(FRIEND_ONLINE_ID, 'Zoe', true),
+    userRow(FRIEND_OFFLINE_ID, 'Bob', false),
+  ];
+
+  // `type: 'user'` + rôle : la forme RÉELLE d'un inscrit, celle sur laquelle
+  // `viewerFromRequest` construit le viewer. « viewerless » est la forme du
+  // harnais ci-dessus (ni type ni rôle) : aucun viewer, donc rien d'ouvert.
+  type ViewerSpec = { role: string } | 'viewerless';
+  const authContextOf = (viewer: ViewerSpec) =>
+    viewer === 'viewerless'
+      ? { isAuthenticated: true, userId: CURRENT_USER_ID, registeredUser: { id: CURRENT_USER_ID } }
+      : { type: 'user', isAuthenticated: true, isAnonymous: false, userId: CURRENT_USER_ID, registeredUser: { id: CURRENT_USER_ID, role: viewer.role } };
+
+  async function search(viewer: ViewerSpec, rows: unknown[]) {
+    mockResolveForTargets.mockImplementationOnce(lawFaithfulResolver(friendsOfViewer));
+    const prisma = makePrisma();
+    prisma.user.findMany = jest.fn<any>().mockResolvedValue(rows);
+    prisma.user.count = jest.fn<any>().mockResolvedValue(rows.length);
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('prisma', prisma);
+    app.decorate('authenticate', async (req: FastifyRequest) => {
+      (req as any).authContext = authContextOf(viewer);
+    });
+    await searchUsers(app);
+    await app.ready();
+    const res = await app.inject({ method: 'GET', url: '/users/search?q=test' });
+    await app.close();
+    const query = prisma.user.findMany.mock.calls[0][0];
+    return { res, orderBy: query.orderBy, select: query.select };
+  }
+  const servedIds = (res: { json: () => any }) => res.json().data.map((u: { id: string }) => u.id);
+  const servedOnline = (res: { json: () => any }) => res.json().data.map((u: { isOnline: boolean }) => u.isOnline);
+  const orderByKeys = (orderBy: unknown): string[] =>
+    [orderBy ?? []].flat().flatMap((clause) => Object.keys(clause as object));
+
+  it("USER ⇒ tri par nom seul en base ; la page servie remonte l'ami en ligne, jamais l'inconnu masqué", async () => {
+    const { res, orderBy } = await search({ role: 'USER' }, byName());
+
+    expect(res.statusCode).toBe(200);
+    expect(orderBy).toEqual([{ firstName: 'asc' }, { lastName: 'asc' }]);
+    expect(servedIds(res)).toEqual([FRIEND_ONLINE_ID, STRANGER_ONLINE_ID, FRIEND_OFFLINE_ID]);
+    expect(servedOnline(res)).toEqual([true, false, false]);
+  });
+
+  it.each(['ADMIN', 'BIGBOSS'])('%s ⇒ tri en base INCHANGÉ (présence brute d\'abord), page servie telle que lue', async (role) => {
+    const { res, orderBy } = await search({ role }, byRawPresenceThenName());
+
+    expect(orderBy).toEqual([{ isOnline: 'desc' }, { firstName: 'asc' }, { lastName: 'asc' }]);
+    expect(servedIds(res)).toEqual([STRANGER_ONLINE_ID, FRIEND_ONLINE_ID, FRIEND_OFFLINE_ID]);
+    expect(servedOnline(res)).toEqual([true, true, false]);
+  });
+
+  it.each(['MODERATOR', 'AUDIT', 'ANALYST'])('%s ⇒ comme un USER : aucune clé de présence en base, seul l\'ami en ligne remonte', async (role) => {
+    const { res, orderBy } = await search({ role }, byName());
+
+    expect(orderByKeys(orderBy)).not.toContain('isOnline');
+    expect(orderByKeys(orderBy)).not.toContain('lastActiveAt');
+    expect(servedIds(res)).toEqual([FRIEND_ONLINE_ID, STRANGER_ONLINE_ID, FRIEND_OFFLINE_ID]);
+  });
+
+  it('viewer sans rôle (la forme du harnais) ⇒ comme un USER sans amis : personne ne remonte, tout est masqué', async () => {
+    const { res, orderBy } = await search('viewerless', byName());
+
+    expect(orderByKeys(orderBy)).not.toContain('isOnline');
+    expect(servedIds(res)).toEqual([STRANGER_ONLINE_ID, FRIEND_OFFLINE_ID, FRIEND_ONLINE_ID]);
+    expect(servedOnline(res)).toEqual([false, false, false]);
+  });
+
+  it('la projection `select` reste celle du schéma de réponse — le tri change, pas la charge', async () => {
+    const { select } = await search({ role: 'USER' }, byName());
+
+    expect(select).toEqual({
+      id: true, username: true, firstName: true, lastName: true, displayName: true,
+      email: true, isOnline: true, lastActiveAt: true, systemLanguage: true,
+    });
   });
 });

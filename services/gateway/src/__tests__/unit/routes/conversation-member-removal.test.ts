@@ -62,10 +62,10 @@ jest.mock('../../../socketio/endConversationMembership', () => ({
   endConversationMembership: jest.fn(async () => undefined),
 }));
 
-const mockResolvePrefsOnly = jest.fn<any>();
+const mockResolveForTargets = jest.fn<any>();
 jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: (...args: unknown[]) => mockResolvePrefsOnly(...args),
+    resolveForTargets: (...args: unknown[]) => mockResolveForTargets(...args),
   }),
 }));
 
@@ -175,8 +175,8 @@ const call = (app: FastifyInstance, method: 'DELETE' | 'PATCH', url: string) =>
 beforeEach(() => {
   mockResolveConversationId.mockReset();
   mockResolveConversationId.mockResolvedValue(CONV_ID);
-  mockResolvePrefsOnly.mockReset();
-  mockResolvePrefsOnly.mockResolvedValue(new Map());
+  mockResolveForTargets.mockReset();
+  mockResolveForTargets.mockResolvedValue(new Map());
 });
 
 describe('DELETE /conversations/:id/participants/:key — expulser', () => {

@@ -219,6 +219,51 @@ describe('GET /admin/conversations/:conversationId/participants', () => {
     expect(res.statusCode).toBe(403);
     await app.close();
   });
+
+  // Directive produit 2026-08-25 : « les utilisateurs avec le rôle ADMIN et
+  // supérieur peuvent constamment avoir l'état de présence » — MODERATOR
+  // passe `requireUserViewAccess` (canViewUsers) mais n'a plus canViewPresence.
+  it('masks isOnline for a role with canViewUsers but no canViewPresence (MODERATOR)', async () => {
+    const prisma = createMockPrisma({
+      participants: [
+        { id: 'pt1', userId: 'u1', type: 'user', displayName: 'Alice', avatar: null, role: 'admin', isActive: true, isOnline: true, joinedAt: new Date('2026-01-01').toISOString(), nickname: null, user: { id: 'u1', username: 'alice', displayName: 'Alice', avatar: null } },
+      ],
+      participantsCount: 1,
+    });
+    const app = await buildApp(prisma, 'MODERATOR');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/conversations/conv-1/participants',
+      headers: { authorization: 'Bearer x' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data[0].isOnline).toBe(false);
+    // Le reste du participant n'est pas emporté par le masquage.
+    expect(body.data[0]).toMatchObject({ id: 'pt1', role: 'admin', displayName: 'Alice' });
+    await app.close();
+  });
+
+  it('serves the real isOnline for a role with canViewPresence (ADMIN)', async () => {
+    const prisma = createMockPrisma({
+      participants: [
+        { id: 'pt1', userId: 'u1', type: 'user', displayName: 'Alice', avatar: null, role: 'admin', isActive: true, isOnline: true, joinedAt: new Date('2026-01-01').toISOString(), nickname: null, user: { id: 'u1', username: 'alice', displayName: 'Alice', avatar: null } },
+      ],
+      participantsCount: 1,
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/conversations/conv-1/participants',
+      headers: { authorization: 'Bearer x' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data[0].isOnline).toBe(true);
+    await app.close();
+  });
 });
 
 describe('GET /admin/users/:userId/media', () => {

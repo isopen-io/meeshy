@@ -45,6 +45,7 @@ export const shareLinkIncludeStructure = {
           avatar: true,
           language: true,
           isOnline: true,
+          lastActiveAt: true,
           isActive: true,
           role: true,
           joinedAt: true,

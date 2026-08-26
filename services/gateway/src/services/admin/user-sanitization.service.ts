@@ -8,6 +8,7 @@ import {
   UserRoleEnum
 } from '@meeshy/shared/types';
 import { permissionsService } from './permissions.service';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 
 export class UserSanitizationService {
   /**
@@ -44,9 +45,14 @@ export class UserSanitizationService {
    */
   sanitizeUser(user: FullUser, viewerRole: UserRoleEnum): UserResponse {
     const canViewSensitive = permissionsService.canViewSensitiveData(viewerRole);
+    // Directive produit 2026-08-25 : « les utilisateurs avec le rôle ADMIN et
+    // supérieur peuvent constamment avoir l'état de présence » — un seuil
+    // DISTINCT de canViewSensitiveData (MODERATOR modère du contenu mais ne
+    // voit ni l'un ni l'autre).
+    const canViewPresence = permissionsService.canViewPresence(viewerRole);
 
     // Données publiques (toujours incluses)
-    const publicData: PublicUser = {
+    const publicDataRaw: PublicUser = {
       id: user.id,
       username: user.username,
       firstName: user.firstName,
@@ -66,6 +72,21 @@ export class UserSanitizationService {
       profileCompletionRate: user.profileCompletionRate,
       _count: user._count
     };
+
+    // `applyPresenceVisibilityAsOffline` est le site UNIQUE déjà bâti (loi de
+    // présence partagée) pour la forme que `PublicUser` déclare : `isOnline:
+    // boolean` (jamais `null`) et `lastActiveAt: Date | null`. Masqué s'y
+    // présente comme HORS LIGNE — `isOnline=false`, `lastActiveAt=null` — et
+    // c'est ce que le type du helper (`PresenceAsOffline`) et celui de
+    // `PublicUser` DISENT tous deux : la colonne (`FullUser.lastActiveAt:
+    // Date`) n'est jamais nulle, la valeur SERVIE peut l'être. Les clés
+    // restent présentes (jamais retirées), seule leur valeur change — un rôle
+    // non autorisé ne doit jamais pouvoir distinguer « présence masquée » de
+    // « réellement hors ligne depuis toujours ».
+    const publicData: PublicUser = applyPresenceVisibilityAsOffline(publicDataRaw, {
+      showOnline: canViewPresence,
+      showLastSeenTimestamp: canViewPresence,
+    });
 
     // Si peut voir les données sensibles → AdminUser
     if (canViewSensitive) {

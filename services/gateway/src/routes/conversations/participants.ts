@@ -33,9 +33,54 @@ import {
   REJOIN_PARTICIPANT_STATE
 } from '../../services/conversations/conversationEntryAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { getPresenceVisibilityService, type PresenceViewer } from '../../services/PresenceVisibilityService';
+import { presenceFor, viewerFromRequest } from '../users/presence-gate';
+import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { sliceByIdCursor, validatePagination } from '../../utils/pagination';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantsRoutes' });
+
+/**
+ * Portée du prédicat « en ligne » d'un listing filtré `?onlineOnly=true`.
+ *
+ * La porte de présence (`resolveForTargets`) ne gouverne que la VALEUR servie.
+ * Filtrer sur `Participant.isOnline` AVANT elle — en base pour le listing
+ * complet, en mémoire pour le top-99 — livrait à un non-ami la liste exacte
+ * des membres en ligne, chacun masqué `isOnline:false` : l'APPARTENANCE à la
+ * liste était la fuite. La sélection obéit donc à la même loi que le champ,
+ * et ne peut porter que sur les `User.id` dont le viewer a le DROIT de
+ * connaître l'état en ligne :
+ *
+ *  - `'everyone'` — ADMIN/BIGBOSS, que la loi sert FULL : aucune borne ;
+ *  - un ensemble — soi-même ∪ amitiés acceptées (`acceptedFriendIds`), la
+ *    seule relation que la directive du 2026-08-25 tient pour une
+ *    autorisation ; VIDE pour un viewer anonyme, qui ne voit personne en ligne.
+ *
+ * Ce que la porte MASQUE ensuite (préférence `showOnlineStatus`, blocage,
+ * désactivation) sort de la page par `servedOnline` : la sélection en amont ne
+ * connaît que l'amitié, la porte connaît le reste.
+ */
+type OnlineOnlyScope = 'everyone' | ReadonlySet<string>;
+
+async function onlineOnlyScope(prisma: PrismaClient, viewer: PresenceViewer): Promise<OnlineOnlyScope> {
+  if (viewer && isGlobalAdmin(viewer.role)) return 'everyone';
+  if (!viewer) return new Set();
+  const friends = await getPresenceVisibilityService(prisma).acceptedFriendIds(viewer.userId);
+  return new Set([...friends, viewer.userId]);
+}
+
+const withinOnlineOnlyScope = (scope: OnlineOnlyScope, userId: string | null | undefined): boolean =>
+  scope === 'everyone' || (!!userId && scope.has(userId));
+
+const onlineOnlyWhere = (scope: OnlineOnlyScope) => ({
+  isOnline: true,
+  ...(scope === 'everyone' ? {} : { userId: { in: [...scope] } })
+});
+
+/**
+ * Une page filtrée « en ligne » ne contient que ce qu'elle SERT en ligne.
+ */
+const servedOnline = (participant: { readonly isOnline: boolean }): boolean => participant.isOnline === true;
 
 const participantListUserSelect = {
   user: {
@@ -54,7 +99,8 @@ const participantListUserSelect = {
       customDestinationLanguage: true,
       isActive: true,
       createdAt: true,
-      updatedAt: true
+      updatedAt: true,
+      deactivatedAt: true
     }
   }
 } as const;
@@ -76,7 +122,7 @@ type ParticipantActivityStat = {
 async function loadMostActiveParticipants(options: {
   prisma: PrismaClient;
   conversationId: string;
-  filters: { onlineOnly?: string; role?: string; search?: string };
+  filters: { onlineOnly?: OnlineOnlyScope; role?: string; search?: string };
   cursor?: string;
   pageLimit: number;
 }): Promise<{ participants: any[]; hasMore: boolean; nextCursor: string | null }> {
@@ -119,10 +165,18 @@ async function loadMostActiveParticipants(options: {
       ordered.push(match);
     }
   }
+  // Le complément se classe par ANCIENNETÉ seule. Il portait `isOnline: 'desc'`
+  // en tête, pour un lecteur à qui la porte masque ensuite ce champ : les
+  // en-ligne remontaient, et leur POSITION disait ce que le champ taisait. Ce
+  // chemin ne sert jamais un viewer privilégié (tout rang plateforme au-dessus
+  // de USER est exempté du top-99 par `isMemberListingRestricted`) — la clé de
+  // présence n'y a donc aucun ayant droit, et sort sans condition. Pas de
+  // stabilisation par la présence servie non plus : cette liste est un rang
+  // d'ACTIVITÉ, qu'un « amis en ligne d'abord » briserait.
   if (ordered.length < ACTIVE_MEMBER_LISTING_LIMIT) {
     const fill = await prisma.participant.findMany({
       where: { conversationId, isActive: true, id: { notIn: [...taken] } },
-      orderBy: [{ isOnline: 'desc' }, { joinedAt: 'asc' }],
+      orderBy: { joinedAt: 'asc' },
       take: ACTIVE_MEMBER_LISTING_LIMIT - ordered.length,
       include: participantListUserSelect
     });
@@ -132,7 +186,7 @@ async function loadMostActiveParticipants(options: {
   const searchTerm = filters.search?.trim().toLowerCase() ?? '';
   const filtered = ordered.filter(
     (p) =>
-      (filters.onlineOnly !== 'true' || p.isOnline) &&
+      (!filters.onlineOnly || (p.isOnline && withinOnlineOnlyScope(filters.onlineOnly, p.userId))) &&
       (!filters.role || p.role === filters.role.toLowerCase()) &&
       (!searchTerm || (p.displayName ?? '').toLowerCase().includes(searchTerm))
   );
@@ -276,6 +330,12 @@ export function registerParticipantsRoutes(
         restricted = isMemberListingRestricted({ platformRole, conversationRole, communityRole });
       }
 
+      // Le viewer de PRÉSENCE (inscrit + rôle, sinon null) se lit AVANT la
+      // sélection : un filtre `onlineOnly` ne porte que sur ce qu'il a le
+      // droit de voir — voir `OnlineOnlyScope`.
+      const presenceViewer = viewerFromRequest(request);
+      const onlineOnlyFilter = onlineOnly === 'true' ? await onlineOnlyScope(prisma, presenceViewer) : undefined;
+
       let paginatedParticipants: any[];
       let hasMore: boolean;
       let nextCursor: string | null;
@@ -284,7 +344,7 @@ export function registerParticipantsRoutes(
         const page = await loadMostActiveParticipants({
           prisma,
           conversationId,
-          filters: { onlineOnly, role, search },
+          filters: { onlineOnly: onlineOnlyFilter, role, search },
           cursor,
           pageLimit
         });
@@ -292,26 +352,14 @@ export function registerParticipantsRoutes(
         hasMore = page.hasMore;
         nextCursor = page.nextCursor;
       } else {
-        const whereConditions: any = {
-          conversationId: conversationId,
-          isActive: true
+        const searchTerm = search?.trim() ?? '';
+        const whereConditions = {
+          conversationId,
+          isActive: true,
+          ...(onlineOnlyFilter ? onlineOnlyWhere(onlineOnlyFilter) : {}),
+          ...(role ? { role: role.toLowerCase() } : {}),
+          ...(searchTerm ? { displayName: { contains: searchTerm, mode: 'insensitive' as const } } : {})
         };
-
-        if (onlineOnly === 'true') {
-          whereConditions.isOnline = true;
-        }
-
-        if (role) {
-          whereConditions.role = role.toLowerCase();
-        }
-
-        if (search && search.trim().length > 0) {
-          const searchTerm = search.trim();
-          whereConditions.displayName = {
-            contains: searchTerm,
-            mode: 'insensitive'
-          };
-        }
 
         // Cursor-based pagination: skip the cursor record, ordered by id for stable pagination
         const cursorOption = cursor ? { id: cursor } : undefined;
@@ -343,10 +391,12 @@ export function registerParticipantsRoutes(
         viewerSeesExactCount: canViewExactMemberCount({ platformRole, conversationRole })
       });
 
-      // Présence des co-participants : montrable (co-participation = contexte
-      // d'accès déjà garanti), mais soumise aux préférences showOnlineStatus/
-      // showLastSeen de chacun. Anonymes inchangés.
-      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Présence des co-participants : régime STRICT (2026-08-25) — self/
+      // ADMIN+/ami seuls, jamais la seule co-participation. Un participant
+      // sans compte (pas d'entrée possible dans la carte) est masqué, sauf
+      // pour un viewer ADMIN+.
+      const presenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        presenceViewer,
         paginatedParticipants.map(p => p.userId).filter((uid): uid is string => !!uid),
       );
 
@@ -356,9 +406,16 @@ export function registerParticipantsRoutes(
       // brut sans gate. La fabrique partagée est désormais la source unique.
       const formattedParticipants = paginatedParticipants.map(participant =>
         serializeConversationParticipant(participant, {
-          presence: presenceVis.get(participant.userId ?? '')
+          presence: presenceFor(presenceViewer, presenceVis, participant.userId)
         })
       );
+
+      // Une page « en ligne » ne SERT que ce qu'elle montre en ligne : ce que
+      // la porte vient de masquer (préférence, blocage, désactivation) en
+      // sort. Elle peut être plus courte que `limit` ; `hasMore` et
+      // `nextCursor` restent ceux de la page LUE — le curseur désigne une
+      // ligne qui existe, servie ou non.
+      const servedParticipants = onlineOnlyFilter ? formattedParticipants.filter(servedOnline) : formattedParticipants;
 
       // NOTE: Cannot use sendSuccess() — response includes a top-level `pagination` field
       // (with cursor-based shape: nextCursor/hasMore/totalCount) that iOS SDK
@@ -366,7 +423,7 @@ export function registerParticipantsRoutes(
       // requires a coordinated client update (breaking change).
       reply.send({
         success: true,
-        data: formattedParticipants,
+        data: servedParticipants,
         pagination: {
           nextCursor,
           hasMore,
@@ -517,7 +574,7 @@ export function registerParticipantsRoutes(
       // le corps.
       const participant = await prisma.participant.findFirst({
         where: { id: participantId, conversationId },
-        include: { user: { select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true } } }
+        include: { user: { select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true, deactivatedAt: true } } }
       });
 
       if (!participant) {
@@ -597,6 +654,24 @@ export function registerParticipantsRoutes(
           }
         : null;
 
+      // La fiche servait `isOnline`/`lastActiveAt` BRUTS, sans aucune gate —
+      // un co-membre qui n'est ni ami ni ADMIN+ apprenait ainsi la dernière
+      // connexion de n'importe quel membre inscrit rien qu'en ouvrant sa
+      // fiche. Régime STRICT : un participant SANS compte (anonyme) n'a pas
+      // d'entrée possible dans la carte de présence — masqué par défaut,
+      // sauf pour un viewer ADMIN+.
+      const presenceViewer = viewerFromRequest(request);
+      const participantPresence = participant.userId
+        ? await getPresenceVisibilityService(prisma).resolveForTarget(presenceViewer, {
+            id: participant.userId,
+            deactivatedAt: participant.user?.deactivatedAt ?? null
+          })
+        : presenceFor(presenceViewer, new Map(), null);
+      const gatedPresence = applyPresenceVisibilityAsOffline(
+        { isOnline: participant.isOnline ?? null, lastActiveAt: participant.lastActiveAt ?? null },
+        participantPresence
+      );
+
       return sendSuccess(reply, {
         participantId: participant.id,
         conversationId,
@@ -611,8 +686,8 @@ export function registerParticipantsRoutes(
         country: participant.anonymousSession?.session?.country ?? null,
         conversationRole: participant.role ?? null,
         joinedAt: participant.joinedAt ?? null,
-        isOnline: participant.isOnline ?? false,
-        lastActiveAt: participant.lastActiveAt ?? null,
+        isOnline: gatedPresence.isOnline,
+        lastActiveAt: gatedPresence.lastActiveAt ?? null,
         shareLinkName: shareLink?.name ?? null,
         hasEmail: !!profile?.email,
         hasBirthday: !!profile?.birthday,
@@ -1482,20 +1557,28 @@ export function registerParticipantsRoutes(
       });
 
       // Cette route servait `updatedRow` TEL QUEL sous la clé `participant`, que
-      // `conversationParticipantSchema` déclare. Le schéma déclarant aussi
-      // `isOnline`/`lastActiveAt`, la présence de la personne promue sortait sans
-      // que sa préférence `showOnlineStatus` soit consultée — seule des cinq
-      // surfaces à participants à ne pas la garder. La diffusion Socket.IO plus
-      // bas est le chemin le plus exposé : elle ne passe par AUCUN sérialiseur,
-      // donc le rang y partait entier (`nickname`, `shareLinkId`, `bannedAt`,
-      // `deletedForMe`) à toute la salle.
+      // `conversationParticipantSchema` déclare. La réponse REST est gatée par
+      // le viewer DEMANDEUR (régime STRICT — self/ADMIN+/ami) : elle seule a
+      // un destinataire nommé capable de porter une visibilité. La diffusion
+      // Socket.IO plus bas n'en a pas — toute la salle la reçoit — donc son
+      // `participant` ne transporte plus `isOnline`/`lastActiveAt` du tout,
+      // gaté ou non ; le type partagé (`ParticipantRoleUpdatedEventData`) ne
+      // les déclare déjà pas.
+      const rolePresenceViewer = viewerFromRequest(request);
       const rolePresenceVis = updatedRow?.userId
-        ? await getPresenceVisibilityService(prisma).resolvePrefsOnly([updatedRow.userId])
-        : new Map();
-      const updatedParticipant = updatedRow
-        ? serializeConversationParticipant(updatedRow, {
-            presence: updatedRow.userId ? rolePresenceVis.get(updatedRow.userId) : undefined
+        ? await getPresenceVisibilityService(prisma).resolveForTarget(rolePresenceViewer, {
+            id: updatedRow.userId,
+            deactivatedAt: updatedRow.user?.deactivatedAt ?? null
           })
+        : presenceFor(rolePresenceViewer, new Map(), null);
+      const updatedParticipant = updatedRow
+        ? serializeConversationParticipant(updatedRow, { presence: rolePresenceVis })
+        : null;
+      const participantForBroadcast = updatedParticipant
+        ? (() => {
+            const { isOnline: _broadcastIsOnline, lastActiveAt: _broadcastLastActiveAt, ...rest } = updatedParticipant;
+            return rest;
+          })()
         : null;
 
       const manager = fastify.socketIOHandler?.getManager();
@@ -1513,7 +1596,7 @@ export function registerParticipantsRoutes(
           userId,
           newRole,
           updatedBy: currentUserId,
-          participant: updatedParticipant
+          participant: participantForBroadcast
         });
         // Invalidate the in-process participant-ID cache so the next message:send
         // from this user re-validates membership/role against the DB instead of

@@ -22,6 +22,7 @@ import {
 } from '../../utils/response.js';
 import { CommunityRole } from './types';
 import { gateCoMemberPresence } from './member-presence';
+import { viewerFromRequest } from '../users/presence-gate';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembershipRoutes' });
 
@@ -436,15 +437,16 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
               username: true,
               displayName: true,
               avatar: true,
-              isOnline: true
+              isOnline: true,
+              deactivatedAt: true
             }
           }
         }
       });
 
-      // Le profil de l'invité repart vers l'inviteur, qui est membre de la même
-      // communauté que l'invité vient de rejoindre : préférences seules.
-      return sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, member));
+      // Critère STRICT avec le viewer réel (l'inviteur) — être membre de la
+      // même communauté que l'invité ne vaut plus d'accès à sa présence.
+      return sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, viewerFromRequest(request), member));
     } catch (error) {
       logger.error('Error inviting to community', error as Error);
       return sendInternalError(reply, 'Failed to invite user to community');

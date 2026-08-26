@@ -117,7 +117,7 @@ describe('serializeConversationParticipant — la forme de fil', () => {
 });
 
 describe('serializeConversationParticipant — la présence ne sort pas toute seule', () => {
-  it('sert la présence quand aucune préférence ne s\'y oppose (régime prefs-only)', () => {
+  it('sert la présence quand la visibilité fournie l\'autorise', () => {
     const wire = serializeConversationParticipant(registeredRow(), {
       presence: { showOnline: true, showLastSeenTimestamp: true },
     });
@@ -144,20 +144,37 @@ describe('serializeConversationParticipant — la présence ne sort pas toute se
     expect(wire.lastActiveAt).toBeNull();
   });
 
-  // Régime PREFS-ONLY : une entrée absente est la situation NORMALE (un anonyme
-  // n'a pas de userId, donc pas de préférences). Elle révèle, elle ne masque pas
-  // — même loi que `applyPresenceVisibilityAsOffline({onMissingEntry:'reveal'})`.
-  it('révèle quand aucune entrée de visibilité ne concerne la cible', () => {
+  // Le défaut FERME. La fabrique ne sait rien du viewer : c'est l'appelant qui
+  // résout la visibilité (`resolveForTarget(s)` + `presenceFor`, qui traite
+  // l'entrée absente — cible sans compte — comme masquée sauf ADMIN+). Sans
+  // visibilité fournie, elle ne peut donc que masquer : révéler ici, ce serait
+  // révéler à l'appelant qui a OUBLIÉ l'option, jamais à celui qui a établi un
+  // droit.
+  it('masque quand aucune visibilité n\'est fournie', () => {
     const wire = serializeConversationParticipant(anonymousRow());
 
-    expect(wire.isOnline).toBe(true);
-    expect(wire.lastActiveAt).toBe(SEEN);
+    expect(wire.isOnline).toBe(false);
+    expect(wire.lastActiveAt).toBeNull();
+  });
+
+  it('masque aussi un rang inscrit, colonne « en ligne » comprise, sans visibilité', () => {
+    const wire = serializeConversationParticipant(registeredRow());
+
+    expect(wire.isOnline).toBe(false);
+    expect(wire.lastActiveAt).toBeNull();
   });
 
   it('préfère la présence VIVE du socket au champ de base, quand elle est fournie', () => {
-    const stale = { ...registeredRow(), isOnline: true };
+    const reveal = { showOnline: true, showLastSeenTimestamp: true };
+    const staleOnline = { ...registeredRow(), isOnline: true };
+    const staleOffline = { ...registeredRow(), isOnline: false };
 
-    const wire = serializeConversationParticipant(stale, { liveOnline: false });
+    expect(serializeConversationParticipant(staleOnline, { liveOnline: false, presence: reveal }).isOnline).toBe(false);
+    expect(serializeConversationParticipant(staleOffline, { liveOnline: true, presence: reveal }).isOnline).toBe(true);
+  });
+
+  it('ne laisse pas la présence VIVE sortir sans visibilité', () => {
+    const wire = serializeConversationParticipant(registeredRow(), { liveOnline: true });
 
     expect(wire.isOnline).toBe(false);
   });

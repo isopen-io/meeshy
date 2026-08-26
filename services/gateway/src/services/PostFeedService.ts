@@ -15,10 +15,11 @@ import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/commun
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { hoistLocationDeep } from './location/sharedPlace';
 import { verdictFor, type ReferenceAccessVerdict } from './posts/referenceAccess';
-import { getPresenceVisibilityService } from './PresenceVisibilityService';
+import { getPresenceVisibilityService, type PresenceViewer } from './PresenceVisibilityService';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 
 const logger = enhancedLogger.child({ module: 'PostFeedService' });
 
@@ -239,7 +240,19 @@ export class PostFeedService {
 
   async getStories(
     userId: string,
-    options?: { updatedSince?: Date; projection?: 'tray'; cursor?: string; limit?: number; archiveOfAuthor?: boolean; reader?: WireReader }
+    options?: {
+      updatedSince?: Date;
+      projection?: 'tray';
+      cursor?: string;
+      limit?: number;
+      archiveOfAuthor?: boolean;
+      reader?: WireReader;
+      // Rôle RÉEL du viewer (2026-08-25) : porté depuis la route jusqu'au gate
+      // de présence auteur — le bypass ADMIN/BIGBOSS doit s'appliquer au fil de
+      // stories comme partout ailleurs. Absent (tests, appelants historiques)
+      // ⇒ `USER`, le plus bas privilège, jamais un bypass par défaut.
+      viewerRole?: GlobalUserRoleType;
+    }
   ) {
     const now = new Date();
     // G1(c) pagination keyset (createdAt, id) — même patron que getStatuses /
@@ -271,7 +284,7 @@ export class PostFeedService {
           ],
         });
       }
-      return this.fetchAndEnrichStories(archiveWhere, userId, limit, options?.projection === 'tray', () => Promise.resolve([]), now, options?.reader);
+      return this.fetchAndEnrichStories(archiveWhere, userId, limit, options?.projection === 'tray', () => Promise.resolve([]), now, options?.viewerRole, options?.reader);
     }
     const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
       this.getFriendIds(userId),
@@ -383,7 +396,7 @@ export class PostFeedService {
           .then((rows) => rows.map((r) => r.id))
       : () => Promise.resolve([]);
 
-    return this.fetchAndEnrichStories(where, userId, limit, options?.projection === 'tray', deletedIdsFactory, now, options?.reader);
+    return this.fetchAndEnrichStories(where, userId, limit, options?.projection === 'tray', deletedIdsFactory, now, options?.viewerRole, options?.reader);
   }
 
   /**
@@ -401,6 +414,7 @@ export class PostFeedService {
     isTrayProjection: boolean,
     deletedIdsFactory: () => Promise<string[]>,
     now: Date,
+    viewerRole: GlobalUserRoleType | undefined,
     reader?: WireReader,
   ) {
     // G1(b) projection tray : select léger (anneaux + miniature + vu) au lieu
@@ -472,8 +486,10 @@ export class PostFeedService {
     // Gate de présence de l'auteur. Les deux projections chargent
     // `isOnline`/`lastActiveAt` (décision produit : l'interstitiel d'identité
     // doit être complet à l'instant du switch de groupe) — les SERVIR bruts
-    // n'en est pas une.
-    const authorVisibility = await this.resolveStoryAuthorPresence(stories, userId);
+    // n'en est pas une. Viewer RÉEL (userId + rôle), jamais un rôle figé — le
+    // bypass ADMIN/BIGBOSS de la loi de présence doit s'appliquer ici aussi.
+    const viewer: PresenceViewer = { userId, role: viewerRole ?? 'USER' };
+    const authorVisibility = await this.resolveStoryAuthorPresence(stories, viewer);
 
     // hoistLocationDeep est un no-op sûr sur la projection tray (ni `metadata`
     // ni `comments` sélectionnés — cf. trayStorySelect) : elle ne rend de
@@ -1168,54 +1184,35 @@ export class PostFeedService {
   /**
    * Visibilité de la présence des AUTEURS d'une page de stories.
    *
-   * Le régime se décide par AUTEUR, sur ce que ses stories de la page prouvent
-   * du lien — c'est la question qui départage les deux régimes de la
-   * passerelle (« le lecteur a-t-il un DROIT sur cette donnée, ou seulement un
-   * lien qu'il a posé tout seul ? ») appliquée ici :
+   * Régime UNIQUE et STRICT (directive produit 2026-08-25 : « ce n'est pas
+   * parce qu'on partage un contexte — conversation, communauté — qu'on doit
+   * voir la présence de l'autre »). Tous les auteurs de la page, quelle que
+   * soit la visibilité de leurs stories (PUBLIC, FRIENDS, COMMUNITY, ONLY),
+   * passent par le MÊME `resolveForTargets(viewer, ids)` que le reste de la
+   * plateforme : self ou ADMIN/BIGBOSS toujours privilégié, sinon amitié
+   * ACCEPTÉE requise — une co-appartenance de communauté ou un contact DM ne
+   * suffit plus, même si elle a suffi à autoriser l'accès à la story
+   * elle-même (`buildPostVisibilityOrFilter`, résolu en amont).
    *
-   *  - une story PUBLIQUE ne prouve RIEN. `buildPostVisibilityOrFilter` porte
-   *    `{ visibility: PUBLIC }` sans condition d'audience : n'importe quel
-   *    compte authentifié la voit. Critère STRICT.
-   *  - toute AUTRE visibilité prouve un lien posé des deux côtés — amitié,
-   *    contact DM, co-appartenance de communauté, ou une désignation
-   *    nominative par l'auteur (`ONLY`). Contexte acquis : préférences seules.
-   *
-   * Un auteur qui prouve le lien par UNE de ses stories le prouve pour toutes :
-   * masquer sa présence sur sa story publique pendant qu'elle s'affiche sur sa
-   * story d'amis, dans la même page, n'aurait aucun sens.
-   *
-   * Le viewer est construit en rôle `USER`, jamais celui de l'appelant : le fil
-   * de stories est une surface de CONSOMMATION, pas de modération. Le bypass
-   * modérateur n'y a rien à faire, et fixer le rôle garantit que ce gate ne
-   * peut qu'en montrer MOINS.
+   * Le viewer est le VRAI viewer (userId + rôle réel de l'appelant), jamais
+   * un rôle figé à `USER` : la directive dit que le rôle ADMIN et supérieur
+   * voit la présence « constamment », et ce bypass doit donc s'appliquer au
+   * fil de stories comme partout ailleurs — plus de surface de consommation
+   * qui l'exclurait.
    */
   private async resolveStoryAuthorPresence(
     stories: Array<Record<string, any>>,
-    viewerId: string,
+    viewer: PresenceViewer,
   ): Promise<Map<string, PresenceVisibility>> {
-    const contextIds = new Set<string>();
-    const publicOnlyIds = new Set<string>();
-    for (const story of stories) {
-      const authorId = story.author?.id as string | undefined;
-      if (!authorId) continue;
-      if (story.visibility === PostVisibility.PUBLIC && authorId !== viewerId) publicOnlyIds.add(authorId);
-      else contextIds.add(authorId);
-    }
-    for (const id of contextIds) publicOnlyIds.delete(id);
-    if (contextIds.size === 0 && publicOnlyIds.size === 0) return new Map();
+    const authorIds = [...new Set(
+      stories.flatMap((story) => {
+        const authorId = story.author?.id;
+        return typeof authorId === 'string' ? [authorId] : [];
+      }),
+    )];
+    if (authorIds.length === 0) return new Map();
 
-    const presence = getPresenceVisibilityService(this.prisma);
-    const [context, strict] = await Promise.all([
-      contextIds.size > 0
-        ? presence.resolvePrefsOnly([...contextIds])
-        : Promise.resolve(new Map<string, PresenceVisibility>()),
-      publicOnlyIds.size > 0
-        ? presence.resolveForTargets({ userId: viewerId, role: 'USER' }, [...publicOnlyIds], {
-            allowConversationContext: true,
-          })
-        : Promise.resolve(new Map<string, PresenceVisibility>()),
-    ]);
-    return new Map([...context, ...strict]);
+    return getPresenceVisibilityService(this.prisma).resolveForTargets(viewer, authorIds);
   }
 
   /**

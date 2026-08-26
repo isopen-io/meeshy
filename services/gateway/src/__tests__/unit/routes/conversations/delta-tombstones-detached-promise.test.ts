@@ -39,7 +39,7 @@ jest.mock('../../../../services/MessageReadStatusService', () => ({
 }));
 
 jest.mock('../../../../services/PresenceVisibilityService', () => ({
-  getPresenceVisibilityService: () => ({ resolvePrefsOnly: jest.fn<any>().mockResolvedValue(new Map()) }),
+  getPresenceVisibilityService: () => ({ resolveForTargets: jest.fn<any>().mockResolvedValue(new Map()) }),
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({

@@ -12,6 +12,7 @@ import { MediaService } from './MediaService';
 import { sweepPendingPostMedia } from './posts/sweepPendingPostMedia';
 import type { PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
 import { conversationMessageStatsService } from './ConversationMessageStatsService';
+import type { SessionRevoker } from './admin/user-management.service';
 import {
   RECIPIENT_LANG_SELECT,
   recipientDateLocale,
@@ -36,6 +37,12 @@ export class MaintenanceService {
    * depuis 30min) se voit marqué offline par le cleanup périodique.
    */
   private isCurrentlyConnected: ((userId: string, isAnonymous: boolean) => boolean) | null = null;
+  /**
+   * Coupe les sockets d'un compte que le balayage vient de mettre hors service
+   * (fin de période de grâce). Même contrat que `UserManagementService` (F9) :
+   * injecté par le manager, résolu à l'appel, best-effort.
+   */
+  private sessionRevoker: SessionRevoker | null = null;
   private lastDailyCleanup: Date | null = null;
 
   private emailService?: EmailService;
@@ -72,6 +79,16 @@ export class MaintenanceService {
    */
   setIsCurrentlyConnected(predicate: (userId: string, isAnonymous: boolean) => boolean): void {
     this.isCurrentlyConnected = predicate;
+  }
+
+  /**
+   * Injecter la coupure des sockets d'un compte mis hors service par le
+   * balayage. Comme les deux capacités ci-dessus, elle vient du manager
+   * Socket.IO — qui naît APRÈS ce service — et ce service ne l'atteint jamais
+   * lui-même.
+   */
+  setSessionRevoker(revoker: SessionRevoker): void {
+    this.sessionRevoker = revoker;
   }
 
   /**
@@ -672,6 +689,24 @@ export class MaintenanceService {
   }
 
   /**
+   * Un compte dont la période de grâce est échue est hors service dès la
+   * transaction ci-dessus ; un socket qui lui resterait ouvert continuerait de
+   * recevoir ses fils temps réel et d'émettre des `typing:start` lus « en
+   * ligne ». Après l'écriture, jamais avant ; ne lève jamais — la ligne est
+   * déjà posée, et un échec ici ne doit pas être compté comme une expiration
+   * ratée par l'appelant.
+   */
+  private async revokeSessionsOfDeletedAccount(userId: string): Promise<void> {
+    const revoke = this.sessionRevoker;
+    if (!revoke) return;
+    try {
+      await revoke(userId);
+    } catch (error) {
+      logger.warn(`⚠️ [DELETION] Session revocation failed for deleted account user=${userId}:`, error);
+    }
+  }
+
+  /**
    * Traiter les demandes de suppression de compte :
    * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED)
    * 2. Envoyer les rappels hebdomadaires pour les requests GRACE_PERIOD_EXPIRED
@@ -703,6 +738,7 @@ export class MaintenanceService {
               })
             ]);
             expiredCount++;
+            await this.revokeSessionsOfDeletedAccount(req.userId);
           } catch (error) {
             logger.error(`❌ [DELETION] Failed to expire request=${req.id} for user=${req.userId}:`, error);
           }

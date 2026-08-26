@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { UserFilters } from '@meeshy/shared/types';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn().mockResolvedValue('hashed_password'),
@@ -13,6 +14,7 @@ jest.mock('bcrypt', () => ({
 
 import { UserManagementService } from '../../../../services/admin/user-management.service';
 import * as bcrypt from 'bcrypt';
+import { logger } from '../../../../utils/logger';
 
 const mockHash = bcrypt.hash as jest.Mock;
 const mockCompare = bcrypt.compare as jest.Mock;
@@ -302,6 +304,48 @@ describe('UserManagementService.getUsers', () => {
     expect(callOrder).toEqual({ username: 'desc' });
   });
 
+  // Revue adversariale F4 (2026-08-26) : `sortBy` vient de la query — il est
+  // borné par une liste blanche, jamais posé tel quel comme clé d'orderBy.
+  describe('sortBy whitelist', () => {
+    const unknownSortKey = (value: string) => value as unknown as UserFilters['sortBy'];
+
+    const orderByFor = async (filters: UserFilters) => {
+      const findMany = jest.fn().mockResolvedValue([]);
+      const count = jest.fn().mockResolvedValue(0);
+      const svc = makeService(makePrisma({ findMany, count }));
+      await svc.getUsers(filters, { offset: 0, limit: 10 });
+      return (findMany.mock.calls[0] as [{ orderBy: Record<string, string> }])[0].orderBy;
+    };
+
+    it('falls back to createdAt when sortBy is an unknown key', async () => {
+      expect(await orderByFor({ sortBy: unknownSortKey('password'), sortOrder: 'asc' })).toEqual({ createdAt: 'asc' });
+    });
+
+    it('falls back to createdAt when sortBy is __proto__', async () => {
+      const orderBy = await orderByFor({ sortBy: unknownSortKey('__proto__') });
+      expect(orderBy).toEqual({ createdAt: 'desc' });
+      expect(Object.keys(orderBy)).toEqual(['createdAt']);
+    });
+
+    it('falls back to createdAt when sortBy is an inherited Object.prototype key', async () => {
+      expect(await orderByFor({ sortBy: unknownSortKey('constructor') })).toEqual({ createdAt: 'desc' });
+    });
+
+    it('keeps lastActiveAt as a sort key (the route gates it by canViewPresence)', async () => {
+      expect(await orderByFor({ sortBy: 'lastActiveAt', sortOrder: 'asc' })).toEqual({ lastActiveAt: 'asc' });
+    });
+
+    it('accepts every documented sort key', async () => {
+      const keys: NonNullable<UserFilters['sortBy']>[] = ['createdAt', 'lastActiveAt', 'username', 'email', 'firstName', 'lastName'];
+      const orders = await Promise.all(keys.map((sortBy) => orderByFor({ sortBy })));
+      expect(orders).toEqual(keys.map((key) => ({ [key]: 'desc' })));
+    });
+
+    it('bounds sortOrder to asc/desc', async () => {
+      expect(await orderByFor({ sortBy: 'username', sortOrder: '$natural' as unknown as UserFilters['sortOrder'] })).toEqual({ username: 'desc' });
+    });
+  });
+
   it('defaults to createdAt desc sort when sortBy not provided', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
     const count = jest.fn().mockResolvedValue(0);
@@ -482,6 +526,68 @@ describe('UserManagementService.updateStatus', () => {
     const callData = (update.mock.calls[0] as any[])[0].data;
     expect(callData.deactivatedAt).toBeInstanceOf(Date);
     expect(callData.isActive).toBe(false);
+  });
+});
+
+// ─── updateStatus — révocation des sockets du compte désactivé (F9) ───────────
+//
+// Loi : un compte désactivé (`deactivatedAt` non nul) est masqué pour TOUS.
+// F6 a fait taire `user:status` pour un sujet désactivé ; mais tant que ses
+// sockets restent ouverts, un désactivé encore connecté reçoit ses fils temps
+// réel, émet des `typing:start` (lus « en ligne ») et voit la présence des
+// autres. La désactivation doit donc couper ses sockets — APRÈS l'écriture,
+// et sans jamais faire échouer la désactivation si la coupure échoue.
+
+describe('UserManagementService.updateStatus — révocation des sockets du compte désactivé', () => {
+  it("désactiver appelle la révocation avec l'id, APRÈS que l'écriture a abouti", async () => {
+    const order: string[] = [];
+    const update = jest.fn(() => new Promise((resolve) => setTimeout(() => {
+      order.push('written');
+      resolve(makeUser({ isActive: false, deactivatedAt: new Date() }));
+    }, 5)));
+    const revokeSessions = jest.fn(async (userId: string) => { order.push(`revoked:${userId}`); return 1; });
+    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
+
+    await svc.updateStatus('user-id', { isActive: false }, 'updater');
+
+    expect(revokeSessions).toHaveBeenCalledTimes(1);
+    expect(revokeSessions).toHaveBeenCalledWith('user-id');
+    expect(order).toEqual(['written', 'revoked:user-id']);
+  });
+
+  it('réactiver ne révoque pas', async () => {
+    const update = jest.fn().mockResolvedValue(makeUser({ isActive: true, deactivatedAt: null }));
+    const revokeSessions = jest.fn(async () => 0);
+    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
+
+    await svc.updateStatus('user-id', { isActive: true }, 'updater');
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(revokeSessions).not.toHaveBeenCalled();
+  });
+
+  it("échec de la révocation ⇒ l'écriture est faite, l'utilisateur est rendu, l'échec est journalisé", async () => {
+    const written = makeUser({ isActive: false, deactivatedAt: new Date() });
+    const update = jest.fn().mockResolvedValue(written);
+    const revokeSessions = jest.fn(async (_userId: string) => { throw new Error('adapter down'); });
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
+
+    const result = await svc.updateStatus('user-id', { isActive: false }, 'updater');
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(result).toBe(written);
+    expect(revokeSessions).toHaveBeenCalledWith('user-id');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('user-id'));
+    warn.mockRestore();
+  });
+
+  it("sans révocateur injecté, désactiver écrit et rend l'utilisateur", async () => {
+    const written = makeUser({ isActive: false, deactivatedAt: new Date() });
+    const update = jest.fn().mockResolvedValue(written);
+    const svc = makeService(makePrisma({ update }));
+
+    await expect(svc.updateStatus('user-id', { isActive: false }, 'updater')).resolves.toBe(written);
   });
 });
 
@@ -715,5 +821,55 @@ describe('UserManagementService.verifyAge', () => {
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ ageVerifiedAt: null }),
     }));
+  });
+});
+
+// ─── deleteUser — révocation des sockets (F9 bis) ─────────────────────────────
+// Un compte supprimé en douceur pose `isActive: false` sans `deactivatedAt` :
+// il est hors service au même titre qu'un compte désactivé, et ses sockets
+// doivent tomber de la même façon.
+
+describe('UserManagementService.deleteUser — révocation des sockets du compte supprimé', () => {
+  it("supprimer appelle la révocation avec l'id, APRÈS que l'écriture a abouti", async () => {
+    const order: string[] = [];
+    const update = jest.fn(() => new Promise((resolve) => setTimeout(() => {
+      order.push('written');
+      resolve(makeUser({ isActive: false }));
+    }, 5)));
+    const revokeSessions = jest.fn(async (userId: string) => { order.push(`revoked:${userId}`); return 1; });
+    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
+
+    await svc.deleteUser('user-id', 'deleter');
+
+    expect(revokeSessions).toHaveBeenCalledTimes(1);
+    expect(revokeSessions).toHaveBeenCalledWith('user-id');
+    expect(order).toEqual(['written', 'revoked:user-id']);
+  });
+
+  it("échec de la révocation ⇒ la suppression aboutit, l'utilisateur est rendu, l'échec est journalisé", async () => {
+    const written = makeUser({ isActive: false });
+    const update = jest.fn().mockResolvedValue(written);
+    const revokeSessions = jest.fn(async (_userId: string) => { throw new Error('adapter down'); });
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
+
+    const result = await svc.deleteUser('user-id', 'deleter');
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(result).toBe(written);
+    expect(revokeSessions).toHaveBeenCalledWith('user-id');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('user-id'));
+    warn.mockRestore();
+  });
+
+  it('restaurer ne révoque pas', async () => {
+    const update = jest.fn().mockResolvedValue(makeUser({ isActive: true }));
+    const revokeSessions = jest.fn(async () => 0);
+    const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
+
+    await svc.restoreUser('user-id', 'restorer');
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(revokeSessions).not.toHaveBeenCalled();
   });
 });

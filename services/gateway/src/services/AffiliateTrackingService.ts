@@ -276,7 +276,6 @@ export class AffiliateTrackingService {
                 lastName: true,
                 email: true,
                 avatar: true,
-                isOnline: true,
                 createdAt: true
               }
             },

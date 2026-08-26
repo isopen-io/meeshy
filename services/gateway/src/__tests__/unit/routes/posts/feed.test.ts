@@ -242,6 +242,71 @@ describe('GET /posts/feed/stories — service error', () => {
   });
 });
 
+// ─── stories — rôle RÉEL du viewer transmis au gate de présence auteur ───────
+//
+// Directive produit 2026-08-25 : ADMIN/BIGBOSS voient la présence
+// « constamment ». `PostFeedService.getStories` ne connaît le rôle que si la
+// route le lui porte (`viewerRole`) ; absent, il retombe sur `USER` — le plus
+// bas privilège — et le bypass ADMIN est perdu en silence. Ces témoins
+// tiennent la route responsable de cette transmission, sur les DEUX chemins
+// qui appellent `getStories` (tray + archive « mes stories »). L'authContext
+// est celui que le middleware réel pose (`type: 'user'`, `userId`), la seule
+// forme que `viewerFromRequest` reconnaît.
+
+function makeRealShapedAuth(role: string) {
+  return async (req: FastifyRequest) => {
+    (req as any).authContext = {
+      type: 'user',
+      isAuthenticated: true,
+      userId: USER_ID,
+      registeredUser: { id: USER_ID, role },
+    };
+  };
+}
+
+async function buildAppWithRole(role: string): Promise<FastifyInstance> {
+  const app = Fastify({ logger: false });
+  const auth = makeRealShapedAuth(role);
+  registerFeedRoutes(app, {} as any, auth, auth);
+  await app.ready();
+  return app;
+}
+
+describe('stories — viewerRole forwarded to the presence gate', () => {
+  it('GET /posts/feed/stories forwards the ADMIN role of the caller', async () => {
+    mockGetStories.mockClear();
+    const app = await buildAppWithRole('ADMIN');
+    await app.inject({ method: 'GET', url: '/posts/feed/stories' });
+    expect(mockGetStories).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({ viewerRole: 'ADMIN' }),
+    );
+    await app.close();
+  });
+
+  it('GET /posts/feed/stories forwards USER for an ordinary caller (no bypass by default)', async () => {
+    mockGetStories.mockClear();
+    const app = await buildAppWithRole('USER');
+    await app.inject({ method: 'GET', url: '/posts/feed/stories' });
+    expect(mockGetStories).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({ viewerRole: 'USER' }),
+    );
+    await app.close();
+  });
+
+  it('GET /posts/stories/mine forwards the BIGBOSS role of the caller', async () => {
+    mockGetStories.mockClear();
+    const app = await buildAppWithRole('BIGBOSS');
+    await app.inject({ method: 'GET', url: '/posts/stories/mine' });
+    expect(mockGetStories).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({ archiveOfAuthor: true, viewerRole: 'BIGBOSS' }),
+    );
+    await app.close();
+  });
+});
+
 // ─── GET /posts/feed/reels ────────────────────────────────────────────────────
 
 describe('GET /posts/feed/reels — unauthenticated', () => {

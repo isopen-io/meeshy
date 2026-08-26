@@ -13,7 +13,9 @@
  *
  * Ce jour est le cycle 92 bis, et le piège a fonctionné comme prévu : les deux
  * arrivent ensemble. La route sert désormais un participant SÉRIALISÉ sous la
- * clé déclarée, dont la présence est passée par `resolvePrefsOnly`.
+ * clé déclarée, dont la présence est résolue pour l'INVITEUR par
+ * `resolveForTarget` — régime STRICT (2026-08-25) : soi/ADMIN+/ami seuls,
+ * jamais la co-participation que l'invitation vient de créer.
  *
  * Ce que ces témoins gardent maintenant : que la charge utile ATTEINT le fil
  * (elle ne l'avait jamais fait), et que le sérialiseur ne peut pas y remettre

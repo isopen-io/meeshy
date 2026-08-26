@@ -783,6 +783,70 @@ describe('systemRankingsRoutes — GET /ranking', () => {
     });
   });
 
+  // ── presence gate on user rankings (lastActivity) ──────────────────────────
+  //
+  // Directive produit 2026-08-25 : « les utilisateurs avec le rôle ADMIN et
+  // supérieur peuvent constamment avoir l'état de présence » — `requireAdmin`
+  // laisse passer AUDIT/ANALYST sur `/ranking`, qui n'ont plus le droit de voir
+  // `lastActivity` (dérivé de `User.lastActiveAt`).
+  describe('user rankings — presence gate (lastActivity)', () => {
+    beforeEach(() => resetMocks());
+
+    it('omits lastActivity for AUDIT even when lastActiveAt is set', async () => {
+      const app = buildApp('AUDIT');
+      await app.ready();
+      const lastActiveAt = new Date('2024-06-01T12:00:00Z');
+      mockPrisma.report.groupBy.mockResolvedValue([{ reporterId: USER_ID, _count: { id: 1 } }]);
+      mockPrisma.user.findMany.mockResolvedValue([{ ...mockUser, lastActiveAt }]);
+
+      const res = await inject(app, { entityType: 'users', criterion: 'reports_sent' });
+      const rankings = JSON.parse(res.body).data.rankings;
+      expect(rankings[0].lastActivity).toBeUndefined();
+      expect(rankings[0]).not.toHaveProperty('lastActivity');
+      // Le reste du classement n'est pas emporté par le masquage.
+      expect(rankings[0].username).toBe(mockUser.username);
+      await app.close();
+    });
+
+    it('omits lastActivity for ANALYST', async () => {
+      const app = buildApp('ANALYST');
+      await app.ready();
+      mockPrisma.report.groupBy.mockResolvedValue([{ reporterId: USER_ID, _count: { id: 1 } }]);
+      mockPrisma.user.findMany.mockResolvedValue([{ ...mockUser, lastActiveAt: new Date('2024-06-01T12:00:00Z') }]);
+
+      const res = await inject(app, { entityType: 'users', criterion: 'reports_sent' });
+      const rankings = JSON.parse(res.body).data.rankings;
+      expect(rankings[0]).not.toHaveProperty('lastActivity');
+      await app.close();
+    });
+
+    it('serves lastActivity for BIGBOSS', async () => {
+      const app = buildApp('BIGBOSS');
+      await app.ready();
+      const lastActiveAt = new Date('2024-06-01T12:00:00Z');
+      mockPrisma.report.groupBy.mockResolvedValue([{ reporterId: USER_ID, _count: { id: 1 } }]);
+      mockPrisma.user.findMany.mockResolvedValue([{ ...mockUser, lastActiveAt }]);
+
+      const res = await inject(app, { entityType: 'users', criterion: 'reports_sent' });
+      const rankings = JSON.parse(res.body).data.rankings;
+      expect(rankings[0].lastActivity).toBe(lastActiveAt.toISOString());
+      await app.close();
+    });
+
+    it('serves lastActivity for ADMIN', async () => {
+      const app = buildApp('ADMIN');
+      await app.ready();
+      const lastActiveAt = new Date('2024-06-01T12:00:00Z');
+      mockPrisma.report.groupBy.mockResolvedValue([{ reporterId: USER_ID, _count: { id: 1 } }]);
+      mockPrisma.user.findMany.mockResolvedValue([{ ...mockUser, lastActiveAt }]);
+
+      const res = await inject(app, { entityType: 'users', criterion: 'reports_sent' });
+      const rankings = JSON.parse(res.body).data.rankings;
+      expect(rankings[0].lastActivity).toBe(lastActiveAt.toISOString());
+      await app.close();
+    });
+  });
+
   // ── rankConversations criteria ────────────────────────────────────────────
   describe('rankConversations', () => {
     let app: FastifyInstance;

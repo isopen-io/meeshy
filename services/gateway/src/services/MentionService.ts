@@ -11,6 +11,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { parseMentions, MENTION_HANDLE_CHARS, NAME_BOUNDARY_LEFT, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
 import type { MentionedUser } from '@meeshy/shared/types';
 import { MAX_MENTIONS_PER_MESSAGE } from '../validation/mention-list.js';
+import { z } from 'zod';
 
 // Logger dédié pour MentionService
 const logger = enhancedLogger.child({ module: 'MentionService' });
@@ -31,6 +32,51 @@ export interface MentionValidationResult {
   validUserIds: string[];
   invalidUsernames: string[];
   errors: string[];
+}
+
+/**
+ * Le rang d'un membre dans les suggestions est son ACTIVITÉ DANS LA
+ * CONVERSATION (dernier message écrit ici, cf. `participantStats` de
+ * `ConversationMessageStats`, clé `statsAuthorKey` = User.id d'un inscrit),
+ * jamais sa présence globale (`lastActiveAt` / `isOnline`) : un ordre ou une
+ * troncature qui en dépendrait révélerait la présence d'un co-participant à
+ * qui la porte la masque, même sans servir le champ. Seul `lastMessageAt` est
+ * lu ; le reste de l'entrée est ignoré tel quel.
+ */
+const participantActivityStatsSchema = z.record(
+  z.string(),
+  z.object({ lastMessageAt: z.string().nullable().optional() }).loose()
+);
+
+type ConversationActivity = ReadonlyMap<string, number>;
+
+type RankableMember = {
+  user: { id: string; username: string; displayName: string | null } | null;
+};
+
+function lastMessageEpochByAuthor(rawParticipantStats: unknown): ConversationActivity {
+  const parsed = participantActivityStatsSchema.safeParse(
+    typeof rawParticipantStats === 'string' ? JSON.parse(rawParticipantStats) : rawParticipantStats
+  );
+  if (!parsed.success) return new Map();
+  return new Map(
+    Object.entries(parsed.data)
+      .map(([authorKey, stat]) => [authorKey, Date.parse(stat.lastMessageAt ?? '')] as const)
+      .filter(([, epoch]) => Number.isFinite(epoch))
+  );
+}
+
+function memberLabel(member: RankableMember): string {
+  return (member.user?.displayName || member.user?.username || '').toLowerCase();
+}
+
+function byConversationActivity(activity: ConversationActivity) {
+  const lastMessageEpoch = (member: RankableMember): number =>
+    member.user ? (activity.get(member.user.id) ?? 0) : 0;
+  return <T extends RankableMember>(a: T, b: T): number =>
+    lastMessageEpoch(b) - lastMessageEpoch(a) ||
+    memberLabel(a).localeCompare(memberLabel(b)) ||
+    (a.user?.username ?? '').localeCompare(b.user?.username ?? '');
 }
 
 export class MentionService {
@@ -289,6 +335,22 @@ export class MentionService {
   }
 
   /**
+   * Dernier message écrit dans la conversation, par auteur (User.id) — le seul
+   * signal autorisé pour classer et tronquer les co-participants. Une
+   * conversation sans compteurs rend une carte vide : tout le monde à égalité,
+   * l'ordre alphabétique tranche. Pas de `recompute()` ici — ce n'est qu'un
+   * rang d'autocomplete, pas une lecture de statistiques.
+   */
+  private async loadConversationActivity(conversationId: string): Promise<ConversationActivity> {
+    const statsRow = await this.prisma.conversationMessageStats.findUnique({
+      where: { conversationId },
+      select: { participantStats: true }
+    });
+    if (!statsRow) return new Map();
+    return lastMessageEpochByAuthor(statsRow.participantStats);
+  }
+
+  /**
    * Obtient des suggestions d'utilisateurs pour l'autocomplete
    * avec priorité aux membres de la conversation et aux amis
    * PERFORMANCE: Utilise Redis cache (TTL: 5 minutes)
@@ -335,8 +397,7 @@ export class MentionService {
               firstName: true,
               lastName: true,
               displayName: true,
-              avatar: true,
-              lastActiveAt: true
+              avatar: true
             }
           }
         }
@@ -349,12 +410,9 @@ export class MentionService {
       throw err;
     }
 
-    // Trier les membres par lastActiveAt de l'utilisateur (en mémoire)
-    conversationMembers.sort((a, b) => {
-      const aTime = a.user?.lastActiveAt?.getTime() || 0;
-      const bTime = b.user?.lastActiveAt?.getTime() || 0;
-      return bTime - aTime; // Ordre décroissant (plus récent d'abord)
-    });
+    const rankedMembers = [...conversationMembers].sort(
+      byConversationActivity(await this.loadConversationActivity(conversationId))
+    );
 
     // 2. Récupérer les amis de l'utilisateur (via les demandes acceptées)
     logger.info('[MentionService] Fetching friendships...');
@@ -428,7 +486,7 @@ export class MentionService {
     };
 
     // Priorité 1: Membres de la conversation
-    for (const member of conversationMembers) {
+    for (const member of rankedMembers) {
       if (!member.user) continue;
       if (addedUserIds.has(member.user.id)) continue;
       if (!matchesQuery(member.user as User)) continue;

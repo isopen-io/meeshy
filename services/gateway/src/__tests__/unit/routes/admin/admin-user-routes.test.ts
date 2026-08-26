@@ -51,6 +51,7 @@ jest.mock('../../../../services/admin/permissions.service', () => ({
     canManageUser: jest.fn().mockReturnValue(true),
     canModifyUser: jest.fn().mockReturnValue(true),
     canChangeRole: jest.fn().mockReturnValue(true),
+    canViewPresence: jest.fn().mockReturnValue(true),
   },
 }));
 
@@ -83,6 +84,8 @@ import { permissionsService } from '../../../../services/admin/permissions.servi
 import { sanitizationService } from '../../../../services/admin/user-sanitization.service';
 import * as adminUserValidation from '@meeshy/shared/types/validation/admin-user';
 import { z } from 'zod';
+import { UserManagementService } from '../../../../services/admin/user-management.service';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 // ── Shared fixtures ──────────────────────────────────────────────────────────
 const mockUser = {
@@ -144,6 +147,7 @@ function resetMocks() {
   (permissionsService.canManageUser as jest.Mock).mockReturnValue(true);
   (permissionsService.canModifyUser as jest.Mock).mockReturnValue(true);
   (permissionsService.canChangeRole as jest.Mock).mockReturnValue(true);
+  (permissionsService.canViewPresence as jest.Mock).mockReturnValue(true);
   (sanitizationService.sanitizeUser as jest.Mock).mockImplementation((u: unknown) => u);
   (sanitizationService.sanitizeUsers as jest.Mock).mockImplementation((u: unknown) => u);
 
@@ -240,6 +244,63 @@ describe('GET /admin/users', () => {
       expect.objectContaining({ search: 'foo', role: 'USER', sortBy: 'username', sortOrder: 'asc' }),
       expect.any(Object)
     );
+  });
+
+  // Directive produit 2026-08-25 (revue adversariale F4) : une SÉLECTION ou un
+  // ORDRE qui dépend de lastActiveAt révèle la présence autant que le champ.
+  // Sans canViewPresence, les bornes sont IGNORÉES en silence (jamais 403,
+  // qui confirmerait l'existence du filtre) et le tri retombe sur createdAt.
+  describe('presence-gated filters and sort (canViewPresence)', () => {
+    const presenceQuery = '/admin/users?lastActiveAfter=2026-08-01T00:00:00.000Z&lastActiveBefore=2026-08-25T00:00:00.000Z&sortBy=lastActiveAt&sortOrder=asc';
+    const forwardedFilters = () => mockUMS.getUsers.mock.calls[0][0] as Record<string, unknown>;
+
+    it('forwards lastActiveAfter/lastActiveBefore and sortBy=lastActiveAt when the viewer can view presence', async () => {
+      const res = await app.inject({ method: 'GET', url: presenceQuery });
+      expect(res.statusCode).toBe(200);
+      expect(forwardedFilters()).toEqual(expect.objectContaining({
+        lastActiveAfter: new Date('2026-08-01T00:00:00.000Z'),
+        lastActiveBefore: new Date('2026-08-25T00:00:00.000Z'),
+        sortBy: 'lastActiveAt',
+        sortOrder: 'asc',
+      }));
+    });
+
+    it('silently drops lastActiveAfter/lastActiveBefore when the viewer cannot view presence', async () => {
+      (permissionsService.canViewPresence as jest.Mock).mockReturnValue(false);
+      const res = await app.inject({ method: 'GET', url: presenceQuery });
+      expect(res.statusCode).toBe(200);
+      expect(mockUMS.getUsers).toHaveBeenCalledTimes(1);
+      expect(forwardedFilters().lastActiveAfter).toBeUndefined();
+      expect(forwardedFilters().lastActiveBefore).toBeUndefined();
+    });
+
+    it('falls sortBy=lastActiveAt back to createdAt when the viewer cannot view presence', async () => {
+      (permissionsService.canViewPresence as jest.Mock).mockReturnValue(false);
+      const res = await app.inject({ method: 'GET', url: presenceQuery });
+      expect(res.statusCode).toBe(200);
+      expect(forwardedFilters()).toEqual(expect.objectContaining({ sortBy: 'createdAt', sortOrder: 'asc' }));
+    });
+
+    it('falls sortBy=isOnline back to createdAt when the viewer cannot view presence', async () => {
+      (permissionsService.canViewPresence as jest.Mock).mockReturnValue(false);
+      const res = await app.inject({ method: 'GET', url: '/admin/users?sortBy=isOnline' });
+      expect(res.statusCode).toBe(200);
+      expect(forwardedFilters()).toEqual(expect.objectContaining({ sortBy: 'createdAt' }));
+    });
+
+    it('keeps a non-presence sortBy untouched when the viewer cannot view presence', async () => {
+      (permissionsService.canViewPresence as jest.Mock).mockReturnValue(false);
+      await app.inject({ method: 'GET', url: '/admin/users?sortBy=username' });
+      expect(forwardedFilters()).toEqual(expect.objectContaining({ sortBy: 'username' }));
+    });
+
+    it('asks canViewPresence with the viewer role', async () => {
+      const moderatorApp = buildApp('MODERATOR');
+      await moderatorApp.ready();
+      await moderatorApp.inject({ method: 'GET', url: presenceQuery });
+      await moderatorApp.close();
+      expect(permissionsService.canViewPresence).toHaveBeenCalledWith('MODERATOR');
+    });
   });
 
   it('returns 500 when getUsers throws', async () => {
@@ -1237,5 +1298,116 @@ describe('GET /admin/conversations/:conversationId/participants', () => {
     mockPrisma.conversation.findUnique.mockRejectedValue(new Error('DB error'));
     const res = await app.inject({ method: 'GET', url: '/admin/conversations/conv123/participants' });
     expect(res.statusCode).toBe(500);
+  });
+
+  // Directive produit 2026-08-25 : présence masquée sans canViewPresence.
+  it('masks isOnline when the viewer lacks canViewPresence', async () => {
+    (permissionsService.canViewPresence as jest.Mock).mockReturnValue(false);
+    const participant = { id: 'p1', userId: 'user123', type: 'user', role: 'MEMBER', isActive: true, isOnline: true };
+    mockPrisma.participant.findMany.mockResolvedValue([participant]);
+    mockPrisma.participant.count.mockResolvedValue(1);
+    const res = await app.inject({ method: 'GET', url: '/admin/conversations/conv123/participants' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].isOnline).toBe(false);
+  });
+});
+
+// ── F9 — la désactivation révoque les sockets du compte ─────────────────────
+//
+// Le service est mocké ici : ce que cette suite vérifie est le CÂBLAGE —
+// `userAdminRoutes` injecte dans `UserManagementService` un révocateur qui
+// atteint Socket.IO par le même chemin que `revoke-all-sessions.ts`
+// (`fastify.socketIOHandler.getManager().getIO()`), résolu À L'APPEL parce
+// que le manager naît après l'enregistrement des routes.
+
+function makeSocketIOHandler(
+  sockets: Array<{ emit: jest.Mock; disconnect: jest.Mock }>,
+  fetchError?: Error,
+) {
+  const rooms: string[] = [];
+  const io = {
+    in: (room: string) => {
+      rooms.push(room);
+      return {
+        fetchSockets: async () => {
+          if (fetchError) throw fetchError;
+          return sockets;
+        },
+      };
+    },
+  };
+  return { rooms, io, handler: { getManager: () => ({ getIO: () => io }) } };
+}
+
+type SessionRevoker = (userId: string) => Promise<unknown>;
+
+function revokerWiredIntoService(): SessionRevoker {
+  const ctor = UserManagementService as unknown as jest.Mock;
+  const deps = ctor.mock.calls.at(-1)?.[1] as { revokeSessions?: SessionRevoker } | undefined;
+  if (!deps?.revokeSessions) {
+    throw new Error("userAdminRoutes n'injecte aucun révocateur de sessions dans UserManagementService");
+  }
+  return deps.revokeSessions;
+}
+
+describe('userAdminRoutes — révocation des sockets du compte désactivé (F9)', () => {
+  beforeEach(resetMocks);
+
+  it('injecte un révocateur qui émet auth:session-revoked (reason admin_revoke) puis ferme chaque socket de la room du compte', async () => {
+    const socket = { emit: jest.fn(), disconnect: jest.fn() };
+    const { rooms, handler } = makeSocketIOHandler([socket]);
+    const app = buildApp();
+    app.decorate('socketIOHandler', handler);
+    await app.ready();
+    try {
+      const revoke = revokerWiredIntoService();
+      await expect(revoke('user123')).resolves.toBe(1);
+      expect(rooms).toEqual([ROOMS.user('user123')]);
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.AUTH_SESSION_REVOKED,
+        expect.objectContaining({ code: 'session_revoked', reason: 'admin_revoke' }),
+      );
+      expect(socket.disconnect).toHaveBeenCalledWith(true);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("résout le manager Socket.IO À L'APPEL : un manager né après l'enregistrement des routes est atteint", async () => {
+    const socket = { emit: jest.fn(), disconnect: jest.fn() };
+    const { io } = makeSocketIOHandler([socket]);
+    let manager: { getIO: () => typeof io } | null = null;
+    const app = buildApp();
+    app.decorate('socketIOHandler', { getManager: () => manager });
+    await app.ready();
+    try {
+      const revoke = revokerWiredIntoService();
+      await expect(revoke('user123')).resolves.toBe(0);
+      manager = { getIO: () => io };
+      await expect(revoke('user123')).resolves.toBe(1);
+      expect(socket.disconnect).toHaveBeenCalledWith(true);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('ne lève jamais : manager absent ⇒ 0 socket coupé ; fetchSockets qui échoue ⇒ 0, sans rejet', async () => {
+    const { handler } = makeSocketIOHandler([{ emit: jest.fn(), disconnect: jest.fn() }], new Error('adapter down'));
+    const bare = buildApp();
+    await bare.ready();
+    try {
+      await expect(revokerWiredIntoService()('user123')).resolves.toBe(0);
+    } finally {
+      await bare.close();
+    }
+
+    const failing = buildApp();
+    failing.decorate('socketIOHandler', handler);
+    await failing.ready();
+    try {
+      await expect(revokerWiredIntoService()('user123')).resolves.toBe(0);
+    } finally {
+      await failing.close();
+    }
   });
 });

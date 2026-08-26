@@ -2,7 +2,10 @@
  * CallService.listHistory Unit Tests
  *
  * Tests cursor-based call history pagination, missed-call filtering,
- * and peer resolution for direct conversations.
+ * peer resolution for direct conversations, and — directive produit
+ * 2026-08-25 — the STRICT presence gate on `peer.isOnline`: co-membership of
+ * the direct conversation is what makes a user the *peer*, never what makes
+ * their presence *visible* to the caller.
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
@@ -13,6 +16,16 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 jest.mock('../../../utils/logger', () => ({
   logger: { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
+
+// `resolveForTargets` is mocked (not the real singleton) so each test controls
+// visibility directly and stays isolated from the module-level singleton that
+// `getPresenceVisibilityService` caches across calls within this file.
+const mockResolveForTargets = jest.fn<any>();
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
+  }),
 }));
 
 jest.mock('../../../services/TURNCredentialService', () => ({
@@ -134,12 +147,16 @@ function makePrisma(overrides: {
 // ---------------------------------------------------------------------------
 
 describe('CallService.listHistory', () => {
+  beforeEach(() => {
+    mockResolveForTargets.mockReset();
+    mockResolveForTargets.mockResolvedValue(new Map());
+  });
 
   describe('empty history', () => {
     it('returns empty items and hasMore=false when no calls exist', async () => {
       const prisma = makePrisma();
       const svc = new CallService(prisma);
-      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(result.items).toHaveLength(0);
       expect(result.hasMore).toBe(false);
       expect(result.nextCursor).toBeUndefined();
@@ -154,7 +171,7 @@ describe('CallService.listHistory', () => {
         participantFindMany: jest.fn<any>().mockResolvedValue([makePeer()]),
       });
       const svc = new CallService(prisma);
-      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(result.items).toHaveLength(1);
       expect(result.items[0].callId).toBe('call-1');
     });
@@ -166,7 +183,7 @@ describe('CallService.listHistory', () => {
         participantFindMany: jest.fn<any>().mockResolvedValue([]),
       });
       const svc = new CallService(prisma);
-      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(result.items[0].durationSec).toBe(90);
     });
 
@@ -177,7 +194,7 @@ describe('CallService.listHistory', () => {
         participantFindMany: jest.fn<any>().mockResolvedValue([]),
       });
       const svc = new CallService(prisma);
-      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(result.items[0].direction).toBe('outgoing');
     });
 
@@ -193,7 +210,7 @@ describe('CallService.listHistory', () => {
         callParticipantFindMany: jest.fn<any>().mockResolvedValue([{ callSessionId: 'call-1' }]),
       });
       const svc = new CallService(prisma);
-      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(result.items[0].direction).toBe('incoming');
     });
 
@@ -204,7 +221,7 @@ describe('CallService.listHistory', () => {
         participantFindMany: jest.fn<any>().mockResolvedValue([]),
       });
       const svc = new CallService(prisma);
-      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(result.items[0].direction).toBe('missed');
     });
 
@@ -226,7 +243,7 @@ describe('CallService.listHistory', () => {
         callParticipantFindMany: jest.fn<any>().mockResolvedValue([]), // no row for USER_ID
       });
       const svc = new CallService(prisma);
-      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(result.items[0].direction).toBe('missed');
     });
 
@@ -239,7 +256,7 @@ describe('CallService.listHistory', () => {
         callParticipantFindMany,
       });
       const svc = new CallService(prisma);
-      await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(callParticipantFindMany).not.toHaveBeenCalled();
     });
 
@@ -252,7 +269,7 @@ describe('CallService.listHistory', () => {
         callParticipantFindMany,
       });
       const svc = new CallService(prisma);
-      await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(callParticipantFindMany).toHaveBeenCalledWith({
         where: { callSessionId: { in: ['call-1'] }, participant: { userId: USER_ID } },
         select: { callSessionId: true },
@@ -269,7 +286,7 @@ describe('CallService.listHistory', () => {
         participantFindMany: jest.fn<any>().mockResolvedValue([peer]),
       });
       const svc = new CallService(prisma);
-      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(result.items[0].peer).not.toBeNull();
       expect(result.items[0].peer?.userId).toBe('user-peer-1');
       expect(result.items[0].peer?.username).toBe('peer');
@@ -282,7 +299,7 @@ describe('CallService.listHistory', () => {
         participantFindMany: jest.fn<any>().mockResolvedValue([]),
       });
       const svc = new CallService(prisma);
-      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(result.items[0].peer).toBeNull();
     });
 
@@ -296,7 +313,7 @@ describe('CallService.listHistory', () => {
         ]),
       });
       const svc = new CallService(prisma);
-      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(result.items[0].peer).toBeNull();
     });
 
@@ -320,7 +337,7 @@ describe('CallService.listHistory', () => {
         ]),
       });
       const svc = new CallService(prisma);
-      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(result.items[0].peer?.displayName).toBeNull();
     });
 
@@ -332,7 +349,7 @@ describe('CallService.listHistory', () => {
         participantFindMany,
       });
       const svc = new CallService(prisma);
-      await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(participantFindMany).not.toHaveBeenCalled();
     });
   });
@@ -346,7 +363,7 @@ describe('CallService.listHistory', () => {
       });
       const svc = new CallService(prisma);
       // limit=1 → 2 rows means there IS a next page
-      const result = await svc.listHistory(USER_ID, { limit: 1, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 1, filter: 'all', viewer: null });
       expect(result.hasMore).toBe(true);
       expect(result.items).toHaveLength(1);
     });
@@ -358,7 +375,7 @@ describe('CallService.listHistory', () => {
         participantFindMany: jest.fn<any>().mockResolvedValue([]),
       });
       const svc = new CallService(prisma);
-      const result = await svc.listHistory(USER_ID, { limit: 1, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 1, filter: 'all', viewer: null });
       expect(result.nextCursor).toBe('call-1');
     });
 
@@ -369,7 +386,7 @@ describe('CallService.listHistory', () => {
         participantFindMany: jest.fn<any>().mockResolvedValue([]),
       });
       const svc = new CallService(prisma);
-      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       expect(result.hasMore).toBe(false);
       expect(result.nextCursor).toBeUndefined();
     });
@@ -378,7 +395,7 @@ describe('CallService.listHistory', () => {
       const callSessionFindMany = jest.fn<any>().mockResolvedValue([]);
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
-      await svc.listHistory(USER_ID, { limit: 10, cursor: 'call-cursor-id', filter: 'all' });
+      await svc.listHistory(USER_ID, { limit: 10, cursor: 'call-cursor-id', filter: 'all', viewer: null });
       const callToFindMany = callSessionFindMany.mock.calls[0][0];
       expect(callToFindMany.cursor).toEqual({ id: 'call-cursor-id' });
       expect(callToFindMany.skip).toBe(1);
@@ -390,7 +407,7 @@ describe('CallService.listHistory', () => {
       const callSessionFindMany = jest.fn<any>().mockResolvedValue([]);
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
-      await svc.listHistory(USER_ID, { limit: 10, filter: 'missed' });
+      await svc.listHistory(USER_ID, { limit: 10, filter: 'missed', viewer: null });
       const { where } = callSessionFindMany.mock.calls[0][0];
       // The base terminal-status window (ended/missed/rejected/failed) must
       // survive — the missed filter narrows further via `where.OR` below, it
@@ -405,7 +422,7 @@ describe('CallService.listHistory', () => {
       const callSessionFindMany = jest.fn<any>().mockResolvedValue([]);
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
-      await svc.listHistory(USER_ID, { limit: 10, filter: 'missed' });
+      await svc.listHistory(USER_ID, { limit: 10, filter: 'missed', viewer: null });
       const { where } = callSessionFindMany.mock.calls[0][0];
       expect(where.OR).toContainEqual({ status: CallStatus.missed });
     });
@@ -421,7 +438,7 @@ describe('CallService.listHistory', () => {
       const callSessionFindMany = jest.fn<any>().mockResolvedValue([]);
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
-      await svc.listHistory(USER_ID, { limit: 10, filter: 'missed' });
+      await svc.listHistory(USER_ID, { limit: 10, filter: 'missed', viewer: null });
       const { where } = callSessionFindMany.mock.calls[0][0];
       expect(where.OR).toContainEqual({
         answeredAt: { not: null },
@@ -433,10 +450,99 @@ describe('CallService.listHistory', () => {
       const callSessionFindMany = jest.fn<any>().mockResolvedValue([]);
       const prisma = makePrisma({ callSessionFindMany, participantFindMany: jest.fn<any>().mockResolvedValue([]) });
       const svc = new CallService(prisma);
-      await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: null });
       const { where } = callSessionFindMany.mock.calls[0][0];
       expect(where.initiatorId).toBeUndefined();
       expect(where.OR).toBeUndefined();
+    });
+  });
+
+  // Directive produit 2026-08-25 — TROU #3. Being the other member of a
+  // direct conversation makes someone the *peer* in this journal; it must
+  // never, on its own, make their presence *visible* to the caller.
+  describe('peer presence gating (directive produit 2026-08-25)', () => {
+    const NON_PRIVILEGED_VIEWER = { userId: USER_ID, role: 'USER' as const };
+    const ADMIN_VIEWER = { userId: USER_ID, role: 'ADMIN' as const };
+
+    const directRow = () =>
+      makeRow({ conversationId: CONV_DIRECT, conversation: { type: 'direct', title: null, avatar: null } });
+
+    it('USER non ami (co-membre de la conversation seul) ⇒ peer.isOnline masqué à false', async () => {
+      mockResolveForTargets.mockResolvedValue(
+        new Map([['user-peer-1', { showOnline: false, showLastSeenTimestamp: false }]])
+      );
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([directRow()]),
+        participantFindMany: jest.fn<any>().mockResolvedValue([makePeer()]),
+      });
+      const svc = new CallService(prisma);
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: NON_PRIVILEGED_VIEWER });
+      expect(result.items[0].peer?.isOnline).toBe(false);
+    });
+
+    it('ADMIN non ami ⇒ peer.isOnline visible (entitlement inconditionnel de la directive)', async () => {
+      mockResolveForTargets.mockResolvedValue(
+        new Map([['user-peer-1', { showOnline: true, showLastSeenTimestamp: true }]])
+      );
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([directRow()]),
+        participantFindMany: jest.fn<any>().mockResolvedValue([makePeer()]),
+      });
+      const svc = new CallService(prisma);
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: ADMIN_VIEWER });
+      expect(result.items[0].peer?.isOnline).toBe(true);
+    });
+
+    it('ami accepté ⇒ visible sous les préférences du pair', async () => {
+      mockResolveForTargets.mockResolvedValue(
+        new Map([['user-peer-1', { showOnline: true, showLastSeenTimestamp: true }]])
+      );
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([directRow()]),
+        participantFindMany: jest.fn<any>().mockResolvedValue([makePeer()]),
+      });
+      const svc = new CallService(prisma);
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: NON_PRIVILEGED_VIEWER });
+      expect(result.items[0].peer?.isOnline).toBe(true);
+    });
+
+    // `resolveForTargets` rend une entrée par id demandé ; une entrée ABSENTE
+    // est une anomalie, et une porte de confidentialité refuse par défaut
+    // (`applyPresenceVisibilityAsOffline` sans `onMissingEntry`). Ce témoin
+    // rougit si le site rouvrait le régime `'reveal'` du prefs-only retiré.
+    it('carte sans entrée pour le pair ⇒ masqué (le défaut est « hide », jamais « reveal »)', async () => {
+      mockResolveForTargets.mockResolvedValue(new Map());
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([directRow()]),
+        participantFindMany: jest.fn<any>().mockResolvedValue([makePeer()]),
+      });
+      const svc = new CallService(prisma);
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: NON_PRIVILEGED_VIEWER });
+      expect(result.items[0].peer?.isOnline).toBe(false);
+      // La gate ne touche QUE la présence : l'identité du pair survit intacte.
+      expect(result.items[0].peer).toMatchObject({ userId: 'user-peer-1', username: 'peer', displayName: 'Peer User' });
+    });
+
+    it('résout en UNE requête batchée, avec le viewer et le `userId` du pair', async () => {
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([directRow()]),
+        participantFindMany: jest.fn<any>().mockResolvedValue([makePeer()]),
+      });
+      const svc = new CallService(prisma);
+      await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: NON_PRIVILEGED_VIEWER });
+      expect(mockResolveForTargets).toHaveBeenCalledTimes(1);
+      expect(mockResolveForTargets).toHaveBeenCalledWith(NON_PRIVILEGED_VIEWER, ['user-peer-1']);
+    });
+
+    it("n'ouvre aucune résolution quand la page ne porte aucun appel direct (groupes seuls)", async () => {
+      const row = makeRow({ conversationId: CONV_GROUP, conversation: { type: 'group', title: 'Squad', avatar: null } });
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
+        participantFindMany: jest.fn<any>().mockResolvedValue([]),
+      });
+      const svc = new CallService(prisma);
+      await svc.listHistory(USER_ID, { limit: 10, filter: 'all', viewer: NON_PRIVILEGED_VIEWER });
+      expect(mockResolveForTargets).not.toHaveBeenCalled();
     });
   });
 });

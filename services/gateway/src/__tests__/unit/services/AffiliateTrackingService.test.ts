@@ -364,6 +364,44 @@ describe('getAffiliateStats', () => {
     );
   });
 
+  // Le parrainage n'est PAS une amitié : la loi de confidentialité de la
+  // présence l'exclut nommément. Un parrain ne reçoit donc AUCUN champ de
+  // présence sur ses filleuls — l'absence de la colonne dans le `select` est
+  // le seul état qu'aucune porte ne peut rouvrir. Le double de `findMany`
+  // honore ici le `select` reçu, comme Prisma : la ligne rendue porte
+  // exactement les colonnes demandées, et rien d'autre.
+  it('serves no presence field under referrals[].referredUser', async () => {
+    const referredRow = {
+      id: 'u-filleul',
+      username: 'awa',
+      firstName: 'Awa',
+      lastName: 'Diop',
+      email: 'awa@example.com',
+      avatar: null,
+      isOnline: true,
+      lastActiveAt: new Date(),
+      createdAt: new Date(),
+    };
+    const prisma = makePrisma();
+    (prisma.affiliateRelation.findMany as jest.Mock<any>).mockImplementation(async (args: any) => {
+      const select = args?.include?.referredUser?.select ?? {};
+      const referredUser = Object.fromEntries(
+        Object.entries(referredRow).filter(([column]) => select[column] === true)
+      );
+      return [{ id: 'rel-1', status: 'completed', createdAt: new Date(), completedAt: null, affiliateToken: {}, referredUser }];
+    });
+
+    const result = await AffiliateTrackingService.getAffiliateStats(prisma, 'user-1');
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const served = result.data?.referrals[0]?.referredUser;
+      expect(served).toMatchObject({ id: 'u-filleul', username: 'awa' });
+      expect(served).not.toHaveProperty('isOnline');
+      expect(served).not.toHaveProperty('lastActiveAt');
+    }
+  });
+
   it('returns success:false on DB error', async () => {
     const prisma = makePrisma();
     (prisma.affiliateRelation.findMany as jest.Mock<any>).mockRejectedValue(new Error('DB down'));

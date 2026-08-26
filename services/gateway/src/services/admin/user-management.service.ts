@@ -10,9 +10,44 @@ import {
   ResetPasswordDTO
 } from '@meeshy/shared/types';
 import * as bcrypt from 'bcrypt';
+import { logger, logWarn } from '../../utils/logger';
+
+type UserSortKey = NonNullable<UserFilters['sortBy']>;
+
+const USER_SORT_KEYS: Readonly<Record<UserSortKey, true>> = {
+  createdAt: true,
+  lastActiveAt: true,
+  username: true,
+  email: true,
+  firstName: true,
+  lastName: true
+};
+
+const isUserSortKey = (value: unknown): value is UserSortKey =>
+  typeof value === 'string' && Object.hasOwn(USER_SORT_KEYS, value);
+
+const resolveUserSortKey = (sortBy: unknown): UserSortKey =>
+  isUserSortKey(sortBy) ? sortBy : 'createdAt';
+
+const resolveSortOrder = (sortOrder: unknown): 'asc' | 'desc' =>
+  sortOrder === 'asc' ? 'asc' : 'desc';
+
+/**
+ * Coupe tout canal temps réel que `userId` tient encore. Injecté par la route
+ * (qui seule atteint le manager Socket.IO) ; résolu à l'appel, jamais à la
+ * construction, parce que le manager naît après l'enregistrement des routes.
+ */
+export type SessionRevoker = (userId: string) => Promise<unknown>;
+
+export type UserManagementServiceDeps = {
+  readonly revokeSessions?: SessionRevoker;
+};
 
 export class UserManagementService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    private readonly deps: UserManagementServiceDeps = {}
+  ) {}
 
   /**
    * Récupère la liste des utilisateurs avec filtres et pagination
@@ -75,13 +110,7 @@ export class UserManagementService {
       }
     }
 
-    // Construction du tri
-    const orderBy: Record<string, string> = {};
-    if (filters.sortBy) {
-      orderBy[filters.sortBy] = filters.sortOrder || 'desc';
-    } else {
-      orderBy.createdAt = 'desc';
-    }
+    const orderBy = { [resolveUserSortKey(filters.sortBy)]: resolveSortOrder(filters.sortOrder) };
 
     // Exécution de la requête
     const [users, totalUsers] = await Promise.all([
@@ -243,7 +272,27 @@ export class UserManagementService {
       },
     });
 
+    if (!data.isActive) await this.revokeSessionsAfterDeactivation(userId);
+
     return user as unknown as FullUser;
+  }
+
+  /**
+   * Un compte mis hors service — désactivé (`deactivatedAt` non nul) ou
+   * supprimé en douceur (`isActive: false` seul) — est masqué pour TOUS ; un
+   * socket qui lui resterait ouvert continuerait de recevoir ses fils temps
+   * réel, d'émettre des `typing:start` (lus « en ligne ») et de voir la
+   * présence des autres. Après l'écriture, jamais avant ; best-effort : la
+   * ligne est déjà posée, une coupure qui échoue ne rend pas la désactivation.
+   */
+  private async revokeSessionsAfterDeactivation(userId: string): Promise<void> {
+    const revoke = this.deps.revokeSessions;
+    if (!revoke) return;
+    try {
+      await revoke(userId);
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Session revocation failed after deactivation of user ${userId}`, error);
+    }
   }
 
   /**
@@ -278,6 +327,8 @@ export class UserManagementService {
         updatedAt: new Date()
       },
     });
+
+    await this.revokeSessionsAfterDeactivation(userId);
 
     return user as unknown as FullUser;
   }

@@ -7,6 +7,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -62,12 +63,14 @@ function makePrisma(overrides: Record<string, any> = {}) {
 async function buildApp(opts: {
   auth?: 'authenticated' | 'unauthenticated';
   prisma?: ReturnType<typeof makePrisma>;
+  socketIOHandler?: unknown;
 } = {}): Promise<{ app: FastifyInstance; prisma: ReturnType<typeof makePrisma> }> {
-  const { auth = 'authenticated', prisma = makePrisma() } = opts;
+  const { auth = 'authenticated', prisma = makePrisma(), socketIOHandler } = opts;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   app.decorate('prisma', prisma);
+  if (socketIOHandler) app.decorate('socketIOHandler', socketIOHandler as never);
 
   app.decorate('authenticate', async (req: FastifyRequest) => {
     (req as any).authContext = auth === 'authenticated'
@@ -348,5 +351,99 @@ describe('GET /delete-account/delete-now — DB error', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('Erreur');
     await app.close();
+  });
+});
+
+// ─── GET /delete-account/delete-now — coupure des sockets (F9 bis) ───────────
+// La suppression pose `isActive: false` ; un socket qui resterait ouvert
+// continuerait de recevoir les fils temps réel d'un compte qui n'existe plus.
+// Même double que `admin-roles.test.ts` (F9) : la room du compte, ses sockets.
+
+type SocketDouble = { emit: jest.Mock<(...args: unknown[]) => void>; disconnect: jest.Mock<(close?: boolean) => void> };
+
+function makeSocketIOHandler(sockets: SocketDouble[], fetchError?: Error) {
+  const rooms: string[] = [];
+  const io = {
+    in: (room: string) => {
+      rooms.push(room);
+      return {
+        fetchSockets: async () => {
+          if (fetchError) throw fetchError;
+          return sockets;
+        },
+      };
+    },
+  };
+  return { rooms, handler: { getManager: () => ({ getIO: () => io }) } };
+}
+
+function expiredDeletionRequest() {
+  return { id: 'req-1', userId: USER_ID, status: 'GRACE_PERIOD_EXPIRED' };
+}
+
+describe('GET /delete-account/delete-now — la suppression coupe les sockets du compte (F9 bis)', () => {
+  it("émet auth:session-revoked puis ferme chaque socket de la room du compte, APRÈS l'écriture", async () => {
+    const order: string[] = [];
+    const socket: SocketDouble = {
+      emit: jest.fn<(...args: unknown[]) => void>(() => { order.push('emit'); }),
+      disconnect: jest.fn<(close?: boolean) => void>((close?: boolean) => { order.push(`disconnect:${close}`); }),
+    };
+    const { rooms, handler } = makeSocketIOHandler([socket]);
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findFirst = jest.fn<any>().mockResolvedValue(expiredDeletionRequest());
+    prisma.user.update = jest.fn<any>(async () => { order.push('written'); return { id: USER_ID }; });
+    const { app } = await buildApp({ prisma, socketIOHandler: handler });
+    try {
+      const res = await app.inject({ method: 'GET', url: `/delete-account/delete-now?token=${VALID_TOKEN}` });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('supprim');
+      expect(rooms).toEqual([ROOMS.user(USER_ID)]);
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.AUTH_SESSION_REVOKED,
+        expect.objectContaining({ code: 'session_revoked', reason: 'logout_all_devices', message: expect.stringContaining('deleted') }),
+      );
+      expect(order).toEqual(['written', 'emit', 'disconnect:true']);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('un lien invalide ne touche à aucun socket', async () => {
+    const socket: SocketDouble = { emit: jest.fn<(...args: unknown[]) => void>(), disconnect: jest.fn<(close?: boolean) => void>() };
+    const { rooms, handler } = makeSocketIOHandler([socket]);
+    const { app, prisma } = await buildApp({ socketIOHandler: handler });
+    try {
+      const res = await app.inject({ method: 'GET', url: `/delete-account/delete-now?token=${VALID_TOKEN}` });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('invalide');
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(rooms).toEqual([]);
+      expect(socket.emit).not.toHaveBeenCalled();
+      expect(socket.disconnect).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('une coupure qui échoue ne fait pas échouer la suppression : page « supprimé », les deux lignes écrites', async () => {
+    const socket: SocketDouble = { emit: jest.fn<(...args: unknown[]) => void>(), disconnect: jest.fn<(close?: boolean) => void>() };
+    const { handler } = makeSocketIOHandler([socket], new Error('adapter down'));
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findFirst = jest.fn<any>().mockResolvedValue(expiredDeletionRequest());
+    const { app } = await buildApp({ prisma, socketIOHandler: handler });
+    try {
+      const res = await app.inject({ method: 'GET', url: `/delete-account/delete-now?token=${VALID_TOKEN}` });
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('supprim');
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ isActive: false }) })
+      );
+      expect(prisma.accountDeletionRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'COMPLETED' }) })
+      );
+      expect(socket.disconnect).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
   });
 });

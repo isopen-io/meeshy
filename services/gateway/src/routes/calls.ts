@@ -36,6 +36,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { MEMBER_ROLE_HIERARCHY, MemberRole } from '@meeshy/shared/types/role-types';
+import { viewerFromRequest } from './users/presence-gate';
 
 /**
  * Numeric conversation-role rank (creator=40 > admin=30 > moderator=20 >
@@ -1246,7 +1247,12 @@ export default async function callRoutes(fastify: FastifyInstance) {
         ? parsed.data
         : { limit: 30, cursor: undefined as string | undefined, filter: 'all' as const };
 
-      const result = await callService.listHistory(userId, { limit, cursor, filter });
+      const result = await callService.listHistory(userId, {
+        limit,
+        cursor,
+        filter,
+        viewer: viewerFromRequest(request)
+      });
 
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor }
