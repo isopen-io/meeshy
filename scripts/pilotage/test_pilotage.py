@@ -58,7 +58,7 @@ class ItemsFromRest(unittest.TestCase):
 
 class Render(unittest.TestCase):
     def test_la_page_embarque_les_donnees_et_le_module_de_calcul_sans_export(self):
-        data = {"fetchedAt": "2026-08-26T16:00:00+00:00", "mode": "project", "items": [{"title": "x</script>"}], "milestones": []}
+        data = {"fetchedAt": "2026-08-26T16:00:00+00:00", "mode": "project", "items": [{"horizon": "x</script>"}], "milestones": []}
         html = build.render("<p>__COMPUTE__</p><script>__DATA__</script>", "export const a = 1;\nexport function f() {}\n", data)
         self.assertNotIn("__DATA__", html)
         self.assertNotIn("__COMPUTE__", html)
