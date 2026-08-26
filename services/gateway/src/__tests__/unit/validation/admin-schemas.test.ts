@@ -107,6 +107,34 @@ describe('AnonymousUsersQuerySchema', () => {
     const result = AnonymousUsersQuerySchema.parse({});
     expect(result.search).toBeUndefined();
   });
+
+  // Converged on the bounded sibling shape (Invitations/Broadcasts) so the
+  // `pagination-parse-sweep` premise — admin querystrings are Zod-validated
+  // before the route's inline parseInt — actually holds for this schema too.
+  it('rejects limit > 100', () => {
+    expect(() => AnonymousUsersQuerySchema.parse({ limit: '101' })).toThrow();
+  });
+
+  it('rejects non-positive limit (Prisma take must stay >= 1)', () => {
+    expect(() => AnonymousUsersQuerySchema.parse({ limit: '0' })).toThrow();
+    expect(() => AnonymousUsersQuerySchema.parse({ limit: '-5' })).toThrow();
+  });
+
+  it('rejects non-integer limit', () => {
+    expect(() => AnonymousUsersQuerySchema.parse({ limit: '2.5' })).toThrow();
+  });
+
+  it('rejects non-numeric limit', () => {
+    expect(() => AnonymousUsersQuerySchema.parse({ limit: 'abc' })).toThrow();
+  });
+
+  it('rejects negative offset (Prisma skip must stay >= 0)', () => {
+    expect(() => AnonymousUsersQuerySchema.parse({ offset: '-1' })).toThrow();
+  });
+
+  it('rejects non-integer offset', () => {
+    expect(() => AnonymousUsersQuerySchema.parse({ offset: '1.5' })).toThrow();
+  });
 });
 
 // ─── Broadcasts ──────────────────────────────────────────────────────────────
@@ -139,6 +167,18 @@ describe('BroadcastsListQuerySchema', () => {
 
   it('rejects limit < 1', () => {
     expect(() => BroadcastsListQuerySchema.parse({ limit: '0' })).toThrow();
+  });
+
+  it('rejects non-integer limit', () => {
+    expect(() => BroadcastsListQuerySchema.parse({ limit: '2.5' })).toThrow();
+  });
+
+  it('rejects negative offset (Prisma skip must stay >= 0)', () => {
+    expect(() => BroadcastsListQuerySchema.parse({ offset: '-1' })).toThrow();
+  });
+
+  it('rejects non-integer offset', () => {
+    expect(() => BroadcastsListQuerySchema.parse({ offset: '1.5' })).toThrow();
   });
 });
 
@@ -385,6 +425,10 @@ describe('RankingsQuerySchema', () => {
 
   it('rejects limit < 1', () => {
     expect(() => RankingsQuerySchema.parse({ limit: '0' })).toThrow();
+  });
+
+  it('rejects non-integer limit', () => {
+    expect(() => RankingsQuerySchema.parse({ limit: '2.5' })).toThrow();
   });
 
   it('accepts optional criterion', () => {
