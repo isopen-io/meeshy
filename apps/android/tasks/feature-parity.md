@@ -4033,7 +4033,29 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       EXACTLY the 3 link-carrying tests; the null-default, blank-drop, `withRepostOf` and
       `onRepostSource`-state tests stay green). **Pending**: cloning the source story's slide
       CONTENT (caption/text-elements/effects) into the composer as an editable starting point.
-- [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
+- [~] Draft save/restore with media persistence + lost-media detection / re-capture prompt —
+      **caption + media + structure + audience + repost persistence done** (slice
+      `story-composer-draft-autosave`, 2026-08-26): the composer now survives leaving and
+      reopening — iOS `StoryDraftStore.save/load` + `resetLocalState`/`isEmpty` purge parity.
+      SSOT split mirrors chat drafts: `StoryComposerDraftSnapshot` (`@Serializable`, primitive-only
+      `{slides:[{id,text,mediaIds}], selectedId, visibility, repostOfId, updatedAt}`) in
+      `core:model`; single-slot `StoryComposerDraftStore` (interface + `InMemory` + `DataStore`,
+      corrupt→null) in `sdk-core`; pure `StoryComposerAutosave` (resolve → Save/Clear/None; restore
+      → snapshot|null; deck↔snapshot mapping) in `:feature:stories`. Wired: VM `onEnterComposer`
+      (silent, **pristine-only** restore — never clobbers work begun in the async gap),
+      `persistDraft` (save-on-leave), `publish` clears; `DisposableEffect` glue; `SdkModule`
+      provider; `StoryVisibility.fromWire` (tolerant). **Fidelity gate (load-bearing)**: a draft
+      carrying rich on-canvas content (text/sticker elements, filter, background, pinned duration,
+      non-identity canvas transform) is *not yet persistable* — the primitive snapshot can't
+      represent it, so `resolve` purges any stale stored draft rather than restoring lossily. +33
+      tests (12 `StoryComposerDraftSnapshotTest` round-trip/validity/predicates, 7
+      `StoryComposerDraftStoreTest` InMemory+DataStore+corrupt, 20 `StoryComposerAutosaveTest`
+      resolve/restore/rich-gate/mapping, 6 `StoryComposerViewModelTest` restore/save/purge/publish).
+      Mutation-RED-proven (neutering the rich-content gate reddens EXACTLY the 7 gate tests; the
+      Save/None/Clear-simple, restore and round-trip tests stay green). **Pending**: widening the
+      snapshot to carry rich on-canvas content (lifts the fidelity gate), lost-media detection /
+      re-capture prompt (now reachable — the restore seam makes a dangling media id possible), and
+      wiping the store on account teardown (`SessionTeardown`).
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
       reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes
       surface a Retry/Discard strip above the tray — no silent loss); preview-before-publish and

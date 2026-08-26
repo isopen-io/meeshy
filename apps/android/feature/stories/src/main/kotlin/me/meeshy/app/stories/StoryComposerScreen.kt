@@ -88,6 +88,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -182,6 +183,13 @@ fun StoryComposerScreen(
     // story — so all the author side carries is the source id.
     LaunchedEffect(repostOfId) {
         repostOfId?.let { viewModel.onRepostSource(it) }
+    }
+
+    // Restore a persisted draft on open (silent, pristine-only) and persist/purge it on
+    // leave — the composer's save-on-dismiss / restore-on-appear seam.
+    DisposableEffect(viewModel) {
+        viewModel.onEnterComposer()
+        onDispose { viewModel.persistDraft() }
     }
 
     fun dispatchPicked(uris: List<Uri>) {
