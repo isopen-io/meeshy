@@ -14,7 +14,12 @@
 
 import { createHash } from 'crypto';
 import { getCountries, type CountryCode } from 'libphonenumber-js';
-import { normalizePhoneWithCountry, normalizeEmail, looksLikePhoneNumber } from './normalize.js';
+import {
+  normalizePhoneWithCountry,
+  normalizeEmail,
+  looksLikePhoneNumber,
+  LINE_BREAKING_CHARS_SOURCE,
+} from './normalize.js';
 
 export const MAX_CONTACTS_PER_SYNC = 2000;
 export const MAX_IDENTIFIERS_PER_CONTACT = 25;
@@ -23,6 +28,12 @@ export const MAX_DISPLAY_NAME_LENGTH = 200;
 const SUPPORTED_COUNTRIES = new Set<string>(getCountries());
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@.]+\.[^\s@]+$/;
 const USERNAME_SHAPE = /^[a-z0-9_-]{2,16}$/;
+
+// Séparateurs de ligne — MÊME jeu que `normalize.normalizeDisplayName` (SSOT
+// dans normalize.ts). Ici ils sont REMPLACÉS par un espace plutôt que supprimés :
+// un `"Awa\nDiallo"` d'un carnet d'adresses est deux segments d'un nom, pas un
+// mot collé.
+const LINE_BREAKING_CHARS = new RegExp(`[${LINE_BREAKING_CHARS_SOURCE}]`, 'g');
 
 export type RawContactEntry = {
   displayName?: unknown;
@@ -64,9 +75,17 @@ function asStringArray(value: unknown): string[] {
 
 function normalizeDisplayName(value: unknown): string | null {
   if (typeof value !== 'string') return null;
-  const trimmed = value.replace(/[\r\n\t]/g, ' ').trim();
+  const trimmed = value.replace(LINE_BREAKING_CHARS, ' ').trim();
   if (trimmed === '') return null;
-  return trimmed.slice(0, MAX_DISPLAY_NAME_LENGTH);
+  if (trimmed.length <= MAX_DISPLAY_NAME_LENGTH) return trimmed;
+  // Reculer d'une unité quand la coupe atterrit sur un substitut HAUT : sans
+  // cela, un nom > 200 unités finissant par un caractère hors-BMP (émoji, CJK)
+  // garde une demi-paire orpheline rendue `�`. Même coupe sûre que
+  // `SecuritySanitizer.truncate` (it. 268). Une entrée ASCII/BMP est inchangée.
+  const lastCharCode = trimmed.charCodeAt(MAX_DISPLAY_NAME_LENGTH - 1);
+  const isHighSurrogate = lastCharCode >= 0xd800 && lastCharCode <= 0xdbff;
+  const end = isHighSurrogate ? MAX_DISPLAY_NAME_LENGTH - 1 : MAX_DISPLAY_NAME_LENGTH;
+  return trimmed.slice(0, end);
 }
 
 function normalizePhones(values: string[], defaultCountry?: CountryCode): string[] {
