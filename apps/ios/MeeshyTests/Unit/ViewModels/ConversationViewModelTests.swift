@@ -1568,6 +1568,151 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(result?.translatedContent, "Hallo")
     }
 
+    /// Tous les cas ci-dessus posent les traductions AVANT le premier appel :
+    /// aucun n'exerce la séquence fautive. Ici la bulle est d'abord résolue
+    /// « pas de traduction ⇒ original », puis la traduction ARRIVE (chemin
+    /// socket `translation:completed`). Le cache de résolution gardait alors le
+    /// `nil` pour toujours et la bulle ne basculait jamais — l'invalidation est
+    /// désormais une propriété du CHAMP, qu'aucun écrivain ne peut oublier.
+    func test_preferredTranslation_lateArrival_afterResolvedAsOriginal_returnsTranslation() {
+        let currentUser = MeeshyUser(
+            id: testUserId, username: "testuser",
+            systemLanguage: "es"
+        )
+        mockAuthManager.simulateLoggedIn(user: currentUser)
+        let sut = ConversationViewModel(
+            conversationId: testConversationId,
+            authManager: mockAuthManager,
+            messageService: mockMessageService,
+            conversationService: mockConversationService,
+            reactionService: mockReactionService,
+            reportService: mockReportService,
+            dependencies: makeTestDependencies()
+        )
+        sut.messages = [makeMessage(id: "msg-t", content: "Bonjour")]
+
+        XCTAssertNil(sut.preferredTranslation(for: "msg-t"),
+                     "aucune traduction reçue ⇒ l'original (règle 1 du Prisme)")
+
+        sut.messageTranslations["msg-t"] = [
+            MessageTranslation(
+                id: "t-es", messageId: "msg-t",
+                sourceLanguage: "fr", targetLanguage: "es",
+                translatedContent: "Hola", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+
+        let result = sut.preferredTranslation(for: "msg-t")
+
+        XCTAssertEqual(result?.targetLanguage, "es")
+        XCTAssertEqual(result?.translatedContent, "Hola",
+                       "la bulle doit basculer dès que la traduction arrive")
+    }
+
+    // MARK: - Édition et traductions périmées
+
+    /// Le gateway invalide les traductions à l'ÉCRITURE du nouveau contenu
+    /// (`translations: null` dans le même `updateMany` que `content`). Le
+    /// chemin d'édition OPTIMISTE du client doit poser le même verdict avant
+    /// d'écrire le nouveau texte, sinon la bulle rend le texte neuf sous
+    /// l'ancienne traduction.
+    func test_editMessage_clearsStaleTranslations() async {
+        let sut = makeSUT()
+        sut.messages = [makeMessage(id: "msg-edit-local", content: "Bonjour")]
+        sut.messageTranslations["msg-edit-local"] = [
+            MessageTranslation(
+                id: "t-es", messageId: "msg-edit-local",
+                sourceLanguage: "fr", targetLanguage: "es",
+                translatedContent: "Hola", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+
+        await sut.editMessage(messageId: "msg-edit-local", newContent: "Bonsoir")
+
+        XCTAssertNil(sut.messageTranslations["msg-edit-local"],
+                     "une traduction d'un contenu périmé n'est pas une traduction")
+        XCTAssertNil(sut.preferredTranslation(for: "msg-edit-local"),
+                     "pendant la fenêtre d'édition, l'ORIGINAL est servi")
+    }
+
+    /// La bulle qu'on édite est la SIENNE, donc celle qui porte encore un id
+    /// optimiste — alors que les deux caches PERSISTANTS sont keyés par l'id
+    /// SERVEUR (`pendingServerIds`). Évincer sous le seul id de la ligne ne
+    /// touchait alors AUCUNE ligne GRDB : le texte périmé revenait au
+    /// redémarrage, exactement le symptôme que l'éviction dit fermer.
+    func test_editMessage_onOptimisticRow_alsoEvictsTheServerKeyedCaches() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        try await persistence.saveTranslation(TranslationRecord(
+            id: "tr-edit-optimistic", messageLocalId: "srv_1", messageServerId: "srv_1",
+            targetLanguage: "es", translatedContent: "Hola",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "fr", receivedAt: Date()
+        ))
+
+        let sut = makeSUT(
+            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+        )
+        sut.messages = [makeMessage(id: "temp_1", content: "Bonjour", isMe: true)]
+        sut.pendingServerIds["temp_1"] = "srv_1"
+        sut.messageTranslations["srv_1"] = [
+            MessageTranslation(
+                id: "t-es", messageId: "srv_1",
+                sourceLanguage: "fr", targetLanguage: "es",
+                translatedContent: "Hola", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+
+        await sut.editMessage(messageId: "temp_1", newContent: "Bonsoir")
+
+        XCTAssertNil(sut.messageTranslations["srv_1"],
+                     "l'espace d'ids SERVEUR doit tomber avec l'espace local")
+
+        // L'éviction disque part dans une `Task` détachée du geste : on la
+        // laisse aboutir avant de lire la table, sans quoi le témoin
+        // mesurerait l'ordonnancement plutôt que l'éviction.
+        var attempts = 0
+        var remaining = try persistence.translations(for: "srv_1")
+        while !remaining.isEmpty && attempts < 50 {
+            try await Task.sleep(nanoseconds: 20_000_000)
+            remaining = try persistence.translations(for: "srv_1")
+            attempts += 1
+        }
+        XCTAssertTrue(remaining.isEmpty,
+                      "la ligne persistée sous l'id serveur doit être supprimée")
+    }
+
+    /// La bascule MANUELLE court-circuite les quatre caches dans
+    /// `preferredTranslation(for:)` : sans son éviction, un lecteur qui a
+    /// exploré une langue garde le texte d'AVANT l'édition à l'écran
+    /// indéfiniment, alors même que tout le reste est vide.
+    func test_editMessage_dropsTheManualLanguageOverride() async {
+        let sut = makeSUT()
+        sut.messages = [makeMessage(id: "msg-edit-local", content: "Bonjour")]
+        // Le geste RÉEL de la vue Langue de l'appui long (ConversationView),
+        // pas une écriture directe du dictionnaire.
+        sut.setActiveTranslation(
+            for: "msg-edit-local",
+            translation: MessageTranslation(
+                id: "t-es", messageId: "msg-edit-local",
+                sourceLanguage: "fr", targetLanguage: "es",
+                translatedContent: "Hola", translationModel: "nllb",
+                confidenceScore: nil
+            )
+        )
+        XCTAssertTrue(sut.activeTranslationOverrides.keys.contains("msg-edit-local"))
+
+        await sut.editMessage(messageId: "msg-edit-local", newContent: "Bonsoir")
+
+        XCTAssertFalse(sut.activeTranslationOverrides.keys.contains("msg-edit-local"),
+                       "la clé est RETIRÉE : présente et nulle, elle graverait un « montre l'original » que le lecteur n'a pas demandé")
+        XCTAssertNil(sut.preferredTranslation(for: "msg-edit-local"),
+                     "le Prisme automatique reprend la main et sert l'ORIGINAL")
+    }
+
     // MARK: - Ouvrir, c'est lire (localement)
 
     /// Le moteur de sync ramenait déjà le compteur de la conversation ouverte à

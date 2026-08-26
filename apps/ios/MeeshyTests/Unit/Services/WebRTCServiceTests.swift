@@ -997,10 +997,20 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
         return disableLocalVideoResult
     }
     private(set) var applyVideoEncodingCallCount = 0
-    private(set) var lastVideoEncoding: (maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double)?
-    func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {
+    private(set) var lastVideoEncoding: (
+        maxBitrateBps: Int,
+        maxFramerate: Int,
+        scaleResolutionDownBy: Double,
+        degradationPreference: VideoDegradationPreference
+    )?
+    func applyVideoEncoding(
+        maxBitrateBps: Int,
+        maxFramerate: Int,
+        scaleResolutionDownBy: Double,
+        degradationPreference: VideoDegradationPreference
+    ) {
         applyVideoEncodingCallCount += 1
-        lastVideoEncoding = (maxBitrateBps, maxFramerate, scaleResolutionDownBy)
+        lastVideoEncoding = (maxBitrateBps, maxFramerate, scaleResolutionDownBy, degradationPreference)
     }
     private(set) var applyAudioEncodingCallCount = 0
     private(set) var lastAudioEncodingMaxBitrateBps: Int?
@@ -1204,12 +1214,253 @@ final class P2PWebRTCClientFallbackConformanceSourceGuardTests: XCTestCase {
         )
     }
 
+    func test_fallback_implementsApplyVideoEncodingWithDegradationPreference() throws {
+        let body = try fallbackClassBody()
+        XCTAssertTrue(
+            body.contains("func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double, degradationPreference: VideoDegradationPreference)"),
+            "The no-WebRTC fallback class must implement the FOUR-parameter " +
+            "applyVideoEncoding — L6-6 added `degradationPreference` to the " +
+            "WebRTCClientProviding requirement, and a stale three-parameter stub " +
+            "compiles fine here yet fails a build with the package unresolved."
+        )
+    }
+
     func test_fallback_doesNotDeclareRemovedSetMaxAudioBitrate() throws {
         let body = try fallbackClassBody()
         XCTAssertFalse(
             body.contains("setMaxAudioBitrate"),
             "setMaxAudioBitrate was removed from WebRTCClientProviding (dead API, superseded " +
             "by applyAudioEncoding, zero prod callers) — it must not reappear in the fallback."
+        )
+    }
+}
+
+// MARK: - L6-1/L6-6 — network-survival encoder FREEZE
+
+/// The survival layer used to DROP outbound video: stop the capture, detach the
+/// track, flip the transceiver to `recvOnly` and renegotiate — on the very link
+/// that could not carry an SDP round-trip. It now pins the ENCODER to its floor
+/// (100 kbps · 2 fps · 360p) with `.maintainResolution`, so the peer keeps
+/// seeing a still, legible image while the audio gets the bandwidth.
+///
+/// These are BEHAVIOURAL tests against the mock client: what matters is that
+/// the freeze reaches `applyVideoEncoding` and that nothing on the track path
+/// is touched.
+@MainActor
+final class WebRTCServiceSurvivalFreezeTests: XCTestCase {
+
+    private func makeSUT() -> (sut: WebRTCService, client: TestableWebRTCClient) {
+        let client = TestableWebRTCClient()
+        let sut = WebRTCService(client: client)
+        return (sut, client)
+    }
+
+    func test_survivalSuspend_appliesEncoderFloor_withoutTouchingTheTrack() {
+        let (sut, client) = makeSUT()
+        client.hasLocalVideoTrack = true
+
+        sut.freezeVideoForSurvival()
+
+        XCTAssertEqual(client.applyVideoEncodingCallCount, 1,
+                       "The freeze must reach the encoder exactly once")
+        XCTAssertEqual(client.lastVideoEncoding?.maxFramerate, QualityThresholds.survivalFrozenFPS,
+                       "The frozen tier must pin the encoder at the 2 fps survival floor")
+        XCTAssertEqual(client.lastVideoEncoding?.maxBitrateBps, QualityThresholds.minVideoBitrate,
+                       "The frozen tier must ask for the floor bitrate, never 0 (undefined behaviour)")
+        XCTAssertEqual(client.lastVideoEncoding?.degradationPreference, VideoDegradationPreference.maintainResolution,
+                       "At 2 fps a still, legible image beats fluid mush")
+
+        XCTAssertEqual(client.disableLocalVideoCallCount, 0,
+                       "The freeze must NOT detach the track — that is what made the peer lose the picture")
+        XCTAssertTrue(client.hasLocalVideoTrack,
+                      "The local video track must survive the freeze")
+        XCTAssertTrue(sut.hasLocalVideoTrack,
+                      "…and the service must keep reporting it, so the UI never swaps to the audio-only tile")
+        XCTAssertNil(client.lastVideoEnabled,
+                     "The freeze must not toggle the video track either")
+        XCTAssertTrue(sut.survivalFloorActive,
+                      "The freeze is a STATE, not a one-shot call")
+    }
+
+    /// The ladder re-applies itself on every tier change AND on every thermal
+    /// transition. A floor written once by a pass-through would be silently
+    /// overwritten by the next `.critical → .poor` sample — the video would thaw
+    /// without anyone deciding it. `applyVideoQuality` therefore consults the
+    /// state FIRST, which this test exercises through the one entry point that
+    /// re-runs it: `unfreezeVideoAfterSurvival()` (still frozen ⇒ floor;
+    /// thawed ⇒ ladder).
+    func test_survivalFloor_survivesQualityLadderReapplication() {
+        let (sut, client) = makeSUT()
+        client.hasLocalVideoTrack = true
+
+        sut.freezeVideoForSurvival()
+        sut.freezeVideoForSurvival()
+
+        XCTAssertEqual(client.lastVideoEncoding?.maxFramerate, QualityThresholds.survivalFrozenFPS,
+                       "A second freeze while frozen must be idempotent, never a partial ladder value")
+        XCTAssertTrue(sut.survivalFloorActive)
+
+        sut.unfreezeVideoAfterSurvival()
+
+        XCTAssertFalse(sut.survivalFloorActive,
+                       "Thawing must clear the state so the ladder owns the encoder again")
+        XCTAssertNotEqual(client.lastVideoEncoding?.maxFramerate, QualityThresholds.survivalFrozenFPS,
+                          "Thawing must hand the encoder back to the CURRENT ladder tier, not leave it at 2 fps")
+    }
+
+    func test_frozenTier_usesMaintainResolution_whileLadderTiersKeepMaintainFramerate() {
+        let (sut, client) = makeSUT()
+
+        sut.freezeVideoForSurvival()
+        XCTAssertEqual(client.lastVideoEncoding?.degradationPreference, VideoDegradationPreference.maintainResolution,
+                       "Only the frozen tier trades frames for definition")
+
+        sut.unfreezeVideoAfterSurvival()
+        XCTAssertEqual(client.lastVideoEncoding?.degradationPreference, VideoDegradationPreference.maintainFramerate,
+                       "Every rung of the quality ladder keeps talking-head motion fluid")
+    }
+
+    /// The freeze has TWO owners: `VideoSurvivalController.isVideoSuspended`
+    /// (policy) and `WebRTCService.survivalFloorActive` (encoder). The
+    /// controller's `reset()` — fired from nine CallManager sites (toggleVideo
+    /// and its failure branches, unhold, critical thermal, forced .ended,
+    /// endCallInternal) — clears the FIRST one only, and never emits `.resume`
+    /// afterwards. CallManager therefore thaws the encoder on the FALLING EDGE
+    /// of the published flag; this test pins the service side of that contract:
+    /// the thaw it calls must clear the state AND hand the encoder back to the
+    /// ladder, so a reset during a freeze cannot pin the encoder at 2 fps for
+    /// the rest of the call.
+    func test_survivalFloor_isLiftedWhenTheControllerIsReset() {
+        let (sut, client) = makeSUT()
+        client.hasLocalVideoTrack = true
+
+        sut.freezeVideoForSurvival()
+        XCTAssertTrue(sut.survivalFloorActive)
+
+        // What the falling edge of `videoSurvivalController.$isVideoSuspended`
+        // (i.e. `reset()`) drives in CallManager's binding.
+        sut.unfreezeVideoAfterSurvival()
+
+        XCTAssertFalse(sut.survivalFloorActive,
+                       "A controller reset during a freeze must not leave the encoder floor armed — " +
+                       "nothing else would ever thaw it before the call ends")
+        XCTAssertNotEqual(client.lastVideoEncoding?.maxFramerate, QualityThresholds.survivalFrozenFPS,
+                          "…and the encoder must be back on the current ladder tier, not stuck at 2 fps")
+        XCTAssertEqual(client.disableLocalVideoCallCount, 0,
+                       "Thawing stays an encoder-only affair — no track detach, no renegotiation")
+    }
+
+    /// `P2PWebRTCClient.enableLocalVideo()` ends with a bare `applyVideoEncoding()`
+    /// — the DEFAULTS (2.5 Mbps / 30 fps). A re-acquisition while frozen (unhold
+    /// after a CallKit pre-emption, camera re-enable) would therefore lift the
+    /// freeze in silence, and stay lifted: the ladder only re-applies itself on a
+    /// TIER change or a thermal transition, neither of which happens on a link
+    /// that stays `.critical`.
+    func test_reacquiringVideoWhileFrozen_reappliesTheFloor() async throws {
+        let (sut, client) = makeSUT()
+        client.hasLocalVideoTrack = true
+        sut.freezeVideoForSurvival()
+
+        _ = try await sut.upgradeToVideo()
+
+        XCTAssertEqual(client.enableLocalVideoCallCount, 1,
+                       "The re-acquisition itself must still happen")
+        XCTAssertEqual(client.lastVideoEncoding?.maxFramerate, QualityThresholds.survivalFrozenFPS,
+                       "A re-acquisition while frozen must hand the encoder back to the survival floor, " +
+                       "never to enableLocalVideo's 30 fps default")
+        XCTAssertEqual(client.lastVideoEncoding?.degradationPreference, VideoDegradationPreference.maintainResolution,
+                       "…with the frozen tier's degradation preference, not the ladder's")
+        XCTAssertTrue(sut.survivalFloorActive,
+                      "The freeze is still on: only the controller decides when it ends")
+    }
+
+    /// Counter-proof of the guard above: re-routing `upgradeToVideo` through
+    /// `applyVideoQuality` must NOT mean "always pin the floor" — with no freeze
+    /// active, a re-acquisition lands on the current ladder tier.
+    func test_reacquiringVideoWhileNotFrozen_appliesTheLadderTier() async throws {
+        let (sut, client) = makeSUT()
+        client.hasLocalVideoTrack = true
+
+        _ = try await sut.upgradeToVideo()
+
+        XCTAssertFalse(sut.survivalFloorActive)
+        XCTAssertNotEqual(client.lastVideoEncoding?.maxFramerate, QualityThresholds.survivalFrozenFPS,
+                          "Without a freeze the re-acquisition must use the ladder, not the survival floor")
+        XCTAssertEqual(client.lastVideoEncoding?.degradationPreference, VideoDegradationPreference.maintainFramerate,
+                       "Ladder tiers keep talking-head motion fluid")
+    }
+}
+
+/// Source guard on the ORDER inside `applyVideoQuality`: the survival-floor
+/// check must be its FIRST act. Placed after the ladder computation it would
+/// still work by accident today, and break silently the day a caller reads a
+/// value computed above it — and the two re-application sites (tier change and
+/// thermal transition) are timer-driven, so the ordering cannot be reached
+/// behaviourally from a unit test.
+@MainActor
+final class ApplyVideoQualitySurvivalFloorOrderSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func applyVideoQualityBody() throws -> String {
+        let source = try webRTCServiceSource()
+        guard let fnRange = source.range(of: "private func applyVideoQuality(_ level: VideoQualityLevel) {") else {
+            XCTFail("applyVideoQuality not found in WebRTCService.swift"); return ""
+        }
+        let after = String(source[fnRange.upperBound...])
+        guard let end = after.range(of: "\n    }")?.upperBound else {
+            XCTFail("Could not bound applyVideoQuality"); return ""
+        }
+        return String(after[..<end])
+    }
+
+    func test_applyVideoQuality_consultsSurvivalFloorBeforeComputingTheTier() throws {
+        let body = try applyVideoQualityBody()
+        guard let floorRange = body.range(of: "if survivalFloorActive {") else {
+            XCTFail(
+                "applyVideoQuality must consult survivalFloorActive — without it a tier change or a " +
+                "thermal transition silently thaws the survival freeze."
+            )
+            return
+        }
+        guard let ladderRange = body.range(of: "let bitrate = level.targetVideoBitrate") else {
+            XCTFail("Ladder computation not found in applyVideoQuality"); return
+        }
+        XCTAssertLessThan(
+            floorRange.lowerBound, ladderRange.lowerBound,
+            "The survival-floor substitution must be the FIRST act of applyVideoQuality, before any " +
+            "ladder/thermal value is computed."
+        )
+        XCTAssertTrue(
+            body.contains("applySurvivalFloorEncoding()"),
+            "The frozen branch must delegate to the single floor site, not re-spell the values."
+        )
+    }
+
+    /// Both re-application sites must route through `applyVideoQuality` — that
+    /// is what makes the state effective rather than decorative.
+    func test_qualityAndThermalReapplication_routeThroughApplyVideoQuality() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("if thermalChanged { applyVideoQuality(currentQualityLevel) }"),
+            "The thermal re-application must go through applyVideoQuality so the survival floor wins."
+        )
+        XCTAssertTrue(
+            source.contains("applyVideoQuality(newLevel)"),
+            "The tier-change re-application must go through applyVideoQuality too."
+        )
+        XCTAssertFalse(
+            source.contains("if thermalChanged { applySurvivalFloorEncoding() }"),
+            "Negative guard: the thermal path must not shortcut to the floor site — the floor is " +
+            "chosen by state inside applyVideoQuality, in one place."
         )
     }
 }

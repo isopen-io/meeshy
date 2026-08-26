@@ -1003,10 +1003,11 @@ export function useWebRTCP2P({ callId, userId, onError, onConnected }: UseWebRTC
   /**
    * Apply an adaptive video quality tier to ONE peer only (per-peer bitrate
    * shedding, Vague 143 — replaces a former call-wide `applyQualityTier`,
-   * which had no remaining caller once bitrate shedding moved per-peer: the
-   * audio-only survival transition it might look like it once fed goes
-   * through `disableVideo`/`enableVideo` instead, see
-   * `use-adaptive-degradation.ts`). `applyVideoEncoding` is a plain
+   * which had no remaining caller once bitrate shedding moved per-peer.
+   * Since L6-3 this function ALSO actuates the call-wide network-survival
+   * freeze, with `tier === 'frozen'` — see `use-per-peer-video-tier.ts`;
+   * `disableVideo`/`enableVideo` are now the manual camera button's path
+   * only. `applyVideoEncoding` is a plain
    * `setParameters()` call on that peer's own RTCRtpSender — no
    * renegotiation, no track mutation — so this cannot affect any other
    * peer's outbound video. A peerId with no live service (already left, or a

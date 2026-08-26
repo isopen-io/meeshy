@@ -54,8 +54,6 @@ struct FeedView: View {
     /// Set to false to keep the existing SwiftUI ScrollView path.
     @State private var useUIKitList = false
     @State private var searchText = ""
-    /// Carte plein écran des posts géolocalisés (bouton `map` du header).
-    @State private var showPostsMap = false
     @State var showComposer = false
     @FocusState var isComposerFocused: Bool
     @State private var composerBounce: Bool = false
@@ -596,11 +594,9 @@ struct FeedView: View {
                     titleColor: theme.textPrimary,
                     backArrowColor: MeeshyColors.indigo500,
                     backgroundColor: theme.backgroundPrimary,
-                    // Entrée de la carte des posts (retour user 2026-08-12) :
-                    // un bouton toujours visible dans le header — basculement
-                    // liste ↔ carte à un tap, cf. FeedPostsMapView pour le
-                    // raisonnement UX complet. Depuis 2026-08-13 elle voisine le
-                    // bouton Réels, à sa droite : deux lectures du même feed.
+                    // Deux lectures du même feed dans le slot trailing : les
+                    // Réels et « À proximité ». La carte des posts d'hier vit
+                    // désormais dans cette dernière (mode Discover, staff).
                     trailing: { feedHeaderActions },
                     titleAccessory: {
                         AnyView(
@@ -628,30 +624,17 @@ struct FeedView: View {
                     .task { await recoverStuckPostDraftIfNeeded() }
             }
         }
-        .fullScreenCover(isPresented: $showPostsMap) {
-            FeedPostsMapView(posts: locatedPosts) { post in
-                showPostsMap = false
-                router.push(.postDetail(post.id, post))
-            }
-        }
     }
 
-    // MARK: - Carte des posts
-
-    /// Posts du feed porteurs d'une position — la même source alimente le
-    /// badge du bouton d'entrée et les pins de la carte.
-    private var locatedPosts: [FeedPost] {
-        viewModel.posts.filter { $0.location != nil }
-    }
-
-    /// Actions du header, dans l'ordre de lecture : les Réels, puis la carte
-    /// des posts immédiatement à sa droite (directive user 2026-08-13). Les
-    /// deux ouvrent une autre LECTURE du même feed — elles vont ensemble ; le
-    /// chemin iPhone (`ThemedFeedOverlay.feedHeaderActions`) porte la même paire.
+    /// Actions du header, dans l'ordre de lecture : les Réels, puis « À
+    /// proximité ». Les deux ouvrent une autre LECTURE du même feed — elles
+    /// vont ensemble ; le chemin iPhone (`ThemedFeedOverlay.feedHeaderActions`)
+    /// porte la même paire. La carte des posts du feed (bouton `map`,
+    /// 2026-08-13) a fusionné dans « À proximité » le 2026-08-26 — mode
+    /// Discover, réservé au staff de la plateforme.
     private var feedHeaderActions: some View {
         HStack(spacing: 8) {
             reelsButton
-            postsMapButton
             nearbyButton
         }
         // La marge droite vient du header (`CollapsibleHeaderMetrics.trailingActionsInset`),
@@ -677,23 +660,6 @@ struct FeedView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
         .accessibilityIdentifier("feed.header.reels")
-    }
-
-    private var postsMapButton: some View {
-        Button {
-            HapticFeedback.light()
-            showPostsMap = true
-        } label: {
-            Image(systemName: "map")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 36, height: 36)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "feed.map.open", defaultValue: "Posts sur la carte", bundle: .main))
-        .accessibilityHint(String(localized: "feed.map.open.hint", defaultValue: "Affiche les posts géolocalisés sur un plan", bundle: .main))
-        .accessibilityIdentifier("feed.header.map")
     }
 
     /// Troisième entrée du header : la découverte par PROXIMITÉ. Distincte de

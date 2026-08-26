@@ -828,6 +828,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // Initialize database with default data
       const initService = new InitService(this.prisma);
 
+      // Invariant de schéma, à CHAQUE boot — avant la porte `shouldInitialize`,
+      // qui ne s'ouvre que sur une base vide. Derrière elle, une base déjà
+      // peuplée ne recevait jamais l'index géospatial (500 sur /posts/nearby).
+      await initService.ensurePostGeoIndex();
+
       // Check if initialization is needed
       const shouldInit = await initService.shouldInitialize();
 

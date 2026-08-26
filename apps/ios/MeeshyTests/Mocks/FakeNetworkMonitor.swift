@@ -12,6 +12,18 @@ import Combine
 final class FakeNetworkMonitor: NetworkMonitorProviding, @unchecked Sendable {
     var isOnline: Bool
 
+    /// Les transitions hors-ligne/en-ligne que le double ÉMET. Le publisher
+    /// par défaut du protocole (`Empty`) n'émettait jamais : aucun test ne
+    /// pouvait exercer la fermeture d'un `sink`, ni le fil sur lequel elle
+    /// est appelée. Le vrai `NetworkMonitor` livre depuis
+    /// `DispatchQueue.global(qos: .utility)` — un test qui veut ce fil-là
+    /// appelle `send` depuis cette file.
+    let offlineTransitions = PassthroughSubject<Bool, Never>()
+
+    var isOfflinePublisher: AnyPublisher<Bool, Never> {
+        offlineTransitions.eraseToAnyPublisher()
+    }
+
     init(isOnline: Bool = true) {
         self.isOnline = isOnline
     }

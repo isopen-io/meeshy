@@ -306,13 +306,33 @@ public struct MeeshyAvatar: View {
         context.isTappable && (onTap != nil || onViewProfile != nil || onViewStory != nil)
     }
 
+    /// La déduplication ci-dessous compare des LIBELLÉS RENDUS. Un même geste
+    /// logique doit donc porter UNE seule clé, dans UN seul bundle : deux clés
+    /// (ou deux bundles) pour « Voir le profil » rendent deux chaînes qui ne
+    /// coïncident plus dans les six autres langues, et le menu affiche l'entrée
+    /// en double. Les hôtes qui passent un item « profil » custom réutilisent
+    /// donc `avatar.menu.view_profile` de `Bundle.module`.
+    ///
+    /// Hôtes concernés (passent à la fois `onViewProfile` ET un `contextMenuItems`
+    /// custom « profil ») — la dédup n'a d'effet que si les DEUX clés rendent la
+    /// même chaîne dans les sept langues : `PostDetailView.swift` (~1259/1261),
+    /// `FeedPostCard.swift` (~731/734 et ~1345/1347), `FeedCommentsSheet.swift`
+    /// (~1389/1391 et ~2261/2262), `StoryViewerView+Sidebar.swift` (~972/975).
     private var effectiveContextMenuItems: [AvatarContextMenuItem] {
         var items: [AvatarContextMenuItem] = []
         if let onViewProfile {
-            items.append(.init(label: "Voir le profil", icon: "person.fill", action: onViewProfile))
+            items.append(.init(
+                label: String(localized: "avatar.menu.view_profile", defaultValue: "Voir le profil", bundle: .module),
+                icon: "person.fill",
+                action: onViewProfile
+            ))
         }
         if let onViewStory, kind == .user, storyState != .none {
-            items.append(.init(label: "Voir la story", icon: "play.circle.fill", action: onViewStory))
+            items.append(.init(
+                label: String(localized: "avatar.menu.view_story", defaultValue: "Voir la story", bundle: .module),
+                icon: "play.circle.fill",
+                action: onViewStory
+            ))
         }
         if let custom = contextMenuItems {
             for item in custom {

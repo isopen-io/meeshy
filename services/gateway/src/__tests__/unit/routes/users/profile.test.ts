@@ -163,6 +163,26 @@ const mockUser = {
   autoTranslateEnabled: true,
 };
 
+// ─── Select-aware update mock ──────────────────────────────────────────────────
+//
+// The default `update: jest.fn().mockResolvedValue(mockUser)` ignores whatever
+// `select` the route passes — it always returns the full fixture, so it can't
+// catch a route whose manual `select` silently drops columns (the real Prisma
+// client DOES restrict its return shape to `select`). This factory mimics that
+// restriction so a truncating `select` shows up as missing keys in the response.
+function makeSelectAwareUserUpdate(fullUser: Record<string, any>) {
+  return jest.fn<any>().mockImplementation((args: any) => {
+    if (!args?.select) {
+      return Promise.resolve(fullUser);
+    }
+    const selected: Record<string, any> = {};
+    for (const key of Object.keys(args.select)) {
+      if (args.select[key]) selected[key] = fullUser[key];
+    }
+    return Promise.resolve(selected);
+  });
+}
+
 // ─── Prisma Mock Factory ───────────────────────────────────────────────────────
 
 function makePrisma(overrides: Record<string, any> = {}) {
@@ -497,6 +517,27 @@ describe('PATCH /users/me/avatar — success', () => {
     expect(res.json().success).toBe(true);
     await app.close();
   });
+
+  it('serialized body carries emailVerifiedAt and autoTranslateEnabled — not truncated by a narrow select', async () => {
+    const fullUser = {
+      ...mockUser,
+      avatar: 'https://example.com/avatar.jpg',
+      emailVerifiedAt: new Date('2024-02-01'),
+      autoTranslateEnabled: true,
+    };
+    const prisma = makePrisma({ user: { update: makeSelectAwareUserUpdate(fullUser) } });
+    const app = await buildApp({ routes: [updateUserAvatar], prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me/avatar',
+      payload: { avatar: 'https://example.com/avatar.jpg' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.user).toHaveProperty('emailVerifiedAt');
+    expect(body.data.user.autoTranslateEnabled).toBe(true);
+    await app.close();
+  });
 });
 
 describe('PATCH /users/me/avatar — realtime propagation to conversation partners', () => {
@@ -574,6 +615,27 @@ describe('PATCH /users/me/banner — success', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    await app.close();
+  });
+
+  it('serialized body carries emailVerifiedAt and autoTranslateEnabled — not truncated by a narrow select', async () => {
+    const fullUser = {
+      ...mockUser,
+      banner: 'https://example.com/banner.jpg',
+      emailVerifiedAt: new Date('2024-02-01'),
+      autoTranslateEnabled: true,
+    };
+    const prisma = makePrisma({ user: { update: makeSelectAwareUserUpdate(fullUser) } });
+    const app = await buildApp({ routes: [updateUserBanner], prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me/banner',
+      payload: { banner: 'https://example.com/banner.jpg' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.user).toHaveProperty('emailVerifiedAt');
+    expect(body.data.user.autoTranslateEnabled).toBe(true);
     await app.close();
   });
 });

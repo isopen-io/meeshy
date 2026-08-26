@@ -747,6 +747,22 @@ nonisolated struct HalfOpenMonitorState {
     }
 }
 
+// MARK: - Video Degradation Preference
+
+/// Which of the two encoder dimensions is sacrificed first when the link
+/// cannot carry the configured target. Agnostic mirror of libwebrtc's
+/// `RTCDegradationPreference` — this file deliberately carries no WebRTC
+/// framework dependency (see the header), so the mapping lives in
+/// `P2PWebRTCClient`.
+enum VideoDegradationPreference: String, Sendable, Equatable {
+    /// Keep motion fluid, shed resolution first — the talking-head default
+    /// used by every rung of the quality ladder.
+    case maintainFramerate
+    /// Keep the picture sharp, shed frames first — used by the network-survival
+    /// FREEZE floor, where a still, legible image beats fluid mush.
+    case maintainResolution
+}
+
 // MARK: - WebRTC Client Protocol
 
 protocol WebRTCClientProviding: AnyObject {
@@ -775,9 +791,17 @@ protocol WebRTCClientProviding: AnyObject {
     func toggleAudio(_ enabled: Bool)
     func toggleVideo(_ enabled: Bool)
     /// Applies adaptive video sender caps (max bitrate / framerate / resolution
-    /// downscale). No-op on audio-only calls (no video transceiver). Driven by
-    /// the quality ladder in `WebRTCService.adjustBitrate`.
-    func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double)
+    /// downscale) and the encoder's degradation trade-off. No-op on audio-only
+    /// calls (no video transceiver). Driven by the quality ladder in
+    /// `WebRTCService.adjustBitrate`; the survival FREEZE floor is the only
+    /// caller passing `.maintainResolution`. Never renegotiates — it only
+    /// rewrites `RTCRtpSender.parameters`.
+    func applyVideoEncoding(
+        maxBitrateBps: Int,
+        maxFramerate: Int,
+        scaleResolutionDownBy: Double,
+        degradationPreference: VideoDegradationPreference
+    )
     /// Applies an adaptive audio sender cap (max bitrate). Called by
     /// `WebRTCService.adjustBitrate` when the quality ladder changes tier so
     /// the encoder sheds bandwidth on a degraded link rather than competing
@@ -1111,7 +1135,17 @@ nonisolated enum QualityThresholds {
     /// Phase 1 fix P10: cellular ACK round-trip can take 3-4s in poor signal.
     /// 5s timeout absorbs worst-case without false positives.
     static let heartbeatAckTimeoutSeconds: TimeInterval = 5.0
-    static let maxReconnectAttempts: Int = 3
+    /// L6-4 (2026-08-25) — 3 → 6. Combined with `reconnectAttemptBudgetSeconds`
+    /// (10 s) this bounds the client-side reconnection window to ~60 s, which
+    /// stays under the gateway's SOCKET disconnect grace of 90 s
+    /// (`CallEventsHandler.ts:217` opens 30 s, extended 4 × 15 s at :224/:225).
+    /// At 3 the client hung up after ~30 s — a 40 s subway/lift outage the
+    /// server was still holding the call open for ended as `.connectionLost`.
+    /// The symmetry argument covers a SOCKET cut only: on a media-only failure
+    /// (dead TURN path, ICE down with signaling alive) the server sets no
+    /// deadline, so the extra 30 s is pure UX cost on the "Reconnexion…" screen
+    /// — an accepted product trade-off, not a neutral correction.
+    static let maxReconnectAttempts: Int = 6
     /// Hard cap on the ICE candidate buffer maintained while the socket is
     /// down.  ICE can generate 50+ candidates per gathering round (host +
     /// STUN server-reflexive + TURN relayed × UDP/TCP); beyond this cap
@@ -1160,6 +1194,11 @@ nonisolated enum QualityThresholds {
     /// Together with `criticalVideoFloorFPS` and `minVideoBitrate` this defines
     /// the 360p15 @ 100 kbps worst-case floor documented in `applyVideoQuality`.
     static let criticalVideoFloorHeight: Int = 360
+    /// Frame rate of the network-survival FREEZE floor (L6-1). Deliberately
+    /// NOT zero and NOT `isActive = false`: the stream never stops, so the
+    /// decoder's reference chain stays valid and no keyframe has to be forced
+    /// on thaw. 2 fps reads as a still image while keeping RTP flowing.
+    static let survivalFrozenFPS: Int = 2
 
     /// Phase 1 fix E6 — RTP gate before transitioning to .connected.
     /// ICE connected does NOT mean media flows: NAT, codec mismatch, audio

@@ -4,13 +4,22 @@ import { useEffect, useRef } from 'react';
 import type { ConnectionQualityStats } from '@meeshy/shared/types/video-call';
 import { deriveVideoTier, type VideoSendTier } from '@/lib/calls/adaptive-degradation';
 
+/** A per-peer applied tier: the quality ladder plus the network-survival floor. */
+export type AppliedPeerVideoTier = VideoSendTier | 'frozen';
+
 export interface UsePerPeerVideoTierParams {
   /** Latest per-peer quality samples (fresh Map reference expected per monitoring tick). */
   readonly perPeerStats: ReadonlyMap<string, ConnectionQualityStats>;
   /** The user's camera intent — the controller is fully idle when this is false. */
   readonly userWantsVideo: boolean;
+  /**
+   * True while the call-wide network-survival freeze (L6-3) is active. While
+   * frozen, every peer is pinned to the 'frozen' encoder floor regardless of
+   * its own quality reading; `deriveVideoTier` is not consulted at all.
+   */
+  readonly frozen: boolean;
   /** Apply a video encoding tier to ONE peer only. */
-  readonly applyTierToPeer: (peerId: string, tier: VideoSendTier) => void;
+  readonly applyTierToPeer: (peerId: string, tier: AppliedPeerVideoTier) => void;
 }
 
 /**
@@ -23,28 +32,35 @@ export interface UsePerPeerVideoTierParams {
  * call no longer drags every other (healthy) peer's video down to the same
  * tier.
  *
- * Deliberately NOT responsible for the audio-only survival fallback — that
- * decision stays call-wide, driven by the worst-of-the-call aggregate
- * (`useAdaptiveDegradation`): if the link genuinely cannot sustain even
- * minimal video for one peer, whether to keep sending degraded video to the
- * OTHERS is a judgment call with real UX/complexity tradeoffs (re-deriving
- * the camera-track ownership/renegotiation semantics that `enableVideoSend`/
- * `disableVideoSend` and the manual-toggle/camera-switch mutual-exclusion
- * guards in `VideoCallInterface.tsx`, Vagues 76/82/92, were built around) —
- * left for a dedicated follow-up rather than folded into this change.
+ * Also the sole actuator of the call-wide network-survival freeze (L6-3).
+ * That freeze used to be actuated call-wide via `disableVideoSend()`/
+ * `enableVideoSend()` — a track-removal + renegotiation cutoff indistinguishable
+ * from the user's manual camera-off, which destroyed the peer's last frame
+ * instead of merely slowing it down. Folding it in here (rather than as a
+ * parallel call-wide `applyVideoEncoding('frozen')`) is deliberate: applying
+ * a tier call-wide would immediately be fought/overridden by this hook's own
+ * next per-peer tick the moment any one peer's reading changes (see the
+ * warning in `VideoCallInterface.tsx` about call-wide tiers fighting
+ * per-peer ones). The `frozen` flag short-circuits `deriveVideoTier` for
+ * every peer while true. No explicit freeze-transition bookkeeping is
+ * needed: `'frozen'` and the quality ladder (`'high' | 'medium' | 'low'`)
+ * are disjoint values, so the per-peer dedup below already force-applies on
+ * BOTH the freeze-entry and freeze-exit tick — a peer previously at `'low'`
+ * reads `'frozen'` as a change, and vice versa on thaw.
  *
  * No time-based hysteresis here (unlike the suspend/resume state machine):
  * a tier change is a cheap, renegotiation-free parameter update, so each
  * peer reacts to its own latest sample immediately. Only the LAST-APPLIED
  * tier per peer is tracked, purely to dedupe redundant `setParameters`
- * calls when a peer's level is unchanged tick-to-tick.
+ * calls when a peer's level (or the freeze) is unchanged tick-to-tick.
  */
 export function usePerPeerVideoTier({
   perPeerStats,
   userWantsVideo,
+  frozen,
   applyTierToPeer,
 }: UsePerPeerVideoTierParams): void {
-  const lastTierRef = useRef<Map<string, VideoSendTier>>(new Map());
+  const lastTierRef = useRef<Map<string, AppliedPeerVideoTier>>(new Map());
 
   // Keep the callback in a ref so a new sample is always handled with the
   // latest closure without making it a dependency of the sampling effect.
@@ -61,7 +77,7 @@ export function usePerPeerVideoTier({
     }
 
     perPeerStats.forEach((stats, peerId) => {
-      const tier = deriveVideoTier(stats.level);
+      const tier = frozen ? 'frozen' : deriveVideoTier(stats.level);
       if (lastTierRef.current.get(peerId) === tier) return;
       lastTierRef.current.set(peerId, tier);
       applyTierToPeerRef.current(peerId, tier);
@@ -74,5 +90,5 @@ export function usePerPeerVideoTier({
     Array.from(lastTierRef.current.keys()).forEach((peerId) => {
       if (!activeIds.has(peerId)) lastTierRef.current.delete(peerId);
     });
-  }, [perPeerStats, userWantsVideo]);
+  }, [perPeerStats, userWantsVideo, frozen]);
 }

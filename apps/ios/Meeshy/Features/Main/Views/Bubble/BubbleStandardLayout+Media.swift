@@ -368,6 +368,18 @@ fileprivate struct BubbleGridCell: View {
     @ViewBuilder private var reactionsBadge: some View {
         if let summary = attachment.reactionSummary, !summary.isEmpty {
             let total = summary.values.reduce(0, +)
+            // « J'ai réagi à CE média » — la donnée existait sur le modèle
+            // (`MessageAttachment.currentUserReactions`, décodée et mappée) mais
+            // ce site ne lisait que `reactionSummary` : sur une photo où j'avais
+            // posé un ❤️ parmi trois 👍 d'autres personnes, la pastille affichait
+            // « ❤️👍 4 » sans rien qui distingue le mien.
+            //
+            // Le renfort emprunte le langage DÉJÀ en place pour les réactions de
+            // bulle (`BubbleReactionsOverlay`) : contour épais à l'accent, et non
+            // le contour-sur-glyphe des actions à symbole — un emoji n'a pas de
+            // tracé qu'on puisse retracer.
+            let iReacted = !(attachment.currentUserReactions ?? []).isEmpty
+            let accent = Color(hex: contactColor)
             HStack(spacing: 1) {
                 ForEach(summary.keys.sorted().prefix(3), id: \.self) { emoji in
                     Text(emoji).font(MeeshyFont.relative(11))
@@ -377,7 +389,13 @@ fileprivate struct BubbleGridCell: View {
                 }
             }
             .padding(.horizontal, 5).padding(.vertical, 2)
-            .background(Capsule().fill(Color.black.opacity(0.55)))
+            .background(
+                Capsule().fill(iReacted ? accent.opacity(0.55) : Color.black.opacity(0.55))
+            )
+            .overlay(
+                Capsule().strokeBorder(iReacted ? accent : .clear, lineWidth: iReacted ? 2 : 0)
+            )
+            .shadow(color: iReacted ? accent.opacity(0.4) : .clear, radius: iReacted ? 4 : 0)
             .padding(5)
         }
     }

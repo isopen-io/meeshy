@@ -1,0 +1,7 @@
+Nouveau : « À proximité »
+• Découvre les publications autour de toi sur une carte — densité, points ou liste, dans le rayon que tu choisis
+• Rends tes propres publications trouvables à proximité, au grain que TU décides : exact, quartier, ville ou région — jamais plus précis que ton choix
+• « Voir près d'ici » depuis n'importe quel lieu affiché sur une publication
+
+Et aussi
+• Stabilité renforcée : un plantage à l'ouverture de « À proximité » est corrigé

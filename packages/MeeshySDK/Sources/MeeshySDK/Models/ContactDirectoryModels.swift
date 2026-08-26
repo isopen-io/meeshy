@@ -103,19 +103,40 @@ public enum DirectorySyncMode: String, Encodable, Sendable {
     case replace
 }
 
+/// Une requête de synchronisation. Un carnet de taille arbitraire part en
+/// LOTS : les deux champs optionnels ci-dessous portent le contrat de lot.
+///
+/// Aucune `CodingKeys` ici — l'encodage synthétisé écrit les clés en camelCase,
+/// exactement ce qu'attend `POST /users/me/contacts/sync`, et il OMET les
+/// optionnels nuls (`encodeIfPresent`). Une gateway antérieure au contrat de
+/// lots ne voit donc littéralement aucun champ nouveau tant que le client
+/// n'envoie qu'un seul lot.
 public struct DirectorySyncRequest: Encodable, Sendable {
     public let contacts: [ContactMatchEntry]
     public let defaultCountry: String?
     public let mode: DirectorySyncMode
+    /// Jeton de la synchronisation en cours : l'horloge SERVEUR renvoyée par le
+    /// PREMIER lot, répétée à l'identique sur tous les suivants. Sa présence
+    /// bascule le serveur en upserts `merge` — jamais de purge intermédiaire.
+    /// `nil` sur le premier lot, qui n'a encore aucun jeton à répéter.
+    public let syncStartedAt: String?
+    /// `true` sur le DERNIER lot seulement : le serveur purge alors ce que
+    /// cette synchronisation n'a pas touché (`lastSyncedAt < syncStartedAt`),
+    /// au lieu de comparer au seul lot reçu. `nil` partout ailleurs.
+    public let isFinalBatch: Bool?
 
     public init(
         contacts: [ContactMatchEntry],
         defaultCountry: String? = nil,
-        mode: DirectorySyncMode = .replace
+        mode: DirectorySyncMode = .replace,
+        syncStartedAt: String? = nil,
+        isFinalBatch: Bool? = nil
     ) {
         self.contacts = contacts
         self.defaultCountry = defaultCountry
         self.mode = mode
+        self.syncStartedAt = syncStartedAt
+        self.isFinalBatch = isFinalBatch
     }
 }
 
@@ -125,19 +146,27 @@ public struct DirectorySyncResult: Decodable, Sendable, Equatable {
     public let syncedCount: Int
     public let matchedCount: Int
     public let removedCount: Int
+    /// Horloge SERVEUR prise à la réception de la requête, AVANT tout upsert :
+    /// le jeton que les lots suivants doivent répéter. `nil` quand la gateway
+    /// ne connaît pas le contrat de lots — le client retombe alors sur l'envoi
+    /// unique historique plutôt que d'entamer une découpe qu'aucune purge par
+    /// filigrane ne viendrait clore.
+    public let syncStartedAt: String?
 
     public init(
         totalContacts: Int,
         processedContacts: Int,
         syncedCount: Int,
         matchedCount: Int,
-        removedCount: Int
+        removedCount: Int,
+        syncStartedAt: String? = nil
     ) {
         self.totalContacts = totalContacts
         self.processedContacts = processedContacts
         self.syncedCount = syncedCount
         self.matchedCount = matchedCount
         self.removedCount = removedCount
+        self.syncStartedAt = syncStartedAt
     }
 }
 

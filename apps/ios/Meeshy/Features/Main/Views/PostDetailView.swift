@@ -332,6 +332,15 @@ struct PostDetailView: View {
         displayPost?.authorColor ?? "6366F1"
     }
 
+    /// Second arrêt du dégradé servi au composer de commentaire. Dérivé de
+    /// l'accent du post par la formule de palette du SDK
+    /// (`secondary = shiftHue(primary, +30°)`) : sans lui, le composer
+    /// retombe sur son défaut de marque et le bouton d'envoi rend un dégradé
+    /// hybride accent → indigo.
+    private var composerSecondaryColor: String {
+        DynamicColorGenerator.hueShiftedHex(accentColor, degrees: 30)
+    }
+
     /// True when the signed-in user authored this post — gates the private reach
     /// stats (vues + impressions) shown next to the @handle, mirroring the feed
     /// and reel cards where analytics are author-only.
@@ -1762,10 +1771,19 @@ struct PostDetailView: View {
             } label: {
                 HStack(spacing: 5) {
                     let heartColor: Color = detailIsLiked ? MeeshyColors.error : (detailLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
-                    Image(systemName: detailIsLiked || detailLikeCount > 0 ? "heart.fill" : "heart")
-                        .font(.headline)
-                        .foregroundColor(heartColor)
-                        .scaleEffect(likeScale)
+EngagementGlyph(
+                        outline: "heart",
+                        filled: "heart.fill",
+                        participated: detailIsLiked,
+                        accentHex: accentColor,
+                        activeTint: MeeshyColors.error,
+                        // Cœur PLEIN dès qu'il existe des likes, contour accent
+                        // seulement quand ils sont les miens.
+                        inactiveTint: heartColor,
+                        filledWhenInactive: detailLikeCount > 0,
+                        size: 18
+                    )
+                    .scaleEffect(likeScale)
                         .opacity(postHeartInFlightIds.contains(postId) ? 0.5 : 1.0)
                     Text("\(detailLikeCount)")
                         .font(.caption.weight(.medium))
@@ -1789,10 +1807,26 @@ struct PostDetailView: View {
                 showRepostOptions = true
                 HapticFeedback.light()
             } label: {
-                Image(systemName: isPostReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
-                    .font(.body)
-                    .foregroundColor(isPostReposted ? MeeshyColors.success : theme.textSecondary)
-                    .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
+                EngagementGlyph(
+                    // Le repost est le seul des trois à changer de FAMILLE selon
+                    // son état : flèches nues au repos, disque plein une fois
+                    // reposté. Son contour est donc `.circle` — et c'est juste :
+                    // il retrace le bord du glyphe AFFICHÉ. La règle proscrit
+                    // l'anneau ajouté autour d'un glyphe qui n'en a pas, pas la
+                    // famille `.circle` quand le glyphe EST un disque.
+                    outline: "arrow.2.squarepath.circle",
+                    filled: "arrow.2.squarepath.circle.fill",
+                    // Au REPOS, les flèches nues — l'apparence d'origine. Sans
+                    // ce paramètre, le repos aurait hérité du contour `.circle`
+                    // et gagné un cercle qu'il n'avait pas.
+                    inactiveSymbol: "arrow.2.squarepath",
+                    participated: isPostReposted,
+                    accentHex: accentColor,
+                    activeTint: MeeshyColors.success,
+                    inactiveTint: theme.textSecondary,
+                    size: 18
+                )
+                .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
                     .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostReposted)
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
             }
@@ -1817,10 +1851,16 @@ struct PostDetailView: View {
                 toggleDetailBookmark()
                 HapticFeedback.light()
             } label: {
-                Image(systemName: isPostBookmarked ? "bookmark.fill" : "bookmark")
-                    .font(.body)
-                    .foregroundColor(isPostBookmarked ? MeeshyColors.warning : theme.textSecondary)
-                    .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
+                EngagementGlyph(
+                    outline: "bookmark",
+                    filled: "bookmark.fill",
+                    participated: isPostBookmarked,
+                    accentHex: accentColor,
+                    activeTint: MeeshyColors.warning,
+                    inactiveTint: theme.textSecondary,
+                    size: 18
+                )
+                .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
                     .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostBookmarked)
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
@@ -2376,6 +2416,7 @@ struct PostDetailView: View {
             mode: .comment,
             onIngest: { ingests in handleComposerIngest(ingests) },
             accentColor: accentColor,
+            secondaryColor: composerSecondaryColor,
             forceShowAttachment: true,
             forceShowVoice: true,
             selectedLanguage: composerLanguage,

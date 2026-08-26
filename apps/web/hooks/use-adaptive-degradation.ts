@@ -16,9 +16,9 @@ import {
 export interface AdaptiveDegradationActions {
   /** Apply a video encoding tier (high/medium/low). */
   readonly applyTier: (tier: VideoSendTier) => void;
-  /** Drop outbound video to audio-only (stop sending + notify peer). */
+  /** Enter the network-survival freeze: pin outbound video to the near-still encoder floor. NEVER stops the track and NEVER notifies the peer (L6-3) — the peer must keep its last frame, not an avatar placeholder. */
   readonly suspend: () => Promise<void>;
-  /** Re-acquire the camera and resume sending video. */
+  /** Leave the freeze: give every peer its own quality tier back. */
   readonly resume: () => Promise<void>;
 }
 
@@ -39,7 +39,7 @@ export interface UseAdaptiveDegradationParams {
  * interval, so we key on that object reference (and guard against reprocessing
  * the same reference) — keying on `qualityStats.level` would only fire on level
  * CHANGES, so a sustained 'poor' link would never accumulate enough samples to
- * trip the audio-only fallback.
+ * trip the network-survival freeze.
  *
  * Returns whether outbound video is currently auto-suspended (for a discreet UI
  * indicator). This is distinct from the user's camera intent.
@@ -99,7 +99,7 @@ export function useAdaptiveDegradation({
         actionsRef.current
           .resume()
           .then(() => setVideoSuspended(false))
-          // Re-acquire failed: stay in survival so a later good streak retries.
+          // Thaw failed: stay in survival so a later good streak retries.
           .catch(() => {
             stateRef.current = { ...stateRef.current, sending: false, goodSince: null };
           });

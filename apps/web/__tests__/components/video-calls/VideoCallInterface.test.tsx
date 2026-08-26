@@ -106,8 +106,12 @@ const useAudioEffectsMock = jest.fn(() => ({
 jest.mock('@/hooks/use-audio-effects', () => ({
   useAudioEffects: (...args: unknown[]) => useAudioEffectsMock(...(args as [])),
 }));
+const useCallQualityMock = jest.fn(() => ({
+  qualityStats: null as unknown,
+  perPeerStats: new Map() as ReadonlyMap<string, unknown>,
+}));
 jest.mock('@/hooks/use-call-quality', () => ({
-  useCallQuality: () => ({ qualityStats: null, perPeerStats: new Map() }),
+  useCallQuality: (...args: unknown[]) => useCallQualityMock(...(args as [])),
 }));
 jest.mock('@/hooks/use-remote-call-alerts', () => ({
   useRemoteCallAlerts: (...args: unknown[]) => useRemoteCallAlertsMock(...(args as [])),
@@ -183,6 +187,7 @@ describe('VideoCallInterface (container)', () => {
       ],
     };
     useAdaptiveDegradationMock.mockReturnValue({ videoSuspended: false });
+    useCallQualityMock.mockReturnValue({ qualityStats: null, perPeerStats: new Map() });
     useRemoteCallAlertsMock.mockReturnValue({
       remoteQualityDegraded: false,
       remoteQualityDegradedParticipantId: null,
@@ -1191,15 +1196,107 @@ describe('VideoCallInterface (container)', () => {
     });
   });
 
+  // L6-3: the network-survival freeze must be indistinguishable, from the
+  // PEER's point of view, from nothing happening at all — the peer keeps
+  // rendering our last (near-still) frame instead of destroying it for an
+  // avatar placeholder, which a `call:toggle-video(video,false)` would
+  // trigger exactly like a real manual camera-off. Guards a REGRESSION back
+  // to that emission just as strictly as it guards the disableVideo()/
+  // enableVideo() calls it replaced.
+  describe('call-wide network-survival freeze (L6-3) — no peer notification, no track mutation', () => {
+    type CapturedDegradationActions = {
+      applyTier: (tier: string) => void;
+      suspend: () => Promise<void>;
+      resume: () => Promise<void>;
+    };
+
+    const capturedActions = (): CapturedDegradationActions => {
+      const calls = useAdaptiveDegradationMock.mock.calls;
+      const lastCall = calls[calls.length - 1] as unknown as [{ actions: CapturedDegradationActions }];
+      return lastCall[0].actions;
+    };
+
+    it('suspend() never emits call:toggle-video and never calls disableVideo/enableVideo', async () => {
+      const fakeSocket = { on: jest.fn(), off: jest.fn(), emit: jest.fn() };
+      (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+
+      render(<VideoCallInterface callId="call1" />);
+      await act(async () => {
+        await capturedActions().suspend();
+      });
+
+      expect(fakeSocket.emit).not.toHaveBeenCalledWith('call:toggle-video', expect.anything());
+      expect(webrtc.disableVideo).not.toHaveBeenCalled();
+      expect(webrtc.enableVideo).not.toHaveBeenCalled();
+      expect(toast.warning).toHaveBeenCalledWith('toasts.videoSuspendedPoorConnection');
+    });
+
+    it('resume() never emits call:toggle-video and never calls disableVideo/enableVideo', async () => {
+      const fakeSocket = { on: jest.fn(), off: jest.fn(), emit: jest.fn() };
+      (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+
+      render(<VideoCallInterface callId="call1" />);
+      await act(async () => {
+        await capturedActions().resume();
+      });
+
+      expect(fakeSocket.emit).not.toHaveBeenCalledWith('call:toggle-video', expect.anything());
+      expect(webrtc.disableVideo).not.toHaveBeenCalled();
+      expect(webrtc.enableVideo).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledWith('toasts.videoResumed');
+    });
+
+    // Without this reset, the freeze — a piece of VideoCallInterface state
+    // now fully decoupled from any track lifecycle — would survive a manual
+    // camera off/on cycle: useAdaptiveDegradation's OWN internal reset
+    // (use-adaptive-degradation.ts, on the SAME `!userWantsVideo` signal)
+    // puts its state machine back in `sending: true`, from which `resume()`
+    // is unreachable until a FRESH poor→good cycle — so a since-recovered
+    // peer would stay silently pinned to the 2 fps floor for the rest of
+    // the call, with no automatic path left to ever clear it.
+    it('a manual camera off/on cycle clears a stale freeze, instead of leaving a recovered peer pinned to 2fps forever', async () => {
+      useCallQualityMock.mockReturnValue({
+        qualityStats: null,
+        perPeerStats: new Map([['peer-1', { level: 'excellent', timestamp: new Date() }]]),
+      });
+
+      const { rerender } = render(<VideoCallInterface callId="call1" />);
+      await act(async () => {
+        await capturedActions().suspend();
+      });
+      expect(webrtc.applyQualityTierToPeer).toHaveBeenLastCalledWith('peer-1', 'frozen');
+      webrtc.applyQualityTierToPeer.mockClear();
+
+      // Camera off, then back on (mirrors the store update handleToggleVideo
+      // drives via the mocked setControls — applied directly here for a
+      // clean, timing-free assertion on the reset effect it should trigger).
+      storeState.controls = { audioEnabled: true, videoEnabled: false };
+      await act(async () => {
+        rerender(<VideoCallInterface callId="call1" />);
+      });
+      storeState.controls = { audioEnabled: true, videoEnabled: true };
+      await act(async () => {
+        rerender(<VideoCallInterface callId="call1" />);
+      });
+
+      // The peer's link is still 'excellent' — the freeze must not still be
+      // in effect, so this re-derives to 'high', not the stale 'frozen'.
+      expect(webrtc.applyQualityTierToPeer).toHaveBeenLastCalledWith('peer-1', 'high');
+    });
+  });
+
   // Vague 82: Vague 76 guarded the manual double-click (`videoToggleInFlightRef`)
   // but explicitly left open ("reste ouvert") that the manual toggle and the
-  // adaptive-degradation controller's own suspend()/resume() (which call
-  // enableVideo/disableVideo directly, see use-adaptive-degradation.ts) were
-  // never synchronized against EACH OTHER — only against themselves. Either
-  // ordering (manual-then-auto or auto-then-manual) acquires two independent
-  // camera tracks on the same WebRTCService instances, exactly like the
-  // double-click bug: the losing track is never referenced by anything that
-  // could stop it.
+  // adaptive-degradation controller's own suspend()/resume() were never
+  // synchronized against EACH OTHER — only against themselves. Either
+  // ordering used to acquire two independent camera tracks on the same
+  // WebRTCService instances, exactly like the double-click bug. Since L6-3,
+  // suspend()/resume() no longer touch a track at all — they only flip a
+  // local `frozen` flag and toast — so this race can no longer orphan a
+  // camera capture; the shared guard (`runGuardedVideoToggle`) is kept
+  // anyway (harmless, avoids reopening the synchronization question for a
+  // narrow change) and is still exercised here, now observed through the
+  // toast side effect rather than a call to disableVideo/enableVideo.
   describe('mutual exclusion — manual toggle vs. adaptive-degradation controller (Vague 82)', () => {
     type CapturedDegradationActions = {
       applyTier: (tier: string) => void;
@@ -1218,7 +1315,7 @@ describe('VideoCallInterface (container)', () => {
       webrtc.disableVideo.mockResolvedValue(undefined);
     });
 
-    it('a manual toggle in flight blocks a concurrent auto-suspend from calling disableVideo twice', async () => {
+    it('a manual toggle in flight blocks a concurrent auto-suspend from freezing video', async () => {
       storeState.controls = { audioEnabled: true, videoEnabled: true };
       let resolveDisable: () => void = () => {};
       webrtc.disableVideo.mockImplementation(
@@ -1232,7 +1329,8 @@ describe('VideoCallInterface (container)', () => {
       expect(webrtc.disableVideo).toHaveBeenCalledTimes(1);
 
       await expect(capturedActions().suspend()).rejects.toThrow();
-      expect(webrtc.disableVideo).toHaveBeenCalledTimes(1);
+      // Rejected by the guard before its body ran — the freeze toast never fires.
+      expect(toast.warning).not.toHaveBeenCalled();
 
       await act(async () => {
         resolveDisable();
@@ -1240,26 +1338,25 @@ describe('VideoCallInterface (container)', () => {
       });
     });
 
-    it('an in-flight auto-suspend blocks a concurrent manual toggle from calling disableVideo twice', async () => {
+    it('an in-flight auto-suspend blocks a concurrent manual toggle from calling disableVideo', async () => {
       storeState.controls = { audioEnabled: true, videoEnabled: true };
-      let resolveDisable: () => void = () => {};
-      webrtc.disableVideo.mockImplementation(
-        () => new Promise<void>((resolve) => { resolveDisable = resolve; }),
-      );
-
       render(<VideoCallInterface callId="call1" />);
-      const suspendPromise = capturedActions().suspend(); // auto suspend now in flight
+
+      // suspend()'s guarded body (setVideoFrozen + toast) has no await of
+      // its own, so it runs to completion synchronously; the guard's ref is
+      // only released on the NEXT microtask (the `finally` after
+      // `await op()`) — so it is still held for the manual click fired here,
+      // in the same synchronous tick.
+      const suspendPromise = capturedActions().suspend();
 
       const button = screen.getByTestId('toggle-video');
       fireEvent.click(button);
 
-      expect(webrtc.disableVideo).toHaveBeenCalledTimes(1);
+      expect(webrtc.disableVideo).not.toHaveBeenCalled();
 
       await act(async () => {
-        resolveDisable();
-        await Promise.resolve();
+        await suspendPromise;
       });
-      await suspendPromise;
     });
   });
 
@@ -1353,7 +1450,7 @@ describe('VideoCallInterface (container)', () => {
       });
     });
 
-    it('a camera switch in flight blocks a concurrent auto-suspend from calling disableVideo', async () => {
+    it('a camera switch in flight blocks a concurrent auto-suspend from freezing video', async () => {
       storeState.controls = { audioEnabled: true, videoEnabled: true };
       let resolveSwitch: () => void = () => {};
       webrtc.switchCamera.mockImplementation(
@@ -1365,7 +1462,8 @@ describe('VideoCallInterface (container)', () => {
       await clickSwitchCamera(); // camera switch now in flight
 
       await expect(capturedActions().suspend()).rejects.toThrow();
-      expect(webrtc.disableVideo).not.toHaveBeenCalled();
+      // Rejected by the guard before its body ran — the freeze toast never fires.
+      expect(toast.warning).not.toHaveBeenCalled();
 
       await act(async () => {
         resolveSwitch();
@@ -1375,24 +1473,26 @@ describe('VideoCallInterface (container)', () => {
 
     it('an in-flight auto-suspend blocks a concurrent camera switch from calling switchCamera', async () => {
       storeState.controls = { audioEnabled: true, videoEnabled: true };
-      let resolveDisable: () => void = () => {};
-      webrtc.disableVideo.mockImplementation(
-        () => new Promise<void>((resolve) => { resolveDisable = resolve; }),
-      );
       setupCameraSwitchFixture();
 
       render(<VideoCallInterface callId="call1" />);
-      const suspendPromise = capturedActions().suspend(); // auto suspend now in flight
+      // Resolve the switch-camera button first (it only appears once the
+      // fixture's mocked enumerateDevices() settles) so the exclusivity
+      // check below is not itself racing that unrelated async gap.
+      const button = await screen.findByRole('button', { name: 'controls.switchCamera' });
 
-      await clickSwitchCamera();
+      // suspend()'s guarded body has no await of its own, so it runs to
+      // completion synchronously; the guard's ref is only released on the
+      // NEXT microtask (the `finally` after `await op()`) — so it is still
+      // held for the camera-switch click fired here, in the same tick.
+      const suspendPromise = capturedActions().suspend();
+      fireEvent.click(button);
 
       expect(webrtc.switchCamera).not.toHaveBeenCalled();
 
       await act(async () => {
-        resolveDisable();
-        await Promise.resolve();
+        await suspendPromise;
       });
-      await suspendPromise;
     });
   });
 

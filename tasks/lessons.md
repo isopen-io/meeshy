@@ -16152,3 +16152,231 @@ Mécanique qui a marché : 2 sceptiques par constat (correction / reproduction p
 6 réfutés étaient tous des sites que W3a/W3c avaient corrigés PENDANT la revue ; aucun faux
 positif n'a survécu, aucun vrai n'a été perdu (les doublons entre lentilles confirment plutôt
 qu'ils ne coûtent).
+### Corollaire 245i — une garde d'analyse de source est adaptée à une FORME DE FICHIER, pas à un langage
+
+La suite naturelle de 244i était « étendre la garde d'atteignabilité au reste de
+l'app ». Mesuré avant d'asserter — comme la leçon 287 l'exige — le balayage rend
+**355 fonctions sur 190 fichiers**, et ce nombre est **dominé par des faux
+positifs structurels** :
+
+1. **Exigences de protocole.** Un nom déclaré dans un `protocol` PUIS implémenté
+   apparaît deux fois ; l'arithmétique `usages − déclarations` retombe donc à
+   zéro **même quand le protocole est appelé**. `StoryComposerProviding` en
+   fabrique huit à lui seul.
+2. **Conformances de délégué** (`DropDelegate`, `UIScrollViewDelegate`…) :
+   appelées par le framework, jamais nommées par le dépôt.
+3. **Sièges de test** (`…ForTesting`, `…ForTest`), légitimes par construction.
+
+> **La garde de 243i/244i n'est pas générale : elle est adaptée aux fichiers
+> d'EXTENSION de vue SwiftUI**, où les conformances de protocole sont rares.
+> Elle a trouvé treize vraies fonctions mortes là ; ailleurs, son arithmétique
+> ne discrimine plus.
+
+Deux conséquences :
+
+- **Une allowlist de NOMS ne rattrape pas un défaut de FORME.** `frameworkInvoked`
+  énumère une douzaine de contrats à la main ; il en faudrait des centaines. Ce
+  qu'il faut est une exclusion STRUCTURELLE — ne pas compter une déclaration
+  écrite dans un corps de `protocol`, reconnaître une conformance `: XxxDelegate`.
+- **Le bon geste, quand une mesure rend un nombre trop gros, est de demander ce
+  que l'outil confond**, pas de trier 355 entrées à la main. Ici la réponse
+  tenait en deux `grep` : un `protocol` et un `DropDelegate`.
+
+## Leçon 288 — un double qui n'émet JAMAIS laisse le FIL d'un sink hors de toute mesure ; et un invariant logé derrière la porte du premier boot ne s'applique jamais à une base peuplée (2026-08-26, crash « Find nearby »)
+
+**Le crash.** Sur l'iPhone comme au simulateur, l'écran « À proximité » mourait
+quelques secondes après le tap : `SIGTRAP` dans `_dispatch_assert_queue_fail`,
+file `com.apple.root.utility-qos`, trame `closure #1 in
+NearbyDiscoveryViewModel.observeNetwork`. `NetworkMonitor.isOfflinePublisher`
+débounce sur `DispatchQueue.global(qos: .utility)` et LIVRE sur cette file ; la
+fermeture du `sink` appartient à une classe `@MainActor`, et le runtime vérifie
+l'exécuteur à son entrée. `SyncPillViewModel`, l'autre abonné, posait
+`.receive(on: DispatchQueue.main)` ; celui-ci non.
+
+**Pourquoi 37 tests étaient verts.** `FakeNetworkMonitor` héritait du publisher
+par défaut du protocole — `Empty(completeImmediately: false)`. Il n'émettait
+JAMAIS : aucun test ne pouvait exercer la fermeture, ni le fil sur lequel elle
+est appelée. La suite était verte **par omission**, exactement la forme de la
+leçon « ce qui ne s'exécute pas ne se signale pas », portée à un PUBLISHER.
+
+> **Un double de publisher doit savoir ÉMETTRE, et émettre depuis l'ordonnanceur
+> du vrai.** Sans quoi tout `sink` reste un code jamais exécuté par la suite.
+> Et la question à poser à chaque `.sink` d'un type isolé à un acteur : « sur
+> quelle file ce publisher LIVRE-t-il ? » — la réponse est dans sa déclaration
+> (`debounce(scheduler:)`, `receive(on:)`), jamais dans son nom.
+
+**Le diagnostic, sans rapport de crash.** L'appareil n'avait aucun `.ips` du
+crash (sous débogueur, rien n'est écrit). Chemin qui a marché : reproduire au
+simulateur ; le process disparaît sans `.ips` non plus → demander à
+RunningBoard la raison (`log show --predicate 'process == "SpringBoard"'` →
+`Process exited: … code:SIGTRAP(5)`) ; relancer l'app, `lldb --batch -p PID -o
+continue -k "bt 70"` — les `-k` s'exécutent au trap et rendent la pile exacte.
+
+**Le second défaut, derrière le premier.** Une fois l'app vivante, les deux
+routes rendaient 500 : `$geoNear requires a 2d or 2dsphere index`.
+`InitService.ensurePostGeoIndex()` — dont le commentaire disait « inconditionnel,
+à chaque boot » — n'était appelé que dans `initializeDatabase()`, que `server.ts`
+ne lance que si `shouldInitialize()` est vrai, c'est-à-dire sur une base VIDE.
+Une base peuplée ne recevait jamais l'index. **C'est l'APPELANT qui décide de
+la fréquence d'un invariant, pas le commentaire de la méthode** (forme de la
+mémoire « un commentaire qui affirme plus que son correctif »). Un invariant de
+schéma se pose AVANT la porte du premier boot, jamais derrière.
+
+## Leçon 289 — un secret PRÉSENT n'est pas une chaîne d'authentification qui MARCHE ; un workflow jamais vert se lit comme jamais exécuté (2026-08-26, release 1.0.6)
+
+`ios-fastlane-release.yml` portait tout ce qu'il faut sur le papier : `MATCH_GIT_URL`,
+`MATCH_DEPLOY_KEY`, un agent SSH armé, `MATCH_PASSWORD`. Il n'avait pourtant **jamais
+été vert** (2 runs, 2 échecs) — et chaque run mourait un cran plus loin que le
+précédent, ce qui donne l'illusion d'un progrès :
+
+1. 22/07 : `bundle install` → le `Gemfile.lock` ne connaissait que `arm64-darwin-25`
+   et le runner `macos-15` est `darwin-23`.
+2. 26/08 : `match` → clone en **HTTPS** sans identifiant. `MATCH_GIT_URL` ET le défaut
+   du Matchfile sont des URL `https://`, donc la clé de déploiement chargée trois
+   lignes plus haut n'était **jamais sollicitée**. Et derrière ce défaut, un second :
+   `isopen-io/meeshy-certificates` n'a AUCUNE clé de déploiement enregistrée, et
+   l'organisation a « Deploy keys are disabled » — la clé du secret n'aurait pu servir
+   nulle part, sous aucun transport.
+
+> **Un secret dit qu'une valeur existe, pas qu'elle est BRANCHÉE.** La question à
+> poser à toute chaîne d'auth CI : « quel transport le client utilise-t-il, et le
+> credential chargé est-il celui de CE transport ? » (URL `https://` ⇒ token ; URL
+> `git@` ⇒ clé). Puis : « la contrepartie ACCEPTE-t-elle ce credential ? » (clé
+> enregistrée, politique d'org). Les deux se vérifient AVANT de relancer un run de
+> 20 minutes : `gh api repos/<org>/<repo>/keys`, et la forme de l'URL dans le log
+> (`git_url | ***` masqué — regarder l'ERREUR, pas le tableau : `could not read
+> Username for 'https://github.com'` nomme le transport).
+
+**Et un workflow jamais vert n'est pas « un pipeline qui a un bug » — c'est un
+pipeline qui n'a jamais existé.** Le lire comme tel change le plan : chercher le
+chemin qui a RÉELLEMENT livré (ici : runs Xcode Cloud #1790–#1799 tous VALID, et la
+lane `release` en LOCAL avec `apps/ios/.env`), plutôt que corriger un cran de plus
+d'un chemin dont personne ne connaît la fin. Le correctif de transport a quand même
+été poussé (insteadOf limité au dépôt de certificats) : il est juste, mais il ne
+suffira qu'avec un PAT `MATCH_GIT_BASIC_AUTHORIZATION` ou le retour des deploy keys —
+deux gestes du user.
+---
+
+## Leçon 288 — j'ai publié un mécanisme faux en croyant avoir mesuré (2026-08-25, itération 246i, correction de 245i)
+
+245i a conclu que les 355 signalements de la garde d'atteignabilité étaient
+« dominés par des faux positifs structurels », et a nommé les **exigences de
+protocole** comme première cause :
+
+> chaque nom apparaît deux fois (l'exigence + l'implémentation), donc
+> l'arithmétique `usages − déclarations` retombe à zéro **même quand le
+> protocole est appelé**
+
+**C'est faux, et la faute se voit en posant l'arithmétique.** Un appel ajoute
+une occurrence SANS ajouter de déclaration : `protocol P { func foo() }` +
+`class C: P { func foo() {} }` + `p.foo()` donne 3 occurrences / 2 déclarations
+⇒ net 1 ⇒ non signalé. Une exigence de protocole ne peut donc pas, à elle
+seule, produire un faux positif.
+
+Vérifié sur le cas que j'avais cité : `bringForward` a **3 occurrences / 3
+déclarations** en production (l'exigence + DEUX implémentations) et **zéro appel
+de production** — ses seuls appelants vivent dans `MeeshySDK/Tests/`, que le
+corpus de la garde exclut.
+
+### Ce que la mesure JUSTE rend
+
+| bucket | nombre |
+|---|---|
+| appelées **uniquement par les tests** | **241** (68 %) |
+| aucun appelant nulle part | **115** (32 %) |
+
+**La conclusion de 245i s'inverse.** Le signal n'est pas noyé : les deux tiers
+des signalements sont le résultat le plus intéressant du lot — la
+généralisation, à l'échelle de l'app, du constat `likePost`/`bookmarkPost` de
+244i. Et le correctif que 245i spécifiait (« ne pas compter les déclarations
+d'un corps de `protocol` ») **ne change rien** : retirer l'exigence des deux
+côtés donne 2/2, toujours zéro.
+
+> **« Mesurer avant d'asserter » n'est pas satisfait par un `grep` de
+> plausibilité.** J'ai vu un `protocol` et un `DropDelegate` dans la liste, j'ai
+> reconnu deux motifs connus, et j'ai extrapolé un mécanisme à 355 entrées sans
+> jamais compter combien relevaient de chacun. La leçon 287 exigeait la mesure ;
+> je l'ai citée en la sous-traitant à une intuition.
+
+Le contrôle qui l'aurait attrapé tient en une ligne : **poser l'arithmétique sur
+un cas concret avant de généraliser son mécanisme.** Trois occurrences, deux
+déclarations — l'histoire ne tenait pas.
+
+Et un corollaire de conception, gagné au passage : **le bucket « appelée
+seulement par un test » ne doit pas être EXCLU mais CLASSÉ.** Une garde qui
+l'exclut jette son meilleur résultat ; une garde qui le nomme rend un inventaire
+exploitable.
+## Leçon 288 — un témoin de parité doit couvrir les N miroirs, pas N−1 (2026-08-25, itération 269)
+
+La table de réduction de langue (`ISO_639_3_TO_1` + `LEGACY_ISO_639_1`) vit en
+TROIS exemplaires, un par client : TS (SSOT), Swift (iOS/SDK), Kotlin (Android).
+`language-normalize-swift-parity.test.ts` prouvait leur égalité — mais seulement
+TS↔Swift. Kotlin n'avait JAMAIS reçu `LEGACY_ISO_639_1` (`iw→he`, `in→id`,
+`ji→yi`), et rien ne pouvait rougir. Résultat : un utilisateur Android sur locale
+hébraïque, dont `java.util.Locale.getLanguage()` émet `iw`, voyait son fil rester
+dans la langue de l'expéditeur — la traduction `he` restant introuvable. La
+plateforme même dont la JVM ÉMET les codes dépréciés était la seule à ne pas les
+réduire.
+
+> **Un témoin de parité qui couvre N−1 des N sites d'une règle dupliquée ne
+> réduit pas le risque de dérive, il le DÉPLACE sur le site non couvert** — et
+> l'y rend invisible, puisqu'on croit la règle gardée. La question à poser à tout
+> test de parité n'est pas « prouve-t-il l'égalité ? » mais « énumère-t-il TOUS
+> les exemplaires de la règle ? ». Le nom du fichier (`…-swift-parity`) le
+> disait : il ne parlait que d'un des deux miroirs.
+
+Corollaire de méthode : **le site non couvert se trouve en comptant les
+implémentations, pas en lisant le test.** Le test paraissait complet (il
+comparait deux tables réelles, avec contre-épreuve de taille) ; sa lacune n'était
+visible qu'en recensant les clients — TS, iOS, Android — et en constatant que le
+troisième n'apparaissait nulle part. Jumelle directe de la leçon 261 (« une
+énumération de sites affirme aussi *ce sont les sites où la règle s'applique* —
+presque jamais vérifié ») appliquée à une énumération de MIROIRS. Correctif :
+renommer en `…-mirror-parity`, ajouter l'extraction Kotlin ; le témoin lit
+désormais les trois tables et tombe au ROUGE dès qu'une entrée diverge sur l'un
+quelconque des trois sites.
+## Leçon 289 — une règle qui vit en DEUX copies dérive dès que l'une est durcie, et le durcissement ne se propage pas tout seul (2026-08-25, itération 269)
+
+> Coordination : une session sœur (#3517) réserve « leçon 288 » (aliases ISO 639-1
+> Android). Cette leçon-ci est disjointe et numérotée 289 pour éviter la collision
+> au merge de `tasks/lessons.md`.
+
+Le gateway portait DEUX `normalizeDisplayName` — l'une exportée
+(`utils/normalize.ts`, inscription/profil), l'autre privée
+(`utils/contact-identifiers.ts`, synchro du carnet d'adresses). Jumelles par le
+nom et le but (nom d'affichage, une seule ligne), divergentes par le contrat
+(SUPPRIMER vs REMPLACER par un espace ; bornée vs non). La jumelle exportée a été
+durcie deux fois — it. 266b (jeu complet des séparateurs de ligne Unicode) et sa
+garantie « une seule ligne » — pendant que la copie du carnet n'en recevait
+AUCUNE et portait en plus une troncature `.slice(0, 200)` qui coupait au milieu
+d'une paire de substituts UTF-16 (défaut jumeau de l'it. 268, `truncate`).
+
+> **Un durcissement appliqué à UNE copie d'une règle laisse l'autre exactement où
+> elle était.** Le correctif ne rougit nulle part ailleurs : la seconde copie
+> compile, ses tests passent (ils n'exerçaient que l'ASCII nu), et la dérive ne se
+> voit qu'à l'entrée exacte que la copie durcie couvre désormais et que la copie
+> restée en arrière ne couvre pas.
+
+Trois corollaires, tous mesurés dans ce lot :
+
+- **Le témoin qui l'attrape s'écrit sur la forme d'entrée que la copie ratée ne
+  couvre pas** — un émoji à la frontière de coupe, un `U+2028` dans le nom —
+  jamais sur l'ASCII que les deux traitent pareil. Même famille que la leçon 287
+  (« le témoin s'écrit sur la famille AUTRE que celle qui marche ») et la
+  leçon 276 (« un témoin de rang s'écrit sur un rang autre que le premier »).
+
+- **On supprime la divergence en extrayant la RÈGLE, pas en fusionnant les
+  fonctions.** Les deux `normalizeDisplayName` gardent leur contrat distinct ; ce
+  qui devient unique est le seul morceau qui avait dérivé — le JEU de caractères
+  de rupture de ligne (`LINE_BREAKING_CHARS_SOURCE`), dont chaque site dérive sa
+  propre regex (supprimer d'un côté, remplacer par un espace de l'autre). C'est la
+  leçon 287 (extraire UN site) appliquée à un fragment de règle, pas à une
+  fonction entière : fusionner aurait cassé un des deux contrats.
+
+- **Un durcissement de sécurité/rendu a des JUMELLES qui ne portent pas son nom.**
+  L'it. 268 a fermé `SecuritySanitizer.truncate` (« troncateur ») ; le second
+  troncateur du dépôt s'appelle `normalizeDisplayName` et ne se serait jamais
+  présenté à une recherche de « truncate ». La question « cette entité a-t-elle une
+  jumelle ? » (cycle 85) se pose donc aussi à un DURCISSEMENT : *quel AUTRE site
+  fait la même opération sous un autre nom ?* — ici « borner une longueur de texte
+  utilisateur » et « garantir une seule ligne », chacun présent deux fois.

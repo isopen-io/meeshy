@@ -41,8 +41,6 @@ export class InitService {
     } else {
     }
 
-    await this.ensurePostGeoIndex();
-
     try {
       // 1. Créer la conversation globale "meeshy"
       await this.createGlobalConversation();
@@ -278,10 +276,16 @@ export class InitService {
    * spec sur un index déjà existant réussit sans erreur (pas de code à
    * ignorer ici) — toute erreur qui remonte est donc réelle et doit stopper
    * le démarrage, jamais avalée en silence.
-   * Inconditionnel : appelé à chaque boot, que `FORCE_DB_RESET` soit actif ou
-   * non — pas dans `resetDatabase()`, qui ne s'exécute que sur reset explicite.
+   *
+   * Invariant de CHAQUE boot, pas du premier : `server.ts` l'appelle AVANT la
+   * porte `shouldInitialize()`, base vide ou non. Il vivait dans
+   * `initializeDatabase()`, que cette porte ne laisse passer que sur une base
+   * VIDE — une base déjà peuplée ne recevait donc jamais l'index, et
+   * `/posts/nearby` rendait 500 en production (`$geoNear requires a 2d or
+   * 2dsphere index`, 2026-08-25) alors que le commentaire ci-dessus disait
+   * « à chaque boot ».
    */
-  private async ensurePostGeoIndex(): Promise<void> {
+  async ensurePostGeoIndex(): Promise<void> {
     try {
       await this.prisma.$runCommandRaw({
         createIndexes: 'Post',

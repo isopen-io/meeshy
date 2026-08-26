@@ -43,6 +43,11 @@ on:
         required: false
         default: ''
         type: string
+      skip_review:
+        description: 'release only: upload binary + metadata WITHOUT submitting to App Review (submit later with `andp submit`)'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ios-release
@@ -95,6 +100,16 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.MATCH_DEPLOY_KEY }}
 
+      # MATCH_GIT_URL (secret) and the Matchfile default are both HTTPS URLs, so
+      # `match` cloned over HTTPS and never touched the deploy key loaded above
+      # (run 32910503192: "could not read Username for 'https://github.com'").
+      # Route ONLY the certificates repo over SSH — a blanket github.com rewrite
+      # would drag every SPM package through a single-repo deploy key.
+      - name: Route the match repo over SSH
+        run: |
+          git config --global url."git@github.com:isopen-io/meeshy-certificates.git".insteadOf "https://github.com/isopen-io/meeshy-certificates.git"
+          git config --global url."git@github.com:isopen-io/meeshy-certificates".insteadOf "https://github.com/isopen-io/meeshy-certificates"
+
       - name: Decode GoogleService-Info.plist
         run: |
           echo "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}" | base64 --decode > apps/ios/Meeshy/GoogleService-Info.plist
@@ -113,6 +128,7 @@ jobs:
           echo "skip_tests=${{ github.event.inputs.skip_tests }}" >> "$GITHUB_OUTPUT"
           echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
           echo "changelog=${{ github.event.inputs.changelog }}" >> "$GITHUB_OUTPUT"
+          echo "skip_review=${{ github.event.inputs.skip_review }}" >> "$GITHUB_OUTPUT"
 
       # Same invocation contract as meeshy.sh's do_release: build the fastlane
       # args in a bash array (preserves spaces in the changelog), then
@@ -142,12 +158,16 @@ jobs:
           SKIP_TESTS: ${{ steps.lane.outputs.skip_tests }}
           RELEASE_VERSION: ${{ steps.lane.outputs.version }}
           RELEASE_CHANGELOG: ${{ steps.lane.outputs.changelog }}
+          SKIP_REVIEW: ${{ steps.lane.outputs.skip_review }}
         run: |
           cd apps/ios
           args=()
           [ "${SKIP_TESTS}" = "true" ] && args+=("skip_tests:true")
           [ -n "${RELEASE_CHANGELOG}" ] && args+=("changelog:${RELEASE_CHANGELOG}")
           [ -n "${RELEASE_VERSION}" ] && args+=("version:${RELEASE_VERSION}")
+          # release only — upload binary + metadata, leave the version editable
+          # on App Store Connect so the listing can be reviewed before `andp submit`.
+          [ "${SKIP_REVIEW}" = "true" ] && args+=("skip_review:true")
           echo "→ bundle exec fastlane ${LANE} ${args[*]}"
           bundle exec fastlane "${LANE}" "${args[@]}"
 

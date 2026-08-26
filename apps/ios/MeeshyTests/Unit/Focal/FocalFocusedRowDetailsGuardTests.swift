@@ -483,4 +483,138 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         let gated = "if (content.translation != nil && !content.isBlurred) || showsReactions {"
         XCTAssertTrue(gated.contains("|| showsReactions {"))
     }
+
+    // MARK: - Audit 2026-08-25 — aucune HAUTEUR ne dépend du focus
+
+    /// **Garde NÉGATIVE** — le plafond de texte ne se ternarise plus sur
+    /// `isFocused`.
+    ///
+    /// C'est LA précondition du tick d'élection : les détails du message élu
+    /// sont resynchronisés EN PLEIN GESTE (`electionChanged` →
+    /// `syncFocalFocusDetails`) précisément parce que « aucune hauteur ne
+    /// dépend du focus » (decisions.md, 2026-08-22 bis). Un `truncateLimit`
+    /// qui passait de 512 à 360 à l'élection re-mesurait la cellule sous le
+    /// doigt et décalait tout ce qui est au-dessus d'elle — le saut que la
+    /// décision voulait justement écarter. Les autres marques du focus
+    /// (carte, chips, identité, opacités) sont des `.overlay`/`.background`
+    /// et ne gouvernent aucune hauteur : elles restent ternarisées.
+    func test_noHeightGoverningArgument_isTernarizedOnFocus() throws {
+        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        XCTAssertTrue(
+            Self.rowHeightIsFocusIndependent(row),
+            "le plafond de texte doit valoir la constante HISTORIQUE (`BubbleExpandableText.truncateLimit`) "
+            + "que la rangée soit élue ou non : le ternaire re-mesurait la cellule au tick d'élection, en "
+            + "plein geste, et l'autre constante (`FocalMetrics.Focus.maxCharacters`, 360) tronquerait "
+            + "TOUTES les rangées plates, y compris au repos — un changement visible hors directive."
+        )
+    }
+
+    /// **Contre-épreuve** — la garde ci-dessus rougit sur le ternaire d'origine
+    /// ET sur le plafond du focus appliqué à toutes les rangées. Une garde
+    /// négative qui ne sait pas dire NON meurt en silence.
+    func test_theGuardAbove_wouldCatchTheTruncationCapComingBack() {
+        XCTAssertFalse(
+            Self.rowHeightIsFocusIndependent(
+                "truncateLimit: input.isFocused ? FocalMetrics.Focus.maxCharacters : BubbleExpandableText.truncateLimit,"
+            ),
+            "le ternaire d'origine doit faire rougir la garde"
+        )
+        XCTAssertFalse(
+            Self.rowHeightIsFocusIndependent("truncateLimit: FocalMetrics.Focus.maxCharacters,"),
+            "le plafond du focus appliqué à TOUTES les rangées aussi — il tronque au repos"
+        )
+        XCTAssertTrue(
+            Self.rowHeightIsFocusIndependent("truncateLimit: BubbleExpandableText.truncateLimit,"),
+            "…et la constante historique, elle, doit passer"
+        )
+    }
+
+    // MARK: - Audit 2026-08-25 — travail mort par frame
+
+    /// Les géométries ne servent QU'à l'élection : les construire avant la
+    /// garde d'armement, c'était par cellule et par frame un `indexPath(for:)`,
+    /// un `itemIdentifier(for:)` et une conversion de repère jetés pendant les
+    /// quatre secondes de défilement soutenu qui précèdent l'armement.
+    ///
+    /// Et le balayage de sous-vues qui fermait la passe retirait une carte
+    /// UIKit que plus rien ne pose : la carte du focus est le FOND SwiftUI de
+    /// la rangée. Le démontage d'une carte héritée d'un recyclage reste
+    /// assuré par la registration et par `flattenFocalScene`.
+    func test_perspectivePass_buildsGeometriesAfterTheArmingGuard_andHasNoPerFrameHideFocusCardLoop() throws {
+        let host = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let pass = try Self.body(of: "func applyFocalPerspectiveToVisibleCells() {", in: host)
+        XCTAssertTrue(
+            Self.perspectivePassHasNoDeadPerFrameWork(pass),
+            "les géométries doivent se construire APRÈS la garde d'armement, et plus aucun balayage "
+            + "de sous-vues ne doit fermer la passe. Corps lu : \(pass)"
+        )
+        // Le nettoyage vit toujours aux deux SEULS points qui en produisent
+        // l'occasion : une cellule (re)configurée, et l'aplatissement.
+        XCTAssertTrue(
+            host.contains("FocalScrollPerspective.reset(cell.contentView.layer) FocalScrollPerspective.hideFocusCard(in: cell.contentView)"),
+            "registration : une cellule recyclée arrive à plat ET sans carte"
+        )
+        let flatten = try Self.body(of: "func flattenFocalScene(animated: Bool) {", in: host)
+        XCTAssertTrue(
+            flatten.contains("FocalScrollPerspective.hideFocusCard(in: cell.contentView)"),
+            "aplatissement de la scène : la carte héritée d'un recyclage est démontée là"
+        )
+    }
+
+    /// **Contre-épreuve** — la garde ci-dessus rougit si la boucle par frame
+    /// revient, ET si les géométries remontent avant la garde d'armement.
+    func test_theGuardAbove_wouldCatchThePerFrameLoopComingBack() {
+        let intact = "guard focalMagnificationArmed else { return } "
+            + "var geometries: [FocalScrollPerspective.CellGeometry] = [] "
+            + "if electionChanged { syncFocalFocusDetails() }"
+        XCTAssertTrue(Self.perspectivePassHasNoDeadPerFrameWork(intact), "la passe conforme doit passer")
+        XCTAssertFalse(
+            Self.perspectivePassHasNoDeadPerFrameWork(
+                intact + " for cell in cells { FocalScrollPerspective.hideFocusCard(in: cell.contentView) }"
+            ),
+            "la boucle par frame réintroduite doit faire rougir la garde"
+        )
+        XCTAssertFalse(
+            Self.perspectivePassHasNoDeadPerFrameWork(
+                "let cells = collectionView.visibleCells var geometries: [FocalScrollPerspective.CellGeometry] = [] "
+                + "guard focalMagnificationArmed else { return }"
+            ),
+            "des géométries construites AVANT la garde d'armement aussi — c'est le travail mort visé"
+        )
+    }
+
+    // MARK: - Prédicats partagés par les gardes et leurs contre-épreuves
+
+    private static func rowHeightIsFocusIndependent(_ row: String) -> Bool {
+        !row.contains("truncateLimit: input.isFocused ?")
+            && row.contains("truncateLimit: BubbleExpandableText.truncateLimit")
+            && !row.contains("FocalMetrics.Focus.maxCharacters")
+    }
+
+    private static func perspectivePassHasNoDeadPerFrameWork(_ pass: String) -> Bool {
+        pass.contains("return } var geometries: [FocalScrollPerspective.CellGeometry] = []")
+            && !pass.contains("hideFocusCard")
+    }
+
+    /// Corps d'une déclaration, par PARENTHÉSAGE d'accolades — une garde de
+    /// forme vise le BLOC, jamais le fichier. (Couper à la « prochaine ` func ` »
+    /// marchait ici, mais laissait la garde NÉGATIVE dépendre de ce qui suit
+    /// la fonction plutôt que de son propre corps.)
+    private static func body(of signature: String, in code: String) throws -> String {
+        let start = try XCTUnwrap(
+            code.range(of: signature),
+            "signature « \(signature) » introuvable — la garde ne peut pas lire un bloc absent"
+        )
+        var depth = 1
+        var index = start.upperBound
+        while index < code.endIndex {
+            if code[index] == "{" { depth += 1 }
+            if code[index] == "}" {
+                depth -= 1
+                if depth == 0 { break }
+            }
+            index = code.index(after: index)
+        }
+        return String(code[start.upperBound ..< index])
+    }
 }

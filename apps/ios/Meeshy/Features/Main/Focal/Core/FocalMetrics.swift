@@ -186,6 +186,12 @@ nonisolated public enum FocalMetrics {
     nonisolated public enum Focus {
         /// Plafond de caractères du texte du message EN FOCUS (2026-08-21) :
         /// au-delà, « Lire plus » — une magnificence qui tient à l'écran.
+        ///
+        /// **Sans consommateur depuis le 2026-08-25** (L1-01, amendement
+        /// `decisions.md`) : `truncateLimit` de la rangée vaut désormais
+        /// `BubbleExpandableText.truncateLimit` (512) qu'elle soit élue ou
+        /// non. Conservée comme POINT DE REBRANCHEMENT si le plafond de
+        /// focus revient — ne pas supprimer.
         public static let maxCharacters: Int = 360
 
         /// Gabarit de pastille réservé en permanence par l'en-tête

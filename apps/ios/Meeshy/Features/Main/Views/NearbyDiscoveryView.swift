@@ -90,8 +90,18 @@ struct NearbyDiscoveryView: View {
         )
     }
 
+    /// Cherché dans les DEUX jeux : les résultats de proximité et, pour le
+    /// staff, les publications du fil du mode Discover.
     private var selectedPost: FeedPost? {
-        selectedPostId.flatMap { id in viewModel.posts.first(where: { $0.id == id }) }
+        selectedPostId.flatMap { id in
+            (viewModel.posts + viewModel.discoverPosts).first(where: { $0.id == id })
+        }
+    }
+
+    /// En mode Discover, les raisons de proximité (position refusée, hors
+    /// ligne…) ne s'appliquent pas : la carte du fil a la sienne.
+    private var shownEmptyReason: NearbyEmptyReason? {
+        viewModel.mode == .discover ? viewModel.discoverEmptyReason : viewModel.emptyReason
     }
 
     var body: some View {
@@ -106,7 +116,7 @@ struct NearbyDiscoveryView: View {
                 modePicker
                 statusPill
                 Spacer(minLength: 0)
-                if let reason = viewModel.emptyReason {
+                if let reason = shownEmptyReason {
                     NearbyEmptyStateCard(
                         reason: reason,
                         radiusKm: viewModel.radiusKm,
@@ -119,7 +129,11 @@ struct NearbyDiscoveryView: View {
                 if let post = selectedPost {
                     selectedPostCard(post)
                 }
-                radiusPicker
+                // Le rayon ne gouverne que la proximité ; Discover montre le
+                // fil entier.
+                if viewModel.mode != .discover {
+                    radiusPicker
+                }
             }
             .padding(.top, MeeshySpacing.sm)
         }
@@ -132,9 +146,14 @@ struct NearbyDiscoveryView: View {
 
     @ViewBuilder
     private var surface: some View {
-        if viewModel.mode == .list {
+        switch viewModel.mode {
+        case .list:
             listSurface
-        } else {
+        case .discover:
+            // La carte des posts du fil (ex-bouton `map` du header), plantée
+            // sur le lieu AFFICHÉ — d'où le mode réservé au staff.
+            PostsMapRepresentable(posts: viewModel.discoverPosts, selectedPostId: $selectedPostId)
+        case .density, .pins:
             NearbyDiscoveryMapView(
                 mode: viewModel.mode,
                 showsPins: viewModel.showsIndividualPins,
@@ -240,19 +259,32 @@ struct NearbyDiscoveryView: View {
         .padding(.horizontal, MeeshySpacing.lg)
     }
 
+    /// Les segments viennent d'`availableModes` — le SEUL site où le rôle du
+    /// lecteur décide si Discover existe. Un segment posé à la main ici
+    /// passerait sous cette règle.
     private var modePicker: some View {
         Picker("", selection: $viewModel.mode) {
-            Text(String(localized: "feed.nearby.mode.density", defaultValue: "Densité", bundle: .main))
-                .tag(NearbyDiscoveryMode.density)
-            Text(String(localized: "feed.nearby.mode.pins", defaultValue: "Points", bundle: .main))
-                .tag(NearbyDiscoveryMode.pins)
-            Text(String(localized: "feed.nearby.mode.list", defaultValue: "Liste", bundle: .main))
-                .tag(NearbyDiscoveryMode.list)
+            ForEach(viewModel.availableModes, id: \.self) { mode in
+                Text(Self.label(for: mode)).tag(mode)
+            }
         }
         .pickerStyle(.segmented)
         .labelsHidden()
         .padding(.horizontal, MeeshySpacing.xl)
         .accessibilityIdentifier("feed.nearby.mode")
+    }
+
+    private static func label(for mode: NearbyDiscoveryMode) -> String {
+        switch mode {
+        case .density:
+            return String(localized: "feed.nearby.mode.density", defaultValue: "Densité", bundle: .main)
+        case .pins:
+            return String(localized: "feed.nearby.mode.pins", defaultValue: "Points", bundle: .main)
+        case .list:
+            return String(localized: "feed.nearby.mode.list", defaultValue: "Liste", bundle: .main)
+        case .discover:
+            return String(localized: "feed.nearby.mode.discover", defaultValue: "Découvrir", bundle: .main)
+        }
     }
 
     /// **Jamais un voile, jamais un spinner par-dessus des données.** Une
@@ -277,6 +309,8 @@ struct NearbyDiscoveryView: View {
     }
 
     private var statusText: String? {
+        // Discover lit le cache du fil : ni recherche, ni revalidation à dire.
+        if viewModel.mode == .discover { return nil }
         if viewModel.isOffline && viewModel.hasContent {
             return String(
                 localized: "feed.nearby.status.offline",
@@ -394,7 +428,7 @@ struct NearbyDiscoveryView: View {
         switch reason {
         case .locationDenied:
             MediaPermissionCoordinator.openSettings()
-        case .awaitingLocation, .offline, .signInRequired, .serviceUnavailable:
+        case .awaitingLocation, .offline, .signInRequired, .serviceUnavailable, .nothingOnTheMap:
             await viewModel.refresh()
         case .noneInRadius:
             guard let wider = NearbyDiscoveryViewModel.offeredRadiiKm
@@ -509,6 +543,7 @@ struct NearbyEmptyStateCard: View {
         case .signInRequired:  return "person.crop.circle.badge.questionmark"
         case .serviceUnavailable: return "exclamationmark.icloud"
         case .noneInRadius:    return "mappin.slash"
+        case .nothingOnTheMap: return "map"
         }
     }
 
@@ -526,6 +561,8 @@ struct NearbyEmptyStateCard: View {
             return String(localized: "feed.nearby.empty.unavailable.title", defaultValue: "Service indisponible", bundle: .main)
         case .noneInRadius:
             return String(localized: "feed.nearby.empty.none.title", defaultValue: "Rien à découvrir ici", bundle: .main)
+        case .nothingOnTheMap:
+            return String(localized: "feed.map.empty.title", defaultValue: "Aucun post localisé", bundle: .main)
         }
     }
 
@@ -547,6 +584,8 @@ struct NearbyEmptyStateCard: View {
                 defaultValue: "Aucune publication à découvrir dans un rayon de \(Int(radiusKm)) km.",
                 bundle: .main
             )
+        case .nothingOnTheMap:
+            return String(localized: "feed.map.empty.detail", defaultValue: "Les posts partagés avec une position apparaîtront ici", bundle: .main)
         }
     }
 
@@ -556,7 +595,7 @@ struct NearbyEmptyStateCard: View {
             return String(localized: "feed.nearby.empty.denied.action", defaultValue: "Ouvrir les Réglages", bundle: .main)
         case .noneInRadius:
             return String(localized: "feed.nearby.empty.none.action", defaultValue: "Élargir le rayon", bundle: .main)
-        case .awaitingLocation, .offline, .signInRequired, .serviceUnavailable:
+        case .awaitingLocation, .offline, .signInRequired, .serviceUnavailable, .nothingOnTheMap:
             return String(localized: "feed.nearby.empty.retry", defaultValue: "Réessayer", bundle: .main)
         }
     }

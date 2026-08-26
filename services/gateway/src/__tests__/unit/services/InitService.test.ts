@@ -168,3 +168,38 @@ describe('InitService.shouldInitialize', () => {
     expect(result).toBe(true);
   });
 });
+
+// ─── ensurePostGeoIndex ───────────────────────────────────────────────────────
+//
+// L'index `2dsphere` de `Post.geoPoint` vivait dans `initializeDatabase()`,
+// que `server.ts` ne lance que si `shouldInitialize()` est vrai — c'est-à-dire
+// sur une base VIDE. Une base déjà peuplée ne le recevait donc jamais :
+// `/posts/nearby` et `/posts/nearby/density` rendaient 500 en production
+// (`$geoNear requires a 2d or 2dsphere index, but none were found`,
+// 2026-08-25). L'index est un invariant de CHAQUE boot, pas du premier.
+
+describe('InitService.ensurePostGeoIndex', () => {
+  const GEO_INDEX_COMMAND = {
+    createIndexes: 'Post',
+    indexes: [{ key: { geoPoint: '2dsphere' }, name: 'Post_geoPoint_2dsphere' }],
+  };
+
+  it('creates the 2dsphere index on Post.geoPoint on an already-initialized database', async () => {
+    delete process.env.FORCE_DB_RESET;
+    const prisma = makePrisma();
+    const sut = new InitService(prisma as any);
+    expect(await sut.shouldInitialize()).toBe(false);
+
+    await sut.ensurePostGeoIndex();
+
+    expect(prisma.$runCommandRaw).toHaveBeenCalledWith(GEO_INDEX_COMMAND);
+  });
+
+  it('rethrows when MongoDB refuses the index — the boot must not continue on a silent miss', async () => {
+    const prisma = makePrisma();
+    (prisma.$runCommandRaw as jest.Mock<any>).mockRejectedValue(new Error('not authorized on meeshy'));
+    const sut = new InitService(prisma as any);
+
+    await expect(sut.ensurePostGeoIndex()).rejects.toThrow('not authorized on meeshy');
+  });
+});

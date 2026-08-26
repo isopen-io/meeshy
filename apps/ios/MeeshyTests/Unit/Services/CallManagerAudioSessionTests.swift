@@ -2128,43 +2128,63 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             "does not bleed into the next call (singleton lifecycle)")
     }
 
-    /// When the VideoSurvivalController has already suspended outbound video
-    /// (weak network), the foreground observer must NOT re-signal the peer with
-    /// `call:media-toggled true` — doing so would falsely indicate our camera is
-    /// active while we're still not sending frames.
-    func test_foregroundObserver_guardsSurvivalSuspended_beforeRestoringPeer() throws {
+    /// Bornes du corps de l'observateur `willEnterForeground` — de sa ligne
+    /// `forName:` jusqu'à la fermeture de `startBackgroundMonitoring()` (le
+    /// premier `\n    }`, l'intérieur de l'observateur étant indenté plus
+    /// profond). Bornage SÉMANTIQUE et ÉTROIT : le témoin remplacé scrutait
+    /// `source[fgRange.upperBound...]`, soit tout le reste du FICHIER — il était
+    /// satisfait par une expression vivant 1200 lignes plus bas (le resync de
+    /// reconnexion socket), jamais par l'observateur qu'il prétendait garder.
+    private func foregroundObserverBody() throws -> String {
         let source = try callManagerSource()
-        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
-            XCTFail("willEnterForegroundNotification observer not found"); return
+        guard let fgRange = source.range(of: "UIApplication.willEnterForegroundNotification") else {
+            XCTFail("willEnterForegroundNotification observer not found"); return ""
         }
-        // Find the block that emits call:media-toggled true on foreground.
-        let afterFg = String(source[fgRange.upperBound...])
-        // The restoration condition must check `!self.isVideoSuspended` in
-        // addition to `self.isVideoEnabled` so that a network-survival suspension
-        // in progress before the background is not prematurely cleared.
-        XCTAssertTrue(
-            afterFg.contains("!self.isVideoSuspended"),
-            "willEnterForeground restore must guard on !isVideoSuspended: if the " +
-            "VideoSurvivalController already suspended video before we backgrounded, " +
-            "emitting call:media-toggled true would signal the peer that our camera is " +
-            "active while frames are still paused — showing a frozen/stale feed instead " +
-            "of the correct avatar placeholder.")
+        let after = String(source[fgRange.upperBound...])
+        guard let end = after.range(of: "\n    }")?.upperBound else {
+            XCTFail("Could not bound the willEnterForeground observer"); return ""
+        }
+        return String(after[..<end])
     }
 
-    /// Validates that the foreground restore emits `call:media-toggled true`
-    /// only when BOTH conditions hold: user intent (isVideoEnabled) AND no
-    /// network suspension (isVideoSuspended is false).
-    func test_foregroundObserver_combinesVideoEnabledAndNotSuspendedGuard() throws {
-        let source = try callManagerSource()
-        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
-            XCTFail("willEnterForegroundNotification observer not found"); return
-        }
-        let afterFg = String(source[fgRange.upperBound...])
-        // The compound condition must appear together before the emit call.
+    /// Le retour en avant-plan ne parle au pair QUE par le point de passage
+    /// unique `applyCameraSuspension(_:cause:)` — il ne recompose jamais sa
+    /// propre condition d'émission. C'est ce qui garantit que drapeau et signal
+    /// ne divergent pas (cf. `test_cameraSuspension_clearsTheFlagOnTheSamePathAsItSetsIt`).
+    func test_foregroundObserver_restoresThroughTheSingleCameraSuspensionFunnel() throws {
+        let body = try foregroundObserverBody()
         XCTAssertTrue(
-            afterFg.contains("isVideoEnabled") && afterFg.contains("!self.isVideoSuspended"),
-            "willEnterForeground restore must combine isVideoEnabled && !isVideoSuspended " +
-            "before calling emitCallToggleVideo(enabled:true)")
+            body.contains("self.applyCameraSuspension(false, cause: \"foreground\")"),
+            "Le retour en avant-plan doit lever la suspension par applyCameraSuspension(false:) — " +
+            "le point de passage unique du signal caméra, qui porte les gardes."
+        )
+        XCTAssertFalse(
+            body.contains("emitCallToggleVideo"),
+            "L'observateur ne doit PAS émettre lui-même : une seconde condition d'émission " +
+            "diverge inévitablement de celle du point de passage unique."
+        )
+    }
+
+    /// L6-1 (2026-08-25) — RENVERSEMENT. Ce témoin exigeait `!self.isVideoSuspended`
+    /// dans la condition de reprise : le gel réseau y valait « pas de caméra ».
+    /// Depuis L6-1 le gel ne relâche PLUS la capture (encodeur au plancher, piste
+    /// et capture intactes), donc il ne dit rien sur la vie de la caméra ; l'y
+    /// garder faisait TAIRE un vrai signal caméra (une interruption de capture
+    /// survenant pendant un épisode dégradé). Garde NÉGATIVE : elle rougit si le
+    /// drapeau est réintroduit dans la garde du point de passage unique.
+    func test_cameraSuspensionFunnel_doesNotGuardOnSurvivalFreeze() throws {
+        let body = try cameraSuspensionBody()
+        XCTAssertTrue(
+            body.contains("guard isVideoEnabled, !isVideoSuspendedByHold else { return }"),
+            "La garde d'émission doit combiner l'intention utilisateur (isVideoEnabled) et le seul " +
+            "état OS qui coupe vraiment la caméra sans passer par ce point (isVideoSuspendedByHold)."
+        )
+        XCTAssertFalse(
+            body.contains("!isVideoSuspended,"),
+            "La garde ne doit PAS inclure isVideoSuspended (gel réseau) : depuis L6-1 la capture " +
+            "tourne pendant tout le gel, donc l'y lire comme « caméra absente » ferait taire une " +
+            "VRAIE interruption de capture survenant pendant un épisode dégradé."
+        )
     }
 }
 
@@ -2179,7 +2199,14 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
 /// backgrounded), the peer would incorrectly show our frozen last frame.
 ///
 /// The reconnect sink must re-emit `call:media-toggled` reflecting the effective
-/// video state: `isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByCaptureInterruption`.
+/// video state: `isVideoEnabled && !isVideoSuspendedByCaptureInterruption
+/// && !isVideoSuspendedByHold`.
+///
+/// L6-2 (2026-08-25) — the network-survival freeze was REMOVED from that
+/// expression. A socket reconnect is most likely precisely DURING a degraded
+/// episode, so folding the freeze in re-emitted the very
+/// `media-toggled(video,false)` the actuator had stopped sending: the peer
+/// destroyed the last frame anyway, one layer down.
 @MainActor
 final class CallManagerSocketReconnectVideoTests: XCTestCase {
 
@@ -2206,21 +2233,40 @@ final class CallManagerSocketReconnectVideoTests: XCTestCase {
             "without this, a dropped connection leaves the peer showing stale video state")
     }
 
-    func test_socketReconnect_computesEffectiveVideoStateFromAllSources() throws {
+    /// Bornes de l'EXPRESSION seule — de `let effectiveVideoOn` à l'émission
+    /// qui la consomme. Volontairement PAS « tout ce qui suit socket.didReconnect » :
+    /// cette borne-là ratissait le reste du fichier (elle était satisfaite par
+    /// n'importe quelle occurrence, commentaire compris), et la garde négative
+    /// ci-dessous doit lire du CODE, jamais le commentaire qui nomme
+    /// délibérément le drapeau retiré.
+    private func reconnectEffectiveVideoExpression() throws -> String {
         let source = try callManagerSource()
-        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
-            XCTFail("socket.didReconnect sink not found in CallManager.swift"); return
+        guard let assignRange = source.range(of: "let effectiveVideoOn =") else {
+            XCTFail("effectiveVideoOn assignment not found in CallManager.swift"); return ""
         }
-        let afterReconnect = String(source[reconnectRange.upperBound...])
-        // The effective video state must consider all three suppression sources:
-        // user toggle, survival controller, and background suspension.
-        XCTAssertTrue(
-            afterReconnect.contains("isVideoSuspended") &&
-            afterReconnect.contains("isVideoSuspendedByCaptureInterruption"),
-            "socket.didReconnect video resync must factor in isVideoSuspended " +
-            "(survival controller) and isVideoSuspendedByCaptureInterruption (app backgrounded) " +
-            "to compute the effective video-on/off state for the peer")
+        guard let end = source.range(
+            of: "MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: effectiveVideoOn)",
+            range: assignRange.upperBound..<source.endIndex
+        )?.lowerBound else {
+            XCTFail("Could not bound the effectiveVideoOn expression"); return ""
+        }
+        return String(source[assignRange.lowerBound..<end])
     }
+
+    func test_socketReconnect_computesEffectiveVideoStateFromRealCaptureStops() throws {
+        let expression = try reconnectEffectiveVideoExpression()
+        XCTAssertTrue(
+            expression.contains("isVideoSuspendedByCaptureInterruption"),
+            "socket.didReconnect video resync must factor in isVideoSuspendedByCaptureInterruption " +
+            "(app backgrounded / OS capture interruption)")
+        XCTAssertTrue(
+            expression.contains("isVideoSuspendedByHold"),
+            "…and isVideoSuspendedByHold (CallKit hold) — the two states where the capture really " +
+            "stopped, so the peer must be told")
+    }
+    // La garde NÉGATIVE correspondante (le gel de survie ne doit jamais revenir
+    // dans cette expression) vit dans CallManagerSurvivalFreezeSourceTests —
+    // `test_reconnectResync_ignoresSurvivalFreeze`, avec le reste du lot L6-2.
 }
 
 // MARK: - Camera Permission Denied — All Call Entry Points
@@ -3832,10 +3878,14 @@ final class CallManagerVideoToggleConcurrencyTests: XCTestCase {
 // MARK: - Socket-reconnect video re-sync correctness
 
 /// Source-analysis guards ensuring the video state re-synced to the peer on
-/// socket reconnect accounts for ALL suspension sources: survival controller,
-/// background, AND CallKit hold. Before this fix, a hold-suspended call that
-/// survived a socket reconnect would incorrectly report video as active to the
-/// peer while iOS was blocking camera access.
+/// socket reconnect accounts for every state where the capture REALLY stopped:
+/// background/capture interruption AND CallKit hold. Before this fix, a
+/// hold-suspended call that survived a socket reconnect would incorrectly
+/// report video as active to the peer while iOS was blocking camera access.
+///
+/// L6-2 (2026-08-25) — the network-survival freeze was removed from that set:
+/// it stops nothing, so announcing it to the peer is a lie that costs the last
+/// frame.
 @MainActor
 final class CallManagerReconnectVideoSyncTests: XCTestCase {
 
@@ -3878,9 +3928,19 @@ final class CallManagerReconnectVideoSyncTests: XCTestCase {
         XCTAssertTrue(
             exprLines.contains("isVideoSuspendedByCaptureInterruption"),
             "Socket-reconnect effectiveVideoOn must also check isVideoSuspendedByCaptureInterruption")
-        XCTAssertTrue(
-            exprLines.contains("isVideoSuspended"),
-            "Socket-reconnect effectiveVideoOn must also check isVideoSuspended (survival controller)")
+        // L6-2 — the survival freeze is deliberately NOT in this expression any
+        // more (see CallManagerSocketReconnectVideoTests for the reasoning).
+        // Negative guard: strip the two qualified names — of which the bare flag
+        // is a prefix — then assert the bare flag is gone.
+        let bare = exprLines
+            .replacingOccurrences(of: "isVideoSuspendedByCaptureInterruption", with: "")
+            .replacingOccurrences(of: "isVideoSuspendedByHold", with: "")
+        XCTAssertFalse(
+            bare.contains("isVideoSuspended"),
+            "Socket-reconnect effectiveVideoOn must NOT read isVideoSuspended: since L6-1 the " +
+            "survival layer freezes the encoder without stopping the capture, so re-emitting " +
+            "media-toggled(video,false) on reconnect would make the peer drop the last frame for " +
+            "a camera that never went away.")
     }
 }
 
@@ -3933,10 +3993,23 @@ final class CallManagerForegroundRestoreHoldGuardTests: XCTestCase {
         )
     }
 
-    func test_cameraSuspensionRestore_guardsOnSurvivalControllerSuspension() throws {
+    /// L6-1 — RENVERSEMENT du témoin précédent, qui exigeait `isVideoSuspended,`
+    /// dans la garde. Le gel de survie ne relâche plus la caméra ; l'y lire
+    /// comme « caméra absente » ferait TAIRE une vraie interruption de capture
+    /// survenant pendant un épisode dégradé. Garde NÉGATIVE : elle rougit à la
+    /// réintroduction du drapeau dans la garde (le corps extrait commence APRÈS
+    /// la signature, donc aucun commentaire ne peut la satisfaire).
+    func test_cameraSuspensionRestore_doesNotGuardOnSurvivalFreeze() throws {
+        let body = try cameraSuspensionBody()
         XCTAssertTrue(
-            try cameraSuspensionBody().contains("isVideoSuspended,"),
-            "La reprise doit toujours vérifier isVideoSuspended (contrôleur de survie)."
+            body.contains("!isVideoSuspendedByHold"),
+            "La garde doit conserver !isVideoSuspendedByHold — un hold CallKit coupe vraiment la " +
+            "caméra et n'est pas levé par un retour en avant-plan."
+        )
+        XCTAssertFalse(
+            body.contains("isVideoSuspended,"),
+            "La garde ne doit PLUS lire isVideoSuspended (gel réseau) : depuis L6-1 la capture " +
+            "tourne pendant tout le gel, donc l'y lire ferait taire un VRAI signal caméra."
         )
     }
 }
@@ -4014,9 +4087,11 @@ final class CallManagerBackgroundDuplicateEmitTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    /// Background entry must NOT emit a second "camera off" to the peer when hold
-    /// or the survival controller has already done so.  The fix: emit only when
-    /// !isVideoSuspendedByHold && !isVideoSuspended.
+    /// Background entry must NOT emit a second "camera off" to the peer when a
+    /// CallKit hold has already done so. The fix: emit only when
+    /// !isVideoSuspendedByHold. (L6-1 dropped the survival freeze from that
+    /// condition — it emits nothing at all any more, so it can duplicate
+    /// nothing.)
     func test_backgroundEntry_doesNotEmitVideoOff_whenHoldAlreadySentIt() throws {
         let source = try callManagerSource()
 
@@ -4037,20 +4112,30 @@ final class CallManagerBackgroundDuplicateEmitTests: XCTestCase {
             "prouve rien sur l'état réel de la capture"
         )
 
-        // Le point de passage unique porte les deux gardes anti-doublon.
+        // Le point de passage unique porte la garde anti-doublon. Borné
+        // SÉMANTIQUEMENT (jusqu'à la fermeture de la fonction) et non par une
+        // largeur fixe de 900 caractères, qui débordait sur la fonction suivante.
         guard let fnRange = source.range(of: "private func applyCameraSuspension(") else {
             XCTFail("applyCameraSuspension not found"); return
         }
-        let body = String(source[fnRange.upperBound...].prefix(900))
+        let after = String(source[fnRange.upperBound...])
+        guard let end = after.range(of: "\n    }")?.upperBound else {
+            XCTFail("Could not find applyCameraSuspension boundary"); return
+        }
+        let body = String(after[..<end])
         XCTAssertTrue(
             body.contains("isVideoSuspendedByHold"),
             "L'émission doit être gardée sur !isVideoSuspendedByHold pour ne pas " +
             "doubler le « caméra coupée » déjà envoyé par le hold"
         )
-        XCTAssertTrue(
+        // L6-1 — le gel de survie N'ÉMET plus rien (il ne coupe rien), donc il
+        // n'y a plus de doublon à éviter de ce côté : l'y garder ferait taire
+        // une vraie interruption de capture pendant un épisode dégradé.
+        XCTAssertFalse(
             body.contains("isVideoSuspended,"),
-            "L'émission doit être gardée sur !isVideoSuspended (contrôleur de survie) " +
-            "pour ne pas doubler le signal qu'il a déjà envoyé"
+            "L'émission ne doit PLUS être gardée sur !isVideoSuspended : depuis L6-1 le gel réseau " +
+            "n'envoie aucun call:media-toggled, donc il n'y a rien à dédoubler — et la garde " +
+            "masquerait un vrai signal caméra."
         )
     }
 }

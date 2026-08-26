@@ -818,7 +818,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         Task(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             let imageCache = await CacheCoordinator.shared.images
-            await withTaskGroup(of: Void.self) { taskGroup in
+            await withTaskGroup(of: [String].self) { taskGroup in
                 for group in groupsToPreload {
                     guard let targetStory = group.stories.first(where: { !$0.isViewed }) ?? group.stories.first else { continue }
                     // Réclame (et marque) les URLs non encore préchargées sur le MainActor
@@ -828,6 +828,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     taskGroup.addTask {
                         await Self.prefetchStoryMediaURLs(urls, in: targetStory, imageCache: imageCache, prerollPlayer: true)
                     }
+                }
+                // Une URL sautée par la politique (ex: vidéo en cellulaire) n'est
+                // PAS « déjà préchargée » — la retirer pour qu'un retour au Wi-Fi
+                // en cours de session la rattrape (cf. claimUnprefetchedURLs ci-dessous).
+                for await skipped in taskGroup {
+                    self.prefetchedMediaURLs.subtract(skipped)
                 }
             }
         }
@@ -847,7 +853,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     guard !Task.isCancelled else { return }
                     let urls = self.claimUnprefetchedURLs(for: story)
                     guard !urls.isEmpty else { continue }
-                    await Self.prefetchStoryMediaURLs(urls, in: story, imageCache: imageCache, prerollPlayer: false)
+                    let skipped = await Self.prefetchStoryMediaURLs(urls, in: story, imageCache: imageCache, prerollPlayer: false)
+                    self.prefetchedMediaURLs.subtract(skipped)
                 }
             }
         }
@@ -1119,8 +1126,45 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
     }
 
+    /// Décision PURE : ce type de média de story doit-il être PRÉCHARGÉ, la
+    /// politique d'auto-téléchargement étant déjà résolue ? Miroir exact de
+    /// `BubbleCarouselView.shouldPrefetchAttachment` — extraite pour être
+    /// testable sans monter la vue ni le monitor réseau.
+    ///
+    /// `.document` n'a pas de politique propre : il transite par le store
+    /// `images` (branche `else` du routage ci-dessous), donc il suit `prefs.image`.
+    nonisolated static func shouldPrefetchStoryMedia(
+        kind: FeedMediaType,
+        allowImage: Bool,
+        allowVideo: Bool,
+        allowAudio: Bool
+    ) -> Bool {
+        switch kind {
+        case .video: return allowVideo
+        case .audio: return allowAudio
+        case .image, .document: return allowImage
+        }
+    }
+
     /// Prefetch les URLs (déjà filtrées) d'une story dans les stores disque + mémoire.
-    private static func prefetchStoryMediaURLs(_ urls: [String], in story: StoryItem, imageCache: DiskCacheStore, prerollPlayer: Bool) async {
+    /// Retourne les URLs SAUTÉES par la politique d'auto-téléchargement (ex:
+    /// vidéo interdite en cellulaire), pour que l'appelant les retire de
+    /// `prefetchedMediaURLs` — sinon la dédup de session les marque
+    /// « déjà préchargées » à vie et un retour au Wi-Fi ne les rattrape jamais.
+    private static func prefetchStoryMediaURLs(_ urls: [String], in story: StoryItem, imageCache: DiskCacheStore, prerollPlayer: Bool) async -> [String] {
+        // Respecte la politique d'auto-téléchargement de l'utilisateur — miroir
+        // de `ConversationMediaHandler.prefetchRecentMedia` et de
+        // `BubbleCarouselView.prefetchAdjacentPages`. Sans cette garde, le
+        // préchargement du tray tirait le corps MP4/audio COMPLET en cellulaire
+        // alors que « Vidéo : Wi-Fi uniquement » est le réglage par défaut.
+        // Le chemin de LECTURE (ouverture réelle d'une story) n'est PAS gardé :
+        // une story tapée doit toujours se charger.
+        let condition = NetworkConditionMonitor.shared.condition
+        let prefs = MediaDownloadPreferencesStore.shared.preferences
+        let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .image, condition: condition, prefs: prefs)
+        let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .video, condition: condition, prefs: prefs)
+        let allowAudio = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .audio, condition: condition, prefs: prefs)
+        var skipped: [String] = []
         for urlString in urls {
             // Normalize through the SAME resolver the SDK reader uses
             // (`StoryReaderRepresentable` / `directURLIfAny`). Cache keys must
@@ -1133,6 +1177,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 declaredType: story.media.first(where: { $0.url == urlString })?.type,
                 urlString: resolved
             )
+            guard Self.shouldPrefetchStoryMedia(
+                kind: mediaType, allowImage: allowImage, allowVideo: allowVideo, allowAudio: allowAudio
+            ) else { skipped.append(urlString); continue }
 
             if mediaType == .video {
                 // Peupler le store `video` (celui que le canvas relit), pas
@@ -1147,6 +1194,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 _ = await imageCache.image(for: resolved)
             }
         }
+        return skipped
     }
 
     // MARK: - Mark Story as Viewed

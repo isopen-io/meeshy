@@ -792,6 +792,25 @@ public actor MessagePersistenceActor {
         try dbWriter.write { db in try Self.upsertTranslationRecord(translation, in: db) }
     }
 
+    /// Supprime les traductions persistées d'un message dont le CONTENU a
+    /// changé (édition locale ou `message:edited`). Sans elle, l'hydratation
+    /// au démarrage relit la traduction du texte d'AVANT et la sert comme si
+    /// elle décrivait le nouveau.
+    ///
+    /// Résolution par `messageLocalId` OU `messageServerId`, comme les mutateurs
+    /// pilotés par le socket : un message « own » garde sa ligne optimiste
+    /// `cid_*` en local alors que l'événement porte l'id SERVEUR — filtrer sur
+    /// la seule colonne locale ne toucherait alors AUCUNE ligne. Les deux
+    /// espaces d'identifiants ne se recouvrent jamais.
+    public func deleteTranslations(messageLocalId: String) throws {
+        try dbWriter.write { db in
+            _ = try TranslationRecord
+                .filter(Column("messageLocalId") == messageLocalId
+                        || Column("messageServerId") == messageLocalId)
+                .deleteAll(db)
+        }
+    }
+
     // MARK: - Edit / Delete / Reactions / ViewOnce
 
     // The socket-driven mutators below (`markEdited` / `markDeleted` /

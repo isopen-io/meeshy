@@ -270,6 +270,99 @@ final class LocalizationConsistencyTests: XCTestCase {
         )
     }
 
+    // MARK: - Libellés de menu contextuel d'avatar
+
+    /// **Un littéral nu passé à `AvatarContextMenuItem(label:)` est invisible
+    /// aux deux axes ci-dessus.** Ils ne scannent que les appels
+    /// `String(localized:)` ; `label` est une `String` rendue TELLE QUELLE
+    /// (`MeeshyAvatar.AvatarContextMenuItem.label`), donc un littéral y sort
+    /// dans la langue source pour les sept locales, sans qu'aucun test ne
+    /// rougisse.
+    ///
+    /// La garde vise le BLOC d'appel — le couple `label:` … `icon:` qui
+    /// identifie ce constructeur —, jamais le fichier : un `label:` alimenté
+    /// par `String(localized:)` ou par une constante de copie
+    /// (`StoryTrayCopy.viewProfile`) passe sans réserve.
+    func test_avatarContextMenuLabels_areNeverBareLiterals() throws {
+        let env = try makeEnvironment()
+
+        var violations: [String] = []
+        for file in env.sourceFiles {
+            guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
+            for literal in Self.bareContextMenuLabels(in: text) {
+                violations.append("\(file.lastPathComponent) : label: \"\(literal)\"")
+            }
+        }
+        violations.sort()
+        XCTAssertTrue(
+            violations.isEmpty,
+            "Ces libellés de menu contextuel d'avatar sont des littéraux nus : ils "
+            + "s'affichent dans la langue source quelle que soit l'interface choisie. "
+            + "Les passer par `String(localized:…, bundle:)`, avec l'entrée au catalogue "
+            + "du bundle qui les résout :\n"
+            + violations.joined(separator: "\n")
+        )
+    }
+
+    /// **Contre-épreuve de la garde négative ci-dessus.** Une garde qui ne
+    /// reconnaît plus la forme qu'elle interdit passe au vert en ayant perdu sa
+    /// protection. Ces vecteurs prouvent qu'elle rougirait si un littéral nu
+    /// revenait — sur une ligne comme sur plusieurs — et qu'elle ne condamne
+    /// pas les deux formes légitimes.
+    func test_bareContextMenuLabelScanner_recognizesTheFormItForbids() {
+        let forbiddenInline = """
+        items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill", action: onViewProfile))
+        """
+        XCTAssertEqual(Self.bareContextMenuLabels(in: forbiddenInline), ["Voir le profil"])
+
+        let forbiddenMultiline = """
+        AvatarContextMenuItem(
+            label: "Voir la story",
+            icon: "play.circle.fill"
+        ) { onViewStory() }
+        """
+        XCTAssertEqual(Self.bareContextMenuLabels(in: forbiddenMultiline), ["Voir la story"])
+
+        let localizedCall = """
+        AvatarContextMenuItem(
+            label: String(localized: "avatar.menu.view_profile", defaultValue: "Voir le profil", bundle: .module),
+            icon: "person.fill"
+        ) { onViewProfile() }
+        """
+        XCTAssertEqual(Self.bareContextMenuLabels(in: localizedCall), [])
+
+        let namedConstant = """
+        AvatarContextMenuItem(label: StoryTrayCopy.viewProfile, icon: "person.fill") { }
+        """
+        XCTAssertEqual(Self.bareContextMenuLabels(in: namedConstant), [])
+
+        let roleBetweenLabelAndIcon = """
+        AvatarContextMenuItem(label: "Voir le profil", role: .destructive, icon: "person.fill") { }
+        """
+        XCTAssertEqual(Self.bareContextMenuLabels(in: roleBetweenLabelAndIcon), ["Voir le profil"])
+    }
+
+    /// Littéraux nus passés en `label:` d'un `AvatarContextMenuItem`. Le couple
+    /// `label:` suivi d'`icon:` est ce qui identifie ce constructeur : il
+    /// attrape aussi bien `AvatarContextMenuItem(label:…)` que le
+    /// `.init(label:…)` des sites qui laissent le type se déduire. Tolère un
+    /// `role: …,` intercalé entre les deux (l'ordre déclaré de l'initialiseur
+    /// est `label:icon:role:action:`, mais la garde ne dépend pas de cet ordre
+    /// pour rester correcte si le paramètre bouge).
+    private static func bareContextMenuLabels(in source: String) -> [String] {
+        let ns = source as NSString
+        guard let regex = try? NSRegularExpression(
+            pattern: #"label:\s*"((?:[^"\\]|\\.)*)"\s*,\s*(?:role:\s*[^,]+,\s*)?icon:"#
+        ) else { return [] }
+        var found: [String] = []
+        regex.enumerateMatches(in: source, range: NSRange(location: 0, length: ns.length)) { match, _, _ in
+            if let match, match.numberOfRanges > 1 {
+                found.append(ns.substring(with: match.range(at: 1)))
+            }
+        }
+        return found
+    }
+
     // MARK: - Environment
 
     /// One catalog, indexed. Added 224i, when the single-catalog model started

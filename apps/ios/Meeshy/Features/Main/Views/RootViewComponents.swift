@@ -114,9 +114,6 @@ struct ThemedFeedOverlay: View {
         router.pendingOpenFeedComposer = false
         showFullComposer = true
     }
-    /// Carte des posts géolocalisés — entrée permanente du header, à droite du
-    /// bouton Réels (directive user 2026-08-13). Parité avec `FeedView`.
-    @State private var showPostsMap = false
     @State private var pendingAttachmentType: String?
     @State private var quoteOriginalPost: FeedPost?
     /// Negative scroll offset of the feed (0 at rest, more negative scrolling
@@ -413,14 +410,15 @@ struct ThemedFeedOverlay: View {
         .scrollMotionActive(offset: headerScrollOffset)
     }
 
-    /// Actions du header, dans l'ordre de lecture : les Réels, puis la carte
-    /// des posts immédiatement à sa droite (directive user 2026-08-13). Les
-    /// deux ouvrent une autre LECTURE du même feed — elles vont ensemble ; le
-    /// chemin iPad (`FeedView.feedHeaderActions`) porte la même paire.
+    /// Actions du header, dans l'ordre de lecture : les Réels, puis « À
+    /// proximité ». Les deux ouvrent une autre LECTURE du même feed — elles
+    /// vont ensemble ; le chemin iPad (`FeedView.feedHeaderActions`) porte la
+    /// même paire. La carte des posts du feed (bouton `map`, 2026-08-13) a
+    /// fusionné dans « À proximité » le 2026-08-26 — mode Discover, réservé au
+    /// staff de la plateforme.
     private var feedHeaderActions: some View {
         HStack(spacing: 8) {
             reelsButton
-            postsMapButton
             nearbyButton
         }
         // Loi commune `ScrollMotion` : une vue en mouvement ne montre pas ses
@@ -441,22 +439,6 @@ struct ThemedFeedOverlay: View {
         }
         .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
         .accessibilityIdentifier("feed.header.reels")
-    }
-
-    private var postsMapButton: some View {
-        Button {
-            HapticFeedback.light()
-            showPostsMap = true
-        } label: {
-            Image(systemName: "map")
-                .font(MeeshyFont.relative(17, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
-                .frame(width: 40, height: 40)
-                .adaptiveGlass(in: Circle(), interactive: true)
-        }
-        .accessibilityLabel(String(localized: "feed.map.open", defaultValue: "Posts sur la carte", bundle: .main))
-        .accessibilityHint(String(localized: "feed.map.open.hint", defaultValue: "Affiche les posts géolocalisés sur un plan", bundle: .main))
-        .accessibilityIdentifier("feed.header.map")
     }
 
     /// Troisième entrée du header, jumelle de celle du chemin iPad
@@ -481,10 +463,6 @@ struct ThemedFeedOverlay: View {
 
     /// Posts du feed porteurs d'une position — même source unique que le chemin
     /// iPad : le bouton et les pins de la carte lisent la même liste.
-    private var locatedPosts: [FeedPost] {
-        viewModel.posts.filter { $0.location != nil }
-    }
-
     // MARK: - Reel card (full-frame)
 
     /// Carte Réel plein-cadre. Réutilise EXACTEMENT les handlers optimistes de
@@ -917,12 +895,6 @@ struct ThemedFeedOverlay: View {
                     quoteOriginalPost = nil
                 }
             )
-        }
-        .fullScreenCover(isPresented: $showPostsMap) {
-            FeedPostsMapView(posts: locatedPosts) { post in
-                showPostsMap = false
-                router.push(.postDetail(post.id, post))
-            }
         }
     }
 }

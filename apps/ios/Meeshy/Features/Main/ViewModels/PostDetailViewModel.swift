@@ -1232,12 +1232,24 @@ class PostDetailViewModel: ObservableObject {
                 let media = (data.comment.media ?? []).map { $0.toFeedMedia() }
                 guard !media.isEmpty else { return }
                 let commentId = data.commentId
+                // Invalidation locale par réécriture, comme le sink
+                // `comment:updated` : sans elle, la transcription et les
+                // variantes TTS reçues à distance ne vivaient qu'en mémoire,
+                // et l'écran suivant resservait le média NU depuis le cache.
                 if let parentId = data.comment.parentId, var existing = self.repliesMap[parentId],
                    let idx = existing.firstIndex(where: { $0.id == commentId }) {
                     existing[idx].media = media
                     self.repliesMap[parentId] = existing
+                    let snapshot = existing
+                    Task {
+                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "replies-\(parentId)")
+                    }
                 } else if let idx = self.comments.firstIndex(where: { $0.id == commentId }) {
                     self.comments[idx].media = media
+                    let snapshot = self.comments
+                    Task {
+                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)")
+                    }
                 }
             }
             .store(in: &socketCancellables)
@@ -1253,21 +1265,44 @@ class PostDetailViewModel: ObservableObject {
             .sink { [weak self] data in
                 guard let self else { return }
                 let id = data.commentId
+                let hadTopLevelRow = self.comments.contains { $0.id == id }
                 self.comments.removeAll { $0.id == id }
                 self.repliesMap[id] = nil
                 self.expandedThreads.remove(id)
                 // Réponse supprimée : retire-la de son fil + décrémente le compteur
                 // de réponses de son parent racine.
+                var touchedThreadIds: [String] = []
                 for (key, var replies) in self.repliesMap {
                     if let idx = replies.firstIndex(where: { $0.id == id }) {
                         replies.remove(at: idx)
                         self.repliesMap[key] = replies
+                        touchedThreadIds.append(key)
                         if let pIdx = self.comments.firstIndex(where: { $0.id == key }), self.comments[pIdx].replies > 0 {
                             self.comments[pIdx].replies -= 1
                         }
                     }
                 }
                 self.post?.commentCount = data.commentCount
+                // Invalidation locale par réécriture : sans elle, la version
+                // cachée ressuscitait le commentaire supprimé à la prochaine
+                // ouverture. Une RÉPONSE touche DEUX clés — son fil, et
+                // `post-` dont le compteur de réponses du parent a bougé. La
+                // clé orpheline `replies-<commentId>` d'un top-level supprimé
+                // reste intouchée : plus rien ne la relira.
+                //
+                // Rien n'est écrit quand RIEN n'a bougé : un sink qui tire
+                // avant le premier chargement écrirait une liste VIDE
+                // par-dessus la page déjà en cache sous la même clé.
+                guard hadTopLevelRow || !touchedThreadIds.isEmpty else { return }
+                let snapshot = self.comments
+                let threadSnapshots = self.repliesMap
+                let touchedThreads = touchedThreadIds
+                Task {
+                    for key in touchedThreads {
+                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(threadSnapshots[key] ?? [], for: "replies-\(key)")
+                    }
+                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)")
+                }
             }
             .store(in: &socketCancellables)
 

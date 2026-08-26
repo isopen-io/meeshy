@@ -60,7 +60,7 @@ struct ContactsListTab: View {
         return Button {
             viewModel.setFilter(filter)
         } label: {
-            Text("\(filter.rawValue)\(countSuffix)")
+            Text("\(filter.title)\(countSuffix)")
                 .font(.footnote.weight(.semibold))
                 .foregroundColor(isActive ? .white : MeeshyColors.indigo500)
                 .padding(.horizontal, 14)
@@ -72,7 +72,7 @@ struct ContactsListTab: View {
                     Capsule().stroke(isActive ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1)
                 )
         }
-        .accessibilityLabel(String(format: String(localized: "contacts.list.filter-a11y", defaultValue: "Filtre: %@%@", bundle: .main), filter.rawValue, countSuffix))
+        .accessibilityLabel(String(format: String(localized: "contacts.list.filter-a11y", defaultValue: "Filtre: %@%@", bundle: .main), filter.title, countSuffix))
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 

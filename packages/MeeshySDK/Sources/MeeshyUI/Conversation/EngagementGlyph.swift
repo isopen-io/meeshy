@@ -27,8 +27,15 @@ import SwiftUI
 /// `private func` dans `ReelFeedCard` ; c'est cette dispersion qui a laissé le
 /// renforcement absent partout ailleurs.
 public struct EngagementGlyph: View {
-    /// Symbole de CONTOUR — l'état inactif, et le tracé superposé à l'accent.
+    /// Symbole du CONTOUR superposé à l'accent quand le lecteur a participé.
+    /// Il doit retracer le bord du glyphe AFFICHÉ à ce moment — donc la même
+    /// famille que `filled`.
     public let outline: String
+    /// Symbole du glyphe AU REPOS. Vaut `outline` par défaut, mais s'en sépare
+    /// quand l'état actif change de famille : le repost montre des flèches nues
+    /// au repos et un disque plein une fois reposté — un seul symbole ne peut
+    /// pas dire les deux, et les confondre changerait l'apparence du repos.
+    public let inactiveSymbol: String
     /// Symbole PLEIN — l'état actif.
     public let filled: String
     /// `true` quand l'action vient du lecteur courant.
@@ -56,6 +63,7 @@ public struct EngagementGlyph: View {
     public init(
         outline: String,
         filled: String,
+        inactiveSymbol: String? = nil,
         participated: Bool,
         accentHex: String,
         activeTint: Color,
@@ -66,6 +74,7 @@ public struct EngagementGlyph: View {
     ) {
         self.outline = outline
         self.filled = filled
+        self.inactiveSymbol = inactiveSymbol ?? outline
         self.participated = participated
         self.accentHex = accentHex
         self.activeTint = activeTint
@@ -75,16 +84,25 @@ public struct EngagementGlyph: View {
         self.shadowed = shadowed
     }
 
-    /// `true` quand le symbole de contour dessinerait un ANNEAU autour du
-    /// glyphe au lieu d'en retracer le bord. Fonction pure : XCTest ne peut pas
-    /// introspecter une hiérarchie SwiftUI, seule la DÉCISION est vérifiable.
-    public nonisolated static func tracesARingInsteadOfTheGlyph(outline: String) -> Bool {
-        outline.hasSuffix(".circle") || outline.hasSuffix(".circle.fill")
+    /// `true` quand le contour retrace bien le bord du glyphe AFFICHÉ.
+    ///
+    /// C'est la mesure de la règle héritée de `ReelFeedCard.actionGlyph` : « le
+    /// contour retrace le bord du GLYPHE, jamais un cercle autour de lui ». Elle
+    /// ne proscrit pas la famille `.circle` — un glyphe QUI EST un disque a
+    /// légitimement un contour circulaire. Ce qu'elle proscrit, c'est un contour
+    /// d'une AUTRE forme que le glyphe qu'il borde : superposer
+    /// `arrow.2.squarepath.circle` à un `heart.fill` dessinerait un anneau
+    /// étranger au glyphe.
+    ///
+    /// Fonction pure : XCTest ne peut pas introspecter une hiérarchie SwiftUI,
+    /// seule la DÉCISION est vérifiable.
+    public nonisolated static func outlineTracesTheGlyph(outline: String, filled: String) -> Bool {
+        filled == outline || filled == outline + ".fill"
     }
 
     public var body: some View {
         ZStack {
-            Image(systemName: (participated || filledWhenInactive) ? filled : outline)
+            Image(systemName: (participated || filledWhenInactive) ? filled : inactiveSymbol)
                 .font(MeeshyFont.relative(size))
                 .foregroundColor(participated ? activeTint : inactiveTint)
             if participated {

@@ -749,6 +749,25 @@ public final class AuthManager: ObservableObject, AuthManaging {
         #endif
     }
 
+    // MARK: - Handle auth:session-revoked (server-side invalidation)
+
+    /// Le serveur a INVALIDÉ la session (changement de mot de passe, révocation
+    /// de tous les appareils, action admin) et vient de couper la socket.
+    ///
+    /// Chemin délibérément DISJOINT de `handleUnauthorized()` : celui-là lance
+    /// `refreshSession(force: true)`, et `/auth/refresh` rend un JWT neuf SANS
+    /// vérifier que la session existe encore — le réarmer ici prolongerait de
+    /// 24 h la session qu'on vient de révoquer. On va donc droit à la
+    /// ré-authentification, qui émet `sessionInvalidated` (l'écran de ré-auth
+    /// existe déjà, aucune UI neuve n'est requise).
+    ///
+    /// Sans session active, rien à révoquer : on sort.
+    public func handleSessionRevoked() {
+        guard let userId = activeUserId else { return }
+        Logger.auth.warning("Session revoked by server — requiring re-authentication")
+        requireReauthentication(userId: userId)
+    }
+
     // MARK: - Internal session helpers
 
     /// Pure helper exposed for tests: returns true iff a new
@@ -791,6 +810,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 Logger.auth.error("Failed to save sessionToken to keychain for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
+        // U3 — a token refresh/rotation carries the server's session response,
+        // which doesn't port voicePublic (self-only /auth/me payload shape);
+        // re-apply the locally-held value before persisting so a background
+        // token refresh can't silently flip the toggle back off.
+        let user = user.withProfileChanges(voicePublic: currentUser?.voicePublic)
         saveUserToKeychain(user, userId: userId)
         let now = String(Date().timeIntervalSince1970)
         do {
@@ -947,6 +971,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
             requireReauthentication(userId: userId)
             return
         }
+        // U3 — the revalidated /auth/me user doesn't port voicePublic (self-only
+        // response shape); re-apply the locally-held value before persisting so
+        // the throttled background revalidation can't silently flip it back off.
+        let user = user.withProfileChanges(voicePublic: currentUser?.voicePublic)
         saveUserToKeychain(user, userId: userId)
         // U3 — don't clobber an in-flight optimistic profile edit with the
         // revalidated server user; re-apply it (and drop the guard once the

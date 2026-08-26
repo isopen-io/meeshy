@@ -221,6 +221,38 @@ public actor CacheCoordinator {
         return translationCache[messageId]
     }
 
+    /// Éviction CIBLÉE des traductions d'UN message, RAM et table GRDB.
+    ///
+    /// Appelée quand le contenu du message a changé (édition) : ses traductions
+    /// décrivent alors un texte qui n'existe plus. Sans la ligne disque, la
+    /// purge en mémoire serait cosmétique — `loadTranslationCaches()` la
+    /// réinjecterait au prochain démarrage. Jumelle par MESSAGE de
+    /// `invalidateTranslationCaches()`, qui vide les trois caches de
+    /// traduction/transcription en entier ; `clearTranslationCacheDB()` en est
+    /// le pendant disque global. Les caches de transcription et d'audio
+    /// traduit ne sont PAS touchés : éditer le texte d'un message ne périme
+    /// pas la piste enregistrée.
+    public func invalidateTranslations(for messageId: String) {
+        translationCache.removeValue(forKey: messageId)
+        translationTimestamps.removeValue(forKey: messageId)
+        if let idx = translationInsertionOrder.firstIndex(of: messageId) {
+            translationInsertionOrder.remove(at: idx)
+        }
+        deleteTranslationCacheRows(messageId: messageId)
+    }
+
+    private nonisolated func deleteTranslationCacheRows(messageId: String) {
+        do {
+            try db.write { db in
+                _ = try TranslationCacheRecord
+                    .filter(Column("messageId") == messageId)
+                    .deleteAll(db)
+            }
+        } catch {
+            logger.error("Failed to delete cached translations for \(messageId): \(error.localizedDescription)")
+        }
+    }
+
     public func cachedTranslations(for messageIds: [String]) -> [String: [TranslationData]] {
         var result: [String: [TranslationData]] = [:]
         for msgId in messageIds {
