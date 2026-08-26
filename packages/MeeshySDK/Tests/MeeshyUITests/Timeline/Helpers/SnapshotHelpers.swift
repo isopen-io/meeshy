@@ -62,6 +62,19 @@ enum SnapshotHelpers {
             .background(colorScheme == .dark ? Color.black : Color.white)
     }
 
+    /// Suffixe de baseline PAR VERSION D'OS MAJEURE, pour les vues dont le rendu
+    /// SYSTÈME change entre versions d'iOS (contrôles de Form restylés,
+    /// gradients/fades retravaillés en iOS 26). Vide pour iOS < 26 — les
+    /// baselines historiques 18.x (que la CI vérifie) restent valides sans
+    /// renommage. À partir d'iOS 26, la baseline vit sous `<name>-iOS26.png`,
+    /// enregistrée séparément : 18.x et 26.x deviennent verts sans se marcher
+    /// dessus. À n'activer (`perOSBaseline: true`) que pour les vues RÉELLEMENT
+    /// sensibles au restyle système — sinon on multiplie les PNG pour rien.
+    static var osBaselineSuffix: String {
+        let major = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+        return major >= 26 ? "-iOS\(major)" : ""
+    }
+
     /// Single-scheme snapshot — used by the light/dark wrapper below.
     @MainActor
     static func assertSnapshot<V: View>(
@@ -69,6 +82,7 @@ enum SnapshotHelpers {
         device: Device = .iPhone16Pro,
         colorScheme: ColorScheme,
         named name: String,
+        perOSBaseline: Bool = false,
         record: Bool = false,
         file: StaticString = #filePath,
         testName: String = #function,
@@ -87,7 +101,7 @@ enum SnapshotHelpers {
             as: .image(precision: 0.99,
                        perceptualPrecision: 0.98,
                        layout: .fixed(width: size.width, height: size.height)),
-            named: name,
+            named: perOSBaseline ? name + osBaselineSuffix : name,
             record: record,
             file: file,
             testName: testName,
@@ -103,6 +117,7 @@ enum SnapshotHelpers {
         of view: V,
         device: Device = .iPhone16Pro,
         named baseName: String,
+        perOSBaseline: Bool = false,
         record: Bool = false,
         file: StaticString = #filePath,
         testName: String = #function,
@@ -115,6 +130,7 @@ enum SnapshotHelpers {
                 device: device,
                 colorScheme: scheme,
                 named: "\(baseName)-\(suffix)",
+                perOSBaseline: perOSBaseline,
                 record: record,
                 file: file,
                 testName: testName,
