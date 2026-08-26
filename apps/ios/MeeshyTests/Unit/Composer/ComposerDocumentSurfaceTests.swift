@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 import MeeshyUI
+import MeeshySDK
 @testable import Meeshy
 
 /// V2 — **la surface « document sans scène »**, et la règle qui la choisit.
@@ -1248,7 +1249,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// document ne portait pas le champ du tout.
     func test_leBrouillonDuDocument_porteSaListeNominative_quandLAudienceLExige() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .only, visibilityUserIds: ["u1", "u2"], repostOfId: nil
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .only, visibilityUserIds: ["u1", "u2"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
         )
         XCTAssertEqual(
             brouillon.visibilityUserIds, ["u1", "u2"],
@@ -1261,7 +1262,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// n'en veut pas la ferait persister pour rien.
     func test_leBrouillonDuDocument_ecarteLaListe_quandLAudienceNeLExigePas() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: ["u1"], repostOfId: nil
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
         )
         XCTAssertNil(
             brouillon.visibilityUserIds,
@@ -1281,7 +1282,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// dur, et aucun appelant ne pouvait donc le remplir.
     func test_leBrouillonDuDocument_porteSaSource_sansQuoiLAncragePerdSonOrigine() {
         let ancrage = ComposerDocumentDraft.document(
-            format: .post, text: "je garde", visibility: .public, visibilityUserIds: [], repostOfId: "mood-source"
+            format: .post, forcePlainPost: false, text: "je garde", visibility: .public, visibilityUserIds: [], repostOfId: "mood-source", localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
         )
         XCTAssertEqual(
             ancrage.repostOfId, "mood-source",
@@ -1325,6 +1326,212 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             branche.contains("moodSeed"),
             "La source est lue sur la GRAINE : deux sources pour « quelle publication republie-t-on », et "
                 + "c'est exactement ce que la branche `.mood` documente comme à ne pas faire."
+        )
+    }
+
+    // MARK: - Lot 2 (T2.1) — le brouillon porte média, position et langue
+
+    /// **La première capacité manquante du DoD du lot 2, comblée.**
+    ///
+    /// `test_leBrouillon_nAAucunCanalMedia_ceQuiTientLeLitteralDuPlan` mesurait
+    /// l'ABSENCE comme garde NÉGATIVE et documentait son propre déclencheur :
+    /// « elle rougira le jour où `ComposerDocumentDraft` gagne un champ de
+    /// média ». C'est ce jour — et le brouillon gagne dans le même geste sa
+    /// position et sa langue déclarée.
+    func test_leBrouillonDuDocument_porteSonMediaSaPositionEtSaLangue() {
+        let media = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/photo.jpg"), mimeType: "image/jpeg", durationMs: nil
+        )
+        let lieu = SharedPlace(latitude: 48.8583736, longitude: 2.2944813, name: "Tour Eiffel")
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil,
+            localMedia: [media], location: lieu, discoverabilityPrecision: nil, originalLanguage: "es", mobileTranscription: nil
+        )
+
+        XCTAssertEqual(brouillon.localMedia, [media])
+        XCTAssertEqual(brouillon.location, lieu)
+        XCTAssertEqual(brouillon.originalLanguage, "es")
+    }
+
+    // MARK: - T2.4 — la bascule POST ↔ RÉEL
+
+    /// **`forcePlainPost` armé doit gagner sur une composition qualifiante.**
+    ///
+    /// Depuis T2.3, une vidéo ≥ 3 s fait élire `"REEL"` par
+    /// `ReelComposition.defaultType` — la loi 9 permet à l'auteur de changer
+    /// de FORMAT, jamais de lui retirer ce choix. Ce test suit la matière
+    /// jusqu'au bout de la chaîne : du brouillon (`ComposerDocumentDraft`,
+    /// où l'interrupteur du meuble sème ce drapeau) jusqu'à l'intention
+    /// publiée (`PublishIntent.document`, qui la remet à
+    /// `ReelComposition.defaultType` — le juge UNIQUE, jamais recopié). Le
+    /// second appel (`forcePlainPost: false`) n'est pas décoratif : sans lui,
+    /// ce test resterait vert même si `forcePlainPost` cessait d'avoir le
+    /// moindre effet sur `intentArme.type`.
+    func test_forcePlainPostArme_surUneVideoQualifiante_publieUnPOST() {
+        let video = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/clip.mp4"), mimeType: "video/mp4", durationMs: 10_000
+        )
+
+        let arme = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: true, text: "légende", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [video], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
+        )
+        XCTAssertTrue(arme.forcePlainPost, "Le brouillon doit porter le drapeau tel que la fabrique l'a reçu.")
+
+        let intentArme = PublishIntent.document(
+            localMedia: arme.localMedia,
+            forcePlainPost: arme.forcePlainPost,
+            content: arme.text,
+            visibility: arme.visibility.rawValue,
+            visibilityUserIds: arme.visibilityUserIds,
+            originalLanguage: arme.originalLanguage,
+            mentions: arme.mentions,
+            location: arme.location,
+            discoverabilityPrecision: nil,
+            transcription: arme.mobileTranscription
+        )
+        XCTAssertEqual(
+            intentArme.type, "POST",
+            "Une vidéo de 10 s qualifie pour un REEL — `forcePlainPost` armé doit garder un POST simple."
+        )
+
+        let nonArme = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "légende", visibility: .public,
+            visibilityUserIds: [], repostOfId: nil, localMedia: [video], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
+        )
+        let intentNonArme = PublishIntent.document(
+            localMedia: nonArme.localMedia,
+            forcePlainPost: nonArme.forcePlainPost,
+            content: nonArme.text,
+            visibility: nonArme.visibility.rawValue,
+            visibilityUserIds: nonArme.visibilityUserIds,
+            originalLanguage: nonArme.originalLanguage,
+            mentions: nonArme.mentions,
+            location: nonArme.location,
+            discoverabilityPrecision: nil,
+            transcription: nonArme.mobileTranscription
+        )
+        XCTAssertEqual(
+            intentNonArme.type, "REEL",
+            "Sans le forçage, la même vidéo qualifiante doit rester un REEL — sinon ce test ne prouverait rien."
+        )
+    }
+
+    /// **La PRÉSENCE de l'interrupteur suit la règle SDK, jamais un seuil
+    /// recopié (T2.4, tests 1 & 2).** L'interrupteur POST ↔ RÉEL n'existe dans
+    /// le meuble que si la composition qualifie — loi 4, un contrôle sans effet
+    /// est absent. Le prédicat qui le gate (`documentComposesReel`) est
+    /// EXACTEMENT `ReelComposition.qualifiesAsReel(mimeTypes:durationsMs:)`,
+    /// celui-là même que `PublishIntent.document` remet à `defaultType` : une
+    /// seule règle, jamais deux à faire diverger. Ce test verrouille ses
+    /// verdicts pour qu'un seuil recopié rougisse ici comme il rougirait côté
+    /// serveur.
+    func test_laQualificationReel_duMeuble_estLaRegleSDK_jamaisUnSeuilRecopie() {
+        func qualifie(_ media: [ComposerDocumentMedia]) -> Bool {
+            ReelComposition.qualifiesAsReel(
+                mimeTypes: media.map(\.mimeType), durationsMs: media.map(\.durationMs)
+            )
+        }
+        let image = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/a.jpg"), mimeType: "image/jpeg", durationMs: nil
+        )
+        let video10 = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/v.mp4"), mimeType: "video/mp4", durationMs: 10_000
+        )
+        let audio5 = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/a.m4a"), mimeType: "audio/mp4", durationMs: 5_000
+        )
+        let videoCourte = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/court.mp4"), mimeType: "video/mp4", durationMs: 1_000
+        )
+
+        XCTAssertFalse(qualifie([]), "Un texte seul, sans média, ne qualifie pas — l'interrupteur reste absent.")
+        XCTAssertFalse(qualifie([image]), "Une image seule ne qualifie pas.")
+        XCTAssertFalse(qualifie([videoCourte]), "Une vidéo de 1 s (< 3 s) ne qualifie pas.")
+        XCTAssertTrue(qualifie([video10]), "Une vidéo de 10 s qualifie — l'interrupteur apparaît.")
+        XCTAssertTrue(qualifie([image, image]), "Deux images qualifient.")
+        XCTAssertTrue(qualifie([audio5]), "Un audio de 5 s qualifie.")
+    }
+
+    /// **Le cas NOMINAL, média compris : la promesse « offline compris » tient
+    /// aussi pour une photo.**
+    ///
+    /// Résolution du blocage §B.3 (vague 1b, 2026-08-26) : `FeedViewModel.publish`
+    /// enfile SANS condition réseau (`FeedViewModel.swift:878-884` — « Aucune
+    /// condition réseau ici, et c'est une décision »). Router un média EN LIGNE
+    /// vers `.upload` refusait donc le cas nominal —
+    /// `ComposerDocumentSendPlan.plan` convertit tout chemin non durable en
+    /// `.refuse(.nonDurablePath(.upload))`.
+    func test_lePlan_dUnPostAvecMedia_prendLaFileDurable_desDeuxCotesDuReseau() {
+        let media = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/photo.jpg"), mimeType: "image/jpeg", durationMs: nil
+        )
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil,
+            localMedia: [media], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
+        )
+        for horsLigne in [true, false] {
+            XCTAssertEqual(
+                ComposerDocumentSendPlan.plan(for: brouillon, isOffline: horsLigne),
+                .send(.durableOutbox),
+                "Un post avec média est durable des DEUX côtés du réseau — jamais `.upload`, qui jette hors "
+                    + "ligne et refuserait le cas nominal en ligne."
+            )
+        }
+    }
+
+    /// **Une photo sans légende n'est plus un brouillon vide.**
+    ///
+    /// La feuille historique l'accepte déjà (`hasContent`,
+    /// `FeedView+Attachments.swift:914-920` : texte OU pièce jointe OU
+    /// position) ; le plan ne connaissait qu'un texte, et rejetait une photo
+    /// seule là où la feuille qu'il remplace l'accepte.
+    func test_lePlan_neRefusePlusUnBrouillonSansTexte_siUnMediaLAccompagne() {
+        let media = ComposerDocumentMedia(
+            url: URL(fileURLWithPath: "/tmp/photo.jpg"), mimeType: "image/jpeg", durationMs: nil
+        )
+        let brouillon = ComposerDocumentDraft.document(
+            format: .post, forcePlainPost: false, text: "", visibility: .public, visibilityUserIds: [], repostOfId: nil,
+            localMedia: [media], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
+        )
+        XCTAssertNotEqual(
+            ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
+            .refuse(.emptyDraft),
+            "Une photo seule est une matière — la feuille l'accepte, ce plan doit l'accepter aussi."
+        )
+    }
+
+    /// **RETOURNÉE (T2.1) — le brouillon a gagné son canal média, exactement au
+    /// jour que cette garde annonçait.** Le littéral `hasLocalMedia: false` est
+    /// devenu le mensonge qu'elle protégeait : le plan doit désormais DÉRIVER
+    /// `hasLocalMedia` du canal réel du brouillon, jamais le supposer.
+    func test_lePlan_deriveHasLocalMedia_duCanalReelDuBrouillon() throws {
+        XCTAssertFalse(
+            try planBlock().contains("hasLocalMedia: false"),
+            "Le plan écrit encore le littéral `false` : une composition avec média partirait par le chemin "
+                + "TEXTE en laissant son fichier sur place."
+        )
+        XCTAssertTrue(
+            try planBlock().contains("hasLocalMedia: !draft.localMedia.isEmpty"),
+            "Le plan doit dériver `hasLocalMedia` du canal RÉEL du brouillon — jamais un littéral."
+        )
+    }
+
+    /// **Garde NÉGATIVE + garde-fou (T2.1).** Un média composé ne doit jamais
+    /// retraverser un upload direct : `TusUploadManager` jette hors ligne, et un
+    /// média composé hors ligne y serait perdu — c'est exactement le second
+    /// chemin d'envoi que la file durable a fermé.
+    func test_laPorteDuDocument_publishNeRemonteAucunUploadDirect() throws {
+        let envoi = try doorSendBlock()
+
+        XCTAssertFalse(envoi.isEmpty, "Le corps de `publish` est vide — l'appariement d'accolades a échoué.")
+        XCTAssertTrue(
+            envoi.contains("ComposerDocumentSendPlan"),
+            "Le corps lu n'est pas celui de l'envoi — la garde ne mesurerait RIEN."
+        )
+        XCTAssertFalse(
+            envoi.contains("TusUploadManager"),
+            "L'envoi remonte `TusUploadManager` : c'est le second chemin d'envoi que la file durable a fermé."
         )
     }
 
@@ -1511,31 +1718,38 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         }
     }
 
-    /// L'état MESURÉ du 2026-08-24, écrit en toutes lettres pour qu'un outil qui
-    /// gagne ou perd son chemin se lise dans un diff.
+    /// **L'état MESURÉ, écrit en toutes lettres pour qu'un outil qui gagne ou
+    /// perd son chemin se lise dans un diff.**
     ///
-    /// L'emoji est le seul dont la destination existe de bout en bout : il
-    /// n'INGÈRE rien, il écrit dans le texte que le meuble possède déjà
-    /// (`documentText`) et que le brouillon emporte. Le précédent est mesuré,
-    /// pas supposé — `FeedView.swift` monte `EmojiPickerSheet` et fait
-    /// exactement `composerText += emoji`.
+    /// **Les SIX outils ont désormais une destination de bout en bout
+    /// (RETOURNÉE au T2.6).** L'emoji n'INGÈRE rien : il écrit dans le texte
+    /// que le meuble possède déjà (`documentText`) et que le brouillon emporte
+    /// — mesuré, `FeedView.swift` monte `EmojiPickerSheet` et fait exactement
+    /// `composerText += emoji`. Photo, caméra et document INGÈRENT (T2.3) :
+    /// `ComposerDocumentDraft.localMedia` (T2.1) les porte, et
+    /// `PublishIntent.document(localMedia:)` les poste. Le lieu POSE une
+    /// position (T2.5) : `ComposerDocumentDraft.location` (T2.1) la porte, et
+    /// `PublishIntent.document(location:)` la poste.
     ///
-    /// Les cinq autres n'ont pas de destination : `ComposerDocumentDraft` ne
-    /// porte ni `mediaIds`, ni fichier, ni lieu, et son unique publieur de
-    /// production (`StatusViewModel.setStatus`) n'en accepte aucun. Les peindre
-    /// ouvrirait des sélecteurs dont le résultat n'aurait nulle part où aller.
-    func test_seulLEmoji_aUnCheminDeBoutEnBout_lesCinqAutresSontUneDette() {
-        XCTAssertEqual(ComposerDocumentTool.servedRow, [.emoji])
+    /// **Le micro n'est plus une dette.** Il INGÈRE un fichier LOCAL, comme
+    /// photo/caméra/document — `ComposerDocumentDraft.localMedia` le porte
+    /// aussi, `AudioPostComposerView` en étant la source (T2.6) — ET porte SA
+    /// transcription à côté, dans `ComposerDocumentDraft.mobileTranscription`,
+    /// que `PublishIntent.document(transcription:)` élit pour la LANGUE.
+    func test_lEmojiEtLesSixOutils_ontUnCheminDeBoutEnBout() {
+        XCTAssertEqual(ComposerDocumentTool.servedRow, ComposerDocumentTool.canonicalRow)
         XCTAssertEqual(ComposerDocumentTool.emoji.effect, .insertsEmojiIntoText)
+        XCTAssertEqual(ComposerDocumentTool.photo.effect, .attachesLocalMedia(.photoLibrary))
+        XCTAssertEqual(ComposerDocumentTool.camera.effect, .attachesLocalMedia(.camera))
+        XCTAssertEqual(ComposerDocumentTool.document.effect, .attachesLocalMedia(.files))
+        XCTAssertEqual(ComposerDocumentTool.place.effect, .attachesLocation)
 
-        for orpheline in [ComposerDocumentTool.photo, .camera, .document, .place, .microphone] {
-            XCTAssertNil(
-                orpheline.effect,
-                "« \(orpheline.rawValue) » déclare un effet : sa destination doit exister sur "
-                    + "`ComposerDocumentDraft` ET chez le publieur, sans quoi la rangée promet ce que "
-                    + "l'envoi jette."
-            )
-        }
+        XCTAssertEqual(
+            ComposerDocumentTool.microphone.effect, .attachesTranscribedAudio,
+            "« microphone » doit désormais déclarer un effet — sa destination existe sur "
+                + "`ComposerDocumentDraft` (localMedia ET mobileTranscription) ET chez le publieur "
+                + "(`PublishIntent.document`), depuis T2.6."
+        )
     }
 
     /// La rangée servie est une PROJECTION de la rangée canonique — jamais une
@@ -1557,9 +1771,11 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// La politique de capture s'applique à ce qui est SERVI, et pas seulement à
     /// la rangée canonique. Le cas qui commande : une porte de republication
     /// (`allowsCapture: false`) ne doit pas voir la caméra revenir par la
-    /// projection. Aujourd'hui la question ne se pose pas — la caméra n'a pas
-    /// d'effet — et c'est justement pourquoi le témoin est écrit maintenant :
-    /// il rougira le jour où elle en gagnera un.
+    /// projection. Jusqu'au T2.3 la question ne se posait pas — la caméra
+    /// n'avait pas d'effet, donc `servedRow` ne la contenait pas, et ce témoin
+    /// passait à VIDE. Depuis que `.camera.effect` existe, `servedRow` la
+    /// porte réellement, et ce même témoin exerce enfin le cas qu'il a été
+    /// écrit pour attraper.
     func test_laCapture_filtreLaRangeeSERVIE_pasSeulementLaCanonique() {
         let sansCapture = ComposerDocumentToolPolicy.visibleTools(
             served: ComposerDocumentTool.servedRow, allowsCapture: false
@@ -1609,10 +1825,14 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
     }
 
-    func test_envoi_enLigne_avecMedia_passeParLUpload() {
+    /// **RETOURNÉE (résolution du blocage §B.3, vague 1b, 2026-08-26).** Le
+    /// média ne branche plus sur `isOffline` : `.upload` refusait le cas
+    /// NOMINAL — une photo composée EN LIGNE —, `ComposerDocumentSendPlan.plan`
+    /// le convertissant en `.refuse(.nonDurablePath(.upload))`.
+    func test_envoi_enLigne_avecMedia_prendLaFileDurable() {
         XCTAssertEqual(
             ComposerDocumentSendRouting.path(isQuote: false, hasLocalMedia: true, isOffline: false),
-            .upload
+            .durableOutbox
         )
     }
 
@@ -1880,9 +2100,17 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// et du sandbox. Sa condition de levée est nommée : le jour où la surface
     /// devient propriétaire de l'ingestion, ce test se retourne — il ne se
     /// supprime pas. Ancrée sur le BLOC, pour la même raison que la précédente.
+    ///
+    /// **Élargie à `CameraView` (T2.3).** Photo, caméra et document posent
+    /// désormais un fichier LOCAL dans le brouillon
+    /// (`ComposerDocumentTool.effect`), et l'ingestion — état, sélecteurs,
+    /// tuiles — vit dans le meuble (`MeeshyComposerHost.handleDocumentTool`,
+    /// `ComposerMediaIntake`), jamais ici : la surface reste une PRÉSENTATION
+    /// sans état, exactement comme avant que ces trois outils n'aient un
+    /// effet.
     func test_laSurface_neFabriquePasUnSecondPipelineDIngestion() throws {
         let bloc = try surfaceBlock()
-        for interdit in ["photosPicker(", "fileImporter(", "PhotosPickerItem", "UIImagePickerController"] {
+        for interdit in ["photosPicker(", "fileImporter(", "PhotosPickerItem", "UIImagePickerController", "CameraView("] {
             XCTAssertFalse(
                 bloc.contains(interdit),
                 "La surface monte « \(interdit) » : le pipeline d'ingestion du dépôt est ailleurs, et unique."
@@ -1903,7 +2131,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUnBrouillonQuiNestPasUnPost() {
         for format in [ComposerFormat.status, .story, .reel] {
             let brouillon = ComposerDocumentDraft.document(
-                format: format, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil
+                format: format, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -1925,7 +2153,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUnBrouillonSansMatiere() {
         for texte in ["", "   ", "\n"] {
             let brouillon = ComposerDocumentDraft.document(
-                format: .post, text: texte, visibility: .public, visibilityUserIds: [], repostOfId: nil
+                format: .post, forcePlainPost: false, text: texte, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -1951,7 +2179,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     func test_lePlan_refuseUneAudienceNominativeSansPersonne() {
         for nominative in PostVisibility.composerSelectableCases where nominative.requiresUserSelection {
             let brouillon = ComposerDocumentDraft.document(
-                format: .post, text: "bonjour", visibility: nominative, visibilityUserIds: [], repostOfId: nil
+                format: .post, forcePlainPost: false, text: "bonjour", visibility: nominative, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false),
@@ -1961,7 +2189,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             )
 
             let complet = ComposerDocumentDraft.document(
-                format: .post, text: "bonjour", visibility: nominative, visibilityUserIds: ["u1"], repostOfId: nil
+                format: .post, forcePlainPost: false, text: "bonjour", visibility: nominative, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
             )
             XCTAssertEqual(
                 ComposerDocumentSendPlan.plan(for: complet, isOffline: false),
@@ -1982,7 +2210,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// `isOffline()` répond oui.
     func test_lePlan_dUnPostTexte_prendLeCheminDejaDurable_desDeuxCotesDuReseau() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
         )
         for horsLigne in [true, false] {
             XCTAssertEqual(
@@ -2031,7 +2259,9 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             visibilityUserIds: nil,
             mentions: nil,
             repostOfId: "post-source",
-            audioUrl: nil
+            audioUrl: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil,
+            forcePlainPost: false,
+            mobileTranscription: nil
         )
         XCTAssertEqual(
             ComposerDocumentSendPlan.plan(for: citation, isOffline: false),
@@ -2059,36 +2289,6 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                 "Le plan nomme « \(recopie) » : il a commencé à réécrire la table qu'il devait interroger."
             )
         }
-    }
-
-    /// **Le brouillon n'a AUCUN canal média — et c'est ce qui rend honnête le
-    /// littéral `hasLocalMedia: false` du plan.**
-    ///
-    /// Garde NÉGATIVE dont toute la valeur est dans le jour où elle rougira :
-    /// dès que `ComposerDocumentDraft` gagnera un champ de média — la première
-    /// capacité manquante du DoD du lot 2 —, ce littéral deviendra un MENSONGE.
-    /// Une composition avec photo prendrait le chemin texte, et le fichier
-    /// resterait sur place sans qu'aucune erreur ne le dise.
-    ///
-    /// Le littéral ne peut pas se garder lui-même : il est vrai par ABSENCE, et
-    /// une absence ne se voit nulle part.
-    func test_leBrouillon_nAAucunCanalMedia_ceQuiTientLeLitteralDuPlan() throws {
-        let source = try surfaceSource()
-        guard let brouillon = blockBody(startingAt: "struct ComposerDocumentDraft", in: source) else {
-            return XCTFail("`ComposerDocumentDraft` est introuvable — la garde ne mesurerait RIEN")
-        }
-        for canal in ["mediaIds", "attachmentIds", "attachments", "fileURL", "localMedia", "imageIds"] {
-            XCTAssertFalse(
-                brouillon.contains(canal),
-                "Le brouillon porte « \(canal) » : le littéral `hasLocalMedia: false` du plan est devenu faux, "
-                    + "et une composition média partirait par le chemin TEXTE en laissant son fichier sur place."
-            )
-        }
-
-        XCTAssertTrue(
-            try planBlock().contains("hasLocalMedia: false"),
-            "Le plan n'écrit plus le littéral que cette garde protège — elle ne mesurerait plus rien."
-        )
     }
 
     // MARK: - L'ISSUE de l'envoi — ce que le publieur a rendu
@@ -2221,13 +2421,25 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// SANS consulter la connectivité — c'est exactement la promesse « offline
     /// compris ». Un appel direct au service la contournerait, et un post
     /// composé hors ligne serait perdu au premier kill de l'app.
+    /// **RETOURNÉE (T2.1).** Elle exigeait `createPost(` — la seule entrée qui
+    /// enfilait durablement, à l'époque où le brouillon ne portait aucun média.
+    /// `FeedViewModel.publish(_ intent: PublishIntent)` enfile désormais SANS
+    /// condition réseau, média compris (`FeedViewModel.swift:878-884` —
+    /// « Aucune condition réseau ici, et c'est une décision ») : c'est le
+    /// publieur NOMMÉ que `PublishIntent.document(…)` compose pour lui, et un
+    /// seul des deux doit décider.
     func test_laPorteDuDocument_envoieParLaFileDurableDuModele() throws {
         let envoi = try doorSendBlock()
 
         XCTAssertTrue(
+            envoi.contains("viewModel.publish(PublishIntent.document("),
+            "L'envoi doit passer par `FeedViewModel.publish(PublishIntent.document(…))` — le publieur unique "
+                + "qui enfile SANS condition réseau, média compris."
+        )
+        XCTAssertFalse(
             envoi.contains("createPost("),
-            "L'envoi doit passer par `FeedViewModel.createPost` — la seule entrée du dépôt dont la branche "
-                + "texte enfile la ligne durablement, en ligne comme hors ligne."
+            "L'envoi appelle encore `createPost(` : deux chemins pour un même geste, dont un seul devrait "
+                + "décider."
         )
         XCTAssertTrue(
             envoi.contains("ComposerDocumentSendPlan.plan("),
@@ -2289,41 +2501,58 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
     }
 
-    /// **Garde NÉGATIVE, à condition de levée nommée.**
+    /// **Garde RETOURNÉE au T3.1 — désormais POSITIVE, à un site nommé.**
     ///
-    /// Aucun site de production ne monte encore cette porte, et ce n'est pas un
-    /// oubli de câblage :
-    /// `test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`
-    /// retient la porte du fil tant que la RANGÉE d'outils du document ne couvre
-    /// pas celle de la feuille qu'elle remplace. L'ENVOI, lui, est tenu depuis
-    /// le lot 4.10 — c'était la troisième des trois capacités du DoD du lot 2.
+    /// Jusqu'à T3.1, aucun site de production ne montait cette porte, et ce
+    /// n'était pas un oubli de câblage : ce test retenait la porte du fil tant
+    /// que la RANGÉE d'outils du document ne couvrait pas celle de la feuille
+    /// qu'elle remplace. L'ENVOI, lui, est tenu depuis le lot 4.10 — c'était la
+    /// troisième des trois capacités du DoD du lot 2.
     ///
-    /// Elle existe pour que la porte ne soit pas montée « puisqu'elle existe »
-    /// avant que la première capacité tombe. Ses déclencheurs sont ses deux
-    /// dernières assertions : le jour où elles tombent TOUTES LES DEUX, plus
-    /// rien ne retient la porte, et ce test se RETOURNE — il ne se supprime pas.
+    /// Elle existait pour que la porte ne soit pas montée « puisqu'elle
+    /// existe » avant que la première capacité tombe. Ses déclencheurs
+    /// étaient ses deux dernières assertions : le jour où elles tombent
+    /// TOUTES LES DEUX (T2.6), plus rien ne retenait la porte — mais elle
+    /// restait à `montages == 0` jusqu'à ce qu'un site de production la
+    /// monte réellement. C'est T3.1 : RootViewComponents construit
+    /// désormais `DocumentComposerDoor(` sur le PLEIN composer du fil
+    /// (`.fullScreenCover(isPresented: $showFullComposer)`), et la garde se
+    /// RETOURNE en conséquence — elle ne se supprime pas, elle exige
+    /// maintenant `montages == 1` : ni zéro (régression du câblage), ni deux
+    /// ou plus (un second site l'aurait montée en plus du fil).
     ///
     /// **ÉLARGIE : la rangée n'était pas tout ce que la feuille absorbée
     /// porte.** La mesure ne comparait que `servedRow` à `canonicalRow`, et
     /// `canonicalRow` ne modélise QUE les six boutons d'attache. La feuille
     /// historique (`FeedComposerSheet`) porte un SEPTIÈME contrôle dans la même
-    /// barre : la capsule de LANGUE, avec son sélecteur — un état ÉCRIVABLE
-    /// (`composerLanguage`) que le meuble n'a ni en champ, ni en contrôle, ni en
-    /// canal sur `ComposerDocumentDraft`. La porte poste
-    /// `DefaultComposerLanguage.resolve()`, une CONSTANTE qui rend « fr ».
-    ///
-    /// Sans cet élargissement, la garde serait passée au vert le jour où la
-    /// rangée se remplit, et aurait laissé monter la porte avec la régression
-    /// intacte : un auteur anglophone publiant « Hello everyone » verrait son
-    /// post étiqueté français, traduit FR→EN par le Prisme, sans aucun moyen de
-    /// corriger — le sélecteur qu'il utilisait la veille n'existe plus sur cet
-    /// écran. C'est le mode d'échec PROXY : la mesure remplaçante était plus
+    /// barre : la capsule de LANGUE, avec son sélecteur. Sans cet
+    /// élargissement, la garde serait passée au vert le jour où la rangée se
+    /// remplit, et aurait laissé monter la porte avec la régression intacte :
+    /// un auteur anglophone publiant « Hello everyone » verrait son post
+    /// étiqueté français, traduit FR→EN par le Prisme, sans aucun moyen de
+    /// corriger. C'est le mode d'échec PROXY : la mesure remplaçante était plus
     /// étroite que la capacité qu'elle prétendait couvrir.
+    ///
+    /// **La SECONDE condition est tombée au lot T2.2.** Le meuble porte
+    /// désormais un état ÉCRIVABLE (`documentLanguage`), sa capsule
+    /// (`ComposerLanguageFlag`) et son sélecteur (`AudioLanguagePickerView`),
+    /// et la porte poste `draft.originalLanguage` plutôt que la CONSTANTE.
+    ///
+    /// **La PREMIÈRE condition — la rangée — est tombée au lot T2.6.**
+    /// T2.3 l'avait fait AVANCER (`servedRow` servait
+    /// `[.photo, .camera, .emoji, .document]`), T2.5 y a ajouté `.place`
+    /// (`[..., .place]`) sans la faire tomber — le micro manquait encore.
+    /// `.microphone` gagne enfin son effet (`.attachesTranscribedAudio`) à ce
+    /// lot, dernier des six : `servedRow == canonicalRow` désormais, TOUTES
+    /// LES DEUX conditions sont tombées. `montages` reste néanmoins à ZÉRO
+    /// plus bas — plus rien ne RETIENT la porte au sens de cette garde, mais
+    /// aucun site de production ne la MONTE pour autant : le câblage effectif
+    /// (T3.1) reste une décision distincte, non prise ici.
     /// `@MainActor` : le bundle de tests est compilé en isolation `nonisolated`,
     /// et `DefaultComposerLanguage.resolve()` — dont cette garde mesure la
     /// constance — est épinglée au main actor.
     @MainActor
-    func test_laPorteDuDocument_nEstMonteeParAucunSiteDeProduction_etCEstLaRangeeQuiLaRetient() throws {
+    func test_laPorteDuDocument_estMonteeParExactementUnSiteDeProduction_leFil() throws {
         let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -2345,21 +2574,32 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
         XCTAssertEqual(declarations, 1, "La porte doit exister, et une seule fois — sinon la garde ne mesure rien.")
         XCTAssertEqual(
-            montages, 0,
-            "Un site de production monte `DocumentComposerDoor` alors que la rangée d'outils du document ne "
-                + "couvre pas encore celle de la feuille historique : l'auteur y perdrait "
-                + "photo·caméra·fichier·lieu·micro d'un coup. Ce n'est pas un échec — c'est la condition de "
-                + "levée. Retourner ce test, ne pas le supprimer."
+            montages, 1,
+            "Exactement UN site de production doit monter `DocumentComposerDoor` : RootViewComponents "
+                + "(le PLEIN composer du fil, `.fullScreenCover(isPresented: $showFullComposer)`) — c'est "
+                + "la levée décidée à T3.1, la rangée d'outils du document couvrant désormais celle de la "
+                + "feuille historique. Zéro dirait que le câblage a régressé ; deux ou plus dirait qu'un "
+                + "second site l'a montée en plus du fil — la CITATION, elle, reste sur `FeedComposerSheet` "
+                + "(c'est T3.2, distincte)."
         )
-        XCTAssertNotEqual(
+        // **RETOURNÉE au T3.1.** `.microphone` avait gagné son effet
+        // (`.attachesTranscribedAudio`) au T2.6, dernier des six outils — la
+        // rangée du document couvrait déjà la rangée canonique, et la langue
+        // déclarée depuis T2.2 : les deux conditions de levée étaient tombées,
+        // mais `montages` restait à ZÉRO tant qu'aucun site de production ne
+        // construisait `DocumentComposerDoor(`. C'est ce câblage que T3.1
+        // prend : RootViewComponents monte désormais la porte sur le PLEIN
+        // composer du fil, et `montages == 1` en est la preuve.
+        XCTAssertEqual(
             ComposerDocumentTool.servedRow, ComposerDocumentTool.canonicalRow,
-            "La rangée du document couvre désormais la rangée canonique. C'est la PREMIÈRE des deux "
-                + "conditions ; lire l'autre ci-dessous avant de monter quoi que ce soit."
+            "La rangée du document couvre désormais la rangée canonique — photo·caméra·emoji·document·"
+                + "lieu·micro, les six. C'est la PREMIÈRE des deux conditions de levée de la porte ; la "
+                + "SECONDE (la langue) est vérifiée juste en-dessous."
         )
 
-        // SECOND déclencheur — la LANGUE. Elle n'est dans aucune rangée : c'est
-        // un contrôle de la même barre, absent du meuble, et son absence ne se
-        // voit pas en comparant deux listes d'outils d'attache.
+        // SECOND déclencheur — la LANGUE. RETOURNÉ au lot T2.2 : la porte poste
+        // désormais `draft.originalLanguage`, et le meuble porte la capsule et
+        // le sélecteur qui l'alimentent.
         let porte = try surfaceSource()
         guard let envoi = corpsDeDeclaration(
             commencantPar: "private func publish(_ draft: ComposerDocumentDraft)",
@@ -2367,21 +2607,28 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         ) else {
             return XCTFail("L'envoi de la porte du document est introuvable — la garde ne mesurerait RIEN.")
         }
-        XCTAssertTrue(
+        XCTAssertFalse(
             envoi.contains("originalLanguage: DefaultComposerLanguage.resolve()"),
-            "La porte ne poste plus la CONSTANTE de langue. Si elle poste désormais un état du meuble, la "
-                + "seconde condition est remplie — retourner cette assertion, pas la supprimer."
+            "La porte poste encore la CONSTANTE de langue au lieu de l'état déclaré par l'auteur : le "
+                + "geste de T2.2 (`draft.originalLanguage`) a disparu du corps de `publish`."
+        )
+        XCTAssertTrue(
+            envoi.contains("draft.originalLanguage"),
+            "La porte doit poster `draft.originalLanguage` — la langue que la capsule du meuble a écrite, "
+                + "pas la constante de départ du brouillon."
         )
         XCTAssertEqual(
             DefaultComposerLanguage.resolve(), "fr",
-            "La prémisse de l'assertion ci-dessus est que `resolve()` est une CONSTANTE. Si elle se met à "
-                + "lire quelque chose, le raisonnement de cette garde change avec elle."
+            "La prémisse des deux assertions ci-dessus est que `resolve()` RESTE le point de DÉPART du "
+                + "brouillon (T2.1) : ce n'est pas elle qui change, c'est cette porte qui a cessé de "
+                + "l'appeler à l'envoi."
         )
-        XCTAssertFalse(
-            porte.contains("originalLanguage") && porte.contains("ComposerLanguageFlag"),
-            "Le meuble a gagné une capsule de langue : l'auteur peut de nouveau déclarer la langue de son "
-                + "post. C'est la SECONDE condition de levée — monter `DocumentComposerDoor` là où "
-                + "`FeedComposerSheet` est présentée, puis RETOURNER ce test."
+        let meuble = try sourceDuMeuble()
+        XCTAssertTrue(
+            meuble.contains("originalLanguage") && meuble.contains("ComposerLanguageFlag"),
+            "Le meuble doit porter un canal de langue déclaré (`originalLanguage`) ET la capsule "
+                + "`ComposerLanguageFlag` qui l'affiche — la SECONDE condition de levée de la porte, "
+                + "tombée au lot T2.2."
         )
     }
 

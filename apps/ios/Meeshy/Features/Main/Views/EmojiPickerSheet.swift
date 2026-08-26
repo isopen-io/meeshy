@@ -353,6 +353,11 @@ struct EmojiPickerView: View {
 
 struct EmojiPickerSheet: View {
     let quickReactions: [String]
+    /// Le titre de la feuille. Défaut : le contexte d'ORIGINE (une réaction).
+    /// Un hôte qui insère l'emoji AILLEURS — le meuble, qui l'ajoute au texte —
+    /// passe le sien (`composer.attach.emoji`), sans que les appelants de
+    /// réaction (fil, préférences) aient à répéter le défaut.
+    var title: LocalizedStringResource = LocalizedStringResource("emoji.title", defaultValue: "Reactions")
     let onSelect: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -360,7 +365,7 @@ struct EmojiPickerSheet: View {
     var body: some View {
         NavigationStack {
             EmojiPickerView(recentEmojis: quickReactions, onSelect: onSelect)
-                .navigationTitle(String(localized: "emoji.title", defaultValue: "Reactions"))
+                .navigationTitle(Text(title))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {

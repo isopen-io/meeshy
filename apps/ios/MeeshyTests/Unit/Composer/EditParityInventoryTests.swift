@@ -42,7 +42,7 @@ import MeeshyUI
 /// `ComposerSurfaceRouting` fait atterrir sur la SCENE, ou le socle ne peint
 /// rien du tout. Une capacite tenue par le meuble et inatteignable depuis la
 /// porte qui en aurait besoin n'est pas une capacite acquise pour le retrait :
-/// c'est le decalage que `test_lesDeuxCapacitesTenues_leSontCoteCreation_...`
+/// c'est le decalage que `test_lesCapacitesDeChromeSocle_leSontCoteCreation_...`
 /// grave, pour qu'un lecteur pressé ne compte pas 2 sur 7 comme un progres vers
 /// le retrait de la feuille d'EDITION.
 @MainActor
@@ -101,10 +101,10 @@ final class EditParityInventoryTests: XCTestCase {
         // d'envoi refuse un brouillon blanc, et le socle peint la fleche sous le
         // document. C'est une capacite REPRISE, la premiere des sept.
         let brouillonBlanc = ComposerDocumentDraft.document(
-            format: .post, text: "   ", visibility: .public, visibilityUserIds: [], repostOfId: nil
+            format: .post, forcePlainPost: false, text: "   ", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
         )
         let brouillonPlein = ComposerDocumentDraft.document(
-            format: .post, text: "un texte", visibility: .public, visibilityUserIds: [], repostOfId: nil
+            format: .post, forcePlainPost: false, text: "un texte", visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
         )
         let refuseLeBlanc = ComposerDocumentSendPlan.plan(for: brouillonBlanc, isOffline: false)
             == .refuse(.emptyDraft)
@@ -120,7 +120,7 @@ final class EditParityInventoryTests: XCTestCase {
         // « Hello everyone » repart etiquete francais, et le Prisme le traduit
         // FR vers EN sur un texte deja anglais.
         let langueEnDur = sourceDuDocument.contains("originalLanguage: DefaultComposerLanguage.resolve()")
-        let langueDeclarable = !langueEnDur
+        let langueDeclarable = !langueEnDur && sourceDuDocument.contains("originalLanguage: draft.originalLanguage")
 
         // 3 — EVENTAIL POST/REEL GATE.
         // L'eventail EXISTE et se peint (lot 4). Ce qui manque est la MOITIE
@@ -147,26 +147,40 @@ final class EditParityInventoryTests: XCTestCase {
             && sansQualification.initialFormat != .reel
 
         // 5 — RETRAIT DE MEDIAS.
-        // Mesure de PRECONDITION, et c'est la bonne : on ne retire pas ce qu'on
-        // ne sait pas porter. Aucun outil d'attache du document n'a d'effet —
-        // `ComposerDocumentTool.effect` rend `nil` pour les trois — donc aucun
-        // media n'entre, donc aucun ne se retire.
-        let outilsDeMedia: [ComposerDocumentTool] = [.photo, .camera, .document]
-        let retraitDeMedias = outilsDeMedia.contains { $0.effect != nil }
+        // La PRECONDITION (l'ingestion) est tombee au lot T2.3 : les trois
+        // outils d'attache portent desormais un effet (`.attachesLocalMedia`).
+        // Continuer a mesurer `effect != nil` ferait dire au vert que le
+        // RETRAIT est tenu — le mode d'echec PROXY : la precondition et la
+        // capacite ont cesse d'etre equivalentes le jour ou l'une des deux a
+        // bouge sans l'autre. Ce que la feuille tient et que le meuble ne
+        // tient toujours pas, c'est un CANAL de retrait sur une composition
+        // REPRISE (l'equivalent de `removeMediaIds`) —
+        // `ComposerDocumentDraft.document(...)` n'en porte aucun, et la porte
+        // d'edition n'atteint de toute facon jamais cette surface
+        // (`test_lesCapacitesDeChromeSocle_leSontCoteCreation_...` : `.edit`
+        // route vers `.scene`).
+        let retraitDeMedias = sourceDuDocument.contains("removeMediaIds")
 
         // 6 — POSITION TRI-ETAT.
         // La feuille distingue TROIS etats (`PostLocationUpdate` : remplacer,
         // retirer, ne pas toucher) — c'est ce qui empeche une reouverture de
-        // vider une position que l'auteur n'a pas regardee. Le meuble n'a meme
-        // pas le premier : son outil de lieu ne declenche rien.
-        let positionTriEtat = ComposerDocumentTool.place.effect != nil
+        // vider une position que l'auteur n'a pas regardee. T2.5 pose desormais
+        // UN etat cote CREATION (`ComposerDocumentTool.place.effect`,
+        // `ComposerDocumentDraft.location: SharedPlace?` — un OPTIONNEL a DEUX
+        // etats, pas trois). Mesurer `effect != nil` serait redevenu un mode
+        // d'echec PROXY, exactement le piege nomme par "retrait de medias"
+        // juste au-dessus au T2.3 : l'outil declenche desormais un effet REEL,
+        // mais ni un canal de RETRAIT ni le troisieme etat ("ne pas toucher")
+        // qu'une REPRISE exige n'existent. Mesuree sur le texte source, comme
+        // "retrait de medias".
+        let positionTriEtat = sourceDuDocument.contains("LocationUpdate")
 
         // 7 — AUDIENCE + LISTE NOMMEE.
         // Reprise au lot 4.9 : le socle peint un vrai selecteur sous le
         // document, et le brouillon porte la liste nominative que ONLY et EXCEPT
         // exigent. Seconde des deux capacites tenues.
         let brouillonNomme = ComposerDocumentDraft.document(
-            format: .post, text: "x", visibility: .only, visibilityUserIds: ["u1"], repostOfId: nil
+            format: .post, forcePlainPost: false, text: "x", visibility: .only, visibilityUserIds: ["u1"], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
         )
         let audienceEtListe = ComposerChromeOwnership.socleZones(for: .document).contains(.audience)
             && brouillonNomme.visibilityUserIds == ["u1"]
@@ -184,9 +198,10 @@ final class EditParityInventoryTests: XCTestCase {
                 nom: "langue source",
                 chezLaFeuille: ["showLanguagePicker = true", "language: languageChanged ? selectedLanguage : nil"],
                 mesuree: langueDeclarable,
-                attendue: false,
-                mesureDit: "la porte-document pose `DefaultComposerLanguage.resolve()`, une constante — "
-                    + "aucun canal de langue sur `ComposerDocumentDraft`"
+                attendue: true,
+                mesureDit: "T2.2 : la porte-document poste `draft.originalLanguage`, ecrit par la capsule "
+                    + "et le selecteur que le meuble monte desormais — le litteral "
+                    + "`DefaultComposerLanguage.resolve()` a quitte le corps de `publish`"
             ),
             Capacite(
                 nom: "eventail POST/REEL gate",
@@ -215,8 +230,9 @@ final class EditParityInventoryTests: XCTestCase {
                 chezLaFeuille: ["private func toggleRemove(_ id: String) {", "removeMediaIds: Array(removedMediaIds)"],
                 mesuree: retraitDeMedias,
                 attendue: false,
-                mesureDit: "aucun outil d'attache du document n'a d'effet — rien n'entre, donc rien ne "
-                    + "se retire"
+                mesureDit: "la precondition (ingestion) est tombee au T2.3, mais `ComposerDocumentDraft` "
+                    + "ne porte toujours aucun canal de retrait — mesuree sur le texte source, pas sur "
+                    + "`effect != nil` (qui serait devenu un mode d'echec PROXY depuis T2.3)"
             ),
             Capacite(
                 nom: "position tri-etat",
@@ -366,32 +382,34 @@ final class EditParityInventoryTests: XCTestCase {
         }
     }
 
-    /// **Le STOP, opposable.** Deux capacites sur sept. Le retrait
-    /// d'`EditPostSheet.swift` retirerait les cinq autres a l'utilisateur.
+    /// **Le STOP, opposable.** Trois capacites sur sept depuis T2.2 (« langue
+    /// source » a rejoint « champ contenu + validite » et « audience + liste
+    /// nommee »). Le retrait d'`EditPostSheet.swift` retirerait les quatre
+    /// autres a l'utilisateur.
     ///
     /// Le compte ET les noms : un compte seul serait reste vert le jour ou une
     /// capacite en remplacerait une autre, et c'est precisement ce qui vient
     /// d'arriver du cote creation.
-    func test_leRetraitDeLaFeuille_resteINTERDIT_tantQueCinqCapacitesManquent() throws {
+    func test_leRetraitDeLaFeuille_resteINTERDIT_tantQueQuatreCapacitesManquent() throws {
         let capacites = try inventaire()
         let tenues = Set(capacites.filter(\.mesuree).map(\.nom))
         let manquantes = capacites.filter { !$0.mesuree }.map(\.nom)
 
         XCTAssertEqual(
-            tenues, ["champ contenu + validite", "audience + liste nommee"],
+            tenues, ["champ contenu + validite", "audience + liste nommee", "langue source"],
             "Les capacites tenues par le meuble ont change. Le retrait de la feuille reste interdit tant "
             + "que les sept n'y sont pas ; ce test dit LESQUELLES manquent, pour qu'un lot suivant sache "
             + "quoi lever plutot que de recompter."
         )
         XCTAssertEqual(
-            manquantes.count, 5,
-            "Cinq capacites manquent : \(manquantes.joined(separator: ", ")). Retirer la feuille les "
+            manquantes.count, 4,
+            "Quatre capacites manquent : \(manquantes.joined(separator: ", ")). Retirer la feuille les "
             + "retirerait a l'utilisateur, sans qu'aucun test d'ecran ne le dise."
         )
     }
 
-    /// **Les deux capacites tenues le sont cote CREATION — la porte d'edition ne
-    /// les atteint pas.**
+    /// **Les capacites de CHROME tenues le sont cote CREATION — la porte
+    /// d'edition ne les atteint pas.**
     ///
     /// C'est la remesure que le plan exigeait, et elle ne dit pas ce qu'on
     /// attendait. Le lot 4 a fait deriver le proprietaire du chrome de la
@@ -400,10 +418,14 @@ final class EditParityInventoryTests: XCTestCase {
     /// `ComposerSurfaceRouting` fait atterrir toute reprise sur la SCENE — ou le
     /// socle ne peint RIEN et l'atelier assemble tout.
     ///
-    /// Compter « 2 sur 7 » comme un progres vers le retrait de la feuille
-    /// d'EDITION serait donc faux. Les deux capacites ont muri sur le chemin de
-    /// CREATION ; le chemin d'edition n'en a exerce aucune.
-    func test_lesDeuxCapacitesTenues_leSontCoteCreation_etLaPorteDEditionNeLesAtteintPas() {
+    /// Compter « 3 sur 7 » comme un progres vers le retrait de la feuille
+    /// d'EDITION serait donc faux. Les trois capacites tenues (T2.2 ajoute
+    /// « langue source ») ont muri sur le chemin de CREATION ; le chemin
+    /// d'edition n'en a exerce aucune. Ce test-ci n'en remesure que DEUX :
+    /// « langue source » ne depend pas du CHROME (`ComposerChromeOwnership`)
+    /// mais d'un canal distinct (`documentLanguage` + capsule superposee), donc
+    /// hors de ce que `socleZones` peut dire.
+    func test_lesCapacitesDeChromeSocle_leSontCoteCreation_etLaPorteDEditionNeLesAtteintPas() {
         let profil = ComposerProfile.profile(for: .edit(postId: "d", documentFormat: .post))
 
         XCTAssertEqual(

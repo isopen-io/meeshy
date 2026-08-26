@@ -1,5 +1,6 @@
 import Foundation
 import UniformTypeIdentifiers
+import AVFoundation
 import MeeshySDK
 import os
 
@@ -38,6 +39,64 @@ nonisolated enum ComposerIngestRouter {
         if normalized.hasPrefix("video/") { return .video }
         if normalized.hasPrefix("audio/") { return .audio }
         return .file
+    }
+}
+
+/// **Sonde des métadonnées d'un fichier LOCAL fraîchement ingéré (T2.3,
+/// revue Opus, correctifs 1 et 3)** — durée pour une vidéo/un audio, mime à
+/// PORTER quand le système ne sait pas toujours en donner un pour un
+/// `UTType` pourtant bien identifié.
+///
+/// `nonisolated enum`, même patron que le reste de ce fichier : les deux
+/// méthodes n'ont aucune affinité avec le MainActor.
+nonisolated enum ComposerMediaProbe {
+
+    /// La durée RÉELLE d'un fichier vidéo/audio, en millisecondes — `nil`
+    /// pour une image ou un fichier générique, dont la durée n'a pas de sens.
+    ///
+    /// **Correctif 1.** Sans elle, un `ComposerDocumentMedia` de vidéo
+    /// partait avec `durationMs: nil`, et `ReelComposition.defaultType` — qui
+    /// exige >= 3 s pour qu'une SEULE vidéo qualifie un RÉEL — traite une
+    /// durée inconnue comme NON qualifiante (`meetsMinDuration(nil) ==
+    /// false`) : une vidéo de 10 s composée dans le meuble partait donc en
+    /// `POST`, jamais en `REEL`.
+    ///
+    /// `ComposerIngestRouter.route(mime:)` reste le SEUL classement
+    /// image/vidéo/audio : cette sonde ne réimplémente aucun `hasPrefix`, et
+    /// court-circuite AVANT de toucher `AVFoundation` pour tout ce qui n'est
+    /// ni vidéo ni audio.
+    static func durationMs(forURL url: URL, mime: String) async -> Int? {
+        switch ComposerIngestRouter.route(mime: mime) {
+        case .video, .audio:
+            let asset = AVURLAsset(url: url)
+            do {
+                let duration = try await asset.load(.duration)
+                guard duration.isValid, !duration.isIndefinite else { return nil }
+                let seconds = CMTimeGetSeconds(duration)
+                guard seconds > 0 else { return nil }
+                return Int((seconds * 1000).rounded())
+            } catch {
+                return nil
+            }
+        case .image, .file:
+            return nil
+        }
+    }
+
+    /// Le mime à porter jusqu'au brouillon — le `UTType` DÉCLARÉ quand il en
+    /// donne un, et SEULEMENT alors un repli sur la table connue par
+    /// EXTENSION (`MimeTypeResolver`), jamais `application/octet-stream`
+    /// directement.
+    ///
+    /// **Correctif 3.** `UTType.preferredMIMEType` rend `nil` pour des types
+    /// pourtant bien identifiés — `.caf` (`com.apple.coreaudio-format`),
+    /// `.opus` — et retomber directement sur `application/octet-stream` y
+    /// ferait perdre EXACTEMENT le défaut que ce lot prétend fermer : la
+    /// passerelle ne reconnaît un média audio qu'à
+    /// `mimeType.startsWith('audio/')` (`PublishIntent.swift:64-75`), et
+    /// n'y lance donc jamais Whisper.
+    static func mime(forURL url: URL, declaredType: UTType?) -> String {
+        declaredType?.preferredMIMEType ?? MimeTypeResolver.mimeType(forURL: url)
     }
 }
 

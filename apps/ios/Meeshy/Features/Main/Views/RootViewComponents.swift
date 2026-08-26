@@ -125,7 +125,6 @@ struct ThemedFeedOverlay: View {
     /// Remplace l'ancien cover local `(isPresented:)` + `selectedStoryUserId`
     /// séparé, dont la capture périmée d'uid provoquait l'écran noir « introuvable ».
     @EnvironmentObject var storyViewerCoordinator: StoryViewerCoordinator
-    @State private var composerText = ""
     @FocusState private var isComposerFocused: Bool
     @State private var showStatusComposer = false
     @State private var showFullComposer = false
@@ -135,7 +134,6 @@ struct ThemedFeedOverlay: View {
         router.pendingOpenFeedComposer = false
         showFullComposer = true
     }
-    @State private var pendingAttachmentType: String?
     @State private var quoteOriginalPost: FeedPost?
     /// Negative scroll offset of the feed (0 at rest, more negative scrolling
     /// up) — drives the collapsing header and the hand-over of the title slot to
@@ -894,16 +892,16 @@ struct ThemedFeedOverlay: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        // T3.1 — le PLEIN composer du fil, la porte la plus utilisée de l'app,
+        // passe par le meuble. La citation juste en-dessous reste sur
+        // `FeedComposerSheet` (T3.2, distincte). `DocumentComposerDoor` se
+        // referme SEULE via `@Environment(\.dismiss)` : pas de binding
+        // `onDismiss` à porter ici, le `dismiss()` referme ce `fullScreenCover`
+        // et ramène `showFullComposer` à `false` par le binding.
         .fullScreenCover(isPresented: $showFullComposer) {
-            FeedComposerSheet(
-                viewModel: viewModel,
-                initialText: composerText,
-                pendingAttachmentType: pendingAttachmentType,
-                onDismiss: {
-                    showFullComposer = false
-                    pendingAttachmentType = nil
-                    composerText = ""
-                }
+            DocumentComposerDoor(
+                intent: ComposerIntent(origin: .feedComposer),
+                viewModel: viewModel
             )
         }
         .fullScreenCover(item: $quoteOriginalPost) { quoted in

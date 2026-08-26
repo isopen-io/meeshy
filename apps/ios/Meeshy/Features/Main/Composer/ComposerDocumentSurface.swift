@@ -335,6 +335,27 @@ nonisolated enum ComposerAudienceOffer {
     }
 }
 
+/// La FAMILLE de sélecteur qu'un outil d'attache ouvre pour poser un fichier
+/// LOCAL dans le brouillon — la valeur associée de
+/// `ComposerDocumentToolEffect.attachesLocalMedia`, jamais trois cas
+/// distincts sur l'effet lui-même : `handleDocumentTool`
+/// (`MeeshyComposerHost.swift`) reste ainsi aiguillé sur l'EFFET, pas sur
+/// l'outil qui l'a déclenché.
+///
+/// `nonisolated` au niveau du TYPE — même patron que `ComposerLanguageFlag`
+/// (`ComposerModels.swift:122-124`) : la cible app compile sous
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests non, et une
+/// valeur associée logée dans un `enum` `Equatable` nonisolated doit l'être
+/// elle aussi.
+nonisolated enum ComposerMediaIntake: Equatable {
+    /// La pellicule — `PhotosPicker`.
+    case photoLibrary
+    /// La capture en direct — `CameraView`.
+    case camera
+    /// L'importateur de documents — `fileImporter`.
+    case files
+}
+
 /// La rangée d'outils du document — **des données, pas une vue**.
 ///
 /// Elle miroite celle de `FeedComposerSheet` (`FeedView+Attachments.swift`),
@@ -359,6 +380,64 @@ nonisolated enum ComposerDocumentToolEffect: Equatable {
     /// mesuré et vivant — le composer inline du fil monte `EmojiPickerSheet` et
     /// fait exactement `composerText += emoji`.
     case insertsEmojiIntoText
+
+    /// Ouvre un sélecteur qui pose un fichier LOCAL dans le brouillon (T2.3) —
+    /// photothèque, caméra ou importateur de documents, selon
+    /// `ComposerMediaIntake`.
+    ///
+    /// **Une valeur associée, jamais trois cas distincts** sur cet `enum` :
+    /// `handleDocumentTool` reste aiguillé sur l'EFFET et non sur l'outil qui
+    /// l'a déclenché — trois cas auraient rouvert exactement ce que `effect`
+    /// referme ailleurs dans ce fichier, trois branches à tenir en phase avec
+    /// trois outils au lieu d'une seule question posée à `ComposerMediaIntake` :
+    /// « quel sélecteur ouvrir ? ».
+    ///
+    /// La destination existe désormais de bout en bout : `ComposerDocumentMedia`
+    /// porte le fichier et son mime déclaré, `ComposerDocumentDraft.localMedia`
+    /// l'emporte (T2.1), et `PublishIntent.document(localMedia:)` le poste tel
+    /// quel.
+    case attachesLocalMedia(ComposerMediaIntake)
+
+    /// Ouvre `LocationPickerView` et pose une POSITION sur le brouillon (T2.5).
+    ///
+    /// **Ce n'ingère aucun fichier** — c'est pourquoi cet effet n'est pas une
+    /// quatrième famille de `ComposerMediaIntake` : `attachesLocalMedia` répond
+    /// à « quel sélecteur ouvrir pour un FICHIER ? », celui-ci répond à une
+    /// question distincte, sans sélecteur commun.
+    ///
+    /// La destination existe de bout en bout : `ComposerDocumentDraft.location`
+    /// la porte depuis T2.1 (semée `nil` faute de picker câblé), et
+    /// `PublishIntent.document(location:)` la poste déjà telle quelle. Ce lot
+    /// ferme le SEUL trou restant — aucun geste du meuble n'atteignait ce
+    /// champ.
+    ///
+    /// **Le SECOND opt-in — « rendre trouvable à proximité » — n'est PAS un
+    /// second effet.** Il voyage AVEC le lieu choisi, sur le même geste :
+    /// `FeedNearbyDiscoverability.offers(hasPlace:visibility:)` en décide,
+    /// jamais une valeur associée ici. Une position choisie sans jamais
+    /// activer ce second opt-in reste un lieu affiché ordinaire — les deux
+    /// opt-ins sont indépendants, dans les deux sens.
+    case attachesLocation
+
+    /// Ouvre `AudioPostComposerView` et pose un enregistrement vocal — AVEC sa
+    /// transcription — dans le brouillon (T2.6, dernier outil de la rangée).
+    ///
+    /// **Ce n'ouvre aucun `ComposerMediaIntake`** : le sélecteur n'est ni la
+    /// photothèque, ni la caméra, ni l'importateur de fichiers — c'est la
+    /// feuille d'enregistrement/transcription dédiée, la même que le composer
+    /// inline du fil monte déjà (`AudioPostComposerView`,
+    /// `FeedView+Attachments.swift`).
+    ///
+    /// **La destination est double, et c'est le cœur du lot.** Le fichier
+    /// enregistré rejoint `ComposerDocumentDraft.localMedia` comme un
+    /// `ComposerDocumentMedia` ORDINAIRE — il part par la file durable, comme
+    /// tout média local (T2.1/T2.3). La transcription, elle, voyage À CÔTÉ,
+    /// dans `ComposerDocumentDraft.mobileTranscription` : c'est elle que
+    /// `PublishIntent.document(transcription:)` consulte pour ÉLIRE la langue
+    /// déclarée — la langue PARLÉE gagne sur la capsule du meuble, jamais
+    /// l'inverse (régression fermée par 7.4b sur `audioRecording`, rouverte
+    /// ici si `originalLanguage` partait tel quel).
+    case attachesTranscribedAudio
 }
 
 nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
@@ -388,21 +467,45 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     ///
     /// **La question à poser avant d'ajouter une valeur ici n'est pas « sait-on
     /// ouvrir le sélecteur ? » mais « où va son RÉSULTAT ? »** — jusqu'au
-    /// brouillon, puis jusqu'au publieur. Les cinq `nil` ci-dessous butent tous
-    /// sur la même réponse : `ComposerDocumentDraft` ne porte ni `mediaIds`, ni
-    /// fichier, ni lieu, et le seul publieur de production que le meuble
-    /// atteigne (`StatusViewModel.setStatus`, par la porte du mood) n'en
-    /// accepte aucun. Ouvrir une photothèque au-dessus de ce trou rendrait une
-    /// image que rien ne transporterait.
+    /// brouillon, puis jusqu'au publieur. **Trois `nil` sont tombés au T2.3** :
+    /// `ComposerDocumentDraft.localMedia` (T2.1) porte désormais un fichier
+    /// LOCAL, et `PublishIntent.document(localMedia:)` le poste. Photo, caméra
+    /// et fichier ont donc une destination réelle — le même trou qui les
+    /// retenait tous les trois à la fois.
+    ///
+    /// **`.place` gagne un effet au T2.5** : `ComposerDocumentDraft.location`
+    /// (T2.1) trouve enfin son geste — `.attachesLocation` ouvre
+    /// `LocationPickerView`. **`.microphone` gagne le SIEN au T2.6** —
+    /// `.attachesTranscribedAudio` ouvre `AudioPostComposerView`, et c'est le
+    /// dernier des six. `servedRow == canonicalRow` DÉSORMAIS — la garde de la
+    /// porte du document (`ComposerDocumentSurfaceTests.test_laPorteDuDocument_...`)
+    /// se retourne : sa PREMIÈRE condition (la rangée) tombe ici, la SECONDE (la
+    /// langue) l'était depuis T2.2 — et à T3.1 un site la monte enfin
+    /// (`RootViewComponents`, `montages == 1`).
+    ///
+    /// **Ce que `.place` ne fait PAS gagner : le tri-état de la feuille
+    /// absorbée** (`PostLocationUpdate` : remplacer, retirer, ne pas toucher).
+    /// `ComposerDocumentDraft.location: SharedPlace?` ne porte que DEUX états —
+    /// un lieu, ou son absence — le seul dont une CRÉATION a besoin. Le
+    /// troisième état appartient à l'ÉDITION, hors du périmètre de ce lot
+    /// (`EditParityInventoryTests`, capacité « position tri-état »).
     ///
     /// Le `switch` reste exhaustif : un septième outil casse la compilation ICI
     /// plutôt que d'hériter d'un effet par défaut.
     var effect: ComposerDocumentToolEffect? {
         switch self {
+        case .photo:
+            return .attachesLocalMedia(.photoLibrary)
+        case .camera:
+            return .attachesLocalMedia(.camera)
         case .emoji:
             return .insertsEmojiIntoText
-        case .photo, .camera, .document, .place, .microphone:
-            return nil
+        case .document:
+            return .attachesLocalMedia(.files)
+        case .place:
+            return .attachesLocation
+        case .microphone:
+            return .attachesTranscribedAudio
         }
     }
 
@@ -516,9 +619,14 @@ nonisolated enum ComposerDocumentSendPath: Equatable {
 /// personne ne le cherche, puisque la table, elle, est désormais légitime.
 nonisolated enum ComposerDocumentSendRouting {
 
-    /// L'ordre des trois questions EST la règle, et l'inverser perd du contenu :
-    /// tester le hors-ligne après avoir choisi l'upload enverrait une
-    /// composition média dans un tus qui jette dès la première requête.
+    /// **Le média ne branche plus sur `isOffline` (résolution du blocage §B.3,
+    /// vague 1b, 2026-08-26).** Mesuré : `FeedViewModel.publish` enfile sa
+    /// ligne SANS condition réseau (doc-comment de `publish(_:)`,
+    /// `FeedViewModel.swift:878-884` — « Aucune condition réseau ici, et c'est
+    /// une décision »). Router un média EN LIGNE vers `.upload` refusait donc
+    /// le cas NOMINAL : `ComposerDocumentSendPlan.plan` convertit tout chemin
+    /// non durable en `.refuse`, et le seul publieur qui accepte ce chemin est
+    /// déjà durable des deux côtés du réseau.
     ///
     /// - Parameter hasLocalMedia: une pièce jointe portée par un fichier LOCAL
     ///   — image, vidéo, document ou **son enregistré**. Depuis c10801bbca (lot
@@ -545,7 +653,7 @@ nonisolated enum ComposerDocumentSendRouting {
     ) -> ComposerDocumentSendPath {
         if isQuote { return .quotedRepost }
         guard hasLocalMedia else { return .textOnly }
-        return isOffline ? .durableOutbox : .upload
+        return .durableOutbox
     }
 }
 
@@ -608,20 +716,19 @@ nonisolated enum ComposerDocumentSendRefusal: Equatable {
 /// brouillon qu'elle n'a pas, et à ce plan une règle de routage qu'il aurait
 /// fallu recopier.
 ///
-/// **`hasLocalMedia` y est un littéral `false`, et c'est mesuré, pas supposé** :
-/// `ComposerDocumentDraft` ne porte ni identifiants de média, ni fichier — la
-/// première capacité manquante du DoD du lot 2. Ce littéral est vrai par
-/// ABSENCE, et une absence ne se garde pas toute seule : le jour où le brouillon
-/// gagnera un canal média, il deviendra un MENSONGE et une composition avec
-/// photo partirait par le chemin texte en laissant son fichier sur place.
-/// `test_leBrouillon_nAAucunCanalMedia_ceQuiTientLeLitteralDuPlan` rougit ce
-/// jour-là.
+/// **`hasLocalMedia` dérive désormais le canal RÉEL du brouillon (T2.1).**
+/// `ComposerDocumentDraft` portait ni identifiants de média, ni fichier — la
+/// première capacité manquante du DoD du lot 2, comblée par `localMedia`. Un
+/// littéral `false` serait redevenu un MENSONGE : une composition avec photo
+/// partirait par le chemin texte en laissant son fichier sur place.
 ///
-/// **`isOffline` est demandé même s'il n'est pas lu aujourd'hui.** La table ne
-/// le consulte qu'après avoir vu un fichier local, et il n'y en a pas : le
-/// paramètre traverse donc sans effet. Le supprimer aurait fait de ce plan une
-/// fonction du seul format, et il aurait fallu le rouvrir — c'est-à-dire
-/// retrouver la question — le jour où un média voyage.
+/// **`isOffline` traverse toujours SANS effet, et c'est désormais une
+/// décision, pas une absence.** `ComposerDocumentSendRouting.path` route un
+/// média EN LIGNE COMME HORS LIGNE vers `.durableOutbox` — la même règle que
+/// `FeedViewModel.publish` (`FeedViewModel.swift:878-884` : « Aucune condition
+/// réseau ici, et c'est une décision »). Le supprimer aurait fait de ce plan
+/// une fonction du seul format, et il aurait fallu le rouvrir le jour où cette
+/// décision serait remise en cause.
 nonisolated enum ComposerDocumentSendPlan: Equatable {
 
     /// Le brouillon part, et par ce chemin-là.
@@ -632,8 +739,15 @@ nonisolated enum ComposerDocumentSendPlan: Equatable {
 
     static func plan(for draft: ComposerDocumentDraft, isOffline: Bool) -> ComposerDocumentSendPlan {
         guard draft.format == .post else { return .refuse(.wrongFormat(draft.format)) }
-        guard let texte = draft.text,
-              !texte.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        // Un média SEUL suffit à faire partir un post — la feuille historique
+        // l'accepte, et T2.1 aligne le meuble dessus. Un LIEU seul le fait
+        // partir de même (T2.5, parité avec `hasContent` de la feuille
+        // historique, `FeedView+Attachments.publishPostWithAttachments`) :
+        // `handleFeedLocationSelection` range un lieu dans `pendingPlace` sans
+        // texte ni média, et `emptyDraft` ne doit se refuser que quand il n'y a
+        // NI texte NI média NI lieu.
+        let texteVide = draft.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true
+        guard !texteVide || !draft.localMedia.isEmpty || draft.location != nil else {
             return .refuse(.emptyDraft)
         }
         // La complétude de l'audience passe par la MÊME règle que le gate de la
@@ -649,7 +763,7 @@ nonisolated enum ComposerDocumentSendPlan: Equatable {
 
         let chemin = ComposerDocumentSendRouting.path(
             isQuote: draft.repostOfId != nil,
-            hasLocalMedia: false,
+            hasLocalMedia: !draft.localMedia.isEmpty,
             isOffline: isOffline
         )
         guard chemin.isDurable else { return .refuse(.nonDurablePath(chemin)) }
@@ -776,6 +890,36 @@ nonisolated enum ComposerDocumentPublishGate {
     }
 }
 
+/// Une pièce jointe LOCALE portée par un brouillon de document — image, vidéo
+/// ou document, avant tout envoi.
+nonisolated struct ComposerDocumentMedia: Equatable, Sendable {
+    let url: URL
+    let mimeType: String
+    let durationMs: Int?
+}
+
+/// Traduit ce qu'un sélecteur (photothèque, caméra, importateur de documents)
+/// vient de rendre en pièce jointe LOCALE du brouillon — le site UNIQUE de
+/// cette conversion pour les trois familles de `ComposerMediaIntake` (T2.3).
+///
+/// **Le mime est toujours celui DÉCLARÉ à la source, jamais recalculé depuis
+/// l'extension du fichier une fois posé sur disque.** `PublishIntent` nomme le
+/// défaut mesuré (`PublishIntent.swift:64-75`) : un mime REÇU puis JETÉ,
+/// re-dérivé plus loin par `MimeTypeResolver.mimeType(forURL:)`, rendait
+/// `application/octet-stream` pour un fichier dont l'extension ne dit rien du
+/// contenu — un nom temporaire générique, une extension absente. Cette
+/// fonction ne connaît donc AUCUN chemin de repli par extension : l'appelant
+/// fournit toujours le mime que la source a déjà déclaré — le `UTType` du
+/// sélecteur de fichiers ou de la photothèque, ou le format que l'app
+/// elle-même choisit en écrivant le fichier (JPEG pour une photo caméra,
+/// QuickTime pour une vidéo caméra, le conteneur qu'`AVCaptureMovieFileOutput`
+/// écrit déjà).
+nonisolated enum ComposerDocumentMediaFactory {
+    static func media(url: URL, declaredMimeType: String, durationMs: Int? = nil) -> ComposerDocumentMedia {
+        ComposerDocumentMedia(url: url, mimeType: declaredMimeType, durationMs: durationMs)
+    }
+}
+
 /// **Ce que le socle remet au site de montage quand l'auteur presse la flèche.**
 ///
 /// Une VALEUR, pas un envoi. Le meuble ne publie toujours pas : il assemble ce
@@ -821,6 +965,49 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     let repostOfId: String?
     let audioUrl: String?
 
+    /// Les pièces jointes LOCALES du document — `[]` pour un mood, qui n'en a
+    /// pas.
+    let localMedia: [ComposerDocumentMedia]
+
+    /// La position jointe au document.
+    let location: SharedPlace?
+
+    /// **T2.5 — le SECOND opt-in de position**, indépendant du premier
+    /// (`location` juste au-dessus, qui EST le lieu affiché). `nil` tant que
+    /// l'auteur n'a rien choisi : `NearbyDiscoverabilityChoice.precisionToSend`
+    /// vaut déjà `nil` off, et poser ici une valeur par défaut rendrait
+    /// trouvable un contenu que personne n'a demandé à rendre trouvable — même
+    /// interdit que celui documenté sur `DiscoverabilityPrecision` (SDK).
+    /// Aucune valeur par défaut, même discipline que le reste du type (T2.1).
+    let discoverabilityPrecision: DiscoverabilityPrecision?
+
+    /// La langue DÉCLARÉE du contenu. `nil` ⇒ le serveur détecte.
+    let originalLanguage: String?
+
+    /// **T2.4 — l'interrupteur POST ↔ RÉEL.** `ReelComposition.defaultType`
+    /// élit `"REEL"` dès qu'une vidéo, un audio ≥ 3 s ou ≥ 2 images qualifient
+    /// (`qualifiesAsReel`) ; ce champ, quand `true`, retient un POST simple
+    /// malgré la qualification — la capacité que la feuille absorbée portait
+    /// et que le meuble avait perdue en héritant du gate. Un mood n'a jamais
+    /// de média qualifiant : sa fabrique le pose à `false` sans exposer de
+    /// paramètre. Aucune valeur par défaut ici — même discipline que le reste
+    /// du type (T2.1) : un défaut ferait disparaître le champ d'un site
+    /// d'appel sans casser la moindre compilation.
+    let forcePlainPost: Bool
+
+    /// **T2.6 — la transcription du vocal composé sur CETTE surface.**
+    /// L'enregistrement lui-même entre dans `localMedia` comme un
+    /// `ComposerDocumentMedia` ordinaire ; ce champ porte ce que Whisper a
+    /// compris SUR L'APPAREIL, à côté du fichier — jamais fondu dedans.
+    /// `PublishIntent.document(transcription:)` le consulte pour ÉLIRE
+    /// `originalLanguage` : la langue PARLÉE gagne sur `documentLanguage`
+    /// (la capsule du meuble), jamais l'inverse. Aucune valeur par défaut,
+    /// même discipline que le reste du type (T2.1) : un défaut le ferait
+    /// disparaître d'un site d'appel sans casser la moindre compilation, et
+    /// un vocal composé ici repartirait étiqueté par la capsule — exactement
+    /// la régression que 7.4b avait fermée sur `PublishIntent.audioRecording`.
+    let mobileTranscription: MobileTranscriptionPayload?
+
     /// Le brouillon d'un MOOD.
     ///
     /// `repostOfId` et `audioUrl` sont les deux graines d'une republication (lot
@@ -856,7 +1043,20 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             visibilityUserIds: visibility.requiresUserSelection ? visibilityUserIds : nil,
             mentions: ComposerMoodPolicy.declared(references),
             repostOfId: repostOfId,
-            audioUrl: audioUrl
+            audioUrl: audioUrl,
+            localMedia: [],
+            location: nil,
+            // Un mood n'a ni tuile de lieu ni second opt-in : les deux vivent
+            // sous la surface document (`documentSurface`, `MeeshyComposerHost`).
+            discoverabilityPrecision: nil,
+            originalLanguage: nil,
+            // Un mood ne porte jamais de média local (`localMedia: []`
+            // au-dessus) : il ne peut donc jamais qualifier comme réel, et ce
+            // champ n'a pas besoin d'un paramètre pour ce geste.
+            forcePlainPost: false,
+            // Un mood n'a pas d'outil micro (rangée du document seule, T2.6) :
+            // aucun geste ne peut jamais alimenter ce champ pour ce format.
+            mobileTranscription: nil
         )
     }
 
@@ -885,12 +1085,40 @@ nonisolated struct ComposerDocumentDraft: Equatable {
     /// La normalisation de la loi 3 est la MÊME que celle du mood, et à la même
     /// place — dans la fabrique, jamais chez l'appelant : porter une liste sous
     /// une audience qui n'en veut pas la ferait persister pour rien.
+    ///
+    /// **`forcePlainPost` est arrivé au T2.4, avec l'interrupteur POST ↔
+    /// RÉEL du meuble**, et il n'a pas davantage de valeur par défaut, pour la
+    /// MÊME raison que `repostOfId` et `visibilityUserIds` juste au-dessus :
+    /// un défaut le ferait disparaître d'un site d'appel sans casser la
+    /// moindre compilation, et un auteur qui viendrait de choisir « Post »
+    /// verrait sa composition partir en `"REEL"` sans qu'aucun écran ne le
+    /// dise.
+    ///
+    /// **`discoverabilityPrecision` est arrivé au T2.5, avec la tuile de
+    /// lieu**, et n'a pas davantage de valeur par défaut — pour la MÊME raison
+    /// que `forcePlainPost` juste au-dessus, mordant ici avec plus de force
+    /// encore : un défaut non-`nil` rendrait trouvable un contenu que
+    /// l'auteur n'a jamais choisi de rendre trouvable (le SECOND opt-in,
+    /// `FeedNearbyDiscoverability`, off par défaut).
+    ///
+    /// **`mobileTranscription` est arrivé au T2.6, avec le sixième outil**, et
+    /// n'a pas davantage de valeur par défaut — pour la MÊME raison que les
+    /// champs juste au-dessus : un défaut le ferait disparaître d'un site
+    /// d'appel sans casser la moindre compilation, et un vocal composé par le
+    /// meuble repartirait sans sa transcription — le serveur re-transcrirait
+    /// alors en silence un travail déjà fait sur l'appareil.
     static func document(
         format: ComposerFormat,
+        forcePlainPost: Bool,
         text: String,
         visibility: PostVisibility,
         visibilityUserIds: [String],
-        repostOfId: String?
+        repostOfId: String?,
+        localMedia: [ComposerDocumentMedia],
+        location: SharedPlace?,
+        discoverabilityPrecision: DiscoverabilityPrecision?,
+        originalLanguage: String?,
+        mobileTranscription: MobileTranscriptionPayload?
     ) -> ComposerDocumentDraft {
         ComposerDocumentDraft(
             format: format,
@@ -900,7 +1128,13 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             visibilityUserIds: visibility.requiresUserSelection ? visibilityUserIds : nil,
             mentions: nil,
             repostOfId: repostOfId,
-            audioUrl: nil
+            audioUrl: nil,
+            localMedia: localMedia,
+            location: location,
+            discoverabilityPrecision: discoverabilityPrecision,
+            originalLanguage: originalLanguage,
+            forcePlainPost: forcePlainPost,
+            mobileTranscription: mobileTranscription
         )
     }
 }
@@ -921,6 +1155,16 @@ nonisolated enum ComposerDocumentCopy {
     static var toolRow: String {
         String(localized: "composer.document.a11y.tools",
                defaultValue: "Outils du document", bundle: .main)
+    }
+
+    /// **Clé neuve (T2.2), sur le patron de `toolRow` juste au-dessus.** Ne
+    /// reprend PAS le littéral `"Langue du post"` de la feuille historique :
+    /// sa clé contient des espaces et échappe au cliquet français
+    /// (`FrenchDefaultValueRatchetTests`) — la recopier aurait importé une
+    /// dette invisible dans le fichier que ce chantier construit.
+    static var language: String {
+        String(localized: "composer.document.a11y.language",
+               defaultValue: "Langue du document", bundle: .main)
     }
 
     /// La SORTIE n'a pas de clé neuve : `common.close` existe et est traduite
@@ -1166,29 +1410,36 @@ struct ComposerDocumentSurface: View {
 /// 5.5 a déjà réservé. Dette NOMMÉE, non refermée ici — elle ne perd rien
 /// aujourd'hui, la ligne bloquée partant seule à la reconnexion.
 ///
-/// **Elle ne laisse pas non plus l'auteur DÉCLARER la langue de son post, et
-/// c'est la dette qui perdrait le plus.** `originalLanguage:` reçoit ici
-/// `DefaultComposerLanguage.resolve()`, une CONSTANTE qui rend « fr ». La
-/// feuille absorbée ne fait pas ça : `FeedComposerSheet` tient un
-/// `composerLanguage` ÉCRIVABLE, avec sa capsule de langue et son sélecteur,
-/// dans la même barre que les six outils d'attache. Le meuble n'a ni ce champ,
-/// ni ce contrôle, ni un canal pour lui sur `ComposerDocumentDraft`.
+/// **Elle laisse désormais l'auteur DÉCLARER la langue de son post (T2.2).**
+/// `originalLanguage:` recevait `DefaultComposerLanguage.resolve()`, une
+/// CONSTANTE qui rendait « fr » — un « Hello everyone » composé ici partait
+/// étiqueté français, le Prisme le traduisait FR→EN sur un texte déjà anglais,
+/// et la carte affichait un badge de langue faux, sans qu'aucun geste ne
+/// permette de corriger. Elle poste maintenant `draft.originalLanguage`, écrit
+/// par la capsule `ComposerLanguageFlag` et le sélecteur
+/// `AudioLanguagePickerView` que le meuble monte — les mêmes que la feuille
+/// absorbée (`FeedComposerSheet.composerLanguage`) portait dans la même barre
+/// que les six outils d'attache. `DefaultComposerLanguage.resolve()` RESTE le
+/// point de DÉPART du brouillon ; ce n'est pas elle qui a changé, c'est cette
+/// porte qui a cessé de la rappeler à l'envoi.
 ///
-/// Monter cette porte en l'état ferait partir un « Hello everyone » étiqueté
-/// français : le Prisme le traduirait FR→EN sur un texte déjà anglais, la carte
-/// afficherait un badge de langue faux, et l'auteur n'aurait aucun moyen de
-/// corriger. **La langue est donc, avec la rangée, la SECONDE condition de levée
-/// de la porte** — et il faut le dire ici parce qu'elle ne se lit dans AUCUNE
-/// rangée : `ComposerDocumentTool.canonicalRow` ne modélise que les six boutons
-/// d'attache, et une garde qui ne compare que ces deux listes serait passée au
-/// vert en laissant la régression entrer.
-///
-/// **Aucun site de production ne la monte encore**, et ce n'est pas un oubli de
-/// câblage : ni la rangée d'outils ni la langue ne couvrent ce que la feuille
-/// remplacée offre. Son témoin,
-/// `test_laPorteDuDocument_nEstMonteeParAucunSiteDeProduction_etCEstLaRangeeQuiLaRetient`,
-/// déclare cet état et porte les DEUX déclencheurs — il rougira le jour où les
-/// deux tomberont, le jour où il faudra monter cette porte, et le retourner.
+/// **Ses deux conditions de levée sont tombées, et elle est MONTÉE.** La langue
+/// n'en est plus une (T2.2) ; la rangée d'outils l'était —
+/// `ComposerDocumentTool.canonicalRow` modélise les six boutons d'attache — et
+/// `servedRow == canonicalRow` depuis T2.6 (photo·caméra·fichier à T2.3, lieu à
+/// T2.5, micro à T2.6 ; l'emoji tenu). Les deux tombées, T3.1 a monté la porte
+/// sur le PLEIN composer du fil : `RootViewComponents` la construit, et son
+/// témoin `test_laPorteDuDocument_estMonteeParExactementUnSiteDeProduction_leFil`
+/// exige désormais `montages == 1`.
+/// **La porte du fil (T3.1) et de tout site qui compose un DOCUMENT** — texte,
+/// média local, lieu, transcription. Elle NE sert PAS la citation : un repost
+/// (`repostOfId != nil`) part par `POST /posts/:id/repost`, sans file durable,
+/// et `ComposerDocumentSendPlan` le REFUSE (`.nonDurablePath(.quotedRepost)`)
+/// plutôt que de le faire partir par un chemin que rien ne rejoue. Les deux
+/// citations restent donc sur `FeedComposerSheet` (T3.2) jusqu'à la **condition
+/// de levée 7.5** : un écrivain durable du repost (fondation livrée, zéro
+/// appelant). La recâbler ici avant 7.5 la ferait refuser en SILENCE — le
+/// composer se refermerait comme quand tout va bien.
 struct DocumentComposerDoor: View {
 
     /// La porte au sens de la table. C'est elle qui décide du format d'ouverture
@@ -1266,13 +1517,37 @@ struct DocumentComposerDoor: View {
         // `content:` reçoit le texte du brouillon tel quel : le plan vient de
         // garantir qu'il n'est ni absent ni blanc, et le re-normaliser ici en
         // ferait une seconde écriture de la même règle.
-        await viewModel.createPost(
+        // La langue est désormais celle DÉCLARÉE par l'auteur (T2.2) :
+        // `draft.originalLanguage` porte ce que la capsule du meuble a écrit,
+        // semé sur `DefaultComposerLanguage.resolve()` — qui RESTE le point de
+        // DÉPART du brouillon, jamais rappelé ici.
+        // `forcePlainPost` vient du brouillon (T2.4) — l'interrupteur du
+        // meuble l'y a semé — jamais d'un littéral : un `false` en dur ferait
+        // partir en `"REEL"` la composition qu'un auteur vient de retenir en
+        // POST simple.
+        // `location:` et `discoverabilityPrecision:` viennent tous deux du
+        // brouillon (T2.5) — jamais d'un littéral `nil` : le premier est le
+        // lieu choisi, le second le SECOND opt-in, indépendant, que l'auteur
+        // seul peut activer (`FeedNearbyDiscoverability`, off par défaut).
+        // `transcription:` vient du brouillon (T2.6) — `draft.mobileTranscription`,
+        // jamais un littéral `nil` : c'est elle que `PublishIntent.document`
+        // consulte pour ÉLIRE `originalLanguage`, la langue PARLÉE gagnant sur
+        // la capsule. Ni ce corps ni son publieur (`FeedViewModel.publish`) ne
+        // touchent au disque : le fichier composé par le meuble n'est ni
+        // déplacé ni effacé ici — il survit à un refus comme à une acceptation,
+        // et c'est la file durable seule qui en dispose.
+        await viewModel.publish(PublishIntent.document(
+            localMedia: draft.localMedia,
+            forcePlainPost: draft.forcePlainPost,
             content: draft.text,
             visibility: draft.visibility.rawValue,
             visibilityUserIds: draft.visibilityUserIds,
-            originalLanguage: DefaultComposerLanguage.resolve(),
-            mentions: draft.mentions
-        )
+            originalLanguage: draft.originalLanguage,
+            mentions: draft.mentions,
+            location: draft.location,
+            discoverabilityPrecision: draft.discoverabilityPrecision,
+            transcription: draft.mobileTranscription
+        ))
 
         let issue = ComposerDocumentSendOutcome.reported(
             succeeded: viewModel.publishSuccess,

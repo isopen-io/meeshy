@@ -538,11 +538,15 @@ final class ComposerIntentTests: XCTestCase {
         case .storyEdit: return .edit(postId: "story-a-moi", documentFormat: .story)
         case .editPostSheet: return .edit(postId: "post-a-moi", documentFormat: .post)
         case .feedComposer: return nil
+        // T3.3 : l'overlay inline iPad, désormais NOMMÉ, n'a aucune porte qui y
+        // route (comme `.feedComposer` et `.statusComposer`) — il reste déclaré
+        // pour que sa garde puisse nommer son interdit.
+        case .feedInlineComposer: return nil
         }
     }
 
     private static let composersHistoriques: [LegacyComposer] = [
-        .statusComposer, .repostComposer, .storyEdit, .editPostSheet, .feedComposer
+        .statusComposer, .repostComposer, .storyEdit, .editPostSheet, .feedComposer, .feedInlineComposer
     ]
 
     /// REFORMULÉE au lot 3 puis au lot 4.6, jamais affaiblie. Elle affirmait

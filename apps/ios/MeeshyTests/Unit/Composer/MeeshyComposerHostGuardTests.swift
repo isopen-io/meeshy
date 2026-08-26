@@ -62,6 +62,38 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         XCTAssertTrue(code.contains("struct MeeshyComposerHost"), "Le fichier lu n'est pas celui du host")
     }
 
+    private func rootViewComponentsCompact() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/Composer
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/Views/RootViewComponents.swift")
+        return compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
+    }
+
+    /// **T3.1 — garde de source, sur le COMPTE, jamais sur l'absence.**
+    ///
+    /// Depuis T3.1 le PLEIN composer du fil passe par `DocumentComposerDoor` ;
+    /// `RootViewComponents` ne monte donc plus `FeedComposerSheet(` qu'UNE fois
+    /// — la CITATION (`.fullScreenCover(item: $quoteOriginalPost)`), que T3.2
+    /// retient tant que 7.5 (un écrivain durable du repost) n'a pas d'appelant.
+    /// Assérer `0` serait un rouge injustifié ET la tentation de recâbler la
+    /// citation sur une porte qui la REFUSE ; assérer `>= 1` cesserait de
+    /// compter — un second montage du plein composer repasserait sans un mot.
+    func test_rootViewComponents_neMonteFeedComposerSheet_quePourLaCitation() throws {
+        let code = try rootViewComponentsCompact()
+        XCTAssertTrue(code.contains("structThemedFeedOverlay"), "Le fichier lu n'est pas RootViewComponents")
+        let montages = code.components(separatedBy: "FeedComposerSheet(").count - 1
+        XCTAssertEqual(
+            montages, 1,
+            "RootViewComponents doit monter `FeedComposerSheet(` EXACTEMENT une fois — la citation "
+                + "(`.fullScreenCover(item: $quoteOriginalPost)`). Le plein composer du fil est passé au "
+                + "meuble à T3.1 ; zéro dirait que la citation a été recâblée sur une porte qui la refuse "
+                + "(levée 7.5), deux ou plus qu'un second montage du plein composer est revenu."
+        )
+    }
+
     // MARK: - V3-2 : le meuble a un APPELANT
 
     /// **LA garde qui empêche ce chantier de retomber inerte.**
@@ -894,7 +926,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     func test_leBrouillonDuDocument_nePlafonnePasLeTexte_carUnPostNaPasDePlafond() {
         let long = String(repeating: "a", count: 300)
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil
+            format: .post, forcePlainPost: false, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
         )
 
         XCTAssertEqual(brouillon.text?.count, 300)
@@ -906,7 +938,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// lecteur aurait crue tenue.
     func test_leBrouillonDuDocument_neFabriqueNiEmojiNiMention() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
         )
         XCTAssertNil(brouillon.emoji)
         XCTAssertNil(brouillon.mentions)
@@ -1572,15 +1604,23 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// outil pour outil ? C'est cela, « ne pas régresser », et c'est ce qu'un
     /// booléen « au moins un » ne pouvait pas dire.
     ///
-    /// Ce qu'elle retient, donc : **la table peut désigner le meuble ; une porte
-    /// de PRÉSENTATION ne peut pas le monter tant que le document est une
-    /// impasse.** Elle est muette aujourd'hui par construction — aucun site ne
-    /// construit cette intention — et c'est le jour du câblage qu'elle parle.
+    /// Ce qu'elle retenait, donc : **la table peut désigner le meuble ; une
+    /// porte de PRÉSENTATION ne peut pas le monter tant que le document est
+    /// une impasse.** Elle était muette par construction — aucun site ne
+    /// construisait cette intention — et c'était le jour du câblage qu'elle
+    /// devait parler.
     ///
-    /// Ce qu'elle ne dit PAS : que les trois capacités soient tenues. Elle
-    /// n'exige rien tant que personne ne monte la porte, et c'est délibéré —
-    /// la dette du lot 2 reste une dette CONSIGNÉE, que le lot 7 lèvera ; cette
-    /// garde interdit seulement de la découvrir par un écran sans issue.
+    /// **Ce jour est T3.1.** RootViewComponents construit désormais
+    /// `ComposerIntent(origin: .feedComposer)` sur le PLEIN composer du fil,
+    /// et `sitesDeProductionOuvrantUnePorteDocument()` n'est plus vide : la
+    /// garde ARME les trois assertions qu'elle portait en silence, plutôt
+    /// que de sortir tôt sur `guard !sites.isEmpty else { return }`. Ce
+    /// qu'elle disait PAS avant : que les trois capacités soient tenues. Elle
+    /// n'exigeait rien tant que personne ne montait la porte — et depuis
+    /// T3.1 quelqu'un la monte, donc elle exige désormais les trois : la
+    /// dette du lot 2 est SOLDÉE (les trois capacités sont vraies depuis le
+    /// lot 4.10 / T2.6 / T2.2), et cette garde le certifie enfin plutôt que
+    /// de se taire dessus.
     ///
     /// **Et elle ne couvre PAS le chemin de l'ÉVENTAIL — à savoir, à ne pas
     /// redécouvrir.** Elle filtre sur `portesDocumentDuMeuble`, c'est-à-dire sur
@@ -1609,7 +1649,15 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         let publieurAtteignable = try leDocumentAUnPublieurAtteignable()
 
         let sites = try sitesDeProductionOuvrantUnePorteDocument()
-        guard !sites.isEmpty else { return }
+        XCTAssertTrue(
+            sites.contains { $0.fichier == "RootViewComponents.swift" && $0.porte == "feedComposer" },
+            "Depuis T3.1, RootViewComponents doit construire `ComposerIntent(origin: .feedComposer)` sur le "
+                + "PLEIN composer du fil (`.fullScreenCover(isPresented: $showFullComposer)`) — c'est le "
+                + "câblage qui arme les trois assertions suivantes. Sans ce site, cette garde restait MUETTE "
+                + "(`guard !sites.isEmpty else { return }`) : elle ne certifiait plus rien sur la rangée, "
+                + "l'issue du texte, ou le publieur — verte pour toujours, y compris le jour où le câblage "
+                + "aurait régressé."
+        )
 
         let ou = sites.map { "\($0.porte) dans \($0.fichier)" }.joined(separator: ", ")
 
@@ -1929,6 +1977,94 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 "Loi 4 : un format non offert est ABSENT du plateau, jamais grisé ni rendu transparent."
             )
         }
+    }
+
+    // MARK: - T2.4 — l'interrupteur POST ↔ RÉEL, gaté sur la qualification
+
+    /// **L'interrupteur n'est peint QUE si la composition qualifie (T2.4,
+    /// tests 1 & 2 — loi 4).** Un contrôle sans effet est absent : le retirer
+    /// du gate ferait apparaître un bouton « Réel » sur un texte seul, qui ne
+    /// changerait rien. La garde s'ancre sur le câblage compacté de l'overlay.
+    func test_host_lInterrupteurPostReel_estGateSurLaQualification() throws {
+        let code = try hostCompact()
+        XCTAssertTrue(
+            code.contains(compact("if documentComposesReel { documentForcePlainPostToggle }")),
+            "L'interrupteur ne se monte que sous `documentComposesReel` — sinon il se peint sur une composition qui n'a rien à offrir."
+        )
+    }
+
+    /// **La qualification du meuble APPELLE la règle SDK, jamais un seuil
+    /// recopié (T2.4, test 2).** Recopier « ≥ 3 s » ou « ≥ 2 images » ici
+    /// ferait deux règles à faire diverger, dont l'une côté serveur
+    /// (`ReelComposition.defaultType` juge l'envoi). La garde lit le BLOC du
+    /// prédicat : il appelle `qualifiesAsReel` et ne contient aucune
+    /// comparaison numérique recopiée.
+    func test_host_laQualification_appelleLaRegleSDK_neRecopiePasLeSeuil() throws {
+        guard let corps = declarationBody(startingAt: "private var documentComposesReel", in: try hostCode()) else {
+            return XCTFail("`documentComposesReel` doit être une propriété calculée — la garde s'ancre sur son bloc.")
+        }
+        let compacte = compact(corps)
+        XCTAssertTrue(
+            compacte.contains(compact("ReelComposition.qualifiesAsReel(")),
+            "Le gate doit APPELER la règle SDK, jamais la recopier."
+        )
+        for recopie in [">=", ">", "count", "3000", "3_000"] {
+            XCTAssertFalse(
+                compacte.contains(compact(recopie)),
+                "Le bloc contient `\(recopie)` — un seuil recopié qui divergerait du juge serveur."
+            )
+        }
+    }
+
+    /// **Retirer un média qui dé-qualifie fait retomber le drapeau à `false`
+    /// (T2.4, test 4).** Sans ce reset, un `forcePlainPost` posé pendant qu'un
+    /// RÉEL était composé survivrait, INVISIBLE (l'interrupteur ayant disparu
+    /// avec la qualification), et gouvernerait la publication SUIVANTE. La
+    /// garde s'ancre sur le fragment compacté unique du reset.
+    func test_host_lInterrupteurPostReel_reArmeLeDrapeau_quandLeMediaDequalifie() throws {
+        let code = try hostCompact()
+        XCTAssertTrue(
+            code.contains(compact(".adaptiveOnChange(of: documentLocalMedia)")),
+            "Le reset doit s'accrocher au CHANGEMENT du média local — la seule chose qui peut dé-qualifier."
+        )
+        XCTAssertTrue(
+            code.contains(compact("guard !documentComposesReel else { return } documentForcePlainPost = false")),
+            "…et remettre le drapeau à `false` dès que la composition ne qualifie plus."
+        )
+    }
+
+    /// **L'interrupteur vit dans le SOCLE, pas dans le plateau (T2.4, test
+    /// 5).** Le plateau porte l'éventail de FORMAT (`ComposerFormatFan`, gardé
+    /// une fois ci-dessus) ; l'interrupteur POST ↔ RÉEL est un contrôle du
+    /// socle, gaté sur la composition. Le monter dans le plateau ferait deux
+    /// contrôles pour un même format. Garde NÉGATIVE sur le bloc du plateau.
+    func test_host_lInterrupteurPostReel_nEstPasDansLePlateau() throws {
+        guard let corps = declarationBody(startingAt: "private var plateauTools", in: try hostCode()) else {
+            return XCTFail("Le plateau doit être une propriété nommée `plateauTools` — la garde s'ancre dessus.")
+        }
+        XCTAssertFalse(
+            compact(corps).contains(compact("documentForcePlainPostToggle")),
+            "L'interrupteur POST ↔ RÉEL n'est pas un outil de plateau — il vit dans le socle, sous `documentComposesReel`."
+        )
+    }
+
+    /// **Resserrer l'audience hors PUBLIC réarme l'opt-in de découvrabilité
+    /// (T2.5, parité VIE PRIVÉE).** Le consentement de trouvabilité porte sur
+    /// UNE publication ET UNE audience. Sans ce reset, un opt-in armé en PUBLIC
+    /// survivrait à un resserrement (`friends`) puis à un ré-élargissement vers
+    /// PUBLIC : le contrôle réapparaîtrait DÉJÀ ON et publierait sur un
+    /// consentement PÉRIMÉ que personne n'a réexaminé. Le composer inline de
+    /// référence (`FeedView+Attachments`) fait ce reset pour cette raison ; le
+    /// même fichier l'applique déjà à `forcePlainPost` (T2.4). Constat de revue
+    /// Opus T2.5. Garde ancrée sur le bloc de `chooseAudience`.
+    func test_host_resserrerLAudienceHorsPublic_reArmeLaDecouvrabilite() throws {
+        guard let corps = declarationBody(startingAt: "private func chooseAudience", in: try hostCode()) else {
+            return XCTFail("`chooseAudience` doit être une fonction — la garde s'ancre sur son bloc.")
+        }
+        XCTAssertTrue(
+            compact(corps).contains(compact("if candidate != .public { documentDiscoverability.reset() }")),
+            "Quitter PUBLIC doit réarmer l'opt-in — un consentement de trouvabilité périmé ne survit pas au resserrement."
+        )
     }
 
     /// Ce que l'éventail RÉSOUT doit gouverner l'envoi, pas seulement le chip
@@ -2489,5 +2625,53 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                     + "défaut, pas le composant."
             )
         }
+    }
+
+    // MARK: - La langue déclarée (T2.2)
+
+    /// Garde NÉGATIVE — même raison que le sélecteur d'emoji juste au-dessus :
+    /// `AudioLanguagePickerView` tourne déjà en production sous la feuille
+    /// historique (`FeedComposerSheet`), avec ses catégories, sa recherche et
+    /// son bouton « afficher toutes les langues ». Un second sélecteur ici
+    /// serait deux listes de langues et deux mémoires à faire diverger — et le
+    /// meuble n'a besoin d'aucune liste propre : `AudioLanguagePickerView` lit
+    /// `EdgeTranscriptionService.shared` lui-même.
+    func test_leMeuble_neFabriquePasUnSecondSelecteurDeLangue() throws {
+        let code = try hostCode()
+        XCTAssertEqual(
+            occurrences(of: "AudioLanguagePickerView(", in: code), 1,
+            "Le meuble doit monter le sélecteur du dépôt UNE fois — sinon cette garde ne mesurerait rien, "
+                + "ou il en fabrique un second."
+        )
+        for interdit in ["LanguageOption(", "supportedLocales:", "availableLocales:", "[\"fr\", \"en\""] {
+            XCTAssertFalse(
+                code.contains(interdit),
+                "Le meuble déclare sa propre liste de langues (« \(interdit) ») : deux listes de langues "
+                    + "sont deux mémoires à faire diverger — le motif que la porte interdit."
+            )
+        }
+    }
+
+    /// **Le canal, pas seulement le contrôle.** La capsule et le sélecteur
+    /// prouvent que l'auteur PEUT écrire une langue ; cette garde prouve que ce
+    /// qu'il écrit ATTEINT le brouillon envoyé à la porte. Sans elle, `code`
+    /// contenait déjà le mot `originalLanguage` (le littéral `nil` qu'il
+    /// remplace le porte aussi) : une garde qui ne chercherait que la présence
+    /// du mot serait passée au vert avant comme après ce lot.
+    func test_leBrouillonDuDocument_porteLaLangueDeclareeParLaCapsule_pasUnLitteral() throws {
+        guard let bloc = declarationBody(startingAt: "private var documentDraft", in: try hostCode()) else {
+            return XCTFail("`documentDraft` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
+        }
+        let corps = compact(bloc)
+        XCTAssertTrue(
+            corps.contains(compact("originalLanguage: documentLanguage")),
+            "Le cas `.document` de `documentDraft` doit poser `originalLanguage: documentLanguage` — l'état "
+                + "que la capsule écrit, pas un littéral qui l'ignorerait."
+        )
+        XCTAssertFalse(
+            corps.contains(compact("originalLanguage: nil")),
+            "Le cas `.document` pose encore `originalLanguage: nil` : la langue déclarée par l'auteur "
+                + "n'atteint jamais le brouillon envoyé à la porte."
+        )
     }
 }

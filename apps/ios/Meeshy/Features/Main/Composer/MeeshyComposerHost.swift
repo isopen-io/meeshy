@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
 
@@ -393,6 +395,87 @@ struct MeeshyComposerHost: View {
     /// qui porterait le sélecteur devrait posséder sa destination — donc cesser
     /// d'être la simple présentation qu'elle est.
     @State private var showsEmojiPicker = false
+
+    /// **La langue DÉCLARÉE du document (T2.2).** Semée sur
+    /// `DefaultComposerLanguage.resolve()` — le point de DÉPART du brouillon
+    /// que T2.1 posait déjà, et qui RESTE la constante « fr » — mais désormais
+    /// ÉCRITE par l'auteur via `documentLanguageCapsule` plutôt que rappelée
+    /// telle quelle à l'envoi. C'est le canal qui manquait à la porte : sans
+    /// lui, un « Hello everyone » composé ici partait étiqueté français, et le
+    /// Prisme le traduisait FR→EN sur un texte déjà anglais, sans que l'auteur
+    /// ait aucun moyen de corriger.
+    @State private var documentLanguage = DefaultComposerLanguage.resolve()
+
+    /// Le sélecteur de langue de la rangée est-il ouvert ? Même forme que
+    /// `showsEmojiPicker` juste au-dessus, pour la même raison : le sélecteur
+    /// vit dans le meuble, qui possède `documentLanguage`, jamais dans la
+    /// surface.
+    @State private var showsDocumentLanguagePicker = false
+
+    /// **L'ingestion de fichiers LOCAUX (T2.3).** Trois sélecteurs, un état
+    /// par famille — même patron que `showsEmojiPicker` /
+    /// `showsDocumentLanguagePicker` juste au-dessus : l'ingestion vit dans le
+    /// MEUBLE, jamais dans la surface. `ComposerDocumentSurface` reste sans
+    /// état — elle ne monte NI `photosPicker` NI `fileImporter` NI
+    /// `CameraView` (`ComposerDocumentSurfaceTests`
+    /// `.test_laSurface_neFabriquePasUnSecondPipelineDIngestion`, élargie à la
+    /// caméra par ce lot).
+    @State private var showsPhotoPicker = false
+    @State private var pickedPhotoLibraryItems: [PhotosPickerItem] = []
+    @State private var showsCamera = false
+    @State private var showsFileImporter = false
+
+    /// **Le sélecteur de lieu (T2.5).** Même patron que les trois au-dessus :
+    /// vit dans le meuble, jamais dans `ComposerDocumentSurface`.
+    @State private var showsLocationPicker = false
+
+    /// Les pièces jointes LOCALES composées jusqu'ici. `documentDraft` les
+    /// transmet désormais sous `.document` — `ComposerDocumentDraft.localMedia`
+    /// ne repartait qu'à `[]` avant ce lot.
+    @State private var documentLocalMedia: [ComposerDocumentMedia] = []
+
+    /// **T2.4 — l'interrupteur POST ↔ RÉEL.** Depuis T2.3, une vidéo ou ≥ 2
+    /// images composées ici font élire `"REEL"` par `ReelComposition.defaultType`
+    /// sans que l'auteur puisse garder un post simple — la capacité que la
+    /// feuille absorbée portait et que le meuble avait perdue. `false` par
+    /// défaut : la composition part REEL dès qu'elle qualifie, exactement le
+    /// comportement de T2.3, jusqu'à ce que l'auteur bascule.
+    @State private var documentForcePlainPost = false
+
+    /// **T2.5 — la POSITION posée sur le brouillon.** Vit dans le MEUBLE, comme
+    /// `documentLocalMedia` juste au-dessus : `ComposerDocumentDraft.location`
+    /// (T2.1) ne portait encore le résultat d'aucun geste, faute de picker
+    /// câblé. `LocationPickerView` — le même sélecteur que le composer inline
+    /// du fil (`FeedView+Attachments.handleFeedLocationSelection`) — l'écrit
+    /// ici ; en fabriquer un second aurait donné deux flux de lieu à faire
+    /// diverger.
+    @State private var documentLocation: SharedPlace?
+
+    /// **T2.5 — le SECOND opt-in**, indépendant du lieu lui-même : « rendre ce
+    /// contenu trouvable à proximité ». `.disabled` est l'état INERTE — off,
+    /// aucun palier offert — et c'est la valeur de départ obligée : rien n'a
+    /// encore été choisi tant qu'aucun lieu n'existe. Un lieu CHOISI la
+    /// remplace par `FeedNearbyDiscoverability.choiceForNewPlace()`, qui lit la
+    /// mémoire locale (`LocationSharingPreferencesStore`) — jamais l'inverse :
+    /// pré-sélectionner avant le premier lieu offrirait un sélecteur de grain
+    /// sans lieu à indexer.
+    @State private var documentDiscoverability: NearbyDiscoverabilityChoice = .disabled
+
+    /// **T2.6 — le sixième et dernier outil de la rangée.** Même patron que
+    /// `showsLocationPicker` juste au-dessus : le sélecteur vit dans le
+    /// MEUBLE, jamais dans `ComposerDocumentSurface`, qui reste une
+    /// présentation sans état.
+    @State private var showsAudioComposer = false
+
+    /// **T2.6 — la transcription du vocal composé par `AudioPostComposerView`.**
+    /// Voyage À CÔTÉ de `documentLocalMedia` (l'enregistrement, posé comme un
+    /// `ComposerDocumentMedia` ordinaire au retour) — jamais fondue dedans.
+    /// `documentDraft` la transmet telle quelle à
+    /// `ComposerDocumentDraft.document(mobileTranscription:)`, et
+    /// `PublishIntent.document(transcription:)` l'élit en aval pour la LANGUE :
+    /// la langue PARLÉE gagne sur `documentLanguage`, jamais l'inverse — la
+    /// régression que 7.4b avait fermée sur `PublishIntent.audioRecording`.
+    @State private var documentTranscription: MobileTranscriptionPayload?
 
     init(
         intent: ComposerIntent,
@@ -796,11 +879,14 @@ struct MeeshyComposerHost: View {
     /// AVEC le transfert de la saisie, jamais avant lui — et la règle de
     /// placement le dira d'elle-même, sans qu'on ait à toucher ce fichier.
     ///
-    /// La TABLE de C1 désigne par ailleurs le meuble pour `.feedComposer`
-    /// (`routesToLegacy: nil`) depuis le lot 3, mais aucun site de présentation
-    /// n'a bougé — le fil monte toujours sa feuille et son composer inline
-    /// depuis ses propres booléens. La porte la plus utilisée ne passe donc pas
-    /// encore ici.
+    /// La TABLE de C1 désigne le meuble pour `.feedComposer`
+    /// (`routesToLegacy: nil`) depuis le lot 3, et depuis T3.1 le PLEIN composer
+    /// du fil PASSE ici : `RootViewComponents` monte
+    /// `DocumentComposerDoor(intent: ComposerIntent(origin: .feedComposer))`.
+    /// Ce qui n'a pas bougé, c'est le reste — les deux CITATIONS montent encore
+    /// leur feuille (T3.2, levée 7.5) et le composer inline iPad son propre
+    /// booléen (T3.3 le nomme ; sa migration T3.4 est descopée). La porte la
+    /// plus utilisée, elle, passe désormais par le meuble.
     ///
     /// **Ne pas confondre les deux blocages, ils n'ont ni la même cause ni la
     /// même levée.** Celui de `.feedComposer` est côté SDK (le transfert de la
@@ -832,7 +918,324 @@ struct MeeshyComposerHost: View {
             onClose: onDismiss,
             onTool: { tool in handleDocumentTool(tool) }
         )
+        // La capsule se superpose plutôt que d'être peinte PAR la surface :
+        // `ComposerDocumentSurface` reste une présentation sans état, et c'est
+        // le meuble qui possède `documentLanguage` — exactement comme il
+        // possède déjà `documentText`. `.bottomTrailing` la pose au bord de la
+        // rangée d'outils, seule ligne peinte au bas de la surface.
+        .overlay(alignment: .bottomTrailing) { documentLanguageCapsule }
+        // **L'interrupteur POST ↔ RÉEL (T2.4)**, gaté sur la QUALIFICATION —
+        // loi 4, un contrôle sans effet est absent. `.topTrailing` : la
+        // capsule de langue occupe déjà l'angle bas, et ce contrôle n'a rien
+        // à voir avec la langue.
+        .overlay(alignment: .topTrailing) {
+            if documentComposesReel { documentForcePlainPostToggle }
+        }
+        // **La tuile de lieu (T2.5)**, symétrique de la capsule de langue —
+        // `.bottomLeading` face à `.bottomTrailing` : les deux occupent le bas
+        // de la surface, sur les bords opposés de la rangée d'outils.
+        .overlay(alignment: .bottomLeading) {
+            if let place = documentLocation { documentLocationTile(place) }
+        }
+        // **Le SECOND opt-in (T2.5)**, en `safeAreaInset` et non en overlay :
+        // `NearbyDiscoverabilityControl` porte un titre, un sélecteur de grain
+        // et des notices — bien plus large qu'une capsule, il ne doit
+        // recouvrir ni le texte ni la rangée d'outils. Gaté sur
+        // `documentOffersNearbyDiscoverability`, jamais sur `documentLocation
+        // != nil` seul : l'audience compte autant que le lieu.
+        .safeAreaInset(edge: .bottom) {
+            if documentOffersNearbyDiscoverability {
+                NearbyDiscoverabilityControl(
+                    choice: $documentDiscoverability,
+                    accentColor: MeeshyColors.brandPrimaryHex
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+            }
+        }
+        .sheet(isPresented: $showsLocationPicker) { documentLocationPickerSheet }
+        // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
+        .sheet(isPresented: $showsAudioComposer) { documentAudioComposerSheet }
+        // Retirer un média qui dé-qualifie fait DISPARAÎTRE l'interrupteur — et
+        // doit réarmer le drapeau à `false`. Le drapeau n'est jamais invisible
+        // ET effectif (il ne pèse que quand ça qualifie, et l'interrupteur est
+        // peint exactement alors) : le risque que ce reset ferme est plus
+        // subtil — un `Post` forcé pour UNE composition survivrait à son
+        // remplacement par une AUTRE qui re-qualifie, imposant en silence un
+        // choix fait pour un contenu différent. Le reset fait repartir toute
+        // re-qualification du défaut honnête (REEL).
+        .adaptiveOnChange(of: documentLocalMedia) { _, _ in
+            guard !documentComposesReel else { return }
+            documentForcePlainPost = false
+        }
         .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
+        .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
+        // **L'ingestion de fichiers LOCAUX (T2.3)** — trois sélecteurs montés
+        // ICI, sur le meuble, jamais dans `ComposerDocumentSurface` : la
+        // surface reste une présentation sans état, l'ingestion lui appartient.
+        .sheet(isPresented: $showsCamera) { documentCameraSheet }
+        .photosPicker(
+            isPresented: $showsPhotoPicker,
+            selection: $pickedPhotoLibraryItems,
+            maxSelectionCount: 10,
+            matching: .any(of: [.images, .videos])
+        )
+        .adaptiveOnChange(of: pickedPhotoLibraryItems) { _, items in
+            guard !items.isEmpty else { return }
+            let picked = items
+            pickedPhotoLibraryItems = []
+            Task { await ingestPhotoLibraryItems(picked) }
+        }
+        .fileImporter(
+            isPresented: $showsFileImporter,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { result in
+            Task { await ingestFileImporterResult(result) }
+        }
+    }
+
+    /// La capture caméra du document (T2.3), montée ICI plutôt que sous la
+    /// scène : le document n'a pas d'atelier, donc pas d'environnement
+    /// `storyCameraCaptureProvided` à réutiliser — `CameraView` est montée
+    /// telle quelle, le même composant que la scène emprunte par
+    /// environnement.
+    private var documentCameraSheet: some View {
+        CameraView { result in
+            Task { await ingestCameraCapture(result) }
+        }
+    }
+
+    /// **Le gate de l'interrupteur (T2.4).** Même prédicat SDK que
+    /// `PublishIntent.document` juge en aval (`ReelComposition.defaultType`
+    /// via `qualifiesAsReel`) — jamais un seuil recopié ici. Sans lui,
+    /// l'interrupteur resterait peint sur une composition qui n'a rien à
+    /// offrir (loi 4) : une image seule ou un texte seul ne qualifient pas.
+    private var documentComposesReel: Bool {
+        ReelComposition.qualifiesAsReel(
+            mimeTypes: documentLocalMedia.map(\.mimeType),
+            durationsMs: documentLocalMedia.map(\.durationMs)
+        )
+    }
+
+    /// **L'interrupteur POST ↔ RÉEL (T2.4)** — la capacité que la feuille
+    /// absorbée portait et que le meuble avait perdue depuis T2.3 : un média
+    /// qualifiant (vidéo, audio ≥ 3 s, ≥ 2 images) fait élire `"REEL"` par
+    /// `ReelComposition.defaultType` sans offrir à l'auteur le moyen de garder
+    /// un post simple. Même modèle visuel et **mêmes clés i18n** que
+    /// `FeedView+Attachments.reelTypeToggle` (`feed.composer.type.post` /
+    /// `.reel` / `.hint`) — zéro clé neuve, deux traductions à faire diverger
+    /// sinon.
+    private var documentForcePlainPostToggle: some View {
+        Button {
+            documentForcePlainPost.toggle()
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: documentForcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
+                    .font(MeeshyFont.relative(10))
+                Text(documentForcePlainPost
+                    ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
+                    : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
+                    .font(MeeshyFont.relative(12))
+            }
+            .foregroundColor(documentForcePlainPost ? MeeshyColors.textSecondary(isDark: true) : MeeshyColors.indigo400)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(MeeshyColors.indigo400.opacity(0.15))
+                    .overlay(
+                        Capsule()
+                            .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1)
+                    )
+            )
+        }
+        .accessibilityHint(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
+        .padding(16)
+    }
+
+    /// **Le sélecteur de lieu (T2.5)**, monté ICI plutôt que dans
+    /// `ComposerDocumentSurface` — même patron que `documentCameraSheet` juste
+    /// au-dessus : le picker est le même composant que le composer inline du
+    /// fil (`FeedView+Attachments.handleFeedLocationSelection`), qui se
+    /// referme lui-même (`LocationPickerView.dismiss()`) après `onSelect`.
+    ///
+    /// **Un lieu choisi recalcule le second opt-in DEPUIS LA MÉMOIRE**, jamais
+    /// depuis l'état courant : `FeedNearbyDiscoverability.choiceForNewPlace()`
+    /// lit `LocationSharingPreferencesStore` à cet instant précis, exactement
+    /// ce que fait le composer inline sur le même geste — un second lieu choisi
+    /// dans la même session doit repartir du dernier palier RETENU, pas d'un
+    /// toggle resté ouvert pour le lieu précédent.
+    private var documentLocationPickerSheet: some View {
+        LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { place in
+            documentLocation = place
+            documentDiscoverability = FeedNearbyDiscoverability.choiceForNewPlace()
+        }
+    }
+
+    /// **Le sixième outil (T2.6)**, dernier de la rangée — même composant que
+    /// le composer inline du fil monte déjà (`AudioPostComposerView`,
+    /// `FeedView+Attachments.swift`) : en fabriquer un second aurait donné
+    /// deux feuilles d'enregistrement/transcription à faire diverger,
+    /// exactement le défaut que `PublishIntent` existe pour fermer.
+    ///
+    /// **La destination est double, et c'est le cœur du lot.** L'enregistrement
+    /// rejoint `documentLocalMedia` comme un `ComposerDocumentMedia` ORDINAIRE
+    /// — il part par la file durable, comme tout média local (T2.3). La
+    /// transcription voyage À CÔTÉ dans `documentTranscription`, jamais fondue
+    /// dans le texte : `documentDraft` la transmet telle quelle à
+    /// `ComposerDocumentDraft.document(mobileTranscription:)`, que la porte
+    /// poste à `PublishIntent.document(transcription:)`.
+    ///
+    /// **La capsule de langue est SEMÉE, jamais imposée.** Poser
+    /// `documentLanguage = transcription.language` au retour rend le contrôle
+    /// RÉEL (loi 4) et évite qu'une voix parte étiquetée par la langue de
+    /// démarrage du meuble — mais ce n'est qu'un confort d'affichage : la
+    /// garantie qui compte est le `??` de `PublishIntent.document`, qui élit
+    /// la langue PARLÉE même si l'auteur rouvre la capsule et la change après
+    /// coup.
+    ///
+    /// **Un son EMPRUNTÉ à la bibliothèque est hors du périmètre de ce lot.**
+    /// `AudioPostComposerView.onPublishBorrowed` référence un `soundId` déjà
+    /// côté serveur, sans fichier LOCAL ni transcription — une matière que
+    /// `ComposerDocumentDraft` ne modélise pas ici. Fermer la feuille sans
+    /// effet est le choix assumé, plutôt qu'un second chemin d'envoi pour un
+    /// cas que la rangée du document n'offre nulle part ailleurs.
+    private var documentAudioComposerSheet: some View {
+        AudioPostComposerView(
+            onPublish: { audioURL, mimeType, durationMs, transcription in
+                documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+                    url: audioURL,
+                    declaredMimeType: mimeType,
+                    durationMs: durationMs
+                ))
+                documentTranscription = transcription
+                if let transcription {
+                    documentLanguage = transcription.language
+                }
+                showsAudioComposer = false
+                HapticFeedback.light()
+            },
+            onPublishBorrowed: { _ in
+                showsAudioComposer = false
+            }
+        )
+    }
+
+    /// **La tuile de lieu (T2.5)** — même idiome capsule que
+    /// `documentForcePlainPostToggle` juste au-dessus : un chip retirable,
+    /// jamais le pavé pin-drop du composer inline (`feedPlaceTile`), que ce
+    /// meuble n'a pas de rangée de vignettes pour accueillir.
+    ///
+    /// Retirer le lieu ne referme PAS le second opt-in — même comportement que
+    /// `feedPlaceTile` (`FeedView+Attachments.swift`), dont le bouton de
+    /// retrait ne touche pas `nearbyDiscoverability` : la garde de
+    /// `documentOffersNearbyDiscoverability` (`hasPlace: false`) suffit à
+    /// masquer le contrôle et à priver `discoverabilityPrecision` de toute
+    /// valeur, sans qu'il faille une seconde écriture de la même règle.
+    private func documentLocationTile(_ place: SharedPlace) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "mappin.circle.fill")
+                .font(MeeshyFont.relative(12))
+                .foregroundColor(MeeshyColors.indigo400)
+            Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+                .font(MeeshyFont.relative(12, weight: .medium))
+                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                .lineLimit(1)
+            Button {
+                HapticFeedback.light()
+                documentLocation = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(MeeshyFont.relative(12))
+                    .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+            }
+            .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(MeeshyColors.indigo400.opacity(0.15))
+                .overlay(
+                    Capsule()
+                        .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .padding(16)
+    }
+
+    /// **Le SECOND opt-in n'est offert que sous la MÊME garde que le composer
+    /// inline** — `FeedNearbyDiscoverability.offers(hasPlace:visibility:)`,
+    /// APPELÉE et jamais recopiée (`hasPlace && visibility == .public`) : une
+    /// condition réécrite ici diverge de l'originale au premier ajustement de
+    /// l'une des deux, exactement le défaut que ce type existe pour fermer.
+    private var documentOffersNearbyDiscoverability: Bool {
+        FeedNearbyDiscoverability.offers(
+            hasPlace: documentLocation != nil,
+            visibility: composerVisibility
+        )
+    }
+
+    /// **La capsule de langue (T2.2)** — le septième contrôle que la feuille
+    /// historique porte dans la même barre que les six outils d'attache
+    /// (`FeedComposerSheet`, `composerLanguage`), et que la porte du document
+    /// n'avait ni en champ, ni en contrôle, ni en canal sur
+    /// `ComposerDocumentDraft` avant ce lot.
+    ///
+    /// Même capsule, même sélecteur que la feuille : `ComposerLanguageFlag` et
+    /// `AudioLanguagePickerView` tournent déjà en production, et en fabriquer
+    /// une seconde paire ici donnerait deux listes de langues et deux mémoires
+    /// à faire diverger.
+    /// Le nom LOCALISÉ de la langue déclarée, pour VoiceOver — un emoji drapeau
+    /// ne se lit pas utilement (contrat de `ComposerLanguageFlag`). Miroir de
+    /// `composerLanguageDisplayName` de la feuille.
+    private var documentLanguageDisplayName: String {
+        let name = Locale.current.localizedString(forLanguageCode: documentLanguage) ?? documentLanguage
+        return name.prefix(1).uppercased() + name.dropFirst()
+    }
+
+    private var documentLanguageCapsule: some View {
+        Button {
+            showsDocumentLanguagePicker = true
+            HapticFeedback.light()
+        } label: {
+            Text(ComposerLanguageFlag.label(for: documentLanguage))
+                .font(MeeshyFont.relative(13, weight: .semibold))
+                .foregroundColor(MeeshyColors.indigo400)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(MeeshyColors.indigo400.opacity(0.15))
+                        .overlay(
+                            Capsule()
+                                .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1)
+                        )
+                )
+        }
+        .accessibilityLabel(Text(ComposerDocumentCopy.language))
+        .accessibilityValue(documentLanguageDisplayName)
+        .padding(16)
+    }
+
+    /// Le sélecteur du dépôt, monté tel quel — même raison que
+    /// `emojiPickerSheet` deux zones plus haut : `AudioLanguagePickerView`
+    /// tourne déjà en production sous la feuille historique, avec ses
+    /// catégories, sa recherche et son bouton « afficher toutes les langues ».
+    /// En fabriquer un second ici serait deux listes de langues à faire
+    /// diverger.
+    private var documentLanguagePickerSheet: some View {
+        AudioLanguagePickerView(
+            selectedLocale: Binding(
+                get: { Locale(identifier: documentLanguage) },
+                set: { newLocale in
+                    documentLanguage = newLocale.language.languageCode?.identifier ?? newLocale.identifier
+                }
+            ),
+            title: "Langue du post"
+        )
     }
 
     /// Ce que le meuble sert — une PROJECTION de la règle, jamais une liste
@@ -844,18 +1247,149 @@ struct MeeshyComposerHost: View {
     /// Le rappel de la rangée, aiguillé sur l'EFFET et non sur l'outil.
     ///
     /// Aiguiller sur l'outil aurait rouvert exactement ce que `effect` referme :
-    /// cinq branches muettes pour cinq outils que rien ne peint, et la dérive
-    /// silencieuse le jour où l'une d'elles cesserait de correspondre à ce que
-    /// la rangée sert. Ici, `nil` est le seul cas inatteignable, et il l'est par
-    /// construction — un outil sans effet n'arrive jamais à l'écran.
+    /// des branches muettes pour les outils que la rangée ne sert pas, et la
+    /// dérive silencieuse le jour où l'une d'elles cesserait de correspondre à
+    /// ce que la rangée sert. Ici, `nil` est le seul cas inatteignable, et il
+    /// l'est par construction — un outil sans effet n'arrive jamais à l'écran.
+    ///
+    /// **`.attachesLocalMedia` porte UNE valeur associée (T2.3)**, jamais trois
+    /// cas distincts sur `tool.effect` — `.photoLibrary`/`.camera`/`.files`
+    /// restent une question posée au SÉLECTEUR à ouvrir
+    /// (`presentMediaIntake`), jamais une seconde question posée à l'outil.
     private func handleDocumentTool(_ tool: ComposerDocumentTool) {
         switch tool.effect {
         case .insertsEmojiIntoText:
             HapticFeedback.light()
             showsEmojiPicker = true
+        case .attachesLocalMedia(let intake):
+            HapticFeedback.light()
+            presentMediaIntake(intake)
+        case .attachesLocation:
+            HapticFeedback.light()
+            showsLocationPicker = true
+        case .attachesTranscribedAudio:
+            HapticFeedback.light()
+            showsAudioComposer = true
         case .none:
             break
         }
+    }
+
+    /// Quel sélecteur ouvrir pour la famille d'ingestion demandée — la seule
+    /// question que `ComposerMediaIntake` pose. `handleDocumentTool` ne la
+    /// pose jamais lui-même : il reste aiguillé sur l'EFFET, cette fonction
+    /// sur l'INTAKE.
+    private func presentMediaIntake(_ intake: ComposerMediaIntake) {
+        switch intake {
+        case .photoLibrary:
+            showsPhotoPicker = true
+        case .camera:
+            showsCamera = true
+        case .files:
+            showsFileImporter = true
+        }
+    }
+
+    /// La photothèque (T2.3). `PhotosPickerItem` ne porte ni URL ni octets
+    /// tant qu'on ne les charge pas : `loadTransferable` les matérialise, et
+    /// `supportedContentTypes` porte le type DÉCLARÉ par la photothèque.
+    ///
+    /// **Revue Opus, correctifs 1 et 3.** Le mime et la durée passent tous
+    /// deux par `ComposerMediaProbe` — jamais un repli `?? "application/octet-stream"`
+    /// recalculé ici (`.mime`, qui seul sait retomber sur la table par
+    /// EXTENSION avant ce repli terminal), jamais une vidéo sélectionnée
+    /// figée `durationMs: nil` (`.durationMs`, sans quoi `ReelComposition`
+    /// la classerait `.post` au lieu de `.reel`).
+    private func ingestPhotoLibraryItems(_ items: [PhotosPickerItem]) async {
+        for item in items {
+            guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+            let declaredType = item.supportedContentTypes.first
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+                "composer_photo_\(UUID().uuidString).\(declaredType?.preferredFilenameExtension ?? "dat")"
+            )
+            guard (try? data.write(to: url)) != nil else { continue }
+            let mime = ComposerMediaProbe.mime(forURL: url, declaredType: declaredType)
+            let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: mime)
+            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+                url: url,
+                declaredMimeType: mime,
+                durationMs: duration
+            ))
+        }
+        HapticFeedback.light()
+    }
+
+    /// La caméra (T2.3) — le mime est celui que CE SITE choisit en écrivant
+    /// le fichier, jamais dérivé après coup : JPEG pour une photo, QuickTime
+    /// pour une vidéo (le conteneur qu'`AVCaptureMovieFileOutput` écrit déjà,
+    /// `CameraModel.startSegment()`).
+    ///
+    /// **Revue Opus, correctif 1.** La branche vidéo sonde sa durée RÉELLE
+    /// (`ComposerMediaProbe.durationMs`) — sans elle, une vidéo de 10 s
+    /// captée ici partait `durationMs: nil` et `ReelComposition` la classait
+    /// `.post` au lieu de `.reel`. La branche photo n'a rien à sonder : une
+    /// image n'a pas de durée, et `ComposerMediaProbe.durationMs` la
+    /// classerait `nil` de toute façon — l'appeler ici serait un aller-retour
+    /// pour rien.
+    private func ingestCameraCapture(_ result: CameraResult) async {
+        switch result {
+        case .photo(let image):
+            guard let data = image.jpegData(compressionQuality: 0.9) else { return }
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("composer_camera_\(UUID().uuidString).jpg")
+            guard (try? data.write(to: url)) != nil else { return }
+            documentLocalMedia.append(ComposerDocumentMediaFactory.media(url: url, declaredMimeType: "image/jpeg"))
+        case .video(let url):
+            let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: "video/quicktime")
+            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+                url: url,
+                declaredMimeType: "video/quicktime",
+                durationMs: duration
+            ))
+        }
+        HapticFeedback.light()
+    }
+
+    /// L'importateur de documents (T2.3) — le mime passe par
+    /// `ComposerMediaProbe.mime`, jamais recalculé ici.
+    ///
+    /// **Revue Opus, correctif 3.** `UTType.preferredMIMEType` rend `nil`
+    /// pour des types pourtant bien identifiés (`.caf`, `.opus`) : retomber
+    /// directement sur `application/octet-stream` ici ferait perdre
+    /// EXACTEMENT le défaut que ce lot prétend fermer. `ComposerMediaProbe.mime`
+    /// retombe d'abord sur la table par EXTENSION (`MimeTypeResolver`).
+    ///
+    /// **Revue Opus, correctif 4.** `startAccessingSecurityScopedResource()`
+    /// rend `false` pour un fichier qui N'EST PAS security-scoped (conteneur
+    /// app, certains fournisseurs) — ce n'EST PAS un échec. La copie est
+    /// tentée QUEL QUE SOIT ce retour ; `stopAccessingSecurityScopedResource()`
+    /// n'est appelé QUE si `start` a rendu `true`.
+    ///
+    /// **Revue Opus, correctif 1.** La durée RÉELLE est sondée
+    /// (`ComposerMediaProbe.durationMs`) — un `.mp4`/`.caf` importé ici
+    /// portait sinon `durationMs: nil`, et `ReelComposition` le classait
+    /// `.post` au lieu de `.reel`/l'excluait à tort d'un réel à deux médias.
+    ///
+    /// `async` depuis ce lot : le `.fileImporter` du corps l'enveloppe d'un
+    /// `Task`, comme les deux autres ingestions.
+    private func ingestFileImporterResult(_ result: Result<[URL], Error>) async {
+        guard case .success(let urls) = result else { return }
+        for sourceURL in urls {
+            let scoped = sourceURL.startAccessingSecurityScopedResource()
+            defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
+            let declaredType = try? sourceURL.resourceValues(forKeys: [.contentTypeKey]).contentType
+            let destination = FileManager.default.temporaryDirectory
+                .appendingPathComponent("composer_file_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
+            guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
+            let mime = ComposerMediaProbe.mime(forURL: destination, declaredType: declaredType)
+            let duration = await ComposerMediaProbe.durationMs(forURL: destination, mime: mime)
+            documentLocalMedia.append(ComposerDocumentMediaFactory.media(
+                url: destination,
+                declaredMimeType: mime,
+                durationMs: duration
+            ))
+        }
+        HapticFeedback.light()
     }
 
     /// **Le sélecteur du dépôt, monté tel quel** — celui que le composer inline
@@ -871,7 +1405,7 @@ struct MeeshyComposerHost: View {
     /// refuse de publier. Les confondre changerait ce qu'un mood EST à chaque
     /// frappe de son texte.
     private var emojiPickerSheet: some View {
-        EmojiPickerSheet(quickReactions: Self.quickEmojis) { emoji in
+        EmojiPickerSheet(quickReactions: Self.quickEmojis, title: "composer.attach.emoji") { emoji in
             documentText += emoji
             showsEmojiPicker = false
         }
@@ -1094,6 +1628,16 @@ struct MeeshyComposerHost: View {
     private func chooseAudience(_ candidate: PostVisibility) {
         composerVisibility = candidate
         lastDocumentVisibility = candidate.rawValue
+        // **Parité vie privée (T2.5).** Le consentement de trouvabilité porte
+        // sur UNE publication ET UNE audience : quitter PUBLIC réarme l'opt-in
+        // de découvrabilité. Sans lui, un opt-in armé en PUBLIC survivrait à un
+        // resserrement puis à un ré-élargissement — le contrôle réapparaîtrait
+        // DÉJÀ ON et publierait sur un consentement PÉRIMÉ que personne n'a
+        // réexaminé. Le composer inline de référence le fait pour cette raison
+        // exacte (`FeedView+Attachments`), et le même meuble l'applique déjà à
+        // `forcePlainPost` (T2.4). `reset()` pose `isDiscoverable = false`, ce
+        // qui rend `precisionToSend == nil`.
+        if candidate != .public { documentDiscoverability.reset() }
         if candidate.requiresUserSelection { audiencePickerMode = candidate }
     }
 
@@ -1252,12 +1796,47 @@ struct MeeshyComposerHost: View {
             // qu'un post ordinaire. Le lire ailleurs (la graine, un drapeau du
             // site de montage) en ferait une seconde source pour « quelle
             // publication republie-t-on », alors que la porte le sait.
+            //
+            // `originalLanguage` vient du SOCLE (`documentLanguage`, T2.2) et
+            // non plus d'un littéral `nil` : c'est la capsule qui l'écrit, la
+            // porte qui la poste telle quelle.
+            //
+            // `forcePlainPost` vient de l'interrupteur du SOCLE (T2.4,
+            // `documentForcePlainPost`) — jamais d'un littéral `false` : un
+            // littéral ferait toujours élire `"REEL"` sur une composition
+            // qualifiante, exactement la régression que ce lot referme.
+            //
+            // `location` vient du SOCLE (`documentLocation`, T2.5, écrit par
+            // `LocationPickerView`) — jamais d'un littéral `nil` : un littéral
+            // jetterait le lieu que l'auteur vient de choisir.
+            //
+            // `discoverabilityPrecision` est le SECOND opt-in, gardé par
+            // `documentOffersNearbyDiscoverability` — la MÊME garde que celle
+            // qui peint le contrôle (`FeedNearbyDiscoverability.offers(`),
+            // jamais recopiée : un contrôle absent de l'écran ne doit jamais
+            // pouvoir peser sur ce qui part. Hors de cette garde, ou tant que
+            // l'auteur n'a rien activé, `precisionToSend` vaut déjà `nil`
+            // (`NearbyDiscoverabilityChoice`, off par défaut).
+            //
+            // `mobileTranscription` vient du SOCLE (`documentTranscription`,
+            // T2.6, écrit par `AudioPostComposerView` au retour du sixième
+            // outil) — jamais d'un littéral `nil` : un littéral ferait perdre
+            // la transcription faite SUR L'APPAREIL, et le serveur
+            // re-transcrirait ce travail en silence.
             return ComposerDocumentDraft.document(
                 format: selectedFormat,
+                forcePlainPost: documentForcePlainPost,
                 text: documentText,
                 visibility: composerVisibility,
                 visibilityUserIds: composerVisibilityUserIds,
-                repostOfId: intent.origin.repostedPostId
+                repostOfId: intent.origin.repostedPostId,
+                localMedia: documentLocalMedia,
+                location: documentLocation,
+                discoverabilityPrecision: documentOffersNearbyDiscoverability
+                    ? documentDiscoverability.precisionToSend
+                    : nil,
+                originalLanguage: documentLanguage,
+                mobileTranscription: documentTranscription
             )
         }
     }
@@ -1293,6 +1872,14 @@ struct MeeshyComposerHost: View {
     /// fait déjà par `publishSuccess` / `publishError`.
     private func publishDocument() {
         guard canPublishDocument, let draft = documentDraft else { return }
+        // Le palier RETENU pour la PROCHAINE publication est écrit ICI, au
+        // moment où il SERT — même geste que
+        // `FeedView+Attachments.publishPostWithAttachments`
+        // (`FeedNearbyDiscoverability.remember(nearbyDiscoverability)`) : la
+        // spec parle du dernier choix « utilisé », pas du dernier survolé.
+        if documentOffersNearbyDiscoverability {
+            FeedNearbyDiscoverability.remember(documentDiscoverability)
+        }
         isPublishingDocument = true
         Task {
             let accepted = await onPublishDocument(draft)

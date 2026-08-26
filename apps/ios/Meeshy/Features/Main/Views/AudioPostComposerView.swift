@@ -736,6 +736,11 @@ struct AudioPostComposerView: View {
 
 struct AudioLanguagePickerView: View {
     @Binding var selectedLocale: Locale
+    /// Le titre de la feuille. Défaut : le contexte d'ORIGINE (la langue d'un
+    /// audio). Un hôte qui remonte ce composant dans un AUTRE contexte — le
+    /// meuble, dont la feuille nomme la langue du POST — passe le sien, sans
+    /// que les trois appelants audio aient à répéter le défaut.
+    var title: LocalizedStringResource = "Langue de l'audio"
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
@@ -817,8 +822,7 @@ struct AudioLanguagePickerView: View {
             .searchable(text: $searchText,
                         prompt: String(localized: "Rechercher une langue",
                                        defaultValue: "Rechercher une langue"))
-            .navigationTitle(String(localized: "Langue de l'audio",
-                                    defaultValue: "Langue de l'audio"))
+            .navigationTitle(Text(title))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
