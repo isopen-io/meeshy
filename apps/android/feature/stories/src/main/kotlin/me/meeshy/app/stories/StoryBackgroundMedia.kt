@@ -23,6 +23,7 @@ data class StoryBackgroundMedia(
     val mimeType: String,
     val durationSeconds: Double?,
     val loop: Boolean = true,
+    val framing: StoryBackgroundFraming = StoryBackgroundFraming.IDENTITY,
 ) {
     /** A `video/…` MIME denotes a looping background video; anything else is an image. */
     val isVideo: Boolean get() = mimeType.startsWith("video", ignoreCase = true)
@@ -41,16 +42,28 @@ data class StoryBackgroundMedia(
      * reads `backgroundObject?.loop ?: true`, while its image branch is unconditionally
      * looping. Emitting the author's `loop = false` onto an image would be a wire value no
      * reader honours, so an image always publishes `loop = true`.
+     *
+     * [framing] (the author's pan/zoom) is carried as normalised `x`/`y`/`scale` **only for
+     * an image** — the reader's image branch converts these back via
+     * [StoryBackgroundObjectTransform.from], closing the author→reader loop; its video branch
+     * keeps IDENTITY (a scoped-out follow-up), so a video publishes the bare centred defaults
+     * rather than a framing no client would honour.
      */
-    fun toMediaObject(): StoryMediaObject = StoryMediaObject(
-        id = mediaId,
-        postMediaId = mediaId,
-        mediaURL = url,
-        mediaType = if (isVideo) "video" else "image",
-        placement = "media",
-        isBackground = true,
-        loop = if (isVideo) loop else true,
-        intrinsicDuration = publishableDuration?.takeIf { isVideo },
-        duration = publishableDuration?.takeIf { isVideo },
-    )
+    fun toMediaObject(): StoryMediaObject {
+        val framed = if (isVideo) StoryBackgroundFraming.IDENTITY else framing
+        return StoryMediaObject(
+            id = mediaId,
+            postMediaId = mediaId,
+            mediaURL = url,
+            mediaType = if (isVideo) "video" else "image",
+            placement = "media",
+            x = framed.x,
+            y = framed.y,
+            scale = framed.scale,
+            isBackground = true,
+            loop = if (isVideo) loop else true,
+            intrinsicDuration = publishableDuration?.takeIf { isVideo },
+            duration = publishableDuration?.takeIf { isVideo },
+        )
+    }
 }
