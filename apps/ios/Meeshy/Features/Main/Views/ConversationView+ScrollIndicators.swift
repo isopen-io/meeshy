@@ -32,6 +32,9 @@ extension ConversationView {
             unreadCount: scrollState.unreadBadgeCount,
             typingParticipants: typingObserver.typingParticipants,
             lastUnreadMessageContent: viewModel.lastUnreadMessage?.content,
+            // Nom devant l'aperçu — utile en groupe (qui a écrit ?), muet en
+            // DM (l'unique interlocuteur n'a pas besoin d'être nommé) (#3921).
+            lastUnreadMessageSenderName: isDirect ? nil : viewModel.lastUnreadMessage?.senderName,
             unreadAttachmentTypeLabel: unreadAttachmentTypeLabel,
             unreadAttachmentThumbHash: unreadAttachment?.thumbHash,
             unreadAttachmentThumbnailUrl: unreadAttachment?.thumbnailUrl,
