@@ -444,6 +444,11 @@ struct ConversationView: View {
     /// ancré. FIGÉE tant qu'un message est en cours de rédaction : voir
     /// `resolvedScrollButtonAnchor(current:composerHeight:isComposing:)`.
     @State var composerScrollButtonAnchor: CGFloat = 130
+    /// #3918 — non-nil pendant l'animation de survol du texte envoyé
+    /// (`ComposerSendFlyPreview`). Posé par `sendMessageWithAttachments()`
+    /// AVANT que le champ ne soit vidé ; auto-effacé après
+    /// `ComposerSendFlyPreview.duration`.
+    @State var sendFlyPayload: ComposerSendFlyPayload?
     @State private var keyboardHeight: CGFloat = 0
     @State private var initialScrollCompleted: Bool = false
 
@@ -2037,6 +2042,21 @@ struct ConversationView: View {
                             .adaptiveOnChange(of: geo.size.height) { _, h in updateComposerHeight(h) }
                     }
                 )
+                // #3918 — le texte envoyé survole depuis le composer.
+                // Overlay pur, jamais dans le flux : ne pousse ni ne
+                // redimensionne rien autour de lui.
+                .overlay(alignment: .bottom) {
+                    if let payload = sendFlyPayload {
+                        ComposerSendFlyPreview(
+                            text: payload.text,
+                            accentColor: accentColor,
+                            secondaryColor: secondaryColor
+                        )
+                        .padding(.bottom, composerHeight)
+                        .allowsHitTesting(false)
+                        .id(payload.id)
+                    }
+                }
             }
             // R-7 (2026-08-22) : en Rivière, le composeur passe AU-DESSUS du
             // pane (80) — le pane lui réserve sa hauteur (`bottomInset`) et

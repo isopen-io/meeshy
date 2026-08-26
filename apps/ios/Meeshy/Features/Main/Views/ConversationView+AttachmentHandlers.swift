@@ -78,6 +78,23 @@ extension ConversationView {
         sendMessageWithAttachments()
     }
 
+    /// #3918 — capture le texte AVANT que `composerText.text` ne soit vidé et
+    /// arme le survol (`ComposerSendFlyPreview`). No-op sur un texte vide :
+    /// un envoi pièce-jointe-seule n'a rien à faire voler.
+    func triggerSendFlyAnimation(text: String) {
+        guard !text.isEmpty else { return }
+        let payload = ComposerSendFlyPayload(text: text)
+        sendFlyPayload = payload
+        // `self` est une struct SwiftUI : la fermeture copie la vue, mais
+        // `@State` porte un stockage PARTAGÉ — muter `sendFlyPayload` ici
+        // touche bien l'état affiché, sans risque de cycle (pas de classe).
+        DispatchQueue.main.asyncAfter(deadline: .now() + ComposerSendFlyPreview.duration) {
+            if self.sendFlyPayload?.id == payload.id {
+                self.sendFlyPayload = nil
+            }
+        }
+    }
+
     func sendMessageWithAttachments() {
         let composerTrimmed = composerText.text.trimmingCharacters(in: .whitespacesAndNewlines)
         Logger.messages.info("SendTap composer tap convId=\(viewModel.conversationId, privacy: .public) isUploading=\(composerState.isUploading, privacy: .public) textLen=\(composerTrimmed.count, privacy: .public) pendingAttachments=\(composerState.pendingAttachments.count, privacy: .public) vmIsSending=\(viewModel.isSending, privacy: .public)")
@@ -135,6 +152,7 @@ extension ConversationView {
             composerState.pendingMediaFiles.removeAll()
             composerState.pendingThumbnails.removeAll()
             purgeDraftAttachmentMedia()
+            triggerSendFlyAnimation(text: text)
             composerText.text = ""
             ReplyContextCleaner(conversationId: viewModel.conversationId)
                 .clear(pendingReplyReference: &composerState.pendingReplyReference)
@@ -153,6 +171,7 @@ extension ConversationView {
         }
 
         // File upload flow: keep attachments visible, show progress
+        triggerSendFlyAnimation(text: text)
         composerText.text = ""
         ReplyContextCleaner(conversationId: viewModel.conversationId)
             .clear(pendingReplyReference: &composerState.pendingReplyReference)
