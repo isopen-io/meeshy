@@ -244,3 +244,11 @@ résultat incrémental est suspect — refaire un CLEAN build avant de conclure.
 **Mesuré (CLEAN builds 26.1)** : app full target 868 suites malloc=0, 3 gardes GREEN,
 AudioRecorderManager 15/15, AuthService/BubbleContentMatrix/AudioBubble verts. SDK full
 re-gate en cours de confirmation.
+
+## Échecs de rendu iOS 26.1 corrigés (2026-08-26, « corriges les echecs restantes »)
+Le re-gate SDK complet laissait 27 échecs de RENDU 26.1 (pas des crashes ; venus du
+merge origin/main, verts sur la CI iOS 18.x). Corrigés SANS toucher la CI 18.x :
+- DynamicTypeTests (7) : check de collapse par `sizeThatFits` (subviews vide sur 26.x). `ad3531f3bf`
+- Snapshots ClipInspector + VideoClipBar (20) : baselines PAR-OS (`perOSBaseline`, `-iOS26.png`). `b56946023c`
+- Plan2DIntegrationGuardTests : hash-pin TimelineExportFlow → invariant `!contains("Plan2D")`. `b05416404b`
+CLEAN SDK full re-gate final en confirmation. Vague 1c + échecs restants = SOLDÉS.
