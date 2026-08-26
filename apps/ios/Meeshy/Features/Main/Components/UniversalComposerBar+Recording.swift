@@ -162,7 +162,9 @@ extension UniversalComposerBar {
             }
             .frame(width: 54, alignment: .trailing)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(String(localized: "composer.recording.inProgress", defaultValue: "Recording in progress", bundle: .main) + ", \(formatDuration(effectiveDuration))")
+            .accessibilityLabel(String(localized: "composer.recording.inProgress", defaultValue: "Recording in progress", bundle: .main))
+            .accessibilityValue(LocalizedNumber.spokenDuration(seconds: effectiveDuration))
+            .accessibilityAddTraits(.updatesFrequently)
 
             // Stop → attachments button — stops recording and drops the audio
             // into the composer's attachment tray, editable before sending.
@@ -436,8 +438,6 @@ extension UniversalComposerBar {
     // MARK: - Helpers
 
     func formatDuration(_ seconds: TimeInterval) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
+        LocalizedNumber.duration(seconds: seconds)
     }
 }

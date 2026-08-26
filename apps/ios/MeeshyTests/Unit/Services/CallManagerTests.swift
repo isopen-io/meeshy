@@ -3739,75 +3739,84 @@ final class CallForcedLeaveDataTests: XCTestCase {
 @MainActor
 final class CallManagerFormatDurationTests: XCTestCase {
 
+    /// Les graphies épinglées ci-dessous (« 00:00 », « 1:05:03 ») sont celles
+    /// d'une locale à chiffres latins. Depuis que le formateur passe par la
+    /// locale — c'était le défaut : « 02:05 » s'écrivait en chiffres latins
+    /// jusque dans une interface arabe — la juger sur `.current` reviendrait à
+    /// juger celle du simulateur (leçon 234i). Ce qui est épinglé ici est la
+    /// FORME de l'horloge d'appel ; la variance de locale l'est chez
+    /// `LocalizedNumberTests`.
+    private let latin = Locale(identifier: "en_US")
+
     func test_formatDuration_zero_showsDoubleZero() {
-        XCTAssertEqual(CallManager.formatDuration(0), "00:00")
+        XCTAssertEqual(CallManager.formatDuration(0, locale: latin), "00:00")
     }
 
     func test_formatDuration_oneSecond_showsZeroZeroZeroOne() {
-        XCTAssertEqual(CallManager.formatDuration(1), "00:01")
+        XCTAssertEqual(CallManager.formatDuration(1, locale: latin), "00:01")
     }
 
     func test_formatDuration_59seconds_noLeadingMinute() {
-        XCTAssertEqual(CallManager.formatDuration(59), "00:59")
+        XCTAssertEqual(CallManager.formatDuration(59, locale: latin), "00:59")
     }
 
     func test_formatDuration_oneMinute_showsZeroOneZeroZero() {
-        XCTAssertEqual(CallManager.formatDuration(60), "01:00")
+        XCTAssertEqual(CallManager.formatDuration(60, locale: latin), "01:00")
     }
 
     func test_formatDuration_90seconds_showsOneMinute30Seconds() {
-        XCTAssertEqual(CallManager.formatDuration(90), "01:30")
+        XCTAssertEqual(CallManager.formatDuration(90, locale: latin), "01:30")
     }
 
     func test_formatDuration_59Minutes59Seconds_maxSubHour() {
-        XCTAssertEqual(CallManager.formatDuration(3599), "59:59")
+        XCTAssertEqual(CallManager.formatDuration(3599, locale: latin), "59:59")
     }
 
     func test_formatDuration_exactlyOneHour_showsHHMMSS() {
         // Pre-fix: was "60:00"; post-fix: "1:00:00"
-        XCTAssertEqual(CallManager.formatDuration(3600), "1:00:00")
+        XCTAssertEqual(CallManager.formatDuration(3600, locale: latin), "1:00:00")
     }
 
     func test_formatDuration_oneHourFiveMinutes_showsHHMMSS() {
         // Pre-fix: was "65:00"; post-fix: "1:05:00"
-        XCTAssertEqual(CallManager.formatDuration(3900), "1:05:00")
+        XCTAssertEqual(CallManager.formatDuration(3900, locale: latin), "1:05:00")
     }
 
     func test_formatDuration_twoHours_showsHHMMSS() {
-        XCTAssertEqual(CallManager.formatDuration(7200), "2:00:00")
+        XCTAssertEqual(CallManager.formatDuration(7200, locale: latin), "2:00:00")
     }
 
     func test_formatDuration_twoHours30MinutesAndSomeSeconds() {
         // 2h 30m 45s = 9045s
-        XCTAssertEqual(CallManager.formatDuration(9045), "2:30:45")
+        XCTAssertEqual(CallManager.formatDuration(9045, locale: latin), "2:30:45")
     }
 
     func test_formatDuration_oneHour59Minutes59Seconds() {
         // 7199 = 1*3600 + 59*60 + 59
-        XCTAssertEqual(CallManager.formatDuration(7199), "1:59:59")
+        XCTAssertEqual(CallManager.formatDuration(7199, locale: latin), "1:59:59")
     }
 
     func test_formatDuration_fractionalSecondsAreTruncated() {
         // 90.9 seconds → 01:30 (truncate, not round)
-        XCTAssertEqual(CallManager.formatDuration(90.9), "01:30")
+        XCTAssertEqual(CallManager.formatDuration(90.9, locale: latin), "01:30")
     }
 
     func test_formatDuration_subHour_doesNotShowHours() {
         // Ensure < 1 h keeps the compact MM:SS format
-        let result = CallManager.formatDuration(3599)
+        let result = CallManager.formatDuration(3599, locale: latin)
         XCTAssertFalse(result.contains(":") && result.split(separator: ":").count == 3,
                        "sub-hour duration must use MM:SS not HH:MM:SS; got \(result)")
     }
 
     func test_formatDuration_oneHour_usesThreeComponents() {
-        let result = CallManager.formatDuration(3600)
+        let result = CallManager.formatDuration(3600, locale: latin)
         XCTAssertEqual(result.split(separator: ":").count, 3,
                        "≥1 h duration must use H:MM:SS format; got \(result)")
     }
 
     func test_formatDuration_minutesAndSecondsArePaddedToTwoDigits() {
         // 1h 5m 3s → "1:05:03" (not "1:5:3")
-        XCTAssertEqual(CallManager.formatDuration(3600 + 5 * 60 + 3), "1:05:03")
+        XCTAssertEqual(CallManager.formatDuration(3600 + 5 * 60 + 3, locale: latin), "1:05:03")
     }
 }
 

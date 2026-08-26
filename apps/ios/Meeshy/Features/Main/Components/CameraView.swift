@@ -282,13 +282,12 @@ struct CameraView: View {
         .background(Capsule().fill(.black.opacity(0.5)))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "camera.recording", defaultValue: "Enregistrement en cours", bundle: .main))
-        .accessibilityValue(formatDuration(camera.recordingDuration))
+        .accessibilityValue(LocalizedNumber.spokenDuration(seconds: camera.recordingDuration))
+        .accessibilityAddTraits(.updatesFrequently)
     }
 
     private func formatDuration(_ t: TimeInterval) -> String {
-        let m = Int(t) / 60
-        let s = Int(t) % 60
-        return String(format: "%d:%02d", m, s)
+        LocalizedNumber.duration(seconds: t)
     }
 }
 

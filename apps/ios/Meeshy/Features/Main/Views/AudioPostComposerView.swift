@@ -264,7 +264,7 @@ struct AudioPostComposerView: View {
                 // the running time as the value.
                 .accessibilityLabel(String(localized: "Durée enregistrée",
                                            defaultValue: "Dur\u{00E9}e enregistr\u{00E9}e"))
-                .accessibilityValue(formattedDuration)
+                .accessibilityValue(spokenDuration)
         } else if phase == .transcribing {
             VStack(spacing: 4) {
                 Text(String(localized: "Transcription en cours...", defaultValue: "Transcription en cours..."))
@@ -579,11 +579,18 @@ struct AudioPostComposerView: View {
         return Locale(identifier: "fr-FR")
     }
 
+    private var elapsedSeconds: TimeInterval {
+        borrowedSound?.durationSeconds ?? recordedDuration
+    }
+
     private var formattedDuration: String {
-        let d = borrowedSound?.durationSeconds ?? recordedDuration
-        let minutes = Int(d) / 60
-        let seconds = Int(d) % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        LocalizedNumber.duration(seconds: elapsedSeconds)
+    }
+
+    /// Ce que VoiceOver ENTEND — « 34 secondes », jamais l'horloge « 0:34 »,
+    /// que le synthétiseur lirait comme une heure.
+    private var spokenDuration: String {
+        LocalizedNumber.spokenDuration(seconds: elapsedSeconds)
     }
 
     /// Entrée UNIQUE des fichiers audio propres — enregistrement (feuille

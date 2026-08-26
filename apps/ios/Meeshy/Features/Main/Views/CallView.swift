@@ -933,7 +933,7 @@ struct CallView: View {
                     // (and FloatingCallPillView 211i): the label reads once, the
                     // timer updates via .accessibilityValue under .updatesFrequently.
                     .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                    .accessibilityValue(callManager.formattedDuration)
+                    .accessibilityValue(callManager.spokenDuration)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
@@ -948,7 +948,7 @@ struct CallView: View {
             // announcement. Reuses the existing `call.duration.a11y.label` key.
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-            .accessibilityValue(callManager.formattedDuration)
+            .accessibilityValue(callManager.spokenDuration)
             .accessibilityAddTraits(.updatesFrequently)
 
             // Status indicators
@@ -1011,13 +1011,13 @@ struct CallView: View {
                         // caption-mode header has no status-pill row, so the
                         // labelled value is the only place the timer gains meaning.
                         .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                        .accessibilityValue(callManager.formattedDuration)
+                        .accessibilityValue(callManager.spokenDuration)
                 }
                 // Same naked-readout fix as audioCallLayout — captions-active
                 // compact header. Bare "0:34" → "Durée de l'appel, 0:34".
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                .accessibilityValue(callManager.formattedDuration)
+                .accessibilityValue(callManager.spokenDuration)
                 .accessibilityAddTraits(.updatesFrequently)
             }
 
@@ -1157,7 +1157,7 @@ struct CallView: View {
                     // (top-trailing) se pose dessous via `pipTopClearance`.
                     .frame(height: 44)
                     .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
-                    .accessibilityValue(callManager.formattedDuration)
+                    .accessibilityValue(callManager.spokenDuration)
                     .accessibilityAddTraits(.updatesFrequently)
                 }
                 .padding(.horizontal, 16)
@@ -1589,7 +1589,7 @@ struct CallView: View {
                     // Final call-total duration: same naked-readout fix, static
                     // (no .updatesFrequently). Bare "0:34" → "Durée de l'appel, 0:34".
                     .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                    .accessibilityValue(callManager.formattedDuration)
+                    .accessibilityValue(callManager.spokenDuration)
             }
 
             if callManager.canRetryCall {
