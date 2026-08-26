@@ -406,9 +406,13 @@ describe('PushNotificationService', () => {
       });
 
       expect(result).toEqual([]);
-      expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
         'No active tokens found for user',
         expect.objectContaining({ userId: 'user-123' })
+      );
+      expect(mockLoggerWarn).not.toHaveBeenCalledWith(
+        'No active tokens found for user',
+        expect.anything()
       );
     });
 
@@ -1745,6 +1749,49 @@ describe('PushNotificationService', () => {
         }),
       });
     });
+
+    it.each(['BadDeviceToken', 'Unregistered', 'ExpiredToken', 'DeviceTokenNotForTopic'])(
+      'should deactivate token immediately on permanent APNS reason %s (no 3-strike counter)',
+      async (reason) => {
+        mockApnsProviderSend.mockResolvedValue({
+          sent: [],
+          failed: [{ device: 'apns-token-123', status: 410, response: { reason } }],
+        });
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: null },
+        ]);
+        mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+        mockPrisma.pushToken.update.mockResolvedValue({});
+
+        await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Test', body: 'Test' },
+        });
+
+        expect(mockPrisma.pushToken.update).toHaveBeenCalledWith({
+          where: { id: 'token-1' },
+          data: expect.objectContaining({
+            failedAttempts: 1,
+            lastError: reason,
+            isActive: false,
+          }),
+        });
+        expect(mockLoggerWarn).toHaveBeenCalledWith(
+          'Token deactivated',
+          expect.objectContaining({ tokenId: 'token-1', reason })
+        );
+      }
+    );
 
     it('should handle token not found gracefully', async () => {
       const { PushNotificationService } = await getServiceWithEnv({

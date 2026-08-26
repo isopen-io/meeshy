@@ -100,16 +100,6 @@ export class ZmqRequestSender {
       timestamp: Date.now()
     };
 
-    logger.info('🔍 PRÉPARATION ENVOI PUSH:');
-    logger.info(`   📋 taskId: ${taskId}`);
-    logger.info(`   📋 messageId: ${request.messageId}`);
-    logger.info(`   📋 text: "${request.text}"`);
-    logger.info(`   📋 sourceLanguage: ${request.sourceLanguage}`);
-    logger.info(`   📋 targetLanguages: [${uniqueTargetLanguages.join(', ')}]`);
-    logger.info(`   📋 conversationId: ${request.conversationId}`);
-    logger.info(`   🎨 modelType: ${requestMessage.modelType}`);
-    logger.info(`   📋 message size: ${JSON.stringify(requestMessage).length} chars`);
-
     // Envoyer la commande via PUSH avec timeout (5s) pour détecter les pannes translator
     try {
       await withTimeout(
@@ -133,7 +123,15 @@ export class ZmqRequestSender {
 
     this.stats.translationRequests++;
 
-    logger.info(`📤 [ZMQ-Client] Commande PUSH envoyée: taskId=${taskId}, conversationId=${request.conversationId}, langues=${uniqueTargetLanguages.length}`);
+    logger.info('translation push sent', {
+      taskId,
+      messageId: request.messageId,
+      conversationId: request.conversationId,
+      sourceLanguage: request.sourceLanguage,
+      targetLanguages: uniqueTargetLanguages,
+      modelType: requestMessage.modelType,
+      textLength: request.text.length
+    });
 
     return taskId;
   }
@@ -188,7 +186,6 @@ export class ZmqRequestSender {
           // L'embedding est transmis en frame binaire, pas dans le JSON
         };
 
-        logger.info(`   🎙️ Voice profile transmis en multipart: frame 2 (${embeddingBuffer.length} bytes)`);
       } catch (error) {
         logger.error('⚠️ Erreur décodage voice profile, ignoré', error);
       }
@@ -221,18 +218,6 @@ export class ZmqRequestSender {
       postMediaId: request.postMediaId,
     };
 
-    const transferMode = `multipart binaire (${(audioData.size / 1024).toFixed(1)}KB, ${audioData.mimeType})`;
-
-    logger.info('🎤 ENVOI AUDIO PROCESS:');
-    logger.info(`   📋 taskId: ${taskId}`);
-    logger.info(`   📋 messageId: ${request.messageId}`);
-    logger.info(`   📋 attachmentId: ${request.attachmentId}`);
-    logger.info(`   📋 senderId: ${request.senderId}`);
-    logger.info(`   📋 targetLanguages: [${request.targetLanguages.join(', ')}]`);
-    logger.info(`   📋 audioDurationMs: ${request.audioDurationMs}`);
-    logger.info(`   📋 mobileTranscription: ${request.mobileTranscription ? 'provided' : 'none'}`);
-    logger.info(`   📋 transferMode: ${transferMode}`);
-
     // Envoyer via PUSH en multipart (TOUJOURS)
     await this.connectionManager.sendMultipart(requestMessage, binaryFrames);
 
@@ -244,7 +229,19 @@ export class ZmqRequestSender {
 
     this.stats.audioProcessRequests++;
 
-    logger.info(`📤 [ZMQ-Client] Audio process PUSH envoyée: taskId=${taskId}, messageId=${request.messageId}`);
+    logger.info('audio process push sent', {
+      taskId,
+      messageId: request.messageId,
+      attachmentId: request.attachmentId,
+      conversationId: request.conversationId,
+      senderId: request.senderId,
+      targetLanguages: request.targetLanguages,
+      audioDurationMs: request.audioDurationMs,
+      hasMobileTranscription: Boolean(request.mobileTranscription),
+      audioSize: audioData.size,
+      audioMimeType: audioData.mimeType,
+      voiceProfileBytes: binaryFrameInfo.voiceProfileSize
+    });
 
     return taskId;
   }
@@ -262,52 +259,34 @@ export class ZmqRequestSender {
     request: Omit<TranscriptionOnlyRequest, 'type' | 'taskId'>,
     existingTaskId?: string
   ): Promise<string> {
-    logger.info(`🔍 [ZMQ-TRACE] ======== DÉBUT ENVOI TRANSCRIPTION ========`);
-    logger.info(`🔍 [ZMQ-TRACE] Request params:`);
-    logger.info(`   - messageId: ${request.messageId}`);
-    logger.info(`   - attachmentId: ${request.attachmentId}`);
-    logger.info(`   - audioPath: ${request.audioPath || 'N/A'}`);
-    logger.info(`   - audioData (base64): ${request.audioData ? `${request.audioData.substring(0, 50)}...` : 'N/A'}`);
-    logger.info(`   - audioFormat: ${request.audioFormat || 'N/A'}`);
-    logger.info(`   - mobileTranscription: ${request.mobileTranscription ? 'OUI' : 'NON'}`);
-
     // Valider qu'on a une source audio (fichier OU base64)
     if (!request.audioPath && !request.audioData) {
-      logger.error(`🔍 [ZMQ-TRACE] ❌ Aucune source audio fournie`);
       throw new Error('Either audioPath or audioData (base64) must be provided');
     }
 
     const taskId = existingTaskId ?? randomUUID();
-    logger.info(`🔍 [ZMQ-TRACE] Task ID généré: ${taskId}`);
 
     let audioBuffer: Buffer;
     let mimeType: string;
     let audioSize: number;
 
     if (request.audioPath) {
-      logger.info(`🔍 [ZMQ-TRACE] Mode FICHIER: chargement depuis ${request.audioPath}...`);
       // Mode fichier: charger depuis le disque
       const audioData = await loadAudioAsBinary(request.audioPath);
       if (!audioData) {
-        logger.error(`🔍 [ZMQ-TRACE] ❌ Impossible de charger le fichier`);
         throw new Error(`Impossible de charger le fichier audio: ${request.audioPath}`);
       }
       audioBuffer = audioData.buffer;
       mimeType = audioData.mimeType;
       audioSize = audioData.size;
-      logger.info(`🔍 [ZMQ-TRACE] ✅ Fichier chargé: ${(audioSize / 1024).toFixed(2)} KB`);
     } else {
-      logger.info(`🔍 [ZMQ-TRACE] Mode BASE64: décodage...`);
       // Mode base64: décoder en Buffer (pas de fichier temporaire)
       audioBuffer = Buffer.from(request.audioData!, 'base64');
       audioSize = audioBuffer.length;
 
       // Déterminer le mime type depuis audioFormat
       mimeType = audioFormatToMimeType(request.audioFormat || 'wav');
-      logger.info(`🔍 [ZMQ-TRACE] ✅ Audio décodé: ${(audioSize / 1024).toFixed(2)} KB, MIME: ${mimeType}`);
     }
-
-    logger.info(`🔍 [ZMQ-TRACE] Préparation frames multipart...`);
 
     // Préparer les frames binaires
     const binaryFrames: Buffer[] = [audioBuffer];
@@ -328,26 +307,8 @@ export class ZmqRequestSender {
       binaryFrames: binaryFrameInfo
     };
 
-    const sourceMode = request.audioPath ? 'fichier' : 'base64';
-    const transferMode = `multipart binaire (${(audioSize / 1024).toFixed(1)}KB, ${mimeType}, source: ${sourceMode})`;
-
-    logger.info('🔍 [ZMQ-TRACE] Message à envoyer:');
-    logger.info(`   - type: ${requestMessage.type}`);
-    logger.info(`   - taskId: ${taskId}`);
-    logger.info(`   - messageId: ${request.messageId}`);
-    logger.info(`   - attachmentId: ${request.attachmentId || 'N/A'}`);
-    logger.info(`   - audioFormat: ${requestMessage.audioFormat}`);
-    logger.info(`   - binaryFrames.audio: ${binaryFrameInfo.audio}`);
-    logger.info(`   - binaryFrames.audioMimeType: ${binaryFrameInfo.audioMimeType}`);
-    logger.info(`   - binaryFrames.audioSize: ${binaryFrameInfo.audioSize} bytes`);
-    logger.info(`   - transferMode: ${transferMode}`);
-    logger.info(`   - mobileTranscription: ${request.mobileTranscription ? 'provided' : 'none'}`);
-
-    logger.info(`🔍 [ZMQ-TRACE] Envoi via PUSH multipart...`);
     // Envoyer via PUSH en multipart
     await this.connectionManager.sendMultipart(requestMessage, binaryFrames);
-
-    logger.info(`🔍 [ZMQ-TRACE] ✅ Message envoyé avec succès`);
 
     // Stocker la requête en cours pour traçabilité
     this.pendingRequests.set(taskId, {
@@ -357,8 +318,16 @@ export class ZmqRequestSender {
 
     this.stats.transcriptionRequests++;
 
-    logger.info(`🔍 [ZMQ-TRACE] ======== FIN ENVOI TRANSCRIPTION ========`);
-    logger.info(`📤 [ZMQ-Client] Transcription only PUSH envoyée: taskId=${taskId}, messageId=${request.messageId}`);
+    logger.info('transcription push sent', {
+      taskId,
+      messageId: request.messageId,
+      attachmentId: request.attachmentId,
+      audioFormat: requestMessage.audioFormat,
+      sourceMode: request.audioPath ? 'file' : 'base64',
+      audioSize,
+      audioMimeType: mimeType,
+      hasMobileTranscription: Boolean(request.mobileTranscription)
+    });
 
     return taskId;
   }
@@ -373,11 +342,6 @@ export class ZmqRequestSender {
    * - voice_admin_metrics / voice_health / voice_languages
    */
   async sendVoiceAPIRequest(request: VoiceAPIRequest, _existingTaskId?: string): Promise<string> {
-    logger.info('🎤 ENVOI VOICE API REQUEST:');
-    logger.info(`   📋 type: ${request.type}`);
-    logger.info(`   📋 taskId: ${request.taskId}`);
-    logger.info(`   📋 userId: ${request.userId || 'N/A'}`);
-
     // Envoyer via PUSH
     await this.connectionManager.send(request);
 
@@ -389,7 +353,11 @@ export class ZmqRequestSender {
 
     this.stats.voiceAPIRequests++;
 
-    logger.info(`📤 [ZMQ-Client] Voice API request envoyée: taskId=${request.taskId}, type=${request.type}`);
+    logger.info('voice api push sent', {
+      taskId: request.taskId,
+      type: request.type,
+      userId: request.userId
+    });
 
     return request.taskId;
   }
@@ -403,10 +371,6 @@ export class ZmqRequestSender {
    * - voice_profile_compare: Compare two fingerprints
    */
   async sendVoiceProfileRequest(request: VoiceProfileRequest, _existingTaskId?: string): Promise<string> {
-    logger.info('🎤 ENVOI VOICE PROFILE REQUEST:');
-    logger.info(`   📋 type: ${request.type}`);
-    logger.info(`   📋 request_id: ${request.request_id}`);
-
     // Envoyer via PUSH
     await this.connectionManager.send(request);
 
@@ -418,7 +382,10 @@ export class ZmqRequestSender {
 
     this.stats.voiceProfileRequests++;
 
-    logger.info(`📤 [ZMQ-Client] Voice Profile request envoyée: request_id=${request.request_id}, type=${request.type}`);
+    logger.info('voice profile push sent', {
+      requestId: request.request_id,
+      type: request.type
+    });
 
     return request.request_id;
   }

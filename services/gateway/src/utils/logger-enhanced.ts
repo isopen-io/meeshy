@@ -24,7 +24,7 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 /**
  * PII (Personally Identifiable Information) fields to hash
  */
-const PII_FIELDS = ['userId', 'email', 'ipAddress', 'phoneNumber', 'username'];
+const PII_FIELDS = ['userId', 'email', 'ipAddress', 'phoneNumber', 'username', 'birthDate'];
 
 /**
  * Hash sensitive data for compliance
@@ -39,7 +39,11 @@ function hashPII(value: string): string {
 /**
  * Recursively redact PII from log objects
  */
-function redactPII(obj: any): any {
+export function redactPII(obj: any): any {
+  if (obj instanceof Date) {
+    return obj;
+  }
+
   if (typeof obj !== 'object' || obj === null) {
     return obj;
   }
@@ -50,8 +54,12 @@ function redactPII(obj: any): any {
 
   const redacted: any = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (PII_FIELDS.includes(key) && typeof value === 'string') {
-      redacted[key] = `${value.substring(0, 4)}...${hashPII(value)}`;
+    if (PII_FIELDS.includes(key) && value !== null && value !== undefined) {
+      redacted[key] = typeof value === 'string'
+        ? `${value.substring(0, 4)}...${hashPII(value)}`
+        : '[redacted]';
+    } else if (value instanceof Date) {
+      redacted[key] = value;
     } else if (typeof value === 'object' && value !== null) {
       redacted[key] = redactPII(value);
     } else {
@@ -436,6 +444,23 @@ export const securityLogger = {
   }
 };
 
+const ROOT_PERF_STEPS = new Set([
+  'ws.message.send',
+  'ws.message.send-with-attachments',
+  'messaging.handleMessage'
+]);
+
+const DEFAULT_PERF_SLOW_MS = 100;
+
+function perfSlowThresholdMs(): number {
+  const raw = process.env.PERF_LOG_SLOW_MS;
+  if (!raw) {
+    return DEFAULT_PERF_SLOW_MS;
+  }
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_PERF_SLOW_MS;
+}
+
 /**
  * Performance logger for tracking slow operations
  */
@@ -469,6 +494,11 @@ export const performanceLogger = {
    * Convention: `step` follows `snake.dotted` (e.g. `messaging.saveMessage`)
    * and `context` MUST include `clientMessageId` for end-to-end correlation
    * when the wrapped call is on the message-send path.
+   *
+   * Levels: start logs and fast non-root end logs go to DEBUG; only end
+   * logs of root steps (ROOT_PERF_STEPS) and of steps whose durationMs
+   * reaches PERF_LOG_SLOW_MS (default 100ms) reach INFO. Error end logs
+   * stay at WARN unconditionally.
    */
   async withTiming<T>(
     step: string,
@@ -476,14 +506,18 @@ export const performanceLogger = {
     context: Record<string, any> = {}
   ): Promise<T> {
     const startTime = Date.now();
-    logger.info(
+    logger.debug(
       redactPII({ ...context, step, phase: 'start' }),
       `perf:${step}`
     );
     try {
       const result = await fn();
       const durationMs = Date.now() - startTime;
-      logger.info(
+      const endLevel =
+        durationMs >= perfSlowThresholdMs() || ROOT_PERF_STEPS.has(step)
+          ? 'info'
+          : 'debug';
+      logger[endLevel](
         redactPII({ ...context, step, phase: 'end', durationMs }),
         `perf:${step}`
       );

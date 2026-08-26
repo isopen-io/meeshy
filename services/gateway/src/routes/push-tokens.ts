@@ -216,6 +216,23 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
         }
       });
 
+      // A device holds ONE live token per type: superseded tokens of the same
+      // (userId, deviceId, type) and the same APNs token left behind by a
+      // previous owner (reassigned device) must stop receiving sends.
+      await fastify.prisma.pushToken.updateMany({
+        where: {
+          isActive: true,
+          id: { not: pushToken.id },
+          OR: [
+            ...(body.deviceId
+              ? [{ userId, deviceId: body.deviceId, type: tokenType }]
+              : []),
+            { token, userId: { not: userId } },
+          ],
+        },
+        data: { isActive: false }
+      });
+
       // Determine if this was a new registration or update
       const isNew = pushToken.createdAt.getTime() === pushToken.updatedAt.getTime();
 

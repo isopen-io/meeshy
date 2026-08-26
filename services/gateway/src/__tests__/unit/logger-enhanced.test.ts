@@ -232,6 +232,56 @@ describe('performanceLogger.withTiming', () => {
     expect(endLog).toContain('"clientMessageId":"cid_test"');
   });
 
+  it('emits no INFO line for a fast non-root step (both phases stay at DEBUG)', async () => {
+    await performanceLogger.withTiming('messaging.processLinks', async () => 'ok');
+
+    const stepLines = stdoutWrites.filter((l) =>
+      l.includes('"step":"messaging.processLinks"')
+    );
+    expect(stepLines.some((l) => l.includes('"phase":"start"'))).toBe(true);
+    expect(stepLines.some((l) => l.includes('"phase":"end"'))).toBe(true);
+    expect(stepLines.filter((l) => l.includes('[INFO]'))).toEqual([]);
+    expect(stepLines.every((l) => l.includes('[DEBUG]'))).toBe(true);
+  });
+
+  it('emits the end log at INFO when durationMs reaches PERF_LOG_SLOW_MS', async () => {
+    process.env.PERF_LOG_SLOW_MS = '5';
+    try {
+      await performanceLogger.withTiming('messaging.slowStep', async () => {
+        await new Promise((r) => setTimeout(r, 25));
+        return 'ok';
+      });
+    } finally {
+      delete process.env.PERF_LOG_SLOW_MS;
+    }
+
+    const endLog = stdoutWrites.find(
+      (l) => l.includes('"step":"messaging.slowStep"') && l.includes('"phase":"end"')
+    );
+    const startLog = stdoutWrites.find(
+      (l) => l.includes('"step":"messaging.slowStep"') && l.includes('"phase":"start"')
+    );
+    expect(endLog).toBeDefined();
+    expect(endLog).toContain('[INFO]');
+    expect(startLog).toBeDefined();
+    expect(startLog).toContain('[DEBUG]');
+  });
+
+  it('emits the end summary of a root step at INFO even when fast, start staying at DEBUG', async () => {
+    await performanceLogger.withTiming('messaging.handleMessage', async () => 'ok');
+
+    const endLog = stdoutWrites.find(
+      (l) => l.includes('"step":"messaging.handleMessage"') && l.includes('"phase":"end"')
+    );
+    const startLog = stdoutWrites.find(
+      (l) => l.includes('"step":"messaging.handleMessage"') && l.includes('"phase":"start"')
+    );
+    expect(endLog).toBeDefined();
+    expect(endLog).toContain('[INFO]');
+    expect(startLog).toBeDefined();
+    expect(startLog).toContain('[DEBUG]');
+  });
+
   it('emits an end log with error=true when the inner fn throws, and rethrows', async () => {
     await expect(
       performanceLogger.withTiming('test.step.fail', async () => {

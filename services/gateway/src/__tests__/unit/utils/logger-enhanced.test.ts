@@ -175,6 +175,57 @@ describe('requestLogger', () => {
   });
 });
 
+// ─── redactPII ────────────────────────────────────────────────────────────────
+
+describe('redactPII', () => {
+  it('returns a Date instance intact at the root', async () => {
+    const { redactPII } = await import('../../../utils/logger-enhanced');
+    const date = new Date('2026-01-01T00:00:00.000Z');
+    expect(redactPII(date)).toBe(date);
+  });
+
+  it('preserves a Date value on a non-PII field', async () => {
+    const { redactPII } = await import('../../../utils/logger-enhanced');
+    const consentAt = new Date('2026-01-01T00:00:00.000Z');
+    const out = redactPII({ consentAt });
+    expect(out.consentAt).toBeInstanceOf(Date);
+    expect(out.consentAt.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('preserves a nested Date value', async () => {
+    const { redactPII } = await import('../../../utils/logger-enhanced');
+    const voiceProfileConsentAt = new Date('2026-05-26T12:00:00.000Z');
+    const out = redactPII({ profile: { voiceProfileConsentAt } });
+    expect(out.profile.voiceProfileConsentAt).toBeInstanceOf(Date);
+    expect(out.profile.voiceProfileConsentAt.toISOString()).toBe('2026-05-26T12:00:00.000Z');
+  });
+
+  it('keeps the abcd...hash format for string PII fields', async () => {
+    const { redactPII } = await import('../../../utils/logger-enhanced');
+    const out = redactPII({ userId: 'user-123456' });
+    expect(out.userId).toMatch(/^user\.\.\.[0-9a-f]{16}$/);
+    expect(out.userId).not.toContain('user-123456');
+  });
+
+  it('redacts a Date-valued PII field (birthDate) as [redacted]', async () => {
+    const { redactPII } = await import('../../../utils/logger-enhanced');
+    const out = redactPII({ birthDate: new Date('1990-05-01T00:00:00.000Z') });
+    expect(out.birthDate).toBe('[redacted]');
+  });
+
+  it('redacts a number-valued PII field as [redacted]', async () => {
+    const { redactPII } = await import('../../../utils/logger-enhanced');
+    const out = redactPII({ phoneNumber: 33612345678 });
+    expect(out.phoneNumber).toBe('[redacted]');
+  });
+
+  it('leaves a null PII field as null', async () => {
+    const { redactPII } = await import('../../../utils/logger-enhanced');
+    const out = redactPII({ userId: null });
+    expect(out.userId).toBeNull();
+  });
+});
+
 // ─── enhancedLogger direct methods ───────────────────────────────────────────
 
 describe('enhancedLogger', () => {

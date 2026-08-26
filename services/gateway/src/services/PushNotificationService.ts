@@ -142,6 +142,11 @@ const FCM_TRANSIENT_ERROR_CODES = new Set([
   'messaging/quota-exceeded',
 ]);
 
+// Apple-reported reasons that mean the token itself is dead (wrong environment,
+// app uninstalled, expired, wrong topic). Retrying or counting strikes on these
+// only keeps sending doomed pushes — the token is deactivated on first sight.
+const APNS_PERMANENT_REASONS = new Set(['BadDeviceToken', 'Unregistered', 'ExpiredToken', 'DeviceTokenNotForTopic']);
+
 function isTransientApnsReason(reason: string | undefined): boolean {
   return !!reason && APNS_TRANSIENT_REASONS.has(reason);
 }
@@ -423,7 +428,7 @@ export class PushNotificationService {
     });
 
     if (tokens.length === 0) {
-      pushLogger.warn('No active tokens found for user', { userId });
+      pushLogger.debug('No active tokens found for user', { userId });
       return [];
     }
 
@@ -895,9 +900,11 @@ export class PushNotificationService {
 
       const newFailedAttempts = token.failedAttempts + 1;
 
-      // Deactivate token after 3 consecutive failures or if explicitly invalid
+      // Deactivate token after 3 consecutive failures, or immediately when the
+      // provider says the token itself is permanently invalid
       const shouldDeactivate = newFailedAttempts >= 3 ||
         error === 'TOKEN_INVALID' ||
+        APNS_PERMANENT_REASONS.has(error) ||
         error.includes('NotRegistered') ||
         error.includes('InvalidRegistration');
 

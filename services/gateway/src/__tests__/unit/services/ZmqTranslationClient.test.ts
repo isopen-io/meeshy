@@ -44,8 +44,11 @@ jest.mock('zeromq', () => ({
   Context: jest.fn().mockImplementation(() => mockContext)
 }));
 
-// Mock crypto for UUID generation
+// UUID figé pour les assertions de taskId — le reste du module reste RÉEL
+// (redactPII hashe les userId loggés via createHash ; un double partiel de
+// crypto ferait tomber tout chemin qui logge un champ PII).
 jest.mock('crypto', () => ({
+  ...jest.requireActual('crypto'),
   randomUUID: jest.fn().mockReturnValue('test-uuid-1234')
 }));
 

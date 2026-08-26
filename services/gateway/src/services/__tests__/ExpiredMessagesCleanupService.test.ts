@@ -1,5 +1,36 @@
 import { describe, it, expect, jest } from '@jest/globals';
+
+jest.mock('../../utils/logger-enhanced', () => {
+  const actual = jest.requireActual('../../utils/logger-enhanced') as {
+    enhancedLogger: Record<string, unknown>;
+  };
+  const child: Record<string, unknown> = {};
+  Object.assign(child, {
+    trace: jest.fn(),
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    fatal: jest.fn(),
+    child: () => child,
+  });
+  return {
+    ...actual,
+    enhancedLogger: { ...actual.enhancedLogger, child: () => child },
+  };
+});
+
+import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ExpiredMessagesCleanupService } from '../ExpiredMessagesCleanupService';
+
+const sharedLog = enhancedLogger.child({ module: 'test-probe' }) as unknown as {
+  error: jest.Mock;
+  warn: jest.Mock;
+  info: jest.Mock;
+};
+
+const burnRefusedCalls = () =>
+  sharedLog.error.mock.calls.filter((call) => String(call[0]).includes('burn refused'));
 
 /**
  * Un message qui s'autodétruit ne s'autodétruisait que sur l'écran.
@@ -134,7 +165,7 @@ describe('ExpiredMessagesCleanupService', () => {
 
     await service.cleanup();
 
-    expect(findManyArgs(prisma).where).toMatchObject({ expiresAt: { lt: NOW } });
+    expect(findManyArgs(prisma).where.AND).toContainEqual({ expiresAt: { lt: NOW } });
   });
 
   it('apparie le vivant sur l’ABSENCE de `deletedAt` autant que sur sa nullité', async () => {
@@ -343,6 +374,87 @@ describe('ExpiredMessagesCleanupService', () => {
     await service.cleanup();
 
     expect(manager!.emit).not.toHaveBeenCalled();
+  });
+
+  it('le prédicat exige une échéance PRÉSENTE, NON NULLE et passée — jamais l’ordre BSON', async () => {
+    // Incident prod : le connecteur Prisma/Mongo passe par un pipeline
+    // d'agrégation où `$lt` suit l'ordre BSON total — `null`/absent passent
+    // AVANT les dates et la page de 500 se remplit de lignes sans échéance,
+    // que le filet refuse à chaque passe. Le prédicat doit exclure ces états
+    // EXPLICITEMENT, pas par hypothèse de bracketing.
+    const { service, prisma } = buildService([messageRow()]);
+
+    await service.cleanup();
+
+    const where = findManyArgs(prisma).where;
+    expect(where.AND).toEqual([
+      { expiresAt: { isSet: true } },
+      { expiresAt: { not: null } },
+      { expiresAt: { lt: NOW } },
+    ]);
+    expect(where.OR).toEqual([{ deletedAt: null }, { deletedAt: { isSet: false } }]);
+  });
+
+  it('le refus de brûler emporte un échantillon exploitable des lignes refusées', async () => {
+    sharedLog.error.mockClear();
+    const { service } = buildService([
+      messageRow({ id: 'sans-echeance-1', expiresAt: null }),
+      messageRow({ id: 'sans-echeance-2', expiresAt: null }),
+      messageRow({ id: 'pas-echu', expiresAt: new Date(NOW.getTime() + 60_000) }),
+      messageRow({ id: 'sans-echeance-4', expiresAt: null }),
+    ]);
+
+    await service.cleanup();
+
+    const calls = burnRefusedCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0][1]).toMatchObject({
+      returned: 4,
+      lapsed: 0,
+      refusedSample: [
+        { id: 'sans-echeance-1', expiresAtType: 'null', expiresAtValue: 'null' },
+        { id: 'sans-echeance-2', expiresAtType: 'null', expiresAtValue: 'null' },
+        {
+          id: 'pas-echu',
+          expiresAtType: 'Date',
+          expiresAtValue: JSON.stringify(new Date(NOW.getTime() + 60_000)),
+        },
+      ],
+    });
+  });
+
+  it('le refus persistant ne part en ERROR qu’à la première passe puis une fois toutes les 10', async () => {
+    sharedLog.error.mockClear();
+    const { service } = buildService([messageRow({ id: 'refuse', expiresAt: null })]);
+
+    for (let pass = 0; pass < 10; pass += 1) {
+      await service.cleanup();
+    }
+    expect(burnRefusedCalls()).toHaveLength(1);
+
+    await service.cleanup();
+    const calls = burnRefusedCalls();
+    expect(calls).toHaveLength(2);
+    expect(calls[1][1]).toMatchObject({ suppressedOccurrences: 9 });
+  });
+
+  it('une passe saine remet le dédoublonnage à zéro — le refus suivant repart en ERROR immédiat', async () => {
+    sharedLog.error.mockClear();
+    const { service, prisma } = buildService([]);
+    const findMany = (prisma as unknown as { message: { findMany: jest.Mock } }).message.findMany;
+    const refused = [messageRow({ id: 'refuse', expiresAt: null })];
+    findMany
+      .mockResolvedValueOnce(refused)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(refused);
+
+    await service.cleanup();
+    await service.cleanup();
+    await service.cleanup();
+
+    const calls = burnRefusedCalls();
+    expect(calls).toHaveLength(2);
+    expect(calls[1][1]).toMatchObject({ suppressedOccurrences: 0 });
   });
 
   it('`start` balaye immédiatement puis à intervalle, `stop` désarme', async () => {

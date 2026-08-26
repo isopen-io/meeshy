@@ -83,6 +83,7 @@ function createMockPrisma() {
   return {
     pushToken: {
       upsert: jest.fn<any>(),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
@@ -340,6 +341,74 @@ describe('POST /users/register-device-token', () => {
         create: expect.objectContaining({ apnsEnvironment: 'production' }),
       })
     );
+  });
+
+  it('deactivates other active tokens of the same user/deviceId/type on registration', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'register-device-token');
+    pr.pushToken.upsert.mockResolvedValue(
+      makePushToken({ id: 'fresh-record-id', createdAt: NOW, updatedAt: NOW })
+    );
+
+    const req = makeRequest({
+      body: {
+        token: 'apns-second-token-1234567890',
+        platform: 'ios',
+        deviceId: 'iphone-hardware-abc',
+      },
+    });
+    await route.handler(req, reply);
+
+    expect(pr.pushToken.updateMany).toHaveBeenCalledWith({
+      where: {
+        isActive: true,
+        id: { not: 'fresh-record-id' },
+        OR: [
+          { userId: USER_ID, deviceId: 'iphone-hardware-abc', type: 'apns' },
+          { token: 'apns-second-token-1234567890', userId: { not: USER_ID } },
+        ],
+      },
+      data: { isActive: false },
+    });
+    expect(mockSendSuccess).toHaveBeenCalled();
+  });
+
+  it('deactivates rows of another user carrying the same token when no deviceId is sent', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'register-device-token');
+    pr.pushToken.upsert.mockResolvedValue(
+      makePushToken({ id: 'fresh-record-id', createdAt: NOW, updatedAt: NOW })
+    );
+
+    const req = makeRequest({
+      body: { token: 'apns-reassigned-token-1234567890', platform: 'ios' },
+    });
+    await route.handler(req, reply);
+
+    expect(pr.pushToken.updateMany).toHaveBeenCalledWith({
+      where: {
+        isActive: true,
+        id: { not: 'fresh-record-id' },
+        OR: [
+          { token: 'apns-reassigned-token-1234567890', userId: { not: USER_ID } },
+        ],
+      },
+      data: { isActive: false },
+    });
+  });
+
+  it('returns 500 when stale-token deactivation fails', async () => {
+    const { fastify, pr, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'register-device-token');
+    pr.pushToken.upsert.mockResolvedValue(makePushToken({ createdAt: NOW, updatedAt: NOW }));
+    pr.pushToken.updateMany.mockRejectedValue(new Error('DB error'));
+
+    const req = makeRequest({
+      body: { token: 'apns-token-1234567890abcdef', platform: 'ios' },
+    });
+    await route.handler(req, reply);
+
+    expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
   });
 
   it('returns 401 when authContext is absent', async () => {

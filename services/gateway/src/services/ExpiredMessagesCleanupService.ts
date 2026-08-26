@@ -58,12 +58,15 @@ const log = enhancedLogger.child({ module: 'ExpiredMessagesCleanupService' });
  *
  * ─── LES DEUX FAÇONS DONT CETTE PASSE POURRAIT FAIRE PIRE ───────────────────
  *
- * 1. **Apparier un message non éphémère.** Le prédicat `expiresAt: { lt: now }`
- *    est bracketé par TYPE sur MongoDB : `$lt` avec une date n'apparie ni les
- *    nuls ni les absents, malgré l'ordre BSON qui place `null` avant les dates.
- *    C'est vrai — et le rayon de souffle d'une erreur ici est la destruction de
- *    TOUS les messages de la base. Un invariant à ce prix se revérifie DANS le
- *    processus (`_isLapsed`), pas dans un commentaire.
+ * 1. **Apparier un message non éphémère.** Le bracketing par type de `$lt`
+ *    n'est PAS un invariant du chemin d'exécution : le connecteur Prisma/Mongo
+ *    peut passer par un pipeline d'agrégation où `$lt` suit l'ordre BSON total,
+ *    et `null`/absent passent alors AVANT les dates — mesuré en production, la
+ *    page entière se remplissait de lignes sans échéance que le filet refusait
+ *    à chaque passe, bloquant tout burn réel. Le prédicat exclut donc ces états
+ *    EXPLICITEMENT (`isSet: true` + `not: null`), et le rayon de souffle d'une
+ *    erreur restant la destruction de TOUS les messages de la base, l'invariant
+ *    se revérifie DANS le processus (`_isLapsed`), pas dans un commentaire.
  * 2. **Manquer un message vivant.** `deletedAt: null` seul apparie le
  *    présent-et-nul et rien d'autre ; une ligne dont le créateur n'a pas écrit
  *    `LIVE_MESSAGE_MARK` a la colonne ABSENTE et ne serait jamais balayée —
@@ -121,6 +124,8 @@ export const EXPIRED_MESSAGES_SWEEP_INTERVAL_MS = 60 * 1000;
 
 export class ExpiredMessagesCleanupService {
   private interval: ReturnType<typeof setInterval> | null = null;
+  private refusalStreak = 0;
+  private suppressedRefusalLogs = 0;
   private readonly batchSize: number;
   private readonly attachmentRemover: ExpiredMessageAttachmentRemover;
   private readonly now: () => Date;
@@ -174,7 +179,13 @@ export class ExpiredMessagesCleanupService {
     try {
       candidates = await this.prisma.message.findMany({
         where: {
-          expiresAt: { lt: now },
+          AND: [
+            { expiresAt: { isSet: true } },
+            { expiresAt: { not: null } },
+            { expiresAt: { lt: now } },
+          ],
+          // `unsetOrNull` rend une clé `OR` — sœur du `AND`, jamais dedans :
+          // les deux se composent en conjonction au premier niveau.
           ...unsetOrNull('deletedAt'),
         },
         select: {
@@ -203,12 +214,13 @@ export class ExpiredMessagesCleanupService {
 
     if (lapsed.length !== candidates.length) {
       // Le prédicat de base a rendu une ligne que le filet a refusée : soit
-      // l'hypothèse de bracketing par type est fausse, soit quelqu'un a élargi
-      // la requête. Les deux valent un signal, pas un silence.
-      log.error('expired-messages query returned non-lapsed rows — burn refused', {
-        returned: candidates.length,
-        lapsed: lapsed.length,
-      });
+      // le connecteur ne bracket pas par type, soit quelqu'un a élargi la
+      // requête. Les deux valent un signal, pas un silence — mais un signal
+      // dédoublonné : à la minute, un état persistant vaudrait une tempête.
+      this._reportRefusedRows(candidates, now);
+    } else {
+      this.refusalStreak = 0;
+      this.suppressedRefusalLogs = 0;
     }
 
     if (lapsed.length === 0) return { burned: 0 };
@@ -226,6 +238,53 @@ export class ExpiredMessagesCleanupService {
 
     log.info('expired-messages swept', { burned });
     return { burned };
+  }
+
+  /**
+   * ERROR à la première occurrence, puis au plus une fois toutes les 10 passes
+   * tant que l'état persiste — avec le compte des occurrences tues entre deux,
+   * pour que le volume réel reste lisible. Une passe saine remet tout à zéro.
+   */
+  private _reportRefusedRows(candidates: ExpiredMessageRow[], now: Date): void {
+    this.refusalStreak += 1;
+    if ((this.refusalStreak - 1) % 10 !== 0) {
+      this.suppressedRefusalLogs += 1;
+      return;
+    }
+    const refused = candidates.filter((message) => !this._isLapsed(message, now));
+    log.error('expired-messages query returned non-lapsed rows — burn refused', {
+      returned: candidates.length,
+      lapsed: candidates.length - refused.length,
+      refusedSample: refused.slice(0, 3).map((message) => this._describeRefusedRow(message)),
+      suppressedOccurrences: this.suppressedRefusalLogs,
+    });
+    this.suppressedRefusalLogs = 0;
+  }
+
+  /**
+   * `expiresAt` est typé `Date | null`, mais c'est précisément quand la base
+   * rend AUTRE CHOSE que ce diagnostic doit parler — d'où le passage par
+   * `unknown` avant inspection.
+   */
+  private _describeRefusedRow(message: ExpiredMessageRow): {
+    id: string;
+    expiresAtType: string;
+    expiresAtValue: string;
+  } {
+    const expiresAt: unknown = message.expiresAt;
+    const expiresAtType =
+      expiresAt === null
+        ? 'null'
+        : expiresAt === undefined
+          ? 'undefined'
+          : typeof expiresAt === 'object'
+            ? expiresAt.constructor?.name ?? 'object'
+            : typeof expiresAt;
+    return {
+      id: message.id,
+      expiresAtType,
+      expiresAtValue: JSON.stringify(expiresAt) ?? 'undefined',
+    };
   }
 
   /** L'échéance est une DATE, et elle est passée. Tout le reste survit. */
