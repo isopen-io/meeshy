@@ -1,6 +1,7 @@
 import {
   planAttachmentPublication,
   postMediaFieldsFromAttachment,
+  defaultVisibilityForPostType,
   type PublishableAttachment,
 } from '../../../../services/posts/publishAttachment';
 
@@ -24,6 +25,7 @@ describe('planAttachmentPublication — le format découle du média', () => {
     const result = planAttachmentPublication({
       attachment: makeAttachment(),
       callerIsMemberOfConversation: true,
+      mediaIsProtected: false,
     });
 
     expect(result).toEqual({ ok: true, plan: { postType: 'POST', attachment: expect.anything() } });
@@ -33,6 +35,7 @@ describe('planAttachmentPublication — le format découle du média', () => {
     const result = planAttachmentPublication({
       attachment: makeAttachment({ mimeType: 'video/mp4' }),
       callerIsMemberOfConversation: true,
+      mediaIsProtected: false,
     });
 
     expect(result.ok && result.plan.postType).toBe('REEL');
@@ -42,6 +45,7 @@ describe('planAttachmentPublication — le format découle du média', () => {
     const result = planAttachmentPublication({
       attachment: makeAttachment({ mimeType: 'audio/mpeg' }),
       callerIsMemberOfConversation: true,
+      mediaIsProtected: false,
     });
 
     expect(result.ok && result.plan.postType).toBe('REEL');
@@ -51,11 +55,13 @@ describe('planAttachmentPublication — le format découle du média', () => {
     const image = planAttachmentPublication({
       attachment: makeAttachment(),
       callerIsMemberOfConversation: true,
+      mediaIsProtected: false,
       target: 'STORY',
     });
     const video = planAttachmentPublication({
       attachment: makeAttachment({ mimeType: 'video/mp4' }),
       callerIsMemberOfConversation: true,
+      mediaIsProtected: false,
       target: 'STORY',
     });
 
@@ -67,6 +73,7 @@ describe('planAttachmentPublication — le format découle du média', () => {
     const result = planAttachmentPublication({
       attachment: makeAttachment({ mimeType: 'application/pdf' }),
       callerIsMemberOfConversation: true,
+      mediaIsProtected: false,
     });
 
     expect(result).toEqual({ ok: false, reason: 'unpublishable-media' });
@@ -78,6 +85,7 @@ describe('planAttachmentPublication — la porte', () => {
     const result = planAttachmentPublication({
       attachment: makeAttachment(),
       callerIsMemberOfConversation: false,
+      mediaIsProtected: false,
     });
 
     expect(result).toEqual({ ok: false, reason: 'forbidden' });
@@ -87,6 +95,7 @@ describe('planAttachmentPublication — la porte', () => {
     const result = planAttachmentPublication({
       attachment: makeAttachment({ mimeType: 'application/pdf' }),
       callerIsMemberOfConversation: false,
+      mediaIsProtected: false,
     });
 
     // « interdit », jamais « ce PDF n'est pas publiable ».
@@ -94,7 +103,7 @@ describe('planAttachmentPublication — la porte', () => {
   });
 
   it('refuse une pièce jointe introuvable', () => {
-    const result = planAttachmentPublication({ attachment: null, callerIsMemberOfConversation: true });
+    const result = planAttachmentPublication({ attachment: null, callerIsMemberOfConversation: true, mediaIsProtected: false });
 
     expect(result).toEqual({ ok: false, reason: 'attachment-not-found' });
   });
@@ -103,9 +112,50 @@ describe('planAttachmentPublication — la porte', () => {
     const result = planAttachmentPublication({
       attachment: makeAttachment({ messageId: null }),
       callerIsMemberOfConversation: true,
+      mediaIsProtected: false,
     });
 
     expect(result).toEqual({ ok: false, reason: 'attachment-not-in-a-message' });
+  });
+});
+
+describe('planAttachmentPublication — un média protégé ne se publie jamais', () => {
+  // La NATURE de la protection (vue unique / flou / éphémère / chiffré, au
+  // niveau MESSAGE comme au niveau PIÈCE JOINTE) est tranchée par l'appelant
+  // via `protectedPreview` + `maskedAttachment` (testés dans NotificationService
+  // et dans le test de route). Le plan ne reçoit que le VERDICT booléen.
+  it("refuse dès que l'appelant signale un média protégé", () => {
+    const result = planAttachmentPublication({
+      attachment: makeAttachment(),
+      callerIsMemberOfConversation: true,
+      mediaIsProtected: true,
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'protected-media' });
+  });
+
+  it("un non-membre reçoit TOUJOURS 'forbidden' d'abord — le refus 'protected' divulguerait l'existence du média", () => {
+    const result = planAttachmentPublication({
+      // Protégé ET hors de la conversation : l'appartenance se juge AVANT la
+      // protection, sinon le verdict renseigne un tiers sur la nature du média.
+      attachment: makeAttachment(),
+      callerIsMemberOfConversation: false,
+      mediaIsProtected: true,
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'forbidden' });
+  });
+});
+
+describe('defaultVisibilityForPostType — une STORY par défaut reste entre amis', () => {
+  it("une STORY tombe sur FRIENDS — jamais PUBLIC par défaut", () => {
+    expect(defaultVisibilityForPostType('STORY')).toBe('FRIENDS');
+  });
+
+  it("tout autre type tombe sur PUBLIC", () => {
+    expect(defaultVisibilityForPostType('POST')).toBe('PUBLIC');
+    expect(defaultVisibilityForPostType('REEL')).toBe('PUBLIC');
+    expect(defaultVisibilityForPostType('STATUS')).toBe('PUBLIC');
   });
 });
 
