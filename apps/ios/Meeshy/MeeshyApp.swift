@@ -227,6 +227,10 @@ struct MeeshyApp: App {
                     NotificationToastManager.shared.hapticPlayer = {
                         HapticFeedback.light()
                     }
+                    // Révocation par socket (`notification:deleted`) : la
+                    // bannière déjà livrée suit la suppression — même atome de
+                    // retrait que le push de contrôle `notification_revoked`.
+                    NotificationActionHandler.shared.observeRevocations(from: NotificationToastManager.shared.notificationWasDeleted.eraseToAnyPublisher())
                     await CacheCoordinator.shared.start()
                     // Touch PresenceManager early so it has subscribed to
                     // `presence:snapshot` + `user:status` + `didReconnect`

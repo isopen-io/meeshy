@@ -120,7 +120,8 @@ public struct APIMessageAttachment: Decodable, Sendable {
     public let width: Int?
     public let height: Int?
     /// D4 — responsive downscaled WebP variants for `srcset`-style selection.
-    public let imageVariants: [MeeshyImageVariant]?
+    /// Décodage tolérant par élément (`LossyImageVariants`).
+    @LossyImageVariants public var imageVariants: [MeeshyImageVariant]?
     /// BUG2 A' — réactions par-image agrégées (emoji→count).
     public let reactionSummary: [String: Int]?
     /// BUG2 A' — emojis posés par l'utilisateur courant sur cette pièce jointe.
@@ -258,7 +259,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
         self.thumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
         self.width = try c.decodeIfPresent(Int.self, forKey: .width)
         self.height = try c.decodeIfPresent(Int.self, forKey: .height)
-        self.imageVariants = try c.decodeIfPresent([MeeshyImageVariant].self, forKey: .imageVariants)
+        self._imageVariants = try c.decode(LossyImageVariants.self, forKey: .imageVariants)
         self.reactionSummary = try c.decodeIfPresent([String: Int].self, forKey: .reactionSummary)
         self.currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
         self.currentUserConsumption = try c.decodeIfPresent(MeeshyMediaConsumption.self, forKey: .currentUserConsumption)

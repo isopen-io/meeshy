@@ -477,6 +477,39 @@ internal struct _FullscreenRenderer: View {
     /// video from 0. We only auto-load on the very first mount.
     @State private var didInitialLoad = false
     @ObservedObject private var manager = SharedAVPlayerManager.shared
+    /// Poster NET (opaque, résolu par l'app) : lu au montage, résolu sinon.
+    @State private var poster: UIImage?
+    /// Fond décoratif pendant la résolution — le thumbHash, flou assumé. La
+    /// vignette serveur n'est jamais montée comme image affichée.
+    @State private var thumbHashBackdrop: UIImage?
+    /// Première frame COMPOSÉE par la surface (KVO `isReadyForDisplay`).
+    /// Jamais `currentItem` (leçon 24) ; failsafe temporel en plus (leçon 25).
+    @State private var surfaceReady = false
+
+    init(player: MeeshyVideoPlayer) {
+        self.player = player
+        let initial = player.poster?.initial
+        _poster = State(initialValue: initial)
+        _thumbHashBackdrop = State(initialValue: initial == nil
+            ? player.attachment.thumbHash.flatMap(UIImage.fromThumbHash)
+            : nil)
+    }
+
+    /// Le poster reste tant qu'aucune frame n'est composée — présence du
+    /// PLAYER + `isReadyForDisplay`. Un player relâché (fin de flux) le remonte.
+    nonisolated static func showsPoster(playerPresent: Bool, surfaceReady: Bool) -> Bool {
+        !playerPresent || !surfaceReady
+    }
+
+    /// Le spinner discret n'accompagne que ce qui CHARGE : avant le premier
+    /// load, puis jusqu'à la première frame. Jamais sur un player relâché.
+    nonisolated static func showsLoadingSpinner(playerPresent: Bool, surfaceReady: Bool, didInitialLoad: Bool) -> Bool {
+        playerPresent ? !surfaceReady : !didInitialLoad
+    }
+
+    /// Failsafe temporel (leçon 25) : couvre le spin-up décodeur d'un fichier
+    /// local ; un KVO manqué ne fige jamais le poster sur une vidéo qui joue.
+    private static let surfaceReadyFailsafe: Duration = .milliseconds(2500)
 
     internal enum SaveState { case idle, saving, saved, failed }
 
@@ -499,6 +532,8 @@ internal struct _FullscreenRenderer: View {
         }
         .offset(y: dismissOffset)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: dismissOffset)
+        .task(id: player.attachment.id) { await resolvePosterIfNeeded() }
+        .task(id: manager.player != nil) { await armSurfaceReadyFailsafe() }
         .onAppear {
             watchStartTime = Date()
             // Defensive : reset l'auto-hide state à l'entrée du fullscreen.
@@ -517,17 +552,22 @@ internal struct _FullscreenRenderer: View {
     private var playerContent: some View {
         ZStack {
             if let p = manager.player {
-                MeeshyVideoSurface(player: p, gravity: videoGravity, isMuted: manager.isMuted)
+                MeeshyVideoSurface(
+                    player: p,
+                    gravity: videoGravity,
+                    isMuted: manager.isMuted,
+                    onReadyForDisplay: { surfaceReady = true }
+                )
                     .ignoresSafeArea()
                     .onTapGesture { toggleControls() }
                     .gesture(swipeDownGesture)
                     .gesture(pinchGesture)
             } else {
-                // Player en cours de chargement. Spinner central derrière les
-                // contrôles overlay (qui restent visibles + boutons disabled).
-                ProgressView()
-                    .tint(.white)
-                    .scaleEffect(1.4)
+                // Player en cours de chargement : le poster net (ci-dessous)
+                // tient l'écran, le spinner discret l'accompagne — les contrôles
+                // overlay restent visibles, boutons disabled tant que
+                // `duration == 0`.
+                Color.clear
                     .onAppear {
                         // Only auto-load on the INITIAL mount. An end-of-stream
                         // nil (manager.stop() on non-loop end) re-inserts this
@@ -542,6 +582,20 @@ internal struct _FullscreenRenderer: View {
                         manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
                         manager.play()
                     }
+            }
+            // Le poster NET reste AU-DESSUS de la surface tant qu'elle n'a pas
+            // COMPOSÉ sa première frame (`isReadyForDisplay`) : sans lui, la
+            // couche vidéo est noire pendant le spin-up décodeur (1–2 s sur
+            // cache froid). Jamais gaté sur `currentItem` (leçon 24).
+            if Self.showsPoster(playerPresent: manager.player != nil, surfaceReady: surfaceReady) {
+                posterLayer
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+            if Self.showsLoadingSpinner(playerPresent: manager.player != nil, surfaceReady: surfaceReady, didInitialLoad: didInitialLoad) {
+                ProgressView()
+                    .tint(.white.opacity(0.85))
+                    .allowsHitTesting(false)
             }
             if showControls {
                 _FullscreenOverlayControls(
@@ -565,6 +619,49 @@ internal struct _FullscreenRenderer: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: showControls)
+        .animation(.easeInOut(duration: 0.2), value: surfaceReady)
+    }
+
+    /// Le poster net, ou — le temps de sa résolution — le thumbHash en fond
+    /// décoratif. La vignette serveur n'est jamais montée ici comme image
+    /// affichée : elle peut être floue au plein écran, et rien ne garantit
+    /// qu'elle soit remplacée.
+    @ViewBuilder
+    private var posterLayer: some View {
+        if let poster {
+            Image(uiImage: poster)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+        } else if let thumbHashBackdrop {
+            Image(uiImage: thumbHashBackdrop)
+                .resizable()
+                .interpolation(.low)
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+        }
+    }
+
+    private func resolvePosterIfNeeded() async {
+        guard poster == nil, let resolve = player.poster?.resolve else { return }
+        let resolved = await resolve()
+        guard !Task.isCancelled, let resolved else { return }
+        withAnimation(.easeIn(duration: 0.15)) { poster = resolved }
+    }
+
+    /// Rejoué à chaque (dis)parition du player : un player relâché remet le
+    /// poster (fin de flux non bouclée) ; un player présent arme le failsafe.
+    private func armSurfaceReadyFailsafe() async {
+        guard manager.player != nil else {
+            surfaceReady = false
+            return
+        }
+        guard !surfaceReady else { return }
+        try? await Task.sleep(for: Self.surfaceReadyFailsafe)
+        guard !Task.isCancelled else { return }
+        surfaceReady = true
     }
 
     @ViewBuilder
@@ -628,7 +725,15 @@ internal struct _FullscreenRenderer: View {
     @ViewBuilder
     private var downloadOverlay: some View {
         ZStack {
-            if player.attachment.thumbHash != nil ||
+            if let poster {
+                // Frame NETTE disponible : servie telle quelle — ni flou ni
+                // voile. Le flou reste réservé au repli vignette/thumbHash.
+                Image(uiImage: poster)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
+            } else if player.attachment.thumbHash != nil ||
                (player.attachment.thumbnailUrl?.isEmpty == false) {
                 ProgressiveCachedImage(
                     thumbHash: player.attachment.thumbHash,
@@ -665,6 +770,7 @@ internal struct _FullscreenRenderer: View {
                 Text(downloadOverlayMessage)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.white.opacity(0.85))
+                    .shadow(color: .black.opacity(0.6), radius: 4)
                     .multilineTextAlignment(.center)
 
                 Button {

@@ -135,6 +135,22 @@ public struct MeeshyVideoPlayer: View {
         }
     }
 
+    // MARK: - Poster
+
+    /// Poster NET d'une vidéo, servi AVANT la première frame décodée (et dans
+    /// l'overlay de téléchargement). Opaque : l'app le RÉSOUT (fichier local,
+    /// poster persisté, extraction) — le SDK ne fait que l'afficher.
+    /// `initial` est lu au montage (aucune transition quand il est déjà
+    /// résident) ; `resolve` prend le relais quand il manque.
+    public struct Poster: Sendable {
+        public let initial: UIImage?
+        public let resolve: (@Sendable () async -> UIImage?)?
+        public init(initial: UIImage? = nil, resolve: (@Sendable () async -> UIImage?)? = nil) {
+            self.initial = initial
+            self.resolve = resolve
+        }
+    }
+
     // MARK: - Properties
 
     public let attachment: MeeshyMessageAttachment
@@ -165,6 +181,7 @@ public struct MeeshyVideoPlayer: View {
     public let caption: String?
     public let fileName: String?
     public let mentionDisplayNames: [String: String]?
+    public let poster: Poster?
     public let onDownload: (() -> Void)?
     public let onExpand: (() -> Void)?
     public let onShare: (() -> Void)?
@@ -189,6 +206,7 @@ public struct MeeshyVideoPlayer: View {
         caption: String? = nil,
         fileName: String? = nil,
         mentionDisplayNames: [String: String]? = nil,
+        poster: Poster? = nil,
         onDownload: (() -> Void)? = nil,
         onExpand: (() -> Void)? = nil,
         onShare: (() -> Void)? = nil,
@@ -210,6 +228,7 @@ public struct MeeshyVideoPlayer: View {
         self.caption = caption
         self.fileName = fileName
         self.mentionDisplayNames = mentionDisplayNames
+        self.poster = poster
         self.onDownload = onDownload
         self.onExpand = onExpand
         self.onShare = onShare
