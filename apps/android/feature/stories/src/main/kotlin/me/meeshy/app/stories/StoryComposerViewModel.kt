@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.StoryFilter
@@ -24,6 +25,7 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.outbox.OutboxFlushWorker
+import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.StoryComposerDraftStore
 import me.meeshy.sdk.story.StoryRepository
@@ -252,6 +254,7 @@ class StoryComposerViewModel @Inject constructor(
     private val mediaUploadQueue: MediaUploadQueue,
     private val workManager: WorkManager,
     private val draftStore: StoryComposerDraftStore,
+    private val mediaBlobStore: MediaBlobStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoryComposerUiState())
@@ -272,21 +275,46 @@ class StoryComposerViewModel @Inject constructor(
     fun onEnterComposer() {
         viewModelScope.launch {
             val stored = draftStore.load()
-            val snapshot = StoryComposerAutosave.restore(
+            val restored = StoryComposerAutosave.restore(
                 stored = stored,
                 deckIsPristine = StoryComposerAutosave.deckIsPristine(_state.value.deck),
             ) ?: return@launch
-            val deck = snapshot.toDeck() ?: return@launch
+            val availableIds = restored.slides
+                .flatMap { it.mediaIds }
+                .toSet()
+                .filter { id -> isRestoredMediaAvailable(id) }
+                .toSet()
+            val reconciled = StoryDraftMediaReconciler.reconcile(restored) { id -> id in availableIds }
+            // Media loss can empty the whole draft; a snapshot no longer worth
+            // restoring must not seed a deck of blank slides — purge it instead so a
+            // later cold start never rebuilds the dead draft.
+            if (!reconciled.snapshot.isWorthRestoring) {
+                draftStore.clear()
+                return@launch
+            }
+            val deck = reconciled.snapshot.toDeck() ?: return@launch
             _state.update {
                 it.copy(
                     deck = deck,
                     draft = it.draft
-                        .withVisibility(StoryVisibility.fromWire(snapshot.visibility))
-                        .withRepostOf(snapshot.repostOfId),
+                        .withVisibility(StoryVisibility.fromWire(reconciled.snapshot.visibility))
+                        .withRepostOf(reconciled.snapshot.repostOfId),
+                    errorMessage = if (reconciled.hasLoss) MEDIA_RESTORE_LOST else it.errorMessage,
                 ).mirrorDraftToSelection()
             }
         }
     }
+
+    /**
+     * Whether a restored draft's media [id] can still be shown/published. An offline
+     * upload placeholder ([OutboxIds.isCmid]) resolves against the durable blob store —
+     * gone once its bytes were swept or its chain abandoned. A server-assigned id lives
+     * server-side and is treated as available (its thumbnail rehydrates on demand). The
+     * cheap [MediaBlobStore.has] never loads the bytes, so probing a whole draft's media
+     * costs a boolean per id.
+     */
+    private suspend fun isRestoredMediaAvailable(id: String): Boolean =
+        !OutboxIds.isCmid(id) || mediaBlobStore.has(id)
 
     /**
      * Persists (or purges) the current composer draft — iOS's save-on-dismiss. Called
@@ -1102,7 +1130,7 @@ class StoryComposerViewModel @Inject constructor(
             ?.let { LanguageResolver.resolveUserLanguage(it) }
             ?: LanguageResolver.FALLBACK_LANGUAGE
 
-    private companion object {
+    internal companion object {
         const val MEDIA_FAILED = "Couldn't attach that media"
         const val MEDIA_UNUSABLE = "That media couldn't be attached"
         const val MEDIA_LIMIT = "You can attach up to ${StoryComposerDraft.MAX_MEDIA} items"
@@ -1110,5 +1138,6 @@ class StoryComposerViewModel @Inject constructor(
             "You can add up to ${StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE} text elements per slide"
         const val STICKER_LIMIT =
             "You can add up to ${StorySlideDeck.MAX_STICKERS_PER_SLIDE} stickers per slide"
+        const val MEDIA_RESTORE_LOST = "Some media couldn't be restored"
     }
 }

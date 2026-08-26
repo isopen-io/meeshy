@@ -2,6 +2,68 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-26 **a restored story draft no longer resurrects media that is gone** (slice
+> `story-draft-lost-media-reconcile`, feature-parity E. Stories — the "Draft save/restore … + lost-media
+> detection / re-capture prompt" line: its lost-media half now ships, closing the follow-up the previous
+> slice's own "Next" and the `story-composer-repost-link` NOTES entry predicted would become reachable
+> once the restore seam existed). Before this, `onEnterComposer` rebuilt the deck from the persisted
+> snapshot VERBATIM — so an offline `cmid_` placeholder whose durable blob had been swept, or an upload
+> chain abandoned, came back as a dangling media id: a broken tile in the composer and a publish of media
+> that no longer exists.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3900 + #3861, both gateway
+> (crypto verification codes / broadcast Prisme) — neither a `claude/apps/android/<slice-id>` routine
+> slice, no `apps/android` collision, nothing of mine to merge. Prior slice
+> (`story-composer-draft-autosave`) is on `main` (#3899, HEAD `1c8c9634`). Branched off freshly-fetched
+> `origin/main`; scope verified with `git diff --name-only origin/main` (10 files, all `apps/android`).
+>
+> **The fix — one pure reducer + real availability wiring.** (1) `StoryDraftMediaReconciler.reconcile(
+> snapshot, isAvailable): StoryDraftMediaReconciliation{snapshot, lostMediaIds, recaptureSlideIds}`
+> (`:feature:stories`, pure/sync): each slide keeps only its available media ids (surviving order
+> preserved); **no slide is ever removed** — a slide the loss empties stays blank and its id goes to
+> `recaptureSlideIds`, so the deck's ≥1-slide / valid-`selectedId` invariants hold untouched; `lostMediaIds`
+> is first-seen order, deduped. (2) `OutboxIds.isCmid(id)` (`sdk-core`, the cmid format's own home) —
+> classifies a restored id: offline placeholder vs server id. (3) `MediaBlobStore.has(cmid)` → DAO
+> `SELECT EXISTS(...)` (`core:database`) — a cheap presence check that NEVER loads the bytes, so probing
+> a whole draft's media costs a boolean per id, not a payload read. (4) VM `onEnterComposer` resolves
+> availability first (a suspend batch: server id ⇒ available, no probe; `cmid_` ⇒ `blobStore.has`), runs
+> the pure reducer on the restored snapshot, seeds the CLEANED deck, sets `MEDIA_RESTORE_LOST` ("Some
+> media couldn't be restored") on the existing `supportingText` notice when `hasLoss`, and **purges
+> rather than seeds** a draft the loss emptied entirely (`!isWorthRestoring`). Companion made `internal`
+> so the message constant is assertable by name.
+>
+> **Tests: +25** (13 `StoryDraftMediaReconcilerTest` all-available-content-unchanged / drop+report /
+> surviving-order / recapture / caption-saves-slide / whitespace-doesn't / one-survivor-no-recapture /
+> no-slide-dropped / empties-whole-draft / first-seen-order / no-media-slide-untouched / idempotent /
+> visibility+repost-survive; 4 `StoryComposerViewModelTest` swept-drops+notifies / survivor-kept /
+> server-id-no-probe (`coVerify(exactly=0){has}`) / emptied-purges; 2 `MediaBlobStoreTest` has present+absent
+> / has-after-remove; 2 `MediaBlobDaoTest` exists present+absent / exists-after-delete; 4 `OutboxIdsTest`
+> isCmid cmid/cid/objectid/empty). Non-tautological: the reducer tests drive real snapshots through
+> `reconcile` and assert the cleaned mediaIds + loss/recapture lists, not restated constants; the VM tests
+> drive `onEnterComposer` against an `InMemoryStoryComposerDraftStore` + a `has`-stubbed blob store and
+> assert the seeded deck + notice + purge. **Mutation-RED-proven**: neutering the availability filter
+> (`val kept = slide.mediaIds`, leaving loss-reporting intact) reddens EXACTLY the 8 cleaning-dependent
+> tests (6 reducer + 2 VM); the pure loss-reporting/order, no-media-slide, and DAO/store/isCmid tests stay green.
+>
+> **SDK bootstrap** — `dl.google.com` 200; the documented android-37 copy→patch (`sdkmanager
+> "platforms;android-37.0"` then `cp -r android-37.0 android-37`, patch `source.properties` ApiLevel 37.0→37).
+>
+> **Verified**: targeted `:sdk-core`/`:core:database` (OutboxIds/MediaBlobStore/MediaBlobDao) green
+> (BUILD SUCCESSFUL 3m19s), then `:feature:stories` reconciler+VM green (BUILD SUCCESSFUL 1m), then the
+> mutation proof (8 RED), then the full `./apps/android/meeshy.sh check` CI-mirror gate (assembleDebug +
+> testDebugUnitTest, all modules) — see run log for the result. Reviewer PASS. Diff is `apps/android`
+> only (10 files). Verdict: **PASS** — a pure reducer + a cheap real availability source reused by VM
+> glue; behavioural tests through the public API tied to the real mapping/persistence; no production
+> logic outside `apps/android`.
+>
+> **Next**: widen the snapshot to carry rich on-canvas content (annotate the deck graph `@Serializable`
+> — sealed `StoryBackgroundValue`/`StoryTextBackground` need closed-polymorphic serializers — OR a
+> `StoryEffects`-based reverse map; lifts the fidelity gate AND lets the reconciler clean
+> `backgroundMediaId` too, which the primitive snapshot doesn't yet carry), OR wipe the composer draft
+> store on account teardown (`SessionTeardown.wipe()` — the last of the three draft follow-ups), OR
+> surface `recaptureSlideIds` as an actual in-canvas re-capture affordance (the reducer already returns
+> them; today only the aggregate notice is shown). Scout `feature-parity.md` read-only before branching.
+
 > On 2026-08-26 **the story composer survives leaving and reopening** (slice `story-composer-draft-autosave`,
 > feature-parity E. Stories — the "Draft save/restore with media persistence + lost-media detection" line, now
 > `[~]`: the caption + media + structure + audience + repost persistence half ships; rich-content serialization

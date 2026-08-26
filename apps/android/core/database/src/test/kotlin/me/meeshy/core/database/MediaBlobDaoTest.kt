@@ -74,6 +74,22 @@ class MediaBlobDaoTest {
     }
 
     @Test
+    fun `exists is true for an upserted cmid and false otherwise`() = runTest {
+        dao.upsert(blob("a"))
+
+        assertThat(dao.exists("a")).isTrue()
+        assertThat(dao.exists("missing")).isFalse()
+    }
+
+    @Test
+    fun `exists turns false once the blob is deleted`() = runTest {
+        dao.upsert(blob("a"))
+        dao.delete("a")
+
+        assertThat(dao.exists("a")).isFalse()
+    }
+
+    @Test
     fun `upsert replaces the blob for an existing cmid`() = runTest {
         dao.upsert(blob("a", bytes = byteArrayOf(1)))
         dao.upsert(blob("a", bytes = byteArrayOf(2, 2), fileName = "new.png"))
