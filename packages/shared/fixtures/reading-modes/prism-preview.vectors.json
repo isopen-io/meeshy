@@ -1,0 +1,121 @@
+{
+  "$format": {
+    "input": "{ preview: string|null, translations: {lang: text}|null, originalLanguage: string|null, preferredLanguages: string[] }",
+    "expected": "string|null — le texte SERVI dans la ligne de liste : la traduction du premier rang du lecteur qui est servi, sinon l'aperçu ORIGINAL (jamais une traduction quelconque — règle #1 du Prisme). `null` UNIQUEMENT quand l'aperçu original lui-même est `null`.",
+    "rule": "Prisme Linguistique — aperçu de dernier message. Le prisme est ORDONNÉ et la langue d'origine concourt à SON rang, jamais comme court-circuit global. Pour chaque langue L du prisme, dans l'ordre : L == langue d'origine ⇒ servir l'aperçu original (le message EST déjà en L) ; une traduction existe pour L ⇒ la servir. Aucune ⇒ aperçu original.",
+    "provenance": "Contrat cross-plateforme des TROIS miroirs que CLAUDE.md nomme source de vérité de cette règle : resolveLastMessagePreview (packages/shared/utils/conversation-helpers.ts, rejoué par ce fichier via __tests__/vectors/prism-preview.vectors.test.ts), MeeshyConversation.resolvedLastMessagePreview (packages/MeeshySDK/.../Models/CoreModels.swift), resolveLastMessagePreview (apps/android/core/model/.../lang/LastMessagePreviewResolver.kt). Les trois portaient jusqu'ici des suites écrites À LA MAIN, chacune se déclarant « one-for-one mirror » des deux autres dans son en-tête — une parité affirmée en prose, gardée par rien. Ce fichier est le témoin machine qui la remplace. Sur divergence entre ce fichier et un miroir, c'est le miroir qui bouge (le TS est vérifié case-à-case contre la règle) — jamais le vecteur.",
+    "excluded": "Les cartes à DEUX clés canonisant vers la MÊME langue (ex. {'pt':…, 'pt-BR':…}, prisme ['pt']) sont volontairement HORS contrat : le gateway n'émet que des clés canoniques (une par langue), et TS retient la PREMIÈRE entrée pour une clé canonique tandis qu'Android/iOS retiennent la DERNIÈRE (HashMap.put / dict subscript). Encoder l'un ou l'autre déclarerait un miroir « en faute » sur un cas qui ne se produit jamais."
+  },
+  "vectors": [
+    {
+      "_label": "carte absente ⇒ aperçu brut",
+      "input": { "preview": "Hello", "translations": null, "originalLanguage": null, "preferredLanguages": ["fr"] },
+      "expected": "Hello"
+    },
+    {
+      "_label": "carte vide ⇒ aperçu brut",
+      "input": { "preview": "Hello", "translations": {}, "originalLanguage": "en", "preferredLanguages": ["fr"] },
+      "expected": "Hello"
+    },
+    {
+      "_label": "aperçu null sans traductions ⇒ null",
+      "input": { "preview": null, "translations": null, "originalLanguage": null, "preferredLanguages": ["fr"] },
+      "expected": null
+    },
+    {
+      "_label": "rang 1 servi quand la traduction existe",
+      "input": { "preview": "Hello", "translations": { "fr": "Bonjour", "es": "Hola" }, "originalLanguage": "en", "preferredLanguages": ["fr", "es"] },
+      "expected": "Bonjour"
+    },
+    {
+      "_label": "descend au rang 2 quand le rang 1 n'a pas de traduction",
+      "input": { "preview": "Hello", "translations": { "es": "Hola" }, "originalLanguage": "en", "preferredLanguages": ["de", "es"] },
+      "expected": "Hola"
+    },
+    {
+      "_label": "honore l'ORDRE du prisme, pas l'ordre des clés de la carte",
+      "input": { "preview": "Hello", "translations": { "es": "Hola", "fr": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["fr", "es"] },
+      "expected": "Bonjour"
+    },
+    {
+      "_label": "aperçu brut quand le message EST déjà dans une langue du lecteur",
+      "input": { "preview": "Bonjour", "translations": { "en": "Hello" }, "originalLanguage": "fr", "preferredLanguages": ["fr"] },
+      "expected": "Bonjour"
+    },
+    {
+      "_label": "préfère la langue PRIMAIRE à un original écrit dans une secondaire",
+      "input": { "preview": "Bonjour", "translations": { "de": "Guten Tag" }, "originalLanguage": "fr", "preferredLanguages": ["de", "fr"] },
+      "expected": "Guten Tag"
+    },
+    {
+      "_label": "s'arrête à la langue d'origine sans regarder plus bas",
+      "input": { "preview": "Guten Tag", "translations": { "fr": "Bonjour" }, "originalLanguage": "de", "preferredLanguages": ["de", "fr"] },
+      "expected": "Guten Tag"
+    },
+    {
+      "_label": "francophone au téléphone anglais : sert le français (rang 1)",
+      "input": { "preview": "Hello everyone", "translations": { "fr": "Bonjour à tous" }, "originalLanguage": "en", "preferredLanguages": ["fr", "en"] },
+      "expected": "Bonjour à tous"
+    },
+    {
+      "_label": "la locale appareil ne sert QUE si la langue in-app n'a rien",
+      "input": { "preview": "Hello everyone", "translations": { "es": "Hola a todos" }, "originalLanguage": "en", "preferredLanguages": ["fr", "en"] },
+      "expected": "Hello everyone"
+    },
+    {
+      "_label": "sert l'original plutôt qu'une langue hors prisme (règle #1)",
+      "input": { "preview": "Hello", "translations": { "es": "Hola" }, "originalLanguage": "en", "preferredLanguages": ["fr", "de"] },
+      "expected": "Hello"
+    },
+    {
+      "_label": "aperçu brut quand le lecteur n'a aucune langue configurée",
+      "input": { "preview": "Hello", "translations": { "fr": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": [] },
+      "expected": "Hello"
+    },
+    {
+      "_label": "ignore une traduction vide au lieu de vider la ligne",
+      "input": { "preview": "Hello", "translations": { "fr": "   " }, "originalLanguage": "en", "preferredLanguages": ["fr"] },
+      "expected": "Hello"
+    },
+    {
+      "_label": "matche une langue du lecteur écrite en MAJUSCULES",
+      "input": { "preview": "Hello", "translations": { "fr": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["FR"] },
+      "expected": "Bonjour"
+    },
+    {
+      "_label": "matche une CLÉ de carte écrite en MAJUSCULES",
+      "input": { "preview": "Hello", "translations": { "FR": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["fr"] },
+      "expected": "Bonjour"
+    },
+    {
+      "_label": "reconnaît une langue d'origine écrite en MAJUSCULES",
+      "input": { "preview": "Bonjour", "translations": { "en": "Hello" }, "originalLanguage": "FR", "preferredLanguages": ["fr"] },
+      "expected": "Bonjour"
+    },
+    {
+      "_label": "original PRIMAIRE tagué région (en-US) concourt à son rang normalisé",
+      "input": { "preview": "Hello everyone", "translations": { "fr": "Bonjour à tous" }, "originalLanguage": "en-US", "preferredLanguages": ["en", "fr"] },
+      "expected": "Hello everyone"
+    },
+    {
+      "_label": "s'arrête à un original tagué région (pt-BR) sans servir un rang inférieur",
+      "input": { "preview": "Olá pessoal", "translations": { "en": "Hello everyone" }, "originalLanguage": "pt-BR", "preferredLanguages": ["pt", "en"] },
+      "expected": "Olá pessoal"
+    },
+    {
+      "_label": "matche une CLÉ taguée région (fr-FR) contre le rang normalisé du lecteur",
+      "input": { "preview": "Hello", "translations": { "fr-FR": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["fr"] },
+      "expected": "Bonjour"
+    },
+    {
+      "_label": "matche une langue LECTEUR taguée région (pt-BR) contre une clé normalisée",
+      "input": { "preview": "Hello", "translations": { "pt": "Olá" }, "originalLanguage": "en", "preferredLanguages": ["pt-BR"] },
+      "expected": "Olá"
+    },
+    {
+      "_label": "saute les entrées vides de la liste de langues du lecteur",
+      "input": { "preview": "Hello", "translations": { "fr": "Bonjour" }, "originalLanguage": "en", "preferredLanguages": ["", "fr"] },
+      "expected": "Bonjour"
+    }
+  ]
+}
