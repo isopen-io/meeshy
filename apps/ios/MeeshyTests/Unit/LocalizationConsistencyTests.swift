@@ -270,6 +270,46 @@ final class LocalizationConsistencyTests: XCTestCase {
         )
     }
 
+    // MARK: - Langue déclarée du document (T2.2)
+
+    /// **Cliquet i18n — la clé neuve existe dans les SEPT locales expédiées,
+    /// vérifié par DUMP du catalogue, jamais à l'œil.**
+    ///
+    /// `composer.document.a11y.language` est la clé accessible que
+    /// `ComposerDocumentCopy.language` sert à la capsule de langue du meuble
+    /// (`MeeshyComposerHost.documentLanguageCapsule`). L'édition du catalogue
+    /// est TEXTUELLE (un `json.load`/`json.dump` réordonnerait les 3369
+    /// entrées existantes) : cette garde relit le résultat par la MÊME voie
+    /// que le reste de la suite — `JSONSerialization`, jamais un coup d'œil
+    /// sur le diff — pour prouver que l'édition à la main n'a oublié aucune
+    /// locale.
+    func test_composerDocumentLanguageKey_isTranslatedInAllSevenShippedLocales() throws {
+        let env = try makeEnvironment()
+        let shipped = try shippedLocales(repoRoot: env.repoRoot)
+
+        XCTAssertEqual(
+            shipped.count, 7,
+            "La prémisse de cette garde est que l'app expédie SEPT locales (ar, de, en, es, fr, "
+            + "it, pt-BR) — si ce compte a changé, la garde doit changer avec lui."
+        )
+
+        let key = "composer.document.a11y.language"
+        guard let translated = env.appCatalog.translations[key] else {
+            return XCTFail(
+                "`\(key)` est absent du catalogue — la capsule de langue du document affichera son "
+                + "identifiant brut."
+            )
+        }
+
+        let manquantes = shipped.subtracting(translated).sorted()
+        XCTAssertTrue(
+            manquantes.isEmpty,
+            "`\(key)` manque dans : \(manquantes.joined(separator: ", ")). Une locale absente "
+            + "affiche soit l'identifiant brut (`fr`, langue source), soit le français "
+            + "(les six autres) — dans les deux cas, jamais la traduction attendue."
+        )
+    }
+
     // MARK: - Libellés de menu contextuel d'avatar
 
     /// **Un littéral nu passé à `AvatarContextMenuItem(label:)` est invisible

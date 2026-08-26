@@ -2400,18 +2400,21 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// porte.** La mesure ne comparait que `servedRow` à `canonicalRow`, et
     /// `canonicalRow` ne modélise QUE les six boutons d'attache. La feuille
     /// historique (`FeedComposerSheet`) porte un SEPTIÈME contrôle dans la même
-    /// barre : la capsule de LANGUE, avec son sélecteur — un état ÉCRIVABLE
-    /// (`composerLanguage`) que le meuble n'a ni en champ, ni en contrôle, ni en
-    /// canal sur `ComposerDocumentDraft`. La porte poste
-    /// `DefaultComposerLanguage.resolve()`, une CONSTANTE qui rend « fr ».
-    ///
-    /// Sans cet élargissement, la garde serait passée au vert le jour où la
-    /// rangée se remplit, et aurait laissé monter la porte avec la régression
-    /// intacte : un auteur anglophone publiant « Hello everyone » verrait son
-    /// post étiqueté français, traduit FR→EN par le Prisme, sans aucun moyen de
-    /// corriger — le sélecteur qu'il utilisait la veille n'existe plus sur cet
-    /// écran. C'est le mode d'échec PROXY : la mesure remplaçante était plus
+    /// barre : la capsule de LANGUE, avec son sélecteur. Sans cet
+    /// élargissement, la garde serait passée au vert le jour où la rangée se
+    /// remplit, et aurait laissé monter la porte avec la régression intacte :
+    /// un auteur anglophone publiant « Hello everyone » verrait son post
+    /// étiqueté français, traduit FR→EN par le Prisme, sans aucun moyen de
+    /// corriger. C'est le mode d'échec PROXY : la mesure remplaçante était plus
     /// étroite que la capacité qu'elle prétendait couvrir.
+    ///
+    /// **La SECONDE condition est tombée au lot T2.2.** Le meuble porte
+    /// désormais un état ÉCRIVABLE (`documentLanguage`), sa capsule
+    /// (`ComposerLanguageFlag`) et son sélecteur (`AudioLanguagePickerView`),
+    /// et la porte poste `draft.originalLanguage` plutôt que la CONSTANTE.
+    /// `montages` reste néanmoins à ZÉRO plus bas : la PREMIÈRE condition — la
+    /// rangée — n'est pas encore tombée (`servedRow != canonicalRow`, T2.3 à
+    /// venir), et c'est elle seule qui retient encore la porte.
     /// `@MainActor` : le bundle de tests est compilé en isolation `nonisolated`,
     /// et `DefaultComposerLanguage.resolve()` — dont cette garde mesure la
     /// constance — est épinglée au main actor.
@@ -2450,9 +2453,9 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                 + "conditions ; lire l'autre ci-dessous avant de monter quoi que ce soit."
         )
 
-        // SECOND déclencheur — la LANGUE. Elle n'est dans aucune rangée : c'est
-        // un contrôle de la même barre, absent du meuble, et son absence ne se
-        // voit pas en comparant deux listes d'outils d'attache.
+        // SECOND déclencheur — la LANGUE. RETOURNÉ au lot T2.2 : la porte poste
+        // désormais `draft.originalLanguage`, et le meuble porte la capsule et
+        // le sélecteur qui l'alimentent.
         let porte = try surfaceSource()
         guard let envoi = corpsDeDeclaration(
             commencantPar: "private func publish(_ draft: ComposerDocumentDraft)",
@@ -2460,21 +2463,28 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         ) else {
             return XCTFail("L'envoi de la porte du document est introuvable — la garde ne mesurerait RIEN.")
         }
-        XCTAssertTrue(
+        XCTAssertFalse(
             envoi.contains("originalLanguage: DefaultComposerLanguage.resolve()"),
-            "La porte ne poste plus la CONSTANTE de langue. Si elle poste désormais un état du meuble, la "
-                + "seconde condition est remplie — retourner cette assertion, pas la supprimer."
+            "La porte poste encore la CONSTANTE de langue au lieu de l'état déclaré par l'auteur : le "
+                + "geste de T2.2 (`draft.originalLanguage`) a disparu du corps de `publish`."
+        )
+        XCTAssertTrue(
+            envoi.contains("draft.originalLanguage"),
+            "La porte doit poster `draft.originalLanguage` — la langue que la capsule du meuble a écrite, "
+                + "pas la constante de départ du brouillon."
         )
         XCTAssertEqual(
             DefaultComposerLanguage.resolve(), "fr",
-            "La prémisse de l'assertion ci-dessus est que `resolve()` est une CONSTANTE. Si elle se met à "
-                + "lire quelque chose, le raisonnement de cette garde change avec elle."
+            "La prémisse des deux assertions ci-dessus est que `resolve()` RESTE le point de DÉPART du "
+                + "brouillon (T2.1) : ce n'est pas elle qui change, c'est cette porte qui a cessé de "
+                + "l'appeler à l'envoi."
         )
-        XCTAssertFalse(
-            porte.contains("originalLanguage") && porte.contains("ComposerLanguageFlag"),
-            "Le meuble a gagné une capsule de langue : l'auteur peut de nouveau déclarer la langue de son "
-                + "post. C'est la SECONDE condition de levée — monter `DocumentComposerDoor` là où "
-                + "`FeedComposerSheet` est présentée, puis RETOURNER ce test."
+        let meuble = try sourceDuMeuble()
+        XCTAssertTrue(
+            meuble.contains("originalLanguage") && meuble.contains("ComposerLanguageFlag"),
+            "Le meuble doit porter un canal de langue déclaré (`originalLanguage`) ET la capsule "
+                + "`ComposerLanguageFlag` qui l'affiche — la SECONDE condition de levée de la porte, "
+                + "tombée au lot T2.2."
         )
     }
 

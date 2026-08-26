@@ -2490,4 +2490,52 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - La langue déclarée (T2.2)
+
+    /// Garde NÉGATIVE — même raison que le sélecteur d'emoji juste au-dessus :
+    /// `AudioLanguagePickerView` tourne déjà en production sous la feuille
+    /// historique (`FeedComposerSheet`), avec ses catégories, sa recherche et
+    /// son bouton « afficher toutes les langues ». Un second sélecteur ici
+    /// serait deux listes de langues et deux mémoires à faire diverger — et le
+    /// meuble n'a besoin d'aucune liste propre : `AudioLanguagePickerView` lit
+    /// `EdgeTranscriptionService.shared` lui-même.
+    func test_leMeuble_neFabriquePasUnSecondSelecteurDeLangue() throws {
+        let code = try hostCode()
+        XCTAssertEqual(
+            occurrences(of: "AudioLanguagePickerView(", in: code), 1,
+            "Le meuble doit monter le sélecteur du dépôt UNE fois — sinon cette garde ne mesurerait rien, "
+                + "ou il en fabrique un second."
+        )
+        for interdit in ["LanguageOption(", "supportedLocales:", "availableLocales:", "[\"fr\", \"en\""] {
+            XCTAssertFalse(
+                code.contains(interdit),
+                "Le meuble déclare sa propre liste de langues (« \(interdit) ») : deux listes de langues "
+                    + "sont deux mémoires à faire diverger — le motif que la porte interdit."
+            )
+        }
+    }
+
+    /// **Le canal, pas seulement le contrôle.** La capsule et le sélecteur
+    /// prouvent que l'auteur PEUT écrire une langue ; cette garde prouve que ce
+    /// qu'il écrit ATTEINT le brouillon envoyé à la porte. Sans elle, `code`
+    /// contenait déjà le mot `originalLanguage` (le littéral `nil` qu'il
+    /// remplace le porte aussi) : une garde qui ne chercherait que la présence
+    /// du mot serait passée au vert avant comme après ce lot.
+    func test_leBrouillonDuDocument_porteLaLangueDeclareeParLaCapsule_pasUnLitteral() throws {
+        guard let bloc = declarationBody(startingAt: "private var documentDraft", in: try hostCode()) else {
+            return XCTFail("`documentDraft` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
+        }
+        let corps = compact(bloc)
+        XCTAssertTrue(
+            corps.contains(compact("originalLanguage: documentLanguage")),
+            "Le cas `.document` de `documentDraft` doit poser `originalLanguage: documentLanguage` — l'état "
+                + "que la capsule écrit, pas un littéral qui l'ignorerait."
+        )
+        XCTAssertFalse(
+            corps.contains(compact("originalLanguage: nil")),
+            "Le cas `.document` pose encore `originalLanguage: nil` : la langue déclarée par l'auteur "
+                + "n'atteint jamais le brouillon envoyé à la porte."
+        )
+    }
 }

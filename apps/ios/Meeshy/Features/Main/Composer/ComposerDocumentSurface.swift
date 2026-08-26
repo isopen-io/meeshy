@@ -957,6 +957,16 @@ nonisolated enum ComposerDocumentCopy {
                defaultValue: "Outils du document", bundle: .main)
     }
 
+    /// **Clé neuve (T2.2), sur le patron de `toolRow` juste au-dessus.** Ne
+    /// reprend PAS le littéral `"Langue du post"` de la feuille historique :
+    /// sa clé contient des espaces et échappe au cliquet français
+    /// (`FrenchDefaultValueRatchetTests`) — la recopier aurait importé une
+    /// dette invisible dans le fichier que ce chantier construit.
+    static var language: String {
+        String(localized: "composer.document.a11y.language",
+               defaultValue: "Langue du document", bundle: .main)
+    }
+
     /// La SORTIE n'a pas de clé neuve : `common.close` existe et est traduite
     /// dans les sept langues du catalogue. Le cliquet de complétude de ce dépôt
     /// est épinglé à un plafond, et une clé de plus pour un mot déjà traduit
@@ -1200,29 +1210,30 @@ struct ComposerDocumentSurface: View {
 /// 5.5 a déjà réservé. Dette NOMMÉE, non refermée ici — elle ne perd rien
 /// aujourd'hui, la ligne bloquée partant seule à la reconnexion.
 ///
-/// **Elle ne laisse pas non plus l'auteur DÉCLARER la langue de son post, et
-/// c'est la dette qui perdrait le plus.** `originalLanguage:` reçoit ici
-/// `DefaultComposerLanguage.resolve()`, une CONSTANTE qui rend « fr ». La
-/// feuille absorbée ne fait pas ça : `FeedComposerSheet` tient un
-/// `composerLanguage` ÉCRIVABLE, avec sa capsule de langue et son sélecteur,
-/// dans la même barre que les six outils d'attache. Le meuble n'a ni ce champ,
-/// ni ce contrôle, ni un canal pour lui sur `ComposerDocumentDraft`.
+/// **Elle laisse désormais l'auteur DÉCLARER la langue de son post (T2.2).**
+/// `originalLanguage:` recevait `DefaultComposerLanguage.resolve()`, une
+/// CONSTANTE qui rendait « fr » — un « Hello everyone » composé ici partait
+/// étiqueté français, le Prisme le traduisait FR→EN sur un texte déjà anglais,
+/// et la carte affichait un badge de langue faux, sans qu'aucun geste ne
+/// permette de corriger. Elle poste maintenant `draft.originalLanguage`, écrit
+/// par la capsule `ComposerLanguageFlag` et le sélecteur
+/// `AudioLanguagePickerView` que le meuble monte — les mêmes que la feuille
+/// absorbée (`FeedComposerSheet.composerLanguage`) portait dans la même barre
+/// que les six outils d'attache. `DefaultComposerLanguage.resolve()` RESTE le
+/// point de DÉPART du brouillon ; ce n'est pas elle qui a changé, c'est cette
+/// porte qui a cessé de la rappeler à l'envoi.
 ///
-/// Monter cette porte en l'état ferait partir un « Hello everyone » étiqueté
-/// français : le Prisme le traduirait FR→EN sur un texte déjà anglais, la carte
-/// afficherait un badge de langue faux, et l'auteur n'aurait aucun moyen de
-/// corriger. **La langue est donc, avec la rangée, la SECONDE condition de levée
-/// de la porte** — et il faut le dire ici parce qu'elle ne se lit dans AUCUNE
-/// rangée : `ComposerDocumentTool.canonicalRow` ne modélise que les six boutons
-/// d'attache, et une garde qui ne compare que ces deux listes serait passée au
-/// vert en laissant la régression entrer.
+/// **Ce que la langue déclarée ne dit toujours pas : ce n'est plus une
+/// condition de levée de la porte.** La rangée d'outils, elle, en reste une —
+/// `ComposerDocumentTool.canonicalRow` ne modélise que les six boutons
+/// d'attache, et T2.3 doit encore la compléter avant qu'un site de production
+/// puisse monter cette porte.
 ///
 /// **Aucun site de production ne la monte encore**, et ce n'est pas un oubli de
-/// câblage : ni la rangée d'outils ni la langue ne couvrent ce que la feuille
-/// remplacée offre. Son témoin,
+/// câblage : la rangée d'outils ne couvre pas ce que la feuille remplacée
+/// offre. Son témoin,
 /// `test_laPorteDuDocument_nEstMonteeParAucunSiteDeProduction_etCEstLaRangeeQuiLaRetient`,
-/// déclare cet état et porte les DEUX déclencheurs — il rougira le jour où les
-/// deux tomberont, le jour où il faudra monter cette porte, et le retourner.
+/// déclare cet état.
 struct DocumentComposerDoor: View {
 
     /// La porte au sens de la table. C'est elle qui décide du format d'ouverture
@@ -1300,16 +1311,17 @@ struct DocumentComposerDoor: View {
         // `content:` reçoit le texte du brouillon tel quel : le plan vient de
         // garantir qu'il n'est ni absent ni blanc, et le re-normaliser ici en
         // ferait une seconde écriture de la même règle.
-        // La langue reste la CONSTANTE en T2.1 — sa déclaration par l'auteur est
-        // le geste de T2.2. Le canal `draft.originalLanguage` existe déjà, il
-        // n'est simplement pas encore branché ici.
+        // La langue est désormais celle DÉCLARÉE par l'auteur (T2.2) :
+        // `draft.originalLanguage` porte ce que la capsule du meuble a écrit,
+        // semé sur `DefaultComposerLanguage.resolve()` — qui RESTE le point de
+        // DÉPART du brouillon, jamais rappelé ici.
         await viewModel.publish(PublishIntent.document(
             localMedia: draft.localMedia,
             forcePlainPost: false,
             content: draft.text,
             visibility: draft.visibility.rawValue,
             visibilityUserIds: draft.visibilityUserIds,
-            originalLanguage: DefaultComposerLanguage.resolve(),
+            originalLanguage: draft.originalLanguage,
             mentions: draft.mentions,
             location: draft.location,
             discoverabilityPrecision: nil

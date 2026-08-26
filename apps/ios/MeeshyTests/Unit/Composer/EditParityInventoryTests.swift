@@ -42,7 +42,7 @@ import MeeshyUI
 /// `ComposerSurfaceRouting` fait atterrir sur la SCENE, ou le socle ne peint
 /// rien du tout. Une capacite tenue par le meuble et inatteignable depuis la
 /// porte qui en aurait besoin n'est pas une capacite acquise pour le retrait :
-/// c'est le decalage que `test_lesDeuxCapacitesTenues_leSontCoteCreation_...`
+/// c'est le decalage que `test_lesCapacitesDeChromeSocle_leSontCoteCreation_...`
 /// grave, pour qu'un lecteur pressé ne compte pas 2 sur 7 comme un progres vers
 /// le retrait de la feuille d'EDITION.
 @MainActor
@@ -120,7 +120,7 @@ final class EditParityInventoryTests: XCTestCase {
         // « Hello everyone » repart etiquete francais, et le Prisme le traduit
         // FR vers EN sur un texte deja anglais.
         let langueEnDur = sourceDuDocument.contains("originalLanguage: DefaultComposerLanguage.resolve()")
-        let langueDeclarable = !langueEnDur
+        let langueDeclarable = !langueEnDur && sourceDuDocument.contains("originalLanguage: draft.originalLanguage")
 
         // 3 — EVENTAIL POST/REEL GATE.
         // L'eventail EXISTE et se peint (lot 4). Ce qui manque est la MOITIE
@@ -184,9 +184,10 @@ final class EditParityInventoryTests: XCTestCase {
                 nom: "langue source",
                 chezLaFeuille: ["showLanguagePicker = true", "language: languageChanged ? selectedLanguage : nil"],
                 mesuree: langueDeclarable,
-                attendue: false,
-                mesureDit: "la porte-document pose `DefaultComposerLanguage.resolve()`, une constante — "
-                    + "aucun canal de langue sur `ComposerDocumentDraft`"
+                attendue: true,
+                mesureDit: "T2.2 : la porte-document poste `draft.originalLanguage`, ecrit par la capsule "
+                    + "et le selecteur que le meuble monte desormais — le litteral "
+                    + "`DefaultComposerLanguage.resolve()` a quitte le corps de `publish`"
             ),
             Capacite(
                 nom: "eventail POST/REEL gate",
@@ -366,32 +367,34 @@ final class EditParityInventoryTests: XCTestCase {
         }
     }
 
-    /// **Le STOP, opposable.** Deux capacites sur sept. Le retrait
-    /// d'`EditPostSheet.swift` retirerait les cinq autres a l'utilisateur.
+    /// **Le STOP, opposable.** Trois capacites sur sept depuis T2.2 (« langue
+    /// source » a rejoint « champ contenu + validite » et « audience + liste
+    /// nommee »). Le retrait d'`EditPostSheet.swift` retirerait les quatre
+    /// autres a l'utilisateur.
     ///
     /// Le compte ET les noms : un compte seul serait reste vert le jour ou une
     /// capacite en remplacerait une autre, et c'est precisement ce qui vient
     /// d'arriver du cote creation.
-    func test_leRetraitDeLaFeuille_resteINTERDIT_tantQueCinqCapacitesManquent() throws {
+    func test_leRetraitDeLaFeuille_resteINTERDIT_tantQueQuatreCapacitesManquent() throws {
         let capacites = try inventaire()
         let tenues = Set(capacites.filter(\.mesuree).map(\.nom))
         let manquantes = capacites.filter { !$0.mesuree }.map(\.nom)
 
         XCTAssertEqual(
-            tenues, ["champ contenu + validite", "audience + liste nommee"],
+            tenues, ["champ contenu + validite", "audience + liste nommee", "langue source"],
             "Les capacites tenues par le meuble ont change. Le retrait de la feuille reste interdit tant "
             + "que les sept n'y sont pas ; ce test dit LESQUELLES manquent, pour qu'un lot suivant sache "
             + "quoi lever plutot que de recompter."
         )
         XCTAssertEqual(
-            manquantes.count, 5,
-            "Cinq capacites manquent : \(manquantes.joined(separator: ", ")). Retirer la feuille les "
+            manquantes.count, 4,
+            "Quatre capacites manquent : \(manquantes.joined(separator: ", ")). Retirer la feuille les "
             + "retirerait a l'utilisateur, sans qu'aucun test d'ecran ne le dise."
         )
     }
 
-    /// **Les deux capacites tenues le sont cote CREATION — la porte d'edition ne
-    /// les atteint pas.**
+    /// **Les capacites de CHROME tenues le sont cote CREATION — la porte
+    /// d'edition ne les atteint pas.**
     ///
     /// C'est la remesure que le plan exigeait, et elle ne dit pas ce qu'on
     /// attendait. Le lot 4 a fait deriver le proprietaire du chrome de la
@@ -400,10 +403,14 @@ final class EditParityInventoryTests: XCTestCase {
     /// `ComposerSurfaceRouting` fait atterrir toute reprise sur la SCENE — ou le
     /// socle ne peint RIEN et l'atelier assemble tout.
     ///
-    /// Compter « 2 sur 7 » comme un progres vers le retrait de la feuille
-    /// d'EDITION serait donc faux. Les deux capacites ont muri sur le chemin de
-    /// CREATION ; le chemin d'edition n'en a exerce aucune.
-    func test_lesDeuxCapacitesTenues_leSontCoteCreation_etLaPorteDEditionNeLesAtteintPas() {
+    /// Compter « 3 sur 7 » comme un progres vers le retrait de la feuille
+    /// d'EDITION serait donc faux. Les trois capacites tenues (T2.2 ajoute
+    /// « langue source ») ont muri sur le chemin de CREATION ; le chemin
+    /// d'edition n'en a exerce aucune. Ce test-ci n'en remesure que DEUX :
+    /// « langue source » ne depend pas du CHROME (`ComposerChromeOwnership`)
+    /// mais d'un canal distinct (`documentLanguage` + capsule superposee), donc
+    /// hors de ce que `socleZones` peut dire.
+    func test_lesCapacitesDeChromeSocle_leSontCoteCreation_etLaPorteDEditionNeLesAtteintPas() {
         let profil = ComposerProfile.profile(for: .edit(postId: "d", documentFormat: .post))
 
         XCTAssertEqual(

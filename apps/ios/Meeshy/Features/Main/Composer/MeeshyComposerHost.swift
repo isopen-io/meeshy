@@ -394,6 +394,22 @@ struct MeeshyComposerHost: View {
     /// d'être la simple présentation qu'elle est.
     @State private var showsEmojiPicker = false
 
+    /// **La langue DÉCLARÉE du document (T2.2).** Semée sur
+    /// `DefaultComposerLanguage.resolve()` — le point de DÉPART du brouillon
+    /// que T2.1 posait déjà, et qui RESTE la constante « fr » — mais désormais
+    /// ÉCRITE par l'auteur via `documentLanguageCapsule` plutôt que rappelée
+    /// telle quelle à l'envoi. C'est le canal qui manquait à la porte : sans
+    /// lui, un « Hello everyone » composé ici partait étiqueté français, et le
+    /// Prisme le traduisait FR→EN sur un texte déjà anglais, sans que l'auteur
+    /// ait aucun moyen de corriger.
+    @State private var documentLanguage = DefaultComposerLanguage.resolve()
+
+    /// Le sélecteur de langue de la rangée est-il ouvert ? Même forme que
+    /// `showsEmojiPicker` juste au-dessus, pour la même raison : le sélecteur
+    /// vit dans le meuble, qui possède `documentLanguage`, jamais dans la
+    /// surface.
+    @State private var showsDocumentLanguagePicker = false
+
     init(
         intent: ComposerIntent,
         initialVisibility: String,
@@ -832,7 +848,73 @@ struct MeeshyComposerHost: View {
             onClose: onDismiss,
             onTool: { tool in handleDocumentTool(tool) }
         )
+        // La capsule se superpose plutôt que d'être peinte PAR la surface :
+        // `ComposerDocumentSurface` reste une présentation sans état, et c'est
+        // le meuble qui possède `documentLanguage` — exactement comme il
+        // possède déjà `documentText`. `.bottomTrailing` la pose au bord de la
+        // rangée d'outils, seule ligne peinte au bas de la surface.
+        .overlay(alignment: .bottomTrailing) { documentLanguageCapsule }
         .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
+        .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
+    }
+
+    /// **La capsule de langue (T2.2)** — le septième contrôle que la feuille
+    /// historique porte dans la même barre que les six outils d'attache
+    /// (`FeedComposerSheet`, `composerLanguage`), et que la porte du document
+    /// n'avait ni en champ, ni en contrôle, ni en canal sur
+    /// `ComposerDocumentDraft` avant ce lot.
+    ///
+    /// Même capsule, même sélecteur que la feuille : `ComposerLanguageFlag` et
+    /// `AudioLanguagePickerView` tournent déjà en production, et en fabriquer
+    /// une seconde paire ici donnerait deux listes de langues et deux mémoires
+    /// à faire diverger.
+    /// Le nom LOCALISÉ de la langue déclarée, pour VoiceOver — un emoji drapeau
+    /// ne se lit pas utilement (contrat de `ComposerLanguageFlag`). Miroir de
+    /// `composerLanguageDisplayName` de la feuille.
+    private var documentLanguageDisplayName: String {
+        let name = Locale.current.localizedString(forLanguageCode: documentLanguage) ?? documentLanguage
+        return name.prefix(1).uppercased() + name.dropFirst()
+    }
+
+    private var documentLanguageCapsule: some View {
+        Button {
+            showsDocumentLanguagePicker = true
+            HapticFeedback.light()
+        } label: {
+            Text(ComposerLanguageFlag.label(for: documentLanguage))
+                .font(MeeshyFont.relative(13, weight: .semibold))
+                .foregroundColor(MeeshyColors.indigo400)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(MeeshyColors.indigo100.opacity(0.15))
+                        .overlay(
+                            Capsule()
+                                .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
+                        )
+                )
+        }
+        .accessibilityLabel(Text(ComposerDocumentCopy.language))
+        .accessibilityValue(documentLanguageDisplayName)
+        .padding(16)
+    }
+
+    /// Le sélecteur du dépôt, monté tel quel — même raison que
+    /// `emojiPickerSheet` deux zones plus haut : `AudioLanguagePickerView`
+    /// tourne déjà en production sous la feuille historique, avec ses
+    /// catégories, sa recherche et son bouton « afficher toutes les langues ».
+    /// En fabriquer un second ici serait deux listes de langues à faire
+    /// diverger.
+    private var documentLanguagePickerSheet: some View {
+        AudioLanguagePickerView(
+            selectedLocale: Binding(
+                get: { Locale(identifier: documentLanguage) },
+                set: { newLocale in
+                    documentLanguage = newLocale.language.languageCode?.identifier ?? newLocale.identifier
+                }
+            )
+        )
     }
 
     /// Ce que le meuble sert — une PROJECTION de la règle, jamais une liste
@@ -1252,12 +1334,17 @@ struct MeeshyComposerHost: View {
             // qu'un post ordinaire. Le lire ailleurs (la graine, un drapeau du
             // site de montage) en ferait une seconde source pour « quelle
             // publication republie-t-on », alors que la porte le sait.
+            //
+            // `originalLanguage` vient du SOCLE (`documentLanguage`, T2.2) et
+            // non plus d'un littéral `nil` : c'est la capsule qui l'écrit, la
+            // porte qui la poste telle quelle.
             return ComposerDocumentDraft.document(
                 format: selectedFormat,
                 text: documentText,
                 visibility: composerVisibility,
                 visibilityUserIds: composerVisibilityUserIds,
-                repostOfId: intent.origin.repostedPostId, localMedia: [], location: nil, originalLanguage: nil
+                repostOfId: intent.origin.repostedPostId, localMedia: [], location: nil,
+                originalLanguage: documentLanguage
             )
         }
     }
