@@ -902,17 +902,19 @@ struct UniversalComposerBar: View {
     // MARK: - Action Button: Mic / Send
     // ========================================================================
 
-    /// Always renders `sendButton` so the user sees the affordance even before
-    /// typing — composer bars that hide the send button until content lands
-    /// leave the right-side HStack slot empty and feel visually unfinished
-    /// (bug 2026-05-28: « on ne voit pas le bouton envoyer »). When idle the
-    /// button stays in-place but is faded and non-tappable; it lights up the
-    /// moment `hasContent || effectiveIsRecording` flips.
+    /// Always MOUNTS `sendButton` — the right-side HStack slot never
+    /// collapses, so nothing reflows the moment content lands (bug
+    /// 2026-05-28: « on ne voit pas le bouton envoyer », caused by the slot
+    /// disappearing entirely when empty). But directive porteur 2026-08-26
+    /// (#3920) wants the button itself gone from view until there is
+    /// something to send — so idle state now fades to fully INVISIBLE
+    /// (opacity 0), not merely dimmed (0.4): the affordance reserves its
+    /// space without ever catching the eye when the composer is empty.
     @ViewBuilder
     var actionButton: some View {
         let isReady = (effectiveIsRecording || hasContent) && !externalIsSending
         sendButton
-            .opacity(isReady ? 1.0 : 0.4)
+            .opacity(isReady ? 1.0 : 0)
             .allowsHitTesting(isReady)
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasContent)
             .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
