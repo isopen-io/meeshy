@@ -1899,6 +1899,73 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertFalse(ConversationViewModel.isServerMessageId("zzzzzzzzzzzzzzzzzzzzzzzz"))
     }
 
+    // MARK: - Rattrapage depuis Résumé / Rivière (#3901)
+    //
+    // Au-delà de 25 non-lus, `ReadingModeOrchestrator` bascule l'ouverture en
+    // Résumé ou Rivière — deux modes qui ne rendent JAMAIS bulle par bulle
+    // (`MessageListViewController.rendersThread` est faux pour `.summary` et
+    // `.river`, voir `MessageListSeenTrackingModeGateTests`), donc n'alimentent
+    // jamais `seenIds`. `markAsRead(messageIds:)` seul ne peut donc jamais y
+    // faire avancer le curseur serveur : un piège permanent, vérifié en base de
+    // production (compteur figé à 125 sur une conversation lue aujourd'hui).
+    // `markCaughtUpFromSummaryOrRiver()` répond à la preuve de consultation
+    // PROPRE à ces modes (Résumé affiché jusqu'au bout, Rivière au présent) —
+    // sans jamais passer par `seen.contains(newest)`, qui n'a pas de sens ici.
+
+    /// La fenêtre chargée est au sommet : le rattrapage envoie directement le
+    /// curseur au dernier message CONNU DU SERVEUR et vide le badge en local
+    /// sans attendre l'aller-retour réseau — même effet immédiat que
+    /// `markAsRead` quand le lot vu contient le plus récent.
+    func test_markCaughtUpFromSummaryOrRiver_atTheTipOfTheWindow_clearsBadgeImmediately() {
+        let sut = makeSUT()
+        sut.messages = [
+            makeMessage(id: Self.idOldest, content: "A"),
+            makeMessage(id: Self.idNewest, content: "B")
+        ]
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+
+        sut.markCaughtUpFromSummaryOrRiver()
+
+        wait(for: [cleared], timeout: 1.0)
+    }
+
+    /// Même garde qu'en mode Bulles (`caughtUpMessageId`) : après un saut vers
+    /// un message cité, le bas de l'écran chargé n'est pas le bas de la
+    /// conversation — déclarer un rattrapage ici viderait un badge encore dû.
+    func test_markCaughtUpFromSummaryOrRiver_windowNotAtTip_doesNotClearBadge() {
+        let sut = makeSUT()
+        sut.messages = [makeMessage(id: Self.idNewest, content: "B")]
+        sut.hasNewerMessages = true
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+        cleared.isInverted = true
+
+        sut.markCaughtUpFromSummaryOrRiver()
+
+        wait(for: [cleared], timeout: 0.5)
+    }
+
+    /// Aucun message CONNU DU SERVEUR dans la fenêtre (fil vide, ou uniquement
+    /// des bulles optimistes sans ObjectId) : rien à rattraper, aucun effet.
+    func test_markCaughtUpFromSummaryOrRiver_noServerMessageInWindow_doesNothing() {
+        let sut = makeSUT()
+        sut.messages = []
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+        cleared.isInverted = true
+
+        sut.markCaughtUpFromSummaryOrRiver()
+
+        wait(for: [cleared], timeout: 0.5)
+    }
+
     // MARK: - messageIndex Tests
 
     func test_messageIndex_returnsCorrectIndex() {

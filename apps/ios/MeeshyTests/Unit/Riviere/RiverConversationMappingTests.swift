@@ -113,6 +113,31 @@ final class RiverConversationMappingTests: XCTestCase {
         XCTAssertEqual(RiverConversationMapping.initialCursor(geometry: empty), RiverLaneResolver.RiverCursor(laneIndex: 0, rank: 0))
     }
 
+    /// #3901 — la preuve de consultation qui autorise le rattrapage du badge
+    /// en Rivière : le curseur porte le rang de la bulle la plus RÉCENTE,
+    /// exactement le calcul que `initialCursor` fait à l'ouverture.
+    func test_isAtPresent_isTrueOnlyWhenCursorRankIsTheMostRecentBubble() {
+        let messages = [message("m1", sender: "alice", minutes: 0), message("m2", sender: "bob", minutes: 1), message("m3", sender: "alice", minutes: 2)]
+        let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me"))
+        let present = RiverConversationMapping.initialCursor(geometry: geometry)
+
+        XCTAssertTrue(RiverConversationMapping.isAtPresent(cursor: present, geometry: geometry))
+
+        let past = RiverLaneResolver.RiverCursor(laneIndex: present.laneIndex, rank: 0)
+        XCTAssertFalse(
+            RiverConversationMapping.isAtPresent(cursor: past, geometry: geometry),
+            "remonté dans l'histoire, le lecteur n'a pas rejoint le présent"
+        )
+    }
+
+    /// Un fil sans bulle n'a rien à rattraper — jamais « au présent » par défaut.
+    func test_isAtPresent_isFalse_whenGeometryHasNoBubbles() {
+        let empty = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: [], viewerId: "me"))
+        XCTAssertFalse(
+            RiverConversationMapping.isAtPresent(cursor: RiverLaneResolver.RiverCursor(laneIndex: 0, rank: 0), geometry: empty)
+        )
+    }
+
     /// **Lot 2 — recalibrage EN CONSCIENCE.** Tant que les avis étaient
     /// écartés de la loi, les ignorer dans l'empreinte était juste. Maintenant
     /// qu'ils occupent un rang, une arrivée qui ne changerait pas l'empreinte
