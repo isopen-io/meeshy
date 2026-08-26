@@ -13,14 +13,21 @@ import {
   type GroupableMessage,
 } from '../../utils/message-grouping';
 
-const parole = (senderId: string): GroupableMessage => ({
+// Horodatages en heure LOCALE (sans `Z`) : le jour calendaire est alors
+// indépendant du fuseau du runner, convention des tests `isNewCalendarDay`.
+const JOUR_1 = '2026-08-25T14:00:00';
+const JOUR_2 = '2026-08-26T09:00:00';
+
+const parole = (senderId: string, createdAt: string = JOUR_1): GroupableMessage => ({
   sender: { id: senderId },
   messageSource: 'user',
+  createdAt,
 });
 
-const avisSysteme = (senderId: string): GroupableMessage => ({
+const avisSysteme = (senderId: string, createdAt: string = JOUR_1): GroupableMessage => ({
   sender: { id: senderId },
   messageSource: 'system',
+  createdAt,
 });
 
 describe('message-grouping', () => {
@@ -44,6 +51,14 @@ describe('message-grouping', () => {
     it('ouvre un groupe pour un message système lui-même', () => {
       expect(isFirstInGroup(parole('a'), avisSysteme('a'))).toBe(true);
     });
+
+    it('regroupe deux paroles du même auteur le MÊME jour', () => {
+      expect(isFirstInGroup(parole('a', JOUR_1), parole('a', JOUR_1))).toBe(false);
+    });
+
+    it("ouvre un groupe quand le même auteur franchit minuit — la bulle sous la capsule de date porte son identité", () => {
+      expect(isFirstInGroup(parole('a', JOUR_1), parole('a', JOUR_2))).toBe(true);
+    });
   });
 
   describe('isLastInGroup', () => {
@@ -66,11 +81,15 @@ describe('message-grouping', () => {
     it('ferme un groupe pour un message système lui-même', () => {
       expect(isLastInGroup(parole('a'), avisSysteme('a'))).toBe(true);
     });
+
+    it('ferme un groupe quand le même auteur reprend le lendemain', () => {
+      expect(isLastInGroup(parole('a', JOUR_2), parole('a', JOUR_1))).toBe(true);
+    });
   });
 
   describe("auteur sans identifiant — deux inconnus ne sont pas la même personne", () => {
     it('ouvre un groupe quand les deux expéditeurs sont absents', () => {
-      const sansAuteur: GroupableMessage = { messageSource: 'user' };
+      const sansAuteur: GroupableMessage = { messageSource: 'user', createdAt: JOUR_1 };
       expect(isFirstInGroup(sansAuteur, sansAuteur)).toBe(true);
     });
   });
