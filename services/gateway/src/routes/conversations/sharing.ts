@@ -25,6 +25,7 @@ import {
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { viewerFromRequest } from '../users/presence-gate';
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
 /**
@@ -766,7 +767,8 @@ export function registerSharingRoutes(
           username: true,
           displayName: true,
           firstName: true,
-          lastName: true
+          lastName: true,
+          deactivatedAt: true
         }
       });
 
@@ -933,14 +935,19 @@ export function registerSharingRoutes(
         }
       }
 
-      // Régime `resolvePrefsOnly` : l'inviteur et l'invité partagent désormais
-      // une conversation — le contexte d'accès est acquis des deux côtés, seules
-      // les préférences de l'invité décident.
-      const invitePresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly([userId]);
+      // Régime STRICT (2026-08-25) : partager une conversation n'ouvre plus
+      // rien — la réponse à l'inviteur montre la présence de l'invité selon
+      // SA propre autorisation (soi/ADMIN+/ami), jamais sur la seule
+      // co-participation qu'il vient de créer.
+      const inviteViewer = viewerFromRequest(request);
+      const invitePresenceVis = await getPresenceVisibilityService(prisma).resolveForTarget(
+        inviteViewer,
+        { id: userId, deactivatedAt: userToInvite.deactivatedAt ?? null }
+      );
 
       return sendSuccess(reply, {
         participant: serializeConversationParticipant(newMember, {
-          presence: invitePresenceVis.get(userId)
+          presence: invitePresenceVis
         }),
         message: `${userToInvite.displayName || userToInvite.username} a été invité à la conversation`
       });

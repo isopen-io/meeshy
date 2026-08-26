@@ -12,6 +12,7 @@ import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shar
 import { UserRole as PrismaUserRole } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest, authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
+import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -271,6 +272,18 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
       });
 
       try { await getCacheStore().del(authUserCacheKey(id)); } catch { /* best-effort */ }
+
+      // Un compte desactive est masque pour TOUS : ses sockets tombent, apres
+      // l'ecriture. Best-effort par construction (`disconnectRevokedSessions`
+      // ne leve jamais) — la ligne est deja posee.
+      if (!body.isActive) {
+        await disconnectRevokedSessions({
+          io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+          userId: id,
+          reason: 'admin_revoke',
+          onError: (err) => fastify.log.warn({ err, userId: id }, '[ADMIN] socket fanout failed on user deactivation'),
+        });
+      }
 
       return sendSuccess(reply, updatedUser, { message: body.isActive ? 'Utilisateur active' : 'Utilisateur desactive' });
 

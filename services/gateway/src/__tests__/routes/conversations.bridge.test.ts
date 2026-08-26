@@ -37,7 +37,7 @@ jest.mock('../../utils/logger-enhanced', () => ({
 // présence. Mocké comme le fait déjà `conversation-core.test.ts`.
 jest.mock('../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: async () => new Map(),
+    resolveForTargets: async () => new Map(),
   }),
 }));
 

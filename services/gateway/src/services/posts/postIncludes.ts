@@ -62,9 +62,14 @@ export const authorSelect = Prisma.validator<Prisma.UserSelect>()({
  * brute pendant des mois (cycle 83).
  *
  * Le filtrage vit chez le SERVEUR de la donnée, pas chez sa forme :
- * `PostFeedService.resolveStoryAuthorPresence` tranche par auteur — strict pour
- * qui n'est vu qu'en PUBLIC, préférences seules dès qu'une story de la page
- * prouve un lien posé des deux côtés.
+ * `PostFeedService.resolveStoryAuthorPresence` passe CHAQUE auteur par
+ * `resolveForTargets(viewer, ids)` — critère STRICT, sans exception par
+ * audience (directive du 2026-08-25) : la présence d'un auteur n'est servie
+ * qu'à lui-même, à ADMIN/BIGBOSS, ou à un ami ACCEPTÉ selon ses préférences.
+ * Qu'une story soit adressée `FRIENDS` / `ONLY` / `COMMUNITY` prouve un LIEN
+ * (l'auteur a choisi son audience), pas une AMITIÉ — et un lien ne vaut rien
+ * pour la présence. Le régime « à deux vitesses » par ligne (strict en PUBLIC,
+ * préférences seules dès qu'une ligne prouvait un lien) est SUPPRIMÉ.
  *
  * Derived by spread so any future `authorSelect` field flows through.
  */

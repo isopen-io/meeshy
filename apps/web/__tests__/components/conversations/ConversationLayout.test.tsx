@@ -25,6 +25,7 @@ import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { useConversationsPaginationRQ } from '@/hooks/queries/use-conversations-pagination-rq';
 import { useSocketCacheSync } from '@/hooks/queries';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { useUserStore } from '@/stores/user-store';
 
 // Mock next/dynamic to return components directly without lazy loading
 // This avoids async loading issues during testing
@@ -793,4 +794,59 @@ describe('ConversationLayout', () => {
       expect(setLocalSelectedConversationId).toHaveBeenCalledWith('conv-1');
     });
   });
+  describe('Re-semis de la présence depuis la liste de conversations (cache React Query)', () => {
+    // La liste vient d'un cache (staleTime: Infinity, persisté en IndexedDB) et
+    // a pu être chargée QUAND la présence était encore visible. Elle alimente
+    // l'identité des participants, jamais une présence que le store tient déjà
+    // — sinon un masque servi par la passerelle serait ranimé jusqu'au refetch.
+    const userStoreState = {
+      mergeParticipants: jest.fn(),
+      setParticipants: jest.fn(),
+      getUserById: jest.fn(),
+      _lastStatusUpdate: 0,
+    };
+
+    beforeEach(() => {
+      (useUserStore as unknown as jest.Mock).mockImplementation(
+        (selector: (state: typeof userStoreState) => unknown) => selector(userStoreState)
+      );
+    });
+
+    afterEach(() => {
+      (useUserStore as unknown as jest.Mock).mockImplementation(() => ({
+        setParticipants: jest.fn(),
+        getUserById: jest.fn(),
+        _lastStatusUpdate: 0,
+      }));
+    });
+
+    it('sème les participants SANS autorité sur la présence (presence: keep-existing)', () => {
+      (useConversationsPaginationRQ as jest.Mock).mockReturnValue({
+        conversations: [{
+          ...mockConversation,
+          participants: [
+            {
+              userId: 'friend-1',
+              user: { id: 'friend-1', displayName: 'Ami', isOnline: true, lastActiveAt: new Date().toISOString() },
+            },
+          ],
+        }],
+        isLoading: false,
+        isLoadingMore: false,
+        hasMore: false,
+        loadMore: jest.fn(),
+        refresh: jest.fn(),
+        setConversations: jest.fn(),
+      });
+
+      render(<ConversationLayout />);
+
+      expect(userStoreState.mergeParticipants).toHaveBeenCalledTimes(1);
+      expect(userStoreState.mergeParticipants).toHaveBeenCalledWith(
+        [expect.objectContaining({ id: 'friend-1', isOnline: true })],
+        { presence: 'keep-existing' }
+      );
+    });
+  });
+
 });

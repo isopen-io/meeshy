@@ -28,6 +28,8 @@ import {
   type CallHistoryPeer,
   type CallHistoryRow
 } from './callHistory';
+import { getPresenceVisibilityService, type PresenceViewer } from './PresenceVisibilityService';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 
 /** Call journal sliding window: 3 months. */
 const CALL_HISTORY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
@@ -2309,12 +2311,20 @@ export class CallService {
    * call participants — so a missed outgoing call (callee never joined) still
    * shows who was dialed. Group calls carry no peer (the conversation
    * name/avatar identifies them).
+   *
+   * Peer presence (`CallHistoryPeer.isOnline`) is gated STRICT (directive
+   * produit 2026-08-25) — `options.viewer` (the caller themselves, from
+   * `viewerFromRequest`) must be the peer, an ADMIN/BIGBOSS, or their accepted
+   * friend, else `isOnline` reads `false`. Being the conversation's other
+   * member is what makes them a *peer* in this journal, never what makes them
+   * *visible* — the two used to be conflated by loading `isOnline` raw off the
+   * `Participant.user` roster query.
    */
   async listHistory(
     userId: string,
-    options: { limit: number; cursor?: string; filter: 'all' | 'missed' }
+    options: { limit: number; cursor?: string; filter: 'all' | 'missed'; viewer: PresenceViewer }
   ): Promise<{ items: CallHistoryItem[]; hasMore: boolean; nextCursor?: string }> {
-    const { limit, cursor, filter } = options;
+    const { limit, cursor, filter, viewer } = options;
     const windowStart = new Date(Date.now() - CALL_HISTORY_WINDOW_MS);
 
     const where: Prisma.CallSessionWhereInput = {
@@ -2401,6 +2411,20 @@ export class CallService {
             isOnline: m.user.isOnline
           });
         }
+      }
+    }
+
+    // Gate peer presence STRICT — one batched resolution for the whole page,
+    // keyed the same way `resolveForTargets` is everywhere else. `isOnline` is
+    // NON-nullable on the wire (`CallHistoryPeer`, mirrored by the SDK's
+    // `APICallRecord.peer.isOnline: Bool`), so `applyPresenceVisibilityAsOffline`
+    // — not `applyPresenceVisibility` — keeps the key and folds "hidden" to
+    // `false` rather than `null`.
+    if (peerByConv.size > 0) {
+      const peerUserIds = Array.from(new Set(Array.from(peerByConv.values(), (p) => p.userId)));
+      const visibility = await getPresenceVisibilityService(this.prisma).resolveForTargets(viewer, peerUserIds);
+      for (const [conversationId, peer] of peerByConv) {
+        peerByConv.set(conversationId, applyPresenceVisibilityAsOffline(peer, visibility.get(peer.userId)));
       }
     }
 

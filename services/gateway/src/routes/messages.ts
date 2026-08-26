@@ -14,7 +14,11 @@ import { buildMessageEditedCore } from '../socketio/messageEditedPayload';
 import type { Message } from '@meeshy/shared/types/index';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
 import { getPresenceVisibilityService } from '../services/PresenceVisibilityService';
-import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import {
+  applyPresenceVisibilityAsOffline,
+  type PresenceVisibility,
+} from '@meeshy/shared/utils/presence-visibility';
+import { presenceFor, viewerFromRequest } from './users/presence-gate';
 import { ConversationBridgeService } from '../services/ConversationBridgeService.js';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
@@ -90,9 +94,10 @@ interface MessageStatusBody {
  * `isOnline` (fail-closed : le `select` ne le charge pas). Ici c'est l'inverse
  * — pas de `role`/`language`, mais `isOnline` sur les DEUX porteurs, chargé
  * DÉLIBÉRÉMENT et gaté à la source par `applyPresenceVisibilityAsOffline`
- * (régime prefs-only : l'appelant est un participant actif, vérifié par le 403
- * du handler). Le déclarer est donc juste, et la garde reste où elle doit être :
- * dans le handler, pas dans le sérialiseur.
+ * (critère STRICT — `resolveForTargets` : soi-même, ADMIN/BIGBOSS, ou ami
+ * accepté de l'expéditeur, jamais la seule co-présence dans la conversation ;
+ * directive produit du 2026-08-25). Le déclarer est donc juste, et la garde
+ * reste où elle doit être : dans le handler, pas dans le sérialiseur.
  */
 const messageDetailSenderSchema = {
   type: 'object',
@@ -357,43 +362,48 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         logger.warn('[MESSAGES] Failed to compute read status summary', err as Error);
       }
 
-      // Présence de l'expéditeur : montrable — l'appelant est un participant
-      // ACTIF de la conversation, vérifié vingt lignes plus haut (403 sinon),
-      // donc contexte d'accès garanti des deux côtés — mais soumise aux
-      // préférences `showOnlineStatus` / `showLastSeen` de l'auteur.
+      // Présence de l'expéditeur : gate STRICT (directive produit 2026-08-25).
+      // Être co-participant ACTIF de cette conversation (le 403 vingt lignes
+      // plus haut) donne accès au MESSAGE, jamais à la présence de son auteur —
+      // une conversation n'est pas une relation. `isOnline`/`lastActiveAt` ne
+      // se montrent donc qu'à soi-même, à un ADMIN/BIGBOSS, ou à un ami accepté
+      // de l'expéditeur (sous ses préférences `showOnlineStatus`/`showLastSeen`).
+      // Tout autre lecteur reçoit `isOnline: false` sur les DEUX porteurs — la
+      // ligne `Participant` (`sender.isOnline`) ET le `User` imbriqué
+      // (`sender.user.isOnline`), qui voyagent tous deux depuis le `select`.
       //
       // Ce site N'EST PAS une non-fuite accidentelle, contrairement à ce que
       // le balayage `{ type: 'object' }` laissait croire : le schéma de cette
       // route décrit le message quand `sendSuccess` répond `{ success, data }`,
       // si bien que ses déclarations ne s'appliquent à rien et que `data`
       // traverse entier (voir la note sur `sender` dans le schéma). `isOnline`
-      // brut — sur la ligne `Participant` ET sur le `user` imbriqué —
-      // atteignait donc réellement le fil. C'était une fuite, pas un piège
-      // armé, et ce gate est ce qui la ferme.
+      // brut atteignait donc réellement le fil sans ce gate.
       //
-      // `onMissingEntry: 'reveal'` : sous `resolvePrefsOnly`, une entrée
-      // absente est NORMALE — un expéditeur anonyme n'a pas de `userId`, donc
-      // pas de préférences, et reste visible. C'est le défaut inverse du
-      // critère strict.
+      // Un expéditeur ANONYME (`userId` absent) n'a pas de ligne `User` à
+      // résoudre via `resolveForTargets` (elle est indexée par `User.id`) —
+      // rien n'est demandé au résolveur, et sa carte reste vide. Le sort d'une
+      // entrée ABSENTE (anonyme, ou inscrit non résolu) n'est pas réécrit ici :
+      // `presenceFor` (`presence-gate`) applique la loi partagée — révélé à
+      // ADMIN/BIGBOSS, à qui la directive garantit la présence de façon
+      // inconditionnelle, masqué sinon — et ne rend jamais `undefined`.
+      const viewer = viewerFromRequest(request);
       const senderUserId = (message as { sender?: { userId?: string | null } }).sender?.userId;
-      const senderVisibility = senderUserId
-        ? (await getPresenceVisibilityService(prisma).resolvePrefsOnly([senderUserId])).get(senderUserId)
-        : undefined;
+      const senderVisibilityById = senderUserId
+        ? await getPresenceVisibilityService(prisma).resolveForTargets(viewer, [senderUserId])
+        : new Map<string, PresenceVisibility>();
+      const senderVisibility = presenceFor(viewer, senderVisibilityById, senderUserId);
       const gatedSender = (message as { sender?: Record<string, unknown> | null }).sender
         ? (() => {
             const raw = (message as unknown as { sender: Record<string, unknown> }).sender;
             const gated = applyPresenceVisibilityAsOffline(
               raw as unknown as { isOnline: boolean | null },
               senderVisibility,
-              { onMissingEntry: 'reveal' },
             ) as Record<string, unknown>;
             const nested = raw.user as { isOnline: boolean | null } | null | undefined;
             return nested
               ? {
                   ...gated,
-                  user: applyPresenceVisibilityAsOffline(nested, senderVisibility, {
-                    onMissingEntry: 'reveal',
-                  }),
+                  user: applyPresenceVisibilityAsOffline(nested, senderVisibility),
                 }
               : gated;
           })()

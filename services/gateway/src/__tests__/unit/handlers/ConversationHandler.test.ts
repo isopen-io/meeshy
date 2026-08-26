@@ -117,12 +117,19 @@ function makeDeps(overrides: Partial<{
   connectedUsers: Map<string, unknown>;
   socketToUser: Map<string, string>;
   readStatusService: ReturnType<typeof makeReadStatusService>;
+  presenceViewer: ConversationHandlerDependencies['presenceViewer'];
+  presenceVisibility: ConversationHandlerDependencies['presenceVisibility'];
 }> = {}): ConversationHandlerDependencies {
   return {
     prisma: (overrides.prisma ?? makePrisma()) as any,
     connectedUsers: (overrides.connectedUsers ?? makeConnectedUsers()) as any,
     socketToUser: overrides.socketToUser ?? makeSocketToUser(),
     readStatusService: (overrides.readStatusService ?? makeReadStatusService()) as any,
+    // La loi de visibilité, FERMÉE par défaut : sans relation déclarée, la
+    // liste `onlineUsers` ne nomme personne. Les témoins de projection vivent
+    // dans la suite jumelle (`socketio/handlers/__tests__/ConversationHandler.test.ts`).
+    presenceViewer: overrides.presenceViewer ?? jest.fn().mockResolvedValue({ userId: USER_ID, role: 'USER' }),
+    presenceVisibility: overrides.presenceVisibility ?? { resolveForTargets: jest.fn().mockResolvedValue(new Map()) },
   };
 }
 
@@ -293,7 +300,7 @@ describe('ConversationHandler', () => {
     });
 
     it('emits conversation:stats when stats service returns data', async () => {
-      const stats = { memberCount: 5, onlineCount: 2 };
+      const stats = { memberCount: 5, onlineCount: 2, onlineUsers: [] };
       mockedStats.mockResolvedValue(stats);
       const deps = makeDeps();
       const handler = new ConversationHandler(deps);
@@ -539,7 +546,7 @@ describe('ConversationHandler', () => {
 
   describe('sendConversationStatsToSocket', () => {
     it('emits conversation:stats when stats are available', async () => {
-      const stats = { memberCount: 10 };
+      const stats = { memberCount: 10, onlineUsers: [] };
       mockedStats.mockResolvedValue(stats);
       const deps = makeDeps();
       const handler = new ConversationHandler(deps);

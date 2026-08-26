@@ -78,21 +78,34 @@ const REVEALED: PresenceVisibility = { showOnline: true, showLastSeenTimestamp: 
 
 /**
  * Que faire d'une carte de visibilité qui ne porte AUCUNE entrée pour l'id
- * qu'on lui présente ? Les deux régimes de résolution répondent l'inverse, et
- * les deux ont raison :
+ * qu'on lui présente ? Le résolveur (`resolveForTargets`) rend une entrée par
+ * id qu'on lui passe ; une entrée absente désigne donc une cible SANS COMPTE
+ * (participant anonyme, sans `userId` ni préférences) — ou une anomalie.
  *
- * - `'hide'` — régime STRICT (`resolveForTargets`). Le résolveur rend une entrée
- *   par id qu'on lui passe ; une entrée absente est donc une anomalie, et une
- *   porte de confidentialité refuse par défaut.
- * - `'reveal'` — régime PREFS-ONLY (`resolvePrefsOnly`). Une entrée absente est
- *   la situation NORMALE : un participant anonyme n'a pas de `userId`, donc pas
- *   de préférences, et doit rester visible. Seule une préférence explicitement
- *   négative masque.
+ * - `'hide'` — le défaut, et le seul régime pour un viewer ordinaire : une
+ *   porte de confidentialité refuse ce qu'elle ne sait pas (directive du
+ *   2026-08-25 : hors amitié, soi ou ADMIN+, aucune présence).
+ * - `'reveal'` — réservé à l'appelant qui a ÉTABLI que le viewer est
+ *   privilégié (ADMIN/BIGBOSS) : la cible sans compte, que la loi ne peut pas
+ *   résoudre faute de `userId`, lui est révélée comme le serait un inscrit.
  *
- * Confondre les deux ne casse rien de visible : cela masque des anonymes, ou
- * révèle des inconnus. C'est précisément pourquoi le choix est ici EXPLICITE.
+ * La résolution aveugle au viewer (« préférences seules »), qui révélait toute
+ * entrée absente, a été SUPPRIMÉE du gateway — une garde de source
+ * (`presence-visibility-viewer-aware-guard.test.ts`) rougit si son identifiant
+ * réapparaît, ce fichier compris. Ce choix reste EXPLICITE parce qu'un
+ * `undefined` laissé passer révèle un inconnu.
  */
 export type PresenceMissingEntryPolicy = 'hide' | 'reveal';
+
+/**
+ * Forme SERVIE par {@link applyPresenceVisibilityAsOffline} : `isOnline` sans
+ * `null`, `lastActiveAt` — si et seulement si le profil le porte, optionnalité
+ * conservée — élargi à `Date | null`, tout le reste tel quel. Mappé sur
+ * `keyof T` pour que la clé ne soit ni fabriquée ni promise à tort.
+ */
+export type PresenceAsOffline<T extends { isOnline: boolean | null; lastActiveAt?: Date | null }> = {
+  [K in keyof T]: K extends 'isOnline' ? boolean : K extends 'lastActiveAt' ? Date | null : T[K];
+};
 
 /**
  * Même application que {@link applyPresenceVisibility}, pour les surfaces dont le
@@ -106,14 +119,29 @@ export type PresenceMissingEntryPolicy = 'hide' | 'reveal';
  * `lastActiveAt` est OPTIONNEL : certaines portes ne chargent que `isOnline`
  * (aperçu de membres d'une communauté). Le gate ne fabrique alors pas la clé —
  * une réponse ne gagne pas un champ parce qu'on l'a filtrée.
+ *
+ * Le type de retour dit ce que le code FAIT ({@link PresenceAsOffline}) : quand
+ * le profil porte `lastActiveAt`, la clé sort en `Date | null` — masquée, elle
+ * vaut `null`, même si le type d'entrée l'excluait (`PublicUser`). Un retour
+ * qui recopiait `T['lastActiveAt']` promettait une `Date` que le masquage ne
+ * tenait pas. Le contrat est porté par une SURCHARGE : `tsc` ne sait pas
+ * relier un objet étalé à un type mappé sur `keyof T` générique, et la
+ * signature d'implémentation garde la forme structurelle qu'il vérifie.
  */
-export const applyPresenceVisibilityAsOffline = <
+export function applyPresenceVisibilityAsOffline<
   T extends { isOnline: boolean | null; lastActiveAt?: Date | null },
 >(
   profile: T,
   visibility: PresenceVisibility | undefined,
   options?: { readonly onMissingEntry?: PresenceMissingEntryPolicy },
-): Omit<T, 'isOnline'> & { isOnline: boolean } => {
+): PresenceAsOffline<T>;
+export function applyPresenceVisibilityAsOffline<
+  T extends { isOnline: boolean | null; lastActiveAt?: Date | null },
+>(
+  profile: T,
+  visibility: PresenceVisibility | undefined,
+  options?: { readonly onMissingEntry?: PresenceMissingEntryPolicy },
+): Omit<T, 'isOnline' | 'lastActiveAt'> & { isOnline: boolean; lastActiveAt?: Date | null } {
   const effective =
     visibility ?? (options?.onMissingEntry === 'reveal' ? REVEALED : HIDDEN);
 
@@ -124,4 +152,4 @@ export const applyPresenceVisibilityAsOffline = <
       ? { lastActiveAt: effective.showLastSeenTimestamp ? profile.lastActiveAt ?? null : null }
       : {}),
   };
-};
+}

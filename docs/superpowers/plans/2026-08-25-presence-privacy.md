@@ -29,16 +29,19 @@
 - Gateway : la loi `resolvePresenceVisibility` existe (soi / `isGlobalModerator` / ami / `sharesConversation`) ; les listes de conversation, messages, communautés (co-membre), stories (auteur lié) et le snapshot/statut socket contournent l'amitié (`resolvePrefsOnly`, audience = rooms) ; 4 trous sans aucune gate ; routes admin servies à MODERATOR/AUDIT/ANALYST.
 
 ## Tâches
-### W1 — loi + service (séquentiel)
-- [ ] `packages/shared/utils/presence-visibility.ts` : privilégié = `isSelf || isGlobalAdmin(viewerRole)` ; autorisé = privilégié || `areConnected` ; suppression de `sharesConversation` de l'entrée ; tests shared réécrits (MODERATOR/AUDIT/ANALYST ne voient pas ; co-participant ne voit pas).
-- [ ] `PresenceVisibilityService` : `isGlobalAdmin` ; suppression de `sharesConversation`/`allowConversationContext` ; `resolvePrefsOnly` marquée `@deprecated` (supprimée en W3) ; tests.
-- [ ] `GET /users/presence` : ids de participants ANONYMES gatés (cachés sauf ADMIN+) ; option conversation retirée ; tests.
-- [ ] `services/gateway/decisions.md` : décision « présence = amis / soi / ADMIN+ ».
-### W2 — sites de service (parallèle, fichiers disjoints)
-- [ ] W2a conversations : `core.ts` ×3, `participants.ts` (liste, rôle, **profil de participant** = trou #1, charge `PARTICIPANT_ROLE_UPDATED` sans présence), `search.ts`, `sharing.ts`, `messages.ts` ×3 → `resolveForTargets(viewerFromAuthContext)`.
-- [ ] W2b `routes/messages.ts` (`reveal` → viewer), historique d'appels (trou #3 : `CallService.listHistory` / `callHistory.ts`), liens publics (trou #4 : `anonymousParticipants.isOnline` redacted comme les membres).
-- [ ] W2c communautés : `members.ts` (co-membre → STRICT), `membership.ts`, `member-presence.ts` (`gateCoMemberPresence`), `community-member-presence.ts` (régime par ligne → STRICT), `search.ts`, `core.ts` (`/communities/:id/conversations` + trou #2 `POST …/conversations/:conversationId`).
-- [ ] W2d socket : `_broadcastUserStatus` → audience = rooms `user:<id>` des AMIS acceptés + ADMIN/BIGBOSS connectés + soi (plus de rooms de conversation ; anonyme : aucun broadcast hors ADMIN+) ; `_emitPresenceSnapshot` → `resolveForTargets(viewer)` (rôle du viewer relu) ; tests audience.
-- [ ] W2e stories (`resolveStoryAuthorPresence` : lien ≠ amitié ⇒ STRICT) + admin (`canViewPresence` = ADMIN/BIGBOSS dans `permissions.service`, `sanitizeUser`, `GET /admin/conversations/:id/participants`).
+### W1 — loi + service (séquentiel) — COMMITTÉ 6f320528ff
+- [x] `packages/shared/utils/presence-visibility.ts` : privilégié = `isSelf || isGlobalAdmin(viewerRole)` ; autorisé = privilégié || `areConnected` ; suppression de `sharesConversation` de l'entrée ; tests shared réécrits (MODERATOR/AUDIT/ANALYST ne voient pas ; co-participant ne voit pas).
+- [x] `PresenceVisibilityService` : `isGlobalAdmin` ; suppression de `sharesConversation`/`allowConversationContext` ; `resolvePrefsOnly` marquée `@deprecated` (supprimée en W3) ; tests.
+- [x] `GET /users/presence` : ids de participants ANONYMES gatés (cachés sauf ADMIN+) ; option conversation retirée ; tests.
+- [x] `services/gateway/decisions.md` : décision « présence = amis / soi / ADMIN+ ».
+### W2 — sites de service (parallèle, fichiers disjoints) — RENDUS 2026-08-25 soir
+- [x] W2a conversations : `core.ts` ×3, `participants.ts` (liste, rôle, **profil de participant** = trou #1, charge `PARTICIPANT_ROLE_UPDATED` sans présence), `search.ts`, `sharing.ts`, `messages.ts` ×3 → `resolveForTargets(viewerFromAuthContext)`.
+- [x] W2b `routes/messages.ts` (`reveal` → viewer), historique d'appels (trou #3 : `CallService.listHistory` / `callHistory.ts`), liens publics (trou #4 : `anonymousParticipants.isOnline` redacted comme les membres).
+- [x] W2c communautés : `members.ts` (co-membre → STRICT), `membership.ts`, `member-presence.ts` (`gateCoMemberPresence`), `community-member-presence.ts` (régime par ligne → STRICT), `search.ts`, `core.ts` (`/communities/:id/conversations` + trou #2 `POST …/conversations/:conversationId`).
+- [x] W2d socket : `_broadcastUserStatus` → audience = rooms `user:<id>` des AMIS acceptés + ADMIN/BIGBOSS connectés + soi (plus de rooms de conversation ; anonyme : aucun broadcast hors ADMIN+) ; `_emitPresenceSnapshot` → `resolveForTargets(viewer)` (rôle du viewer relu) ; tests audience.
+- [x] W2e stories (`resolveStoryAuthorPresence` : lien ≠ amitié ⇒ STRICT) + admin (`canViewPresence` = ADMIN/BIGBOSS dans `permissions.service`, `sanitizeUser`, `GET /admin/conversations/:id/participants`).
 ### W3 — clôture
+- [x] W2f (HORS plan, trouvé par la revue W2c) : `conversation:stats.onlineUsers` projeté par socket via `resolveForTargets(viewer)` ; cache inchangé.
+- [ ] W3a (HORS plan, trouvé par W2f) : `participants?onlineOnly=true` filtrait `isOnline` EN BASE avant la porte — fuite par SÉLECTION ; la sélection obéit à la loi (ids autorisés d abord, puis présence servie).
+- [ ] W3b : repli « entrée absente » (`presenceForMissingEntry` ×3, divergent) → un helper dans `presence-gate.ts`, sémantique masquée sauf ADMIN+.
 - [ ] suppression de `resolvePrefsOnly` + garde de source (0 appelant) ; `CLAUDE.md` § Présence (règle de visibilité) ; suites shared + gateway complètes ; revue opus ; commit ; PR.

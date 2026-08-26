@@ -412,30 +412,82 @@ ne sert ces deux champs bruts — le gate porte les préférences
 (`showOnlineStatus` / `showLastSeen`), la désactivation de compte, et le blocage
 bidirectionnel, qu'aucune route ne rejoue à la main.
 
-Deux régimes, et la question qui les départage : **le lecteur a-t-il un DROIT sur
-cette donnée, ou seulement un lien qu'il a posé tout seul ?**
+**UN régime, la directive du 2026-08-25** (`decisions.md`, « Visibilité de la
+présence ») : la présence d'un utilisateur n'est servie qu'à **lui-même**, à
+**ADMIN/BIGBOSS**, et à un **ami ACCEPTÉ** (`FriendRequest.status = accepted`) —
+et pour l'ami, selon les préférences de la cible (`showOnlineStatus` /
+`showLastSeen`). Tout le reste est MASQUÉ :
 
-| régime | méthode | pour |
-|---|---|---|
-| STRICT | `resolveForTargets` / `resolveForTarget` | découverte : recherche d'utilisateurs, répertoire, profil. Le lien est unilatéral et non vérifié — n'importe qui inscrit n'importe quel numéro dans son téléphone |
-| contexte acquis | `resolvePrefsOnly` | co-participants d'une conversation, co-membres d'une communauté : les DEUX parties ont posé le lien. Seules les préférences s'appliquent |
+- **MODERATOR est un lecteur ordinaire** — aucun bypass (`isGlobalAdmin`, plus
+  `isGlobalModerator`) ; AUDIT, ANALYST, USER, AGENT idem.
+- **« Affilié » (parrainage) ne compte pas**, ni un contact téléphone importé :
+  un lien posé d'un seul côté n'est pas une relation.
+- **Partager une conversation ou une communauté ne donne RIEN** — le « contexte
+  acquis » (co-participant, co-membre) n'existe plus comme critère.
+  `sharesConversation` est retiré du type d'entrée de la loi ; y revenir ne
+  compile pas.
+- **Anonyme / non authentifié** (viewer `null`) : masqué.
 
-Le viewer se lit par `viewerFromRequest(request)` (`routes/users/presence-gate.ts`) —
-jamais depuis `AuthenticatedRequest`, dont le champ `registeredUser` est typé
-`boolean` alors que la production y met un objet.
+Le seul signal qu'un non-ami reçoit encore est l'ACTIVITÉ — frappe
+(`typing:start`), message envoyé — qui voyage par ses propres événements
+Socket.IO, jamais par ce résolveur.
+
+**Une seule méthode, toujours avec le viewer** : `resolveForTarget(viewer, target)`
+/ `resolveForTargets(viewer, ids)`. La résolution AVEUGLE au viewer
+(« préférences seules », `resolvePrefsOnly`) est **SUPPRIMÉE, pas dépréciée** —
+une garde de source (`__tests__/unit/presence-visibility-viewer-aware-guard.test.ts`)
+rougit si l'identifiant réapparaît sous `services/gateway/src/`,
+`packages/shared/utils` ou `packages/shared/types`, défini, appelé ou seulement
+cité ; elle prouve d'abord qu'elle balaie bien ces trois racines (une garde
+négative dont le balayage rend `[]` reste verte). Le viewer se lit par
+`viewerFromRequest(request)` (`routes/users/presence-gate.ts`) — jamais depuis
+`AuthenticatedRequest`, dont le champ `registeredUser` est typé `boolean` alors
+que la production y met un objet.
 
 **Un paramètre `viewer` est REQUIS, jamais optionnel** : un appelant sans viewer
 passe `null`, ce qui MASQUE. Une porte de confidentialité échoue en montrant
-moins, jamais en montrant plus. Même règle sur la carte rendue par
-`resolveForTargets` : **un id ABSENT vaut masqué**, jamais brut.
+moins, jamais en montrant plus.
+
+**Une entrée ABSENTE de la carte vaut masquée, sauf pour ADMIN/BIGBOSS.**
+`resolveForTargets` rend une entrée par id passé ; une entrée absente désigne
+une cible SANS COMPTE (participant anonyme, pas de `userId`) — ou une anomalie.
+Son sort ne se décide pas au site : `presenceMissingEntryPolicy(viewer)` rend
+`'reveal'` pour ADMIN/BIGBOSS et `'hide'` pour tout autre lecteur — dérivé de la
+loi partagée (`resolvePresenceVisibility` appliquée à l'entrée qu'elle aurait
+reçue), pas redéclaré — et `presenceFor(viewer, carte, userId)` sert la
+visibilité d'un id sans jamais rendre `undefined`. L'idiome
+`vis.get(id)?.showOnline === false ? false : x` est INTERDIT : un `undefined`
+laissé passer révèle l'inconnu à tout le monde (`core.ts` le faisait pour un
+inscrit non résolu, avant `presenceFor`).
 
 Le collapse « visibilité résolue → champs servis » ne se réécrit pas à la main.
 Deux applicateurs partagés, et le schéma de la route choisit :
 `applyPresenceVisibility` (`isOnline: null`, pour un schéma nullable) et
 `applyPresenceVisibilityAsOffline` (`isOnline: false`, pour `userMinimalSchema`
 et `contacts-schemas`, qui le déclarent `type: 'boolean'`). Le second prend
-`{ onMissingEntry: 'hide' | 'reveal' }` — le défaut `'hide'` sert le régime
-strict, `'reveal'` le régime prefs-only (voir les défauts opposés plus bas).
+`{ onMissingEntry }`, à alimenter par `presenceMissingEntryPolicy(viewer)` — le
+défaut `'hide'` est le bon pour tout lecteur non-ADMIN. Son type de retour dit
+ce qu'il fait : `lastActiveAt` sort en `Date | null` dès que le profil le porte
+(`PresenceAsOffline<T>`), même si l'entrée l'excluait — `PublicUser` le déclare
+nullable pour cette raison.
+
+**Un participant sérialisé passe par `serializeConversationParticipant`
+(`packages/shared/utils/participant-helpers.ts`) avec
+`presence: presenceFor(viewer, carte, userId)`.** La fabrique FERME par défaut :
+sans visibilité fournie, elle sert `isOnline:false` / `lastActiveAt:null`, jamais
+la colonne. Un appelant qui oublie l'option masque ; il ne fuit pas.
+
+**Une SÉLECTION ou un ORDRE qui dépend de la présence révèle autant que le
+champ.** Filtrer `?onlineOnly=true` en base puis masquer `isOnline` livrait à un
+non-ami la liste exacte des membres en ligne — l'APPARTENANCE à la page était la
+fuite ; trier `isOnline: 'desc'` en base puis masquer laissait lire la présence
+dans la POSITION. La sélection ne porte que sur les ids dont le viewer a le
+DROIT de connaître l'état (`onlineOnlyScope`, `conversations/participants.ts` :
+tout pour ADMIN/BIGBOSS, soi ∪ amis acceptés sinon, vide pour un anonyme), et
+l'ordre par présence brute n'est demandé à la base que si
+`mayOrderByRawPresence(viewer)` — sinon la page se lit sans clé de présence,
+puis se stabilise APRÈS la porte sur ce qui est SERVI (`servedOnlineFirst`,
+`presence-gate.ts`).
 
 **Une amitié acceptée n'est PAS un laissez-passer.** `areConnected` ouvre la
 porte, il ne dispense pas de `showOnlineStatus` — la politique pure masque quand
@@ -458,26 +510,27 @@ assertaient tous les trois que le `select` DEMANDE les champs, aucun sur ce que
 le handler en FAIT, et le défaut vivait dans l'espace exact entre les deux
 (cycle 83). **Un témoin de confidentialité assert sur la VALEUR SERVIE.**
 
-**Le régime peut se trancher par LIGNE, pas seulement par route.** Sur une page
-de stories, `PUBLIC` ne prouve aucun lien (`buildPostVisibilityOrFilter` la sert
-sans condition d'audience) ⇒ strict ; `FRIENDS` / `EXCEPT` / `COMMUNITY` /
-`ONLY` en prouvent un ⇒ `resolvePrefsOnly`. Un régime unique s'y trompe dans les
-deux sens. Et un sujet qui prouve le lien par UNE ligne de la page le prouve
-pour toutes. Voir `PostFeedService.resolveStoryAuthorPresence`.
+**Un LIEN n'est pas une AMITIÉ.** Sur une page de stories, une ligne `FRIENDS` /
+`EXCEPT` / `COMMUNITY` / `ONLY` prouve que l'auteur a CHOISI son audience — un
+lien — et le régime « à deux vitesses » qui en déduisait « préférences seules »
+pour tout auteur ainsi prouvé a été SUPPRIMÉ avec la directive : la présence ne
+se déduit d'aucune audience. `PostFeedService.resolveStoryAuthorPresence` passe
+chaque auteur par `resolveForTargets(viewer, ids)`, sans exception par ligne.
 
 **Attention aux commentaires qui ÉNUMÈRENT une règle au lieu de la citer** : la
 note de `storyAuthorSelect` listait trois audiences gatées et omettait `PUBLIC`,
 la seule qui ne l'est pas. Fausse nulle part, incomplète là où l'incomplétude
 valait autorisation — c'est elle, pas le code, qui a tenu la porte ouverte.
 
-**Les deux régimes ont des défauts OPPOSÉS sur une carte incomplète, et les deux
-ont raison.** Strict (`resolveForTargets`) : un id non rendu vaut MASQUÉ — le
-résolveur rend une entrée par id, donc un manquant est une anomalie, et une
-porte de confidentialité refuse par défaut. Prefs-only (`resolvePrefsOnly`) : un
-id manquant est NORMAL — les participants anonymes n'ont pas de `userId`, donc
-pas de préférences, et restent visibles ; seule une préférence **explicitement**
-négative masque, d'où l'idiome `vis.get(id)?.showOnline === false ? false : x`
-(`participants.ts`, la référence). Ne jamais « simplifier » l'un vers l'autre.
+**Une carte incomplète a UN sort, et il se décide par le VIEWER, pas par le
+site.** Tant que deux régimes coexistaient, un id manquant valait masqué sous
+l'un et visible sous l'autre — et l'idiome
+`vis.get(id)?.showOnline === false ? false : x` (« seule une préférence
+explicitement négative masque ») était la référence du second. Il est désormais
+une FUITE : un participant anonyme n'a pas de `userId`, donc jamais d'entrée, et
+cet idiome le révélait à tout lecteur. La règle unique est celle du
+§ « entrée ABSENTE » plus haut — `presenceFor` / `presenceMissingEntryPolicy`,
+révélé à ADMIN/BIGBOSS seuls.
 
 **Un audit qui liste des `select:` ne liste pas des fuites.** Entre la requête et
 le fil il y a un sérialiseur : au cycle 84, deux des trois portes examinées ne
@@ -534,7 +587,11 @@ garde n'avait aucun endroit unique où être posée.
 est cette source unique. Elle ferme deux pièges par construction :
 
 1. **La présence ne peut sortir qu'à travers son paramètre de visibilité** — pas
-   de champ à recopier, donc pas de champ à oublier.
+   de champ à recopier, donc pas de champ à oublier. Et le paramètre FERME par
+   défaut (`showOnline === true` pour servir, sinon `false` / `null`) : la
+   fabrique avait d'abord été écrite « absente ⇒ révèle », ce que ses trois
+   appelants compensaient chacun chez eux par `presenceFor` — le quatrième
+   aurait fui.
 2. **`role` porte DEUX taxonomies.** `Participant.role` est le rang DANS LA
    CONVERSATION (`creator|admin|moderator|member`) ; le schéma déclare le rôle
    GLOBAL (`USER|ADMIN|…`). Le rang brut servait donc `member` là où le contrat
@@ -544,13 +601,13 @@ est cette source unique. Elle ferme deux pièges par construction :
 à la main est exactement ce qui a produit l'écart — une règle qui doit être
 retapée à chaque site est une règle qu'un site finira par ne pas avoir.
 
-**Une même route peut relever des DEUX régimes, décidés par son contrôle
-d'accès.** `GET /communities/:id/members` ne referme que les communautés
-PRIVÉES : sur une publique, elle répond à un non-membre, et devient une porte de
-découverte. Le régime s'y choisit donc par LECTEUR — `hasAccess` ⇒ prefs-only,
-sinon strict — avec le `onMissingEntry` correspondant. Lire le contrôle d'accès
-avant de choisir le régime : « c'est une route de communauté » ne suffit pas
-(cycle 85-bis).
+**Le contrôle d'accès borne qui ENTRE, jamais ce qu'on sert de la présence.**
+`GET /communities/:id/members` ne referme que les communautés PRIVÉES ; tant que
+deux régimes existaient, `hasAccess` y choisissait « préférences seules » pour
+un membre et strict pour un non-membre (cycle 85-bis). Depuis la directive, la
+co-appartenance ne vaut rien : la route passe TOUTES ses lignes par
+`resolveForTargets(viewer, ids)`, et `hasAccess` ne gouverne plus que la liste.
+Le seul régime est le strict ; la seule variable est le viewer.
 
 ## Un fichier `X.ts` à côté d'un répertoire `X/` : lequel est chargé ?
 
@@ -1321,16 +1378,19 @@ Conséquences, dans les deux sens :
   enveloppe qui passait entière TRONQUE ce qui marchait. Le faire avec la liste
   complète des champs servis, ou pas du tout.
 
-### Le régime se lit dans le `where`, pas dans le contrôle d'accès
+### Le `where` dit qui SORT — plus quel régime de présence s'applique
 
-Le contrôle d'accès borne qui ENTRE ; la requête borne ce qui SORT — et c'est la
-seconde qui décide du régime de présence. Sur
-`GET /communities/:id/conversations`, l'accès ne referme que les communautés
-PRIVÉES (ce qui appellerait le strict), mais le `where` porte
-`participants: { some: { userId } }` : la route ne rend que les conversations
-dont l'appelant est lui-même participant, donc tout profil servi est un
-CO-PARTICIPANT ⇒ `resolvePrefsOnly`, sans condition. Choisir sur le contrôle
-d'accès aurait retiré des pastilles légitimes (cycle 88).
+Le contrôle d'accès borne qui ENTRE ; la requête borne ce qui SORT. Au cycle 88,
+la seconde décidait encore du régime de présence : sur
+`GET /communities/:id/conversations`, le `where` porte
+`participants: { some: { userId } }`, donc tout profil servi est un
+CO-PARTICIPANT, et la route servait « préférences seules » sans condition. La
+directive du 2026-08-25 a retiré la co-participation des critères : la route
+passe aujourd'hui par le strict comme les autres (`resolveForTargets` avec le
+viewer, `communities/member-presence.ts`), et les pastilles que le cycle 88
+préservait ne sont légitimes que pour un ami accepté. La leçon de MÉTHODE
+survit — lire le `where` avant de raisonner sur ce qu'une route sert — le
+verdict de présence, non.
 
 ### Un schéma d'ERREUR se confronte à l'enveloppe, pas à l'intuition
 

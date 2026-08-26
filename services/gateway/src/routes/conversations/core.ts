@@ -30,6 +30,7 @@ import { loadConversationTombstones } from './utils/delta-tombstones';
 import { isBlockedBetween } from '../../utils/blocking';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import {
   generateConversationIdentifier,
   generateCompactConversationIdentifier,
@@ -737,11 +738,12 @@ export function registerCoreRoutes(
       // Map du SocketIOManager, exposée via le décorateur `presenceChecker`.
       const presenceChecker = fastify.presenceChecker;
 
-      // Présence des co-participants : montrable (co-participation = contexte
-      // d'accès déjà garanti), mais soumise aux préférences showOnlineStatus/
-      // showLastSeen de chacun — même règle que le broadcast user:status et le
-      // presence:snapshot. Anonymes inchangés.
-      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Présence des co-participants : régime STRICT (2026-08-25) — la
+      // co-participation n'ouvre plus rien, seul le viewer (soi/ADMIN+/ami)
+      // voit isOnline/lastActiveAt d'un co-participant qui ne l'est pas.
+      const presenceViewer = viewerFromRequest(request);
+      const presenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        presenceViewer,
         conversations.flatMap((conversation) => [
           ...conversation.participants.slice(0, 5).map((m: any) => m.userId),
           conversation.messages[0]?.sender?.userId,
@@ -936,9 +938,11 @@ export function registerCoreRoutes(
           .slice(0, 5)
           .map((m: any) => {
             const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
-            const vis = m.userId ? presenceVis.get(m.userId) : undefined;
-            const hideOnline = vis?.showOnline === false;
-            const hideLastSeen = vis?.showLastSeenTimestamp === false;
+            // Entrée absente (sans compte, ou inscrit non résolu) : UN site,
+            // `presenceFor` — masqué, sauf ADMIN+. Jamais `undefined` ici.
+            const vis = presenceFor(presenceViewer, presenceVis, m.userId);
+            const hideOnline = !vis.showOnline;
+            const hideLastSeen = !vis.showLastSeenTimestamp;
             return {
               ...m,
               // Bannière de profil top-level : le schéma participant (minimal) est
@@ -1030,7 +1034,7 @@ export function registerCoreRoutes(
             const senderLiveOnline = sender
               ? presenceChecker?.isOnline(sender.userId ?? sender.id)
               : undefined;
-            const senderVis = sender?.userId ? presenceVis.get(sender.userId) : undefined;
+            const senderVis = sender ? presenceFor(presenceViewer, presenceVis, sender.userId) : undefined;
             // Lot 3 : hisser metadata.location en `location` top-level. Un
             // message géolocalisé SANS légende a un `content` vide — hisser
             // la position ne fabrique aucun texte de repli ; c'est au client
@@ -1041,19 +1045,19 @@ export function registerCoreRoutes(
               ...msgRest,
               content: truncateMessagePreview(msg.content),
               ...(place ? { location: place } : {}),
-              sender: sender ? {
+              sender: sender && senderVis ? {
                 ...sender,
                 username: sender.user?.username ?? sender.username ?? null,
                 firstName: sender.user?.firstName ?? null,
                 lastName: sender.user?.lastName ?? null,
                 displayName: resolveParticipantDisplayName(sender),
                 avatar: resolveParticipantAvatar(sender),
-                isOnline: senderVis?.showOnline === false
-                  ? false
-                  : (senderLiveOnline ?? sender.user?.isOnline ?? sender.isOnline ?? null),
-                lastActiveAt: senderVis?.showLastSeenTimestamp === false
-                  ? null
-                  : (sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null),
+                isOnline: senderVis.showOnline
+                  ? (senderLiveOnline ?? sender.user?.isOnline ?? sender.isOnline ?? null)
+                  : false,
+                lastActiveAt: senderVis.showLastSeenTimestamp
+                  ? (sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null)
+                  : null,
               } : null
             };
           })(),
@@ -1249,20 +1253,21 @@ export function registerCoreRoutes(
       // (message.groupBy plein scan à froid, TTL 1h) pour un résultat jeté.
       // Les clients consomment les stats via l'event Socket.IO
       // `conversation:stats`, qui se recompute seul (updateOnNewMessage).
-      // Même politique de présence que la liste : override runtime + gate
-      // showOnlineStatus/showLastSeen (cf. GET /conversations).
-      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Même régime strict que la liste : self/ADMIN+/ami (cf. GET /conversations).
+      const detailPresenceViewer = viewerFromRequest(request);
+      const presenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        detailPresenceViewer,
         conversation.participants
           .map((m: any) => m.userId)
           .filter((uid: string | null): uid is string => !!uid)
       );
       const gatedParticipants = conversation.participants.map((m: any) => {
         const liveOnline = fastify.presenceChecker?.isOnline(m.userId ?? m.id);
-        const vis = m.userId ? presenceVis.get(m.userId) : undefined;
+        const vis = presenceFor(detailPresenceViewer, presenceVis, m.userId);
         return {
           ...m,
-          isOnline: vis?.showOnline === false ? false : (liveOnline === undefined ? m.isOnline : liveOnline),
-          lastActiveAt: vis?.showLastSeenTimestamp === false ? null : m.lastActiveAt
+          isOnline: vis.showOnline ? (liveOnline === undefined ? m.isOnline : liveOnline) : false,
+          lastActiveAt: vis.showLastSeenTimestamp ? m.lastActiveAt : null
         };
       });
 
@@ -1854,28 +1859,29 @@ export function registerCoreRoutes(
       // Gate de présence des co-participants. `conversationParticipantSchema`
       // DÉCLARE `isOnline`/`lastActiveAt`, et l'`include` ci-dessus ramène tous
       // les scalaires de `Participant` : ces deux champs atteignaient le fil
-      // BRUTS. Régime `resolvePrefsOnly` — la co-participation est un contexte
-      // d'accès garanti des DEUX côtés, seules les préférences s'appliquent, et
-      // un id ABSENT de la carte vaut MONTRABLE (un participant sans compte n'a
-      // pas de préférences et doit rester visible).
+      // BRUTS. Régime STRICT (2026-08-25) : self/ADMIN+/ami seuls voient la
+      // présence d'un co-participant ; un id ABSENT de la carte (participant
+      // sans compte) est masqué, sauf pour un viewer ADMIN+.
       //
       // Défini ici, appliqué aux DEUX sorties : la branche « rien à écrire »
       // rend les mêmes lignes que la branche nominale, donc la même donnée à
       // garder. Une porte posée sur une seule des deux n'est pas une porte.
+      const updatePresenceViewer = viewerFromRequest(request);
       const gatePresence = async <P extends { userId: string | null; isOnline: boolean | null; lastActiveAt: Date | null }>(
         participants: P[]
       ) => {
-        const vis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        const vis = await getPresenceVisibilityService(prisma).resolveForTargets(
+          updatePresenceViewer,
           participants
             .map((p) => p.userId)
             .filter((uid): uid is string => !!uid)
         );
         return participants.map((p) => {
-          const prefs = p.userId ? vis.get(p.userId) : undefined;
+          const prefs = presenceFor(updatePresenceViewer, vis, p.userId);
           return {
             ...p,
-            isOnline: prefs?.showOnline === false ? false : p.isOnline,
-            lastActiveAt: prefs?.showLastSeenTimestamp === false ? null : p.lastActiveAt,
+            isOnline: prefs.showOnline ? p.isOnline : false,
+            lastActiveAt: prefs.showLastSeenTimestamp ? p.lastActiveAt : null,
           };
         });
       };

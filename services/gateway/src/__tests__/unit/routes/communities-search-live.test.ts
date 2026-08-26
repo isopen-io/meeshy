@@ -18,6 +18,10 @@
  * ne tolère que la clé ABSENTE ou `null`, jamais un objet malformé : le `{}`
  * faisait échouer le décodage de TOUTE la réponse, pas seulement du champ.
  *
+ * Présence des membres de l'aperçu : critère STRICT sans condition (directive
+ * produit 2026-08-25) — être membre de la communauté qu'on parcourt, ou de
+ * n'importe quelle autre, ne vaut plus aucun accès à la présence d'un tiers.
+ *
  * @jest-environment node
  */
 
@@ -28,11 +32,9 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn() }) },
 }));
 
-const mockResolvePrefsOnly = jest.fn<any>();
 const mockResolveForTargets = jest.fn<any>();
 jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
     resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
   }),
 }));
@@ -74,14 +76,10 @@ const memberRow = (userId: string, isOnline: boolean) => ({
   user: { id: userId, username: userId, displayName: userId, avatar: null, isOnline },
 });
 
-type AppOpts = { readonly viewerMemberships?: ReadonlyArray<{ communityId: string }> };
-
 async function buildApp(
   members: ReadonlyArray<Record<string, unknown>>,
-  opts: AppOpts = {},
-): Promise<FastifyInstance & { memberFindMany: jest.Mock }> {
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  const memberFindMany = jest.fn<any>().mockResolvedValue(opts.viewerMemberships ?? []);
 
   app.decorate('authenticate', async (req: any) => {
     req.authContext = {
@@ -98,12 +96,11 @@ async function buildApp(
       findMany: jest.fn<any>().mockResolvedValue([communityRow(members)]),
       count: jest.fn<any>().mockResolvedValue(1),
     },
-    communityMember: { findMany: memberFindMany },
   } as any);
 
   await communityRoutes(app);
   await app.ready();
-  return Object.assign(app, { memberFindMany });
+  return app;
 }
 
 const search = async (app: FastifyInstance) => {
@@ -112,9 +109,7 @@ const search = async (app: FastifyInstance) => {
 };
 
 beforeEach(() => {
-  mockResolvePrefsOnly.mockReset();
   mockResolveForTargets.mockReset();
-  mockResolvePrefsOnly.mockResolvedValue(new Map());
   mockResolveForTargets.mockResolvedValue(new Map());
 });
 
@@ -189,18 +184,18 @@ describe('GET /communities/search — présence des membres de l’aperçu', () 
     expect(body.data[0].members[0].user.isOnline).toBe(false);
   });
 
-  // Le régime se tranche par LIGNE : une communauté dont le lecteur EST membre
-  // prouve un lien posé des DEUX côtés et relève du contexte acquis.
-  it('bascule sur les préférences seules pour une communauté dont le lecteur est membre', async () => {
-    mockResolvePrefsOnly.mockResolvedValue(new Map([[MEMBER_ID, VISIBLE]]));
-    const app = await buildApp([memberRow(MEMBER_ID, true)], {
-      viewerMemberships: [{ communityId: COMM_ID }],
-    });
+  // Avant la directive produit du 2026-08-25, une communauté dont le lecteur
+  // était LUI-MÊME membre bifurquait vers un régime préférences-seules — la
+  // co-appartenance valait alors un accès. Ce régime a disparu : ce témoin
+  // prouve qu'il ne revient pas, même quand le lecteur est membre de la
+  // communauté qu'il consulte.
+  it('reste sur le critère strict même quand le lecteur est membre de la communauté', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[MEMBER_ID, VISIBLE]]));
+    const app = await buildApp([memberRow(MEMBER_ID, true), memberRow(VIEWER_ID, true)]);
     const body = await search(app);
     await app.close();
 
-    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([MEMBER_ID]);
-    expect(mockResolveForTargets).not.toHaveBeenCalled();
+    expect(mockResolveForTargets).toHaveBeenCalledTimes(1);
     expect(body.data[0].members[0].user.isOnline).toBe(true);
   });
 });

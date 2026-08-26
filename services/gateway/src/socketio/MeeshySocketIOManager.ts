@@ -11,13 +11,14 @@ import { Server as SocketIOServer } from 'socket.io';
 // des six handlers qui dérivent déjà les leurs.
 import type { MeeshySocket as Socket } from './typed-socket';
 import { Server as HTTPServer } from 'http';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, UserRole } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
 import { isMessageTranslationTarget } from '../services/zmq-translation/utils/zmq-helpers';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
 import { filterMessagePayloadForLanguages, groupSocketsByLanguage } from './utils/message-payload-filter';
 import { applyResolvedLanguagesRefresh } from './utils/resolved-languages-refresh';
 import { MaintenanceService } from '../services/MaintenanceService';
+import { disconnectRevokedSessions } from './disconnectRevokedSessions';
 import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
@@ -47,10 +48,10 @@ import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 import { stripClientMessageId } from './utils/message-ack-shaping.js';
 import {
   emitToConversationParticipants,
-  participantUserRooms,
   participantUserRoomTargets,
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
+import { presenceStatusEmissions } from './presence-audience';
 import {
   PREVIEW_PRISM_PARTICIPANT_SELECT,
   resolveLastMessagePreviewPrism,
@@ -68,7 +69,10 @@ import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { setSharedNotificationService } from '../services/notifications/notification-service-registry';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
-import { getBlockedUserIdsAmong, getBlockRelatedUserIds } from '../utils/blocking';
+import { getBlockRelatedUserIds } from '../utils/blocking';
+import { PresenceVisibilityService, type PresenceViewer } from '../services/PresenceVisibilityService';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
 import { StoryTextObjectTranslationService } from '../services/posts/StoryTextObjectTranslationService';
@@ -116,6 +120,19 @@ const logger = enhancedLogger.child({ module: 'SocketIOManager' });
  * les conversations du lecteur, comme avant.
  */
 const BRIDGE_SNAPSHOT_LIMIT = 30;
+
+/**
+ * Les rôles que la directive du 2026-08-25 tient pour privilégiés sur la
+ * présence (« ADMIN et supérieur »), ÉNUMÉRÉS en croisant les rôles du SCHÉMA
+ * avec la loi partagée, au lieu d'être recopiés à la main.
+ *
+ * `['ADMIN', 'BIGBOSS']` écrit en dur serait juste aujourd'hui et faux le jour
+ * où `isGlobalAdmin` change d'avis — sans qu'aucun témoin ne rougisse, puisque
+ * les deux listes vivraient dans des fichiers différents. Ici la liste ne peut
+ * pas diverger : elle EST le filtre, appliqué aux valeurs que la colonne
+ * `User.role` peut réellement porter.
+ */
+const PRESENCE_PRIVILEGED_ROLES = Object.values(UserRole).filter(isGlobalAdmin);
 
 
 // What one queued entry actually puts on the wire. Every eventType replays as a
@@ -220,6 +237,7 @@ export class MeeshySocketIOManager {
   private socialEventsHandler: SocialEventsHandler;
   private locationHandler: LocationHandler;
   private privacyPreferencesService: PrivacyPreferencesService;
+  private presenceVisibilityService: PresenceVisibilityService;
   private agentClient: ZmqAgentClient | null = null;
   private mentionService: MentionService;
   private deliveryQueue: RedisDeliveryQueue | null = null;
@@ -255,6 +273,15 @@ export class MeeshySocketIOManager {
   private presenceSnapshotCache = new Map<string, { users: Array<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }>; cachedAt: number }>();
   private readonly PRESENCE_SNAPSHOT_CACHE_TTL_MS = 60_000;
 
+  // Les `User.id` des ADMIN/BIGBOSS — l'audience PRIVILÉGIÉE de chaque
+  // transition de présence (directive 2026-08-25). Mise en cache pour la même
+  // raison que l'instantané ci-dessus : `_broadcastUserStatus` s'exécute à
+  // CHAQUE connexion, chaque déconnexion, et pour chaque compte que le balayage
+  // de maintenance passe hors ligne d'un coup. La requête est bornée par le
+  // nombre d'administrateurs (une poignée), jamais par la population connectée.
+  private globalAdminIdsCache: { ids: string[]; cachedAt: number } | null = null;
+  private readonly GLOBAL_ADMIN_IDS_CACHE_TTL_MS = 60_000;
+
   // Statistiques
   private stats = {
     total_connections: 0,
@@ -282,6 +309,12 @@ export class MeeshySocketIOManager {
 
     // Initialiser PrivacyPreferencesService pour vérifier les préférences de confidentialité
     this.privacyPreferencesService = new PrivacyPreferencesService(prisma);
+
+    // La loi de visibilité de la présence (amitié acceptée / ADMIN+ / blocage /
+    // préférences) vit dans UN service, partagé avec les routes REST. Il reçoit
+    // l'instance de préférences du gestionnaire pour que le cache de prefs soit
+    // le MÊME des deux côtés du transport.
+    this.presenceVisibilityService = new PresenceVisibilityService(prisma, this.privacyPreferencesService);
 
     // CORRECTION: Créer NotificationService AVANT MessagingService pour que les mentions génèrent des notifications
     this.notificationService = new NotificationService(prisma);
@@ -322,6 +355,22 @@ export class MeeshySocketIOManager {
     // offline par `updateOfflineUsers`, broadcastant un faux `isOnline: false`.
     this.maintenanceService.setIsCurrentlyConnected(
       (userId: string, _isAnonymous: boolean) => this.connectedUsers.has(userId)
+    );
+
+    // Le balayage journalier des demandes de suppression (`processAccountDeletionRequests`)
+    // met des comptes HORS SERVICE (`isActive: false`) : leurs sockets encore vivants
+    // recevraient leurs fils et émettraient `typing:start` (= « en ligne » chez les
+    // clients). Seul le manager tient `io` : il fournit le révocateur, résolu à
+    // l'appel (`this.io` naît quelques lignes plus bas). Même mécanisme que
+    // `revoke-all-sessions` et que la désactivation par un admin (`routes/admin`).
+    this.maintenanceService.setSessionRevoker((userId: string) =>
+      disconnectRevokedSessions({
+        io: this.io,
+        userId,
+        reason: 'logout_all_devices',
+        message: 'Your account was deleted — every session was signed out.',
+        onError: (err: unknown) => logger.warn('[MAINTENANCE] socket fanout failed on grace-period expiry', { err, userId }),
+      })
     );
 
     // Initialiser Socket.IO avec les types shared
@@ -501,6 +550,14 @@ export class MeeshySocketIOManager {
       // construit plus haut dans ce même constructeur.
       replayLiveLocations: (socket, conversationId) =>
         this.locationHandler.replayLiveLocationsTo(socket, conversationId),
+      // La liste nominative `onlineUsers` de `conversation:stats` est projetée
+      // par LECTEUR à l'émission (directive produit du 2026-08-25) : le handler
+      // reçoit le lecteur avec son VRAI rôle et la loi unique — la même paire
+      // que `_emitPresenceSnapshot` consomme. Les stats ne partent qu'aux
+      // inscrits, et le handler ne demande un lecteur que pour un `User.id`
+      // résolu, d'où `isAnonymous: false`.
+      presenceViewer: (userId) => this._presenceViewer(userId, false),
+      presenceVisibility: this.presenceVisibilityService,
     });
   }
 
@@ -1229,44 +1286,93 @@ export class MeeshySocketIOManager {
   }
 
   /**
-   * Émet `presence:snapshot` au socket fraîchement authentifié : liste les userIds
-   * (ou participantIds anonymes) actuellement online parmi les contacts du nouvel
-   * arrivant — c'est-à-dire les autres participants des conversations qu'il rejoint.
-   * Permet au client de seed son store sans attendre qu'un changement d'état arrive
-   * (closes la faille "ne se met jamais à jour" sur les contacts déjà connectés).
+   * Le LECTEUR de l'instantané, avec son VRAI rôle — la seule donnée qui
+   * autorise un ADMIN/BIGBOSS à voir la présence de qui il regarde.
+   *
+   * Ni `SocketUser`, ni `socket.data`, ni le contexte du handshake ne portent
+   * `User.role` (mesuré : le `select` de `AuthHandler._authenticateJWTUser` ne
+   * lit que les langues). Il est donc relu UNE fois par connexion, sur un
+   * chemin qui fait déjà plusieurs lectures — jamais par contact filtré.
+   *
+   * Un lecteur ANONYME n'est pas un lecteur de rang bas : il n'a AUCUNE
+   * relation, donc la loi partagée lui rend `null` et tout est masqué. C'est
+   * `PresenceVisibilityService` qui le dit — ici on ne fait que ne pas
+   * fabriquer d'identité pour lui.
    */
+  private async _presenceViewer(userId: string, isAnonymous: boolean): Promise<PresenceViewer> {
+    if (isAnonymous) return null;
+    const row = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    // Pas de ligne — socket périmé, compte supprimé — ⇒ AUCUN lecteur, donc
+    // tout masqué. Même refus fermé que la porte REST jumelle
+    // (`viewerFromAuthContext`, `routes/users/presence-gate.ts`), qui rend
+    // `null` pour un contexte inscrit sans rôle : une identité qu'on ne sait
+    // pas qualifier ne se voit accorder aucune relation.
+    if (!row) return null;
+    // Une ligne SANS rôle lisible reste un lecteur ordinaire : elle garde ses
+    // amitiés et ne gagne aucun privilège.
+    return { userId, role: row.role ?? 'USER' };
+  }
+
   /**
-   * Masque la présence des contacts selon leurs préférences privacy (cascade
-   * showOnlineStatus maître + showLastSeen) ET le blocage bidirectionnel avec
-   * `viewerId` — même règle que `GET /users/presence` (`PresenceVisibilityService`).
-   * Anonymes → défaut (montrés, non-bloquables). Appliqué à l'émission (pas au
-   * cache) pour couvrir aussi le cache-hit.
+   * Applique la visibilité de présence de CHAQUE contact pour CE lecteur —
+   * amitié acceptée, rôle du lecteur, blocage bidirectionnel et préférences,
+   * tenus ensemble par `PresenceVisibilityService.resolveForTargets`, la même
+   * porte que `GET /users/presence`.
+   *
+   * Directive produit (2026-08-25) : partager une conversation n'autorise plus
+   * rien. Le prédécesseur (`_applyPresencePrefs`) n'appliquait que les
+   * préférences et le blocage, donc un co-participant INCONNU recevait la
+   * pastille et la dernière connexion de tout le monde à chaque reconnexion.
+   *
+   * Masqué se présente ici comme HORS LIGNE (`isOnline: false`,
+   * `lastActiveAt: null`) et non comme une absence : le contact reste dans la
+   * liste — les clients typent `isOnline` non nullable sur ce canal — mais il
+   * n'en apprend rien. `lastActiveAt` voyage À CÔTÉ d'`isOnline` et tombe avec
+   * lui : un gate posé sur le seul drapeau laisserait partir l'horodatage, qui
+   * est précisément ce que la directive interdit de révéler.
+   *
+   * Le filtre est appliqué à l'ÉMISSION, jamais au cache : `presenceSnapshotCache`
+   * stocke l'état BRUT, partagé par tous les lecteurs, et la visibilité est par
+   * lecteur.
    */
-  private async _applyPresencePrefs(
-    viewerId: string,
+  private async _applyPresenceVisibility(
+    viewer: PresenceViewer,
     users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[],
   ): Promise<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[]> {
     if (users.length === 0) return users;
-    const [prefsMap, blockedUserIds] = await Promise.all([
-      this.privacyPreferencesService.getPreferencesForUsers(
-        users.map(u => ({ id: u.userId, isAnonymous: false })),
-      ),
-      getBlockedUserIdsAmong(this.prisma, viewerId, users.map(u => u.userId)),
-    ]);
-    return users.map(u => {
-      if (blockedUserIds.has(u.userId)) return { ...u, isOnline: false, lastActiveAt: null };
-      const p = prefsMap.get(u.userId);
-      if (p && !p.showOnlineStatus) return { ...u, isOnline: false, lastActiveAt: null };
-      return { ...u, lastActiveAt: p && !p.showLastSeen ? null : u.lastActiveAt };
-    });
+    const visibility = await this.presenceVisibilityService.resolveForTargets(
+      viewer,
+      users.map(u => u.userId),
+    );
+    // Les ids ANONYMES (des `Participant.id`) n'ont pas de compte : le
+    // résolveur ne leur trouve ni amitié ni préférence, donc il rend HIDDEN —
+    // sauf à un ADMIN+, à qui il rend FULL pour tout id qu'on lui présente.
+    return users.map(u => applyPresenceVisibilityAsOffline(u, visibility.get(u.userId)));
   }
 
+  /**
+   * Émet `presence:snapshot` au socket fraîchement authentifié : l'état de
+   * présence des contacts du nouvel arrivant, pour que le client amorce son
+   * store sans attendre la prochaine transition.
+   *
+   * La LISTE des contacts reste dérivée des conversations — c'est la façon la
+   * moins chère de nommer « les gens que ce client va afficher ». Ce n'est PAS
+   * une autorisation : chaque entrée traverse ensuite
+   * `_applyPresenceVisibility`, où un co-participant qui n'est ni ami accepté
+   * ni ADMIN+ ressort HORS LIGNE, sans dernière connexion (directive produit du
+   * 2026-08-25). Ce qui gouverne l'audience est la RELATION ; la conversation
+   * ne fait que fournir des candidats.
+   */
   private async _emitPresenceSnapshot(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
     try {
+      const viewer = await this._presenceViewer(userId, isAnonymous);
       const cached = this.presenceSnapshotCache.get(userId);
       if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
-        const users = await this._applyPresencePrefs(
-          userId,
+        const users = await this._applyPresenceVisibility(
+          viewer,
           cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) })),
         );
         socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
@@ -1322,7 +1428,9 @@ export class MeeshySocketIOManager {
           }
 
           this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
-          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users: await this._applyPresencePrefs(userId, users) });
+          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, {
+            users: await this._applyPresenceVisibility(viewer, users),
+          });
           logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
         }
       }
@@ -2531,61 +2639,97 @@ export class MeeshySocketIOManager {
   }
 
   /**
-   * Diffuse une transition de présence (connexion / déconnexion) aux pairs qui
-   * AFFICHENT la pastille de cette personne.
+   * Les `User.id` des ADMIN/BIGBOSS, derrière un cache mémoire à TTL.
    *
-   * PRIVACY: Respecte les préférences showOnlineStatus et showLastSeen, et le
-   * blocage bidirectionnel — même règle que `GET /users/presence`.
+   * La requête est bornée par le nombre d'administrateurs — jamais par la
+   * population connectée de la passerelle, la contrainte de coût que ce chemin
+   * porte depuis qu'il a cessé d'énumérer `connectedUsers`. Le cache évite de
+   * la rejouer à chaque connexion et déconnexion ; sa TTL est celle de
+   * l'instantané de présence, pour la même raison : le retard maximal d'une
+   * promotion de rôle sur ce canal est de 60 s, et la porte REST
+   * (`PresenceVisibilityService`) n'a, elle, aucun retard.
    *
-   * **L'audience est faite de PERSONNES, pas de fils ouverts.** La pastille de
-   * présence se regarde très majoritairement HORS du fil : liste de
-   * conversations, écrans de contacts, en-têtes (`PRESENCE_DOT_CLASS` web,
-   * `PresenceState.dotColor` iOS). `conversation:<id>` ne pouvait donc pas être
-   * la seule adresse de l'événement, parce qu'un client la QUITTE en refermant
-   * le fil tout en restant connecté — `conversation:leave` →
-   * `ConversationHandler.handleConversationLeave` → `socket.leave(...)`, émis par
-   * `ConversationSocketHandler.deinit` (iOS) dès qu'une vue de conversation
-   * disparaît. La room que `AuthHandler` avait jointe à la connexion pour
-   * ATTEINDRE ce participant était démontée par un geste qui ne voulait dire que
-   * « je ne regarde plus ce fil ».
+   * Une room `user:<id>` sans socket vivant ne coûte rien à `.to()` : un
+   * administrateur déconnecté n'est pas un destinataire à filtrer.
+   */
+  private async _globalAdminUserIds(): Promise<string[]> {
+    const cached = this.globalAdminIdsCache;
+    if (cached && Date.now() - cached.cachedAt < this.GLOBAL_ADMIN_IDS_CACHE_TTL_MS) {
+      return cached.ids;
+    }
+    const rows = await this.prisma.user.findMany({
+      where: { role: { in: PRESENCE_PRIVILEGED_ROLES } },
+      select: { id: true },
+    });
+    const ids = rows.map(row => row.id);
+    this.globalAdminIdsCache = { ids, cachedAt: Date.now() };
+    return ids;
+  }
+
+  /**
+   * Diffuse une transition de présence (connexion / déconnexion) aux personnes
+   * AUTORISÉES à la connaître.
    *
-   * Ce que ça coûtait, et pourquoi rien ne le rattrapait : `user:status` ne se
-   * répète pas, il ne marque que des TRANSITIONS. Un pair qui se connecte
-   * pendant que je suis ailleurs n'émettra plus rien tant qu'il reste en ligne,
-   * et `presence:snapshot` — le seul autre porteur de cette information — n'est
-   * envoyé qu'à l'authentification. Côté iOS, `PresenceManager` ne sonde jamais
-   * le réseau : son minuteur de 30 s ne fait que recalculer la DÉCROISSANCE
-   * 1/3/5 min depuis `lastActiveAt`. Une transition manquée ne se rattrapait
-   * donc pas d'elle-même : le pair restait éteint sur ma liste jusqu'à la
-   * prochaine reconnexion de socket — et ce, précisément pour les conversations
-   * que j'avais ouvertes, c'est-à-dire les miennes.
+   * Directive produit (2026-08-25), gravée dans
+   * `packages/shared/utils/presence-visibility.ts` : « Lorsqu'on n'est pas ami
+   * (aucune connexion) : je veux supprimer ma présence en ligne […] et personne
+   * ne doit savoir ma dernière connexion sur l'application si on n'est pas ami.
+   * Les utilisateurs avec le rôle ADMIN et supérieur peuvent constamment avoir
+   * l'état de présence. »
    *
-   * Le remède suit la doctrine déjà écrite dans `emitToConversationParticipants` :
-   * un participant s'adresse par `userId ?? id`, dans une room personnelle que
-   * `AuthHandler` joint à la connexion et que RIEN ne fait quitter. Les rooms de
-   * conversation restent en tête de chaîne — l'élargissement n'est qu'ADDITIF,
-   * il ne retire aucun destinataire d'aujourd'hui — et le chaînage `.to()`
-   * garantit au plus une copie par socket, y compris pour celui qui siège dans
-   * les deux.
+   * L'audience est donc faite de RELATIONS, et d'elles seules :
    *
-   * Le prix est une requête `participant` de plus par transition, sur un chemin
-   * de connexion / déconnexion (jamais par message). C'est la MÊME requête que
-   * `_emitPresenceSnapshot` fait déjà à la connexion ; elle n'est délibérément
-   * pas mutualisée avec son cache, dont le TTL rendrait la LIVRAISON de la
-   * présence tributaire de la fraîcheur d'un cache cosmétique.
+   *  - **inscrit** — les rooms personnelles (`ROOMS.user`) de ses AMIS acceptés,
+   *    des ADMIN/BIGBOSS, et la sienne (ses autres appareils). **Aucune room de
+   *    conversation.** Partager un fil n'est pas une relation : c'était pourtant
+   *    l'adresse qui, jusqu'à ce lot, livrait chaque transition à tout
+   *    co-participant inconnu — la fuite exacte que la directive nomme.
+   *  - **invité de lien (anonyme)** — il n'a pas de compte, donc pas d'ami :
+   *    ADMIN/BIGBOSS seulement. Son nom d'affichage ne part plus dans le fil.
+   *
+   * Deux charges au plus, jamais une seule aplatie : `showOnlineStatus = false`
+   * doit taire la présence pour les AMIS sans la taire pour les administrateurs
+   * ni pour les autres appareils du sujet, que la loi partagée met en FULL. Le
+   * `return` précoce sur cette préférence coupait les trois d'un coup. La
+   * décision « quelle charge pour quel sous-ensemble » vit dans
+   * `presenceStatusEmissions` (`./presence-audience`), pure et testée à part —
+   * `lastActiveAt` y tombe avec `showLastSeen` pour les amis seulement, car il
+   * voyage À CÔTÉ d'`isOnline` et un gate posé sur le seul drapeau le
+   * laisserait partir.
+   *
+   * Un sujet DÉSACTIVÉ n'émet AUCUNE charge — pas même la privilégiée. La loi
+   * partagée (`resolvePresenceVisibility`) tranche `targetIsDeactivated` AVANT
+   * le privilège, et `resolveForTargets` l'applique déjà à l'instantané comme à
+   * la porte REST ; ce canal la rejoint (revue F6, 2026-08-26). Le point
+   * compte parce que la désactivation (`user-management.service.updateStatus`)
+   * pose `deactivatedAt` SANS révoquer les sockets : un compte désactivé encore
+   * connecté continuait d'annoncer chacune de ses transitions à son éventail.
+   * `Participant` n'a pas de `deactivatedAt` — l'invité de lien n'est pas
+   * concerné.
+   *
+   * Le blocage bidirectionnel reste appliqué à TOUTES les charges, y compris
+   * celle des administrateurs : `.except(socketIds)` — un socket.id est aussi
+   * une room Socket.IO. C'est un cran plus strict que
+   * `PresenceVisibilityService.resolveForTargets`, qui rend FULL à un admin
+   * bloqué ; sur un canal de DIFFUSION, la décision de l'utilisateur de couper
+   * le lien l'emporte, et c'est le comportement qui existait déjà ici.
+   *
+   * Coût par transition, la contrainte de ce chemin : une lecture de
+   * préférences (cachée), une lecture d'utilisateur, UNE requête `FriendRequest`
+   * bornée par le nombre d'amis, la liste d'administrateurs (cachée 60 s) et la
+   * relation de blocage (bornée par elle-même). Rien n'y est dimensionné par la
+   * population connectée. Les deux requêtes `participant` qu'exigeait
+   * l'adressage par conversation ont disparu avec lui.
    */
   private async _broadcastUserStatus(userId: string, isOnline: boolean, isAnonymous: boolean): Promise<void> {
     try {
-      // PRIVACY: Vérifier les préférences de confidentialité de l'utilisateur
-      const privacyPrefs = await this.privacyPreferencesService.getPreferences(userId, isAnonymous);
+      const adminIds = await this._globalAdminUserIds();
 
-      // Si l'utilisateur a désactivé showOnlineStatus, ne pas broadcaster son statut
-      if (!privacyPrefs.showOnlineStatus) {
-        return;
-      }
-
-      // Récupérer les informations de l'utilisateur pour le broadcast
       if (isAnonymous) {
+        // Aucun ami possible, donc aucune audience hors administrateurs : sans
+        // eux, la lecture du participant elle-même n'a plus de destinataire.
+        if (adminIds.length === 0) return;
+
         // userId is participantId for anonymous
         const participant = await this.prisma.participant.findUnique({
           where: { id: userId },
@@ -2593,117 +2737,102 @@ export class MeeshySocketIOManager {
             id: true,
             displayName: true,
             nickname: true,
-            lastActiveAt: true,
-            conversationId: true
-          }
-        });
-
-        if (participant) {
-          const displayName = participant.nickname || participant.displayName;
-
-          // PRIVACY: Ne pas envoyer lastActiveAt si showLastSeen est désactivé
-          const lastActiveAt = privacyPrefs.showLastSeen ? participant.lastActiveAt : null;
-
-          // L'invité de lien partagé n'a QU'UNE conversation : « la room
-          // refermée » y vaut la totalité de sa présence, là où un inscrit n'en
-          // perdrait qu'une sur N. Le chemin à 1 objet n'est pas le cas facile,
-          // c'est celui qu'aucune redondance n'absorbe — d'où le même
-          // élargissement qu'à la porte inscrite, et non un raccourci.
-          const peers = await this.prisma.participant.findMany({
-            where: { conversationId: participant.conversationId, isActive: true },
-            select: { id: true, userId: true },
-          });
-          emitToConversationParticipants({
-            io: this.io,
-            conversationId: participant.conversationId,
-            participants: peers,
-            event: SERVER_EVENTS.USER_STATUS,
-            payload: {
-              userId: participant.id,
-              username: displayName,
-              isOnline,
-              lastActiveAt
-            },
-          });
-
-        }
-      } else {
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
-            firstName: true,
-            lastName: true,
             lastActiveAt: true
           }
         });
+        if (!participant) return;
 
-        if (user) {
-          const displayName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
-
-          // PRIVACY: Ne pas envoyer lastActiveAt si showLastSeen est désactivé
-          const lastActiveAt = privacyPrefs.showLastSeen ? user.lastActiveAt : null;
-
-          // Find all conversations this user participates in
-          const participantRows = await this.prisma.participant.findMany({
-            where: { userId: user.id, isActive: true },
-            select: { conversationId: true }
+        // Les préférences ne sont pas lues : le seul sous-ensemble servi est
+        // celui que la loi partagée met en FULL, où elles ne s'appliquent pas.
+        for (const emission of presenceStatusEmissions({
+          subjectId: participant.id,
+          isAnonymous: true,
+          friendIds: [],
+          adminIds,
+          lastActiveAt: participant.lastActiveAt,
+          showOnlineStatus: true,
+          showLastSeen: true,
+        })) {
+          this.io.to(emission.rooms).emit(SERVER_EVENTS.USER_STATUS, {
+            userId: participant.id,
+            username: participant.nickname || participant.displayName,
+            isOnline,
+            lastActiveAt: emission.lastActiveAt
           });
-
-          // Un seul emit pour toute l'audience (chaînage `.to()`), et une
-          // audience faite de personnes : les rooms de conversation amorcent la
-          // chaîne — aucun destinataire d'aujourd'hui n'est retiré — puis
-          // `participantUserRooms` y ajoute la room personnelle de chaque
-          // participant, seule adresse qui survive à la fermeture d'un fil.
-          const conversationIds = participantRows.map(p => p.conversationId);
-          const conversationRooms = conversationIds.map(id => ROOMS.conversation(id));
-          const peers = conversationIds.length > 0
-            ? await this.prisma.participant.findMany({
-                where: { conversationId: { in: conversationIds }, isActive: true },
-                select: { id: true, userId: true },
-              })
-            : [];
-          const rooms = participantUserRooms(peers, conversationRooms);
-          if (rooms.length > 0) {
-            // PRIVACY: exclure les sockets des viewers en relation de blocage
-            // bidirectionnel avec ce user — même règle que GET /users/presence
-            // (PresenceVisibilityService). Un socket.id est aussi une room
-            // Socket.IO (auto-join), donc .except(socketId) l'exclut du
-            // broadcast même s'il est par ailleurs membre de `rooms`.
-            //
-            // La relation de blocage est résolue SANS liste de candidats. La
-            // version précédente passait `connectedUsers.keys()` — toute la
-            // population connectée de la gateway — en candidats, si bien qu'une
-            // seule transition de présence portait un `$in` dimensionné par le
-            // serveur entier. Or ce chemin s'exécute à CHAQUE connexion, chaque
-            // déconnexion, et pour chaque user que le balayage de maintenance
-            // passe hors ligne d'un coup : le coût d'une connexion croissait
-            // avec le nombre de personnes déjà connectées.
-            //
-            // Le résultat est le MÊME : un id en relation de blocage qui n'a
-            // aucun socket vivant n'apporte rien à `.except()`, exactement ce
-            // que le pré-filtre par `connectedUsers` retirait. `userSockets` est
-            // vidé à la déconnexion (`AuthHandler.handleDisconnection`), donc
-            // l'intersection se fait ici, en mémoire, au lieu d'en base.
-            const blockedUserIds = await getBlockRelatedUserIds(this.prisma, user.id);
-            const blockedSocketIds = [...blockedUserIds].flatMap(
-              id => [...(this.userSockets.get(id) ?? [])],
-            );
-
-            const emitter = blockedSocketIds.length > 0
-              ? this.io.to(rooms).except(blockedSocketIds)
-              : this.io.to(rooms);
-            emitter.emit(SERVER_EVENTS.USER_STATUS, {
-              userId: user.id,
-              username: displayName,
-              isOnline,
-              lastActiveAt
-            });
-          }
-
         }
+        return;
+      }
+
+      // PRIVACY: les préférences gouvernent le sous-ensemble AMIS, pas la
+      // totalité de l'éventail — d'où l'absence de `return` précoce ici.
+      const privacyPrefs = await this.privacyPreferencesService.getPreferences(userId, false);
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          firstName: true,
+          lastName: true,
+          lastActiveAt: true,
+          deactivatedAt: true
+        }
+      });
+      if (!user) return;
+      // Un compte DÉSACTIVÉ n'a de présence pour personne : la loi partagée
+      // rend HIDDEN sur `targetIsDeactivated` AVANT le privilège, donc ni les
+      // amis, ni les ADMIN, ni ses autres appareils ne reçoivent la transition.
+      if (user.deactivatedAt) return;
+
+      // La requête d'amitiés n'est même pas lancée quand elle ne peut servir
+      // personne : `showOnlineStatus = false` retire tout le sous-ensemble AMIS.
+      const friendIds = privacyPrefs.showOnlineStatus
+        ? [...await this.presenceVisibilityService.acceptedFriendIds(user.id)]
+        : [];
+
+      const emissions = presenceStatusEmissions({
+        subjectId: user.id,
+        isAnonymous: false,
+        friendIds,
+        adminIds,
+        lastActiveAt: user.lastActiveAt,
+        showOnlineStatus: privacyPrefs.showOnlineStatus,
+        showLastSeen: privacyPrefs.showLastSeen,
+      });
+      if (emissions.length === 0) return;
+
+      const displayName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
+
+      // PRIVACY: exclure les sockets des viewers en relation de blocage
+      // bidirectionnel avec ce user. Un socket.id est aussi une room Socket.IO
+      // (auto-join), donc .except(socketId) l'exclut du broadcast même s'il est
+      // par ailleurs membre de `rooms`.
+      //
+      // La relation de blocage est résolue SANS liste de candidats. La version
+      // d'avant passait `connectedUsers.keys()` — toute la population connectée
+      // de la gateway — en candidats, si bien qu'une seule transition de
+      // présence portait un `$in` dimensionné par le serveur entier.
+      //
+      // Le résultat est le MÊME : un id en relation de blocage qui n'a aucun
+      // socket vivant n'apporte rien à `.except()`. `userSockets` est vidé à la
+      // déconnexion (`AuthHandler.handleDisconnection`), donc l'intersection se
+      // fait ici, en mémoire, au lieu d'en base.
+      const blockedUserIds = await getBlockRelatedUserIds(this.prisma, user.id);
+      const blockedSocketIds = [...blockedUserIds].flatMap(
+        id => [...(this.userSockets.get(id) ?? [])],
+      );
+
+      for (const emission of emissions) {
+        const emitter = blockedSocketIds.length > 0
+          ? this.io.to(emission.rooms).except(blockedSocketIds)
+          : this.io.to(emission.rooms);
+        emitter.emit(SERVER_EVENTS.USER_STATUS, {
+          userId: user.id,
+          username: displayName,
+          isOnline,
+          lastActiveAt: emission.lastActiveAt
+        });
       }
     } catch (error) {
       logger.error('❌ [STATUS] Erreur lors du broadcast du statut', error);

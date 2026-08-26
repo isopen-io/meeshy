@@ -57,6 +57,8 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 
@@ -162,6 +164,12 @@ export const SendMessageBodySchema = z.object({
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
+
+// Présence de l'EXPÉDITEUR sur une charge servie PAR DESTINATAIRE (liste,
+// épinglés, recherche) : le viewer est connu, donc la loi descend pour LUI —
+// `resolveForTargets(viewer, ids)` — et le sort d'une entrée ABSENTE (expéditeur
+// SANS COMPTE, ou inscrit non résolu) est UN site, `presenceMissingEntryPolicy`
+// (presence-gate) : masqué, sauf viewer ADMIN/BIGBOSS.
 
 /**
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
@@ -1042,10 +1050,12 @@ export function registerMessagesRoutes(
         }
       }
 
-      // Présence des expéditeurs : soumise aux préférences showOnlineStatus/
-      // showLastSeen — même règle que le broadcast user:status et le
-      // presence:snapshot (co-participation = accès déjà garanti).
-      const senderPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Présence des expéditeurs : régime STRICT (2026-08-25) — self/ADMIN+/
+      // ami seuls, jamais la seule co-participation.
+      const listPresenceViewer = viewerFromRequest(request);
+      const listMissingEntry = presenceMissingEntryPolicy(listPresenceViewer);
+      const senderPresenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        listPresenceViewer,
         messages
           .map((message: any) => message.sender?.userId)
           .filter((uid: string | null | undefined): uid is string => !!uid)
@@ -1146,25 +1156,25 @@ export function registerMessagesRoutes(
             const anonymousIdentity = message.sender.type === 'anonymous'
               ? resolveAnonymousSenderIdentity(message.sender)
               : null;
-            return {
-            ...senderData,
-            username: anonymousIdentity?.username
-              ?? message.sender.user?.username ?? message.sender.username ?? null,
-            // T16 — firstName/lastName were serialized but read by no client and
-            // are no longer fetched (messageSenderUserSelect trims them).
-            // Auteur sans compte : le nom DONNÉ au formulaire prime, le pseudo
-            // ano_ descend en handle (`username` ci-dessus).
-            displayName: anonymousIdentity && anonymousIdentity.displayName
-              ? anonymousIdentity.displayName
-              : resolveParticipantDisplayName(message.sender),
-            avatar: resolveParticipantAvatar(message.sender),
-            isOnline: senderPresenceVis.get(message.sender.userId ?? '')?.showOnline === false
-              ? false
-              : (message.sender.user?.isOnline ?? message.sender.isOnline ?? null),
-            lastActiveAt: senderPresenceVis.get(message.sender.userId ?? '')?.showLastSeenTimestamp === false
-              ? null
-              : (message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null),
-          };
+            return applyPresenceVisibilityAsOffline(
+              {
+                ...senderData,
+                username: anonymousIdentity?.username
+                  ?? message.sender.user?.username ?? message.sender.username ?? null,
+                // T16 — firstName/lastName were serialized but read by no client and
+                // are no longer fetched (messageSenderUserSelect trims them).
+                // Auteur sans compte : le nom DONNÉ au formulaire prime, le pseudo
+                // ano_ descend en handle (`username` ci-dessus).
+                displayName: anonymousIdentity && anonymousIdentity.displayName
+                  ? anonymousIdentity.displayName
+                  : resolveParticipantDisplayName(message.sender),
+                avatar: resolveParticipantAvatar(message.sender),
+                isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
+                lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
+              },
+              message.sender.userId ? senderPresenceVis.get(message.sender.userId) : undefined,
+              { onMissingEntry: listMissingEntry },
+            );
           })() : null,
           attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, consumptionMap),
           _count: message._count
@@ -2497,7 +2507,11 @@ export function registerMessagesRoutes(
         )
       });
 
-      const pinnedPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Régime STRICT (2026-08-25) : self/ADMIN+/ami seuls.
+      const pinnedPresenceViewer = viewerFromRequest(request);
+      const pinnedMissingEntry = presenceMissingEntryPolicy(pinnedPresenceViewer);
+      const pinnedPresenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        pinnedPresenceViewer,
         pinnedMessages
           .map((message: any) => message.sender?.userId)
           .filter((uid: string | null | undefined): uid is string => !!uid)
@@ -2538,19 +2552,21 @@ export function registerMessagesRoutes(
           ),
           createdAt: message.createdAt,
           updatedAt: message.updatedAt,
-          sender: sender ? {
-            id: sender.id,
-            userId: sender.userId,
-            displayName: resolveParticipantDisplayName(sender),
-            avatar: resolveParticipantAvatar(sender),
-            type: sender.type,
-            username: sender.user?.username ?? null,
-            firstName: sender.user?.firstName ?? null,
-            lastName: sender.user?.lastName ?? null,
-            isOnline: pinnedPresenceVis.get(sender.userId ?? '')?.showOnline === false
-              ? false
-              : (sender.user?.isOnline ?? false)
-          } : null,
+          sender: sender ? applyPresenceVisibilityAsOffline(
+            {
+              id: sender.id,
+              userId: sender.userId,
+              displayName: resolveParticipantDisplayName(sender),
+              avatar: resolveParticipantAvatar(sender),
+              type: sender.type,
+              username: sender.user?.username ?? null,
+              firstName: sender.user?.firstName ?? null,
+              lastName: sender.user?.lastName ?? null,
+              isOnline: sender.user?.isOnline ?? false
+            },
+            sender.userId ? pinnedPresenceVis.get(sender.userId) : undefined,
+            { onMissingEntry: pinnedMissingEntry },
+          ) : null,
           attachments: message.attachments || [],
           reactionCount: message._count?.reactions ?? 0,
           replyCount: message._count?.replies ?? 0,
@@ -2901,7 +2917,11 @@ export function registerMessagesRoutes(
 
       const lastId = results.length > 0 ? results[results.length - 1].id : null;
 
-      const searchPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Régime STRICT (2026-08-25) : self/ADMIN+/ami seuls.
+      const msgSearchPresenceViewer = viewerFromRequest(request);
+      const searchMissingEntry = presenceMissingEntryPolicy(msgSearchPresenceViewer);
+      const searchPresenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        msgSearchPresenceViewer,
         results
           .map((msg: any) => msg.sender?.userId)
           .filter((uid: string | null | undefined): uid is string => !!uid)
@@ -2916,16 +2936,18 @@ export function registerMessagesRoutes(
         // top-level — un résultat de recherche géolocalisé le perdait sinon.
         return hoistLocationOnto({
           ...msg,
-          sender: sender ? {
-            id: sender.id,
-            userId: sender.userId,
-            displayName: resolveParticipantDisplayName(sender),
-            avatar: resolveParticipantAvatar(sender),
-            username: sender.user?.username ?? null,
-            isOnline: searchPresenceVis.get(sender.userId ?? '')?.showOnline === false
-              ? false
-              : (sender.user?.isOnline ?? false)
-          } : null,
+          sender: sender ? applyPresenceVisibilityAsOffline(
+            {
+              id: sender.id,
+              userId: sender.userId,
+              displayName: resolveParticipantDisplayName(sender),
+              avatar: resolveParticipantAvatar(sender),
+              username: sender.user?.username ?? null,
+              isOnline: sender.user?.isOnline ?? false
+            },
+            sender.userId ? searchPresenceVis.get(sender.userId) : undefined,
+            { onMissingEntry: searchMissingEntry },
+          ) : null,
           translations: msg.translations
             ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)
             : undefined

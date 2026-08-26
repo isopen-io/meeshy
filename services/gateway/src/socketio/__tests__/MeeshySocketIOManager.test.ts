@@ -80,6 +80,7 @@ jest.mock('../../services/MaintenanceService', () => ({
       startMaintenanceTasks: jest.fn().mockResolvedValue(undefined),
       setStatusBroadcastCallback: jest.fn(),
       setIsCurrentlyConnected: jest.fn(),
+      setSessionRevoker: jest.fn(),
     };
     return mockMaintenanceServiceInstance;
   }),
@@ -158,6 +159,10 @@ jest.mock('../../services/MessagingService', () => ({
 }));
 
 let mockCallEventsHandlerInstance: any;
+jest.mock('../disconnectRevokedSessions', () => ({
+  disconnectRevokedSessions: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../CallEventsHandler', () => ({
   CallEventsHandler: jest.fn().mockImplementation(() => {
     mockCallEventsHandlerInstance = {
@@ -447,6 +452,12 @@ function makePrisma(): any {
       findUnique: fn(),
       findMany: fn().mockResolvedValue([]),
     },
+    // La présence se résout désormais sur la RELATION (amitié acceptée), pas
+    // sur le partage d'une conversation — directive produit du 2026-08-25.
+    friendRequest: {
+      findMany: fn().mockResolvedValue([]),
+      findFirst: fn().mockResolvedValue(null),
+    },
   };
 }
 
@@ -616,6 +627,13 @@ describe('MeeshySocketIOManager', () => {
 
     it('registers isCurrentlyConnected predicate on MaintenanceService', () => {
       expect(mockMaintenanceServiceInstance.setIsCurrentlyConnected).toHaveBeenCalledWith(expect.any(Function));
+    });
+
+    // F9 bis : le balayage journalier des demandes de suppression met des comptes
+    // HORS SERVICE (isActive:false) — leurs sockets doivent tomber. Le seul
+    // producteur du révocateur est le manager (il tient `io`).
+    it('registers a session revoker on MaintenanceService', () => {
+      expect(mockMaintenanceServiceInstance.setSessionRevoker).toHaveBeenCalledWith(expect.any(Function));
     });
 
     it('wires CallEventsHandler message broadcaster', () => {
@@ -2010,338 +2028,359 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('_broadcastUserStatus', () => {
-    it('returns early when showOnlineStatus is false', async () => {
+    /**
+     * Enregistre les émissions de `user:status` AVEC leurs rooms et leur charge.
+     *
+     * L'éventail n'émet plus une charge unique : les privilégiés (ADMIN+ et les
+     * autres appareils du sujet) et les AMIS reçoivent deux charges distinctes,
+     * dont l'une peut manquer. `ioState.toEmit` ne sait dire que « un emit a eu
+     * lieu » — insuffisant pour une règle dont tout l'enjeu est QUI reçoit QUOI.
+     */
+    function recordPresenceEmissions() {
+      const emissions: Array<{ rooms: string[]; excluded: string[]; payload: any }> = [];
+      const chain = (rooms: string[], excluded: string[]): any => ({
+        to: (r: string | string[]) => chain([...rooms, ...(Array.isArray(r) ? r : [r])], excluded),
+        except: (e: string | string[]) => chain(rooms, [...excluded, ...(Array.isArray(e) ? e : [e])]),
+        emit: (event: string, payload: unknown) => {
+          if (event === SERVER_EVENTS.USER_STATUS) emissions.push({ rooms, excluded, payload });
+        },
+      });
+      ioState.to.mockImplementation(((r: string | string[]) =>
+        chain(Array.isArray(r) ? [...r] : [r], [])) as never);
+      return {
+        emissions,
+        rooms: () => emissions.flatMap((e) => e.rooms),
+        payloadForRoom: (room: string) => emissions.find((e) => e.rooms.includes(room))?.payload,
+        restore: () => { ioState.to.mockImplementation((() => ioState.toChain) as never); },
+      };
+    }
+
+    /**
+     * Les DEUX lectures relationnelles que l'éventail fait désormais :
+     * `friendRequest.findMany` (amitiés acceptées du sujet) et
+     * `user.findMany` (les ADMIN+ de la plateforme, puis ceux qui l'ont bloqué).
+     * Les deux dernières partagent le même délégué, d'où l'aiguillage sur la
+     * FORME du `where`.
+     */
+    function stubPresenceRelations(opts: {
+      friendIds?: string[];
+      adminIds?: string[];
+      blockerIds?: string[];
+    } = {}) {
+      const { friendIds = [], adminIds = [], blockerIds = [] } = opts;
+      // `senderId` porte l'ami : le résolveur rend l'AUTRE bout, quel que soit
+      // le sens de la demande — ce témoin n'a donc pas à connaître le sujet.
+      prisma.friendRequest.findMany.mockResolvedValue(
+        friendIds.map((id) => ({ senderId: id, receiverId: 'subject-side' })),
+      );
+      prisma.user.findMany.mockImplementation(async (args: any) =>
+        args?.where?.role ? adminIds.map((id: string) => ({ id })) : blockerIds.map((id: string) => ({ id })),
+      );
+    }
+
+    function stubSubject(over: Record<string, unknown> = {}) {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-subject',
+        username: 'alice',
+        displayName: 'Alice',
+        firstName: 'Alice',
+        lastName: 'Smith',
+        lastActiveAt: SEEN_AT,
+        ...over,
+      });
+    }
+
+    const SEEN_AT = new Date('2026-08-25T09:00:00.000Z');
+    let rec: ReturnType<typeof recordPresenceEmissions>;
+
+    beforeEach(() => {
+      rec = recordPresenceEmissions();
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({
+        showOnlineStatus: true,
+        showLastSeen: true,
+      });
+    });
+
+    afterEach(() => { rec.restore(); });
+
+    // -----------------------------------------------------------------------
+    // Directive produit (2026-08-25) : « Lorsqu'on n'est pas ami (aucune
+    // connexion) : je veux supprimer ma présence en ligne […] et personne ne
+    // doit savoir ma dernière connexion sur l'application si on n'est pas ami.
+    // Les utilisateurs avec le rôle ADMIN et supérieur peuvent constamment
+    // avoir l'état de présence. »
+    //
+    // Les témoins qui suivaient jusqu'ici gardaient l'inverse : ils EXIGEAIENT
+    // que la room du fil, puis la room personnelle de chaque co-participant,
+    // reçoivent la transition. C'était la fuite, décrite comme un contrat.
+    // -----------------------------------------------------------------------
+
+    it("n'adresse plus AUCUNE room de conversation", async () => {
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'], adminIds: ['user-admin'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.rooms().some((room) => room.startsWith('conversation:'))).toBe(false);
+      expect(prisma.participant.findMany).not.toHaveBeenCalled();
+    });
+
+    it("ne dit RIEN à un co-participant qui n'est ni ami ni administrateur", async () => {
+      stubSubject();
+      stubPresenceRelations({});
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.rooms()).not.toContain(ROOMS.user('user-stranger'));
+      // Seuls ses propres appareils restent adressés.
+      expect(rec.rooms()).toEqual([ROOMS.user('user-subject')]);
+    });
+
+    it('adresse la transition à un AMI accepté', async () => {
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.rooms()).toContain(ROOMS.user('user-friend'));
+      expect(rec.payloadForRoom(ROOMS.user('user-friend'))).toEqual({
+        userId: 'user-subject',
+        username: 'Alice',
+        isOnline: true,
+        lastActiveAt: SEEN_AT,
+      });
+    });
+
+    it('sert un ADMIN même quand showOnlineStatus est FAUX — et tait alors l\'ami', async () => {
       mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({
         showOnlineStatus: false,
         showLastSeen: true,
       });
-      await (manager as any)._broadcastUserStatus('user-1', true, false);
-      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'], adminIds: ['user-admin'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.rooms()).toContain(ROOMS.user('user-admin'));
+      expect(rec.rooms()).not.toContain(ROOMS.user('user-friend'));
+      // Le `return` précoce d'avant coupait TOUT sur cette préférence, y compris
+      // les autres appareils du sujet lui-même.
+      expect(rec.rooms()).toContain(ROOMS.user('user-subject'));
+      expect(rec.payloadForRoom(ROOMS.user('user-admin'))).toEqual(
+        expect.objectContaining({ isOnline: true, lastActiveAt: SEEN_AT }),
+      );
     });
 
-    it('broadcasts anonymous participant status to their conversation room', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+    it("n'adresse ni MODERATOR, ni AUDIT, ni ANALYST : seuls ADMIN et BIGBOSS sont privilégiés", async () => {
+      stubSubject();
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      // Le mock répond comme la base : il ne rend que les rôles DEMANDÉS. Un
+      // éventail qui demanderait « MODERATOR et au-dessus » le recevrait — et
+      // ce témoin tomberait.
+      const roster = [
+        { id: 'user-boss', role: 'BIGBOSS' },
+        { id: 'user-admin', role: 'ADMIN' },
+        { id: 'user-mod', role: 'MODERATOR' },
+        { id: 'user-audit', role: 'AUDIT' },
+        { id: 'user-analyst', role: 'ANALYST' },
+        { id: 'user-plain', role: 'USER' },
+      ];
+      prisma.user.findMany.mockImplementation(async (args: any) => {
+        const wanted: string[] | undefined = args?.where?.role?.in;
+        return wanted ? roster.filter((u) => wanted.includes(u.role)).map(({ id }) => ({ id })) : [];
+      });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.rooms()).toEqual(expect.arrayContaining([ROOMS.user('user-boss'), ROOMS.user('user-admin')]));
+      for (const id of ['user-mod', 'user-audit', 'user-analyst', 'user-plain']) {
+        expect(rec.rooms()).not.toContain(ROOMS.user(id));
+      }
+    });
+
+    it("showOnlineStatus=false n'interroge même pas les amitiés (rien à leur servir)", async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({
+        showOnlineStatus: false,
+        showLastSeen: true,
+      });
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
+    });
+
+    it('efface lastActiveAt pour les AMIS sur showLastSeen=false, et le garde pour les privilégiés', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({
+        showOnlineStatus: true,
+        showLastSeen: false,
+      });
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'], adminIds: ['user-admin'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.payloadForRoom(ROOMS.user('user-friend'))).toEqual(
+        expect.objectContaining({ lastActiveAt: null }),
+      );
+      expect(rec.payloadForRoom(ROOMS.user('user-admin'))).toEqual(
+        expect.objectContaining({ lastActiveAt: SEEN_AT }),
+      );
+    });
+
+    it("n'émet rien quand l'utilisateur inscrit est introuvable", async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      stubPresenceRelations({ adminIds: ['user-admin'] });
+
+      await (manager as any)._broadcastUserStatus('user-ghost', false, false);
+
+      expect(rec.emissions).toEqual([]);
+    });
+
+    // -----------------------------------------------------------------------
+    // Un compte DÉSACTIVÉ n'a plus de présence pour PERSONNE. La loi partagée
+    // (`resolvePresenceVisibility`) rend HIDDEN sur `targetIsDeactivated` AVANT
+    // le privilège : ni un ami, ni un ADMIN, ni le sujet lui-même n'en apprend
+    // rien — et `resolveForTargets` l'applique déjà à l'instantané comme à la
+    // porte REST. Or la désactivation (`user-management.service.updateStatus`)
+    // pose `deactivatedAt` SANS révoquer les sockets : un compte désactivé
+    // encore connecté annonçait chacune de ses transitions à tout son éventail.
+    // -----------------------------------------------------------------------
+
+    it("n'émet RIEN pour un sujet DÉSACTIVÉ — ni aux amis, ni aux ADMIN, ni à lui-même", async () => {
+      stubSubject({ deactivatedAt: new Date('2026-08-20T00:00:00.000Z') });
+      stubPresenceRelations({ friendIds: ['user-friend'], adminIds: ['user-admin'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.emissions).toEqual([]);
+      // Rien à servir ⇒ l'amitié n'est même pas interrogée.
+      expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
+    });
+
+    it("DEMANDE `deactivatedAt` à la base — un mock rend ce qu'on lui donne, Prisma rend ce qu'on lui demande", async () => {
+      stubSubject();
+      stubPresenceRelations({ adminIds: ['user-admin'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(prisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'user-subject' },
+          select: expect.objectContaining({ deactivatedAt: true }),
+        }),
+      );
+    });
+
+    // -----------------------------------------------------------------------
+    // La porte ANONYME. Un invité de lien partagé n'a pas de compte, donc pas
+    // d'ami : la directive ne lui laisse que les ADMIN/BIGBOSS. Son nom
+    // d'affichage voyage À CÔTÉ de sa présence — il ne part plus dans le fil.
+    // -----------------------------------------------------------------------
+
+    it("n'annonce un invité de lien QU'AUX administrateurs", async () => {
+      stubPresenceRelations({ adminIds: ['user-admin'] });
       prisma.participant.findUnique.mockResolvedValue({
         id: 'anon-1',
         displayName: 'Anonymous',
         nickname: 'Anon',
-        lastActiveAt: new Date(),
-        conversationId: 'conv-123456789012',
+        lastActiveAt: SEEN_AT,
       });
 
       await (manager as any)._broadcastUserStatus('anon-1', true, true);
 
-      expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation('conv-123456789012'));
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
+      expect(rec.rooms()).toEqual([ROOMS.user('user-admin')]);
+      expect(rec.payloadForRoom(ROOMS.user('user-admin'))).toEqual({
         userId: 'anon-1',
+        username: 'Anon',
         isOnline: true,
-      }));
+        lastActiveAt: SEEN_AT,
+      });
     });
 
-    it('respects showLastSeen=false for anonymous participant', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: false });
-      prisma.participant.findUnique.mockResolvedValue({
-        id: 'anon-2',
-        displayName: 'Incognito',
-        nickname: null,
-        lastActiveAt: new Date(),
-        conversationId: 'conv-test',
-      });
+    it("ne lit même pas l'invité de lien quand aucun administrateur n'existe", async () => {
+      stubPresenceRelations({ adminIds: [] });
 
       await (manager as any)._broadcastUserStatus('anon-2', true, true);
 
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
-        lastActiveAt: null,
-      }));
+      expect(prisma.participant.findUnique).not.toHaveBeenCalled();
+      expect(rec.emissions).toEqual([]);
     });
 
-    it('broadcasts registered user status to all their conversation rooms', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-reg-1',
-        username: 'alice',
-        displayName: 'Alice',
-        firstName: 'Alice',
-        lastName: 'Smith',
-        lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany.mockResolvedValue([
-        { conversationId: 'conv-aaa' },
-        { conversationId: 'conv-bbb' },
-      ]);
+    // -----------------------------------------------------------------------
+    // Le blocage bidirectionnel survit au changement d'audience : il exclut par
+    // socket.id, et s'applique à TOUTES les charges — y compris celle des
+    // administrateurs, un cran plus strict que `resolveForTargets`.
+    // -----------------------------------------------------------------------
 
-      await (manager as any)._broadcastUserStatus('user-reg-1', false, false);
-
-      expect(ioState.to).toHaveBeenCalledWith(expect.arrayContaining([
-        ROOMS.conversation('conv-aaa'),
-        ROOMS.conversation('conv-bbb'),
-      ]));
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
-        userId: 'user-reg-1',
-        isOnline: false,
-      }));
-    });
-
-    it('skips broadcast when registered user not found', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue(null);
-      await (manager as any)._broadcastUserStatus('user-ghost', false, false);
-      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.anything());
-    });
-
-    it('skips broadcast when registered user has no participant rows', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-lonely',
-        username: 'lonely',
-        displayName: null,
-        firstName: '',
-        lastName: '',
-        lastActiveAt: null,
-      });
-      prisma.participant.findMany.mockResolvedValue([]);
-      await (manager as any)._broadcastUserStatus('user-lonely', true, false);
-      // to(rooms) is called with an empty array — .emit should not be called with USER_STATUS
-      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.anything());
-    });
-
-    it('excludes the socket of an online viewer blocked either way with the broadcaster (privacy parity with GET /users/presence)', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-reg-2',
-        username: 'alice',
-        displayName: 'Alice',
-        firstName: 'Alice',
-        lastName: 'Smith',
-        lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-shared' }]);
-      // Two other users are currently online, only one of them blocked the broadcaster.
-      (manager as any).connectedUsers.set('user-blocker', {
-        id: 'user-blocker', socketId: 'sock-blocker', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
-      (manager as any).connectedUsers.set('user-friend', {
-        id: 'user-friend', socketId: 'sock-friend', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+    it("exclut le socket d'un AMI qui a bloqué le sujet", async () => {
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-blocker'], blockerIds: ['user-blocker'] });
       (manager as any).userSockets.set('user-blocker', new Set(['sock-blocker']));
-      (manager as any).userSockets.set('user-friend', new Set(['sock-friend']));
-      // 'user-blocker' blocked 'user-reg-2' (findMany branch of getBlockedUserIdsAmong).
-      prisma.user.findMany.mockResolvedValue([{ id: 'user-blocker' }]);
 
-      await (manager as any)._broadcastUserStatus('user-reg-2', true, false);
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
 
-      expect(ioState.to).toHaveBeenCalledWith(expect.arrayContaining([ROOMS.conversation('conv-shared')]));
-      expect(ioState.except).toHaveBeenCalledWith(['sock-blocker']);
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
-        userId: 'user-reg-2',
-        isOnline: true,
-      }));
+      expect(rec.rooms()).toContain(ROOMS.user('user-blocker'));
+      expect(rec.emissions.every((e) => e.excluded.includes('sock-blocker'))).toBe(true);
     });
 
-    it('resolves the blocked viewers WITHOUT enumerating the connected population', async () => {
-      // The privacy filter must cost what the BLOCK RELATION costs, never what
-      // the server population costs. `_broadcastUserStatus` fires on every
-      // presence transition — each connect, each disconnect, and every user the
-      // maintenance sweep marks offline at once. Passing `connectedUsers.keys()`
-      // as the candidate list made one presence transition carry an `$in` sized
-      // by the whole gateway, so the cost of a single connect grew with the
-      // number of people already connected.
-      //
-      // The typing channel next door already got this right
-      // (`StatusHandler._getBlockedSocketIdsInRoom` bounds its candidates to the
-      // conversation's participants); this witness is what keeps the presence
-      // channel from drifting back.
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-crowded',
-        username: 'crowded',
-        displayName: 'Crowded',
-        firstName: 'C',
-        lastName: 'R',
-        lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-shared' }]);
+    it("n'appelle pas except() quand aucun bloqueur n'a de socket vivant", async () => {
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'], blockerIds: ['user-offline-blocker'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.emissions.every((e) => e.excluded.length === 0)).toBe(true);
+    });
+
+    // -----------------------------------------------------------------------
+    // COÛT. Ce chemin s'exécute à chaque connexion, chaque déconnexion, et pour
+    // chaque compte que le balayage de maintenance passe hors ligne d'un coup.
+    // Aucune de ses requêtes ne doit être dimensionnée par la population
+    // connectée de la passerelle.
+    // -----------------------------------------------------------------------
+
+    it('résout son audience SANS énumérer la population connectée', async () => {
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'] });
       for (let i = 0; i < 50; i++) {
         (manager as any).connectedUsers.set(`bystander-${i}`, {
           id: `bystander-${i}`, socketId: `sock-${i}`, isAnonymous: false, language: 'fr', resolvedLanguages: [],
         });
       }
-      prisma.user.findMany.mockResolvedValue([]);
 
-      await (manager as any)._broadcastUserStatus('user-crowded', true, false);
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
 
-      const blockQueryArgs = prisma.user.findMany.mock.calls.map((c: unknown[]) => c[0]) as Array<{
+      const userFindManyArgs = prisma.user.findMany.mock.calls.map((c: unknown[]) => c[0]) as Array<{
         where?: { id?: unknown };
       }>;
-      expect(blockQueryArgs.length).toBeGreaterThan(0);
-      for (const args of blockQueryArgs) {
+      expect(userFindManyArgs.length).toBeGreaterThan(0);
+      for (const args of userFindManyArgs) {
         expect(args.where?.id).toBeUndefined();
       }
+      // L'amitié se lit sur le seul sujet — jamais sur une liste de candidats.
+      expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'accepted',
+            OR: [{ senderId: 'user-subject' }, { receiverId: 'user-subject' }],
+          }),
+        }),
+      );
     });
 
-    it('still excludes a blocked viewer who is connected, now resolved from the block relation', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-reg-9',
-        username: 'nine',
-        displayName: 'Nine',
-        firstName: 'N',
-        lastName: 'I',
-        lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-shared' }]);
-      (manager as any).userSockets.set('user-blocker-9', new Set(['sock-blocker-9']));
-      // Someone who blocked the broadcaster but is NOT connected: they own no
-      // socket, so they contribute nothing to the exclusion list — the reason
-      // dropping the `connectedUsers` pre-filter is behaviour-preserving.
-      prisma.user.findMany.mockResolvedValue([{ id: 'user-blocker-9' }, { id: 'user-offline-blocker' }]);
+    it("ne relit pas la liste des administrateurs à chaque transition (cache TTL)", async () => {
+      stubSubject();
+      stubPresenceRelations({ adminIds: ['user-admin'] });
 
-      await (manager as any)._broadcastUserStatus('user-reg-9', true, false);
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+      await (manager as any)._broadcastUserStatus('user-subject', false, false);
 
-      expect(ioState.except).toHaveBeenCalledWith(['sock-blocker-9']);
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
-        userId: 'user-reg-9',
-        isOnline: true,
-      }));
-    });
-
-    it('does not call except() when no online user is blocked with the broadcaster', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-reg-3',
-        username: 'bob',
-        displayName: 'Bob',
-        firstName: 'Bob',
-        lastName: 'Jones',
-        lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-shared-2' }]);
-      (manager as any).connectedUsers.set('user-friend-2', {
-        id: 'user-friend-2', socketId: 'sock-friend-2', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
-      (manager as any).userSockets.set('user-friend-2', new Set(['sock-friend-2']));
-      prisma.user.findMany.mockResolvedValue([]);
-
-      await (manager as any)._broadcastUserStatus('user-reg-3', true, false);
-
-      expect(ioState.except).not.toHaveBeenCalled();
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
-        userId: 'user-reg-3',
-      }));
-    });
-
-    // -----------------------------------------------------------------------
-    // La pastille de présence se REGARDE hors du fil : liste de conversations,
-    // écrans de contacts, en-têtes. La room `conversation:<id>` ne peut donc pas
-    // être la seule adresse de `user:status` — un client qui referme un fil en
-    // sort (`conversation:leave` → `socket.leave`, iOS
-    // `ConversationSocketHandler.deinit`) tout en restant connecté, et sa liste
-    // continue d'afficher la pastille de ce pair.
-    // -----------------------------------------------------------------------
-
-    it('adresse la présence aux rooms PERSONNELLES des pairs, pas seulement au fil', async () => {
-      const chains = recordEmitChains(ioState);
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-away', username: 'alice', displayName: 'Alice',
-        firstName: 'Alice', lastName: 'Smith', lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ conversationId: 'conv-aaa' }])
-        .mockResolvedValueOnce([
-          { id: 'part-peer', userId: 'user-peer' },
-          { id: 'part-self', userId: 'user-away' },
-        ]);
-      prisma.user.findMany.mockResolvedValue([]);
-
-      await (manager as any)._broadcastUserStatus('user-away', true, false);
-
-      const rooms = chains.roomsFor(SERVER_EVENTS.USER_STATUS).flat();
-      chains.restore();
-      expect(rooms).toContain(ROOMS.user('user-peer'));
-    });
-
-    it("adresse la présence d'un pair SANS COMPTE par son Participant.id", async () => {
-      const chains = recordEmitChains(ioState);
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-host', username: 'host', displayName: 'Host',
-        firstName: 'Host', lastName: '', lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ conversationId: 'conv-link' }])
-        .mockResolvedValueOnce([
-          { id: 'part-guest', userId: null },
-          { id: 'part-host', userId: 'user-host' },
-        ]);
-      prisma.user.findMany.mockResolvedValue([]);
-
-      await (manager as any)._broadcastUserStatus('user-host', true, false);
-
-      const rooms = chains.roomsFor(SERVER_EVENTS.USER_STATUS).flat();
-      chains.restore();
-      expect(rooms).toContain(ROOMS.user('part-guest'));
-    });
-
-    // La garde de PARITÉ — celle qui a de la valeur. Les deux témoins ci-dessus
-    // décrivent la porte inscrite ; ils resteraient verts si la porte anonyme
-    // gardait son unique `to(ROOMS.conversation(...))`. Or c'est elle qui porte
-    // le pire cas : un invité de lien partagé n'a QU'UNE conversation, donc « la
-    // room quittée » y vaut la totalité de sa présence (corollaire de la
-    // Leçon 233 : le chemin à 1 objet n'est pas le cas facile). Le témoin ne
-    // nomme aucun nombre de rooms — il exige des DEUX portes qu'elles adressent
-    // le pair par sa room personnelle, et tombe dès que l'une diverge.
-    it('les DEUX portes de présence adressent le pair par sa room personnelle', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findMany.mockResolvedValue([]);
-
-      const chainsRegistered = recordEmitChains(ioState);
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-reg-parity', username: 'reg', displayName: 'Reg',
-        firstName: 'Reg', lastName: '', lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ conversationId: 'conv-parity' }])
-        .mockResolvedValueOnce([{ id: 'part-witness', userId: 'user-witness' }]);
-      await (manager as any)._broadcastUserStatus('user-reg-parity', true, false);
-      const registeredRooms = chainsRegistered.roomsFor(SERVER_EVENTS.USER_STATUS).flat();
-      chainsRegistered.restore();
-
-      const chainsAnonymous = recordEmitChains(ioState);
-      prisma.participant.findUnique.mockResolvedValue({
-        id: 'anon-parity', displayName: 'Guest', nickname: null,
-        lastActiveAt: new Date(), conversationId: 'conv-parity',
-      });
-      prisma.participant.findMany.mockResolvedValue([{ id: 'part-witness', userId: 'user-witness' }]);
-      await (manager as any)._broadcastUserStatus('anon-parity', true, true);
-      const anonymousRooms = chainsAnonymous.roomsFor(SERVER_EVENTS.USER_STATUS).flat();
-      chainsAnonymous.restore();
-
-      const peerRoom = ROOMS.user('user-witness');
-      expect({
-        porteInscrite: registeredRooms.includes(peerRoom),
-        porteAnonyme: anonymousRooms.includes(peerRoom),
-      }).toEqual({ porteInscrite: true, porteAnonyme: true });
-    });
-
-    // L'élargissement de l'audience ne doit RIEN retirer au filtre de blocage :
-    // il exclut par socket.id, donc il doit survivre au changement d'adressage.
-    it("l'exclusion des bloqueurs survit à l'adressage par rooms personnelles", async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-blocked-parity', username: 'alice', displayName: 'Alice',
-        firstName: 'Alice', lastName: 'Smith', lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ conversationId: 'conv-blocked' }])
-        .mockResolvedValueOnce([{ id: 'part-blocker', userId: 'user-blocker' }]);
-      (manager as any).userSockets.set('user-blocker', new Set(['sock-blocker']));
-      prisma.user.findMany.mockResolvedValue([{ id: 'user-blocker' }]);
-
-      await (manager as any)._broadcastUserStatus('user-blocked-parity', true, false);
-
-      expect(ioState.to).toHaveBeenCalledWith(expect.arrayContaining([ROOMS.user('user-blocker')]));
-      expect(ioState.except).toHaveBeenCalledWith(['sock-blocker']);
+      const roleQueries = prisma.user.findMany.mock.calls
+        .map((c: unknown[]) => c[0] as { where?: { role?: unknown } })
+        .filter((args) => args?.where?.role !== undefined);
+      expect(roleQueries).toHaveLength(1);
     });
   });
 
@@ -4269,6 +4308,14 @@ describe('MeeshySocketIOManager', () => {
       jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
       // The viewer blocked 'user-blocked' (bidirectional block model on User.blockedUserIds).
       prisma.user.findUnique.mockResolvedValue({ blockedUserIds: ['user-blocked'] });
+      // Depuis le 2026-08-25 le contact « normal » doit être un AMI ACCEPTÉ pour
+      // rester visible : partager une conversation n'autorise plus rien. Les
+      // DEUX sont amis ici — c'est ce qui isole le BLOCAGE comme seule cause du
+      // masquage, au lieu de le confondre avec l'absence de relation.
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: 'user-blocked', receiverId: 'user-viewer' },
+        { senderId: 'user-normal', receiverId: 'user-viewer' },
+      ]);
 
       await (manager as any)._emitPresenceSnapshot(socket, 'user-viewer', false);
 
@@ -4276,6 +4323,61 @@ describe('MeeshySocketIOManager', () => {
         users: [
           { userId: 'user-blocked', username: 'blocked-contact', isOnline: false, lastActiveAt: null },
           { userId: 'user-normal', username: 'normal-contact', isOnline: false, lastActiveAt: seenAt },
+        ],
+      });
+    });
+
+    // Témoin de CONFIRMATION (revue F6, 2026-08-26) : l'instantané passe par
+    // `resolveForTargets`, qui lit `deactivatedAt` et rend HIDDEN avant tout
+    // privilège. Le lecteur ADMIN est la variante qui porte la preuve — il
+    // reçoit FULL pour tout le reste, donc seule la désactivation peut masquer.
+    it.each([
+      ['un ADMIN', { role: 'ADMIN', blockedUserIds: [] }],
+      ['un AMI', { role: 'USER', blockedUserIds: [] }],
+    ])('masque un contact DÉSACTIVÉ même à %s — encore connecté, il ressort hors ligne sans dernière connexion', async (_viewer, viewerRow) => {
+      const socket = makeSocket('sock-ps-deactivated');
+      const seenAt = new Date('2026-08-20T00:00:00.000Z');
+      (manager as any).presenceSnapshotCache.set('user-viewer', {
+        users: [
+          { userId: 'user-deactivated', username: 'gone', isOnline: false, lastActiveAt: seenAt },
+          { userId: 'user-live', username: 'live', isOnline: false, lastActiveAt: seenAt },
+        ],
+        cachedAt: Date.now(),
+      });
+      // Les deux sont CONNECTÉS : la désactivation ne révoque pas les sockets.
+      for (const id of ['user-deactivated', 'user-live']) {
+        (manager as any).connectedUsers.set(id, {
+          id, socketId: `sock-${id}`, isAnonymous: false, language: 'fr', resolvedLanguages: [],
+        });
+      }
+      jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+      jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
+      prisma.user.findUnique.mockResolvedValue(viewerRow);
+      // `user.findMany` sert DEUX questions au résolveur : « lesquels sont
+      // désactivés ? » (`where.id.in`) et « lesquels ont bloqué le lecteur ? »
+      // (`where.blockedUserIds`) — d'où l'aiguillage sur la forme du `where`.
+      prisma.user.findMany.mockImplementation(async (args: any) => {
+        if (args?.where?.blockedUserIds) return [];
+        if (args?.where?.id?.in) {
+          return [
+            { id: 'user-deactivated', deactivatedAt: seenAt },
+            { id: 'user-live', deactivatedAt: null },
+          ];
+        }
+        return [];
+      });
+      // Les deux sont AMIS du lecteur : seule la désactivation distingue les deux lignes.
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: 'user-deactivated', receiverId: 'user-viewer' },
+        { senderId: 'user-live', receiverId: 'user-viewer' },
+      ]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-viewer', false);
+
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, {
+        users: [
+          { userId: 'user-deactivated', username: 'gone', isOnline: false, lastActiveAt: null },
+          { userId: 'user-live', username: 'live', isOnline: true, lastActiveAt: seenAt },
         ],
       });
     });
@@ -4773,6 +4875,20 @@ describe('MeeshySocketIOManager', () => {
       await cb('user-maint', true, false);
     });
 
+    it('setSessionRevoker callback disconnects the user sockets with the deletion reason', async () => {
+      const { disconnectRevokedSessions } = jest.requireMock('../disconnectRevokedSessions') as { disconnectRevokedSessions: jest.Mock };
+      disconnectRevokedSessions.mockClear();
+      const revoke = mockMaintenanceServiceInstance.setSessionRevoker.mock.calls[0][0];
+      await revoke('user-expired');
+      expect(disconnectRevokedSessions).toHaveBeenCalledTimes(1);
+      expect(disconnectRevokedSessions).toHaveBeenCalledWith(expect.objectContaining({
+        io: (manager as any).io,
+        userId: 'user-expired',
+        reason: 'logout_all_devices',
+        onError: expect.any(Function),
+      }));
+    });
+
     it('setIsCurrentlyConnected callback returns true for connected user', () => {
       const cb = mockMaintenanceServiceInstance.setIsCurrentlyConnected.mock.calls[0][0];
       (manager as any).connectedUsers.set('user-live', { id: 'user-live', socketId: 's1', isAnonymous: false, language: 'fr', resolvedLanguages: [] });
@@ -4989,6 +5105,138 @@ describe('MeeshySocketIOManager', () => {
   });
 
   // -------------------------------------------------------------------------
+  // 34 bis. _emitPresenceSnapshot — la RELATION, pas la conversation
+  //
+  // Directive produit (2026-08-25) : « personne ne doit savoir ma dernière
+  // connexion sur l'application si on n'est pas ami. Les utilisateurs avec le
+  // rôle ADMIN et supérieur peuvent constamment avoir l'état de présence. »
+  //
+  // La liste des contacts reste dérivée des conversations — c'est la façon la
+  // moins chère de nommer les gens que le client va afficher. Ce n'est plus une
+  // AUTORISATION : chaque entrée traverse `PresenceVisibilityService`. Ces
+  // témoins gardent la différence entre « être dans la liste » et « y être
+  // renseigné ».
+  // -------------------------------------------------------------------------
+
+  describe('_emitPresenceSnapshot - visibilité par relation', () => {
+    const SEEN_AT = new Date('2026-08-20T12:00:00.000Z');
+
+    function warmSnapshot(viewerKey: string) {
+      (manager as any).presenceSnapshotCache.set(viewerKey, {
+        users: [
+          { userId: 'user-friend', username: 'friend', isOnline: false, lastActiveAt: SEEN_AT },
+          { userId: 'user-stranger', username: 'stranger', isOnline: false, lastActiveAt: SEEN_AT },
+          { userId: 'part-guest', username: 'Guest', isOnline: false, lastActiveAt: SEEN_AT },
+        ],
+        cachedAt: Date.now(),
+      });
+      // Les trois sont RÉELLEMENT en ligne : le masquage doit SUPPRIMER une
+      // information vraie, pas se contenter de ne pas en inventer une.
+      for (const id of ['user-friend', 'user-stranger', 'part-guest']) {
+        (manager as any).connectedUsers.set(id, {
+          id, socketId: `sock-${id}`, isAnonymous: false, language: 'fr', resolvedLanguages: [],
+        });
+      }
+      jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+      jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
+    }
+
+    function emittedUsers(socket: ReturnType<typeof makeSocket>) {
+      const call = socket.emit.mock.calls.find((c: any) => c[0] === SERVER_EVENTS.PRESENCE_SNAPSHOT);
+      return call?.[1]?.users as Array<{ userId: string; isOnline: boolean; lastActiveAt: Date | null }>;
+    }
+
+    it("rend HORS LIGNE, sans dernière connexion, un co-participant qui n'est pas ami", async () => {
+      const socket = makeSocket('sock-vis-stranger');
+      warmSnapshot('user-viewer');
+      prisma.user.findUnique.mockResolvedValue({ role: 'USER', blockedUserIds: [] });
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: 'user-friend', receiverId: 'user-viewer' },
+      ]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-viewer', false);
+
+      const users = emittedUsers(socket);
+      expect(users).toContainEqual(
+        expect.objectContaining({ userId: 'user-stranger', isOnline: false, lastActiveAt: null }),
+      );
+      // Un invité de lien n'a pas de compte, donc aucune amitié possible.
+      expect(users).toContainEqual(
+        expect.objectContaining({ userId: 'part-guest', isOnline: false, lastActiveAt: null }),
+      );
+    });
+
+    it('rend en ligne, avec sa dernière connexion, un AMI accepté', async () => {
+      const socket = makeSocket('sock-vis-friend');
+      warmSnapshot('user-viewer');
+      prisma.user.findUnique.mockResolvedValue({ role: 'USER', blockedUserIds: [] });
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: 'user-friend', receiverId: 'user-viewer' },
+      ]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-viewer', false);
+
+      expect(emittedUsers(socket)).toContainEqual(
+        expect.objectContaining({ userId: 'user-friend', isOnline: true, lastActiveAt: SEEN_AT }),
+      );
+    });
+
+    it('montre TOUT à un lecteur ADMIN, y compris un inconnu et un invité de lien', async () => {
+      const socket = makeSocket('sock-vis-admin');
+      warmSnapshot('user-admin-viewer');
+      prisma.user.findUnique.mockResolvedValue({ role: 'ADMIN', blockedUserIds: [] });
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-admin-viewer', false);
+
+      const users = emittedUsers(socket);
+      for (const id of ['user-friend', 'user-stranger', 'part-guest']) {
+        expect(users).toContainEqual(
+          expect.objectContaining({ userId: id, isOnline: true, lastActiveAt: SEEN_AT }),
+        );
+      }
+      // Le privilège se lit sur le RÔLE, pas sur une relation : aucune amitié
+      // n'a eu à être interrogée.
+      expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
+    });
+
+    it("traite un lecteur MODERATOR comme un utilisateur ordinaire : ses amis, pas les inconnus", async () => {
+      const socket = makeSocket('sock-vis-mod');
+      warmSnapshot('user-mod-viewer');
+      prisma.user.findUnique.mockResolvedValue({ role: 'MODERATOR', blockedUserIds: [] });
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: 'user-friend', receiverId: 'user-mod-viewer' },
+      ]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-mod-viewer', false);
+
+      const users = emittedUsers(socket);
+      expect(users).toContainEqual(
+        expect.objectContaining({ userId: 'user-friend', isOnline: true, lastActiveAt: SEEN_AT }),
+      );
+      for (const id of ['user-stranger', 'part-guest']) {
+        expect(users).toContainEqual(
+          expect.objectContaining({ userId: id, isOnline: false, lastActiveAt: null }),
+        );
+      }
+    });
+
+    it("ne renseigne RIEN à un lecteur anonyme — il n'a aucune relation", async () => {
+      const socket = makeSocket('sock-vis-anon');
+      warmSnapshot('part-anon-viewer');
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'part-anon-viewer', true);
+
+      for (const user of emittedUsers(socket)) {
+        expect(user).toEqual(expect.objectContaining({ isOnline: false, lastActiveAt: null }));
+      }
+      // Un lecteur sans compte n'a pas de rôle à relire.
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // 35. _broadcastNewMessage - normalizeConversationId path with DB lookup
   // -------------------------------------------------------------------------
 
@@ -5123,27 +5371,14 @@ describe('MeeshySocketIOManager', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 41. _broadcastUserStatus - registered user showLastSeen=false
+  // 41. `showLastSeen=false` — voir `_broadcastUserStatus` § « efface
+  // lastActiveAt pour les AMIS […] et le garde pour les privilégiés ».
+  //
+  // Le témoin qui vivait ici n'exigeait qu'« une » charge à `lastActiveAt: null`
+  // et serait resté vert alors même que la charge des ADMIN+, qui doit garder
+  // l'horodatage, aurait été effacée avec elle. Son successeur nomme les DEUX
+  // sous-ensembles, donc il tombe dans les deux sens.
   // -------------------------------------------------------------------------
-
-  describe('_broadcastUserStatus - registered user showLastSeen=false', () => {
-    it('sends null lastActiveAt when showLastSeen=false', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: false });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-hidden',
-        username: 'hidden',
-        displayName: 'Hidden User',
-        firstName: 'Hidden',
-        lastName: 'User',
-        lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-h1' }]);
-      await (manager as any)._broadcastUserStatus('user-hidden', true, false);
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
-        lastActiveAt: null,
-      }));
-    });
-  });
 
   // -------------------------------------------------------------------------
   // 42. sendToUser - returns false when socket missing from sockets map
@@ -5945,6 +6180,7 @@ describe('MeeshySocketIOManager', () => {
         startMaintenanceTasks: jest.fn().mockRejectedValue(new Error('maintenance fail')),
         setStatusBroadcastCallback: jest.fn(),
         setIsCurrentlyConnected: jest.fn(),
+        setSessionRevoker: jest.fn(),
       }));
 
       const m = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);
@@ -6533,6 +6769,28 @@ describe('MeeshySocketIOManager', () => {
       lastCallArgs.replayLiveLocations(mockSock, 'conv-replay-cb');
       expect((manager as any).locationHandler.replayLiveLocationsTo)
         .toHaveBeenCalledWith(mockSock, 'conv-replay-cb');
+    });
+
+    // La liste nominative `onlineUsers` de `conversation:stats` est projetée
+    // par LECTEUR à l'émission (directive produit du 2026-08-25) : le handler
+    // reçoit le lecteur RELU et la loi unique — la même paire que
+    // `_emitPresenceSnapshot` consomme. Deux fils de plus que rien d'autre ne
+    // signale s'ils manquent.
+    it('wires ConversationHandler.presenceVisibility to the shared PresenceVisibilityService', () => {
+      const { ConversationHandler } = jest.requireMock('../handlers/ConversationHandler') as any;
+      const lastCallArgs = ConversationHandler.mock.calls[ConversationHandler.mock.calls.length - 1][0];
+      expect(lastCallArgs.presenceVisibility).toBe((manager as any).presenceVisibilityService);
+    });
+
+    it('wires ConversationHandler.presenceViewer to _presenceViewer — le rôle est RELU en base', async () => {
+      const { ConversationHandler } = jest.requireMock('../handlers/ConversationHandler') as any;
+      const lastCallArgs = ConversationHandler.mock.calls[ConversationHandler.mock.calls.length - 1][0];
+      prisma.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+
+      await expect(lastCallArgs.presenceViewer('user-stats-viewer'))
+        .resolves.toEqual({ userId: 'user-stats-viewer', role: 'ADMIN' });
+      expect(prisma.user.findUnique)
+        .toHaveBeenCalledWith({ where: { id: 'user-stats-viewer' }, select: { role: true } });
     });
 
     it('emitPresenceSnapshot callback does not throw', () => {
@@ -7185,6 +7443,7 @@ describe('MeeshySocketIOManager', () => {
         startMaintenanceTasks: jest.fn().mockRejectedValue('string rejection'),  // not an Error
         setStatusBroadcastCallback: jest.fn(),
         setIsCurrentlyConnected: jest.fn(),
+        setSessionRevoker: jest.fn(),
       }));
 
       const m = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);

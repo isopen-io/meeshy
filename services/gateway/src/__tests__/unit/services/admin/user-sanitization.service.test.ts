@@ -6,12 +6,14 @@
 import { describe, it, expect } from '@jest/globals';
 import { UserRoleEnum, FullUser, UserAuditLog, UserAuditAction } from '@meeshy/shared/types';
 
-// Mock permissionsService so we control canViewSensitiveData
+// Mock permissionsService so we control canViewSensitiveData / canViewPresence
 const mockCanViewSensitiveData = jest.fn() as jest.Mock<any>;
+const mockCanViewPresence = jest.fn() as jest.Mock<any>;
 
 jest.mock('../../../../services/admin/permissions.service', () => ({
   permissionsService: {
     canViewSensitiveData: (...args: unknown[]) => mockCanViewSensitiveData(...args),
+    canViewPresence: (...args: unknown[]) => mockCanViewPresence(...args),
   },
 }));
 
@@ -90,6 +92,7 @@ function makeAuditLog(overrides: Partial<UserAuditLog> = {}): UserAuditLog {
 describe('UserSanitizationService.sanitizeUser — sensitive viewer', () => {
   beforeEach(() => {
     mockCanViewSensitiveData.mockReturnValue(true);
+    mockCanViewPresence.mockReturnValue(true);
   });
 
   it('returns AdminUser with sensitive fields when viewer has canViewSensitiveData', () => {
@@ -136,6 +139,7 @@ describe('UserSanitizationService.sanitizeUser — sensitive viewer', () => {
 describe('UserSanitizationService.sanitizeUser — non-sensitive viewer', () => {
   beforeEach(() => {
     mockCanViewSensitiveData.mockReturnValue(false);
+    mockCanViewPresence.mockReturnValue(false);
   });
 
   it('returns MaskedUser with masked email and phone', () => {
@@ -177,6 +181,7 @@ describe('UserSanitizationService.sanitizeUser — non-sensitive viewer', () => 
 describe('UserSanitizationService — maskEmail edge cases (via sanitizeUser)', () => {
   beforeEach(() => {
     mockCanViewSensitiveData.mockReturnValue(false);
+    mockCanViewPresence.mockReturnValue(false);
   });
 
   it('masks first char + keeps domain', () => {
@@ -203,6 +208,7 @@ describe('UserSanitizationService — maskEmail edge cases (via sanitizeUser)', 
 describe('UserSanitizationService — maskPhone edge cases (via sanitizeUser)', () => {
   beforeEach(() => {
     mockCanViewSensitiveData.mockReturnValue(false);
+    mockCanViewPresence.mockReturnValue(false);
   });
 
   it('returns *** when phone is shorter than 6 chars', () => {
@@ -224,6 +230,63 @@ describe('UserSanitizationService — maskPhone edge cases (via sanitizeUser)', 
     // cleaned = '+336123456789' → length >= 6 → not '***'
     expect(result.phoneNumber).not.toBe('***');
     expect(result.phoneNumber).toMatch(/\*\*/);
+  });
+});
+
+// ─── presence gate (isOnline/lastActiveAt) ─────────────────────────────────────
+//
+// Directive produit 2026-08-25 : « les utilisateurs avec le rôle ADMIN et
+// supérieur peuvent constamment avoir l'état de présence ». Seuil DISTINCT de
+// canViewSensitiveData — ces témoins prouvent que les deux checks sont bien
+// deux appels séparés, pas un raccourci qui les confond.
+
+describe('UserSanitizationService.sanitizeUser — presence gate (isOnline/lastActiveAt)', () => {
+  it('sert isOnline/lastActiveAt réels quand canViewPresence est vrai (ADMIN/BIGBOSS)', () => {
+    mockCanViewSensitiveData.mockReturnValue(true);
+    mockCanViewPresence.mockReturnValue(true);
+    const svc = makeService();
+    const lastActiveAt = new Date('2026-08-20T10:00:00.000Z');
+    const user = makeFullUser({ isOnline: true, lastActiveAt });
+    const result = svc.sanitizeUser(user, UserRoleEnum.ADMIN) as any;
+
+    expect(result.isOnline).toBe(true);
+    expect(result.lastActiveAt).toEqual(lastActiveAt);
+  });
+
+  it('masque isOnline/lastActiveAt quand canViewPresence est faux (MODERATOR/AUDIT/ANALYST)', () => {
+    mockCanViewSensitiveData.mockReturnValue(false);
+    mockCanViewPresence.mockReturnValue(false);
+    const svc = makeService();
+    const user = makeFullUser({ isOnline: true, lastActiveAt: new Date('2026-08-20T10:00:00.000Z') });
+    const result = svc.sanitizeUser(user, UserRoleEnum.MODERATOR) as any;
+
+    // isOnline: boolean non nullable côté PublicUser → masqué se présente
+    // comme HORS LIGNE (false), jamais null.
+    expect(result.isOnline).toBe(false);
+    expect(result.lastActiveAt).toBeNull();
+  });
+
+  it('garde les clés isOnline/lastActiveAt présentes même masquées (jamais retirées)', () => {
+    mockCanViewSensitiveData.mockReturnValue(false);
+    mockCanViewPresence.mockReturnValue(false);
+    const svc = makeService();
+    const result = svc.sanitizeUser(makeFullUser(), UserRoleEnum.AUDIT) as any;
+
+    expect(result).toHaveProperty('isOnline');
+    expect(result).toHaveProperty('lastActiveAt');
+  });
+
+  it('canViewPresence est un check INDÉPENDANT de canViewSensitiveData', () => {
+    // Un viewer avec accès aux données sensibles mais sans canViewPresence
+    // (câblage isolé — n'arrive jamais avec la vraie matrice de rôles, mais
+    // prouve que sanitizeUser ne déduit pas l'un de l'autre) reste masqué.
+    mockCanViewSensitiveData.mockReturnValue(true);
+    mockCanViewPresence.mockReturnValue(false);
+    const svc = makeService();
+    const result = svc.sanitizeUser(makeFullUser({ isOnline: true }), UserRoleEnum.ADMIN) as any;
+
+    expect(result.isOnline).toBe(false);
+    expect(result.lastActiveAt).toBeNull();
   });
 });
 

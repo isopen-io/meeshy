@@ -204,8 +204,9 @@ function makeRequest(overrides: Record<string, any> = {}) {
     authContext: {
       userId: USER_ID,
       participantId: PART_ID,
-      type: 'registered',
+      type: 'user',
       hasFullAccess: true,
+      registeredUser: { id: USER_ID, role: 'USER' },
     },
     ...overrides,
   };
@@ -1914,6 +1915,46 @@ describe('callRoutes', () => {
       expect(mockListHistory).toHaveBeenCalledWith(
         USER_ID,
         expect.objectContaining({ limit: 5, filter: 'all' })
+      );
+    });
+
+    // Directive produit 2026-08-25 — TROU #3. `listHistory` gates
+    // `peer.isOnline` on `options.viewer`, resolved once here from the
+    // request's REAL authContext (`viewerFromRequest`) — never from `userId`
+    // alone, which would carry no role and no way to grant the ADMIN/BIGBOSS
+    // entitlement the directive requires.
+    it('forwards the resolved viewer (userId + role) alongside the parsed query', async () => {
+      const { routes, reply } = setup();
+      mockListHistory.mockResolvedValueOnce({ items: [], hasMore: false });
+
+      const req = makeRequest({ query: {} });
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(mockListHistory).toHaveBeenCalledWith(
+        USER_ID,
+        expect.objectContaining({ viewer: { userId: USER_ID, role: 'USER' } })
+      );
+    });
+
+    it('forwards an ADMIN viewer when the caller is an admin', async () => {
+      const { routes, reply } = setup();
+      mockListHistory.mockResolvedValueOnce({ items: [], hasMore: false });
+
+      const req = makeRequest({
+        query: {},
+        authContext: {
+          userId: USER_ID,
+          participantId: PART_ID,
+          type: 'user',
+          hasFullAccess: true,
+          registeredUser: { id: USER_ID, role: 'ADMIN' },
+        },
+      });
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(mockListHistory).toHaveBeenCalledWith(
+        USER_ID,
+        expect.objectContaining({ viewer: { userId: USER_ID, role: 'ADMIN' } })
       );
     });
 

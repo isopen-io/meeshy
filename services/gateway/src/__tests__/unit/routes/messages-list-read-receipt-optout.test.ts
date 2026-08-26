@@ -65,7 +65,7 @@ jest.mock('../../../services/PrivacyPreferencesService', () => ({
 
 jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: jest.fn().mockResolvedValue(new Map()),
+    resolveForTargets: jest.fn().mockResolvedValue(new Map()),
   }),
 }));
 

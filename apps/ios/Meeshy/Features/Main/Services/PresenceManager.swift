@@ -132,20 +132,26 @@ final class PresenceManager: ObservableObject {
         }
     }
 
-    // Seed initial presence from conversations API response
+    /// Re-sème la présence depuis une page de conversations (REST). Cette
+    /// charge n'a d'autorité que sur les INCONNUS : un utilisateur déjà suivi
+    /// GARDE son entrée — masque serveur (`isOnline:false`, `lastActiveAt:nil`)
+    /// compris, activité fraîche (`noteActivity`) comprise. Seules les sources
+    /// vivantes (`presence:snapshot`, `user:status`, typing:start) remplacent
+    /// une présence connue. Jumeau iOS de F10 (web `mergeParticipants(_,
+    /// { presence: 'keep-existing' })`) — chantier confidentialité 2026-08-26.
     func seed(from conversations: [APIConversation], currentUserId: String) {
-        for conv in conversations {
-            guard let participants = conv.participants else { continue }
-            for participant in participants where participant.userId != currentUserId {
-                guard let userId = participant.userId else { continue }
-                let isOnline = participant.isOnline ?? participant.user?.isOnline ?? false
-                let lastActive = participant.lastActiveAt ?? participant.user?.lastActiveAt
-                presenceMap[userId] = UserPresence(
-                    isOnline: isOnline,
-                    lastActiveAt: lastActive
+        let listed = conversations
+            .flatMap { $0.participants ?? [] }
+            .filter { $0.userId != currentUserId }
+            .reduce(into: [String: UserPresence]()) { map, participant in
+                guard let userId = participant.userId else { return }
+                map[userId] = UserPresence(
+                    isOnline: participant.isOnline ?? participant.user?.isOnline ?? false,
+                    lastActiveAt: participant.lastActiveAt ?? participant.user?.lastActiveAt
                 )
             }
-        }
+        guard !listed.isEmpty else { return }
+        presenceMap.merge(listed) { known, _ in known }
     }
 
     func presenceState(for userId: String) -> PresenceState {

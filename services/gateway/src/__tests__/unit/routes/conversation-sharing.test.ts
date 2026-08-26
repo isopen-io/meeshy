@@ -79,13 +79,16 @@ jest.mock('@meeshy/shared/utils/errors', () => ({
   sendErrorResponse: jest.fn<any>(),
 }));
 
-// Gate de présence — les profils servis par ces deux routes sont des
-// CO-PARTICIPANTS de la conversation : contexte d'accès déjà garanti des deux
-// côtés, donc `resolvePrefsOnly` (et non le critère strict).
-const mockResolvePrefsOnly = jest.fn<any>();
+// Gate de présence. Régime STRICT (2026-08-25) : partager une conversation
+// n'ouvre plus rien — la réponse à l'inviteur montre la présence de l'invité
+// selon SA propre autorisation (soi/ADMIN+/ami), via `resolveForTarget`
+// (cible unique), jamais sur la seule co-participation qu'il vient de créer.
+// Le service n'est doublé que sur son I/O : `lawFaithfulTargetResolver`
+// applique la VRAIE loi partagée à un ensemble d'amis piloté par le test.
+const mockResolveForTarget = jest.fn<any>(async () => ({ showOnline: false, showLastSeenTimestamp: false }));
 jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+    resolveForTarget: (...args: any[]) => mockResolveForTarget(...args),
   }),
 }));
 
@@ -98,6 +101,8 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
+import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import type { PresenceViewer, PresenceTarget } from '../../../services/PresenceVisibilityService';
 import { registerSharingRoutes } from '../../../routes/conversations/sharing';
 
 // ─── IDs ──────────────────────────────────────────────────────────────────────
@@ -106,16 +111,22 @@ const CONV_ID = '507f1f77bcf86cd799439011';
 const USER_ID = '507f1f77bcf86cd799439022';
 const INVITEE_ID = '507f1f77bcf86cd799439033';
 
-const PREFS_FULL = { showOnline: true, showLastSeenTimestamp: true };
-const PREFS_HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
+const PREFS_HIDDEN = { showOnline: false, showLastSeenTimestamp: false } as const;
 
-// Défaut du double : tout montrable, pour que les cas de ce fichier qui ne
-// parlent pas de présence restent inchangés.
-beforeEach(() => {
-  mockResolvePrefsOnly.mockImplementation(async (ids: string[]) =>
-    new Map((ids ?? []).map((id) => [id, PREFS_FULL])),
-  );
-});
+const lawFaithfulTargetResolver =
+  (friendsOfViewer: ReadonlySet<string> = new Set()) =>
+  async (viewer: PresenceViewer, target: PresenceTarget) =>
+    viewer
+      ? resolvePresenceVisibility({
+          isSelf: viewer.userId === target.id,
+          viewerRole: viewer.role,
+          areConnected: friendsOfViewer.has(target.id),
+          targetShowOnlineStatus: true,
+          targetShowLastSeen: true,
+          targetIsDeactivated: false,
+          isBlockedEitherWay: false,
+        })
+      : PREFS_HIDDEN;
 const PART_ID = '507f1f77bcf86cd799439044';
 const LINK_ID = '507f1f77bcf86cd799439055';
 
@@ -227,11 +238,14 @@ function getRoute(fastify: ReturnType<typeof createMockFastify>, method: string,
   return r;
 }
 
+// `type: 'user'` est la forme RÉELLE que pose `createUnifiedAuthMiddleware`
+// pour un inscrit : c'est sur elle que `viewerFromRequest` construit le viewer
+// de présence.
 function makeRequest(overrides: Record<string, any> = {}) {
   return {
     params: {},
     body: {},
-    authContext: { userId: USER_ID, isAuthenticated: true, registeredUser: { id: USER_ID, role: 'USER' } },
+    authContext: { type: 'user', userId: USER_ID, isAuthenticated: true, registeredUser: { id: USER_ID, role: 'USER' } },
     ...overrides,
   };
 }
@@ -471,8 +485,8 @@ describe('POST /conversations/:id/new-link', () => {
 // ignorait sous une réponse 200.
 //
 // Ce qui a été PORTÉ vers `conversation-update-route.test.ts`, sur les DEUX
-// verbes : le gate de présence des participants (les cinq témoins, régime
-// `resolvePrefsOnly`, préférences indépendantes comprises) — c'est ce que cet
+// verbes : le gate de présence des participants (désormais en régime STRICT
+// — soi/ADMIN+/ami —, préférences indépendantes comprises) — c'est ce que cet
 // exemplaire-ci avait de PLUS, et le `PUT` ne l'avait jamais eu.
 //
 // Ce qui a été RETIRÉ avec la route, délibérément : « n'importe quel membre
@@ -1030,20 +1044,24 @@ describe('POST /conversations/:id/invite', () => {
       ...over,
     });
 
-    async function invite(row: Record<string, unknown>) {
+    async function invite(row: Record<string, unknown>, viewerRole: string = 'USER') {
       const { fastify, reply, route } = getInviteRoute();
       fastify.prisma.conversation.findUnique.mockResolvedValue(
         makeConversation([makeInviterParticipant('admin')]),
       );
       fastify.prisma.user.findUnique.mockResolvedValue(makeTargetUser());
       fastify.prisma.participant.create.mockResolvedValue(row);
-      const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
+      const req = makeRequest({
+        params: { id: CONV_ID },
+        body: { userId: INVITEE_ID },
+        authContext: { type: 'user', userId: USER_ID, isAuthenticated: true, registeredUser: { id: USER_ID, role: viewerRole } },
+      });
       await route.handler(req, reply);
       return mockSendSuccess.mock.calls.at(-1)?.[1];
     }
 
     it('sert le participant sous la clé que le schéma déclare', async () => {
-      mockResolvePrefsOnly.mockResolvedValue(new Map());
+      mockResolveForTarget.mockResolvedValue({ showOnline: true, showLastSeenTimestamp: true });
 
       const payload = await invite(invitedRow());
 
@@ -1053,7 +1071,7 @@ describe('POST /conversations/:id/invite', () => {
     });
 
     it('sépare le rang de conversation du rôle global', async () => {
-      mockResolvePrefsOnly.mockResolvedValue(new Map());
+      mockResolveForTarget.mockResolvedValue({ showOnline: true, showLastSeenTimestamp: true });
 
       const payload = await invite(invitedRow());
 
@@ -1062,9 +1080,7 @@ describe('POST /conversations/:id/invite', () => {
     });
 
     it('masque la présence quand l\'invité refuse de montrer son statut', async () => {
-      mockResolvePrefsOnly.mockResolvedValue(
-        new Map([[INVITEE_ID, { showOnline: false, showLastSeenTimestamp: false }]]),
-      );
+      mockResolveForTarget.mockResolvedValue({ showOnline: false, showLastSeenTimestamp: false });
 
       const payload = await invite(invitedRow());
 
@@ -1072,16 +1088,61 @@ describe('POST /conversations/:id/invite', () => {
       expect(payload.participant.lastActiveAt).toBeNull();
     });
 
-    it('consulte le gate sur l\'invité, pas sur l\'inviteur', async () => {
-      mockResolvePrefsOnly.mockResolvedValue(new Map());
+    // La porte : le viewer DEMANDEUR — identité ET rôle — atteint le service,
+    // avec l'invité pour cible. Sans le rôle, ADMIN et USER seraient
+    // indiscernables ; sans l'identité, l'amitié le serait.
+    it('consulte le gate sur l\'invité, pour l\'inviteur (identité + rôle)', async () => {
+      mockResolveForTarget.mockResolvedValue({ showOnline: true, showLastSeenTimestamp: true });
 
       await invite(invitedRow());
 
-      expect(mockResolvePrefsOnly).toHaveBeenCalledWith([INVITEE_ID]);
+      expect(mockResolveForTarget).toHaveBeenCalledWith(
+        { userId: USER_ID, role: 'USER' },
+        { id: INVITEE_ID, deactivatedAt: null },
+      );
+    });
+
+    // Régime STRICT : l'invitation crée une co-participation, et une
+    // co-participation n'est pas une relation — la présence de l'invité suit
+    // l'autorisation PROPRE de l'inviteur.
+    it('invité ami accepté ⇒ présence servie', async () => {
+      mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver(new Set([INVITEE_ID])));
+
+      const payload = await invite(invitedRow());
+
+      expect(payload.participant.isOnline).toBe(true);
+      expect(payload.participant.lastActiveAt).toEqual(new Date('2026-08-22T09:00:00.000Z'));
+    });
+
+    it('invité NON ami ⇒ isOnline false et lastActiveAt null, malgré la co-participation créée', async () => {
+      mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver());
+
+      const payload = await invite(invitedRow());
+
+      expect(payload.participant.isOnline).toBe(false);
+      expect(payload.participant.lastActiveAt).toBeNull();
+    });
+
+    it('inviteur ADMIN non ami ⇒ présence servie', async () => {
+      mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver());
+
+      const payload = await invite(invitedRow(), 'ADMIN');
+
+      expect(payload.participant.isOnline).toBe(true);
+      expect(payload.participant.lastActiveAt).toEqual(new Date('2026-08-22T09:00:00.000Z'));
+    });
+
+    it('inviteur MODERATOR non ami ⇒ cachée, comme un utilisateur ordinaire', async () => {
+      mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver());
+
+      const payload = await invite(invitedRow(), 'MODERATOR');
+
+      expect(payload.participant.isOnline).toBe(false);
+      expect(payload.participant.lastActiveAt).toBeNull();
     });
 
     it('ne recopie pas l\'état privé par paire du rang Prisma', async () => {
-      mockResolvePrefsOnly.mockResolvedValue(new Map());
+      mockResolveForTarget.mockResolvedValue({ showOnline: true, showLastSeenTimestamp: true });
 
       const payload = await invite(invitedRow());
 

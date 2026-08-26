@@ -175,7 +175,12 @@ export interface PublicUser {
   isOnline: boolean;
   emailVerifiedAt: Date | null;
   phoneVerifiedAt: Date | null;
-  lastActiveAt: Date;
+  /**
+   * `null` = présence MASQUÉE pour ce viewer (`UserSanitizationService`, seuil
+   * `canViewPresence` : ADMIN/BIGBOSS). La colonne, elle, n'est jamais nulle
+   * (`FullUser.lastActiveAt: Date`) — c'est la valeur SERVIE qui peut l'être.
+   */
+  lastActiveAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   deactivatedAt: Date | null;

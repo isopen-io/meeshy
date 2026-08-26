@@ -148,6 +148,80 @@ describe('GET /anonymous-users — ADMIN with status=inactive', () => {
   });
 });
 
+// Directive produit 2026-08-25 : « les utilisateurs avec le rôle ADMIN et
+// supérieur peuvent constamment avoir l'état de présence » — MODERATOR/AUDIT
+// passent `requireAdmin` ici mais n'ont plus canViewPresence.
+describe('GET /anonymous-users — presence gate (isOnline/lastActiveAt)', () => {
+  const participant = {
+    id: 'p1',
+    displayName: 'Anon',
+    avatar: null,
+    language: 'fr',
+    isActive: true,
+    isOnline: true,
+    lastActiveAt: new Date('2026-08-20T10:00:00.000Z'),
+    joinedAt: new Date('2026-08-01'),
+    leftAt: null,
+  };
+
+  async function buildAppWithParticipant(role: string): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('authenticate', async (req: any) => {
+      (req as any).authContext = {
+        isAuthenticated: true,
+        userId: USER_ID,
+        registeredUser: { id: USER_ID, role },
+      };
+    });
+    app.decorate('prisma', makePrisma({
+      participant: {
+        findMany: jest.fn<any>().mockResolvedValue([participant]),
+        count: jest.fn<any>().mockResolvedValue(1),
+      },
+    }) as any);
+    await app.register(anonymousUsersAdminRoutes);
+    await app.ready();
+    return app;
+  }
+
+  it('masks isOnline/lastActiveAt for MODERATOR (canViewUsers but no canViewPresence)', async () => {
+    const app = await buildAppWithParticipant('MODERATOR');
+    const res = await app.inject({ method: 'GET', url: '/anonymous-users' });
+    expect(res.statusCode).toBe(200);
+    const [anon] = res.json().data.anonymousUsers;
+    expect(anon.isOnline).toBe(false);
+    expect(anon.lastActiveAt).toBeNull();
+    expect(anon.id).toBe('p1');
+    await app.close();
+  });
+
+  it('masks isOnline/lastActiveAt for AUDIT', async () => {
+    const app = await buildAppWithParticipant('AUDIT');
+    const res = await app.inject({ method: 'GET', url: '/anonymous-users' });
+    const [anon] = res.json().data.anonymousUsers;
+    expect(anon.isOnline).toBe(false);
+    expect(anon.lastActiveAt).toBeNull();
+    await app.close();
+  });
+
+  it('serves the real isOnline/lastActiveAt for ADMIN', async () => {
+    const app = await buildAppWithParticipant('ADMIN');
+    const res = await app.inject({ method: 'GET', url: '/anonymous-users' });
+    const [anon] = res.json().data.anonymousUsers;
+    expect(anon.isOnline).toBe(true);
+    expect(anon.lastActiveAt).toBe('2026-08-20T10:00:00.000Z');
+    await app.close();
+  });
+
+  it('serves the real isOnline/lastActiveAt for BIGBOSS', async () => {
+    const app = await buildAppWithParticipant('BIGBOSS');
+    const res = await app.inject({ method: 'GET', url: '/anonymous-users' });
+    const [anon] = res.json().data.anonymousUsers;
+    expect(anon.isOnline).toBe(true);
+    await app.close();
+  });
+});
+
 describe('GET /anonymous-users — DB error', () => {
   let app: FastifyInstance;
   beforeAll(async () => {

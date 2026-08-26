@@ -206,21 +206,38 @@ describe('PresenceVisibilityService.resolveForTargets (batch)', () => {
   });
 });
 
-describe('PresenceVisibilityService.resolvePrefsOnly', () => {
-  function svcWithPrefs(prefsById: Record<string, Partial<PrivacyPreferences>>) {
-    const privacy = {
-      getPreferencesForUsers: jest.fn<any>().mockImplementation((arr: Array<{ id: string }>) =>
-        Promise.resolve(new Map(arr.map(({ id }) => [id, makePrefs(prefsById[id] ?? {})]))),
-      ),
+describe('PresenceVisibilityService.acceptedFriendIds', () => {
+  function svcWithFriendships(rows: Array<{ senderId: string; receiverId: string }>) {
+    const prisma = {
+      friendRequest: { findMany: jest.fn<any>().mockResolvedValue(rows) },
     } as any;
-    return new PresenceVisibilityService({} as any, privacy);
+    return { prisma, service: new PresenceVisibilityService(prisma, {} as any) };
   }
 
-  it('shows presence but applies the preference cascade, without any relation lookup', async () => {
-    const svc = svcWithPrefs({ off: { showOnlineStatus: false }, noseen: { showLastSeen: false } });
-    const map = await svc.resolvePrefsOnly(['normal', 'off', 'noseen']);
-    expect(map.get('normal')).toEqual({ showOnline: true, showLastSeenTimestamp: true });
-    expect(map.get('off')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
-    expect(map.get('noseen')).toEqual({ showOnline: true, showLastSeenTimestamp: false });
+  it('rend le PAIR de chaque amitié acceptée, dans les deux sens de la demande', async () => {
+    const { service } = svcWithFriendships([
+      { senderId: VIEWER, receiverId: 'friend-sent' },
+      { senderId: 'friend-received', receiverId: VIEWER },
+    ]);
+    await expect(service.acceptedFriendIds(VIEWER)).resolves.toEqual(
+      new Set(['friend-sent', 'friend-received']),
+    );
+  });
+
+  it("n'interroge que les demandes ACCEPTÉES du seul utilisateur — coût borné par ses amis", async () => {
+    const { service, prisma } = svcWithFriendships([]);
+    await service.acceptedFriendIds(VIEWER);
+    expect(prisma.friendRequest.findMany).toHaveBeenCalledWith({
+      where: {
+        status: 'accepted',
+        OR: [{ senderId: VIEWER }, { receiverId: VIEWER }],
+      },
+      select: { senderId: true, receiverId: true },
+    });
+  });
+
+  it("ne se rend jamais lui-même comme ami (ligne d'auto-amitié résiduelle)", async () => {
+    const { service } = svcWithFriendships([{ senderId: VIEWER, receiverId: VIEWER }]);
+    await expect(service.acceptedFriendIds(VIEWER)).resolves.toEqual(new Set());
   });
 });

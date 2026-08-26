@@ -89,10 +89,10 @@ jest.mock('../../../validation/messages-schemas', () => ({
   AttachmentStatusBodySchema: {},
 }));
 
-const mockResolvePrefsOnly = jest.fn<any>();
+const mockResolveForTargets = jest.fn<any>();
 jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
   }),
 }));
 
@@ -173,12 +173,12 @@ const messageRow = () => ({
 });
 
 async function fetchDetail(): Promise<any> {
-  mockResolvePrefsOnly.mockReset();
-  mockResolvePrefsOnly.mockResolvedValue(new Map([[SENDER_USER_ID, { showOnline: true, showLastSeenTimestamp: true }]]));
+  mockResolveForTargets.mockReset();
+  mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, { showOnline: true, showLastSeenTimestamp: true }]]));
 
   mockAuthMiddleware.mockImplementation(async (req: any) => {
     req.authContext = {
-      type: 'registered',
+      type: 'user',
       isAuthenticated: true,
       isAnonymous: false,
       userId: READER_USER_ID,

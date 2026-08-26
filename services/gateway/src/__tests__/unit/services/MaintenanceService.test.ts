@@ -29,6 +29,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { MaintenanceService } from '../../../services/MaintenanceService';
+import { logger } from '../../../utils/logger';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,7 @@ function makePrisma(overrides: {
     },
     accountDeletionRequest: {
       findMany: jest.fn<any>().mockResolvedValue([]),
+      update: jest.fn<any>().mockResolvedValue({}),
     },
     $transaction: jest.fn<any>().mockResolvedValue([]),
     $runCommandRaw: jest.fn<any>().mockResolvedValue({}),
@@ -369,5 +371,89 @@ describe('getMaintenanceStats', () => {
     const stats = await sut.getMaintenanceStats();
 
     expect(stats).toBeNull();
+  });
+});
+
+// ─── processAccountDeletionRequests — fin de période de grâce (F9 bis) ────────
+// Le balayage journalier met hors service, EN LOT, chaque compte dont la
+// période de grâce est échue (`isActive: false` + `deletedAt`). Le révocateur
+// est injecté comme les deux autres capacités côté socket (`setStatusBroadcastCallback`,
+// `setIsCurrentlyConnected`) : le service ne touche jamais le manager.
+
+type DeletionSweep = { processAccountDeletionRequests(): Promise<void> };
+const sweepDeletions = (sut: MaintenanceService) =>
+  (sut as unknown as DeletionSweep).processAccountDeletionRequests();
+
+function expiredRequest(id: string, userId: string) {
+  return { id, userId, status: 'CONFIRMED', gracePeriodEndsAt: new Date(Date.now() - 1000) };
+}
+
+function makeRevoker(order: string[], failFor?: string) {
+  return jest.fn<(userId: string) => Promise<number>>(async (userId) => {
+    if (userId === failFor) throw new Error('adapter down');
+    order.push(`revoked:${userId}`);
+    return 1;
+  });
+}
+
+describe('processAccountDeletionRequests — la fin de période de grâce coupe les sockets du compte', () => {
+  it("révoque chaque compte expiré avec son id, APRÈS que sa transaction a abouti", async () => {
+    const order: string[] = [];
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    prisma.$transaction = jest.fn<() => Promise<unknown[]>>(async () => { order.push('written'); return []; });
+    const revokeSessions = makeRevoker(order);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    sut.setSessionRevoker(revokeSessions);
+
+    await sweepDeletions(sut);
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(revokeSessions).toHaveBeenNthCalledWith(1, 'user-a');
+    expect(revokeSessions).toHaveBeenNthCalledWith(2, 'user-b');
+    expect(order).toEqual(['written', 'revoked:user-a', 'written', 'revoked:user-b']);
+  });
+
+  it("une transaction qui échoue ne révoque PAS ce compte — il n'est pas hors service — et n'arrête pas le lot", async () => {
+    const order: string[] = [];
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    prisma.$transaction = jest.fn<() => Promise<unknown[]>>()
+      .mockRejectedValueOnce(new Error('write conflict'))
+      .mockResolvedValueOnce([]);
+    const revokeSessions = makeRevoker(order);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    sut.setSessionRevoker(revokeSessions);
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(revokeSessions).toHaveBeenCalledTimes(1);
+    expect(revokeSessions).toHaveBeenCalledWith('user-b');
+  });
+
+  it("échec de la révocation ⇒ la transaction est faite, le lot continue, l'échec est journalisé", async () => {
+    const order: string[] = [];
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a'), expiredRequest('req-b', 'user-b')]);
+    const revokeSessions = makeRevoker(order, 'user-a');
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+    sut.setSessionRevoker(revokeSessions);
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+    expect(revokeSessions).toHaveBeenCalledTimes(2);
+    expect(order).toEqual(['revoked:user-b']);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('user-a'), expect.any(Error));
+  });
+
+  it('sans révocateur injecté, le lot expire les demandes sans lever', async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await expect(sweepDeletions(sut)).resolves.toBeUndefined();
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 });

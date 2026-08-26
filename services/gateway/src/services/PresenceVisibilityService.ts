@@ -139,30 +139,31 @@ export class PresenceVisibilityService {
   }
 
   /**
-   * Prefs-only pour les listes où l'accès est déjà garanti par le contexte
-   * (co-participants d'une conversation, co-membres d'une communauté) : la
-   * présence est montrable, on applique seulement showOnlineStatus/showLastSeen.
+   * Les `User.id` avec qui `userId` est LIÉ par une amitié acceptée — la seule
+   * relation que la directive du 2026-08-25 tient pour une autorisation.
    *
-   * @deprecated Ce régime accorde l'accès sur la seule co-présence dans une
-   * conversation/communauté — exactement ce que la directive produit du
-   * 2026-08-25 retire (« ce n'est pas parce qu'on partage une conversation
-   * qu'on doit voir la présence de l'autre »). Supprimée en W3 : ses appelants
-   * sont convertis vers `resolveForTarget`/`resolveForTargets` par des lots
-   * parallèles. Ne plus l'appeler pour du code neuf.
+   * Même forme de requête que {@link PresenceVisibilityService.areConnected},
+   * privée de sa seconde borne : là où celle-ci répond « ces deux-là ? », ici
+   * on demande « lesquels ? », parce qu'un ÉVENTAIL de présence
+   * (`_broadcastUserStatus`) doit nommer son audience avant de connaître ses
+   * membres. Le coût reste borné par le nombre d'amis du sujet — jamais par la
+   * population connectée de la passerelle, dont l'énumération avait déjà fait
+   * grossir ce chemin avec le serveur plutôt qu'avec la question posée.
    */
-  async resolvePrefsOnly(userIds: string[]): Promise<Map<string, PresenceVisibility>> {
-    const result = new Map<string, PresenceVisibility>();
-    const uniqueIds = [...new Set(userIds)];
-    if (uniqueIds.length === 0) return result;
-    const prefsMap = await this.privacy.getPreferencesForUsers(
-      uniqueIds.map((id) => ({ id, isAnonymous: false })),
+  async acceptedFriendIds(userId: string): Promise<Set<string>> {
+    const rows = await this.prisma.friendRequest.findMany({
+      where: {
+        status: 'accepted',
+        OR: [{ senderId: userId }, { receiverId: userId }],
+      },
+      select: { senderId: true, receiverId: true },
+    });
+
+    return new Set(
+      rows
+        .map((row) => (row.senderId === userId ? row.receiverId : row.senderId))
+        .filter((friendId) => friendId !== userId),
     );
-    for (const id of uniqueIds) {
-      const p = prefsMap.get(id);
-      if (p && !p.showOnlineStatus) result.set(id, HIDDEN);
-      else result.set(id, { showOnline: true, showLastSeenTimestamp: p ? p.showLastSeen : true });
-    }
-    return result;
   }
 
   private async isBlockedEitherWay(a: string, b: string): Promise<boolean> {

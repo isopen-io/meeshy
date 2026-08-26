@@ -7,6 +7,7 @@ import { sendSuccess, sendUnauthorized, sendInternalError } from '../../utils/re
 import { validatePagination } from '../../utils/pagination';
 import { getCacheStore } from '../../services/CacheStore';
 import { wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
+import { viewerFromRequest } from '../users/presence-gate';
 
 export function registerFeedRoutes(
   fastify: FastifyInstance,
@@ -78,6 +79,9 @@ export function registerFeedRoutes(
 
       const result = await feedService.getStories(authContext.registeredUser.id, {
         updatedSince, projection, cursor, limit,
+        // Rôle RÉEL du viewer (2026-08-25) : le gate de présence auteur en a
+        // besoin pour appliquer le bypass ADMIN/BIGBOSS au fil de stories.
+        viewerRole: viewerFromRequest(request)?.role,
         reader: wireReaderFromRequest(request as UnifiedAuthRequest),
       });
 
@@ -131,6 +135,7 @@ export function registerFeedRoutes(
 
       const result = await feedService.getStories(authContext.registeredUser.id, {
         cursor, limit, archiveOfAuthor: true,
+        viewerRole: viewerFromRequest(request)?.role,
         reader: wireReaderFromRequest(request as UnifiedAuthRequest),
       });
 

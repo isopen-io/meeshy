@@ -24,12 +24,10 @@ jest.mock('../../../utils/pagination', () => ({
   validatePagination: (...a: any[]) => mockValidatePagination(...a),
 }));
 
-const mockResolvePrefsOnly = jest.fn<any>().mockResolvedValue(new Map());
 const mockResolveForTargets = jest.fn<any>().mockResolvedValue(new Map());
 
 jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: (...a: any[]) => mockResolvePrefsOnly(...a),
     resolveForTargets: (...a: any[]) => mockResolveForTargets(...a),
   }),
 }));
@@ -226,7 +224,6 @@ describe('GET /communities/search — creator and members reach the wire', () =>
   let app: FastifyInstance;
   beforeAll(async () => {
     jest.clearAllMocks();
-    mockResolvePrefsOnly.mockResolvedValue(new Map());
     mockResolveForTargets.mockResolvedValue(new Map([[MEMBER_A, VISIBLE]]));
     app = await buildApp({
       community: {
@@ -251,28 +248,24 @@ describe('GET /communities/search — creator and members reach the wire', () =>
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Présence des membres — régime tranché par LIGNE
+// Présence des membres — critère STRICT sans condition (directive produit
+// 2026-08-25). Avant cette directive, une communauté dont le lecteur était
+// LUI-MÊME membre bifurquait vers un régime préférences-seules — la
+// co-appartenance valait alors un accès. Ce régime a disparu : un seul appel
+// au résolveur strict, avec le viewer réel, tranche toute la page.
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function searchWith(options: {
   communities: any[];
-  viewerCommunityIds?: string[];
-  prefsOnly?: Map<string, unknown>;
   strict?: Map<string, unknown>;
   authenticated?: boolean;
 }) {
   jest.clearAllMocks();
-  mockResolvePrefsOnly.mockResolvedValue(options.prefsOnly ?? new Map());
   mockResolveForTargets.mockResolvedValue(options.strict ?? new Map());
   const app = await buildApp({
     community: {
       findMany: jest.fn<any>().mockResolvedValue(options.communities),
       count: jest.fn<any>().mockResolvedValue(options.communities.length),
-    },
-    communityMember: {
-      findMany: jest.fn<any>().mockResolvedValue(
-        (options.viewerCommunityIds ?? []).map(communityId => ({ communityId })),
-      ),
     },
   }, options.authenticated ?? true);
   const res = await app.inject({ method: 'GET', url: '/communities/search?q=tech' });
@@ -281,7 +274,7 @@ async function searchWith(options: {
 }
 
 describe('GET /communities/search — member presence gate', () => {
-  it('masks a member met only through a public community the viewer does not belong to', async () => {
+  it('masks a member the strict resolver does not clear', async () => {
     const res = await searchWith({
       communities: [makeCommunity({ members: [makeMember(MEMBER_A)] })],
       strict: new Map([[MEMBER_A, HIDDEN]]),
@@ -297,40 +290,26 @@ describe('GET /communities/search — member presence gate', () => {
     expect(res.json().data[0].members[0].user.isOnline).toBe(true);
   });
 
-  it('routes a community the viewer does not belong to through the strict resolver', async () => {
+  it('routes every member of the page through the strict resolver, with the real viewer', async () => {
     await searchWith({ communities: [makeCommunity({ members: [makeMember(MEMBER_A)] })] });
     expect(mockResolveForTargets).toHaveBeenCalledWith(
       { userId: USER_ID, role: 'USER' },
       [MEMBER_A],
     );
-    expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
   });
 
-  it('routes a community the viewer belongs to through the prefs-only resolver', async () => {
-    await searchWith({
-      communities: [makeCommunity({ members: [makeMember(MEMBER_A)] })],
-      viewerCommunityIds: ['comm-1'],
-    });
-    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([MEMBER_A]);
-    expect(mockResolveForTargets).not.toHaveBeenCalled();
-  });
-
-  it('ignores a membership the viewer has left (isActive filter)', async () => {
-    await searchWith({ communities: [makeCommunity({ members: [makeMember(MEMBER_A)] })] });
-    // Aucune ligne active rendue ⇒ la communauté reste en découverte.
-    expect(mockResolveForTargets).toHaveBeenCalled();
-  });
-
-  it('classes a member met in a shared community as prefs-only across the whole page', async () => {
+  // Directive produit 2026-08-25 : la co-appartenance ne bifurque plus rien.
+  // Un membre croisé dans une communauté dont le lecteur est LUI-MÊME membre
+  // part au MÊME résolveur strict que n'importe quel autre.
+  it('stays on the strict resolver, deduplicated, even across a community the viewer belongs to', async () => {
     await searchWith({
       communities: [
         makeCommunity({ id: 'comm-1', members: [makeMember(MEMBER_A)] }),
         makeCommunity({ id: 'comm-2', members: [makeMember(MEMBER_A), makeMember(MEMBER_B)] }),
       ],
-      viewerCommunityIds: ['comm-1'],
     });
-    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([MEMBER_A]);
-    expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: USER_ID, role: 'USER' }, [MEMBER_B]);
+    expect(mockResolveForTargets).toHaveBeenCalledTimes(1);
+    expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: USER_ID, role: 'USER' }, [MEMBER_A, MEMBER_B]);
   });
 
   it('masks a member the resolver did not answer for', async () => {
@@ -343,7 +322,6 @@ describe('GET /communities/search — member presence gate', () => {
 
   it('opens no presence resolution when the page carries no member', async () => {
     await searchWith({ communities: [makeCommunity({ members: [] })] });
-    expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
     expect(mockResolveForTargets).not.toHaveBeenCalled();
   });
 

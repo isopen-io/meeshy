@@ -6,12 +6,10 @@ import {
   communitySchema,
   createCommunityRequestSchema,
   updateCommunityRequestSchema,
-  errorResponseSchema,
-  userMinimalSchema
+  errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
-import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
-import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { viewerFromRequest } from '../users/presence-gate';
+import { gateConversationParticipantsPresence } from './member-presence';
 import {
   CreateCommunitySchema,
   UpdateCommunitySchema,
@@ -23,7 +21,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { flattenCommunityCounts } from './serialization';
+import { communityConversationSchema, flattenCommunityCounts } from './serialization';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
@@ -513,56 +511,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
             success: { type: 'boolean', example: true },
             data: {
               type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  // Le web type cette réponse `Conversation[]` et n'en recevait
-                  // que l'id et deux dates : titre, type et identifiant sont
-                  // produits par le handler (`findMany` sans `select`) et
-                  // n'étaient pas déclarés, donc supprimés à la sérialisation.
-                  id: { type: 'string' },
-                  identifier: { type: 'string', nullable: true },
-                  title: { type: 'string', nullable: true },
-                  type: { type: 'string', nullable: true },
-                  description: { type: 'string', nullable: true },
-                  avatar: { type: 'string', nullable: true },
-                  banner: { type: 'string', nullable: true },
-                  isActive: { type: 'boolean', nullable: true },
-                  memberCount: { type: 'number', nullable: true },
-                  lastMessageAt: { type: 'string', format: 'date-time', nullable: true },
-                  communityId: { type: 'string' },
-                  createdAt: { type: 'string', format: 'date-time' },
-                  updatedAt: { type: 'string', format: 'date-time' },
-                  // Le handler produit `participants`, jamais `members` — ce
-                  // schéma déclarait donc un champ que rien ne pose, pendant
-                  // qu'il supprimait celui qui existe. Et son `user` était
-                  // `{ type: 'object' }` nu : vidé en `{}` par
-                  // fast-json-stringify. Renommer ne casse aucun client —
-                  // `members` n'a jamais atteint le fil.
-                  participants: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        id: { type: 'string' },
-                        userId: { type: 'string', nullable: true },
-                        displayName: { type: 'string', nullable: true },
-                        role: { type: 'string', nullable: true },
-                        isActive: { type: 'boolean', nullable: true },
-                        user: { ...userMinimalSchema, nullable: true }
-                      }
-                    }
-                  },
-                  _count: {
-                    type: 'object',
-                    properties: {
-                      messages: { type: 'number' },
-                      // Idem : le handler compte `participants`.
-                      participants: { type: 'number' }
-                    }
-                  }
-                }
-              }
+              items: communityConversationSchema
             }
           }
         },
@@ -651,46 +600,20 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Présence des co-participants. Le régime est tranché par le `where` de
-      // la requête ci-dessus, pas par le contrôle d'accès : elle ne rend que
-      // les conversations dont l'appelant est lui-même participant
-      // (`participants: { some: { userId } }`). Toute personne listée est donc
-      // un CO-PARTICIPANT — contexte d'accès garanti des deux côtés — et seules
-      // les préférences s'appliquent. Le contrôle d'accès, lui, ne referme que
-      // les communautés PRIVÉES : s'y fier aurait conduit au critère strict, et
-      // retiré des pastilles légitimes.
+      // Présence des co-participants — critère STRICT avec le viewer réel.
+      // Être co-participant de la même conversation (ni même co-membre de la
+      // communauté) ne vaut plus d'accès à la présence de l'autre (directive
+      // produit 2026-08-25) : seuls soi-même, un admin global, ou un ami
+      // accepté (selon SES préférences) voient `isOnline`/`lastActiveAt`. Le
+      // contrôle d'accès ci-dessus, lui, ne referme que les communautés
+      // PRIVÉES — il ne gouverne pas la présence des lignes rendues.
       //
       // Gate posé dans le MÊME lot que la déclaration du schéma : `user`
       // portait `isOnline` brut, et seul le `{ type: 'object' }` nu l'empêchait
       // de sortir. Déclarer sans gater aurait publié la fuite.
-      const participantUserIds = [
-        ...new Set(
-          conversations.flatMap((c: { participants?: Array<{ userId?: string | null }> }) =>
-            (c.participants ?? []).map(p => p.userId).filter((uid): uid is string => !!uid),
-          ),
-        ),
-      ];
-      const participantPresence = participantUserIds.length > 0
-        ? await getPresenceVisibilityService(fastify.prisma).resolvePrefsOnly(participantUserIds)
-        : new Map<string, PresenceVisibility>();
-
       return sendSuccess(
         reply,
-        conversations.map((conversation: { participants?: Array<Record<string, unknown>> }) => ({
-          ...conversation,
-          participants: (conversation.participants ?? []).map(participant => {
-            const nested = participant.user as { id: string; isOnline: boolean | null } | null | undefined;
-            if (!nested?.id) return participant;
-            return {
-              ...participant,
-              // `onMissingEntry: 'reveal'` — sous prefs-only, une entrée absente
-              // est normale (participant anonyme, sans `userId`), pas suspecte.
-              user: applyPresenceVisibilityAsOffline(nested, participantPresence.get(nested.id), {
-                onMissingEntry: 'reveal',
-              }),
-            };
-          }),
-        })),
+        await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), conversations),
       );
     } catch (error) {
       logger.error('Error fetching community conversations', error as Error);
@@ -725,7 +648,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'object', additionalProperties: true }
+            data: communityConversationSchema
           }
         },
         401: { description: 'User not authenticated', ...errorResponseSchema },
@@ -805,7 +728,13 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         }
       });
 
-      return sendSuccess(reply, updated);
+      // Même gate que `GET /communities/:id/conversations` : la réponse porte
+      // les MÊMES participants, par le même `include`, sous le MÊME schéma
+      // fermé (`communityConversationSchema`). Le gate masque la présence de
+      // `user` ET celle de la ligne `Participant` ; le schéma retient le reste
+      // de la ligne que l'`include` rend (jeton de session, session anonyme).
+      const [gated] = await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), [updated]);
+      return sendSuccess(reply, gated);
     } catch (error) {
       logger.error('Error adding conversation to community', error as Error);
       return sendInternalError(reply, 'Failed to add conversation to community');

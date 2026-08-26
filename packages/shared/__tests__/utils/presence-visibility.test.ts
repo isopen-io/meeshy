@@ -195,12 +195,15 @@ describe('applyPresenceVisibilityAsOffline', () => {
     expect(out.lastActiveAt).toBeNull();
   });
 
-  // Le régime PREFS-ONLY inverse le défaut : une entrée absente y est la
-  // situation normale (un anonyme n'a pas de préférences), pas une anomalie.
-  // Les deux défauts cohabitent dans le même applicateur parce qu'une même
-  // route peut servir les deux régimes selon le lecteur —
-  // `GET /communities/:id/members` en est l'exemple.
-  describe('onMissingEntry: reveal — régime prefs-only', () => {
+  // Le régime `'reveal'` inverse le défaut : réservé à l'appelant qui a établi
+  // que le viewer est ADMIN/BIGBOSS, il révèle une cible sans compte (donc sans
+  // entrée), qui pour tout autre lecteur reste masquée.
+  // Les deux défauts cohabitent dans le même applicateur parce que le sort
+  // d'une entrée absente se choisit par VIEWER, pas par route — le gateway le
+  // dérive de la loi elle-même (`presenceMissingEntryPolicy`,
+  // `routes/users/presence-gate.ts`) : `'reveal'` pour ADMIN/BIGBOSS, `'hide'`
+  // pour tout autre lecteur, MODERATOR compris.
+  describe('onMissingEntry: reveal — viewer ADMIN/BIGBOSS établi par l\'appelant', () => {
     it('laisse la présence brute quand aucune entrée ne concerne le profil', () => {
       const out = applyPresenceVisibilityAsOffline(profile, undefined, { onMissingEntry: 'reveal' });
       expect(out.isOnline).toBe(true);

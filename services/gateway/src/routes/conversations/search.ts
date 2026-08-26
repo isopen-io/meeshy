@@ -16,6 +16,7 @@ import {
 import type { SearchQuery } from './types';
 import { sendSuccess, sendInternalError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 import {
@@ -251,9 +252,14 @@ export function registerSearchRoutes(
           })
         : [];
 
-      // Présence des expéditeurs de lastMessage : gate showOnlineStatus —
-      // même règle que GET /conversations (cf. core.ts).
-      const senderPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Présence des expéditeurs de lastMessage : régime STRICT (2026-08-25),
+      // même règle que GET /conversations (cf. core.ts) — soi/ADMIN+/ami seuls,
+      // jamais la seule co-participation. La carte ne porte une entrée que
+      // pour un `User.id` ; le sort d'une entrée ABSENTE est celui de
+      // `presenceFor` (presence-gate) — masqué, sauf ADMIN+.
+      const searchPresenceViewer = viewerFromRequest(request);
+      const senderPresenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        searchPresenceViewer,
         conversations
           .map((conversation) => (conversation.messages[0]?.sender as any)?.userId)
           .filter((uid: string | null | undefined): uid is string => !!uid)
@@ -308,9 +314,12 @@ export function registerSearchRoutes(
             username: sender.user?.username ?? null,
             displayName: resolveParticipantDisplayName(sender),
             avatar: resolveParticipantAvatar(sender),
-            isOnline: senderPresenceVis.get(sender.userId ?? '')?.showOnline === false
-              ? false
-              : (sender.user?.isOnline ?? false),
+            // Un expéditeur sans compte n'a pas de `user.isOnline` : cette
+            // projection ne charge aucune présence pour lui, donc même révélé
+            // (ADMIN), rien à servir.
+            isOnline: presenceFor(searchPresenceViewer, senderPresenceVis, sender.userId).showOnline
+              ? (sender.user?.isOnline ?? false)
+              : false,
           } : null,
           attachments: msg.attachments || [],
           _count: (msg as any)._count,

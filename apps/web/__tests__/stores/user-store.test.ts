@@ -512,4 +512,272 @@ describe('UserStore', () => {
       expect(afterTick).toBeGreaterThan(afterMerge);
     });
   });
+  describe('Confidentialité de la présence — une présence retirée par le serveur ne survit pas côté client', () => {
+    // Depuis le chantier « Confidentialité de la présence », la passerelle sert
+    // à un lecteur non autorisé `isOnline: false` + `lastActiveAt: null`
+    // (`applyPresenceVisibilityAsOffline`), sur les listes REST comme sur
+    // `presence:snapshot` / `user:status`. Le store ne doit RIEN fabriquer et ne
+    // doit pas garder une présence que le serveur vient de retirer : présence
+    // absente ⇒ aucun point (CLAUDE.md § User Presence).
+    const TWO_MINUTES_AGO = () => new Date(Date.now() - 2 * 60 * 1000);
+    const TEN_MINUTES_AGO = () => new Date(Date.now() - 10 * 60 * 1000);
+
+    const seedOnline = (id: string) => {
+      act(() => {
+        useUserStore.getState().mergeParticipants([
+          createMockUser({ id, isOnline: true, lastActiveAt: TWO_MINUTES_AGO() }),
+        ]);
+      });
+      expect(getUserStatus(useUserStore.getState().getUserById(id))).toBe('online');
+    };
+
+    describe('mergeParticipants', () => {
+      it('accepte une charge masquée (isOnline:false, lastActiveAt:null) par-dessus une présence en ligne ⇒ offline immédiatement', () => {
+        seedOnline('masked-rest');
+
+        act(() => {
+          useUserStore.getState().mergeParticipants([
+            createMockUser({ id: 'masked-rest', isOnline: false, lastActiveAt: null } as unknown as Partial<User>),
+          ]);
+        });
+
+        const user = useUserStore.getState().getUserById('masked-rest');
+        expect(user?.isOnline).toBe(false);
+        expect(user?.lastActiveAt ?? null).toBeNull();
+        expect(getUserStatus(user)).toBe('offline');
+      });
+
+      it('accepte la forme du snapshot socket (lastActiveAt: undefined, cf. toMinimalUser) ⇒ offline immédiatement', () => {
+        seedOnline('masked-snapshot');
+
+        act(() => {
+          useUserStore.getState().mergeParticipants([
+            createMockUser({ id: 'masked-snapshot', isOnline: false, lastActiveAt: undefined }),
+          ]);
+        });
+
+        const user = useUserStore.getState().getUserById('masked-snapshot');
+        expect(user?.isOnline).toBe(false);
+        expect(user?.lastActiveAt ?? null).toBeNull();
+        expect(getUserStatus(user)).toBe('offline');
+      });
+
+      it('une présence masquée est visible dans `participants` aussi (même objet que usersMap)', () => {
+        seedOnline('masked-both');
+
+        act(() => {
+          useUserStore.getState().mergeParticipants([
+            createMockUser({ id: 'masked-both', isOnline: false, lastActiveAt: null } as unknown as Partial<User>),
+          ]);
+        });
+
+        const inList = useUserStore.getState().participants.find(p => p.id === 'masked-both');
+        expect(getUserStatus(inList)).toBe('offline');
+      });
+
+      it('une charge DATÉE plus ancienne (relecture REST périmée) ne rétrograde pas une présence fraîche', () => {
+        // Raison d'être de la comparaison d'horodatage : ConversationLayout re-sème
+        // le store depuis la liste de conversations (cache React Query) à chaque
+        // mutation de la liste. Sans ce garde, un contact qui vient de se connecter
+        // (user:status) repasserait hors ligne au prochain message reçu.
+        const fresh = new Date();
+        act(() => {
+          useUserStore.getState().mergeParticipants([
+            createMockUser({ id: 'fresh-then-stale', isOnline: true, lastActiveAt: fresh }),
+          ]);
+        });
+
+        act(() => {
+          useUserStore.getState().mergeParticipants([
+            createMockUser({ id: 'fresh-then-stale', isOnline: false, lastActiveAt: TEN_MINUTES_AGO() }),
+          ]);
+        });
+
+        const user = useUserStore.getState().getUserById('fresh-then-stale');
+        expect(user?.isOnline).toBe(true);
+        expect(user?.lastActiveAt).toEqual(fresh);
+        expect(getUserStatus(user)).toBe('online');
+      });
+
+      it('une charge DATÉE par-dessus une présence masquée (visibilité rendue) est acceptée', () => {
+        act(() => {
+          useUserStore.getState().mergeParticipants([
+            createMockUser({ id: 'revealed', isOnline: false, lastActiveAt: null } as unknown as Partial<User>),
+          ]);
+        });
+        expect(getUserStatus(useUserStore.getState().getUserById('revealed'))).toBe('offline');
+
+        act(() => {
+          useUserStore.getState().mergeParticipants([
+            createMockUser({ id: 'revealed', isOnline: true, lastActiveAt: new Date() }),
+          ]);
+        });
+
+        expect(getUserStatus(useUserStore.getState().getUserById('revealed'))).toBe('online');
+      });
+    });
+
+    describe('updateUserStatus', () => {
+      it('un lastActiveAt: null explicite EFFACE le dernier instant d’activité ⇒ offline immédiatement', () => {
+        seedOnline('status-null');
+
+        act(() => {
+          useUserStore.getState().updateUserStatus('status-null', { isOnline: false, lastActiveAt: null });
+        });
+
+        const user = useUserStore.getState().getUserById('status-null');
+        expect(user?.isOnline).toBe(false);
+        expect(user?.lastActiveAt ?? null).toBeNull();
+        expect(getUserStatus(user)).toBe('offline');
+      });
+
+      it('la forme relayée par useUserStatusRealtime pour un null serveur (clé présente, valeur undefined) efface aussi', () => {
+        // Les deux écrivains temps réel (onUserStatus, resync REST) normalisent le
+        // `null` de la passerelle en `undefined` AVANT d'appeler le store ; c'est la
+        // seule forme sous laquelle une charge user:status masquée l'atteint.
+        seedOnline('status-undefined');
+
+        act(() => {
+          useUserStore.getState().updateUserStatus('status-undefined', { isOnline: false, lastActiveAt: undefined });
+        });
+
+        const user = useUserStore.getState().getUserById('status-undefined');
+        expect(user?.isOnline).toBe(false);
+        expect(user?.lastActiveAt ?? null).toBeNull();
+        expect(getUserStatus(user)).toBe('offline');
+      });
+
+      it('une mise à jour SANS la clé lastActiveAt ne touche pas au dernier instant d’activité', () => {
+        const seeded = TWO_MINUTES_AGO();
+        act(() => {
+          useUserStore.getState().mergeParticipants([
+            createMockUser({ id: 'status-absent', isOnline: false, lastActiveAt: seeded }),
+          ]);
+        });
+
+        act(() => {
+          useUserStore.getState().updateUserStatus('status-absent', { isOnline: true });
+        });
+
+        const user = useUserStore.getState().getUserById('status-absent');
+        expect(user?.isOnline).toBe(true);
+        expect(user?.lastActiveAt).toEqual(seeded);
+      });
+
+      it('frappe ⇒ en ligne (TypingService) reste vert par-dessus une présence masquée', () => {
+        act(() => {
+          useUserStore.getState().mergeParticipants([
+            createMockUser({ id: 'typist', isOnline: false, lastActiveAt: null } as unknown as Partial<User>),
+          ]);
+        });
+        expect(getUserStatus(useUserStore.getState().getUserById('typist'))).toBe('offline');
+
+        act(() => {
+          useUserStore.getState().updateUserStatus('typist', { isOnline: true, lastActiveAt: new Date() });
+        });
+
+        expect(getUserStatus(useUserStore.getState().getUserById('typist'))).toBe('online');
+      });
+    });
+  });
+
+  describe('Re-semis depuis un CACHE — la charge alimente l’identité, jamais la présence d’un utilisateur déjà connu', () => {
+    // ConversationLayout re-sème le store à chaque changement de la liste de
+    // conversations (cache React Query, staleTime: Infinity, persisté en
+    // IndexedDB). Cette liste a pu être chargée QUAND la présence était visible
+    // (avant la fin d'une amitié) : elle porte alors une charge DATÉE, que le
+    // store — qui vient de recevoir un masque sans horodatage — accepterait
+    // comme « plus récente que rien » (cf. « visibilité rendue » ci-dessus).
+    // Le store seul ne peut pas ordonner un masque et une date : c'est
+    // l'ÉCRIVAIN qui déclare qu'un cache n'a pas autorité sur la présence.
+    const TWO_MINUTES_AGO = () => new Date(Date.now() - 2 * 60 * 1000);
+    const TEN_MINUTES_AGO = () => new Date(Date.now() - 10 * 60 * 1000);
+    const masked = (id: string, overrides: Partial<User> = {}) =>
+      createMockUser({ id, isOnline: false, lastActiveAt: null, ...overrides } as unknown as Partial<User>);
+
+    it('une charge DATÉE en ligne par-dessus un masque ⇒ le masque est conservé, offline', () => {
+      act(() => {
+        useUserStore.getState().mergeParticipants([masked('cached-online')]);
+      });
+      expect(getUserStatus(useUserStore.getState().getUserById('cached-online'))).toBe('offline');
+
+      act(() => {
+        useUserStore.getState().mergeParticipants(
+          [createMockUser({ id: 'cached-online', isOnline: true, lastActiveAt: TWO_MINUTES_AGO() })],
+          { presence: 'keep-existing' },
+        );
+      });
+
+      const user = useUserStore.getState().getUserById('cached-online');
+      expect(user?.isOnline).toBe(false);
+      expect(user?.lastActiveAt ?? null).toBeNull();
+      expect(getUserStatus(user)).toBe('offline');
+      expect(getUserStatus(useUserStore.getState().participants.find(p => p.id === 'cached-online'))).toBe('offline');
+    });
+
+    it('conserve aussi une présence FRAÎCHE face à une charge de cache périmée — quelle qu’en soit la valeur', () => {
+      const fresh = new Date();
+      act(() => {
+        useUserStore.getState().mergeParticipants([
+          createMockUser({ id: 'cached-stale', isOnline: true, lastActiveAt: fresh }),
+        ]);
+      });
+
+      act(() => {
+        useUserStore.getState().mergeParticipants(
+          [createMockUser({ id: 'cached-stale', isOnline: false, lastActiveAt: TEN_MINUTES_AGO() })],
+          { presence: 'keep-existing' },
+        );
+      });
+
+      const user = useUserStore.getState().getUserById('cached-stale');
+      expect(user?.isOnline).toBe(true);
+      expect(user?.lastActiveAt).toEqual(fresh);
+      expect(getUserStatus(user)).toBe('online');
+    });
+
+    it('un utilisateur INCONNU du store reçoit la présence du cache', () => {
+      const seen = TWO_MINUTES_AGO();
+      act(() => {
+        useUserStore.getState().mergeParticipants(
+          [createMockUser({ id: 'cached-unknown', isOnline: true, lastActiveAt: seen })],
+          { presence: 'keep-existing' },
+        );
+      });
+
+      const user = useUserStore.getState().getUserById('cached-unknown');
+      expect(user?.isOnline).toBe(true);
+      expect(user?.lastActiveAt).toEqual(seen);
+      expect(getUserStatus(user)).toBe('online');
+    });
+
+    it('l’identité (displayName, avatar) est mise à jour même quand la présence est conservée', () => {
+      act(() => {
+        useUserStore.getState().mergeParticipants([
+          masked('cached-identity', { displayName: 'Ancien nom' }),
+        ]);
+      });
+
+      act(() => {
+        useUserStore.getState().mergeParticipants(
+          [createMockUser({
+            id: 'cached-identity',
+            displayName: 'Nouveau nom',
+            avatar: 'https://cdn.meeshy.me/avatar.png',
+            isOnline: true,
+            lastActiveAt: TWO_MINUTES_AGO(),
+          })],
+          { presence: 'keep-existing' },
+        );
+      });
+
+      const user = useUserStore.getState().getUserById('cached-identity');
+      expect(user?.displayName).toBe('Nouveau nom');
+      expect(user?.avatar).toBe('https://cdn.meeshy.me/avatar.png');
+      expect(user?.isOnline).toBe(false);
+      expect(user?.lastActiveAt ?? null).toBeNull();
+      expect(getUserStatus(user)).toBe('offline');
+    });
+  });
+
 });
