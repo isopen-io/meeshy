@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import UserNotifications
 import MeeshySDK
 @testable import Meeshy
@@ -120,6 +121,20 @@ final class NotificationActionHandlerTests: XCTestCase {
         }
     }
 
+    /// Attente en TEMPS RÉEL. Le regroupement des révocations socket a une
+    /// fenêtre de 200 ms : `Task.yield()` fait tourner la boucle sans garantir
+    /// qu'elle s'écoule, et le test conclurait avant le premier lot.
+    private func waitUntilRealTime(
+        timeout: Duration = .seconds(3),
+        _ condition: @MainActor () -> Bool
+    ) async {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while ContinuousClock.now < deadline {
+            if condition() { return }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
     // MARK: - Factory
 
     private struct SUTContext {
@@ -137,6 +152,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         let removedConversationBanners: () -> [String]
         let removedPostBanners: () -> [String]
         let preparedReplyQueue: () -> Int
+        let revokedNotificationIds: () -> [[String]]
     }
 
     private func makeSUT(
@@ -159,6 +175,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         var removedBanners: [String] = []
         var removedPostBanners: [String] = []
         var preparedReplyQueueCount = 0
+        var revokedIds: [[String]] = []
 
         let sut = NotificationActionHandler(
             messageService: messageService,
@@ -177,6 +194,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             localMarkRead: { markedRead.append($0) },
             removeDeliveredForConversation: { removedBanners.append($0) },
             removeDeliveredForPost: { removedPostBanners.append($0) },
+            removeDeliveredForNotificationIds: { revokedIds.append($0) },
             prepareReplyQueue: { preparedReplyQueueCount += 1 }
         )
 
@@ -194,7 +212,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             locallyMarkedRead: { markedRead },
             removedConversationBanners: { removedBanners },
             removedPostBanners: { removedPostBanners },
-            preparedReplyQueue: { preparedReplyQueueCount }
+            preparedReplyQueue: { preparedReplyQueueCount },
+            revokedNotificationIds: { revokedIds }
         )
     }
 
@@ -842,5 +861,221 @@ final class NotificationActionHandlerTests: XCTestCase {
         )
 
         XCTAssertEqual(ctx.openedNotifications(), 1)
+    }
+
+    // MARK: - Révocation (features 4/5) : la bannière livrée suit la suppression
+
+    /// Push de contrôle `notification_revoked` (AppDelegate) ET socket
+    /// `notification:deleted` convergent ici : UN atome de retrait
+    /// (`removeDeliveredNotifications(matching:)`), jamais une seconde
+    /// implémentation d'`UNUserNotificationCenter`.
+    func test_revokeDeliveredBanners_routesTheIdsToTheSingleRemovalSeam() async {
+        let ctx = makeSUT()
+
+        await ctx.sut.revokeDeliveredBanners(notificationIds: ["n1", "n2"])
+
+        XCTAssertEqual(ctx.revokedNotificationIds(), [["n1", "n2"]])
+    }
+
+    func test_revokeDeliveredBanners_withNoIds_touchesNothing() async {
+        let ctx = makeSUT()
+
+        await ctx.sut.revokeDeliveredBanners(notificationIds: [])
+
+        XCTAssertEqual(ctx.revokedNotificationIds(), [])
+    }
+
+    func test_observeRevocations_removesTheBannerOfEachDeletedNotification() async {
+        let ctx = makeSUT()
+        let deletions = PassthroughSubject<String, Never>()
+        ctx.sut.observeRevocations(from: deletions.eraseToAnyPublisher())
+
+        deletions.send("n7")
+        await waitUntilRealTime { ctx.revokedNotificationIds().count == 1 }
+        deletions.send("n8")
+        await waitUntilRealTime { ctx.revokedNotificationIds().count == 2 }
+
+        XCTAssertEqual(ctx.revokedNotificationIds(), [["n7"], ["n8"]],
+                       "deux suppressions ESPACÉES restent deux lots — le regroupement ne retarde rien qui ne se chevauche")
+    }
+
+    /// Une purge en lot (`notification:deleted-bulk`, typiquement les lues
+    /// effacées depuis un autre appareil) republie ses ids UN PAR UN sur
+    /// `notificationWasDeleted`. Sans regroupement, deux cents suppressions
+    /// enchaînaient deux cents `getDeliveredNotifications` sur le main thread —
+    /// alors que le retrait prend DÉJÀ un tableau.
+    func test_observeRevocations_batchesABurstIntoASingleSystemCall() async {
+        let ctx = makeSUT()
+        let deletions = PassthroughSubject<String, Never>()
+        ctx.sut.observeRevocations(from: deletions.eraseToAnyPublisher())
+
+        ["n1", "n2", "n3", "n4", "n5"].forEach(deletions.send)
+        await waitUntilRealTime { !ctx.revokedNotificationIds().isEmpty }
+        // Une fenêtre de plus : un second lot trahirait un regroupement partiel.
+        try? await Task.sleep(for: .milliseconds(400))
+
+        XCTAssertEqual(ctx.revokedNotificationIds(), [["n1", "n2", "n3", "n4", "n5"]])
+    }
+
+    /// Un second abonnement remplace le premier : la racine SwiftUI peut
+    /// rejouer son câblage, la bannière ne doit pas être retirée deux fois.
+    func test_observeRevocations_calledTwice_keepsASingleSubscription() async {
+        let ctx = makeSUT()
+        let first = PassthroughSubject<String, Never>()
+        let second = PassthroughSubject<String, Never>()
+        ctx.sut.observeRevocations(from: first.eraseToAnyPublisher())
+        ctx.sut.observeRevocations(from: second.eraseToAnyPublisher())
+
+        first.send("stale")
+        second.send("live")
+        await waitUntilRealTime { !ctx.revokedNotificationIds().isEmpty }
+
+        XCTAssertEqual(ctx.revokedNotificationIds(), [["live"]])
+    }
+
+    // MARK: - Retrait de bannières : confirmé par RELECTURE, jamais par l'émission
+
+    /// Double du centre système. Compte les LECTURES — c'est elles que le
+    /// contrat porte : `removeDeliveredNotifications(withIdentifiers:)` n'a
+    /// aucun completion handler, donc seule une seconde lecture prouve que le
+    /// retrait a été TRAITÉ. `appliesRemoval: false` rejoue un système qui ne
+    /// confirme jamais.
+    private nonisolated final class SpyBannerCenter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storedReads = 0
+        private var storedRemoved: [[String]] = []
+        private var storedDelivered: [DeliveredBanner]
+        private let appliesRemoval: Bool
+
+        init(delivered: [DeliveredBanner], appliesRemoval: Bool = true) {
+            self.storedDelivered = delivered
+            self.appliesRemoval = appliesRemoval
+        }
+
+        var reads: Int { lock.withLock { storedReads } }
+        var removed: [[String]] { lock.withLock { storedRemoved } }
+
+        func center() -> DeliveredBannerCenter {
+            DeliveredBannerCenter(
+                delivered: { [self] completion in
+                    let snapshot = lock.withLock { () -> [DeliveredBanner] in
+                        storedReads += 1
+                        return storedDelivered
+                    }
+                    completion(snapshot)
+                },
+                remove: { [self] identifiers in
+                    lock.withLock {
+                        storedRemoved.append(identifiers)
+                        guard appliesRemoval else { return }
+                        storedDelivered.removeAll { identifiers.contains($0.identifier) }
+                    }
+                }
+            )
+        }
+    }
+
+    private func banner(_ identifier: String, notificationId: String) -> DeliveredBanner {
+        DeliveredBanner(identifier: identifier, userInfo: ["notificationId": notificationId])
+    }
+
+    /// `removeDeliveredNotifications(withIdentifiers:)` n'est qu'une ÉMISSION.
+    /// Rendre la main à iOS derrière elle (`completionHandler(.noData)`) laisse
+    /// le système libre de suspendre le processus AVANT le retrait — la
+    /// bannière reste affichée, ce que la révocation prétend justement
+    /// empêcher. Le contrat : on attend la RELECTURE.
+    func test_removeDeliveredAwaiting_returnsOnlyOnceTheRemovalIsConfirmedByARereading() async {
+        let spy = SpyBannerCenter(delivered: [
+            banner("d1", notificationId: "n1"),
+            banner("d2", notificationId: "other")
+        ])
+
+        await NotificationActionHandler.removeDeliveredNotificationsAwaiting(
+            matching: { ($0["notificationId"] as? String) == "n1" },
+            center: spy.center()
+        )
+
+        XCTAssertEqual(spy.removed, [["d1"]])
+        XCTAssertEqual(spy.reads, 2,
+                       "une seule lecture = on a rendu la main sur l'ÉMISSION ; la seconde est la preuve d'effet")
+    }
+
+    /// Le budget d'un push silencieux n'est pas extensible : un système qui ne
+    /// confirme jamais ne doit pas le consommer entier.
+    func test_removeDeliveredAwaiting_returnsAnyway_whenTheSystemNeverConfirms() async {
+        let spy = SpyBannerCenter(delivered: [banner("d1", notificationId: "n1")], appliesRemoval: false)
+        let start = ContinuousClock.now
+
+        await NotificationActionHandler.removeDeliveredNotificationsAwaiting(
+            matching: { _ in true },
+            center: spy.center(),
+            confirmationTimeout: .milliseconds(200)
+        )
+
+        XCTAssertLessThan(start.duration(to: .now), .seconds(3))
+        XCTAssertGreaterThan(spy.reads, 1, "la confirmation a bien été TENTÉE avant d'abandonner")
+        XCTAssertEqual(spy.removed, [["d1"]])
+    }
+
+    /// Fire-and-forget (nettoyage de bannières après une action) : personne
+    /// n'attend, donc aucune boucle de confirmation — sinon chaque action
+    /// brûlerait jusqu'à trois secondes d'allers-retours système pour rien.
+    func test_removeDelivered_withoutACompletion_doesNotPollForConfirmation() async {
+        let spy = SpyBannerCenter(delivered: [banner("d1", notificationId: "n1")], appliesRemoval: false)
+
+        NotificationActionHandler.removeDeliveredNotifications(
+            matching: { _ in true },
+            center: spy.center()
+        )
+        try? await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(spy.removed, [["d1"]])
+        XCTAssertEqual(spy.reads, 1)
+    }
+
+    /// Aucune bannière ne correspond : rien à confirmer, rien à relire.
+    func test_removeDeliveredAwaiting_withoutAMatch_touchesTheSystemOnce() async {
+        let spy = SpyBannerCenter(delivered: [banner("d1", notificationId: "n1")])
+
+        await NotificationActionHandler.removeDeliveredNotificationsAwaiting(
+            matching: { _ in false },
+            center: spy.center()
+        )
+
+        XCTAssertEqual(spy.removed, [])
+        XCTAssertEqual(spy.reads, 1)
+    }
+
+    // MARK: Câblage (gardes de source — AppDelegate et la racine ne s'instancient pas en test)
+
+    private func appSource(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Services
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+            .appendingPathComponent(relativePath)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// La branche `notification_revoked` vit AVANT la logique de sync du push
+    /// silencieux et termine le handler en `.noData` : ce push ne porte aucun
+    /// compteur, il ne doit ni déclencher `syncNow()` ni l'ack de réception.
+    func test_appDelegate_handlesRevocationPush_beforeSilentSync_andCompletesNoData() throws {
+        let code = AppSourceGuard.stripComments(try appSource("Meeshy/AppDelegate.swift"))
+        guard let branch = code.range(of: "NotificationRevocationPayload(userInfo: userInfo)"),
+              let sync = code.range(of: "NotificationCoordinator.shared.syncNow()") else {
+            XCTFail("AppDelegate doit parser la révocation et garder la sync silencieuse"); return
+        }
+        XCTAssertTrue(branch.lowerBound < sync.lowerBound, "la révocation se traite avant la sync")
+        let tail = code[branch.upperBound...].prefix(700)
+        XCTAssertTrue(tail.contains("revokeDeliveredBanners(notificationIds:"))
+        XCTAssertTrue(tail.contains("completionHandler(.noData)"))
+    }
+
+    func test_app_wiresSocketDeletions_toTheBannerRevocation() throws {
+        let code = AppSourceGuard.stripComments(try appSource("Meeshy/MeeshyApp.swift"))
+        XCTAssertTrue(code.contains("observeRevocations(from: NotificationToastManager.shared.notificationWasDeleted"),
+                      "le socket `notification:deleted` doit retirer la bannière livrée par le même atome que le push")
     }
 }

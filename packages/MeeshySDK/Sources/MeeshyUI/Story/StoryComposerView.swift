@@ -352,6 +352,10 @@ public struct StoryComposerView: View {
         self.chromeOwner = chromeOwner
         self.publishTrigger = publishTrigger
         self.publishTargetType = publishTargetType
+        // E1 (#3886) — le contenu du réel/story part dans la langue DÉCLARÉE au
+        // composer (semée dans `viewModel.declaredContentLanguage` par l'hôte),
+        // jamais « fr » codé en dur.
+        self._storyLanguage = State(initialValue: viewModel.declaredContentLanguage)
         self._visibility = State(initialValue: initialVisibility)
         self._visibilityUserIds = State(initialValue: initialVisibilityUserIds)
         self.onPublishSlide = onPublishSlide

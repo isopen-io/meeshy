@@ -181,6 +181,24 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
+        // Révocation (features 4/5) : le gateway retire une notification déjà
+        // poussée (message supprimé, demande d'ami annulée, effacée depuis un
+        // autre appareil) par un push de contrôle silencieux. On retire les
+        // bannières livrées AVANT toute logique de sync — ce push ne porte
+        // aucun compteur ni messageId — et on termine en `.noData` une fois le
+        // retrait effectué (le centre de notifications répond en asynchrone :
+        // compléter avant, c'est laisser iOS suspendre le processus avec la
+        // bannière encore affichée). Même atome que le socket
+        // `notification:deleted` : `NotificationActionHandler`.
+        if let revocation = NotificationRevocationPayload(userInfo: userInfo) {
+            Logger.network.info("notification_revoked silent push received (count=\(revocation.notificationIds.count, privacy: .public))")
+            Task { @MainActor in
+                await NotificationActionHandler.shared.revokeDeliveredBanners(notificationIds: revocation.notificationIds)
+                completionHandler(.noData)
+            }
+            return
+        }
+
         // Le gateway sérialise `unreadCount` en STRING dans `data` — le cast
         // `as? Int` échouait toujours et le compteur de la cloche n'était
         // jamais appliqué au réveil silencieux.

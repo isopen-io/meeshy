@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.MeeshyUser
@@ -26,7 +27,11 @@ import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
+import me.meeshy.sdk.model.StoryComposerDraftSnapshot
+import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
+import me.meeshy.sdk.story.StoryComposerDraftStore
 import me.meeshy.sdk.story.StoryRepository
 import org.junit.After
 import org.junit.Before
@@ -51,9 +56,11 @@ class StoryComposerViewModelTest {
 
     private fun viewModel(
         user: MeeshyUser? = MeeshyUser(id = "me", username = "me", systemLanguage = "en"),
+        draftStore: StoryComposerDraftStore = InMemoryStoryComposerDraftStore(),
+        blobStore: MediaBlobStore = mockk(relaxed = true),
     ): StoryComposerViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
-        return StoryComposerViewModel(repo, session, media, uploadQueue, workManager)
+        return StoryComposerViewModel(repo, session, media, uploadQueue, workManager, draftStore, blobStore)
     }
 
     private fun offline(status: Int? = null): NetworkResult<List<UploadedMedia>> =
@@ -2486,5 +2493,173 @@ class StoryComposerViewModelTest {
         assertThat(requests).hasSize(2)
         assertThat(requests.map { it.content }).containsExactly("one", "two")
         assertThat(requests.map { it.repostOfId }).containsExactly("src-1", "src-1")
+    }
+
+    // ---- Draft auto-save / restore ----------------------------------------------------
+
+    @Test
+    fun `onEnterComposer restores a stored simple draft into a pristine composer`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", text = "resumed one"),
+                StoryDraftSlideSnapshot(id = "s2", text = "resumed two"),
+            ),
+            selectedId = "s2",
+            visibility = "FRIENDS",
+        )
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        val state = vm.state.value
+        assertThat(state.deck.slides.map { it.text }).containsExactly("resumed one", "resumed two").inOrder()
+        assertThat(state.deck.selectedId).isEqualTo("s2")
+        assertThat(state.draft.visibility).isEqualTo(StoryVisibility.FRIENDS)
+        // The draft mirror re-points at the restored selection.
+        assertThat(state.draft.text).isEqualTo("resumed two")
+    }
+
+    @Test
+    fun `onEnterComposer leaves an in-progress composer untouched`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "stored")),
+            selectedId = "s1",
+        )
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored))
+        vm.onTextChange("already typing") // composer no longer pristine
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.deck.selectedSlide.text).isEqualTo("already typing")
+    }
+
+    @Test
+    fun `persistDraft saves a simple text draft to the store`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onTextChange("keep me")
+        vm.onVisibilityChange(StoryVisibility.PRIVATE)
+
+        vm.persistDraft()
+
+        val saved = store.load()
+        assertThat(saved).isNotNull()
+        assertThat(saved!!.slides.single().text).isEqualTo("keep me")
+        assertThat(saved.visibility).isEqualTo("PRIVATE")
+    }
+
+    @Test
+    fun `persistDraft does not save a draft carrying rich on-canvas content`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onTextChange("caption")
+        vm.onAddTextElement() // rich content the snapshot can't represent
+
+        vm.persistDraft()
+
+        assertThat(store.load()).isNull()
+    }
+
+    @Test
+    fun `persistDraft purges a stored draft once the composer goes empty`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "was here")),
+            selectedId = "s1",
+        )
+        val store = InMemoryStoryComposerDraftStore(stored)
+        val vm = viewModel(draftStore = store)
+        // A fresh (pristine, empty) composer over a stored draft.
+
+        vm.persistDraft()
+
+        assertThat(store.load()).isNull()
+    }
+
+    @Test
+    fun `publish clears any stored draft`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "draft")),
+            selectedId = "s1",
+        )
+        val store = InMemoryStoryComposerDraftStore(stored)
+        val vm = viewModel(draftStore = store)
+        vm.onTextChange("bonjour")
+        coEvery { repo.enqueuePublish(any(), any()) } returns "cmid"
+
+        vm.publish()
+
+        assertThat(store.load()).isNull()
+    }
+
+    // ---- Draft restore: lost-media reconciliation -------------------------------------
+
+    @Test
+    fun `onEnterComposer drops a restored offline media whose blob was swept and notifies`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "caption", mediaIds = listOf("cmid_gone"))),
+            selectedId = "s1",
+        )
+        val blob: MediaBlobStore = mockk(relaxed = true)
+        coEvery { blob.has("cmid_gone") } returns false
+        val store = InMemoryStoryComposerDraftStore(stored)
+        val vm = viewModel(draftStore = store, blobStore = blob)
+
+        vm.onEnterComposer()
+
+        val state = vm.state.value
+        assertThat(state.deck.selectedSlide.mediaIds).isEmpty()
+        assertThat(state.deck.selectedSlide.text).isEqualTo("caption")
+        assertThat(state.errorMessage).isEqualTo(StoryComposerViewModel.MEDIA_RESTORE_LOST)
+    }
+
+    @Test
+    fun `onEnterComposer keeps a restored offline media whose blob still survives`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "caption", mediaIds = listOf("cmid_live"))),
+            selectedId = "s1",
+        )
+        val blob: MediaBlobStore = mockk(relaxed = true)
+        coEvery { blob.has("cmid_live") } returns true
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored), blobStore = blob)
+
+        vm.onEnterComposer()
+
+        val state = vm.state.value
+        assertThat(state.deck.selectedSlide.mediaIds).containsExactly("cmid_live")
+        assertThat(state.errorMessage).isNull()
+    }
+
+    @Test
+    fun `onEnterComposer keeps a restored server media without probing the blob store`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", mediaIds = listOf("507f1f77bcf86cd799439011"))),
+            selectedId = "s1",
+        )
+        val blob: MediaBlobStore = mockk(relaxed = true)
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored), blobStore = blob)
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.deck.selectedSlide.mediaIds).containsExactly("507f1f77bcf86cd799439011")
+        coVerify(exactly = 0) { blob.has(any()) }
+    }
+
+    @Test
+    fun `onEnterComposer purges and does not seed a draft the media loss emptied entirely`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", mediaIds = listOf("cmid_gone"))),
+            selectedId = "s1",
+        )
+        val blob: MediaBlobStore = mockk(relaxed = true)
+        coEvery { blob.has("cmid_gone") } returns false
+        val store = InMemoryStoryComposerDraftStore(stored)
+        val vm = viewModel(draftStore = store, blobStore = blob)
+
+        vm.onEnterComposer()
+
+        // The composer stays on its fresh pristine deck; the dead draft is purged.
+        assertThat(vm.state.value.deck.hasMedia).isFalse()
+        assertThat(vm.state.value.deck.slides).hasSize(1)
+        assertThat(store.load()).isNull()
     }
 }

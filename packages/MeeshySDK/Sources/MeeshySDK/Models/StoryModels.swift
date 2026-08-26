@@ -1134,6 +1134,10 @@ public struct StorySticker: Codable, Identifiable, Sendable {
     /// Origine de l'asset — "genmoji", "bitmoji", "thirdParty", "library".
     /// Métadonnée de PROVENANCE : elle ne pilote aucun chargement.
     public var provider: String?
+    /// **E3 (#3888) — langue d'origine de l'élément.** Comme sur texte/média/
+    /// audio : par défaut la langue DÉCLARÉE au composer (`declaredContentLanguage`),
+    /// surchargeable par élément. `nil` sur les brouillons/payloads antérieurs.
+    public var sourceLanguage: String?
     public var x: Double
     public var y: Double
     public var scale: Double
@@ -1163,7 +1167,7 @@ public struct StorySticker: Codable, Identifiable, Sendable {
     public var wireEmoji: String { emoji.isEmpty ? Self.imageFallbackEmoji : emoji }
 
     enum CodingKeys: String, CodingKey {
-        case id, emoji, postMediaId, provider, x, y, scale, rotation, zIndex
+        case id, emoji, postMediaId, provider, sourceLanguage, x, y, scale, rotation, zIndex
         case baseSize, anchor
         case startTime, duration, fadeIn, fadeOut
     }
@@ -1172,6 +1176,7 @@ public struct StorySticker: Codable, Identifiable, Sendable {
                 emoji: String,
                 postMediaId: String = "",
                 provider: String? = nil,
+                sourceLanguage: String? = nil,
                 x: Double = 0.5, y: Double = 0.5,
                 scale: Double = 1.0,
                 rotation: Double = 0,
@@ -1184,6 +1189,7 @@ public struct StorySticker: Codable, Identifiable, Sendable {
                 fadeOut: Double? = nil) {
         self.id = id; self.emoji = emoji
         self.postMediaId = postMediaId; self.provider = provider
+        self.sourceLanguage = sourceLanguage
         self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
         self.zIndex = zIndex
         self.baseSize = baseSize
@@ -1206,6 +1212,7 @@ public struct StorySticker: Codable, Identifiable, Sendable {
         emoji = try c.decode(String.self, forKey: .emoji)
         postMediaId = try c.decodeIfPresent(String.self, forKey: .postMediaId) ?? ""
         provider = try c.decodeIfPresent(String.self, forKey: .provider)
+        sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage)
         x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
         y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
         scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1.0
@@ -1233,6 +1240,7 @@ public struct StorySticker: Codable, Identifiable, Sendable {
         // alors exactement comme avant.
         if !postMediaId.isEmpty { try c.encode(postMediaId, forKey: .postMediaId) }
         try c.encodeIfPresent(provider, forKey: .provider)
+        try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
         try c.encode(x, forKey: .x); try c.encode(y, forKey: .y)
         try c.encode(scale, forKey: .scale); try c.encode(rotation, forKey: .rotation)
         try c.encode(zIndex, forKey: .zIndex)
@@ -1267,18 +1275,24 @@ public struct StoryLocationObject: Codable, Identifiable, Sendable {
     public var zIndex: Int
     /// Pivot point for rotation/scale (normalized 0–1). Default center (0.5, 0.5).
     public var anchor: CGPoint
+    /// **E3 (#3888) — langue d'origine de l'élément.** Défaut : la langue
+    /// DÉCLARÉE au composer (`declaredContentLanguage`), surchargeable par
+    /// élément. `nil` sur les brouillons/payloads antérieurs.
+    public var sourceLanguage: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, place, x, y, scale, rotation, zIndex, anchor
+        case id, place, x, y, scale, rotation, zIndex, anchor, sourceLanguage
     }
 
     public init(id: String = UUID().uuidString, place: SharedPlace,
                 x: Double = 0.5, y: Double = 0.8, scale: Double = 1.0,
                 rotation: Double = 0, zIndex: Int = 0,
-                anchor: CGPoint = CGPoint(x: 0.5, y: 0.5)) {
+                anchor: CGPoint = CGPoint(x: 0.5, y: 0.5),
+                sourceLanguage: String? = nil) {
         self.id = id; self.place = place
         self.x = x; self.y = y; self.scale = scale
         self.rotation = rotation; self.zIndex = zIndex; self.anchor = anchor
+        self.sourceLanguage = sourceLanguage
     }
 
     // Custom Codable: anchor uses the nested {x,y} container patron shared
@@ -1289,6 +1303,7 @@ public struct StoryLocationObject: Codable, Identifiable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         place = try c.decode(SharedPlace.self, forKey: .place)
+        sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage)
         x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
         y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.8
         scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1.0
@@ -1307,6 +1322,7 @@ public struct StoryLocationObject: Codable, Identifiable, Sendable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
         try c.encode(place, forKey: .place)
+        try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
         try c.encode(x, forKey: .x); try c.encode(y, forKey: .y)
         try c.encode(scale, forKey: .scale); try c.encode(rotation, forKey: .rotation)
         try c.encode(zIndex, forKey: .zIndex)
@@ -2104,6 +2120,30 @@ public enum PostType: String, CaseIterable, Sendable {
         case .reel: return "play.rectangle.on.rectangle.fill"
         case .story: return "camera.fill"
         case .status: return "face.smiling"
+        }
+    }
+}
+
+/// **Comment un post AFFICHE ses médias (directive 2026-08-27).**
+///
+/// La structure existe **dès maintenant** pour porter la règle, mais elle n'a
+/// **aucune interface** et **aucun autre choix** pour l'instant : la présentation
+/// se DÉRIVE entièrement du type via `default(for:)` — carousel pour un POST,
+/// diapositives horizontales pour un RÉEL. Un futur champ par post pourra la
+/// surcharger sans changer ce point unique.
+public enum PostMediaPresentation: String, CaseIterable, Sendable, Codable {
+    /// Défaut POST — les médias défilent en carrousel.
+    case carousel
+    /// Défaut RÉEL — les médias défilent en diapositives horizontales.
+    case horizontalSlides
+
+    /// La SEULE règle pour l'instant : dérivée du type de post. Aucun autre
+    /// choix possible, aucune UI — carousel partout sauf le réel, qui glisse
+    /// à l'horizontale.
+    public static func `default`(for postType: PostType) -> PostMediaPresentation {
+        switch postType {
+        case .reel: return .horizontalSlides
+        case .post, .story, .status: return .carousel
         }
     }
 }

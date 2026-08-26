@@ -69,4 +69,23 @@ extension StoryCanvasUIView: UIGestureRecognizerDelegate {
         if isCanvasZoomA || isCanvasZoomB { return false }
         return true
     }
+
+    /// Single choke point for "a gesture is being attempted on this canvas" —
+    /// `setupGesturesAll()` sets `self` as the delegate of every recognizer it
+    /// attaches (pan, pinch, rotation, single/double tap, three-finger canvas
+    /// zoom), so this fires for every one of them without touching any
+    /// individual `handle*` method. Wakes the idle-throttled edit clock
+    /// (issue #3906) — see `noteEditInteraction()`.
+    ///
+    /// `override`: `UIView` itself already implements
+    /// `UIGestureRecognizerDelegate.gestureRecognizerShouldBegin(_:)`
+    /// (`UIView.h`, its own default delegate behavior for its gesture
+    /// recognizers) — this is not a fresh protocol witness. Calling
+    /// `super` and returning its result (rather than hardcoding `true`)
+    /// preserves whatever UIKit's own default decides, so gesture
+    /// recognition behavior is unchanged.
+    public override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        noteEditInteraction()
+        return super.gestureRecognizerShouldBegin(gestureRecognizer)
+    }
 }

@@ -36,4 +36,27 @@ final class StoryComposerBackgroundLiveApplyTests: XCTestCase {
         XCTAssertEqual(vm.currentSlide.effects.background, before,
                        "Re-sélectionner la même couleur ne doit pas dirty la slide")
     }
+
+    // F2 (#3885) — l'hôte app (composer POST) sème un fond par le point d'entrée
+    // PUBLIC `applyBackground(hex:)`, avec un hex NU (la palette partagée).
+    func test_applyBackground_hexNu_normaliseEtAtterritDansLaSlide() {
+        let vm = StoryComposerViewModel()
+
+        vm.applyBackground(hex: "1E90FF")
+
+        XCTAssertEqual(vm.backgroundColor, "#1E90FF",
+                       "Le point d'entrée public préfixe le `#` — l'hôte passe un hex nu.")
+        XCTAssertEqual(vm.currentSlide.effects.background, "1E90FF",
+                       "…et le `didSet` propage à la slide courante (format effects, sans '#').")
+    }
+
+    func test_applyBackground_hexDejaPrefixe_neDoublePasLeDieze() {
+        let vm = StoryComposerViewModel()
+
+        vm.applyBackground(hex: "#0A0A0A")
+
+        XCTAssertEqual(vm.backgroundColor, "#0A0A0A",
+                       "Un hex déjà préfixé n'est pas doublé.")
+        XCTAssertEqual(vm.currentSlide.effects.background, "0A0A0A")
+    }
 }

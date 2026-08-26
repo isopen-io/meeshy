@@ -110,6 +110,12 @@ extension StoryComposerView {
                 .padding(.bottom, keyboardHeight)
                 .environment(\.colorScheme, canvasChromeScheme)
 
+            // E3 (#3888) — la langue par élément pour les objets NON-TEXTE.
+            // Apparaît quand un média/audio/sticker/lieu est sélectionné ; le
+            // texte garde sa pastille dans son éditeur inline.
+            StoryElementLanguageBar(viewModel: viewModel)
+                .environment(\.colorScheme, canvasChromeScheme)
+
             // Le dessin utilise le band PARTAGÉ (`ComposerBottomBand` →
             // `drawingPanel` = liste éditable des traits), comme tous les autres
             // outils — plus de bande dédiée `DrawingBand` qui doublonnait

@@ -15,6 +15,17 @@ enum class StoryVisibility(val wire: String) {
     FRIENDS("FRIENDS"),
     COMMUNITY("COMMUNITY"),
     PRIVATE("PRIVATE"),
+    ;
+
+    companion object {
+        /**
+         * The audience whose [wire] string is [value], or [PUBLIC] when none matches. Tolerant
+         * by design: a legacy or unknown persisted value decays to the safe default rather than
+         * throwing, so restoring a story-composer draft can never crash on a stale visibility.
+         */
+        fun fromWire(value: String): StoryVisibility =
+            entries.firstOrNull { it.wire == value } ?: PUBLIC
+    }
 }
 
 /**

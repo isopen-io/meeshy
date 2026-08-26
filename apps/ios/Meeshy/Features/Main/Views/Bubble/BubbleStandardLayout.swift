@@ -709,6 +709,9 @@ struct BubbleStandardLayout: View {
                                 caption: caption,
                                 fileName: attachment.originalName,
                                 mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                                // Poster NET avant la première frame (feature 3) :
+                                // résolu côté app, affiché par le SDK.
+                                poster: VideoPosterResolver.poster(for: attachment),
                                 onDownload: onDownload,
                                 onShare: resolvedShareURL.map { url in
                                     {

@@ -1988,7 +1988,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     func test_host_lInterrupteurPostReel_estGateSurLaQualification() throws {
         let code = try hostCompact()
         XCTAssertTrue(
-            code.contains(compact("if documentComposesReel { documentForcePlainPostToggle }")),
+            code.contains(compact("if documentComposesReel { documentDestinationSelector }")),
             "L'interrupteur ne se monte que sous `documentComposesReel` — sinon il se peint sur une composition qui n'a rien à offrir."
         )
     }
@@ -2028,7 +2028,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "Le reset doit s'accrocher au CHANGEMENT du média local — la seule chose qui peut dé-qualifier."
         )
         XCTAssertTrue(
-            code.contains(compact("guard !documentComposesReel else { return } documentForcePlainPost = false")),
+            code.contains(compact("guard !documentComposesReel else { return } documentDestination = .reel")),
             "…et remettre le drapeau à `false` dès que la composition ne qualifie plus."
         )
     }
@@ -2043,7 +2043,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             return XCTFail("Le plateau doit être une propriété nommée `plateauTools` — la garde s'ancre dessus.")
         }
         XCTAssertFalse(
-            compact(corps).contains(compact("documentForcePlainPostToggle")),
+            compact(corps).contains(compact("documentDestinationSelector")),
             "L'interrupteur POST ↔ RÉEL n'est pas un outil de plateau — il vit dans le socle, sous `documentComposesReel`."
         )
     }

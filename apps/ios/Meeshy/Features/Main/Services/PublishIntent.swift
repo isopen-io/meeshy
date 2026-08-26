@@ -160,11 +160,18 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             content: content,
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
-            // La langue PARLÉE gagne sur la langue DÉCLARÉE par la capsule du
-            // meuble — même arbitrage que `audioRecording`, jamais un
-            // court-circuit : un document SANS vocal (`transcription: nil`)
-            // garde `originalLanguage` tel quel, celui de la capsule.
-            originalLanguage: transcription?.language ?? originalLanguage,
+            // **E2 (#3887) — texte et média portent DEUX langues distinctes,
+            // SANS rouvrir la régression 7.4b.** La bascule est le TEXTE :
+            //  • `content == nil` (vocal/média PUR) → il n'y a pas de texte,
+            //    donc la langue PARLÉE de la transcription EST celle du contenu
+            //    et gagne sur la capsule — exactement 7.4b, gardé par
+            //    `ComposerDocumentToolChainTests.test_leCrux…`.
+            //  • `content != nil` (texte + média) → le TEXTE garde la langue
+            //    DÉCLARÉE (la capsule) ; le MÉDIA garde SA propre langue sur
+            //    `mobileTranscription` ci-dessous, résolue à part (famille
+            //    audio). Les conflater faisait un audio wolof retitrer le
+            //    texte français, ou l'inverse.
+            originalLanguage: content == nil ? (transcription?.language ?? originalLanguage) : originalLanguage,
             mentions: mentions,
             location: location,
             discoverabilityPrecision: discoverabilityPrecision,

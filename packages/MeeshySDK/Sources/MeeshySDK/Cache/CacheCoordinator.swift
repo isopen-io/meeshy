@@ -165,6 +165,16 @@ public actor CacheCoordinator {
         shared.thumbnails.cachedFileURL(for: key)
     }
 
+    /// Synchronous warm for the `thumbnails` store — NSCache hit OR
+    /// disk-to-NSCache decode + return. Mirrors `warmedImage` (`images`
+    /// store) for callers that need a `thumbnails`-store key resolved
+    /// without an actor hop — e.g. a video poster persisted under
+    /// `thumb:<url>`, read back synchronously at page mount so the first
+    /// `body` renders it directly, no placeholder flash.
+    nonisolated public static func warmedThumbnail(for key: String) -> UIImage? {
+        shared.thumbnails.warmedImage(for: key)
+    }
+
     /// Configures memory caps for the image pipeline. Call once at app launch.
     ///
     /// Sets:
