@@ -4018,8 +4018,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `StorySlideView.repostAttribution` resolved once at projection, header Compose glue
       (merged a11y label `stories_reposted_from`/`stories_reposted`, EN/FR/ES/PT). +15 tests
       (10 pure `StoryRepostAttributionTest` + 3 `StoryGroupingTest` mapping + 2
-      `StoryViewerViewModelTest` projection). **Pending**: the AUTHOR clone half (reposting
-      someone's story clones its slides into the composer carrying `repostOfId`).
+      `StoryViewerViewModelTest` projection). **AUTHOR link half done** (slice
+      `story-composer-repost-link`, 2026-08-26): the viewer's options menu now offers "Repost" on
+      someone else's story → opens the composer carrying the source id, which rides onto **every**
+      published slide's `CreateStoryRequest.repostOfId`. The gateway records the repost chain and
+      the reader half above renders the attribution from the published story's server-resolved
+      fields — so the author side is a pure link, no composer-side locked badge (an improvement on
+      iOS's brittle locked-text-element badge). `StoryComposerDraft.repostOfId` + `withRepostOf`
+      (blank/whitespace/null → dropped, never a repost of "nothing"), `toCreateStoryRequest` carries
+      it, `publishPlans` threads it per slide, VM `onRepostSource` (inert on blank), composer-screen
+      `LaunchedEffect` seam, viewer `onRepost` menu item (EN/FR/ES/PT), `story_composer?repostOfId=`
+      nav arg. +11 tests (5 `StoryComposerDraftTest` wire/normalise + 6 `StoryComposerViewModelTest`
+      intent/publish incl. multi-slide). Mutation-RED-proven (neutering the wire mapping reddens
+      EXACTLY the 3 link-carrying tests; the null-default, blank-drop, `withRepostOf` and
+      `onRepostSource`-state tests stay green). **Pending**: cloning the source story's slide
+      CONTENT (caption/text-elements/effects) into the composer as an editable starting point.
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
       reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes

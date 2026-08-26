@@ -659,6 +659,19 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
+     * Opens the composer as a **repost** of the story identified by [sourceId]: the link
+     * rides onto every published slide's wire request so the gateway records the repost
+     * chain and the reader half (already shipped) renders the attribution badge. Inert on
+     * a blank id — a repost of "nothing" must never be created — and it only sets the link,
+     * leaving the author's own draft content untouched so they can add their take. Called
+     * once from the composer screen when it is entered with a repost source argument.
+     */
+    fun onRepostSource(sourceId: String) {
+        if (sourceId.isBlank()) return
+        _state.update { it.copy(draft = it.draft.withRepostOf(sourceId)) }
+    }
+
+    /**
      * Toggles the bottom-band drawer for [category] (the Contenu / Effets FABs): opens
      * it, switches category, or closes it per the pure [ComposerBandState.tapFab]. All
      * band navigation state lives in the unit-tested [ComposerBandState].
@@ -978,6 +991,7 @@ class StoryComposerViewModel @Inject constructor(
                 durationSecondsPin = slide.durationSecondsPin,
                 background = slide.background,
                 backgroundMedia = resolveBackgroundMedia(slide, current),
+                repostOfId = current.draft.repostOfId,
             )
             PublishPlan(
                 request = draft.toCreateStoryRequest(language),

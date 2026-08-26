@@ -163,6 +163,7 @@ import me.meeshy.ui.theme.hexColor
 @Composable
 fun StoryComposerScreen(
     onClose: () -> Unit,
+    repostOfId: String? = null,
     viewModel: StoryComposerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -174,6 +175,13 @@ fun StoryComposerScreen(
         viewModel.published
             .flowWithLifecycle(lifecycleOwner.lifecycle)
             .collectLatest { onClose() }
+    }
+
+    // Entered as a repost: link this composition to its source story once. The ViewModel
+    // ignores a blank id, and the reader half renders the attribution from the published
+    // story — so all the author side carries is the source id.
+    LaunchedEffect(repostOfId) {
+        repostOfId?.let { viewModel.onRepostSource(it) }
     }
 
     fun dispatchPicked(uris: List<Uri>) {

@@ -116,6 +116,7 @@
     <!-- Story options -->
     <string name="stories_options">Options de la story</string>
     <string name="stories_action_report">Signaler</string>
+    <string name="stories_action_repost">Republier</string>
     <string name="stories_action_delete">Supprimer</string>
     <string name="stories_cancel">Annuler</string>
     <string name="stories_delete_confirm_title">Supprimer cette story ?</string>

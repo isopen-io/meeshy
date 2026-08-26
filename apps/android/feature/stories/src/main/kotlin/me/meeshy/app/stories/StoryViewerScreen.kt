@@ -126,6 +126,7 @@ private const val TEXT_DESIGN_CANVAS_WIDTH = 1080f
 @Composable
 fun StoryViewerScreen(
     onClose: () -> Unit,
+    onRepost: (String) -> Unit = {},
     viewModel: StoryViewerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -589,6 +590,15 @@ fun StoryViewerScreen(
                                     },
                                 )
                             } else {
+                                state.currentStoryId?.let { storyId ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.stories_action_repost)) },
+                                        onClick = {
+                                            showOptions = false
+                                            onRepost(storyId)
+                                        },
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.stories_action_report)) },
                                     onClick = {

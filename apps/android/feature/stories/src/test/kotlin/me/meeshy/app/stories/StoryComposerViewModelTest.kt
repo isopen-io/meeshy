@@ -2425,4 +2425,66 @@ class StoryComposerViewModelTest {
         assertThat(vm.state.value.deck).isSameInstanceAs(before)
         assertThat(vm.state.value.elementContextMenu).isNull()
     }
+
+    @Test
+    fun `onRepostSource sets the draft repost link`() = runTest {
+        val vm = viewModel()
+
+        vm.onRepostSource("src-1")
+
+        assertThat(vm.state.value.draft.repostOfId).isEqualTo("src-1")
+    }
+
+    @Test
+    fun `onRepostSource is inert on a blank id and leaves the draft untouched`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("my take")
+
+        vm.onRepostSource("   ")
+
+        assertThat(vm.state.value.draft.repostOfId).isNull()
+        assertThat(vm.state.value.draft.text).isEqualTo("my take")
+    }
+
+    @Test
+    fun `a non-repost publish sends a null repost link`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("hello")
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        assertThat(request.captured.repostOfId).isNull()
+    }
+
+    @Test
+    fun `publish carries the repost link on the wire request`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("my take")
+        vm.onRepostSource("src-1")
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        assertThat(request.captured.repostOfId).isEqualTo("src-1")
+    }
+
+    @Test
+    fun `publish carries the repost link on every slide of a multi-slide repost`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("one")
+        vm.onAddSlide()
+        vm.onTextChange("two")
+        vm.onRepostSource("src-1")
+        val requests = mutableListOf<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(requests), any()) } returns "cmid"
+
+        vm.publish()
+
+        assertThat(requests).hasSize(2)
+        assertThat(requests.map { it.content }).containsExactly("one", "two")
+        assertThat(requests.map { it.repostOfId }).containsExactly("src-1", "src-1")
+    }
 }

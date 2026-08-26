@@ -116,6 +116,7 @@
     <!-- Story options -->
     <string name="stories_options">Story options</string>
     <string name="stories_action_report">Report</string>
+    <string name="stories_action_repost">Repost</string>
     <string name="stories_action_delete">Delete</string>
     <string name="stories_cancel">Cancel</string>
     <string name="stories_delete_confirm_title">Delete this story?</string>

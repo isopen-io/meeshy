@@ -116,6 +116,7 @@
     <!-- Story options -->
     <string name="stories_options">Opções da história</string>
     <string name="stories_action_report">Denunciar</string>
+    <string name="stories_action_repost">Republicar</string>
     <string name="stories_action_delete">Excluir</string>
     <string name="stories_cancel">Cancelar</string>
     <string name="stories_delete_confirm_title">Excluir esta história?</string>

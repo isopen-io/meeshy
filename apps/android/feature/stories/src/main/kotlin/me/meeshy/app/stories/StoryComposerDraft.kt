@@ -36,6 +36,7 @@ data class StoryComposerDraft(
     val durationSecondsPin: Double? = null,
     val background: StoryBackgroundValue? = null,
     val backgroundMedia: StoryBackgroundMedia? = null,
+    val repostOfId: String? = null,
 ) {
     /** The content actually sent — surrounding whitespace is never published. */
     val trimmedText: String get() = text.trim()
@@ -92,6 +93,15 @@ data class StoryComposerDraft(
     fun withFilter(value: StoryFilter?): StoryComposerDraft = copy(filter = value)
 
     /**
+     * Links this draft to the story it reposts. A blank/whitespace [value] (or `null`)
+     * clears the link — an empty source id must never ride the wire and read as a repost
+     * of "nothing". The reader half renders the attribution badge from the published
+     * story's server-resolved fields, so the author side only has to carry this id.
+     */
+    fun withRepostOf(value: String?): StoryComposerDraft =
+        copy(repostOfId = value?.takeIf { it.isNotBlank() })
+
+    /**
      * Maps the draft to the create-story wire request. [originalLanguage] is the
      * publisher's resolved content language (Prisme) so the gateway can seed
      * translations. [content] is omitted (null) for a media-only story; attached
@@ -108,6 +118,7 @@ data class StoryComposerDraft(
         visibility = visibility.wire,
         originalLanguage = originalLanguage,
         mediaIds = mediaIds.takeIf { it.isNotEmpty() },
+        repostOfId = repostOfId?.takeIf { it.isNotBlank() },
     )
 
     private fun storyEffects(originalLanguage: String): StoryEffects? {
