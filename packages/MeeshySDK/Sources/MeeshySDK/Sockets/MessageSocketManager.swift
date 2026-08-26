@@ -1652,6 +1652,41 @@ public struct NotificationReadEvent: Decodable, Sendable {
     public let notificationId: String
 }
 
+/// `notification:read-bulk` — un AUTRE appareil du meme compte vient de marquer
+/// un LOT lu. Le gateway n'envoie AUCUN id (`updateMany` / `$runCommandRaw` ne
+/// les rendent pas) : il annonce le PREDICAT, que chaque client rejoue sur son
+/// propre cache. @see NotificationBulkScopeMapping.
+public struct NotificationReadBulkEvent: Decodable, Sendable {
+    public let scope: NotificationBulkScopePayload
+}
+
+/// `notification:deleted-bulk` — jumeau du precedent cote PURGE. Cas plus fort :
+/// `notification:counts` ne dit RIEN d'une purge des lues (`unread` est
+/// inchange par construction), donc sans ce predicat rien n'annonce la purge
+/// aux autres appareils.
+public struct NotificationDeletedBulkEvent: Decodable, Sendable {
+    public let scope: NotificationBulkScopePayload
+}
+
+/// `friend-request:cancelled` — signal temps reel PUR (aucune ligne
+/// `Notification` persistee, contrairement a NEW/ACCEPTED/REJECTED). Emis a
+/// l'user-room de l'AUTRE partie, donc `cancelledBy` designe par construction
+/// l'interlocuteur, jamais le lecteur.
+public struct FriendRequestCancelledEvent: Decodable, Sendable {
+    public let friendRequestId: String?
+    public let cancelledBy: String
+}
+
+/// `friend-request:rejected` — emis a l'user-room de l'EXPEDITEUR d'origine.
+/// C'est donc `_sentPending` qu'il faut vider chez le lecteur, jamais
+/// `_receivedPending`. `senderId` n'est PAS sur le fil (il ne sert qu'a router
+/// l'emission cote gateway) : declare optionnel par tolerance, jamais lu.
+public struct FriendRequestRejectedEvent: Decodable, Sendable {
+    public let friendRequestId: String?
+    public let senderId: String?
+    public let rejecterId: String
+}
+
 public struct NotificationDeletedEvent: Decodable, Sendable {
     public let notificationId: String
 }
@@ -2035,6 +2070,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let notificationRead = PassthroughSubject<NotificationReadEvent, Never>()
     public let notificationDeleted = PassthroughSubject<NotificationDeletedEvent, Never>()
     public let notificationCounts = PassthroughSubject<NotificationCountsEvent, Never>()
+    public let notificationReadBulk = PassthroughSubject<NotificationReadBulkEvent, Never>()
+    public let notificationDeletedBulk = PassthroughSubject<NotificationDeletedBulkEvent, Never>()
 
     // Combine publishers — call signaling
     public let callOfferReceived = PassthroughSubject<CallOfferData, Never>()
@@ -2239,6 +2276,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             .reconnectWaitMax(16),
             .reconnectAttempts(-1),
             .sessionDelegate(CertificatePinningDelegate()),
+            // BW-IOS-01 — negocie l'extension `permessage-deflate`. Le gateway
+            // l'annonce depuis toujours (`perMessageDeflate`, seuil 256 o) mais
+            // Starscream ne pose l'en-tete d'extension que si le manager le
+            // demande : sans ce drapeau, TOUTES les trames iOS voyageaient non
+            // compressees. Un intermediaire qui casserait l'extension fait
+            // retomber le handshake sur des trames nues, jamais sur une
+            // deconnexion.
+            .compress,
         ])
 
         socket = manager?.defaultSocket
@@ -2266,6 +2311,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             .reconnectWaitMax(16),
             .reconnectAttempts(-1),
             .sessionDelegate(CertificatePinningDelegate()),
+            // BW-IOS-01 — `permessage-deflate` (voir `connect()`).
+            .compress,
         ])
 
         socket = manager?.defaultSocket
@@ -3602,6 +3649,20 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        // Le serveur a REVOQUE la session (mot de passe change, revocation de
+        // tous les appareils, action admin) puis coupe la socket. Surtout PAS
+        // `handleUnauthorized()` comme la ligne au-dessus : son
+        // `refreshSession(force:)` obtiendrait un JWT neuf — `/auth/refresh` ne
+        // verifie pas que la session existe encore — et re-armerait pour 24 h
+        // la session qu'on vient de revoquer. La charge (`code`/`message`/
+        // `reason`) n'est pas decodee : aucune surface iOS ne l'affiche.
+        socket.on("auth:session-revoked") { _, _ in
+            Logger.socket.warning("MessageSocket: session revoked — forcing re-authentication")
+            Task { @MainActor in
+                AuthManager.shared.handleSessionRevoked()
+            }
+        }
+
         // --- Read status events ---
 
         socket.on("read-status:updated") { [weak self] data, _ in
@@ -3863,6 +3924,36 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        socket.on("notification:read-bulk") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(NotificationReadBulkEvent.self, from: data) { [weak self] event in
+                self?.notificationReadBulk.send(event)
+            }
+        }
+
+        socket.on("notification:deleted-bulk") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(NotificationDeletedBulkEvent.self, from: data) { [weak self] event in
+                self?.notificationDeletedBulk.send(event)
+            }
+        }
+
+        // --- Friend request lifecycle events ---
+
+        socket.on("friend-request:cancelled") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(FriendRequestCancelledEvent.self, from: data) { event in
+                Task { await MessageSocketManager.applyFriendRequestWithdrawal(otherUserId: event.cancelledBy) }
+            }
+        }
+
+        socket.on("friend-request:rejected") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(FriendRequestRejectedEvent.self, from: data) { event in
+                Task { await MessageSocketManager.applyFriendRequestRejection(rejecterId: event.rejecterId) }
+            }
+        }
+
         // --- Mention events ---
 
         socket.on("mention:created") { [weak self] data, _ in
@@ -4018,6 +4109,33 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+    }
+
+    // MARK: - Friend request lifecycle
+
+    /// `friend-request:cancelled` ne porte que `{friendRequestId, cancelledBy}`
+    /// et ne dit PAS de quel cote se trouve le lecteur — l'evenement part a
+    /// l'user-room de l'AUTRE partie, donc `cancelledBy` est l'interlocuteur,
+    /// que la demande ait ete emise ou recue. On retire dans les DEUX sens :
+    /// chacune des deux methodes est un no-op quand la cle est absente.
+    ///
+    /// Muter `FriendshipCache` ne repeint PAS l'ecran Demandes : ses lignes
+    /// viennent de GRDB (`PersistenceKeys.receivedRequests` / `sentRequests`),
+    /// qui resterait `.fresh` avec la ligne retiree. D'ou l'invalidation
+    /// EXPLICITE — `notifyChange()` ne fait qu'incrementer `version`.
+    static func applyFriendRequestWithdrawal(otherUserId: String) async {
+        FriendshipCache.shared.didCancelRequest(to: otherUserId)
+        FriendshipCache.shared.didRejectRequest(from: otherUserId)
+        await FriendshipCache.shared.invalidatePersistedFriendCaches()
+    }
+
+    /// `friend-request:rejected` arrive chez l'EXPEDITEUR d'origine : sa demande
+    /// vit dans `_sentPending`, que `didCancelRequest(to:)` vide.
+    /// `didRejectRequest(from:)` viderait `_receivedPending` — mauvaise
+    /// direction, no-op garanti.
+    static func applyFriendRequestRejection(rejecterId: String) async {
+        FriendshipCache.shared.didCancelRequest(to: rejecterId)
+        await FriendshipCache.shared.invalidatePersistedFriendCaches()
     }
 
     // MARK: - Decode Helper

@@ -805,9 +805,13 @@ struct CallView: View {
             if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
                 pipView
             } else if callManager.isVideoEnabled && callManager.isVideoSuspended {
-                // Survival: outbound video dropped to audio-only on a weak link.
-                // The live local track is gone, so show a dedicated "paused" tile
-                // over the user's avatar rather than letting the self-view vanish.
+                // Survie réseau : depuis L6-1 la piste locale RESTE attachée
+                // (l'encodeur est au plancher), donc `hasLocalVideoTrack` est
+                // vrai et c'est la PiP qui gagne — elle montre l'image
+                // réellement gelée. Cette branche ne sert plus que si la piste
+                // disparaît pour une AUTRE raison (échec de ré-acquisition) :
+                // une tuile « en pause » sur l'avatar plutôt qu'une self-view
+                // qui s'évapore.
                 localVideoSuspendedTile
             }
         }

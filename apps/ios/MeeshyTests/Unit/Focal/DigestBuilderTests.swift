@@ -53,6 +53,21 @@ final class DigestBuilderTests: XCTestCase {
         XCTAssertFalse(digest.isComplete)
     }
 
+    /// Prémisse de 2b-2 (PAS une garde — F9, revue adversariale 2026-08-25) :
+    /// sur une fenêtre VIDE, `messageCount` vaut 0. Ce test n'observe AUCUN
+    /// site de montage et ne rougirait donc PAS si le rebasculement
+    /// d'identité de `LivingSummaryHost` (`LivingSummaryMountIdentityTests`)
+    /// était annulé — il passe aussi par coïncidence de deux constantes
+    /// indépendantes (`isComplete: windowCoversUnread` rendu `true` ici, qui
+    /// matche par hasard `.empty.isComplete == true`). Il consigne seulement
+    /// le contrat de `DeterministicDigestBuilder.build` sur l'entrée vide.
+    func test_buildOnEmptyMessages_producesSkeletonDigest() {
+        let digest = DeterministicDigestBuilder.build(
+            messages: [], participants: [], viewerId: viewerId, episodes: [], windowCoversUnread: true
+        )
+        XCTAssertEqual(digest.messageCount, 0)
+    }
+
     // MARK: - isComplete honnête (critère central §WS-8)
 
     func test_windowCoversUnread_true_producesIsCompleteTrue() {

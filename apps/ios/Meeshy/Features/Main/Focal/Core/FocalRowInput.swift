@@ -159,9 +159,11 @@ struct FocalRowInput: Equatable {
     let isLastReceivedMessage: Bool
     /// Focal (2026-08-21) : le message EN FOCUS — celui de la carte teintée.
     /// Il porte ses détails même en continuation de groupe (avatar, présence,
-    /// mood, date ET heure d'envoi) et plafonne son texte
-    /// (`FocalMetrics.Focus.maxCharacters`) pour tenir dans une magnificence
-    /// lisible. Posé par l'hôte À LA POSE seulement (jamais par frame).
+    /// mood, date ET heure d'envoi). Son texte garde le MÊME plafond que les
+    /// autres rangées (`BubbleExpandableText.truncateLimit`) : aucune hauteur
+    /// ne dépend du focus (décision 2026-08-22 bis, retrait du plafond
+    /// `FocalMetrics.Focus.maxCharacters` le 2026-08-25 — L1-01). Posé par
+    /// l'hôte au tick d'élection (une superposition, jamais une hauteur).
     let isFocused: Bool
     /// Date complète du message en focus, PRÉ-CALCULÉE à la configuration
     /// (directive 2026-08-22 : « la date doit être pré-calculée et affichée

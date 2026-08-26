@@ -314,10 +314,20 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
         return disableLocalVideoResult
     }
     private(set) var applyVideoEncodingCallCount = 0
-    private(set) var lastVideoEncoding: (maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double)?
-    func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {
+    private(set) var lastVideoEncoding: (
+        maxBitrateBps: Int,
+        maxFramerate: Int,
+        scaleResolutionDownBy: Double,
+        degradationPreference: VideoDegradationPreference
+    )?
+    func applyVideoEncoding(
+        maxBitrateBps: Int,
+        maxFramerate: Int,
+        scaleResolutionDownBy: Double,
+        degradationPreference: VideoDegradationPreference
+    ) {
         applyVideoEncodingCallCount += 1
-        lastVideoEncoding = (maxBitrateBps, maxFramerate, scaleResolutionDownBy)
+        lastVideoEncoding = (maxBitrateBps, maxFramerate, scaleResolutionDownBy, degradationPreference)
     }
     func switchCamera() async throws {}
     var availableCamerasResult: [CameraDeviceOption] = []
@@ -1312,6 +1322,69 @@ final class VideoSurvivalControllerIntegrationTests: XCTestCase {
             "isVideoSuspended must be driven by videoSurvivalController.$isVideoSuspended binding, " +
             "not set directly, to keep single-source-of-truth"
         )
+    }
+
+    /// Bounds the `$isVideoSuspended` subscription body, from the publisher to
+    /// the `store(in:)` that terminates it.
+    private func survivalSuspensionBindingBody() throws -> String {
+        let source = try callManagerSource()
+        guard let start = source.range(of: "videoSurvivalController.$isVideoSuspended") else {
+            XCTFail("The $isVideoSuspended binding was not found in CallManager.swift"); return ""
+        }
+        let after = String(source[start.upperBound...])
+        guard let end = after.range(of: ".store(in: &cancellables)")?.upperBound else {
+            XCTFail("Could not bound the $isVideoSuspended subscription"); return ""
+        }
+        return String(after[..<end])
+    }
+
+    /// The survival freeze has TWO owners: the controller (policy, published as
+    /// `isVideoSuspended`) and `WebRTCService.survivalFloorActive` (encoder).
+    /// `videoSurvivalController.reset()` — called from nine sites (toggleVideo
+    /// and its three failure branches, both unhold branches, critical thermal,
+    /// forced `.ended`, endCallInternal) — clears the FIRST only, and the
+    /// controller never emits `.resume` afterwards. Without a thaw wired to the
+    /// FALLING EDGE of the published flag, a reset during a freeze pins the
+    /// encoder at 100 kbps · 2 fps for the rest of the call, with no affordance
+    /// and no recovery path. The edge is the single site that covers all nine.
+    func test_survivalSuspensionBinding_thawsTheEncoderOnTheFallingEdge() throws {
+        let body = try survivalSuspensionBindingBody()
+        guard !body.isEmpty else { return }
+        XCTAssertTrue(
+            body.contains("removeDuplicates()"),
+            "The binding must de-duplicate, so the thaw fires on real transitions only"
+        )
+        XCTAssertTrue(
+            body.contains("if !suspended { self.webRTCService.unfreezeVideoAfterSurvival() }"),
+            "The falling edge of isVideoSuspended must thaw the encoder — a controller reset " +
+            "clears the policy flag but never the encoder floor"
+        )
+    }
+
+    /// Counter-proof of the guard above: the thaw must stay CONDITIONAL. An
+    /// unconditional call in the same body would also satisfy a naive
+    /// `contains("unfreezeVideoAfterSurvival")` while thawing on the RISING
+    /// edge too — i.e. cancelling every freeze the controller asks for.
+    func test_survivalSuspensionBinding_doesNotThawUnconditionally() throws {
+        let body = try survivalSuspensionBindingBody()
+        guard !body.isEmpty else { return }
+        let occurrences = body.components(separatedBy: "unfreezeVideoAfterSurvival").count - 1
+        XCTAssertEqual(
+            occurrences, 1,
+            "Exactly one thaw call belongs in the binding — the one guarded by `if !suspended`"
+        )
+        let thawLines = body
+            .components(separatedBy: "\n")
+            .filter { $0.contains("unfreezeVideoAfterSurvival") }
+        XCTAssertFalse(thawLines.isEmpty, "The thaw call must be present in the binding")
+        for line in thawLines {
+            XCTAssertTrue(
+                line.contains("if !suspended"),
+                "Negative guard: the thaw must never sit outside the `!suspended` condition — on the " +
+                "RISING edge it would undo the very freeze the controller just asked for. Offending " +
+                "line: \(line.trimmingCharacters(in: .whitespaces))"
+            )
+        }
     }
 
     /// The quality monitor must feed each quality level sample to the controller
@@ -7635,7 +7708,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_switchCamera_holdGuardRevertsOptimisticMirrorAndReturns() throws {
         let body = try switchCameraBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "if self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
+            of: "if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
         ) else {
             XCTFail("hold/capture-interruption guard block not found in switchCamera"); return
         }
@@ -7655,22 +7728,31 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Vague 160: switchCamera()/selectCamera(id:) checked only 2 of the
-    // 3 sibling suspension flags — `isVideoSuspended` (VideoSurvivalController's
-    // graceful network degradation to audio-only) was missing, even though
-    // `applyCameraSuspension` and `applySurvivalVideoSend` already treat it as
-    // equivalent to hold/capture-interruption ("camera stopped, isVideoEnabled
-    // left true"). A camera-flip queued while the link degraded enough to
-    // trigger the survival downgrade reacquired the physical camera exactly
-    // like the Vague 158/159 hold/interruption defect.
+    // MARK: - L6-1 (2026-08-25) — REVERSAL of the Vague 160 extension.
+    //
+    // Vague 160 added `isVideoSuspended` to these two guards on the premise that
+    // the survival layer shared the hold/capture-interruption contract ("camera
+    // stopped, isVideoEnabled left true"). That premise DIED with L6-1: survival
+    // no longer stops the capture, it pins the ENCODER to a 2 fps floor. The
+    // camera keeps running for the whole degraded episode, so keeping the flag
+    // in this guard made flipping front/back INERT — the optimistic mirror flag
+    // was silently reverted and `webRTCService.switchCamera` never ran, for a
+    // camera that was live the entire time.
+    //
+    // NEGATIVE guard: it must fail again if `isVideoSuspended` is folded back
+    // into either camera-actuation guard. Anchored on the literal `if self.
+    // isVideoSuspended ||` head of the reintroduced condition so the L6-1
+    // EXPLANATORY comment in the source (which names the flag on purpose) does
+    // not satisfy it.
 
-    func test_switchCamera_guardsVideoSurvivalSuspensionBeforeActuating() throws {
+    func test_switchCamera_doesNotGuardOnSurvivalFreeze() throws {
         let body = try switchCameraBody(in: try callManagerSource())
-        XCTAssertTrue(
-            body.contains("self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
-            "switchCamera must also check isVideoSuspended (network-survival downgrade), not just " +
-            "the hold/capture-interruption pair — it is the third sibling flag with the same " +
-            "'camera stopped, isVideoEnabled left true' contract."
+        XCTAssertFalse(
+            body.contains("if self.isVideoSuspended ||"),
+            "switchCamera must NOT gate on isVideoSuspended: since L6-1 the network-survival layer " +
+            "freezes the encoder without releasing the camera, so gating here makes a camera flip " +
+            "inert (silent revert of isUsingFrontCamera) for the whole degraded episode. Only " +
+            "isVideoSuspendedByHold / isVideoSuspendedByCaptureInterruption mean 'no camera'."
         )
     }
 
@@ -7705,7 +7787,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_selectCamera_holdGuardRevertsOptimisticStateAndReturns() throws {
         let body = try selectCameraBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "if self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
+            of: "if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
         ) else {
             XCTFail("hold/capture-interruption guard block not found in selectCamera"); return
         }
@@ -7728,15 +7810,15 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Vague 160: same third-flag extension as switchCamera() above.
+    // MARK: - L6-1: same reversal as switchCamera() above, same reason.
 
-    func test_selectCamera_guardsVideoSurvivalSuspensionBeforeActuating() throws {
+    func test_selectCamera_doesNotGuardOnSurvivalFreeze() throws {
         let body = try selectCameraBody(in: try callManagerSource())
-        XCTAssertTrue(
-            body.contains("self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
-            "selectCamera(id:) must also check isVideoSuspended (network-survival downgrade), not " +
-            "just the hold/capture-interruption pair — same capturer, same task chain as " +
-            "switchCamera()."
+        XCTAssertFalse(
+            body.contains("if self.isVideoSuspended ||"),
+            "selectCamera(id:) must NOT gate on isVideoSuspended either — same capturer, same task " +
+            "chain, same L6-1 reason: a frozen encoder still owns a running camera, so gating here " +
+            "reverts the picker selection without ever actuating."
         )
     }
 }

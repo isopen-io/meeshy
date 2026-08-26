@@ -181,6 +181,21 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         set { stateQueue.sync { _realtimeMessagePersistor = newValue } }
     }
 
+    /// Accusés de RÉCEPTION en attente, par conversation.
+    ///
+    /// `POST /conversations/{id}/mark-as-received` ne porte AUCUN `messageId` :
+    /// son corps est vide, donc dix messages d'une même rafale produisaient dix
+    /// requêtes strictement identiques. Ce n'est pas qu'une question d'octets —
+    /// la route partage avec `mark-read` un quota de 30 requêtes/minute, qu'une
+    /// conversation animée épuise à elle seule, faisant rejeter des accusés de
+    /// LECTURE que rien ne rejouera. Une rafale devient donc un envoi unique par
+    /// conversation et par fenêtre ; le curseur de livraison étant monotone,
+    /// fusionner des requêtes identiques ne perd rien.
+    ///
+    /// Une entrée présente EST la fenêtre ouverte de cette conversation.
+    private var _markAsReceivedTasks: [String: Task<Void, Never>] = [:]
+    private let markAsReceivedWindow: TimeInterval
+
     // Cooldown between successive delta syncs. The gateway delta endpoint
     // is cheap (~10-50 ms) but a chatty socket that flaps reconnect every
     // 200 ms used to spam `/conversations?updatedSince=...` once per flap
@@ -246,7 +261,8 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
         api: APIClientProviding = APIClient.shared,
-        fullReconcileInterval: TimeInterval = 86_400
+        fullReconcileInterval: TimeInterval = 86_400,
+        markAsReceivedWindow: TimeInterval = 1.0
     ) {
         self.cache = cache
         self.conversationService = conversationService
@@ -255,6 +271,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         self.socialSocket = socialSocket
         self.api = api
         self.fullReconcileInterval = fullReconcileInterval
+        self.markAsReceivedWindow = markAsReceivedWindow
     }
 
     // MARK: - Sync Checkpoints (logout / re-auth reset)
@@ -1136,6 +1153,15 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     public func stopSocketRelay() async {
         socketSubscriptions.removeAll()
+        // Les fenêtres d'accusé de réception ne survivent pas au relais : sur un
+        // changement de compte, un envoi encore en attente partirait sous la
+        // session SUIVANTE.
+        let pending: [Task<Void, Never>] = stateQueue.sync {
+            let tasks = Array(_markAsReceivedTasks.values)
+            _markAsReceivedTasks.removeAll()
+            return tasks
+        }
+        pending.forEach { $0.cancel() }
     }
 
     // MARK: - Socket Event Handlers
@@ -1237,10 +1263,38 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
         _conversationsDidChange.send()
 
-        // Auto mark-as-received for messages from other users
+        // Auto mark-as-received for messages from other users — coalescé par
+        // conversation (voir `_markAsReceivedTasks`).
         if !isMe {
-            Task {
-                try? await ConversationService.shared.markAsReceived(conversationId: msg.conversationId)
+            scheduleMarkAsReceived(for: msg.conversationId)
+        }
+    }
+
+    /// Ouvre (ou rejoint) la fenêtre de coalescence d'une conversation. Le
+    /// PREMIER message de la rafale arme l'envoi ; les suivants tombent sur une
+    /// fenêtre déjà ouverte et ne coûtent rien.
+    private func scheduleMarkAsReceived(for conversationId: String) {
+        let window = markAsReceivedWindow
+        // La table des tâches EST la fenêtre : une entrée présente signifie
+        // « déjà armée ». Un jeu d'ids en attente à côté d'elle se
+        // désynchroniserait — la tâche s'y retirant elle-même, une seconde
+        // rafale pourrait réarmer avant que la première ne se soit enregistrée,
+        // et `stopSocketRelay` n'aurait plus que la tâche MORTE à annuler.
+        stateQueue.sync {
+            guard _markAsReceivedTasks[conversationId] == nil else { return }
+            _markAsReceivedTasks[conversationId] = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(window * 1_000_000_000))
+                guard let self else { return }
+                // La fenêtre se ferme AVANT l'envoi : un message arrivant
+                // pendant l'aller-retour ouvre la fenêtre SUIVANTE au lieu
+                // d'être avalé.
+                self.stateQueue.sync { _ = self._markAsReceivedTasks.removeValue(forKey: conversationId) }
+                guard !Task.isCancelled else { return }
+                do {
+                    try await self.conversationService.markAsReceived(conversationId: conversationId)
+                } catch {
+                    Self.logger.error("[SyncEngine] markAsReceived failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
     }

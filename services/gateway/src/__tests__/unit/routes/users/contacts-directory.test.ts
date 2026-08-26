@@ -213,6 +213,120 @@ describe('POST /users/me/contacts/sync', () => {
   });
 });
 
+/**
+ * Synchronisation par lots (contrat K2) — `syncStartedAt`/`isFinalBatch` sont
+ * optionnels et rétrocompatibles : leur absence doit laisser le comportement
+ * historique testé ci-dessus totalement inchangé (dont la rétrogradation
+ * replace→merge d'un lot tronqué). Leur présence bascule la purge sur le
+ * filigrane `lastSyncedAt`, jamais sur `contactKey notIn`.
+ */
+describe('POST /users/me/contacts/sync — synchronisation par lots', () => {
+  it('always returns a server-clock syncStartedAt, even without the new batching fields', async () => {
+    const prisma = makePrisma();
+    const { app } = await buildApp({ prisma });
+    const before = Date.now();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/sync',
+      payload: { contacts: [{ emails: ['awa@test.com'] }] },
+    });
+    const after = Date.now();
+    const body = res.json();
+    expect(typeof body.data.syncStartedAt).toBe('string');
+    const parsed = Date.parse(body.data.syncStartedAt);
+    expect(Number.isNaN(parsed)).toBe(false);
+    expect(parsed).toBeGreaterThanOrEqual(before);
+    expect(parsed).toBeLessThanOrEqual(after);
+    await app.close();
+  });
+
+  it('rejects a syncStartedAt more than 5 seconds in the future', async () => {
+    const prisma = makePrisma();
+    const { app } = await buildApp({ prisma });
+    const future = new Date(Date.now() + 10_000).toISOString();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/sync',
+      payload: { contacts: [{ emails: ['awa@test.com'] }], syncStartedAt: future },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(prisma.userContact.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('rejects a syncStartedAt that does not parse as a date', async () => {
+    const prisma = makePrisma();
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/sync',
+      payload: { contacts: [{ emails: ['awa@test.com'] }], syncStartedAt: 'not-a-date' },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('never purges via contactKey notIn once syncStartedAt is present, even with mode replace', async () => {
+    const prisma = makePrisma();
+    const { app } = await buildApp({ prisma });
+    const past = new Date(Date.now() - 1000).toISOString();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/sync',
+      payload: { mode: 'replace', syncStartedAt: past, contacts: [{ emails: ['awa@test.com'] }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.userContact.deleteMany).not.toHaveBeenCalled();
+    expect(res.json().data.removedCount).toBe(0);
+    await app.close();
+  });
+
+  it('purges via the lastSyncedAt watermark on the final batch', async () => {
+    const prisma = makePrisma();
+    const { app } = await buildApp({ prisma });
+    const past = new Date(Date.now() - 1000).toISOString();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/sync',
+      payload: { syncStartedAt: past, isFinalBatch: true, contacts: [{ emails: ['awa@test.com'] }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.removedCount).toBe(2);
+    expect(prisma.userContact.deleteMany).toHaveBeenCalledWith({
+      where: { ownerId: CURRENT_USER_ID, lastSyncedAt: { lt: new Date(past) } },
+    });
+    await app.close();
+  });
+
+  it('treats a lone isFinalBatch request without a token as a complete single-batch sync', async () => {
+    const prisma = makePrisma();
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/sync',
+      payload: { isFinalBatch: true, contacts: [{ emails: ['awa@test.com'] }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.userContact.deleteMany).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('never closes a truncated batch: the dropped tail must not be purged', async () => {
+    const prisma = makePrisma();
+    const { app } = await buildApp({ prisma });
+    const contacts = Array.from({ length: 2001 }, (_, i) => ({ emails: [`u${i}@test.com`] }));
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/sync',
+      payload: { syncStartedAt: new Date(Date.now() - 1000).toISOString(), isFinalBatch: true, contacts },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.processedContacts).toBe(2000);
+    expect(prisma.userContact.deleteMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 // ─── GET /users/me/contacts ───────────────────────────────────────────────────
 
 describe('GET /users/me/contacts', () => {

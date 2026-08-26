@@ -13,8 +13,10 @@
 //  state so the controller never fights a manual toggle." That reasoning
 //  applies identically when the toggle FAILS and disables video — yet none
 //  of the three failure branches called the reset, while the analogous
-//  failure branches in `handleHold`'s unhold path (Vague 167/168) and
-//  `actuateSurvivalVideoSend` both do. Left unset, `isVideoEnabled = false`
+//  failure branch in `handleHold`'s unhold path (Vague 167/168) does.
+//  (`actuateSurvivalVideoSend` was a third such site until L6-1 turned it
+//  into a pure encoder-floor call, which has no failure branch left to
+//  reset from.) Left unset, `isVideoEnabled = false`
 //  alone only clears survival state on the controller's NEXT quality-sample
 //  tick, and `VideoSurvivalController.handle()` no-ops entirely while a
 //  suspend/resume transition is already in flight (`guard !isTransitioning

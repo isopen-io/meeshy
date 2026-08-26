@@ -287,6 +287,134 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - Le report est une règle de FLUIDITÉ, pas une règle de MODE (2026-08-25)
+
+    /// **Garde NÉGATIVE** — aucun des trois chemins de reconfiguration ne
+    /// conditionne son report au `readingMode`.
+    ///
+    /// Deux d'entre eux excluaient explicitement `.bubbles` du report §4.7ter
+    /// (`isDeferringReconfigure` et le volet CIBLÉ), si bien que le mode
+    /// NOMINAL était le seul où une traduction, une coche de lecture ou une
+    /// réaction arrivée SOUS LE DOIGT re-mesurait une cellule visible et
+    /// faisait sauter tout ce qui la surplombe. Le troisième chemin
+    /// (`reconfigureVisibleCells`) ne faisait déjà pas cette exception : la
+    /// divergence était INTERNE au fichier, ce qui est exactement la forme
+    /// qu'une exclusion réintroduite en silence reprendrait.
+    ///
+    /// Le report est sûr parce que la reprise ne dépend d'aucun mode : la pose
+    /// (`settleAtRest`) appelle inconditionnellement
+    /// `flushDeferredReconfigureAtSettle`, et la PORTÉE demandée est retenue
+    /// (`deferredReconfigureScope`) — rien ne peut rester périmé, tout est
+    /// resservi à la levée du doigt. Les INSERTIONS, elles, restent immédiates.
+    func test_theReconfigureDeferral_isKeyedOnMovement_neverOnReadingMode() throws {
+        let host = try normalizedHost()
+
+        XCTAssertTrue(
+            host.contains(
+                "let isDeferringReconfigure = !itemsToReconfigure.isEmpty "
+                + "&& (collectionView.isDragging || collectionView.isDecelerating)"
+            ),
+            "le chemin GLOBAL ne retient que les conditions de MOUVEMENT"
+        )
+
+        let targeted = try Self.block(after: "private func reconfigureMessages(serverIds: Set<String>) {", in: host)
+        XCTAssertTrue(
+            Self.deferralIsModeAgnostic(targeted),
+            "volet CIBLÉ : le report doit se décider sur le geste seul. Corps lu : \(targeted.prefix(240))"
+        )
+
+        let global = try Self.block(after: "private func reconfigureVisibleCells() {", in: host)
+        XCTAssertTrue(
+            Self.deferralIsModeAgnostic(global),
+            "chemin des cellules visibles : inchangé, et toujours mode-agnostique. Corps lu : \(global.prefix(240))"
+        )
+
+        // Ce qui REND le report sûr : la reprise ne connaît aucun mode.
+        let settle = try Self.block(after: "private func settleAtRest() {", in: host)
+        XCTAssertTrue(
+            settle.contains("flushDeferredReconfigureAtSettle()"),
+            "la pose rejoue le report — inconditionnellement"
+        )
+        XCTAssertFalse(
+            settle.contains("readingMode"),
+            "…et sans regarder le mode : un flush conditionné laisserait un état périmé à l'écran"
+        )
+        XCTAssertTrue(
+            host.contains("if reconfigure == .allItems { deferredReconfigureScope = .allItems }"),
+            "la PORTÉE demandée pendant le geste est retenue (`.allItems` domine) — sans elle, le flush resservirait moins que ce que le report a retenu"
+        )
+    }
+
+    /// **Contre-épreuve** — la garde ci-dessus rougit si l'exclusion `.bubbles`
+    /// revient devant l'une ou l'autre condition de mouvement. Sans elle, la
+    /// garde négative pourrait perdre sa protection en silence.
+    func test_theGuardAbove_wouldCatchTheBubblesExclusionComingBack() {
+        XCTAssertFalse(
+            Self.deferralIsModeAgnostic(
+                " guard let dataSource = dataSource, !serverIds.isEmpty else { return } "
+                + "if readingMode != .bubbles, store.isUserScrolling { "
+                + "deferredTargetedReconfigureIds.formUnion(serverIds) return } "
+            ),
+            "le volet ciblé re-conditionné au mode doit faire rougir la garde"
+        )
+        XCTAssertFalse(
+            Self.deferralIsModeAgnostic(
+                " let isDeferringReconfigure = readingMode != .bubbles && !itemsToReconfigure.isEmpty "
+                + "&& (collectionView.isDragging || collectionView.isDecelerating) "
+            ),
+            "le chemin global re-conditionné au mode aussi"
+        )
+        XCTAssertTrue(
+            Self.deferralIsModeAgnostic(
+                " if store.isUserScrolling { hasDeferredGlobalReconfigure = true return } "
+            ),
+            "…et un report décidé sur le seul geste, lui, doit passer"
+        )
+        XCTAssertFalse(
+            Self.deferralIsModeAgnostic(" let x = 1 "),
+            "un bloc SANS aucune condition de mouvement n'est pas « mode-agnostique » : il ne diffère plus rien du tout"
+        )
+    }
+
+    // MARK: - Prédicat partagé par la garde et sa contre-épreuve
+
+    /// Un bloc DIFFÈRE-t-il sur le seul MOUVEMENT ? Il doit nommer au moins
+    /// une condition de geste, et aucune condition de mode.
+    private static func deferralIsModeAgnostic(_ body: String) -> Bool {
+        let movesOnGesture = body.contains("store.isUserScrolling")
+            || body.contains("collectionView.isDragging")
+        return movesOnGesture && !body.contains("readingMode != .bubbles")
+    }
+
+    /// L'hôte SANS commentaires et à espaces normalisés — une garde qui lirait
+    /// les commentaires rougirait sur la documentation d'un futur correctif.
+    private func normalizedHost() throws -> String {
+        try stripped(hostPath)
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    /// Corps d'une déclaration, par PARENTHÉSAGE d'accolades — une garde de
+    /// forme vise le BLOC, jamais le fichier.
+    private static func block(after signature: String, in code: String) throws -> String {
+        let start = try XCTUnwrap(
+            code.range(of: signature),
+            "signature « \(signature) » introuvable — la garde ne peut pas lire un bloc absent"
+        )
+        var depth = 1
+        var index = start.upperBound
+        while index < code.endIndex {
+            if code[index] == "{" { depth += 1 }
+            if code[index] == "}" {
+                depth -= 1
+                if depth == 0 { break }
+            }
+            index = code.index(after: index)
+        }
+        return String(code[start.upperBound ..< index])
+    }
+
     // MARK: - Badge non-lus (matrice « Message entrant temps réel »)
 
     func test_unreadBadge_neverCountsOwnMessages() throws {

@@ -75,7 +75,15 @@ final class ProfileCompletionUploader: ProfileCompletionUploading {
         }
 
         if let user = latestUser {
-            await MainActor.run { AuthManager.shared.currentUser = user }
+            // Same self-only response shape as the three ProfileView upload
+            // paths (avatar/banner/profile PATCH never carries `voicePublic`)
+            // — go through the same merge instead of replacing wholesale.
+            // `voicePublic` is nil at onboarding time regardless (no voice
+            // profile exists yet), so this is a no-op today; it stays the
+            // single site to update once that stops being true.
+            await MainActor.run {
+                AuthManager.shared.currentUser = ProfileView.mergingServerUser(user, onto: AuthManager.shared.currentUser)
+            }
         }
 
         return outcome

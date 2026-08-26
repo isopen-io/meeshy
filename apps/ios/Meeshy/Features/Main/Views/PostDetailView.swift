@@ -332,6 +332,15 @@ struct PostDetailView: View {
         displayPost?.authorColor ?? "6366F1"
     }
 
+    /// Second arrêt du dégradé servi au composer de commentaire. Dérivé de
+    /// l'accent du post par la formule de palette du SDK
+    /// (`secondary = shiftHue(primary, +30°)`) : sans lui, le composer
+    /// retombe sur son défaut de marque et le bouton d'envoi rend un dégradé
+    /// hybride accent → indigo.
+    private var composerSecondaryColor: String {
+        DynamicColorGenerator.hueShiftedHex(accentColor, degrees: 30)
+    }
+
     /// True when the signed-in user authored this post — gates the private reach
     /// stats (vues + impressions) shown next to the @handle, mirroring the feed
     /// and reel cards where analytics are author-only.
@@ -2407,6 +2416,7 @@ EngagementGlyph(
             mode: .comment,
             onIngest: { ingests in handleComposerIngest(ingests) },
             accentColor: accentColor,
+            secondaryColor: composerSecondaryColor,
             forceShowAttachment: true,
             forceShowVoice: true,
             selectedLanguage: composerLanguage,

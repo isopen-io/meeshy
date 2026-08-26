@@ -1626,6 +1626,65 @@ describe('applyVideoEncoding — audio-only tier', () => {
 });
 
 // ===========================================================================
+// applyVideoEncoding — 'frozen' tier (L6-3: network-survival floor)
+// ===========================================================================
+
+describe("applyVideoEncoding — 'frozen' tier", () => {
+  it('applies the frozen floor via setParameters — no renegotiation, no track mutation', async () => {
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true, video: true }), { sendVideo: true });
+
+    const videoTx = pc._transceivers.find(
+      (t) => (t.sender.track as { kind?: string })?.kind === 'video'
+    )!;
+    const trackBefore = videoTx.sender.track;
+
+    await service.applyVideoEncoding('frozen');
+
+    expect(videoTx.sender.replaceTrack).not.toHaveBeenCalled();
+    expect(videoTx.sender.track).toBe(trackBefore);
+    expect(videoTx.direction).not.toBe('recvonly');
+
+    const params = videoTx.sender.setParameters.mock.calls[0][0];
+    expect(params.encodings![0]).toEqual(
+      expect.objectContaining({ maxBitrate: 100_000, maxFramerate: 2, scaleResolutionDownBy: 4 })
+    );
+  });
+
+  it('keeps resolution and sheds cadence at the frozen floor — parity with iOS maintainResolution', async () => {
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true, video: true }), { sendVideo: true });
+
+    const videoTx = pc._transceivers.find(
+      (t) => (t.sender.track as { kind?: string })?.kind === 'video'
+    )!;
+
+    await service.applyVideoEncoding('low');
+    const lowParams = videoTx.sender.setParameters.mock.calls.at(-1)?.[0];
+    expect(lowParams?.degradationPreference).toBe('maintain-framerate');
+
+    await service.applyVideoEncoding('frozen');
+    const frozenParams = videoTx.sender.setParameters.mock.calls.at(-1)?.[0];
+    expect(frozenParams?.degradationPreference).toBe('maintain-resolution');
+  });
+
+  it('a passive re-enable after a frozen tier restores "high", not the stale freeze', async () => {
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    await service.createOffer();
+
+    await service.applyVideoEncoding('frozen');
+
+    const videoTx = pc._transceivers.find((t) => t.direction === 'recvonly')!;
+    const camTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.enableVideoSend(camTrack);
+
+    const lastCall = videoTx.sender.setParameters.mock.calls.at(-1)?.[0];
+    expect(lastCall?.encodings?.[0]?.maxBitrate).toBe(1_500_000);
+  });
+});
+
+// ===========================================================================
 // setJitterBufferTargets
 // ===========================================================================
 
