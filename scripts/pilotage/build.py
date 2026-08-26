@@ -8,7 +8,7 @@ import pathlib
 import re
 
 HERE = pathlib.Path(__file__).parent
-KEEP_ITEM = ("number", "title", "state", "createdAt", "closedAt", "milestone", "milestoneNumber", "milestoneDue", "status", "horizon", "priorite")
+KEEP_ITEM = ("createdAt", "closedAt", "status", "horizon", "milestoneNumber", "milestoneDue")
 KEEP_MILESTONE = ("number", "title", "state", "dueOn", "closedAt", "url")
 
 

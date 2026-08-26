@@ -273,7 +273,7 @@
 
   const dueChip = (m, t) => {
     const s = dueState(m, t, today);
-    if (s.kind === 'closed') return el('span', { class: 'chip closed' }, el('i'), `clos le ${fmtDay(m.closedAt.slice(0, 10), { day: 'numeric', month: 'short' })}`);
+    if (s.kind === 'closed') return el('span', { class: 'chip closed' }, el('i'), m.closedAt ? `clos le ${fmtDay(m.closedAt.slice(0, 10), { day: 'numeric', month: 'short' })}` : 'clos');
     if (s.kind === 'none') return el('span', { class: 'chip' }, 'sans échéance');
     if (s.kind === 'late') return el('span', { class: 'chip late' }, el('i'), `en retard de ${fmtNum(-s.days)} j`);
     if (s.kind === 'soon') return el('span', { class: 'chip soon' }, el('i'), `dans ${s.days} j`);
@@ -299,7 +299,7 @@
     if (T.wip) { const i = el('i', { class: 'wip' }); i.style.width = (100 * T.wip / T.total) + '%'; meter.append(i); }
     const last30 = closedInLastDays(items, today, 30), prev30 = closedInLastDays(items, today, 60) - last30;
     const msInScope = D.milestones.filter(m => items.some(i => i.milestoneNumber === m.number));
-    const msDone = msInScope.filter(m => m.state === 'closed' || tally(items.filter(i => i.milestoneNumber === m.number)).todo + tally(items.filter(i => i.milestoneNumber === m.number)).wip === 0).length;
+    const msDone = msInScope.filter(m => { if (m.state === 'closed') return true; const t = tally(items.filter(i => i.milestoneNumber === m.number)); return t.todo + t.wip === 0; }).length;
     const medianDays = median(items.filter(i => i.closedAt).map(i => (new Date(i.closedAt) - new Date(i.createdAt)) / DAY));
     const kpis = [
       { l: 'Livrées', v: fmtNum(T.done), d: `${pctOf(T.done, T.total)} % du périmètre` },

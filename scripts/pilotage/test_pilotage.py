@@ -1,5 +1,7 @@
 import json
+import subprocess
 import unittest
+from unittest import mock
 
 import build
 import fetch
@@ -70,8 +72,59 @@ class Render(unittest.TestCase):
     def test_les_champs_inutiles_ne_sont_pas_embarques(self):
         data = {"fetchedAt": "x", "mode": "project", "items": [{"number": 1, "id": "PVTI", "labels": ["ios"], "status": "Done"}], "milestones": [{"number": 1, "description": "long"}]}
         payload = json.loads(build.slim(data))
-        self.assertEqual(payload["items"][0], {"number": 1, "status": "Done"})
+        self.assertEqual(payload["items"][0], {"status": "Done"})
         self.assertEqual(payload["milestones"][0], {"number": 1})
+
+
+class ParseConcatenated(unittest.TestCase):
+    def test_deux_pages_de_listes_sont_aplaties(self):
+        self.assertEqual(fetch.parse_concatenated('[{"a": 1}, {"a": 2}]\n[{"a": 3}]\n'), [{"a": 1}, {"a": 2}, {"a": 3}])
+
+    def test_un_document_objet_est_rendu_tel_quel(self):
+        self.assertEqual(fetch.parse_concatenated('{"data": {"x": 1}}'), {"data": {"x": 1}})
+
+    def test_texte_vide(self):
+        self.assertEqual(fetch.parse_concatenated("  \n"), [])
+
+
+class FetchProjectItems(unittest.TestCase):
+    def test_suit_le_curseur_jusqu_a_la_derniere_page(self):
+        pages = [
+            {"data": {"organization": {"projectV2": {"items": {"pageInfo": {"hasNextPage": True, "endCursor": "C1"}, "nodes": [project_node()]}}}}},
+            {"data": {"organization": {"projectV2": {"items": {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": [project_node(content={**project_node()["content"], "number": 43})]}}}}},
+        ]
+        with mock.patch.object(fetch, "gh_json", side_effect=pages) as gh:
+            items = fetch.fetch_project_items()
+        self.assertEqual([i["number"] for i in items], [42, 43])
+        self.assertEqual(gh.call_count, 2)
+        self.assertIn("after=C1", gh.call_args_list[1].args)
+
+
+class MainFallback(unittest.TestCase):
+    def test_sans_acces_au_projet_le_mode_degrade_ecrit_les_issues_rest(self):
+        import tempfile, pathlib
+        issues = [{"number": 7, "title": "A", "state": "closed", "created_at": "2026-08-01T00:00:00Z", "closed_at": "2026-08-02T00:00:00Z", "html_url": "u", "milestone": None}]
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch.object(fetch, "fetch_milestones", return_value=[]), \
+             mock.patch.object(fetch, "fetch_project_items", side_effect=subprocess.CalledProcessError(1, "gh")), \
+             mock.patch.object(fetch, "fetch_issues_rest", return_value=issues):
+            out = pathlib.Path(d) / "data.json"
+            fetch.main(out)
+            data = json.loads(out.read_text())
+        self.assertEqual(data["mode"], "fallback")
+        self.assertEqual([i["number"] for i in data["items"]], [7])
+        self.assertEqual(data["items"][0]["status"], "Done")
+
+    def test_avec_le_projet_le_mode_est_nominal(self):
+        import tempfile, pathlib
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch.object(fetch, "fetch_milestones", return_value=[]), \
+             mock.patch.object(fetch, "fetch_project_items", return_value=[{"number": 1}]):
+            out = pathlib.Path(d) / "data.json"
+            fetch.main(out)
+            data = json.loads(out.read_text())
+        self.assertEqual(data["mode"], "project")
+        self.assertEqual(data["items"], [{"number": 1}])
 
 
 if __name__ == "__main__":
