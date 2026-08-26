@@ -237,10 +237,16 @@ export class AuthHandler {
 
     await this._joinUserConversations(socket, user.id, false);
 
-    this._registerUser(user.id, socketUser, socket);
+    const isFirstSocket = this._registerUser(user.id, socketUser, socket);
 
     this.statusService.markConnected(user.id, false);
-    await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
+    // Le write DB + broadcast « en ligne » n'appartiennent qu'à la transition
+    // 0→1 : un appareil supplémentaire, ou une ré-auth du même socket
+    // (handshake puis `authenticate` manuel), n'a rien de neuf à annoncer aux
+    // contacts — chaque écriture ici part en broadcast vers chacun d'eux.
+    if (isFirstSocket) {
+      await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
+    }
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
@@ -338,9 +344,12 @@ export class AuthHandler {
       });
     }
 
-    this._registerUser(participant.id, socketUser, socket);
+    const isFirstSocket = this._registerUser(participant.id, socketUser, socket);
 
-    await this.maintenanceService.updateAnonymousOnlineStatus(socketUser.id, true, true);
+    // Même garde 0→1 que la porte inscrite — voir `_authenticateJWTUser`.
+    if (isFirstSocket) {
+      await this.maintenanceService.updateAnonymousOnlineStatus(socketUser.id, true, true);
+    }
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
@@ -356,15 +365,30 @@ export class AuthHandler {
     }
   }
 
-  private _registerUser(key: string, user: SocketUser, socket: Socket): void {
+  /**
+   * Rend `true` UNIQUEMENT sur la transition 0→1 du compteur de sockets — le
+   * signal dont dérivent le write DB et le broadcast « en ligne ». La capture
+   * du compteur et l'ajout du socket forment un bloc synchrone : la décision
+   * est prise sur la map QUE ce socket vient de rejoindre, si bien qu'un
+   * disconnect concurrent (qui, lui, RETIRE de la map avant de décider
+   * l'offline — voir `handleDisconnection`) ne peut jamais lire un état où ce
+   * socket manque. C'est cet ordre, ajout-avant-décision d'un côté et
+   * retrait-avant-décision de l'autre, qui rend la course last-write-wins
+   * impossible.
+   */
+  private _registerUser(key: string, user: SocketUser, socket: Socket): boolean {
+    const existingSockets = this.userSockets.get(user.id);
+    const isFirstSocket = (existingSockets?.size ?? 0) === 0;
+
     this.connectedUsers.set(key, user);
     this.socketToUser.set(socket.id, key);
 
-    const userSocketsSet = this.userSockets.get(user.id) || new Set();
+    const userSocketsSet = existingSockets ?? new Set<string>();
     userSocketsSet.add(socket.id);
     this.userSockets.set(user.id, userSocketsSet);
 
     logger.info('user authenticated', { userId: user.id, isAnonymous: user.isAnonymous });
+    return isFirstSocket;
   }
 
   async handleDisconnection(socket: Socket): Promise<void> {

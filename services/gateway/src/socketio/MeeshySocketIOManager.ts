@@ -1184,17 +1184,46 @@ export class MeeshySocketIOManager {
     isAnonymous: boolean
   ): Promise<void> {
     try {
+      // SANS la relation `conversation`, pourtant nécessaire plus bas : elle
+      // est REQUISE côté schéma, et il existe en prod des participants
+      // orphelins (conversation supprimée hors Prisma). La charger ici fait
+      // rejeter la lecture ENTIÈRE (`PrismaClientUnknownRequestError: Field
+      // conversation is required to return data, got null`) — une seule ligne
+      // orpheline privait le lecteur de TOUTES ses pastilles, à chaque
+      // reconnexion. La résolution se fait en seconde requête, qui départage
+      // lignes saines et orphelines au lieu de tomber avec elles.
       const participantRows = await this.prisma.participant.findMany({
         where: isAnonymous
           ? { id: readerKey, isActive: true }
           : { userId: readerKey, isActive: true },
-        // `lastMessageAt` ne sert PAS au compteur — il sert à borner la passe
-        // de ponts ci-dessous sur les conversations que le lecteur va
-        // réellement voir. Cf. `BRIDGE_SNAPSHOT_LIMIT`.
-        select: { conversationId: true, conversation: { select: { lastMessageAt: true } } },
+        select: { id: true, conversationId: true },
       });
       if (participantRows.length === 0) return;
-      const conversationIds = participantRows.map(p => p.conversationId);
+      // `lastMessageAt` ne sert PAS au compteur — il sert à borner la passe
+      // de ponts ci-dessous sur les conversations que le lecteur va
+      // réellement voir. Cf. `BRIDGE_SNAPSHOT_LIMIT`.
+      const conversationRows = await this.prisma.conversation.findMany({
+        where: { id: { in: participantRows.map(p => p.conversationId) } },
+        select: { id: true, lastMessageAt: true },
+      });
+      const lastMessageAtByConversation = new Map(
+        conversationRows.map(row => [row.id, row.lastMessageAt ?? null])
+      );
+      const orphanRows = participantRows.filter(
+        p => !lastMessageAtByConversation.has(p.conversationId)
+      );
+      if (orphanRows.length > 0) {
+        logger.warn('orphan participants skipped in unread snapshot — their conversations no longer exist (GC: scripts/maintenance/fix-orphan-participants.ts)', {
+          readerKey,
+          isAnonymous,
+          participantIds: orphanRows.map(p => p.id),
+          conversationIds: [...new Set(orphanRows.map(p => p.conversationId))],
+        });
+      }
+      const conversationIds = participantRows
+        .filter(p => lastMessageAtByConversation.has(p.conversationId))
+        .map(p => p.conversationId);
+      if (conversationIds.length === 0) return;
       // `getUnreadCountsForUser` résout DÉJÀ les deux identités en interne
       // (`OR: [{ id: userId }, { userId }]`) — c'est la lecture de participants
       // au-dessus qui ne connaissait qu'une colonne.
@@ -1231,12 +1260,6 @@ export class MeeshySocketIOManager {
       // sous les yeux au retour du réseau. Les conversations plus anciennes
       // gardent leur compteur exact — seul leur pont attend le prochain
       // `GET /conversations`, qui le rendra en même temps que leur ligne.
-      const lastMessageAtByConversation = new Map(
-        participantRows.map(row => [
-          row.conversationId,
-          (row as { conversation?: { lastMessageAt?: Date } }).conversation?.lastMessageAt ?? null,
-        ])
-      );
       const bridgeCandidates = [...unreadCounts]
         .map(([conversationId, unreadCount]) => ({ conversationId, unreadCount }))
         .filter(candidate => candidate.unreadCount > 0)

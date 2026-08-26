@@ -1497,4 +1497,123 @@ describe('AuthHandler', () => {
       expect(joinedRooms).not.toContain('conversation:any');
     });
   });
+
+  /**
+   * Les transitions de présence dérivent du COMPTEUR de sockets, jamais de
+   * l'événement isolé : « en ligne » n'est écrit+diffusé qu'à la transition
+   * 0→1 (premier socket du user), « hors ligne » qu'à la transition vers 0
+   * (dernier socket). Prouvé en prod : chaque auth écrivait « en ligne »
+   * (write DB + broadcast dupliqués 2-3× par connexion multi-socket), et un
+   * disconnect d'ancien socket arrivé après l'auth de nouveaux sockets
+   * pouvait laisser « hors ligne » gagner en dernier écrivain.
+   *
+   * L'ordre rend la course impossible : l'AJOUT du socket à la map précède la
+   * décision online (un disconnect concurrent voit donc le socket vivant), et
+   * le RETRAIT précède la décision offline (une auth concurrente relit une
+   * map déjà à jour).
+   */
+  describe('présence — transitions premier/dernier socket', () => {
+    const authRegisteredSocket = async (socketId: string) => {
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123',
+        systemLanguage: 'en',
+        regionalLanguage: null,
+        customDestinationLanguage: null,
+        deviceLocale: null
+      } as any);
+      const socket = createMockSocket({
+        id: socketId,
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+      await authHandler.handleTokenAuthentication(socket);
+      return socket;
+    };
+
+    const authAnonymousSocket = async (socketId: string) => {
+      jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
+        id: 'anon-123',
+        displayName: 'Anonymous',
+        language: 'fr',
+        conversationId: 'conv-1'
+      } as any);
+      const socket = createMockSocket({
+        id: socketId,
+        handshake: { auth: { sessionToken: 'anon-session' } }
+      });
+      await authHandler.handleTokenAuthentication(socket);
+      return socket;
+    };
+
+    it('writes and broadcasts online ONCE for a multi-socket user — the 0→1 transition only', async () => {
+      await authRegisteredSocket('socket-a');
+      await authRegisteredSocket('socket-b');
+
+      expect(mockMaintenanceService.updateUserOnlineStatus).toHaveBeenCalledTimes(1);
+      expect(mockMaintenanceService.updateUserOnlineStatus).toHaveBeenCalledWith('user-123', true, true);
+    });
+
+    it('does not rewrite online when the SAME socket re-authenticates (token auth then manual auth)', async () => {
+      const socket = await authRegisteredSocket('socket-a');
+      await authHandler.handleManualAuthentication(socket, { token: 'valid-jwt-token' } as any);
+
+      expect(mockMaintenanceService.updateUserOnlineStatus).toHaveBeenCalledTimes(1);
+    });
+
+    it('writes online ONCE for a multi-socket anonymous participant too', async () => {
+      await authAnonymousSocket('socket-anon-a');
+      await authAnonymousSocket('socket-anon-b');
+
+      expect(mockMaintenanceService.updateAnonymousOnlineStatus).toHaveBeenCalledTimes(1);
+      expect(mockMaintenanceService.updateAnonymousOnlineStatus).toHaveBeenCalledWith('anon-123', true, true);
+    });
+
+    it('never writes offline when a NON-last socket disconnects', async () => {
+      await authRegisteredSocket('socket-a');
+      await authRegisteredSocket('socket-b');
+
+      await authHandler.handleDisconnection(createMockSocket({ id: 'socket-a' }));
+
+      expect(mockMaintenanceService.updateUserOnlineStatus).not.toHaveBeenCalledWith('user-123', false, true);
+    });
+
+    it('writes offline exactly once, on the LAST socket disconnect', async () => {
+      await authRegisteredSocket('socket-a');
+      await authRegisteredSocket('socket-b');
+
+      await authHandler.handleDisconnection(createMockSocket({ id: 'socket-a' }));
+      await authHandler.handleDisconnection(createMockSocket({ id: 'socket-b' }));
+
+      const offlineWrites = mockMaintenanceService.updateUserOnlineStatus.mock.calls
+        .filter(([, isOnline]: [string, boolean]) => isOnline === false);
+      expect(offlineWrites).toEqual([['user-123', false, true]]);
+    });
+
+    it('goes back online after a full offline cycle — the counter re-crosses 0→1', async () => {
+      await authRegisteredSocket('socket-a');
+      await authHandler.handleDisconnection(createMockSocket({ id: 'socket-a' }));
+      await authRegisteredSocket('socket-b');
+
+      expect(mockMaintenanceService.updateUserOnlineStatus.mock.calls).toEqual([
+        ['user-123', true, true],
+        ['user-123', false, true],
+        ['user-123', true, true],
+      ]);
+    });
+
+    // La séquence de course prouvée en prod : le nouveau socket s'authentifie,
+    // PUIS le disconnect de l'ancien arrive. L'état final doit rester online
+    // — un seul write online, aucun write offline, l'utilisateur toujours
+    // inscrit au registre.
+    it('keeps the final state online through the prod race sequence (auth B, then disconnect A)', async () => {
+      await authRegisteredSocket('socket-a');
+      await authRegisteredSocket('socket-b');
+
+      await authHandler.handleDisconnection(createMockSocket({ id: 'socket-a' }));
+
+      expect(mockMaintenanceService.updateUserOnlineStatus.mock.calls).toEqual([
+        ['user-123', true, true],
+      ]);
+      expect(connectedUsers.has('user-123')).toBe(true);
+    });
+  });
 });

@@ -435,7 +435,17 @@ function makeTranslationService() {
 function makePrisma(): any {
   const fn = () => jest.fn() as any;
   return {
-    conversation: { findUnique: fn() },
+    conversation: {
+      findUnique: fn(),
+      // Écho par défaut : toute conversation demandée existe (base saine).
+      // Les témoins d'orphelins la surchargent pour faire « disparaître » des
+      // conversations, comme une suppression hors Prisma le fait en prod.
+      findMany: fn().mockImplementation(({ where }: any = {}) =>
+        Promise.resolve(
+          (where?.id?.in ?? []).map((id: string) => ({ id, lastMessageAt: null }))
+        )
+      ),
+    },
     message: { findUnique: fn(), findFirst: fn() },
     messageAttachment: { findUnique: fn() },
     participant: {
@@ -3345,6 +3355,156 @@ describe('MeeshySocketIOManager', () => {
     });
 
     /**
+     * ── Tolérance aux participants orphelins (prod) ─────────────────────
+     *
+     * Il existe en prod des lignes `Participant` dont la conversation a été
+     * supprimée HORS Prisma. La relation `conversation` étant REQUISE côté
+     * schéma, la charger dans le même `findMany` fait rejeter la lecture
+     * ENTIÈRE (`PrismaClientUnknownRequestError: Field conversation is
+     * required to return data, got null`) : UNE ligne orpheline suffisait à
+     * priver le lecteur de TOUTES ses pastilles, à chaque reconnexion.
+     *
+     * La forme tolérante charge les participants SANS la relation, résout les
+     * conversations en SECONDE requête, ignore les lignes orphelines, et les
+     * publie UNE fois par snapshot en warn structuré (participantIds +
+     * conversationIds) pour alimenter le GC
+     * (`scripts/maintenance/fix-orphan-participants.ts`).
+     *
+     * Le double Prisma d'ici reproduit le CONTRAT de la base, pas le corps de
+     * la production : il rejette exactement quand la relation requise est
+     * demandée au-dessus d'une ligne orpheline — la mutation « re-joindre la
+     * relation dans la première requête » refait donc tomber ces témoins.
+     */
+    describe('tolérance aux participants orphelins', () => {
+      const managerLogger = (jest.requireMock('../../utils/logger-enhanced') as any)
+        .enhancedLogger.child();
+
+      const orphanWarns = () =>
+        managerLogger.warn.mock.calls.filter(
+          ([, ctx]: any[]) => ctx && Array.isArray(ctx.participantIds)
+        );
+
+      function prismaWithOrphans(
+        rows: Array<{ id: string; conversationId: string }>,
+        liveConversationIds: string[]
+      ) {
+        prisma.participant.findMany.mockImplementation(async (args: any) => {
+          const loadsRequiredRelation =
+            args?.select?.conversation !== undefined || args?.include?.conversation !== undefined;
+          if (loadsRequiredRelation && rows.some(r => !liveConversationIds.includes(r.conversationId))) {
+            const error = new Error(
+              'Field conversation is required to return data, got `null` instead.'
+            );
+            error.name = 'PrismaClientUnknownRequestError';
+            throw error;
+          }
+          return rows;
+        });
+        prisma.conversation.findMany.mockImplementation(async ({ where }: any = {}) =>
+          (where?.id?.in ?? [])
+            .filter((id: string) => liveConversationIds.includes(id))
+            .map((id: string) => ({ id, lastMessageAt: null }))
+        );
+      }
+
+      it('still emits for the healthy rows when an orphan row would poison a joined read', async () => {
+        prismaWithOrphans(
+          [
+            { id: 'part-live', conversationId: 'conv-live' },
+            { id: 'part-orphan', conversationId: 'conv-gone' },
+          ],
+          ['conv-live']
+        );
+        const counts = unreadCounts({ 'conv-live': 2 });
+        const socket = socketDouble();
+
+        await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-orphan', false);
+
+        expect(counts).toHaveBeenCalledWith('user-orphan', ['conv-live']);
+        expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          conversationId: 'conv-live',
+          unreadCount: 2,
+          bridge: null,
+        });
+      });
+
+      it('warns ONCE per snapshot with every orphan participant/conversation id, feeding the GC', async () => {
+        prismaWithOrphans(
+          [
+            { id: 'part-live', conversationId: 'conv-live' },
+            { id: 'part-orphan-1', conversationId: 'conv-gone-1' },
+            { id: 'part-orphan-2', conversationId: 'conv-gone-2' },
+          ],
+          ['conv-live']
+        );
+        unreadCounts({ 'conv-live': 1 });
+
+        await (manager as any)._emitUnreadCountsSnapshot(socketDouble(), 'user-orphan-warn', false);
+
+        expect(orphanWarns()).toHaveLength(1);
+        expect(orphanWarns()[0][1]).toMatchObject({
+          participantIds: ['part-orphan-1', 'part-orphan-2'],
+          conversationIds: ['conv-gone-1', 'conv-gone-2'],
+        });
+      });
+
+      it('does not warn when every participant row resolves its conversation', async () => {
+        prisma.participant.findMany.mockResolvedValue([
+          { id: 'part-sane', conversationId: 'conv-sane' },
+        ]);
+        unreadCounts({ 'conv-sane': 1 });
+
+        await (manager as any)._emitUnreadCountsSnapshot(socketDouble(), 'user-sane', false);
+
+        expect(orphanWarns()).toHaveLength(0);
+      });
+
+      // Les deux colonnes d'identité (cycle 61) survivent au correctif : la
+      // tolérance ne doit pas re-perdre la moitié invitée de la population.
+      it('keeps resolving an anonymous reader by participant id through the tolerant read', async () => {
+        prismaWithOrphans(
+          [
+            { id: 'anon-part-8', conversationId: 'conv-link-live' },
+            { id: 'part-orphan', conversationId: 'conv-link-gone' },
+          ],
+          ['conv-link-live']
+        );
+        const counts = unreadCounts({ 'conv-link-live': 3 });
+        const socket = socketDouble();
+
+        await (manager as any)._emitUnreadCountsSnapshot(socket, 'anon-part-8', true);
+
+        expect(prisma.participant.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: expect.objectContaining({ id: 'anon-part-8', isActive: true }),
+          })
+        );
+        expect(counts).toHaveBeenCalledWith('anon-part-8', ['conv-link-live']);
+        expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          conversationId: 'conv-link-live',
+          unreadCount: 3,
+          bridge: null,
+        });
+      });
+
+      it('emits nothing when EVERY row is orphaned — but still warns for the GC', async () => {
+        prismaWithOrphans([{ id: 'part-orphan', conversationId: 'conv-gone' }], []);
+        const counts = unreadCounts({});
+        const socket = socketDouble();
+
+        await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-all-orphans', false);
+
+        expect(counts).not.toHaveBeenCalled();
+        expect(socket.emit).not.toHaveBeenCalled();
+        expect(orphanWarns()).toHaveLength(1);
+        expect(orphanWarns()[0][1]).toMatchObject({
+          participantIds: ['part-orphan'],
+          conversationIds: ['conv-gone'],
+        });
+      });
+    });
+
+    /**
      * ── Le pont ✦ à la reconnexion (cycle 62) ────────────────────────────
      *
      * `conversation:unread-updated` a DEUX émetteurs, et ils n'émettaient pas
@@ -3557,11 +3717,14 @@ describe('MeeshySocketIOManager', () => {
       // pont aurait échangé un défaut d'affichage contre un défaut de charge,
       // et précisément à l'instant où le réseau est le plus fragile.
       it('caps the bridge pass at one list page, keeping the MOST RECENT conversations', async () => {
-        const many = Array.from({ length: 42 }, (_, i) => ({
-          conversationId: `conv-${i}`,
-          conversation: { lastMessageAt: new Date(2026, 0, 1 + i) },
-        }));
+        const many = Array.from({ length: 42 }, (_, i) => ({ conversationId: `conv-${i}` }));
         prisma.participant.findMany.mockResolvedValue(many);
+        prisma.conversation.findMany.mockResolvedValue(
+          Array.from({ length: 42 }, (_, i) => ({
+            id: `conv-${i}`,
+            lastMessageAt: new Date(2026, 0, 1 + i),
+          }))
+        );
         unreadCounts(Object.fromEntries(many.map(row => [row.conversationId, 1])));
         const pass = bridgePass({});
         const socket = socketDouble();
@@ -3580,11 +3743,14 @@ describe('MeeshySocketIOManager', () => {
       // menteuse, et une pastille menteuse sur la 200e conversation ment
       // autant que sur la première.
       it('never caps the COUNTS — only the bridges', async () => {
-        const many = Array.from({ length: 42 }, (_, i) => ({
-          conversationId: `conv-${i}`,
-          conversation: { lastMessageAt: new Date(2026, 0, 1 + i) },
-        }));
+        const many = Array.from({ length: 42 }, (_, i) => ({ conversationId: `conv-${i}` }));
         prisma.participant.findMany.mockResolvedValue(many);
+        prisma.conversation.findMany.mockResolvedValue(
+          Array.from({ length: 42 }, (_, i) => ({
+            id: `conv-${i}`,
+            lastMessageAt: new Date(2026, 0, 1 + i),
+          }))
+        );
         unreadCounts(Object.fromEntries(many.map(row => [row.conversationId, 1])));
         bridgePass({});
         const socket = socketDouble();
@@ -3610,11 +3776,14 @@ describe('MeeshySocketIOManager', () => {
        * rougi.
        */
       it('DIFFÈRE le pont des conversations hors borne au lieu de l’effacer', async () => {
-        const many = Array.from({ length: 42 }, (_, i) => ({
-          conversationId: `conv-${i}`,
-          conversation: { lastMessageAt: new Date(2026, 0, 1 + i) },
-        }));
+        const many = Array.from({ length: 42 }, (_, i) => ({ conversationId: `conv-${i}` }));
         prisma.participant.findMany.mockResolvedValue(many);
+        prisma.conversation.findMany.mockResolvedValue(
+          Array.from({ length: 42 }, (_, i) => ({
+            id: `conv-${i}`,
+            lastMessageAt: new Date(2026, 0, 1 + i),
+          }))
+        );
         unreadCounts(Object.fromEntries(many.map(row => [row.conversationId, 1])));
         bridgePass({});
         const socket = socketDouble();
