@@ -218,3 +218,103 @@ describe('resolveVisibleLastMessages', () => {
     );
   });
 });
+
+// ─── Le plancher d'historique ────────────────────────────────────────────────
+//
+// Le dernier message GLOBAL d'un salon peut précéder l'arrivée du lecteur : un
+// membre ajouté après coup, un anonyme entré par un lien sans historique, un
+// inscrit dans le salon global. `historyFloors` porte le plancher par
+// conversation (`services/historyFloor`) ; la reprise cherche le dernier
+// message DEPUIS ce plancher, sous le masquage personnel s'il y en a un.
+
+describe('resolveVisibleLastMessages — plancher d’historique', () => {
+  const JOINED = new Date('2026-06-15T00:00:00.000Z');
+  const BEFORE_JOIN = new Date('2026-06-01T00:00:00.000Z');
+  const AFTER_JOIN = new Date('2026-07-01T00:00:00.000Z');
+
+  it('reprend depuis le plancher quand l’aperçu global le précède', async () => {
+    const since = { id: 'm-since', content: 'depuis mon arrivée' };
+    const prisma = makePrisma({ deletions: [], nextVisible: since });
+
+    const out = await resolveVisibleLastMessages(prisma as never, {
+      userId: USER_ID,
+      candidates: [{ conversationId: CONV_A, message: { id: 'm-old', createdAt: BEFORE_JOIN }, clearHistoryBefore: null }],
+      historyFloors: new Map([[CONV_A, JOINED]]),
+      ...SELECT,
+    });
+
+    expect(out.get(CONV_A)).toBe(since);
+    expect(prisma.message.findFirst.mock.calls[0][0]).toMatchObject({
+      where: { conversationId: CONV_A, deletedAt: null, createdAt: { gte: JOINED } },
+    });
+  });
+
+  it('borne aussi un lecteur SANS compte — sans sonder les tables de masquage', async () => {
+    const prisma = makePrisma({ nextVisible: null });
+
+    const out = await resolveVisibleLastMessages(prisma as never, {
+      userId: null,
+      candidates: [{ conversationId: CONV_A, message: { id: 'm-old', createdAt: BEFORE_JOIN }, clearHistoryBefore: null }],
+      historyFloors: new Map([[CONV_A, JOINED]]),
+      ...SELECT,
+    });
+
+    expect(out.has(CONV_A)).toBe(true);
+    expect(out.get(CONV_A)).toBeNull();
+    expect(prisma.userMessageDeletion.findMany).not.toHaveBeenCalled();
+    expect(prisma.message.findFirst.mock.calls[0][0].where.createdAt).toEqual({ gte: JOINED });
+  });
+
+  it('laisse intact un aperçu écrit APRÈS le plancher', async () => {
+    const prisma = makePrisma({ deletions: [] });
+
+    const out = await resolveVisibleLastMessages(prisma as never, {
+      userId: USER_ID,
+      candidates: [{ conversationId: CONV_A, message: { id: 'm-new', createdAt: AFTER_JOIN }, clearHistoryBefore: null }],
+      historyFloors: new Map([[CONV_A, JOINED]]),
+      ...SELECT,
+    });
+
+    expect(out.size).toBe(0);
+    expect(prisma.message.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('ne borne que les conversations qui ont un plancher', async () => {
+    const prisma = makePrisma({ deletions: [], nextVisible: null });
+
+    const out = await resolveVisibleLastMessages(prisma as never, {
+      userId: USER_ID,
+      candidates: [
+        { conversationId: CONV_A, message: { id: 'm-a', createdAt: BEFORE_JOIN }, clearHistoryBefore: null },
+        { conversationId: CONV_B, message: { id: 'm-b', createdAt: BEFORE_JOIN }, clearHistoryBefore: null },
+      ],
+      historyFloors: new Map([[CONV_A, JOINED]]),
+      ...SELECT,
+    });
+
+    expect([...out.keys()]).toEqual([CONV_A]);
+  });
+
+  it('dégrade FERMÉ sous un plancher quand la sonde échoue — « rien » plutôt que l’avant-arrivée', async () => {
+    const prisma = {
+      userMessageDeletion: { findMany: jest.fn(async () => { throw new Error('mongo down'); }) },
+      userConversationPreferences: { findMany: jest.fn(async () => []) },
+      message: { findFirst: jest.fn(async () => null) },
+    };
+
+    const out = await resolveVisibleLastMessages(prisma as never, {
+      userId: USER_ID,
+      candidates: [
+        { conversationId: CONV_A, message: { id: 'm-a', createdAt: BEFORE_JOIN }, clearHistoryBefore: null },
+        { conversationId: CONV_B, message: { id: 'm-b', createdAt: BEFORE_JOIN }, clearHistoryBefore: null },
+      ],
+      historyFloors: new Map([[CONV_A, JOINED]]),
+      ...SELECT,
+    });
+
+    // Sous plancher : aperçu retiré. Sans plancher : l'aperçu global, comme avant.
+    expect(out.has(CONV_A)).toBe(true);
+    expect(out.get(CONV_A)).toBeNull();
+    expect(out.has(CONV_B)).toBe(false);
+  });
+});

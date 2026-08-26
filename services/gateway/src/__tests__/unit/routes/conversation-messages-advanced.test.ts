@@ -2580,6 +2580,44 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       expect(mockSendInternalError).toHaveBeenCalled();
     });
+
+    /**
+     * Une réaction NOMME un message et l'identité de celui qui l'a posée. Sur un
+     * message d'AVANT l'arrivée du lecteur, elle révèle donc l'existence du
+     * message, son id, et qui était là — trois métadonnées que le plancher
+     * d'historique doit borner au même titre que le contenu (§ Sécurité :
+     * « qu'est-ce qui part À CÔTÉ ? »).
+     */
+    describe('plancher d’historique', () => {
+      const FLOOR = new Date('2026-06-15T00:00:00.000Z');
+
+      it('borne le prédicat de sélection au plancher du lecteur', async () => {
+        prisma.participant.findFirst.mockResolvedValue({
+          role: 'member', joinedAt: FLOOR, shareLinkId: null, permissions: { canViewHistory: false },
+        });
+        prisma.reaction.findMany.mockResolvedValue([]);
+
+        await getReactionsHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), makeReply());
+
+        expect(prisma.reaction.findMany.mock.calls[0][0].where.message).toMatchObject({
+          conversationId: CONV_ID,
+          deletedAt: null,
+          createdAt: { gte: FLOOR },
+        });
+      });
+
+      it('ne borne rien pour un lecteur sans plancher — la requête reste identique', async () => {
+        prisma.participant.findFirst.mockResolvedValue(null);
+        prisma.reaction.findMany.mockResolvedValue([]);
+
+        await getReactionsHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), makeReply());
+
+        expect(prisma.reaction.findMany.mock.calls[0][0].where.message).toEqual({
+          conversationId: CONV_ID,
+          deletedAt: null,
+        });
+      });
+    });
   });
 
   // ─── POST /conversations/:id/messages/:messageId/reactions ───────────────
@@ -3092,6 +3130,42 @@ describe('registerMessagesAdvancedRoutes', () => {
       await getStatusHandler(fastify)(req, reply);
 
       expect(mockSendInternalError).toHaveBeenCalled();
+    });
+
+    /**
+     * `id`, `senderId`, `createdAt` et les accusés NOMINATIFS d'un message
+     * d'avant l'arrivée sont l'historique lui-même, moins le texte. Cette route
+     * les servait sans aucun plancher.
+     */
+    describe('plancher d’historique', () => {
+      const FLOOR = new Date('2026-06-15T00:00:00.000Z');
+
+      it('borne la page de messages au plancher du lecteur', async () => {
+        prisma.participant.findFirst.mockResolvedValue({
+          role: 'member', joinedAt: FLOOR, shareLinkId: null, permissions: { canViewHistory: false },
+        });
+        prisma.message.findMany.mockResolvedValue([]);
+
+        await getStatusHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), makeReply());
+
+        expect(prisma.message.findMany.mock.calls[0][0].where).toMatchObject({
+          conversationId: CONV_ID,
+          deletedAt: null,
+          createdAt: { gte: FLOOR },
+        });
+      });
+
+      it('ne borne rien pour un lecteur sans plancher', async () => {
+        prisma.participant.findFirst.mockResolvedValue(null);
+        prisma.message.findMany.mockResolvedValue([]);
+
+        await getStatusHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), makeReply());
+
+        expect(prisma.message.findMany.mock.calls[0][0].where).toEqual({
+          conversationId: CONV_ID,
+          deletedAt: null,
+        });
+      });
     });
 
     it('deliveredCount=0 and readCount=0 use fallback 0', async () => {

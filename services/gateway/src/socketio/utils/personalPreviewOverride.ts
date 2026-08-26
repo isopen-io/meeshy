@@ -5,6 +5,7 @@ import {
   loadPersonalHistoryHidingByUser,
   NO_PERSONAL_HIDING,
 } from '../../services/personalHistoryFilter';
+import { applyHistoryFloor } from '../../services/historyFloor';
 
 /**
  * L'aperçu de ligne de liste POUSSÉ, rendu au masquage personnel de chaque
@@ -70,69 +71,97 @@ export interface PersonalPreviewOverridePrisma {
   };
 }
 
+/**
+ * Un destinataire de l'aperçu poussé. Nommé par `participantId` — un
+ * participant sans compte a une room personnelle et un plancher, mais aucune
+ * ligne dans les deux tables de masquage (`userId: null`).
+ */
+export interface PreviewReader {
+  readonly participantId: string;
+  readonly userId: string | null;
+  /** Plancher d'historique (`services/historyFloor`) ; `null`/absent = tout. */
+  readonly historyFloor?: Date | null;
+}
+
 export interface PersonalPreviewOverrideParams {
   readonly conversationId: string;
   /** L'aperçu global recalculé par l'appelant. `null` = plus rien à masquer. */
   readonly latest: { readonly id: string; readonly createdAt: Date } | null;
-  /** Les participants INSCRITS : eux seuls possèdent une ligne dans les deux tables. */
-  readonly userIds: readonly string[];
+  readonly readers: readonly PreviewReader[];
   /** La projection de l'appelant, pour que le remplaçant ait exactement sa forme. */
   readonly select: Record<string, unknown>;
 }
 
+const isString = (value: string | null | undefined): value is string => typeof value === 'string';
+
 /**
- * Rend `userId -> son propre dernier message visible`, et NE CONTIENT QUE les
- * lecteurs pour qui l'aperçu global est masqué. Une valeur `null` dit « aucun
- * aperçu à montrer » (historique entièrement effacé), ce qu'un appelant doit
- * distinguer de l'absence de clé — d'où `Map.has`, jamais `Map.get() ?? …`.
+ * Rend `participantId -> son propre dernier message visible`, et NE CONTIENT
+ * QUE les lecteurs pour qui l'aperçu global est masqué — par masquage
+ * personnel, ou parce qu'il précède leur plancher d'historique. Une valeur
+ * `null` dit « aucun aperçu à montrer » (historique entièrement effacé, ou rien
+ * d'écrit depuis l'arrivée), ce qu'un appelant doit distinguer de l'absence de
+ * clé — d'où `Map.has`, jamais `Map.get() ?? …`.
  */
 export async function resolvePersonalPreviewOverrides<M>(
   prisma: PersonalPreviewOverridePrisma,
   params: PersonalPreviewOverrideParams,
 ): Promise<Map<string, M | null>> {
-  const { conversationId, latest, userIds, select } = params;
+  const { conversationId, latest, readers, select } = params;
   const overrides = new Map<string, M | null>();
-  if (!latest || userIds.length === 0) return overrides;
+  if (!latest || readers.length === 0) return overrides;
 
-  const ids = [...new Set(userIds)];
+  const belowFloor = (reader: PreviewReader): boolean =>
+    reader.historyFloor != null && latest.createdAt < reader.historyFloor;
+  const ids = [...new Set(readers.map((reader) => reader.userId).filter(isString))];
 
   try {
-    const [deletions, cutoffs] = await Promise.all([
-      prisma.userMessageDeletion.findMany({
-        where: { messageId: latest.id, userId: { in: ids } },
-        select: { userId: true },
-      }),
-      prisma.userConversationPreferences.findMany({
-        // `applyPersonalHistoryHiding` rend visible un message écrit À
-        // l'instant du seuil (`createdAt: { gte: cutoff }`), donc masqué ⟺
-        // `createdAt < clearHistoryBefore` ⟺ `clearHistoryBefore > createdAt`.
-        // La borne est stricte des deux côtés : la même, énoncée à l'envers.
-        where: {
-          conversationId,
-          userId: { in: ids },
-          clearHistoryBefore: { gt: latest.createdAt },
-        },
-        select: { userId: true },
-      }),
-    ]);
+    const [deletions, cutoffs] = ids.length === 0
+      ? [[], []]
+      : await Promise.all([
+          prisma.userMessageDeletion.findMany({
+            where: { messageId: latest.id, userId: { in: ids } },
+            select: { userId: true },
+          }),
+          prisma.userConversationPreferences.findMany({
+            // `applyPersonalHistoryHiding` rend visible un message écrit À
+            // l'instant du seuil (`createdAt: { gte: cutoff }`), donc masqué ⟺
+            // `createdAt < clearHistoryBefore` ⟺ `clearHistoryBefore > createdAt`.
+            // La borne est stricte des deux côtés : la même, énoncée à l'envers.
+            where: {
+              conversationId,
+              userId: { in: ids },
+              clearHistoryBefore: { gt: latest.createdAt },
+            },
+            select: { userId: true },
+          }),
+        ]);
 
-    const affected = [...new Set([...deletions, ...cutoffs].map((row) => row.userId))];
+    const hidingUsers = new Set([...deletions, ...cutoffs].map((row) => row.userId));
+    const affected = readers.filter(
+      (reader) => belowFloor(reader) || (reader.userId !== null && hidingUsers.has(reader.userId)),
+    );
     if (affected.length === 0) return overrides;
 
-    const hidingByUser = await loadPersonalHistoryHidingByUser(prisma as unknown as PrismaClient, {
-      userIds: affected,
-      conversationId,
-    });
+    const affectedUserIds = [...new Set(affected.map((reader) => reader.userId).filter(isString))];
+    const hidingByUser = affectedUserIds.length === 0
+      ? new Map<string, typeof NO_PERSONAL_HIDING>()
+      : await loadPersonalHistoryHidingByUser(prisma as unknown as PrismaClient, {
+          userIds: affectedUserIds,
+          conversationId,
+        });
 
     await Promise.all(
-      affected.map(async (userId) => {
-        const hiding = hidingByUser.get(userId) ?? NO_PERSONAL_HIDING;
+      affected.map(async (reader) => {
+        const hiding = (reader.userId !== null ? hidingByUser.get(reader.userId) : undefined) ?? NO_PERSONAL_HIDING;
         const replacement = (await prisma.message.findFirst({
-          where: applyPersonalHistoryHiding({ conversationId, deletedAt: null }, hiding),
+          where: applyPersonalHistoryHiding(
+            applyHistoryFloor({ conversationId, deletedAt: null }, reader.historyFloor ?? null),
+            hiding,
+          ),
           orderBy: { createdAt: 'desc' },
           select,
         })) as M | null;
-        overrides.set(userId, replacement ?? null);
+        overrides.set(reader.participantId, replacement ?? null);
       }),
     );
 

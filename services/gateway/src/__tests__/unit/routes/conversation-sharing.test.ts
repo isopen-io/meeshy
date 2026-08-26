@@ -650,6 +650,59 @@ describe('POST /conversations/join/:linkId', () => {
     expect(prisma.participant.create).not.toHaveBeenCalled();
   });
 
+  // Le droit de voir l'avant-jointure est FIGÉ au join depuis le lien, comme
+  // pour un anonyme (`routes/anonymous.ts`) : c'est ce que le plancher de
+  // lecture (`services/historyFloor`) lit en premier.
+  it('fige `canViewHistory` depuis le lien à la création de la ligne — lien fermé', async () => {
+    const { prisma, reply, route } = getJoinRoute();
+    prisma.conversationShareLink.findFirst.mockResolvedValue(makeShareLink({ allowViewHistory: false }));
+    prisma.participant.findFirst.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({ displayName: 'Bob', username: 'bob' });
+    prisma.participant.create.mockResolvedValue({});
+    prisma.conversationShareLink.update.mockResolvedValue({});
+    await route.handler(makeRequest({ params: { linkId: LINK_ID } }), reply);
+    expect(prisma.participant.create.mock.calls[0][0].data.permissions.canViewHistory).toBe(false);
+  });
+
+  it('fige `canViewHistory` depuis le lien à la création de la ligne — lien ouvert', async () => {
+    const { prisma, reply, route } = getJoinRoute();
+    prisma.conversationShareLink.findFirst.mockResolvedValue(makeShareLink({ allowViewHistory: true }));
+    prisma.participant.findFirst.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({ displayName: 'Bob', username: 'bob' });
+    prisma.participant.create.mockResolvedValue({});
+    prisma.conversationShareLink.update.mockResolvedValue({});
+    await route.handler(makeRequest({ params: { linkId: LINK_ID } }), reply);
+    expect(prisma.participant.create.mock.calls[0][0].data.permissions.canViewHistory).toBe(true);
+  });
+
+  /**
+   * Le rejoin remet déjà le rôle et les droits booléens à ce que le lien donne
+   * à un nouvel arrivant. `historyVisibleFrom` doit suivre : il PRIME sur ces
+   * deux-là (rang 2 du plancher), donc un ancien octroi survivant les rendait
+   * inopérants — la ligne périmée décidait seule de ce que le revenant lit.
+   */
+  it('efface l’octroi d’historique de la venue PRÉCÉDENTE quand on rejoint par lien', async () => {
+    const { prisma, reply, route } = getJoinRoute();
+    prisma.conversationShareLink.findFirst.mockResolvedValue(makeShareLink({ allowViewHistory: false }));
+    prisma.participant.findMany.mockResolvedValue([
+      makeParticipant({ isActive: false, bannedAt: null, joinedAt: new Date('2026-01-01T00:00:00Z') }),
+    ]);
+    prisma.user.findUnique.mockResolvedValue({ displayName: 'Bob', username: 'bob' });
+    prisma.participant.update.mockResolvedValue({ id: PART_ID });
+    prisma.conversationShareLink.update.mockResolvedValue({});
+
+    await route.handler(makeRequest({ params: { linkId: LINK_ID } }), reply);
+
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+    const written = prisma.participant.update.mock.calls[0][0];
+    expect(written.where).toEqual({ id: PART_ID });
+    expect(written.data.historyVisibleFrom).toBeNull();
+    // Et la remise à zéro du rang/droits, qui existait déjà, n'a pas bougé.
+    expect(written.data.role).toBe('member');
+    expect(written.data.permissions.canViewHistory).toBe(false);
+    expect(written.data.isActive).toBe(true);
+  });
+
   it('joins successfully and increments usage counter', async () => {
     const { prisma, reply, route, fastify } = getJoinRoute();
     prisma.conversationShareLink.findFirst.mockResolvedValue(makeShareLink());
@@ -955,6 +1008,18 @@ describe('POST /conversations/:id/invite', () => {
     const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
     await route.handler(req, reply);
     expect(mockSendSuccess).toHaveBeenCalled();
+  });
+
+  // Un membre invité après coup lit depuis son arrivée : le droit est écrit
+  // EXPLICITEMENT (`false`), jamais laissé au défaut du schéma — un
+  // administrateur lui ouvre l'avant par date (`historyVisibleFrom`).
+  it('écrit `canViewHistory: false` sur la ligne d’un invité', async () => {
+    const { fastify, reply, route } = getInviteRoute();
+    fastify.prisma.conversation.findUnique.mockResolvedValue(makeConversation([makeInviterParticipant('admin')]));
+    fastify.prisma.user.findUnique.mockResolvedValue(makeTargetUser());
+    fastify.prisma.participant.create.mockResolvedValue({ id: 'new-part', user: makeTargetUser() });
+    await route.handler(makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } }), reply);
+    expect(fastify.prisma.participant.create.mock.calls[0][0].data.permissions.canViewHistory).toBe(false);
   });
 
   it('allows creator member to invite', async () => {

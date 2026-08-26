@@ -137,6 +137,12 @@ const BaseParticipantSchema = z.object({
   joinedAt: z.coerce.date(),
   leftAt: z.coerce.date().optional(),
   bannedAt: z.coerce.date().optional(),
+  /**
+   * Octroi d'historique par DATE posé par un administrateur de la conversation.
+   * Facultatif : ajouté après coup, absent sur toute participation antérieure.
+   * @see schema.prisma → Participant.historyVisibleFrom
+   */
+  historyVisibleFrom: z.coerce.date().nullable().optional(),
   nickname: z.string().optional(),
   lastActiveAt: z.coerce.date().optional(),
   sessionTokenHash: z.string().optional(),

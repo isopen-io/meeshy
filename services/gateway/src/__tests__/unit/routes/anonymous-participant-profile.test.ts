@@ -519,3 +519,66 @@ describe('GET …/profile — présence (régime strict)', () => {
     expect(data.lastActiveAt).toEqual(anonymousRow.lastActiveAt);
   });
 });
+
+// ─── L'octroi d'historique par date, sur la fiche ────────────────────────────
+
+/**
+ * SECOND CERCLE, pour la raison qui vaut déjà pour l'email et pour les réglages
+ * du lien dans ce même fichier : `historyVisibleFrom` n'est pas un attribut de
+ * la personne, c'est un FAIT DE MODÉRATION — « l'hôte a rouvert l'avant-jointure
+ * à celle-ci depuis le 3 mars ». Le servir à toute la salle publiait la décision
+ * d'un hôte à ceux qu'elle ne concerne pas, et laissait chaque membre comparer
+ * les fiches pour savoir qui a été favorisé.
+ *
+ * Il n'a PAS de jumeau `hasHistoryGrant` : là où `hasEmail` sert à l'hôte à
+ * distinguer « pas fourni » de « caché », l'existence de l'octroi EST le fait à
+ * taire. Un membre ordinaire lit donc `null` dans les deux cas — c'est voulu.
+ */
+describe('GET …/profile — l’octroi d’historique par date', () => {
+  const granted = new Date('2026-01-01T00:00:00Z');
+  const grantedRow = { ...anonymousRow, historyVisibleFrom: granted };
+
+  it('le cache à un membre ordinaire — une décision de modération n’est pas publique', async () => {
+    const data = await fetchProfile(setup('member', grantedRow));
+
+    expect(data.historyVisibleFrom).toBeNull();
+  });
+
+  it('le cache aussi à un membre ordinaire regardant un participant INSCRIT', async () => {
+    const ctx = setup('member', { ...registeredRow, historyVisibleFrom: granted });
+
+    const data = await fetchProfile(ctx, REGISTERED_ID);
+
+    expect(data.historyVisibleFrom).toBeNull();
+  });
+
+  it('le rend à un modérateur', async () => {
+    const data = await fetchProfile(setup('moderator', grantedRow));
+
+    expect(data.historyVisibleFrom).toEqual(granted);
+  });
+
+  it('le rend à un administrateur de la conversation', async () => {
+    const data = await fetchProfile(setup('admin', grantedRow));
+
+    expect(data.historyVisibleFrom).toEqual(granted);
+  });
+
+  it('le rend à un creator', async () => {
+    const data = await fetchProfile(setup('creator', grantedRow));
+
+    expect(data.historyVisibleFrom).toEqual(granted);
+  });
+
+  it('sert `null` sans octroi — jamais une clé absente, que le client lirait comme « inconnu »', async () => {
+    const data = await fetchProfile(setup('admin'));
+
+    expect(data).toHaveProperty('historyVisibleFrom', null);
+  });
+
+  it('sert la clé, à `null`, même à un membre ordinaire — le masquage ne retire pas le champ', async () => {
+    const data = await fetchProfile(setup('member', grantedRow));
+
+    expect(data).toHaveProperty('historyVisibleFrom', null);
+  });
+});

@@ -8,6 +8,7 @@ import {
   toIsoOrNull,
 } from './utils/lastMessagePreviewPrism';
 import { resolvePersonalPreviewOverrides } from './utils/personalPreviewOverride';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsForOrFail } from '../services/historyFloor';
 import type { ServerEmitIO } from './serverEmit';
 
 /**
@@ -29,7 +30,7 @@ export type PreviewEmitIO = ServerEmitIO;
  */
 export type PreviewPrisma = Pick<
   PrismaClient,
-  'participant' | 'message' | 'userMessageDeletion' | 'userConversationPreferences'
+  'participant' | 'message' | 'userMessageDeletion' | 'userConversationPreferences' | 'conversationShareLink'
 >;
 
 /**
@@ -187,7 +188,9 @@ export async function emitConversationPreviewUpdate(
         // with no `User` row. Selecting `userId` alone did not ignore the
         // fallback identity, it never read it. `user` carries the reader's
         // language preferences — without them there is no Prisme to resolve.
-        select: PREVIEW_PRISM_PARTICIPANT_SELECT,
+        // Et ce qui décide du PLANCHER d'historique de chaque lecteur : le
+        // dernier message global peut précéder l'arrivée de l'un d'eux.
+        select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
       }),
       prisma.message.findFirst({
         where: { conversationId, deletedAt: null },
@@ -217,10 +220,32 @@ export async function emitConversationPreviewUpdate(
     // ligne de liste — voir `resolvePersonalPreviewOverrides`. Résolue APRÈS le
     // portillon `onlyIfLatestIs` : le chemin des traductions, le plus fréquenté
     // des trois, abandonne avant d'avoir rien sondé.
+    //
+    // Le plancher d'historique de chaque lecteur s'y ajoute : un participant
+    // ajouté après coup, ou entré par un lien sans historique, ne doit pas voir
+    // dans sa ligne de liste un message d'AVANT son arrivée. Lu ici, pas dans la
+    // sonde : sa lecture est un contrôle d'accès, et son échec ne dégrade pas en
+    // « on sert » comme le masquage personnel.
+    //
+    // Fail-closed PAR DESTINATAIRE, jamais en bloc : la lecture des liens
+    // n'apprend rien sur un lecteur dont le plancher se rend sans elle (admin,
+    // octroi par date, droit figé, aucune participation par lien). Abandonner
+    // l'émission entière le privait d'un aperçu que la panne ne rendait pas
+    // incertain — et lui SERVIR l'aperçu global sans son plancher aurait été
+    // pire. Seul celui dont le LIEN décidait sort de l'émission.
+    const { floors, unreadable } = await loadHistoryFloorsForOrFail(prisma, targets);
+    const floorByParticipant = new Map(targets.map((p, index) => [p.id, floors[index]]));
+    const served = targets.filter((_, index) => !unreadable.has(index));
+    if (served.length === 0) return;
+
     const overrides = await resolvePersonalPreviewOverrides<PreviewMessage>(prisma, {
       conversationId,
       latest,
-      userIds: targets.map((p) => p.userId).filter((id): id is string => typeof id === 'string'),
+      readers: served.map((p) => ({
+        participantId: p.id,
+        userId: p.userId,
+        historyFloor: floorByParticipant.get(p.id) ?? null,
+      })),
       select: PREVIEW_MESSAGE_SELECT,
     });
 
@@ -278,14 +303,19 @@ export async function emitConversationPreviewUpdate(
     // tout le monde.
     const wantedLanguage = scope?.onlyIfPreviewCarriesLanguage?.toLowerCase();
 
-    for (const { room, participant } of participantUserRoomTargets(targets)) {
+    for (const { room, participant } of participantUserRoomTargets(served)) {
+      // La sonde a pu échouer (carte vide, aperçu global pour tous) : sous un
+      // plancher, l'aperçu global est précisément ce que ce lecteur n'a pas le
+      // droit de lire. Rien plutôt que l'interdit — sa ligne garde l'état que
+      // le REST lui a servi sous la même borne.
+      const floor = floorByParticipant.get(participant.id) ?? null;
+      const latestBelowFloor = floor !== null && latest !== null && latest.createdAt < floor;
+      if (latestBelowFloor && !overrides.has(participant.id)) continue;
+
       // `has`, jamais `get() ?? latest` : une entrée qui vaut `null` dit « cette
       // personne n'a plus AUCUN message visible ici », ce qu'un repli sur
       // l'aperçu global rendrait exactement à l'envers.
-      const own =
-        participant.userId != null && overrides.has(participant.userId)
-          ? overrides.get(participant.userId) ?? null
-          : latest;
+      const own = overrides.has(participant.id) ? overrides.get(participant.id) ?? null : latest;
       const prism = resolveLastMessagePreviewPrism(participant, own);
       if (wantedLanguage != null && !carriesLanguage(prism.lastMessageTranslations, wantedLanguage)) continue;
       io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {

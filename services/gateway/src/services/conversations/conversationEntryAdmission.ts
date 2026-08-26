@@ -267,8 +267,18 @@ function mostRecentlyJoined<T extends { joinedAt?: Date | null }>(rows: readonly
  * ce cycle.
  *
  * `joinedAt` n'y figure pas : il est conservé, cf. l'en-tête.
+ *
+ * `historyVisibleFrom` y figure, lui, et c'est le pendant EXACT de la remise à
+ * zéro du rang et des droits que les portes opèrent déjà (« un ancien admin qui
+ * revient par un lien public ne récupère pas son rang dans une ligne
+ * périmée ») : l'octroi par date est accordé à UNE arrivée. Il PRIME de plus sur
+ * le droit figé et sur le lien — rang 2 de `historyFloorFor` —, donc le laisser
+ * survivre ne se contentait pas d'être périmé : il court-circuitait la borne que
+ * la nouvelle venue vient d'établir, dans les deux sens (un ancien octroi rouvre
+ * ce que le lien ferme ; une ancienne restriction ferme ce qu'il ouvre).
  */
 export const REJOIN_PARTICIPANT_STATE = {
   isActive: true,
   leftAt: null,
+  historyVisibleFrom: null,
 } as const;

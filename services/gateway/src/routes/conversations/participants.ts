@@ -38,7 +38,27 @@ import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { sliceByIdCursor, validatePagination } from '../../utils/pagination';
+import { z } from 'zod';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantsRoutes' });
+
+/**
+ * `PATCH …/rights` : un instant ISO 8601 (décalage admis), `null` pour retirer,
+ * absent pour ne rien dire.
+ *
+ * Borné au PRÉSENT. Le plancher est un `createdAt: { gte: date }` : une date à
+ * venir n'exclut pas seulement le passé, elle exclut aussi les messages À
+ * VENIR — y compris ceux que l'intéressé écrit lui-même. Sans cette borne,
+ * « ouvrir l'historique depuis le 1er janvier prochain » rendait le participant
+ * AVEUGLE à toute la conversation, silencieusement : un mute déguisé en octroi,
+ * qu'aucune erreur ne signalait à l'administrateur qui venait de l'écrire.
+ */
+const HISTORY_VISIBLE_FROM_BODY = z.iso
+  .datetime({ offset: true, error: 'historyVisibleFrom must be an ISO 8601 date-time or null' })
+  .refine((value) => Date.parse(value) <= Date.now(), {
+    error: 'historyVisibleFrom must not be in the future: a future floor hides every message, including the participant\'s own',
+  })
+  .nullable()
+  .optional();
 
 /**
  * Portée du prédicat « en ligne » d'un listing filtré `?onlineOnly=true`.
@@ -499,6 +519,7 @@ export function registerParticipantsRoutes(
                 country: { type: 'string', nullable: true },
                 conversationRole: { type: 'string', nullable: true },
                 joinedAt: { type: 'string', format: 'date-time', nullable: true },
+                historyVisibleFrom: { type: 'string', format: 'date-time', nullable: true, description: 'History grant by DATE set by a conversation admin: the participant reads everything written since this instant. null = no grant, the ordinary rule applies (admin sees all, otherwise the right frozen at join / the share link). Served to conversation admins, moderators and creators only — a plain member always reads null, whether or not a grant exists.' },
                 isOnline: { type: 'boolean' },
                 lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
                 shareLinkName: { type: 'string', nullable: true, description: 'Name of the share link used to join' },
@@ -686,6 +707,15 @@ export function registerParticipantsRoutes(
         country: participant.anonymousSession?.session?.country ?? null,
         conversationRole: participant.role ?? null,
         joinedAt: participant.joinedAt ?? null,
+        // Second cercle, comme `email` et `entryLink` ci-dessous. Ce champ n'est
+        // pas un attribut de la personne : c'est un FAIT DE MODÉRATION — « l'hôte
+        // a rouvert l'avant-jointure à celle-ci depuis telle date ». Le servir à
+        // toute la salle publiait la décision d'un hôte à ceux qu'elle ne
+        // concerne pas, et laissait chaque membre comparer les fiches pour savoir
+        // qui a été favorisé. Masqué en `null` plutôt que retiré : la clé absente
+        // se lirait « inconnu », et il n'existe volontairement aucun jumeau
+        // `hasHistoryGrant` — l'EXISTENCE de l'octroi est justement le fait à taire.
+        historyVisibleFrom: viewerHostsTheRoom ? (participant.historyVisibleFrom ?? null) : null,
         isOnline: gatedPresence.isOnline,
         lastActiveAt: gatedPresence.lastActiveAt ?? null,
         shareLinkName: shareLink?.name ?? null,
@@ -713,15 +743,20 @@ export function registerParticipantsRoutes(
    * `AnonymousRightsOverride` existait dans le schéma et était lu par
    * `middleware/auth.ts` depuis toujours, sans qu'aucun code ne l'écrive nulle
    * part. Ceci est son premier écrivain.
+   *
+   * `historyVisibleFrom` est le second levier, et il vaut pour TOUT participant,
+   * inscrit compris : un administrateur ouvre l'historique depuis une DATE —
+   * jamais depuis un message, qui se supprime — et `null` retire l'octroi. La
+   * lecture le respecte partout par `services/historyFloor`.
    */
   fastify.patch<{
     Params: { id: string; participantId: string };
-    Body: Partial<Record<ParticipantRightName, boolean>>;
+    Body: Partial<Record<ParticipantRightName, boolean>> & { historyVisibleFrom?: string | null };
   }>('/conversations/:id/participants/:participantId/rights', {
     schema: {
-      description: 'Grant or revoke a no-account visitor\'s rights in this conversation. Admins/moderators only. The override is a DELTA: a right the body does not name keeps following the value frozen at join time.',
+      description: 'Grant or revoke a no-account visitor\'s rights in this conversation, and/or grant history by DATE to any participant (`historyVisibleFrom`: ISO 8601, or null to revoke). Admins/moderators only. The boolean override is a DELTA: a right the body does not name keeps following the value frozen at join time.',
       tags: ['conversations', 'participants'],
-      summary: 'Update a visitor\'s rights',
+      summary: 'Update a participant\'s rights',
       params: {
         type: 'object',
         required: ['id', 'participantId'],
@@ -734,9 +769,15 @@ export function registerParticipantsRoutes(
         type: 'object',
         minProperties: 1,
         additionalProperties: false,
-        properties: Object.fromEntries(
-          PARTICIPANT_RIGHT_NAMES.map((name) => [name, { type: 'boolean' }])
-        )
+        properties: {
+          ...Object.fromEntries(
+            PARTICIPANT_RIGHT_NAMES.map((name) => [name, { type: 'boolean' }])
+          ),
+          historyVisibleFrom: {
+            type: ['string', 'null'],
+            description: 'ISO 8601 instant from which this participant may read the history (any participant, account or not); null revokes the grant. Must not be in the future — a future floor hides every message, including the participant\'s own. Writable by conversation admins and creators only.'
+          }
+        }
       },
       response: {
         200: {
@@ -754,7 +795,8 @@ export function registerParticipantsRoutes(
                   properties: Object.fromEntries(
                     PARTICIPANT_RIGHT_NAMES.map((name) => [name, { type: 'boolean' }])
                   )
-                }
+                },
+                historyVisibleFrom: { type: 'string', format: 'date-time', nullable: true, description: 'The history grant by date now in force (null = none)' }
               }
             }
           }
@@ -792,7 +834,21 @@ export function registerParticipantsRoutes(
         .filter((name) => typeof body[name] === 'boolean')
         .map((name) => [name, body[name] as boolean] as const);
 
-      if (requested.length === 0) {
+      // L'octroi par date : `undefined` = non nommé, `null` = retiré, sinon
+      // une date. Validé ici parce que le schéma Fastify ne sait dire qu'une
+      // chaîne ou `null` — pas qu'elle est un instant.
+      const historyGrant = HISTORY_VISIBLE_FROM_BODY.safeParse(body.historyVisibleFrom);
+      if (!historyGrant.success) {
+        return sendBadRequest(
+          reply,
+          historyGrant.error.issues[0]?.message ?? 'historyVisibleFrom must be an ISO 8601 date-time or null',
+          { code: 'INVALID_HISTORY_VISIBLE_FROM' }
+        );
+      }
+      const historyVisibleFrom: Date | null | undefined =
+        historyGrant.data === undefined ? undefined : historyGrant.data === null ? null : new Date(historyGrant.data);
+
+      if (requested.length === 0 && historyVisibleFrom === undefined) {
         return sendBadRequest(reply, 'No known right named in the request body');
       }
 
@@ -810,6 +866,22 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Only conversation admins and moderators may change a visitor\'s rights');
       }
 
+      // L'octroi par DATE n'est pas un droit d'entrée de plus : il OUVRE ce qui
+      // précède l'arrivée, et la règle produit le réserve à un ADMINISTRATEUR de
+      // la conversation. Un modérateur est lui-même BORNÉ par le plancher — le
+      // rang 1 de `historyFloorFor` exige `admin`, pas `moderator` — donc écrire
+      // ce champ lui donnait le moyen de se l'ouvrir À LUI-MÊME, sur sa propre
+      // ligne. La garde porte sur le CHAMP, pas sur la route : les droits
+      // booléens que ce même endpoint lui confie ne franchissent aucun plancher
+      // et restent à sa portée.
+      if (historyVisibleFrom !== undefined && !['admin', 'creator'].includes(viewerRole)) {
+        return sendForbidden(
+          reply,
+          'Only conversation admins may grant or revoke history access by date',
+          { code: 'HISTORY_GRANT_REQUIRES_ADMIN' }
+        );
+      }
+
       const target = await prisma.participant.findFirst({
         where: { id: participantId, conversationId, isActive: true }
       });
@@ -818,10 +890,11 @@ export function registerParticipantsRoutes(
         return sendNotFound(reply, 'Participant not found in this conversation');
       }
 
-      // La surcharge vit dans `anonymousSession`, qu'un participant inscrit n'a
-      // pas. Refuser explicitement vaut mieux qu'écrire une session anonyme sur
-      // quelqu'un qui a un compte.
-      if (target.type !== 'anonymous') {
+      // La surcharge BOOLÉENNE vit dans `anonymousSession`, qu'un participant
+      // inscrit n'a pas. Refuser explicitement vaut mieux qu'écrire une session
+      // anonyme sur quelqu'un qui a un compte. L'octroi par date, lui, est un
+      // scalaire de la ligne participant et vaut pour tous.
+      if (requested.length > 0 && target.type !== 'anonymous') {
         return sendBadRequest(reply, 'Only no-account participants carry an entry-rights override', { code: 'PARTICIPANT_HAS_ACCOUNT' });
       }
 
@@ -843,14 +916,16 @@ export function registerParticipantsRoutes(
       const updated = await prisma.participant.update({
         where: { id: target.id },
         data: {
-          anonymousSession: {
-            ...target.anonymousSession,
-            rights: priorRights
-          }
+          ...(requested.length > 0
+            ? { anonymousSession: { ...target.anonymousSession, rights: priorRights } }
+            : {}),
+          ...(historyVisibleFrom !== undefined ? { historyVisibleFrom } : {})
         }
       });
 
       const rights = resolveEntryRights(updated ?? target, priorRights);
+      const grantedFrom: Date | null =
+        historyVisibleFrom !== undefined ? historyVisibleFrom : (target.historyVisibleFrom ?? null);
 
       // Deux audiences, une seule émission par room : la conversation, pour que
       // les autres hôtes voient le changement ; et la room personnelle du
@@ -864,10 +939,14 @@ export function registerParticipantsRoutes(
           conversationId,
           participantId: target.id,
           updatedBy: currentUserId ?? '',
-          rights
+          rights,
+          historyVisibleFrom: grantedFrom ? grantedFrom.toISOString() : null
         };
         io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, payload);
-        io.to(ROOMS.user(target.id)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, payload);
+        // La room personnelle porte le `User.id` d'un inscrit et le
+        // `Participant.id` d'un visiteur sans compte — même clé que
+        // `participantUserRoomTargets`.
+        io.to(ROOMS.user(target.userId ?? target.id)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, payload);
       }
 
       // Le middleware d'auth met en cache la ligne participant : sans
@@ -875,7 +954,12 @@ export function registerParticipantsRoutes(
       // anciens droits pendant toute la durée du cache.
       manager?.invalidateParticipantCache?.(target.id, conversationId);
 
-      return sendSuccess(reply, { participantId: target.id, conversationId, rights });
+      return sendSuccess(reply, {
+        participantId: target.id,
+        conversationId,
+        rights,
+        historyVisibleFrom: grantedFrom ? grantedFrom.toISOString() : null
+      });
     } catch (error) {
       logger.error('Error updating participant rights', error as Error);
       return sendInternalError(reply, 'Internal server error');
@@ -1009,7 +1093,10 @@ export function registerParticipantsRoutes(
           canSendAudios: true,
           canSendVideos: true,
           canSendLocations: false,
-          canSendLinks: false
+          canSendLinks: false,
+          // Un membre ajouté après coup lit depuis son arrivée ; un
+          // administrateur lui ouvre l'avant par date (`historyVisibleFrom`).
+          canViewHistory: false
         }
       };
 
