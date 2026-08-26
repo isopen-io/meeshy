@@ -1233,7 +1233,8 @@ struct MeeshyComposerHost: View {
                 set: { newLocale in
                     documentLanguage = newLocale.language.languageCode?.identifier ?? newLocale.identifier
                 }
-            )
+            ),
+            title: "Langue du post"
         )
     }
 
@@ -1404,7 +1405,7 @@ struct MeeshyComposerHost: View {
     /// refuse de publier. Les confondre changerait ce qu'un mood EST à chaque
     /// frappe de son texte.
     private var emojiPickerSheet: some View {
-        EmojiPickerSheet(quickReactions: Self.quickEmojis) { emoji in
+        EmojiPickerSheet(quickReactions: Self.quickEmojis, title: "composer.attach.emoji") { emoji in
             documentText += emoji
             showsEmojiPicker = false
         }
