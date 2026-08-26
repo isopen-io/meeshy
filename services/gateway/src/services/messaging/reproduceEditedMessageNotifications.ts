@@ -1,4 +1,5 @@
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { truncateByCodePoints } from '../../utils/truncate-text';
 import { protectedPreview } from '../notifications/NotificationService';
 import type {
   ReproducedNotification,
@@ -72,12 +73,6 @@ const BODY_DERIVES_FROM_MESSAGE = new Set(['new_message', 'user_mentioned', 'mes
  * ligne à chaque édition d'un long message.
  */
 const PREVIEW_MAX_LENGTH = 100;
-
-function truncatePreview(content: string): string {
-  return content.length > PREVIEW_MAX_LENGTH
-    ? `${content.substring(0, PREVIEW_MAX_LENGTH)}…`
-    : content;
-}
 
 type JsonBlob = Record<string, unknown> | null | undefined;
 
@@ -217,7 +212,7 @@ export async function reproduceEditedMessageNotifications(
   // message à pièce jointe — et non un « rien à faire » : la copie dénormalisée
   // doit bien perdre l'ancien texte. Seul `null` (aucune écriture de contenu)
   // se lit comme une chaîne vide, ce que le producteur faisait déjà.
-  const nextPreview = truncatePreview(edited.content ?? '');
+  const nextPreview = truncateByCodePoints(edited.content ?? '', PREVIEW_MAX_LENGTH, '…');
 
   const rows = await prisma.notification.findMany({
     where: { messageId: edited.messageId },

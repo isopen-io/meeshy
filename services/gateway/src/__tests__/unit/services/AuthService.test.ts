@@ -991,6 +991,70 @@ describe('AuthService', () => {
       expect(result?.permissions.canAccessAdmin).toBe(false);
     });
   });
+
+  // `autoTranslateEnabled` n'a qu'un store : `UserPreferences.application`. Le
+  // témoin de rang s'écrit sur `false` : sur `true`, la valeur en dur que la
+  // conversion servait et la lecture rendent le même verdict.
+  describe('autoTranslateEnabled read from UserPreferences.application', () => {
+    const withPreference = (autoTranslateEnabled: boolean) => ({
+      ...mockUser,
+      userPreferences: { application: { autoTranslateEnabled } }
+    });
+
+    it('getUserById serves false when the stored preference is false', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(withPreference(false));
+
+      const result = await authService.getUserById('user-123');
+
+      expect(result?.autoTranslateEnabled).toBe(false);
+    });
+
+    it('authenticate serves false when the stored preference is false', async () => {
+      mockPrisma.user.findFirst.mockResolvedValue(withPreference(false));
+      mockBcryptCompare.mockResolvedValue(true);
+      mockPrisma.user.update.mockResolvedValue(mockUser);
+
+      const result = await authService.authenticate({ username: 'testuser', password: 'password123' });
+
+      expect(result?.user.autoTranslateEnabled).toBe(false);
+    });
+
+    it('falls back to the shared default (true) when the user has no preferences row', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({ ...mockUser, userPreferences: null });
+
+      const result = await authService.getUserById('user-123');
+
+      expect(result?.autoTranslateEnabled).toBe(true);
+    });
+
+    // Un mock Prisma rend ce qu'on lui dit quel que soit le `select` : seule une
+    // assertion sur la REQUÊTE prouve que la lecture est possible en aval.
+    it('getUserById projects UserPreferences.application', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+
+      await authService.getUserById('user-123');
+
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({ userPreferences: { select: { application: true } } })
+        })
+      );
+    });
+
+    it('authenticate projects UserPreferences.application', async () => {
+      mockPrisma.user.findFirst.mockResolvedValue(mockUser);
+      mockBcryptCompare.mockResolvedValue(true);
+      mockPrisma.user.update.mockResolvedValue(mockUser);
+
+      await authService.authenticate({ username: 'testuser', password: 'password123' });
+
+      expect(mockPrisma.user.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.objectContaining({ userPreferences: { select: { application: true } } })
+        })
+      );
+    });
+  });
 });
 
 describe('AuthService - Edge Cases', () => {

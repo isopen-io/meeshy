@@ -43,6 +43,33 @@ describe('isValidEmoji', () => {
     });
   });
 
+  describe('valid multi-code-point emoji (RGI sequences)', () => {
+    // A reaction is any single RGI (Recommended for General Interchange) emoji
+    // grapheme — the exact set every modern messenger (WhatsApp, Slack,
+    // iMessage) lets a user pick. The former single-code-point regex rejected
+    // all of these, so users could not react with the most common modern
+    // emojis; they hit "Invalid emoji" at the gateway reaction gate.
+    it('accepts a skin-tone modified emoji (thumbs-up + Fitzpatrick modifier)', () => {
+      // 👍🏽 = U+1F44D + U+1F3FD — base emoji + skin-tone modifier
+      expect(isValidEmoji('👍🏽')).toBe(true);
+    });
+
+    it('accepts a ZWJ profession sequence', () => {
+      // 👩‍💻 = U+1F469 + U+200D + U+1F4BB — woman + ZWJ + laptop
+      expect(isValidEmoji('👩‍💻')).toBe(true);
+    });
+
+    it('accepts a regional-indicator flag sequence', () => {
+      // 🇫🇷 = U+1F1EB + U+1F1F7 — two regional indicators forming one flag
+      expect(isValidEmoji('🇫🇷')).toBe(true);
+    });
+
+    it('accepts a keycap sequence', () => {
+      // #️⃣ = U+0023 + U+FE0F + U+20E3 — the RGI keycap grapheme
+      expect(isValidEmoji('#️⃣')).toBe(true);
+    });
+  });
+
   describe('trims surrounding whitespace before validation', () => {
     it('accepts emoji with leading space', () => {
       expect(isValidEmoji(' 😀')).toBe(true);
@@ -71,6 +98,20 @@ describe('isValidEmoji', () => {
       expect(isValidEmoji('1')).toBe(false);
     });
 
+    it('rejects a digit followed by a variation selector', () => {
+      // 1️ = U+0031 + U+FE0F. A bare digit is not a standalone emoji, and
+      // appending FE0F does not make it one — the keycap emoji is the full
+      // sequence 1️⃣ (digit + FE0F + U+20E3). The former regex admitted this
+      // via its `\p{Emoji}️` branch, so the gateway persisted "1️" as a
+      // reaction. RGI matching rejects it.
+      expect(isValidEmoji('1️')).toBe(false);
+    });
+
+    it('rejects a lone asterisk followed by a variation selector', () => {
+      // *️ = U+002A + U+FE0F — same false-positive class as the digit case.
+      expect(isValidEmoji('*️')).toBe(false);
+    });
+
     it('rejects an empty string', () => {
       expect(isValidEmoji('')).toBe(false);
     });
@@ -81,13 +122,9 @@ describe('isValidEmoji', () => {
     });
 
     it('rejects two emojis concatenated', () => {
-      // ^ and $ anchors allow only a single emoji unit
+      // ^ and $ anchors allow only a single RGI emoji grapheme; two smileys
+      // are two graphemes.
       expect(isValidEmoji('😀😀')).toBe(false);
-    });
-
-    it('rejects a flag sequence (two regional-indicator letters)', () => {
-      // 🇫🇷 = U+1F1EB + U+1F1F7 — two code points, cannot match single-unit regex
-      expect(isValidEmoji('🇫🇷')).toBe(false);
     });
 
     it('rejects an emoji followed by extra text', () => {
@@ -107,6 +144,14 @@ describe('sanitizeEmoji', () => {
 
   it('returns the emoji with FE0F variation selector', () => {
     expect(sanitizeEmoji('❤️')).toBe('❤️');
+  });
+
+  it('returns a skin-tone modified emoji unchanged', () => {
+    expect(sanitizeEmoji('👍🏽')).toBe('👍🏽');
+  });
+
+  it('returns a flag sequence unchanged', () => {
+    expect(sanitizeEmoji('🇫🇷')).toBe('🇫🇷');
   });
 
   it('returns null for plain text', () => {

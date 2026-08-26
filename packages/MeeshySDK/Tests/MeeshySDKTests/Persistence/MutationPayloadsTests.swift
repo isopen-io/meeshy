@@ -452,6 +452,55 @@ final class MutationPayloadsTests: XCTestCase {
         XCTAssertEqual(object["postId"] as? String, "post-1")
     }
 
+    /// Une réaction à une story emprunte le MÊME endpoint que le like d'un post
+    /// (`POST /posts/:id/like`) et le même `kind` de `MutationLog` côté gateway
+    /// (`toggleLikePost`) : pas d'`OutboxKind` à elle, mais l'emoji doit
+    /// voyager jusqu'au dispatcher.
+    func test_toggleLikePostPayload_withReactionEmoji_roundTripsTheEmoji() throws {
+        let payload = ToggleLikePostPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000013",
+            postId: "story-1",
+            liked: true,
+            emoji: "🔥"
+        )
+
+        let decoded = try decoder.decode(ToggleLikePostPayload.self, from: try encoder.encode(payload))
+
+        XCTAssertEqual(decoded.emoji, "🔥")
+        XCTAssertEqual(decoded, payload)
+    }
+
+    /// Un like simple garde la forme qu'il avait avant ce champ : la clé ne
+    /// part pas, plutôt qu'un `null` que le dispatcher aurait à interpréter.
+    func test_toggleLikePostPayload_withoutEmoji_omitsTheEmojiKey() throws {
+        let payload = ToggleLikePostPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000014",
+            postId: "post-1",
+            liked: false
+        )
+
+        let data = try encoder.encode(payload)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertNil(object["emoji"])
+        XCTAssertEqual(Set(object.keys), ["clientMutationId", "postId", "liked"])
+    }
+
+    /// Rétro-compatibilité : les lignes DÉJÀ en file au moment de la migration
+    /// ont été encodées sans `emoji`. Elles doivent continuer à se décoder —
+    /// sinon la mise à jour ferait perdre des mutations en attente.
+    func test_toggleLikePostPayload_decodesRowsWrittenBeforeTheEmojiField_asPlainLike() throws {
+        let legacy = Data("""
+        {"clientMutationId":"cmid_00000000-0000-4000-8000-000000000012","postId":"post-1","liked":true}
+        """.utf8)
+
+        let decoded = try decoder.decode(ToggleLikePostPayload.self, from: legacy)
+
+        XCTAssertNil(decoded.emoji, "Un like simple n'a pas d'emoji.")
+        XCTAssertTrue(decoded.liked)
+        XCTAssertEqual(decoded.postId, "post-1")
+    }
+
     // MARK: - CreateCommentPayload (Phase C)
 
     func test_createCommentPayload_roundtrip_topLevel() throws {

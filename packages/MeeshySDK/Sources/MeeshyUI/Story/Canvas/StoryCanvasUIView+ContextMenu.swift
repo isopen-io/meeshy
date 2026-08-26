@@ -8,6 +8,49 @@ import Combine
 import os
 import MeeshySDK
 
+/// Les entrées du menu long-press d'un élément du canvas, dans leur ordre
+/// d'affichage. Le même inventaire alimente les actions VoiceOver
+/// (`makeCustomActions`) : une seule règle décide de ce qu'un élément offre.
+///
+/// `nonisolated` sur le TYPE : le package pose `.defaultIsolation(MainActor
+/// .self)` (SE-0466), qui isolerait cet énuméré et le rendrait illisible
+/// depuis un contexte non isolé.
+nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equatable {
+    case edit
+    case duplicate
+    case bringForward
+    case sendBackward
+    case delete
+
+    /// Un élément verrouillé — le badge d'attribution d'une republication,
+    /// seul porteur de `StoryTextObject.isLocked` — n'offre ni édition, ni
+    /// duplication, ni suppression : les trois retirent ou dénaturent
+    /// l'attribution. L'empilement reste : il ne touche pas au contenu.
+    static func offered(isLocked: Bool) -> [StoryCanvasContextAction] {
+        isLocked ? [.bringForward, .sendBackward] : allCases
+    }
+
+    var title: String {
+        switch self {
+        case .edit:         return "Modifier"
+        case .duplicate:    return "Dupliquer"
+        case .bringForward: return "Mettre au premier plan"
+        case .sendBackward: return "Mettre à l'arrière"
+        case .delete:       return "Supprimer"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .edit:         return "pencil"
+        case .duplicate:    return "doc.on.doc"
+        case .bringForward: return "square.3.stack.3d.top.filled"
+        case .sendBackward: return "square.2.stack.3d.bottom.filled"
+        case .delete:       return "trash"
+        }
+    }
+}
+
 // MARK: - UIContextMenuInteractionDelegate (long-press / right-click)
 
 extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
@@ -27,29 +70,43 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
             identifier: id as NSString,
             previewProvider: nil
         ) { [weak self] _ in
-            UIMenu(children: [
-                UIAction(title: "Modifier",
-                         image: UIImage(systemName: "pencil")) { _ in
-                    self?.onItemDoubleTapped?(id, kind)
-                },
-                UIAction(title: "Dupliquer",
-                         image: UIImage(systemName: "doc.on.doc")) { _ in
-                    self?.contextDuplicate(id: id)
-                },
-                UIAction(title: "Mettre au premier plan",
-                         image: UIImage(systemName: "square.3.stack.3d.top.filled")) { _ in
-                    self?.contextBringForward(id: id)
-                },
-                UIAction(title: "Mettre à l'arrière",
-                         image: UIImage(systemName: "square.2.stack.3d.bottom.filled")) { _ in
-                    self?.contextSendBackward(id: id)
-                },
-                UIAction(title: "Supprimer",
-                         image: UIImage(systemName: "trash"),
-                         attributes: .destructive) { _ in
-                    self?.contextDelete(id: id)
-                },
-            ])
+            self?.contextMenu(for: id, kind: kind)
+        }
+    }
+
+    /// Construit le menu de l'élément `id`. Séparé de la configuration UIKit,
+    /// qui n'expose pas son `actionProvider` : c'est ici qu'un test lit ce
+    /// que le menu offre.
+    func contextMenu(for id: String, kind: CanvasItemKind) -> UIMenu {
+        let children = StoryCanvasContextAction
+            .offered(isLocked: isLockedItem(id: id))
+            .map { action in
+                UIAction(title: action.title,
+                         image: UIImage(systemName: action.systemImage),
+                         attributes: action == .delete ? .destructive : []) { [weak self] _ in
+                    self?.performContextAction(action, on: id, kind: kind)
+                }
+            }
+        return UIMenu(children: children)
+    }
+
+    /// Point de passage UNIQUE entre une entrée du menu et la primitive qui
+    /// l'exécute — c'est lui que les tests exercent, la configuration UIKit
+    /// ne laissant pas déclencher ses `UIAction`.
+    ///
+    /// Les deux actions d'empilement échangeaient deux positions dans le
+    /// TABLEAU `mediaObjects` alors que le rendu trie par `zIndex`
+    /// (`StoryRenderer.render`) : le geste ne se voyait jamais, et ignorait
+    /// textes, stickers et pastilles. `bringForward` / `sendBackward`
+    /// raisonnent sur les `zIndex` de tous les types d'éléments et propagent
+    /// elles-mêmes la slide.
+    func performContextAction(_ action: StoryCanvasContextAction, on id: String, kind: CanvasItemKind) {
+        switch action {
+        case .edit:         onItemDoubleTapped?(id, kind)
+        case .duplicate:    contextDuplicate(id: id)
+        case .bringForward: bringForward(id: id)
+        case .sendBackward: sendBackward(id: id)
+        case .delete:       contextDelete(id: id)
         }
     }
 
@@ -173,6 +230,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     }
 
     func contextDuplicate(id: String) {
+        guard !isLockedItem(id: id) else { return }
         var duplicatedNewId: String?
         var duplicatedKind: CanvasItemKind?
         // Branche media : `guard var` au lieu de `mediaObjects![idx]` — même si
@@ -233,27 +291,8 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         }
     }
 
-    func contextBringForward(id: String) {
-        if var medias = slide.effects.mediaObjects,
-           let idx = medias.firstIndex(where: { $0.id == id }),
-           idx < medias.count - 1 {
-            medias.swapAt(idx, idx + 1)
-            slide.effects.mediaObjects = medias
-            onItemModified?(slide)
-        }
-    }
-
-    func contextSendBackward(id: String) {
-        if var medias = slide.effects.mediaObjects,
-           let idx = medias.firstIndex(where: { $0.id == id }),
-           idx > 0 {
-            medias.swapAt(idx, idx - 1)
-            slide.effects.mediaObjects = medias
-            onItemModified?(slide)
-        }
-    }
-
     func contextDelete(id: String) {
+        guard !isLockedItem(id: id) else { return }
         slide.effects.mediaObjects?.removeAll { $0.id == id }
         slide.effects.textObjects.removeAll { $0.id == id }
         slide.effects.stickerObjects?.removeAll { $0.id == id }

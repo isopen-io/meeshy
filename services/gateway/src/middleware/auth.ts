@@ -627,56 +627,6 @@ export function getUserPermissions(authContext: UnifiedAuthContext) {
 
 // ===== LEGACY COMPATIBILITY =====
 
-/** @deprecated Use createUnifiedAuthMiddleware */
-export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
-  authLogger.warn('authenticate() is deprecated, use createUnifiedAuthMiddleware instead');
-
-  try {
-    const authHeader = request.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new Error('No authorization header');
-    }
-
-    const token = authHeader.substring(7);
-
-    if (process.env.NODE_ENV === 'development') {
-      const { AuthService } = await import('../services/AuthTestService');
-      const decoded = AuthService.verifyToken(token);
-
-      if (decoded) {
-        const user = AuthService.getUserById(decoded.userId);
-        if (user) {
-          const req = request as unknown as Record<string, unknown>;
-          req.user = {
-            userId: user.id,
-            username: user.username,
-            email: user.email,
-            role: user.role
-          };
-          return;
-        }
-      }
-    }
-
-    await request.jwtVerify();
-
-    const reqUser = request.user as Record<string, unknown>;
-    const { userId } = reqUser;
-    if (!userId) {
-      throw new Error('Invalid token payload: missing userId');
-    }
-    reqUser.id = userId;
-
-  } catch (error) {
-    authLogger.error('Authentication failed (legacy)', { error });
-    reply.code(401).send({
-      success: false,
-      message: 'Token invalide ou manquant'
-    });
-  }
-}
-
 /** @deprecated Use getUserPermissions */
 export function requireRole(allowedRoles: string | string[]) {
   const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];

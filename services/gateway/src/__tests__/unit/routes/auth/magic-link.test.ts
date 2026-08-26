@@ -245,6 +245,31 @@ describe('GET /me — anonymous user', () => {
     expect(body.success).toBe(true);
     await app.close();
   });
+
+  it('serves the shared default for autoTranslateEnabled — an anonymous participant has no preferences row', async () => {
+    // Ce site servait `false` en dur pendant que `participant-helpers`
+    // servait `true` au MÊME participant dans chaque charge de conversation.
+    // L'absence de préférence vaut le DÉFAUT du schéma partagé, pas un
+    // troisième verdict local.
+    const app = await buildApp({
+      authContext: {
+        isAuthenticated: true,
+        type: 'anonymous',
+        userId: 'anon-session-1',
+        anonymousUser: {
+          username: 'anon-user',
+          firstName: null,
+          lastName: null,
+          language: 'fr',
+          permissions: [],
+        },
+        displayName: 'Anonymous',
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: '/me' });
+    expect(res.json().data.user.autoTranslateEnabled).toBe(true);
+    await app.close();
+  });
 });
 
 describe('GET /me — unauthenticated', () => {

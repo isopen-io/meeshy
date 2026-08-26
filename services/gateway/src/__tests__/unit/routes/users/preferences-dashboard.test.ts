@@ -151,6 +151,37 @@ describe('GET /users/me/dashboard-stats (direct conversation without title)', ()
   });
 });
 
+describe('GET /users/me/dashboard-stats (direct conversation avatar resolution)', () => {
+  it('falls back to the other participant avatar when the conversation avatar is blank', async () => {
+    const directConv = {
+      ...mockConversation,
+      type: 'direct',
+      avatar: '   ',
+      participants: [
+        { user: { id: 'other-user', username: 'bob', displayName: 'Bob', avatar: 'https://cdn.meeshy.test/bob.png' } },
+        { user: { id: USER_ID, username: 'alice', displayName: 'Alice', avatar: null } },
+      ],
+    };
+    const app = await buildApp('authenticated', {
+      conversation: { findMany: jest.fn().mockResolvedValue([directConv]) },
+    });
+    const res = await app.inject({ method: 'GET', url: '/users/me/dashboard-stats' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.recentConversations[0].avatar).toBe('https://cdn.meeshy.test/bob.png');
+    await app.close();
+  });
+
+  it('never leaks a blank string as the resolved avatar', async () => {
+    const groupConv = { ...mockConversation, type: 'group', avatar: '' };
+    const app = await buildApp('authenticated', {
+      conversation: { findMany: jest.fn().mockResolvedValue([groupConv]) },
+    });
+    const res = await app.inject({ method: 'GET', url: '/users/me/dashboard-stats' });
+    expect(res.json().data.recentConversations[0].avatar).toBeNull();
+    await app.close();
+  });
+});
+
 describe('GET /users/me/dashboard-stats (conversation without messages)', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
