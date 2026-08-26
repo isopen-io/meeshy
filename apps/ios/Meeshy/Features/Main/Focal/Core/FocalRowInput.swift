@@ -81,6 +81,12 @@ struct FocalRowInput: Equatable {
     // MARK: - Identité de tête de groupe
 
     let isFirstInGroup: Bool
+    /// La rangée ferme-t-elle un groupe ? En Script/Focal, c'est elle qui
+    /// porte le drapeau-toggle de langue (`FocalRow.flagAndReactionsRow`) —
+    /// pas chaque message du groupe (#3919, directive porteur 2026-08-26,
+    /// miroir de `isLastReceivedMessage`/mode Bulles où c'est déjà le DERNIER
+    /// message qui porte l'identité).
+    let isLastInGroup: Bool
     let senderId: String
     let senderDisplayName: String
     let senderUsername: String?
@@ -178,6 +184,7 @@ struct FocalRowInput: Equatable {
         content: BubbleContent,
         density: Density,
         isFirstInGroup: Bool,
+        isLastInGroup: Bool = true,
         senderId: String,
         senderDisplayName: String,
         senderUsername: String?,
@@ -216,6 +223,7 @@ struct FocalRowInput: Equatable {
         self.content = content
         self.density = density
         self.isFirstInGroup = isFirstInGroup
+        self.isLastInGroup = isLastInGroup
         self.senderId = senderId
         self.senderDisplayName = senderDisplayName
         self.senderUsername = senderUsername
@@ -336,6 +344,13 @@ struct FocalRowActions {
     /// effectif DÉJÀ résolu, la sheet scrollable vit côté ConversationView.
     var onReadMore: ((FocalReadMorePayload) -> Void)?
     var onSetActiveDisplayLanguage: ((String, String?) -> Void)?
+    /// Tap sur le drapeau de la rangée ORDINAIRE (jamais magnifiée) — cette
+    /// rangée n'est montée que sur le DERNIER message d'un groupe (#3919),
+    /// et le choix s'applique à TOUT le groupe. La magnification
+    /// (`FocalRow.focusStrip`), elle, continue d'appeler
+    /// `onSetActiveDisplayLanguage` (message seul) : elle cible le message
+    /// élu, quelle que soit sa position dans son groupe.
+    var onSetActiveDisplayLanguageForGroup: ((String, String?) -> Void)?
     var onSetSecondaryLanguage: ((String, String?) -> Void)?
     var onPlayAudio: ((String) -> Void)?
     /// CORRIGÉ vs le texte littéral du contrat (`ProfileUser`, inexistant
@@ -377,6 +392,7 @@ struct FocalRowActions {
         onRequestTranslation: ((String, String) -> Void)? = nil,
         onShowTranslationDetail: ((String) -> Void)? = nil,
         onSetActiveDisplayLanguage: ((String, String?) -> Void)? = nil,
+        onSetActiveDisplayLanguageForGroup: ((String, String?) -> Void)? = nil,
         onSetSecondaryLanguage: ((String, String?) -> Void)? = nil,
         onPlayAudio: ((String) -> Void)? = nil,
         onOpenProfile: ((ProfileSheetUser) -> Void)? = nil,
@@ -401,6 +417,7 @@ struct FocalRowActions {
         self.onRequestTranslation = onRequestTranslation
         self.onShowTranslationDetail = onShowTranslationDetail
         self.onSetActiveDisplayLanguage = onSetActiveDisplayLanguage
+        self.onSetActiveDisplayLanguageForGroup = onSetActiveDisplayLanguageForGroup
         self.onSetSecondaryLanguage = onSetSecondaryLanguage
         self.onPlayAudio = onPlayAudio
         self.onOpenProfile = onOpenProfile

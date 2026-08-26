@@ -925,6 +925,41 @@ final class MessageListViewController: UIViewController {
         view.addSubview(collectionView)
     }
 
+    // MARK: - Groupe de rangées (Script/Focal, #3919)
+
+    /// Identifiants (ordre chronologique) du groupe qui se TERMINE au
+    /// message `lastLocalId` — remonte `store.messages` tant que le message
+    /// précédent CONTINUE le groupe (`MessageDayGrouping`, même règle que
+    /// `isFirstInGroup`/`isLastInGroup`). Sert à appliquer un choix de langue
+    /// posé sur le drapeau du DERNIER message à tout le groupe qu'il ferme.
+    /// Portée non-`private` pour rester directement testable (même patron
+    /// que `fireOrDeferRecoveryInvalidation` de `MessageListLayout`).
+    func messageIdsInGroup(endingAt lastLocalId: String) -> [String] {
+        guard let lastIndex = store.index(of: lastLocalId) else { return [lastLocalId] }
+        var ids = [lastLocalId]
+        var index = lastIndex
+        while index > 0 {
+            let current = store.messages[index]
+            let previous = store.messages[index - 1]
+            let isHead = MessageDayGrouping.isGroupHead(
+                previous: .init(
+                    senderId: previous.senderId,
+                    isSystem: previous.messageSource == MeeshyMessage.MessageSource.system.rawValue,
+                    createdAt: previous.createdAt
+                ),
+                current: .init(
+                    senderId: current.senderId,
+                    isSystem: current.messageSource == MeeshyMessage.MessageSource.system.rawValue,
+                    createdAt: current.createdAt
+                )
+            )
+            if isHead { break }
+            ids.append(previous.localId)
+            index -= 1
+        }
+        return ids
+    }
+
     // MARK: - DataSource
 
     private func configureDataSource() {
@@ -1441,6 +1476,7 @@ final class MessageListViewController: UIViewController {
                     content: focalContent,
                     density: self.readingMode == .script ? .script : .focal,
                     isFirstInGroup: isFirstInGroup,
+                    isLastInGroup: isLastInGroup,
                     senderId: senderId,
                     senderDisplayName: message.senderName ?? message.senderUsername ?? "",
                     senderUsername: message.senderUsername,
@@ -1510,6 +1546,15 @@ final class MessageListViewController: UIViewController {
                 focalActions.onShareFile = shareFileHandler
                 focalActions.onSetActiveDisplayLanguage = { [weak self] msgId, code in
                     self?.conversationViewModel?.setBubbleActiveDisplayLanguage(code, for: msgId)
+                }
+                // Rangée ORDINAIRE (jamais magnifiée) montée sur le DERNIER
+                // message d'un groupe (#3919) : le choix posé là s'applique
+                // à CHAQUE message du groupe qu'elle ferme.
+                focalActions.onSetActiveDisplayLanguageForGroup = { [weak self] msgId, code in
+                    guard let self else { return }
+                    for memberId in self.messageIdsInGroup(endingAt: msgId) {
+                        self.conversationViewModel?.setBubbleActiveDisplayLanguage(code, for: memberId)
+                    }
                 }
                 focalActions.onSetSecondaryLanguage = { [weak self] msgId, code in
                     self?.conversationViewModel?.setBubbleSecondaryLanguage(code, for: msgId)

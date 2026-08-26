@@ -634,7 +634,15 @@ struct FocalRow: View {
             // drapeaux avec le contenu — révéler la langue d'origine
             // d'un message voilé fuirait une information. Les réactions,
             // elles, restent hors voile (parité bulle historique).
-            if let translation = content.translation, !content.isBlurred {
+            //
+            // UN SEUL jeu de drapeaux par groupe, sur son DERNIER message
+            // (#3919, directive porteur 2026-08-26 — miroir du mode Bulles,
+            // où c'est déjà le dernier message qui porte l'identité). Le
+            // choix posé ici s'applique à TOUT le groupe
+            // (`onSetActiveDisplayLanguageForGroup`) ; changer la langue d'UN
+            // message précis du groupe reste possible via la magnification
+            // (`focusStrip`, `onSetActiveDisplayLanguage`) ou le long-press.
+            if let translation = content.translation, !content.isBlurred, input.isLastInGroup {
                 plainLanguageFlags(translation)
             }
             if showsReactions {
@@ -930,7 +938,9 @@ struct FocalRow: View {
             ) { code in
                 let isActive = code.lowercased() == translation.activeLangCode.lowercased()
                 Button {
-                    actions.onSetActiveDisplayLanguage?(content.messageId, code)
+                    // Rangée ORDINAIRE, montée sur le DERNIER message d'un
+                    // groupe (#3919) : le choix s'applique à tout le groupe.
+                    actions.onSetActiveDisplayLanguageForGroup?(content.messageId, code)
                 } label: {
                     Text(flagEmoji(code))
                         .font(MeeshyFont.relative(MeeshyFont.captionSize))
