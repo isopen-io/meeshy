@@ -16524,7 +16524,7 @@ Deux corollaires de forme :
   restaient verts sur le défaut — le témoin qui l'attrape s'écrit sur du hors-BMP,
   jamais sur l'ASCII (jumeau de la leçon 261 « un témoin de rang s'écrit sur un
   rang AUTRE que le premier »).
-## Leçon 288 — un état posé à la RACINE d'un pager coûte à chaque page réalisée, et le prix ne se voit qu'après vingt swipes (2026-08-25, galerie média iOS)
+## Leçon 292 — un état posé à la RACINE d'un pager coûte à chaque page réalisée, et le prix ne se voit qu'après vingt swipes (2026-08-25, galerie média iOS)
 
 La galerie plein écran d'une conversation (`ConversationMediaGalleryView`)
 freezait au défilement, et — c'est le détail qui nomme la cause — **le
