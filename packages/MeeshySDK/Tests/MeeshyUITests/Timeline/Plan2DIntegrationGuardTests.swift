@@ -542,13 +542,23 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
 
     // MARK: - Guard 3c — les deux voisins immédiats hors périmètre
 
-    func test_timelineExportFlow_contentIsUnchanged() throws {
-        let data = try Data(contentsOf: Self.timelineExportFlowURL)
-        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        XCTAssertEqual(
-            digest,
-            "de4d954b0876b86e2e0569ceec31029967e4fb8e7f4f68ec682ad5af9363f54c",
-            "TimelineExportFlow.swift PRÉSENTE le conteneur racine mais n'appartient pas à ce lot — aucune ligne ne doit bouger"
+    /// **Hash remplacé par l'invariant qu'il servait — 2026-08-26.** Même
+    /// raison que pour `ComposerControlsLayer` ci-dessous (2026-08-24) : le
+    /// figement par empreinte SHA-256 n'était un invariant que TANT QUE le lot
+    /// Plan 2D était en vol. Le lot D mergé, l'empreinte n'interdit plus une
+    /// FUITE du plan mais TOUTE évolution du fichier par un autre chantier —
+    /// ici le balayage `nonisolated deinit {}` de la famille deinit iOS 26.1
+    /// (SE-0466), qui touche légitimement `ProgressSinkBox` et
+    /// `TimelineExportController`. L'invariant RÉEL — « le Plan 2D ne fuit pas
+    /// hors de `Story/Timeline/` » — est porté par
+    /// `test_noPlan2DReferenceLeaksOutsideTheTimeline`, et redit ici sur le
+    /// fichier nommé : falsifiable (il rougit si `Plan2D` réapparaît), sans
+    /// figer une ligne.
+    func test_timelineExportFlow_carriesNoPlan2DReference() throws {
+        let source = try String(contentsOf: Self.timelineExportFlowURL, encoding: .utf8)
+        XCTAssertFalse(
+            source.contains("Plan2D"),
+            "Le Plan 2D ne déborde pas sur TimelineExportFlow — voisin hors périmètre du lot D"
         )
     }
 
