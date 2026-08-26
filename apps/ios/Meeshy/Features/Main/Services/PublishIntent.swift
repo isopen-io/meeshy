@@ -160,11 +160,17 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             content: content,
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
-            // La langue PARLÉE gagne sur la langue DÉCLARÉE par la capsule du
-            // meuble — même arbitrage que `audioRecording`, jamais un
-            // court-circuit : un document SANS vocal (`transcription: nil`)
-            // garde `originalLanguage` tel quel, celui de la capsule.
-            originalLanguage: transcription?.language ?? originalLanguage,
+            // **E2 (#3887) — texte et média portent DEUX langues distinctes.**
+            // Le TEXTE du document garde la langue DÉCLARÉE (la capsule) : c'est
+            // ce que l'auteur a écrit, dans la langue qu'il a choisie. Le MÉDIA
+            // (l'audio joint) garde SA propre langue sur `mobileTranscription`
+            // ci-dessous — la transcription en porte la langue PARLÉE, et le
+            // Prisme la résout à part (famille audio). Les conflater en un seul
+            // `originalLanguage` faisait un audio wolof retitrer le TEXTE
+            // français d'un document, ou l'inverse. À la différence du vocal
+            // PUR (`audioRecording`), où il n'y a pas de texte : là, la langue
+            // de la transcription EST celle du contenu.
+            originalLanguage: originalLanguage,
             mentions: mentions,
             location: location,
             discoverabilityPrecision: discoverabilityPrecision,
