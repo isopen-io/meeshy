@@ -178,7 +178,11 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// relance en vol — si aucun arrêt n'est signalé (défilement programmé).
     private(set) var recoveryInvalidationPending = false
 
-    private func fireOrDeferRecoveryInvalidation() {
+    /// Portée non-`private` : appelée par `scheduleRecoveryInvalidation()`
+    /// (asynchrone, chemin réel) ET directement par les tests — le
+    /// mécanisme d'ancrage ci-dessous ne dépend d'aucun timing, seul le
+    /// DÉCLENCHEMENT (planification async) l'est.
+    func fireOrDeferRecoveryInvalidation() {
         recoveryInvalidationScheduled = false
         if let collectionView, collectionView.isDragging || collectionView.isDecelerating {
             recoveryInvalidationPending = true
@@ -186,7 +190,41 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
             return
         }
         recoveryInvalidationPending = false
+        // Une invalidation COMPLÈTE ne porte AUCUNE des deux compensations
+        // ci-dessus (elles ne s'accrochent qu'aux entonnoirs self-sizing et
+        // batch update) : sans ancre, elle repositionne silencieusement le
+        // contenu déjà visible dès que la re-mesure change quoi que ce soit
+        // dans la liste — mesuré en repro (2026-08-26) : `contentOffset`
+        // 968→842 en moins de 20 ms, sans doigt ni décélération. L'ancre
+        // n'est PAS le bas visuel (l'utilisateur peut lire n'importe où dans
+        // l'historique) : c'est la rangée la plus proche du bord haut de la
+        // fenêtre visible, celle qu'il regarde.
+        guard let collectionView else {
+            invalidateLayout()
+            return
+        }
+        let anchor = topmostVisibleAnchor(in: collectionView)
         invalidateLayout()
+        guard let anchor else { return }
+        collectionView.layoutIfNeeded()
+        guard let restoredAttributes = layoutAttributesForItem(at: anchor.indexPath) else { return }
+        let delta = restoredAttributes.frame.minY - anchor.minY
+        guard abs(delta) > 0.5 else { return }
+        collectionView.contentOffset.y += delta
+    }
+
+    /// La cellule visible dont `minY` est le plus proche de zéro dans le
+    /// repère de la fenêtre — la première rangée que l'utilisateur voit,
+    /// quelle que soit sa position dans l'historique.
+    private func topmostVisibleAnchor(in collectionView: UICollectionView) -> (indexPath: IndexPath, minY: CGFloat)? {
+        var best: (indexPath: IndexPath, minY: CGFloat)?
+        for indexPath in collectionView.indexPathsForVisibleItems {
+            guard let minY = layoutAttributesForItem(at: indexPath)?.frame.minY else { continue }
+            if best == nil || minY < best!.minY {
+                best = (indexPath, minY)
+            }
+        }
+        return best
     }
 
     private var recoveryRetryScheduled = false

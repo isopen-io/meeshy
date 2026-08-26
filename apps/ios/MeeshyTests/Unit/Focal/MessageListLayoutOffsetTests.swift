@@ -301,6 +301,118 @@ final class MessageListLayoutOffsetTests: XCTestCase {
         )
     }
 
+    // MARK: - Invalidation de RÉCUPÉRATION (budget dépassé) — l'ancre de lecture
+
+    private final class HeightBox {
+        var heights: [Int: CGFloat] = [:]
+        func height(for item: Int) -> CGFloat { heights[item] ?? 100 }
+    }
+
+    /// Groupe `.custom` : positions DÉTERMINISTES lues dans `heights` à
+    /// chaque `prepare()` — contourne toute incertitude sur le cache de
+    /// mesure self-sizing d'UIKit (hors-écran, invalidation complète…) pour
+    /// isoler exactement ce que le test veut prouver : la préservation de
+    /// l'ancre de lecture, quelle que soit la cause du changement de hauteur.
+    private func makeDeterministicHeightHarness(
+        itemCount: Int,
+        heights: HeightBox
+    ) -> (collectionView: UICollectionView, dataSource: UICollectionViewDiffableDataSource<Int, String>, window: UIWindow) {
+        let layout = MessageListLayout { _, _ in
+            let totalHeight = (0..<itemCount).reduce(CGFloat(0)) { $0 + heights.height(for: $1) }
+            let groupSize = NSCollectionLayoutSize(
+                widthDimension: .fractionalWidth(1),
+                heightDimension: .absolute(totalHeight)
+            )
+            let group = NSCollectionLayoutGroup.custom(layoutSize: groupSize) { environment in
+                var y: CGFloat = 0
+                var items: [NSCollectionLayoutGroupCustomItem] = []
+                for i in 0..<itemCount {
+                    let h = heights.height(for: i)
+                    items.append(NSCollectionLayoutGroupCustomItem(
+                        frame: CGRect(x: 0, y: y, width: environment.container.contentSize.width, height: h)
+                    ))
+                    y += h
+                }
+                return items
+            }
+            return NSCollectionLayoutSection(group: group)
+        }
+        let collectionView = UICollectionView(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 300),
+            collectionViewLayout: layout
+        )
+        let registration = UICollectionView.CellRegistration<UICollectionViewCell, String> { _, _, _ in }
+        let dataSource = UICollectionViewDiffableDataSource<Int, String>(
+            collectionView: collectionView
+        ) { collectionView, indexPath, item in
+            collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: item)
+        }
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 300))
+        window.addSubview(collectionView)
+        window.makeKeyAndVisible()
+
+        var snapshot = NSDiffableDataSourceSnapshot<Int, String>()
+        snapshot.appendSections([0])
+        snapshot.appendItems((0..<itemCount).map { "m\($0)" })
+        dataSource.apply(snapshot, animatingDifferences: false)
+        collectionView.layoutIfNeeded()
+        return (collectionView, dataSource, window)
+    }
+
+    /// Reproduit le mécanisme mesuré en repro live (2026-08-26) : une
+    /// cellule AU-DESSUS de la fenêtre visible (`m0`) change de hauteur
+    /// (-150 pt — le cas « séparateur de jour estimé 150 réalisé à ~36 » de
+    /// la doc de la loi) pendant que le budget de compensations partielles
+    /// est dépassé dans la MÊME transaction : le chemin de rattrapage
+    /// (invalidation COMPLÈTE, anti-SIGTRAP) prend le relais et — sans
+    /// ancre — ne porte AUCUNE des deux compensations. `contentOffset` doit
+    /// pourtant rester posé sur la rangée que le lecteur regardait :
+    /// mesuré en repro live, `contentOffset` a sauté de 968 à 842 en moins
+    /// de 20 ms sans doigt ni décélération.
+    func test_recoveryInvalidation_budgetExceeded_preservesReadingAnchor() {
+        let heights = HeightBox()
+        // `dataSource` doit rester VIVANT : `UICollectionView.dataSource`
+        // est faible, et sans référence forte ici ARC le libère avant que
+        // le rattrapage ne re-questionne le nombre d'items.
+        let (collectionView, dataSource, _) = makeDeterministicHeightHarness(itemCount: 10, heights: heights)
+        _ = dataSource
+        let layout = collectionView.collectionViewLayout as! MessageListLayout
+
+        // Géométrie initiale (tout à 100 pt) : la fenêtre [400, 700) couvre
+        // m4 (400-500) en tête — l'ancre de lecture, l'utilisateur ayant
+        // défilé loin dans l'historique, `m0` hors champ au-dessus.
+        collectionView.contentOffset = CGPoint(x: 0, y: 400)
+        collectionView.layoutIfNeeded()
+        let anchorIndexPath = IndexPath(item: 4, section: 0)
+        guard let anchorMinYBefore = layout.layoutAttributesForItem(at: anchorIndexPath)?.frame.minY else {
+            return XCTFail("ancre absente du layout")
+        }
+        let distanceFromOffsetBefore = anchorMinYBefore - collectionView.contentOffset.y
+
+        // `m0` (hors champ, minY=0 < offset=400) rétrécit de 100 pt — tout
+        // ce qui suit, ancre comprise, glisse de 100 pt vers le haut au
+        // prochain `prepare()`.
+        heights.heights[0] = 0
+
+        // Appel DIRECT du chemin de rattrapage (invalidation COMPLÈTE, celui
+        // que `scheduleRecoveryInvalidation()` planifie en asynchrone quand
+        // le budget de compensations partielles est dépassé DANS LA MÊME
+        // transaction) — le mécanisme d'ancrage ne dépend d'aucun timing,
+        // seul son déclenchement réel l'est ; l'appeler directement isole le
+        // test de cette asynchronie sans en changer la sémantique.
+        layout.fireOrDeferRecoveryInvalidation()
+
+        guard let anchorMinYAfter = layout.layoutAttributesForItem(at: anchorIndexPath)?.frame.minY else {
+            return XCTFail("ancre disparue après le rattrapage")
+        }
+        let distanceFromOffsetAfter = anchorMinYAfter - collectionView.contentOffset.y
+
+        XCTAssertEqual(
+            distanceFromOffsetAfter, distanceFromOffsetBefore, accuracy: 1,
+            "l'invalidation de récupération (budget dépassé) doit préserver la position visuelle de la rangée lue par l'utilisateur — jamais la faire sauter au repos."
+        )
+    }
+
     // MARK: - Hôte — le contrôleur monte bien la sous-classe
 
     private func makeEmptyStore() throws -> MessageStore {
