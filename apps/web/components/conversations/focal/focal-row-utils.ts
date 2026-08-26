@@ -154,27 +154,32 @@ export function resolveFocalAuthorAccent(displayName: string): string {
 
 /**
  * Deux messages sont dans le même groupe visuel s'ils partagent l'expéditeur
- * (§WS-4 : « en tête de groupe uniquement ») — MAIS un message SYSTÈME n'est
- * jamais une prise de parole : il ouvre toujours son propre groupe et ne
- * continue jamais celui d'un voisin. L'avis d'arrivée est écrit avec l'arrivant
- * pour auteur (`packages/shared/utils/join-notice.ts`) ; comparer les seuls
- * `senderId` groupait la première vraie bulle du nouveau venu avec l'annonce de
- * sa propre arrivée — la bulle perdait alors avatar, nom et horodatage ensemble
- * (`FocalIdentityHeader` n'est monté qu'en tête de groupe). Même défaut que la
- * vue Bulles, corrigé le 2026-08-20 dans `utils/message-grouping.ts` mais laissé
- * dans ce mode de lecture Focal — pourtant monté par `ConversationMessages`.
+ * (§WS-4 : « en tête de groupe uniquement ») ET le même jour calendaire — MAIS
+ * un message SYSTÈME n'est jamais une prise de parole : il ouvre toujours son
+ * propre groupe et ne continue jamais celui d'un voisin. L'avis d'arrivée est
+ * écrit avec l'arrivant pour auteur (`packages/shared/utils/join-notice.ts`) ;
+ * comparer les seuls `senderId` groupait la première vraie bulle du nouveau venu
+ * avec l'annonce de sa propre arrivée — la bulle perdait alors avatar, nom et
+ * horodatage ensemble (`FocalIdentityHeader` n'est monté qu'en tête de groupe).
+ * Même défaut que la vue Bulles, corrigé le 2026-08-20 dans
+ * `utils/message-grouping.ts` mais laissé dans ce mode de lecture Focal —
+ * pourtant monté par `ConversationMessages`. La dimension JOUR y a rejoint la
+ * règle le 2026-08-26 (it. 270) : sans elle, la première bulle sous une capsule
+ * de date masquait son identité.
  *
  * La règle est déclarée UNE SEULE FOIS (`utils/message-grouping.ts`) : ce
- * prédicat n'en est qu'un adaptateur de forme (`senderId` plat → `sender.id`),
- * il ne recopie pas le raisonnement.
+ * prédicat n'en est qu'un adaptateur de forme (`senderId` plat → `sender.id`,
+ * `createdAt` descendu tel quel), il ne recopie pas le raisonnement.
  */
 export function isFirstInFocalGroup(
-  current: Pick<Message, 'senderId' | 'messageSource'>,
-  previous: Pick<Message, 'senderId' | 'messageSource'> | null | undefined
+  current: Pick<Message, 'senderId' | 'messageSource' | 'createdAt'>,
+  previous: Pick<Message, 'senderId' | 'messageSource' | 'createdAt'> | null | undefined
 ): boolean {
   return computeIsFirstInGroup(
-    previous ? { sender: { id: previous.senderId }, messageSource: previous.messageSource } : previous,
-    { sender: { id: current.senderId }, messageSource: current.messageSource }
+    previous
+      ? { sender: { id: previous.senderId }, messageSource: previous.messageSource, createdAt: previous.createdAt }
+      : previous,
+    { sender: { id: current.senderId }, messageSource: current.messageSource, createdAt: current.createdAt }
   );
 }
 

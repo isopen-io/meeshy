@@ -186,34 +186,49 @@ describe('resolveFocalMessageDisplay — texte + langue RÉELLEMENT servie', () 
 });
 
 describe('isFirstInFocalGroup', () => {
+  // Heure LOCALE (sans `Z`) : jour calendaire indépendant du fuseau du runner.
+  // `Message.createdAt` est typé `Date` — on construit des Date, pas des chaînes.
+  const J1_MATIN = new Date('2026-08-25T09:00:00');
+  const J1_SOIR = new Date('2026-08-25T22:00:00');
+  const J2_MATIN = new Date('2026-08-26T08:00:00');
+
   it('vrai quand il n\'y a pas de message précédent', () => {
-    expect(isFirstInFocalGroup({ senderId: 'u1', messageSource: 'user' }, null)).toBe(true);
-    expect(isFirstInFocalGroup({ senderId: 'u1', messageSource: 'user' }, undefined)).toBe(true);
+    expect(isFirstInFocalGroup({ senderId: 'u1', messageSource: 'user', createdAt: J1_MATIN }, null)).toBe(true);
+    expect(isFirstInFocalGroup({ senderId: 'u1', messageSource: 'user', createdAt: J1_MATIN }, undefined)).toBe(true);
   });
 
   it('vrai quand l\'expéditeur change', () => {
     expect(
       isFirstInFocalGroup(
-        { senderId: 'u2', messageSource: 'user' },
-        { senderId: 'u1', messageSource: 'user' }
+        { senderId: 'u2', messageSource: 'user', createdAt: J1_SOIR },
+        { senderId: 'u1', messageSource: 'user', createdAt: J1_MATIN }
       )
     ).toBe(true);
   });
 
-  it('faux quand le même expéditeur enchaîne', () => {
+  it('faux quand le même expéditeur enchaîne le même jour', () => {
     expect(
       isFirstInFocalGroup(
-        { senderId: 'u1', messageSource: 'user' },
-        { senderId: 'u1', messageSource: 'user' }
+        { senderId: 'u1', messageSource: 'user', createdAt: J1_SOIR },
+        { senderId: 'u1', messageSource: 'user', createdAt: J1_MATIN }
       )
     ).toBe(false);
+  });
+
+  it("ouvre un groupe quand le même expéditeur reprend le lendemain — la bulle sous la capsule de date porte son identité", () => {
+    expect(
+      isFirstInFocalGroup(
+        { senderId: 'u1', messageSource: 'user', createdAt: J2_MATIN },
+        { senderId: 'u1', messageSource: 'user', createdAt: J1_SOIR }
+      )
+    ).toBe(true);
   });
 
   it("ouvre un groupe après l'avis d'arrivée DU MÊME auteur — un message système n'est pas une prise de parole", () => {
     expect(
       isFirstInFocalGroup(
-        { senderId: 'u1', messageSource: 'user' },
-        { senderId: 'u1', messageSource: 'system' }
+        { senderId: 'u1', messageSource: 'user', createdAt: J1_SOIR },
+        { senderId: 'u1', messageSource: 'system', createdAt: J1_MATIN }
       )
     ).toBe(true);
   });
@@ -221,8 +236,8 @@ describe('isFirstInFocalGroup', () => {
   it('ouvre un groupe pour un message système lui-même', () => {
     expect(
       isFirstInFocalGroup(
-        { senderId: 'u1', messageSource: 'system' },
-        { senderId: 'u1', messageSource: 'user' }
+        { senderId: 'u1', messageSource: 'system', createdAt: J1_SOIR },
+        { senderId: 'u1', messageSource: 'user', createdAt: J1_MATIN }
       )
     ).toBe(true);
   });
