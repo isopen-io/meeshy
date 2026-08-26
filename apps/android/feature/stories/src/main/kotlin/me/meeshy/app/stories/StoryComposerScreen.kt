@@ -94,10 +94,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -666,6 +668,39 @@ private fun StoryCanvasSurface(
             }
             if (snapFeedback != null) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
+                    // Persistent composition overlay (parity with iOS SafeZoneOverlay): while an
+                    // element is being dragged, draw the viewer-chrome safe rectangle and the
+                    // rule-of-thirds grid so the author frames content clear of the viewer's
+                    // top/bottom chrome. Geometry from the pure, unit-tested StorySafeZoneGrid.
+                    val grid = StorySafeZoneGrid.geometry(size.width, size.height)
+                    if (!grid.isEmpty) {
+                        val gridColor = guideColor.copy(alpha = 0.35f)
+                        val dash = PathEffect.dashPathEffect(floatArrayOf(12f, 12f))
+                        grid.verticalThirds.forEach { gx ->
+                            drawLine(
+                                color = gridColor,
+                                start = Offset(gx, 0f),
+                                end = Offset(gx, size.height),
+                                strokeWidth = 1f,
+                                pathEffect = dash,
+                            )
+                        }
+                        grid.horizontalThirds.forEach { gy ->
+                            drawLine(
+                                color = gridColor,
+                                start = Offset(0f, gy),
+                                end = Offset(size.width, gy),
+                                strokeWidth = 1f,
+                                pathEffect = dash,
+                            )
+                        }
+                        drawRect(
+                            color = gridColor,
+                            topLeft = Offset(grid.safeLeft, grid.safeTop),
+                            size = Size(grid.safeRight - grid.safeLeft, grid.safeBottom - grid.safeTop),
+                            style = Stroke(width = 1.5f, pathEffect = dash),
+                        )
+                    }
                     snapFeedback.verticalGuide?.let { gx ->
                         drawLine(
                             color = guideColor,

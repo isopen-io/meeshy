@@ -2,6 +2,53 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-26 **the composer draws the persistent safe-zone + rule-of-thirds overlay while dragging** (slice
+> `story-composer-safe-zone-overlay`, feature-parity E. Stories — the "Frosted-glass text backdrops; safe-zone
+> overlay; …" line, its LAST open piece → the whole line is now `[x]`). Before this, dragging an element lit only
+> the transient snap guide line(s) NEAR the drag (`StorySnapResolver` feedback); there was no persistent
+> composition frame, so an author had no on-canvas cue for where the viewer's top chrome / bottom reply-bar will
+> clip content. iOS shows exactly such a frame (`SafeZoneOverlay`, `if isDragging`) with ASYMMETRIC insets.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → four PRs, all iOS/gateway/shared
+> (#3854 iOS scroll, #3750 gateway reel-affinity, #3749 iOS TaskTimeout, #3619 shared Prisme-preview contract) —
+> none a `claude/apps/android/<slice-id>` routine slice, no `apps/android` collision. Prior slice
+> (`story-viewer-text-backdrop`) merged as #3748 (`main` HEAD before this run `f266d7ad`). Branched off
+> freshly-fetched `origin/main`.
+>
+> **The fix — one pure geometry resolver + canvas glue.** (1) `StorySafeZoneGrid.geometry(width, height)`
+> (`:feature:stories`) → `SafeZoneGeometry(safeLeft/Top/Right/Bottom, verticalThirds, horizontalThirds)` ports
+> iOS `StorySafeZone` exactly: asymmetric `TOP_INSET 0.18` / `BOTTOM_INSET 0.25` / `HORIZONTAL_INSET 0.05` (the
+> viewer's progress bars + header up top and reply bar + scrim at the bottom eat unequal margins) plus the
+> rule-of-thirds fractions `[1/3, 2/3]` — the centre (0.5) is OMITTED so the persistent grid never double-draws
+> the transient centre snap guide. A non-finite/non-positive dimension collapses to an `isEmpty` geometry
+> (zeroed rect + empty lists) so an unmeasured or zero canvas draws nothing. (2) The composer drag `Canvas`
+> (already gated on `snapFeedback != null`, i.e. shown only while dragging) strokes the dashed safe rect + faint
+> thirds lines at `primary@35%` BENEATH the existing accent snap guides — declarative glue over the resolver.
+>
+> **Tests: +9** (all pure/JVM `StorySafeZoneGridTest`): unit-rect equals the iOS insets; per-axis denormalisation
+> (1080×1920); the two thirds lines per axis (900×1800 → x 300/600, y 600/1200); centre-omission (a 1000px axis
+> must not list 500); and every degenerate guard — zero width, zero height, negative dimension, non-finite width,
+> non-finite height. **Mutation-RED-proven**: replacing the degenerate guard with `if (false)` reddened EXACTLY
+> the zero/non-finite tests (4) while the negative-dimension test correctly stayed green (a negative width makes
+> `safeRight < safeLeft`, so `isEmpty` is true geometrically without the guard).
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** `sdkmanager` installed android-35;
+> AGP auto-installed pristine `android-37.0`; the first `./gradlew` hash-errored on bare `android-37`; `cp -r
+> android-37.0 android-37` + `source.properties` `AndroidVersion.ApiLevel=37.0→37` (the FULL key), keeping BOTH
+> dirs, resolved it (the documented recipe).
+>
+> **Verified**: targeted `StorySafeZoneGridTest` 9/9 green, the mutation proof, then full
+> `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate)
+> **BUILD SUCCESSFUL in 4m 43s**. Reviewer PASS. Diff is `apps/android` only (1 new resolver + 1 amended composer
+> screen for the glue + 1 new test + tracking docs). Verdict: **PASS** — a pure geometry resolver reused by a
+> Compose `Canvas` glue; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: §E "Frosted-glass … safe-zone … snap-to-guide" is now fully `[x]`. Advance to the next-highest
+> unchecked §E item — the **single unified multi-element long-press context menu** (consolidating the already-shipped
+> edit/duplicate/reorder/delete per-element actions into one menu — feature-parity "Multi-element context menu"
+> line, `[~]`), or the "Per-element + per-slide duration; background designation toggle" remainders (the
+> background-designation toggle sub-piece). Scout `feature-parity.md` read-only before branching.
+
 > On 2026-08-26 **the viewer honours a text element's frosted-glass / solid BACKDROP** (slice
 > `story-viewer-text-backdrop`, feature-parity E. Stories — "Frosted-glass text backdrops … " line, the
 > reader-render half whose author half the composer already shipped). Before this, the composer authored a

@@ -3872,7 +3872,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `storyEffects.filter`/`filterIntensity` (a filter-only slide still emits a `storyEffects` payload).
       +31 tests (21 matrix, 10 deck) + 7 VM + 5 draft; +11 strings × 4 locales. Mirrors iOS's per-slide
       photo filter with an adjustable strength.
-- [~] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
+- [x] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
       **Snap-to-guide + out-of-bounds warning done** (`story-canvas-snap-guides`): a pure
       `StorySnapResolver.resolve(x, y, …)` → `SnapResult(x, y, verticalGuide, horizontalGuide,
       withinSafeZone)` is the single source of truth for where a dragged element settles. Each axis
@@ -3905,8 +3905,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       priority + tolerant-decay branch + a toStyleWire round-trip; 4 projection: none/glass/solid/legacy;
       +1 net accounting). Mutation-RED-proven twice (dropping the projection's resolution reddened EXACTLY the
       3 non-None projection tests while the None test stayed green; dropping the glass radius guard reddened
-      EXACTLY the 2 non-positive/non-finite tests while the missing-radius test stayed green). Pending on this
-      line: persistent safe-zone overlay grid.
+      EXACTLY the 2 non-positive/non-finite tests while the missing-radius test stayed green).
+      **Persistent safe-zone overlay grid done** (`story-composer-safe-zone-overlay`): closes this line. The
+      transient snap feedback above lit only the guide line(s) NEAR the drag; the persistent overlay draws the
+      full composition frame while dragging (parity with iOS `SafeZoneOverlay`). A pure `StorySafeZoneGrid.geometry(width,
+      height)` → `SafeZoneGeometry(safeLeft/Top/Right/Bottom, verticalThirds, horizontalThirds)` ports iOS
+      `StorySafeZone`'s ASYMMETRIC insets (`TOP_INSET 0.18` / `BOTTOM_INSET 0.25` / `HORIZONTAL_INSET 0.05` —
+      the viewer's top chrome and bottom reply-bar eat unequal margins, so a centred safe zone would lie) plus
+      the classic rule-of-thirds lines (`THIRDS [1/3, 2/3]`, the centre deliberately OMITTED so it never
+      double-draws the transient snap guide). A non-finite or non-positive dimension collapses to an `isEmpty`
+      geometry (zeroed rect + empty line lists) so an unmeasured/zero canvas draws nothing. The composer's drag
+      `Canvas` (already shown only while `snapFeedback != null`) strokes the dashed safe rect + faint thirds
+      lines at `primary@35%` beneath the existing accent snap guides — pure glue over the resolver. +9 tests
+      (all `StorySafeZoneGridTest`: unit-rect equals the iOS insets, per-axis denormalisation, the two thirds
+      lines per axis, centre-omission, and every degenerate guard — zero/negative/non-finite width & height).
+      Mutation-RED-proven: dropping the degenerate guard reddened EXACTLY the zero/non-finite tests (the
+      negative case is geometrically empty regardless — `safeRight < safeLeft` — and correctly stayed green).
 - [x] Z-order management (front/back, forward/backward) persisted for WYSIWYG playback
       (`story-text-element-zorder`): the slide's `elements` list order *is* the paint order (index 0 =
       back, last = front), so a pure `StorySlideDeck.reorderTextElement(id, StoryZOrder)` restacks the
