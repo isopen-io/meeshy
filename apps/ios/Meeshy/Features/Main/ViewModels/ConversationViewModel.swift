@@ -1613,6 +1613,7 @@ class ConversationViewModel: ObservableObject {
             Task { [weak self] in
                 guard let self else { return }
                 await self.refreshMessagesFromAPI()
+                await self.syncMissedMessagesOnOpen()
                 await MainActor.run { self.isRevalidating = false }
             }
 
@@ -1642,6 +1643,7 @@ class ConversationViewModel: ObservableObject {
                 Task { [weak self] in
                     guard let self else { return }
                     await self.refreshMessagesFromAPI()
+                    await self.syncMissedMessagesOnOpen()
                     await MainActor.run { self.isRevalidating = false }
                 }
             }
@@ -3868,6 +3870,30 @@ class ConversationViewModel: ObservableObject {
         commandHandler.markAsReceived()
     }
 
+
+    // MARK: - Ouverture de conversation
+
+    /// Le rattrapage `after`, joué à l'OUVERTURE quand GRDB était déjà chaud.
+    ///
+    /// `refreshMessagesFromAPI()` lit `offset: 0, limit: 30` : sur une absence
+    /// courte il suffit, mais au-delà de trente messages manqués il colle les
+    /// trente derniers sur le bloc GRDB ancien et laisse un TROU au milieu que
+    /// personne ne regarde — `loadOlderMessages` part du plus ancien vers
+    /// l'arrière, ce rattrapage part du plus récent vers l'avant. Le trou
+    /// n'était comblé que par redondance (le puits `message:new` global et le
+    /// rejeu serveur de 48 h), jamais DÉTECTÉ, et rien ne le couvrait après une
+    /// absence plus longue.
+    ///
+    /// Les deux lectures sont COMPLÉMENTAIRES, pas redondantes : le refresh
+    /// rapporte les éditions et réactions des trente derniers, le rattrapage
+    /// rapporte les messages ABSENTS, quel qu'en soit le nombre.
+    ///
+    /// Sur un GRDB FROID on ne l'appelle pas : le refresh vient d'apporter les
+    /// trente plus récents, il n'y a rien devant eux à rattraper.
+    private func syncMissedMessagesOnOpen() async {
+        guard !messageStore.messages.isEmpty else { return }
+        await syncMissedMessages()
+    }
 
     // MARK: - Reconnection Sync (called by ConversationSocketHandler)
 

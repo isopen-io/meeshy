@@ -374,6 +374,73 @@ final class ConversationViewModelTests: XCTestCase {
         )
     }
 
+    // MARK: - Rattrapage à l'OUVERTURE d'une conversation
+
+    /// Le geste rapporté par l'utilisateur le 2026-08-25 : « j'ouvre la
+    /// conversation, même après 1h, et il manque des messages récents — alors
+    /// que dans la liste on a bien le dernier ».
+    ///
+    /// `refreshMessagesFromAPI()` lit `offset: 0, limit: 30`. Au-delà de trente
+    /// messages manqués il colle les trente derniers sur le bloc GRDB ancien et
+    /// laisse un TROU au milieu : `loadOlderMessages` part du plus ancien vers
+    /// l'arrière, `syncMissedMessages` du plus récent vers l'avant, et personne
+    /// ne regarde entre les deux. Le trou n'était comblé que par redondance —
+    /// le puits `message:new` global et le rejeu serveur de 48 h —, jamais
+    /// détecté, et rien ne le couvrait après une absence plus longue.
+    func test_loadMessages_surUnCacheCHAUD_declencheLeRattrapageParWatermark() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let base = Date().addingTimeInterval(-3600)
+        let records: [MessageRecord] = (0..<5).map { i in
+            var record = MessageStoreObservationHelper.makeRecord(
+                localId: "chaud-\(i)", conversationId: testConversationId,
+                senderId: testUserId, content: "msg \(i)",
+                state: .sent, createdAt: base.addingTimeInterval(Double(i))
+            )
+            record.cachedTimeString = MessageRecord.computeTimeString(for: record.createdAt)
+            return record
+        }
+        try await pool.write { db in
+            for record in records { try record.insert(db) }
+        }
+
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        _ = await MessageStoreObservationHelper.awaitMessagesCount(equals: 5, in: sut)
+        mockMessageService.listAfterResult = .success(makeMessagesResponse())
+
+        await sut.loadMessages()
+
+        // Le rattrapage part dans une tâche de fond détachée du chargement :
+        // on attend qu'il se manifeste plutôt que de supposer son instant.
+        // `awaitCondition` prend une closure NON échappante : pas de capture
+        // faible, `self` y est capturé implicitement et sans cycle.
+        let rattrape = await MessageStoreObservationHelper.awaitCondition(timeout: 2.0) {
+            self.mockMessageService.listAfterCallCount >= 1
+        }
+        XCTAssertTrue(
+            rattrape,
+            "ouvrir une conversation dont GRDB est CHAUD doit rejouer le rattrapage par watermark — sans lui, un trou de plus de trente messages reste invisible et définitif"
+        )
+    }
+
+    /// La moitié NÉGATIVE, et elle n'est pas décorative : sur un GRDB FROID le
+    /// refresh vient d'apporter les trente plus récents, il n'y a rien devant
+    /// eux à rattraper. Un rattrapage y serait une seconde lecture pour rien.
+    func test_loadMessages_surUnCacheFROID_neDeclenchePasLeRattrapage() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        mockMessageService.listAfterResult = .success(makeMessagesResponse())
+
+        await sut.loadMessages()
+
+        XCTAssertEqual(
+            mockMessageService.listAfterCallCount, 0,
+            "GRDB froid : le refresh a déjà apporté les plus récents, aucun watermark à remonter"
+        )
+    }
+
     // MARK: - syncMissedMessages (T9 — reconnect gap recovery via watermark)
 
     /// The backfill must ask the gateway for messages created *after* the
